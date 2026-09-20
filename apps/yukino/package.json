@@ -1,6 +1,6 @@
 {
   "name": "@yukino.js/yukino",
-  "version": "0.0.38",
+  "version": "0.0.1",
   "description": "Yukino is a terminal-based AI coding agent. It provides an interactive UI (terminal user interface) for conversing with large language models, executing code, manipulating files, and orchestrating multi-agent workflows, all from the command line.",
   "keywords": [
     "agent",
