@@ -159,9 +159,6 @@ importers:
 
   apps/yukino:
     dependencies:
-      '@a2a-js/sdk':
-        specifier: ^1.2.0
-        version: 1.2.0(@bufbuild/protobuf@2.15.0)(@grpc/grpc-js@1.14.5)(express@5.2.1)
       '@agentclientprotocol/sdk':
         specifier: ^1.4.0
         version: 1.4.0(zod@4.6.5)
@@ -396,21 +393,6 @@ importers:
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.6)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.49.0)(tsx@4.23.15)(yaml@2.9.1))
 
 packages:
-
-  '@a2a-js/sdk@1.2.0':
-    resolution: {integrity: sha512-zxjvBrxhPV4J/RN8QTbsYaUIu9Y9RvmR06IP5o42UdJX42A9I0m1StGVvqrcCQ3bdu3SzWHPm5CeC2FNHARvkw==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@bufbuild/protobuf': ^2.10.2
-      '@grpc/grpc-js': ^1.11.0
-      express: ^4.21.2 || ^5.1.0
-    peerDependenciesMeta:
-      '@bufbuild/protobuf':
-        optional: true
-      '@grpc/grpc-js':
-        optional: true
-      express:
-        optional: true
 
   '@agentclientprotocol/sdk@1.4.0':
     resolution: {integrity: sha512-/eufudw+aFY1LKLolT6yFE6UMmYRl7fMJ/DEONSIyR6wI3slHWITBsANRGqXEY8FRzqUxwh7QEaGiZHcJPVThg==}
@@ -4982,14 +4964,6 @@ packages:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
-
-  '@a2a-js/sdk@1.2.0(@bufbuild/protobuf@2.15.0)(@grpc/grpc-js@1.14.5)(express@5.2.1)':
-    dependencies:
-      jose: 6.2.12
-    optionalDependencies:
-      '@bufbuild/protobuf': 2.15.0
-      '@grpc/grpc-js': 1.14.5
-      express: 5.2.1
 
   '@agentclientprotocol/sdk@1.4.0(zod@4.6.5)':
     dependencies:
