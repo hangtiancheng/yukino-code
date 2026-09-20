@@ -305,6 +305,50 @@ describe("Chat Completions terminal boundaries", () => {
     expect(events).toEqual([{ type: "text_delta", text: "partial" }]);
   });
 
+  it("emits tool_call_complete with empty args when the server sends none", async () => {
+    // Some compat servers return "" (or omit the field entirely) instead of
+    // "{}" for no-argument tool calls; the call must still complete instead
+    // of being silently dropped.
+    mockStream([
+      {
+        type: "chunk",
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_1",
+                  function: { name: "TaskList", arguments: "" },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      {
+        type: "chunk",
+        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+      },
+    ]);
+    const events = await collect(
+      new OpenAICompatClient(config("openai-compat"), "system"),
+    );
+    expect(events).toContainEqual({
+      type: "tool_call_start",
+      toolName: "TaskList",
+      toolId: "call_1",
+    });
+    expect(events).toContainEqual({
+      type: "tool_call_complete",
+      toolName: "TaskList",
+      toolId: "call_1",
+      arguments: {},
+    });
+  });
+
   it("retains a trailing usage-only chunk after the finish reason", async () => {
     mockStream([
       {

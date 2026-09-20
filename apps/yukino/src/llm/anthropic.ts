@@ -21,7 +21,6 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { safeParseAsync, z } from "zod";
 
 import type { LLMClient } from "./client.js";
 import {
@@ -149,72 +148,6 @@ enum AnthropicErrorCode {
   RateLimitError = 429,
   /** 400 Bad Request — invalid_request_error; carries "prompt is too long: N tokens > M maximum" on context overflow. */
   BadRequest = 400,
-}
-
-// Auto-fetch the context window for an anthropic-protocol provider
-// by hitting GET {base_url}/v1/models/{model} and reading ModelInfo.max_input_tokens.
-
-// This is layer 2 of the context-window fallback chain. It MUST be best-effort:
-// Any failure (network error, non-200, missing field, timeout, non-anthropic, endpoint that doesn't speak this API) silently returns 0 so the caller can degrade to the built-in table / default.
-
-// It never throws and never blocks, startup beyond a short timeout.
-const MODEL_FETCH_TIMEOUT_MS = 3000;
-
-const ModelContextWindowResSchema = z.object({
-  max_input_tokens: z.coerce.number(),
-});
-
-// type ModelContextWindowRes = z.infer<typeof ModelContextWindowResSchema>;
-
-export async function fetchModelContextWindow(
-  config: ProviderConfig,
-): Promise<number> {
-  // Non-anthropic endpoints do not support this metadata request.
-  if (config.protocol !== "anthropic") {
-    return 0;
-  }
-  const apiKey = resolveAPIKey(config);
-  const base = config.base_url.replace(/\/+$/, "");
-  const url = `${base}/v1/models/${encodeURIComponent(config.model)}`;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, MODEL_FETCH_TIMEOUT_MS);
-
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "anthropic-version": "2023-06-01",
-        ...(apiKey ? { "x-api-key": apiKey } : {}),
-      },
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      return 0;
-    }
-    const body: unknown = await res.json();
-    const { success, error, data } = await safeParseAsync(
-      ModelContextWindowResSchema,
-      body,
-    );
-    if (!success) {
-      log.warn(
-        { message: error.message },
-        "model context window schema validation failed",
-      );
-      return 0;
-    }
-    const maxInputTokens = data.max_input_tokens;
-    return Math.max(maxInputTokens, 0);
-  } catch (err) {
-    log.error({ err }, "failed to fetch model context window");
-    return 0;
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 // User message content → Anthropic blocks. String content becomes a single
