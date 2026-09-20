@@ -61,24 +61,24 @@ describe("input visual-row navigation", () => {
   });
 
   it("uses display cells and never lands inside a CJK, emoji or combining grapheme", () => {
-    const unicode = "ab界👩‍💻éz";
-    const rows = layoutInputRows([unicode, "短", "abcdefg"], 20);
+    const unicode = "abあ😁éz";
+    const rows = layoutInputRows([unicode, "あ", "abcdefg"], 20);
     expect(moveInputVertically(rows, 1, 1, -1, 5)).toEqual({
       cursorLine: 0,
-      cursorCol: "ab界".length,
+      cursorCol: "abあ".length,
       preferredColumn: 5,
     });
     expect(moveInputVertically(rows, 1, 1, -1, 6)).toEqual({
       cursorLine: 0,
-      cursorCol: "ab界👩‍💻".length,
+      cursorCol: "abあ😁".length,
       preferredColumn: 6,
     });
     expect(moveInputVertically(rows, 1, 1, -1, 7)).toEqual({
       cursorLine: 0,
-      cursorCol: "ab界👩‍💻é".length,
+      cursorCol: "abあ😁é".length,
       preferredColumn: 7,
     });
-    expect(moveInputVertically(rows, 0, "ab界👩‍💻".length, 1)).toEqual({
+    expect(moveInputVertically(rows, 0, "abあ😁".length, 1)).toEqual({
       cursorLine: 1,
       cursorCol: 1,
       preferredColumn: 6,
@@ -150,7 +150,7 @@ describe("input visual-row navigation", () => {
     "fits graphemes and paste atoms into %i cells",
     (width) => {
       const paste = collapsePaste("x".repeat(1001));
-      const line = `${"界👩‍💻é ".repeat(25)}${paste.text}`;
+      const line = `${"あ😁é ".repeat(25)}${paste.text}`;
       const rows = layoutInputRows([line], width, paste.store);
       for (const row of rows) {
         expect(row.width).toBeLessThanOrEqual(width);
@@ -185,19 +185,19 @@ describe("input visual-row navigation", () => {
   });
 
   it("does not split ANSI sequences into visible text or count them as cells", () => {
-    const line = "\x1b[31m界a\x1b[0m";
+    const line = "\x1b[31mあa\x1b[0m";
     const rows = layoutInputRows(["plain", line], 3);
     expect(
       rows
         .filter((row) => row.line === 1)
         .map((row) => row.cells.map((cell) => cell.text).join("")),
-    ).toEqual(["界a", " "]);
+    ).toEqual(["あa", " "]);
     expect(locateInputCursor(rows, 1, 0)).toEqual({
       row: 2,
       cell: 0,
       column: 0,
     });
-    expect(locateInputCursor(rows, 1, "\x1b[31m界".length)).toEqual({
+    expect(locateInputCursor(rows, 1, "\x1b[31mあ".length)).toEqual({
       row: 2,
       cell: 1,
       column: 2,

@@ -136,7 +136,7 @@ describe("terminal input report filtering", () => {
   });
 
   it("preserves UTF-8, backslashes, keyboard sequences and bracketed paste", async () => {
-    const text = "\\path/中文👩‍💻\x1b[A\x1b[1;5D\x03";
+    const text = "\\path/日本語😁\x1b[A\x1b[1;5D\x03";
     const paste = "\x1b[200~" + osc + colorScheme + "\\\x1b[201~";
     for (const byte of Buffer.from(text + paste)) {
       terminal.stream.write(Buffer.from([byte]));

@@ -411,7 +411,7 @@ describe("composer completion rows", () => {
   it("keeps long wide-character command names in a single row", () => {
     const longCommand: Command = {
       ...commands[0],
-      name: "很长的命令名称".repeat(4),
+      name: "とても長いコマンド名".repeat(4),
     };
     const output = composer(18, {
       commands: [longCommand],
@@ -442,7 +442,7 @@ describe("composer completion rows", () => {
   });
 
   it("clips long @file suggestions to one row", () => {
-    terminal.files = ["很长的文件路径/".repeat(8) + "file.ts"];
+    terminal.files = ["とても長いファイルパス/".repeat(8) + "file.ts"];
     const output = composer(20, {
       workDir: "/virtual",
       draftRef: draftRef(["@"]),
@@ -746,8 +746,8 @@ describe("composer queue recall and visual navigation", () => {
     "bounds the visual viewport and inverse caret at width %i",
     (width) => {
       chalk.level = 3;
-      const line = "界👩‍💻é".repeat(200);
-      const ref = draftRef([line], 0, "界👩‍💻é".repeat(100).length);
+      const line = "あ👩‍💻é".repeat(200);
+      const ref = draftRef([line], 0, "あ👩‍💻é".repeat(100).length);
       const output = composer(width, { draftRef: ref });
       const rows = output.split("\n");
       expect(rows).toHaveLength(9);
@@ -755,7 +755,7 @@ describe("composer queue recall and visual navigation", () => {
       expect(output).toContain("\x1b[7m");
       expect(ref.current?.lines).toEqual([line]);
       if (width > 1) {
-        expect(output).toContain("\x1b[7m界\x1b[27m");
+        expect(output).toContain("\x1b[7mあ\x1b[27m");
         expect(rows[0]).toContain("more");
         expect(rows.at(-1)).toContain("more");
       }
@@ -791,7 +791,7 @@ describe("footer priorities", () => {
   });
 
   it("only truncates cwd and keeps the complete session ID on the first row when possible", () => {
-    const output = footer(70, { workDir: "/工作目录/".repeat(20) });
+    const output = footer(70, { workDir: "/作業ディレクトリ/".repeat(20) });
     const first = output.split("\n")[0];
     expect(first).toContain("…");
     expect(first.trimEnd().endsWith(footerProps.sessionId)).toBe(true);
@@ -817,9 +817,9 @@ describe("footer priorities", () => {
     "never overflows a %i-column terminal",
     (width) => {
       const output = footer(width, {
-        model: "模型-".repeat(30),
+        model: "モデル-".repeat(30),
         permissionMode: "acceptEdits",
-        workDir: "/工作区/项目/".repeat(10),
+        workDir: "/作業ディレクトリ/プロジェクト/".repeat(10),
       });
       expect(
         output.split("\n").every((line) => visibleWidth(line) <= width),

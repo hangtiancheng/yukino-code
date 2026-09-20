@@ -56,7 +56,7 @@ writeFileSync(
 );
 writeFileSync(
   join(workDir, "unicode.txt"),
-  "中文注释\nemoji 😄 line\n全角数字１２３\nmixed 变量名abc end\nplain ascii only\n",
+  "日本語注釈\nemoji 😁 line\n全角数字１２３\nmixed 変数名abc end\nplain ascii only\n",
 );
 writeFileSync(join(workDir, "legacy.txt"), "match foo{ here\n");
 writeFileSync(
@@ -148,8 +148,8 @@ describe("GrepTool unicode", () => {
   const grep = new GrepTool();
 
   it("matches literal CJK text", async () => {
-    const res = await grep.execute(ctx, { pattern: "注释", include: "*.txt" });
-    expect(res.output).toContain("unicode.txt:1:中文注释");
+    const res = await grep.execute(ctx, { pattern: "注釈", include: "*.txt" });
+    expect(res.output).toContain("unicode.txt:1:日本語注釈");
   });
 
   it("supports unicode property escapes", async () => {
@@ -157,7 +157,7 @@ describe("GrepTool unicode", () => {
       pattern: "^\\p{Script=Han}+$",
       include: "*.txt",
     });
-    expect(res.output).toContain("unicode.txt:1:中文注释");
+    expect(res.output).toContain("unicode.txt:1:日本語注釈");
     expect(res.output).not.toContain("plain ascii only");
   });
 
@@ -166,7 +166,7 @@ describe("GrepTool unicode", () => {
       pattern: "[😀-😜]",
       include: "*.txt",
     });
-    expect(res.output).toContain("unicode.txt:2:emoji 😄 line");
+    expect(res.output).toContain("unicode.txt:2:emoji 😁 line");
   });
 
   it("treats \\w and \\b as unicode-aware like ripgrep", async () => {
@@ -174,13 +174,13 @@ describe("GrepTool unicode", () => {
       pattern: "^mixed \\w+ end$",
       include: "*.txt",
     });
-    expect(word.output).toContain("unicode.txt:4:mixed 变量名abc end");
+    expect(word.output).toContain("unicode.txt:4:mixed 変数名abc end");
 
     const boundary = await grep.execute(ctx, {
-      pattern: "\\b变量名",
+      pattern: "\\b変数名",
       include: "*.txt",
     });
-    expect(boundary.output).toContain("unicode.txt:4:mixed 变量名abc end");
+    expect(boundary.output).toContain("unicode.txt:4:mixed 変数名abc end");
   });
 
   it("matches full-width digits with \\d", async () => {
@@ -197,7 +197,7 @@ describe("GrepTool unicode", () => {
       include: "*.txt",
     });
     expect(res.isError).toBe(false);
-    expect(res.output).toContain("unicode.txt:1:中文注释");
+    expect(res.output).toContain("unicode.txt:1:日本語注釈");
     expect(res.output).not.toContain("plain ascii only");
   });
 
