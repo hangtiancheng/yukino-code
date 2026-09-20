@@ -223,6 +223,60 @@ describe("pi Markdown presentation", () => {
     },
   );
 
+  it("wraps wide tables into the terminal instead of dropping to raw Markdown", () => {
+    const source = [
+      "| Column A | Column B | Column C | Column D |",
+      "| --- | --- | --- | --- |",
+      "| a very long cell value that keeps going | another long cell value here | third | fourth |",
+    ].join("\n");
+    const output = stripVTControlCharacters(renderMarkdown(source, 40));
+    expect(output).toContain("┌");
+    expect(output).not.toContain("| --- |");
+    // Columns wrap their cells instead of truncating them.
+    expect(output).not.toContain("…");
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("keeps a wide table inside the message card", () => {
+    const source = [
+      "| Column A | Column B | Column C | Column D |",
+      "| --- | --- | --- | --- |",
+      "| a very long cell value that keeps going | another long cell value here | third | fourth |",
+    ].join("\n");
+    const output = stripVTControlCharacters(
+      renderToString(
+        createElement(CommittedMessage, {
+          message: { role: "assistant", content: source },
+        }),
+        { columns: 40 },
+      ),
+    );
+    expect(output).toContain("┌");
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("keeps wide characters inside the table column they belong to", () => {
+    const source = [
+      "| 键 | 说明 |",
+      "| --- | --- |",
+      "| 甲 | 这里是较长的中文说明文字，用于验证换行处理 |",
+    ].join("\n");
+    const output = stripVTControlCharacters(renderMarkdown(source, 40));
+    expect(output).toContain("┌");
+    expect(output).not.toContain("…");
+    // Wrapping splits between characters, so no text disappears.
+    expect(output.replace(/[\s│]/gu, "")).toContain(
+      "这里是较长的中文说明文字，用于验证换行处理",
+    );
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+    }
+  });
+
   it("preserves the source numbering and escaped syntax of user messages", () => {
     const text = renderMarkdown("3. first\n8. \\*literal\\*\n", 80, "user");
     const plain = stripVTControlCharacters(text);
@@ -230,7 +284,28 @@ describe("pi Markdown presentation", () => {
     expect(plain).toContain("8. \\*literal\\*");
   });
 
-  it("keeps streamed fences, lists and reference links consistent with committed Markdown", () => {
+  it("leaves scp-style git remotes intact instead of linkifying an email", () => {
+    const output = stripVTControlCharacters(
+      renderMarkdown(
+        "Clone git@github.com:hangtiancheng/yukino-code.git now",
+        80,
+      ),
+    );
+    expect(output).toContain("git@github.com:hangtiancheng/yukino-code.git");
+    expect(output).not.toContain("mailto:");
+  });
+
+  it("keeps email addresses as autolinks without repeating the target", () => {
+    chalk.level = 3;
+    const output = renderMarkdown("Contact foo@example.com now", 80);
+    // The address keeps the href style (underlined), so it stays a link.
+    expect(output).toContain("\u001b[4m");
+    expect(stripVTControlCharacters(output)).toBe(
+      "Contact foo@example.com now",
+    );
+  });
+
+  it("keeps streamed fences, lists, tables and reference links consistent with committed Markdown", () => {
     const cache: MarkdownCache = {
       prefix: "",
       rendered: "",
@@ -242,6 +317,10 @@ describe("pi Markdown presentation", () => {
       "Intro\n\n```ts\nconst first = 1;\n\nconst second = 2;\n```\n\nDone",
       "Intro\n\n1. one\n2. two\n\nNext",
       "A [reference][target]\n\n[target]: https://example.com",
+      "Intro\n\n| Long column one | Long column two |\n| --- | --- |\n| " +
+        "value".repeat(15) +
+        " | 中文测试中文测试 |",
+      "Clone git@github.com:hangtiancheng/yukino-code.git then push",
     ];
     for (const text of sources) {
       expect(renderStreamingMarkdown(text, 40, cache)).toBe(

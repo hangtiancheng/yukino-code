@@ -23,6 +23,7 @@
 import chalk from "chalk";
 import { supportsLanguage } from "cli-highlight";
 import { Marked } from "marked";
+import type { TokenizerExtension } from "marked";
 
 import { visibleWidth, wrapToLines } from "./terminal-text.js";
 
@@ -32,6 +33,31 @@ import { THEME } from "@/ui/styles.js";
 chalk.level = 3;
 
 type MarkdownKind = "assistant" | "user" | "thinking";
+
+/**
+ * An scp-style remote, as in `git clone git@github.com:owner/repo.git`.
+ *
+ * GFM autolinks the `user@host` part as an email address, and the terminal
+ * renderer then prints the mailto target next to it, turning the remote into
+ * `git@github.com (mailto:git@github.com):owner/repo.git`. Claiming the pattern
+ * before marked's inline url rule sees it keeps such remotes verbatim; the
+ * colon has to be followed by a path, so ordinary addresses such as
+ * "foo@example.com: see the docs" still autolink.
+ */
+const SCP_STYLE_REMOTE =
+  /^[A-Za-z0-9._+-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+:(?=\S)/u;
+
+const scpStyleRemote: TokenizerExtension = {
+  name: "scp-style-remote",
+  level: "inline",
+  tokenizer(source) {
+    const remote = SCP_STYLE_REMOTE.exec(source);
+    if (!remote) {
+      return undefined;
+    }
+    return { type: "text", raw: remote[0], text: remote[0] };
+  },
+};
 
 function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
   const textColor =
@@ -97,6 +123,7 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
   );
   const markdown = new Marked({ breaks: false, gfm: true });
   markdown.use(terminal);
+  markdown.use({ extensions: [scpStyleRemote] });
   markdown.use({
     renderer: {
       code(token) {

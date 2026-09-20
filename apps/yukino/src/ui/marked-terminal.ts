@@ -36,6 +36,8 @@ import type {
 import * as emoji from "node-emoji";
 import supportsHyperlinks from "supports-hyperlinks";
 
+import { fitTableToWidth } from "./table-layout.js";
+
 // === Type Definitions ===
 
 type StyleFn = (...text: string[]) => string;
@@ -335,20 +337,33 @@ class Renderer {
   }
 
   table(token: Tokens.Table): string {
-    const headerCells = token.header.map((cell) =>
-      this.getParser().parseInline(cell.tokens),
-    );
+    const rows = [
+      token.header.map((cell) => this.getParser().parseInline(cell.tokens)),
+      ...token.rows.map((row) =>
+        row.map((cell) =>
+          this.transform(this.getParser().parseInline(cell.tokens)),
+        ),
+      ),
+    ];
+
+    // cli-table3 sizes its columns to the unwrapped cells, so a table with wide
+    // cells overflows the terminal. Wrap the cells into the configured width
+    // first, unless the caller pinned the columns itself.
+    const fitted =
+      this.tableSettings.colWidths && this.tableSettings.colWidths.length > 0
+        ? undefined
+        : fitTableToWidth(rows, token.header.length, this.config.width);
 
     const table = new Table({
       ...this.tableSettings,
-      head: headerCells,
+      head: (fitted?.rows ?? rows)[0],
+      // The fitted cells arrive pre-wrapped, so cli-table3 must not wrap them
+      // again: it breaks long words and wide characters past the column width.
+      ...(fitted ? { colWidths: fitted.columnWidths, wordWrap: false } : {}),
     });
 
-    for (const row of token.rows) {
-      const cells = row.map((cell) =>
-        this.transform(this.getParser().parseInline(cell.tokens)),
-      );
-      table.push(cells);
+    for (const row of (fitted?.rows ?? rows).slice(1)) {
+      table.push(row);
     }
 
     return section(this.config.table(table.toString()));
@@ -403,6 +418,14 @@ class Renderer {
       const linkText = text ? this.emojiFn(text) : href;
       const styledLink = this.config.href(linkText);
       out = ansiEscapes.link(styledLink, href.replace(/\+/g, "%20"));
+    } else if (
+      token.autolink &&
+      token.text !== "" &&
+      href === `mailto:${token.text}`
+    ) {
+      // An autolinked address is its own target, so appending the `mailto:`
+      // destination in parentheses would only repeat the address.
+      out = this.config.href(token.text);
     } else {
       if (hasText) {
         out += this.emojiFn(text) + " (";
