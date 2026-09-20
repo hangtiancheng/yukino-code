@@ -23,12 +23,16 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { Box, Text, useApp } from "ink";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import { AgentActivity, type SubagentProgress } from "./agent-activity.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "./chat.js";
 import { Footer } from "./footer.js";
 import { InteractionDock } from "./interaction-dock.js";
+import {
+  createInterruptHandlers,
+  isForegroundBusy,
+} from "./interrupt-scope.js";
 import { PendingQueue } from "./pending-queue.js";
 import type { PlanChoice } from "./plan-approval.js";
 import { ProviderLogin } from "./provider-login.js";
@@ -451,17 +455,25 @@ export function App({
     [],
   );
 
-  const interruptAll = useCallback(() => {
-    abortControllerRef.current?.abort();
-    permissionResolveRef.current?.("deny");
-    permissionResolveRef.current = null;
-    setPermissionRequest(null);
-    askResolveRef.current?.({});
-    askResolveRef.current = null;
-    setAskRequest(null);
-    void backgroundTaskManagerRef.current.stopAll();
-    void teamManagerRef.current.stopAll();
-  }, []);
+  // Interrupt scope: a single Ctrl+C / Esc routes to interruptForeground,
+  // which only stops the in-flight agent loop (its signal is shared by
+  // synchronous tool calls and run_in_background=false subagents). Background
+  // tasks, background subagents and teammates own separate abort controllers
+  // and keep running; only the TUI-exit path (double Ctrl+C, /quit) tears
+  // them down through interruptAll().
+  const { interruptForeground, interruptAll } = useMemo(
+    () =>
+      createInterruptHandlers({
+        abortControllerRef,
+        permissionResolveRef,
+        setPermissionRequest,
+        askResolveRef,
+        setAskRequest,
+        backgroundTasks: backgroundTaskManagerRef.current,
+        teams: teamManagerRef.current,
+      }),
+    [],
+  );
 
   const requestExit = useCallback(() => {
     interruptAll();
@@ -476,17 +488,15 @@ export function App({
     exit();
   }, [exit, interruptAll, onExitSummary]);
 
-  const hasRunningChildren =
-    subagents.some((subagent) => subagent.status === "running") ||
-    backgroundTasks.some((task) => task.status === "running") ||
-    teammateStates.some(
-      (teammate) => teammate.status === "running" || teammate.status === "idle",
-    );
+  // Foreground-only work gate for Ctrl+C/Esc: while only background work is
+  // running, a press must fall through to the press-twice-to-exit flow
+  // instead of interrupting anything.
+  const foregroundBusy = isForegroundBusy(isStreaming, isCompacting, subagents);
   const { termWidth, toolsExpanded, ctrlCHint } = useTerminalControls({
     isStreaming,
-    hasRunningWork: isStreaming || isCompacting || hasRunningChildren,
+    hasRunningWork: foregroundBusy,
     clearInputRef,
-    onInterrupt: interruptAll,
+    onInterrupt: interruptForeground,
     onExit: requestExit,
     teamsDialogOpen,
     onToggleTeams: () => {
@@ -2603,8 +2613,8 @@ export function App({
           insertTextRef: insertInputTextRef,
           clearRef: clearInputRef,
           onEscape: () => {
-            if (isStreaming || isCompacting || hasRunningChildren) {
-              interruptAll();
+            if (foregroundBusy) {
+              interruptForeground();
             }
           },
         }}
