@@ -56,9 +56,13 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
   useInput((_input, key) => {
     if (phase === 0) {
       if (key.upArrow) {
-        setCursor((current) => (current > 0 ? current - 1 : snapshots.length - 1));
+        setCursor((current) =>
+          current > 0 ? current - 1 : snapshots.length - 1,
+        );
       } else if (key.downArrow) {
-        setCursor((current) => (current < snapshots.length - 1 ? current + 1 : 0));
+        setCursor((current) =>
+          current < snapshots.length - 1 ? current + 1 : 0,
+        );
       } else if (key.return && snapshots[cursor]) {
         setSelectedIndex(cursor);
         setPhase(1);
@@ -70,9 +74,13 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
     }
 
     if (key.upArrow) {
-      setOptionCursor((current) => (current > 0 ? current - 1 : RESTORE_OPTIONS.length - 1));
+      setOptionCursor((current) =>
+        current > 0 ? current - 1 : RESTORE_OPTIONS.length - 1,
+      );
     } else if (key.downArrow) {
-      setOptionCursor((current) => (current < RESTORE_OPTIONS.length - 1 ? current + 1 : 0));
+      setOptionCursor((current) =>
+        current < RESTORE_OPTIONS.length - 1 ? current + 1 : 0,
+      );
     } else if (key.escape) {
       setPhase(0);
     } else if (key.return) {
@@ -93,7 +101,10 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
 
   if (phase === 0) {
     return (
-      <SelectorFrame hint="↑↓ navigate · Enter select · Escape cancel" title="Rewind to checkpoint">
+      <SelectorFrame
+        hint="↑↓ navigate · Enter select · Escape cancel"
+        title="Rewind to checkpoint"
+      >
         {snapshots.map((snapshot, index) => {
           const selected = index === cursor;
           return (
@@ -147,7 +158,9 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
 }
 
 function formatAgo(timestamp: string): string {
-  const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+  const seconds = Math.floor(
+    (Date.now() - new Date(timestamp).getTime()) / 1000,
+  );
   if (seconds < 60) {
     return `${String(seconds)}s ago`;
   }

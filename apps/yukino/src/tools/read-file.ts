@@ -86,7 +86,10 @@ export class ReadFileTool implements Tool {
     };
   }
 
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const requestedPath = strArg(args, "file_path");
     if (!requestedPath) {
       return Promise.resolve({
@@ -147,7 +150,8 @@ export class ReadFileTool implements Tool {
       let outputBytes = 0;
       for (const [index, line] of slice.entries()) {
         const numberedLine = `${String(offset + index + 1)}\t${line}`;
-        const lineBytes = utf8ByteLength(numberedLine) + (numbered.length > 0 ? 1 : 0);
+        const lineBytes =
+          utf8ByteLength(numberedLine) + (numbered.length > 0 ? 1 : 0);
         if (outputBytes + lineBytes > MAX_READ_BYTES) {
           if (numbered.length === 0) {
             return Promise.resolve({

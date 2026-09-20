@@ -52,9 +52,13 @@ export function PermissionDialog({
 
   useInput((_input, key) => {
     if (key.upArrow) {
-      setCursor((current) => (current > 0 ? current - 1 : PERMISSION_OPTIONS.length - 1));
+      setCursor((current) =>
+        current > 0 ? current - 1 : PERMISSION_OPTIONS.length - 1,
+      );
     } else if (key.downArrow) {
-      setCursor((current) => (current < PERMISSION_OPTIONS.length - 1 ? current + 1 : 0));
+      setCursor((current) =>
+        current < PERMISSION_OPTIONS.length - 1 ? current + 1 : 0,
+      );
     } else if (key.return) {
       const option = PERMISSION_OPTIONS[cursor];
       if (option) {

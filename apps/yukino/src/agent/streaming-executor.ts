@@ -21,7 +21,10 @@
  */
 
 import { createChildLogger } from "@/logger/index.js";
-import { observeToolExecution, type AgentTelemetry } from "@/telemetry/instrumentation.js";
+import {
+  observeToolExecution,
+  type AgentTelemetry,
+} from "@/telemetry/instrumentation.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type { ToolResult, ToolContext } from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
@@ -47,13 +50,21 @@ export class StreamingExecutor {
   private ctx: ToolContext;
   private telemetry: AgentTelemetry;
 
-  constructor(registry: ToolRegistry, ctx: ToolContext, telemetry: AgentTelemetry) {
+  constructor(
+    registry: ToolRegistry,
+    ctx: ToolContext,
+    telemetry: AgentTelemetry,
+  ) {
     this.registry = registry;
     this.ctx = ctx;
     this.telemetry = telemetry;
   }
 
-  submit(toolId: string, toolName: string, args: Record<string, unknown>): void {
+  submit(
+    toolId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+  ): void {
     this.pending.push({ toolId, toolName, arguments: args });
   }
 
@@ -68,7 +79,10 @@ export class StreamingExecutor {
         return {
           toolId: call.toolId,
           toolName: call.toolName,
-          result: { output: "Tool execution was cancelled before it started.", isError: true },
+          result: {
+            output: "Tool execution was cancelled before it started.",
+            isError: true,
+          },
           elapsed: 0,
         };
       }
@@ -89,7 +103,11 @@ export class StreamingExecutor {
       try {
         const result = await observeToolExecution(
           call.toolName,
-          () => tool.execute({ ...this.ctx, toolCallId: call.toolId }, call.arguments),
+          () =>
+            tool.execute(
+              { ...this.ctx, toolCallId: call.toolId },
+              call.arguments,
+            ),
           this.telemetry,
         );
         return {

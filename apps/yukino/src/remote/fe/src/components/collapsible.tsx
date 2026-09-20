@@ -33,7 +33,11 @@ interface CollapsibleProps {
  * Generic collapsible panel used by tool blocks and thinking blocks.
  * Pure Tailwind utilities — no custom CSS classes.
  */
-export function Collapsible({ header, children, defaultOpen = false }: CollapsibleProps) {
+export function Collapsible({
+  header,
+  children,
+  defaultOpen = false,
+}: CollapsibleProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="my-2 overflow-hidden rounded-lg border border-border bg-surface shadow-xs">

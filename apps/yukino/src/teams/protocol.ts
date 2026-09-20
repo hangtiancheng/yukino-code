@@ -70,7 +70,12 @@ function typed(
 /** Shutdown request. The text carries the reason so the teammate can decide whether to agree. */
 export function shutdownRequest(from: string, reason = ""): FileMailMessage {
   const why = reason || "team is wrapping up";
-  return typed(from, MSG_SHUTDOWN_REQUEST, newRequestId(), `${SHUTDOWN_PREFIX} ${why}`);
+  return typed(
+    from,
+    MSG_SHUTDOWN_REQUEST,
+    newRequestId(),
+    `${SHUTDOWN_PREFIX} ${why}`,
+  );
 }
 
 /** Teammate's reply to a shutdown request. */
@@ -84,7 +89,10 @@ export function shutdownResponse(
 }
 
 /** Plan approval request; text contains the full plan content. */
-export function planApprovalRequest(from: string, plan: string): FileMailMessage {
+export function planApprovalRequest(
+  from: string,
+  plan: string,
+): FileMailMessage {
   return typed(from, MSG_PLAN_APPROVAL_REQUEST, newRequestId(), plan);
 }
 

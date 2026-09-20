@@ -22,13 +22,18 @@
 
 import { describe, it, expect } from "vitest";
 
-import { expandMcpServerConfigEnvironment, mcpContentToToolOutput } from "@/mcp/client.js";
+import {
+  expandMcpServerConfigEnvironment,
+  mcpContentToToolOutput,
+} from "@/mcp/client.js";
 import { isRecord } from "@/utils/index.js";
 
 // Small buffers pass through maybeResizeAndDownsampleImage untouched (sharp is
 // only consulted above the passthrough limit), so fake bytes are fine here.
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const DATA = Buffer.concat([PNG_MAGIC, Buffer.from("mcp-image")]).toString("base64");
+const DATA = Buffer.concat([PNG_MAGIC, Buffer.from("mcp-image")]).toString(
+  "base64",
+);
 
 describe("mcpContentToToolOutput", () => {
   it("keeps text-only content as a plain string fallback", async () => {
@@ -51,7 +56,9 @@ describe("mcpContentToToolOutput", () => {
       text: "screenshot below",
     });
     expect(result.contentBlocks?.[1]?.type).toBe("image");
-    const source = isRecord(result.contentBlocks?.[1]) ? result.contentBlocks[1].source : null;
+    const source = isRecord(result.contentBlocks?.[1])
+      ? result.contentBlocks[1].source
+      : null;
     expect(isRecord(source) ? source.media_type : null).toBe("image/png");
     expect(isRecord(source) ? source.data : null).toBe(DATA);
   });
@@ -104,7 +111,10 @@ describe("expandMcpServerConfigEnvironment", () => {
 
   it("rejects an unset variable without a default", () => {
     expect(() =>
-      expandMcpServerConfigEnvironment({ name: "server", command: "${MISSING}" }, {}),
+      expandMcpServerConfigEnvironment(
+        { name: "server", command: "${MISSING}" },
+        {},
+      ),
     ).toThrow(/MISSING/);
   });
 });

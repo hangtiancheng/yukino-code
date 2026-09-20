@@ -23,9 +23,16 @@
 import type { AgentEvent } from "./events.js";
 import { StreamingExecutor } from "./streaming-executor.js";
 
-import { manageContext, forceCompact, AutoCompactTrackingState } from "@/compact/compact.js";
+import {
+  manageContext,
+  forceCompact,
+  AutoCompactTrackingState,
+} from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
-import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/index.js";
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+} from "@/config/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import type { ToolUseBlock, ToolResultBlock } from "@/conversation/index.js";
 import { REJECTED_TOOL_RESULT } from "@/conversation/pairing.js";
@@ -39,7 +46,11 @@ import type { PermissionChecker } from "@/permissions/index.js";
 import { getOrCreatePlanPath, planExists } from "@/plan-file/index.js";
 import { coordinatorReminder } from "@/prompt/coordinator.js";
 import { buildPlanModeReminder } from "@/prompt/plan-mode.js";
-import { saveMessage, toolUsesToRecords, toolResultsToRecords } from "@/session/index.js";
+import {
+  saveMessage,
+  toolUsesToRecords,
+  toolResultsToRecords,
+} from "@/session/index.js";
 import { getSessionFilePath } from "@/session/index.js";
 import type { TaskManager } from "@/subagent/task-manager.js";
 import {
@@ -82,7 +93,8 @@ const MAX_OUTPUT_CHARS = 50000;
 // Fixed prefix of the deferred-tool reminder. Used to detect whether the reminder
 // is still present in history: after compaction collapses history into a summary,
 // the original reminder is gone and must be re-injected.
-const DEFERRED_REMINDER_MARKER = "The following deferred tools are available via ToolSearch.";
+const DEFERRED_REMINDER_MARKER =
+  "The following deferred tools are available via ToolSearch.";
 
 export interface AgentConfig {
   client: LLMClient;
@@ -219,11 +231,17 @@ export class Agent {
   private restoreContext(): void {
     const skills = [
       this.skillSection,
-      ...[...this.activeSkills].map(([name, body]) => `## Active skill: ${name}\n${body}`),
+      ...[...this.activeSkills].map(
+        ([name, body]) => `## Active skill: ${name}\n${body}`,
+      ),
     ]
       .filter(Boolean)
       .join("\n\n");
-    this.conversation.injectLongTermMemory(this.instructions, this.memoryContent, skills);
+    this.conversation.injectLongTermMemory(
+      this.instructions,
+      this.memoryContent,
+      skills,
+    );
   }
 
   async *run(): AsyncGenerator<AgentEvent> {
@@ -253,7 +271,9 @@ export class Agent {
         if (this.maxIterations > 0 && iteration > this.maxIterations) {
           yield {
             type: "error",
-            error: new Error(`Agent reached maximum iterations (${String(this.maxIterations)})`),
+            error: new Error(
+              `Agent reached maximum iterations (${String(this.maxIterations)})`,
+            ),
           };
           return;
         }
@@ -272,7 +292,11 @@ export class Agent {
           const planPath = getOrCreatePlanPath(this.workDir);
           this.checker.planFilePath = planPath;
           this.conversation.addSystemReminder(
-            buildPlanModeReminder(planPath, planExists(this.workDir), iteration),
+            buildPlanModeReminder(
+              planPath,
+              planExists(this.workDir),
+              iteration,
+            ),
           );
         }
 
@@ -302,7 +326,10 @@ export class Agent {
           const poolChanged =
             deferredNames.length !== this.announcedDeferred.length ||
             deferredNames.some((n, i) => n !== this.announcedDeferred[i]);
-          if (poolChanged || !this.conversation.hasReminderContaining(DEFERRED_REMINDER_MARKER)) {
+          if (
+            poolChanged ||
+            !this.conversation.hasReminderContaining(DEFERRED_REMINDER_MARKER)
+          ) {
             let reminder =
               DEFERRED_REMINDER_MARKER +
               ' Their schemas are NOT loaded - use ToolSearch with query "select:<name>[,<name>...]" ' +
@@ -311,7 +338,9 @@ export class Agent {
               this.registry.mcpLoadingMode === "dispatch"
                 ? ", then invoke them with the McpCall tool"
                 : " before calling them";
-            this.conversation.addSystemReminder(reminder + ":\n" + deferredNames.join("\n"));
+            this.conversation.addSystemReminder(
+              reminder + ":\n" + deferredNames.join("\n"),
+            );
             this.announcedDeferred = deferredNames;
           }
         }
@@ -333,7 +362,9 @@ export class Agent {
         if (this.skillDeltaFn) {
           const delta = this.skillDeltaFn();
           if (delta) {
-            this.conversation.addSystemReminder("The following skills became available:\n" + delta);
+            this.conversation.addSystemReminder(
+              "The following skills became available:\n" + delta,
+            );
           }
         }
 
@@ -380,7 +411,11 @@ export class Agent {
             // Initiate API call directly with the conversation — no need to rebuild
             const stream = observeLlmStream(
               this.client,
-              this.client.stream(this.conversation, toolSchemas, this.abortSignal),
+              this.client.stream(
+                this.conversation,
+                toolSchemas,
+                this.abortSignal,
+              ),
               telemetry,
             );
 
@@ -419,7 +454,9 @@ export class Agent {
                     toolUseId: event.toolId,
                     toolName: event.toolName,
                     arguments: event.arguments,
-                    ...(event.providerItemId ? { providerItemId: event.providerItemId } : {}),
+                    ...(event.providerItemId
+                      ? { providerItemId: event.providerItemId }
+                      : {}),
                   });
                   yield {
                     type: "tool_use",
@@ -439,7 +476,11 @@ export class Agent {
           } catch (err) {
             if (this.abortSignal?.aborted) {
               if (fullText || thinkingBlocks.length > 0) {
-                this.conversation.addAssistantFull(fullText, thinkingBlocks, []);
+                this.conversation.addAssistantFull(
+                  fullText,
+                  thinkingBlocks,
+                  [],
+                );
                 this.persistLastMessage();
               }
               yield { type: "loop_complete", stopReason: "interrupted" };
@@ -467,7 +508,8 @@ export class Agent {
                 this.restoreContext();
                 yield {
                   type: "compact",
-                  message: "Auto-compacted due to context length: " + result.message,
+                  message:
+                    "Auto-compacted due to context length: " + result.message,
                   boundary: result.boundary,
                 };
                 continue;
@@ -523,12 +565,20 @@ export class Agent {
           // the model window can hold).
           if (stopReason === "max_tokens") {
             const ceiling = Math.min(MAX_TOKENS_CEILING, this.contextWindow);
-            if (!maxTokensEscalated && this.maxOutput < ceiling && this.client.setMaxOutputTokens) {
+            if (
+              !maxTokensEscalated &&
+              this.maxOutput < ceiling &&
+              this.client.setMaxOutputTokens
+            ) {
               this.client.setMaxOutputTokens?.(ceiling);
               this.maxOutput = ceiling;
               maxTokensEscalated = true;
               if (fullText) {
-                this.conversation.addAssistantFull(fullText, thinkingBlocks, []);
+                this.conversation.addAssistantFull(
+                  fullText,
+                  thinkingBlocks,
+                  [],
+                );
                 this.persistLastMessage();
                 if (lastUsage) {
                   this.conversation.recordUsageAnchor(
@@ -575,7 +625,11 @@ export class Agent {
             outputRecoveries = 0;
           }
 
-          this.conversation.addAssistantFull(fullText, thinkingBlocks, toolUses);
+          this.conversation.addAssistantFull(
+            fullText,
+            thinkingBlocks,
+            toolUses,
+          );
           this.persistLastMessage();
 
           if (lastUsage) {
@@ -598,7 +652,14 @@ export class Agent {
             // never see the full text and will loop between "read back" and "spill".
             const exemptIds = new Set<string>();
             for (const tu of toolUses) {
-              if (isSpillReadback(tu.toolName, tu.arguments, this.workDir, this.sessionId)) {
+              if (
+                isSpillReadback(
+                  tu.toolName,
+                  tu.arguments,
+                  this.workDir,
+                  this.sessionId,
+                )
+              ) {
                 exemptIds.add(tu.toolUseId);
               }
             }
@@ -609,10 +670,15 @@ export class Agent {
                 const toolResult: ToolResultBlock = {
                   toolUseId: r.toolId,
                   content: r.output,
-                  ...(r.contentBlocks?.length ? { contentBlocks: r.contentBlocks } : {}),
+                  ...(r.contentBlocks?.length
+                    ? { contentBlocks: r.contentBlocks }
+                    : {}),
                   isError: r.isError,
                 };
-                if (toolResult.content.length > MAX_OUTPUT_CHARS && !exemptIds.has(r.toolId)) {
+                if (
+                  toolResult.content.length > MAX_OUTPUT_CHARS &&
+                  !exemptIds.has(r.toolId)
+                ) {
                   // Single result exceeds the limit: write to disk and replace its
                   // text fallback and rich text blocks with the same preview.
                   const replacement = persistLargeResult(
@@ -686,7 +752,8 @@ export class Agent {
           } else {
             looping = false;
             if (this.fileHistory) {
-              const summary = fullText.length > 60 ? fullText.slice(0, 60) + "..." : fullText;
+              const summary =
+                fullText.length > 60 ? fullText.slice(0, 60) + "..." : fullText;
               this.fileHistory.makeSnapshot(this.conversation.len(), summary);
             }
             yield { type: "loop_complete", stopReason };
@@ -708,14 +775,20 @@ export class Agent {
       try {
         await this.fireLifecycle("session_end");
       } finally {
-        endAgentTelemetry(telemetry, this.abortSignal?.aborted ? "interrupted" : "completed");
+        endAgentTelemetry(
+          telemetry,
+          this.abortSignal?.aborted ? "interrupted" : "completed",
+        );
       }
     }
   }
 
   // Fire a lifecycle hook event and queue any non-empty hook output as a
   // notification to be surfaced on the next turn. No-op without a HookEngine.
-  private async fireLifecycle(event: EventName, message?: string): Promise<void> {
+  private async fireLifecycle(
+    event: EventName,
+    message?: string,
+  ): Promise<void> {
     if (!this.hookEngine) {
       return;
     }
@@ -781,10 +854,15 @@ export class Agent {
       // Safety is determined by the actual arguments of this call, not just the tool category.
       // ls and rm are both Bash — the former can run concurrently with ReadFile, the latter must be exclusive.
       const safe = tool
-        ? (tool.isConcurrencySafe?.(tu.arguments ?? {}) ?? tool.category === "read")
+        ? (tool.isConcurrencySafe?.(tu.arguments ?? {}) ??
+          tool.category === "read")
         : false;
 
-      if (safe && batches.length > 0 && batches[batches.length - 1].concurrent) {
+      if (
+        safe &&
+        batches.length > 0 &&
+        batches[batches.length - 1].concurrent
+      ) {
         batches[batches.length - 1].blocks.push(tu);
       } else {
         batches.push({ concurrent: safe, blocks: [tu] });
@@ -846,10 +924,14 @@ export class Agent {
 
       // Fire pre-tool hooks
       if (this.hookEngine) {
-        const hookResult = await this.hookEngine.firePreToolHooks(tu.toolName, tu.arguments, {
-          workDir: this.workDir,
-          abortSignal: this.abortSignal,
-        });
+        const hookResult = await this.hookEngine.firePreToolHooks(
+          tu.toolName,
+          tu.arguments,
+          {
+            workDir: this.workDir,
+            abortSignal: this.abortSignal,
+          },
+        );
         if (hookResult.rejected) {
           events.push({
             type: "tool_result",
@@ -866,10 +948,14 @@ export class Agent {
       const tool = this.registry.get(tu.toolName);
       const category = tool?.category ?? "command";
 
-      const target = tool instanceof McpCallTool ? tool.resolveTarget(tu.arguments) : undefined;
+      const target =
+        tool instanceof McpCallTool
+          ? tool.resolveTarget(tu.arguments)
+          : undefined;
       if (
         target &&
-        (!this.registry.get(target.name) || (this.toolFilter && !this.toolFilter(target.name)))
+        (!this.registry.get(target.name) ||
+          (this.toolFilter && !this.toolFilter(target.name)))
       ) {
         events.push({
           type: "tool_result",
@@ -881,10 +967,16 @@ export class Agent {
         });
         continue;
       }
-      const decisions = [this.checker.check(tu.toolName, category, tu.arguments)];
+      const decisions = [
+        this.checker.check(tu.toolName, category, tu.arguments),
+      ];
       if (target) {
         decisions.push(
-          this.checker.check(target.name, target.category, asRecord(tu.arguments.arguments ?? {})),
+          this.checker.check(
+            target.name,
+            target.category,
+            asRecord(tu.arguments.arguments ?? {}),
+          ),
         );
       }
       const decision =
@@ -987,7 +1079,11 @@ export class Agent {
     events: AgentEvent[],
   ): Promise<void> {
     // Snapshot exactly what text ReadFile returned so recovery stays aligned with what the model saw.
-    if (!r.result.isError && r.toolName === "ReadFile" && !r.result.contentBlocks?.length) {
+    if (
+      !r.result.isError &&
+      r.toolName === "ReadFile" &&
+      !r.result.contentBlocks?.length
+    ) {
       const tu = toolUses.find((t) => t.toolUseId === r.toolId);
       const p = strArg(tu?.arguments ?? {}, "file_path");
       if (p) {
@@ -1000,7 +1096,9 @@ export class Agent {
       toolName: r.toolName,
       toolId: r.toolId,
       output: r.result.output,
-      ...(r.result.contentBlocks?.length ? { contentBlocks: r.result.contentBlocks } : {}),
+      ...(r.result.contentBlocks?.length
+        ? { contentBlocks: r.result.contentBlocks }
+        : {}),
       isError: r.result.isError,
       elapsed: r.elapsed,
     });
@@ -1014,7 +1112,11 @@ export class Agent {
           event: "post_tool_use",
           toolName: r.toolName,
           args,
-          filePath: strArg(args ?? {}, "file_path", strArg(args ?? {}, "path", "")),
+          filePath: strArg(
+            args ?? {},
+            "file_path",
+            strArg(args ?? {}, "path", ""),
+          ),
           message: r.result.output,
         },
         { workDir: this.workDir, abortSignal: this.abortSignal },
@@ -1048,8 +1150,12 @@ export class Agent {
       role: last.role,
       content: last.content,
       timestamp: Math.floor(Date.now() / 1000),
-      ...(last.toolUses?.length ? { tool_uses: toolUsesToRecords(last.toolUses) } : {}),
-      ...(last.toolResults?.length ? { tool_results: toolResultsToRecords(last.toolResults) } : {}),
+      ...(last.toolUses?.length
+        ? { tool_uses: toolUsesToRecords(last.toolUses) }
+        : {}),
+      ...(last.toolResults?.length
+        ? { tool_results: toolResultsToRecords(last.toolResults) }
+        : {}),
     });
   }
 }

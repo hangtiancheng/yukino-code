@@ -31,7 +31,10 @@ async function canonicalPath(filePath: string): Promise<string> {
     return await realpath(absolutePath);
   } catch {
     try {
-      return join(await realpath(dirname(absolutePath)), basename(absolutePath));
+      return join(
+        await realpath(dirname(absolutePath)),
+        basename(absolutePath),
+      );
     } catch {
       return absolutePath;
     }

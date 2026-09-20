@@ -26,14 +26,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentEvent } from "@/agent/events.js";
 import type { ChatMessage } from "@/ui/chat.js";
-import { useAgentOutput, type AgentCardDecoration } from "@/ui/use-agent-output.js";
+import {
+  useAgentOutput,
+  type AgentCardDecoration,
+} from "@/ui/use-agent-output.js";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const isPromise = (obj: unknown): obj is Promise<unknown> =>
-  typeof obj === "object" && obj !== null && "then" in obj && typeof obj.then === "function";
+  typeof obj === "object" &&
+  obj !== null &&
+  "then" in obj &&
+  typeof obj.then === "function";
 
 let instance: Instance | undefined;
-let current: { output: ReturnType<typeof useAgentOutput>; messages: ChatMessage[] } | undefined;
+let current:
+  | { output: ReturnType<typeof useAgentOutput>; messages: ChatMessage[] }
+  | undefined;
 
 function Harness() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -48,7 +56,9 @@ function state() {
   return current;
 }
 
-function startLoop(resolveAgentCard?: (toolId: string) => AgentCardDecoration | undefined) {
+function startLoop(
+  resolveAgentCard?: (toolId: string) => AgentCardDecoration | undefined,
+) {
   let handler: ((event: AgentEvent) => void) | undefined;
   act(() => {
     handler = state().output.createEventHandler(resolveAgentCard);
@@ -90,15 +100,23 @@ afterEach(() => {
 describe("agent output hook", () => {
   it("batches stream updates and commits once at turn and loop boundaries", () => {
     const send = startLoop();
-    send({ type: "stream_text", text: "Hello" }, { type: "stream_text", text: " world" });
+    send(
+      { type: "stream_text", text: "Hello" },
+      { type: "stream_text", text: " world" },
+    );
     expect(state().output.streamingText).toBe("");
     expect(state().output.streamingTextRef.current).toBe("Hello world");
     act(() => {
       vi.advanceTimersByTime(50);
     });
     expect(state().output.streamingText).toBe("Hello world");
-    send({ type: "turn_complete" }, { type: "loop_complete", stopReason: "end_turn" });
-    expect(state().messages).toEqual([{ role: "assistant", content: "Hello world" }]);
+    send(
+      { type: "turn_complete" },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(state().messages).toEqual([
+      { role: "assistant", content: "Hello world" },
+    ]);
     expect(state().output.streamingText).toBe("");
     act(() => {
       vi.advanceTimersByTime(100);
@@ -138,7 +156,9 @@ describe("agent output hook", () => {
         elapsed: 2,
       },
     );
-    expect(state().output.activeTools.map((tool) => [tool.toolId, tool.loading])).toEqual([
+    expect(
+      state().output.activeTools.map((tool) => [tool.toolId, tool.loading]),
+    ).toEqual([
       ["a", true],
       ["b", false],
     ]);
@@ -173,7 +193,10 @@ describe("agent output hook", () => {
     ]);
     expect(state().output.activeTools).toEqual([]);
     expect(state().output.streamingThinking).toBe("");
-    send({ type: "stream_text", text: "Done" }, { type: "loop_complete", stopReason: "end_turn" });
+    send(
+      { type: "stream_text", text: "Done" },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
     expect(state().messages.at(-1)).toEqual({
       role: "assistant",
       content: "Done",
@@ -212,7 +235,9 @@ describe("agent output hook", () => {
         loading: false,
       }),
     ]);
-    expect(state().messages.flatMap((message) => message.toolSummary ?? [])).toEqual([]);
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toEqual([]);
 
     act(() => {
       state().output.resetUsage();
@@ -248,7 +273,9 @@ describe("agent output hook", () => {
     // card scrolls away with the transcript like any other tool card, and
     // the result reaches the user as a task notification.
     expect(state().output.persistentAgentTools).toEqual([]);
-    expect(state().messages.flatMap((message) => message.toolSummary ?? [])).toEqual([
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toEqual([
       expect.objectContaining({
         toolName: "Agent",
         output: "Background agent started",
@@ -320,7 +347,9 @@ describe("agent output hook", () => {
 
     // The interrupted card must not look like a success: status drives the
     // red "stopped" styling, matching the persistent background cards.
-    const stopped = state().output.activeTools.find((tool) => tool.toolId === "agent-stop");
+    const stopped = state().output.activeTools.find(
+      (tool) => tool.toolId === "agent-stop",
+    );
     expect(stopped).toEqual(
       expect.objectContaining({
         status: "stopped",
@@ -329,7 +358,9 @@ describe("agent output hook", () => {
       }),
     );
     // Non-Agent tools never receive a decoration, even with a resolver active.
-    const read = state().output.activeTools.find((tool) => tool.toolId === "read-1");
+    const read = state().output.activeTools.find(
+      (tool) => tool.toolId === "read-1",
+    );
     expect(read?.status).toBeUndefined();
     expect(read?.progress).toBeUndefined();
 
@@ -397,7 +428,9 @@ describe("agent output hook", () => {
       },
     );
 
-    expect(state().output.persistentAgentTools.map((tool) => tool.toolId)).toEqual(["b-1"]);
+    expect(
+      state().output.persistentAgentTools.map((tool) => tool.toolId),
+    ).toEqual(["b-1"]);
   });
 
   it("clears every pinned teammate card when TeamCreate succeeds", () => {
@@ -420,7 +453,9 @@ describe("agent output hook", () => {
         },
       );
     }
-    expect(state().output.persistentAgentTools.map((tool) => tool.toolId)).toEqual(["a-1", "a-2"]);
+    expect(
+      state().output.persistentAgentTools.map((tool) => tool.toolId),
+    ).toEqual(["a-1", "a-2"]);
 
     // TeamCreate deletes every existing team, so all pinned cards are stale.
     send(
@@ -442,7 +477,9 @@ describe("agent output hook", () => {
 
     expect(state().output.persistentAgentTools).toEqual([]);
     // The TeamCreate call itself still commits to history like a normal tool.
-    expect(state().messages.flatMap((message) => message.toolSummary ?? [])).toEqual([]);
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toEqual([]);
     send({ type: "turn_complete" });
     expect(
       state()
@@ -510,7 +547,9 @@ describe("agent output hook", () => {
       { type: "stream_text", text: "new turn" },
       { type: "loop_complete", stopReason: "end_turn" },
     );
-    expect(state().messages).toEqual([{ role: "assistant", content: "new turn" }]);
+    expect(state().messages).toEqual([
+      { role: "assistant", content: "new turn" },
+    ]);
   });
 
   it("shows retry feedback until output resumes or the turn ends", () => {

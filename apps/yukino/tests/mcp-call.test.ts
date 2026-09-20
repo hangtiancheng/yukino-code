@@ -31,7 +31,11 @@ import {
 } from "@/mcp/strategy.js";
 import { buildMcpToolName, mcpToolNamePrefix } from "@/mcp/tool-wrapper.js";
 import { extractContent } from "@/permissions/index.js";
-import { McpCallTool, coerceBySchema, mcpCallPermissionContent } from "@/tools/mcp-call.js";
+import {
+  McpCallTool,
+  coerceBySchema,
+  mcpCallPermissionContent,
+} from "@/tools/mcp-call.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { ToolSearchTool } from "@/tools/tool-search.js";
 import type {
@@ -107,7 +111,10 @@ class FakeMcpTool implements MCPToolLike {
     };
   }
 
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     this.received = args;
     return Promise.resolve({ output: "ok", isError: false });
   }
@@ -119,7 +126,11 @@ describe("coerceBySchema contract", () => {
     ["string ← integer", { issueId: 8891 }, { issueId: "8891" }],
     ["string ← float", { issueId: 1.5 }, { issueId: "1.5" }],
     ["integer ← numeric string", { limit: "5" }, { limit: 5 }],
-    ["number ← numeric string with whitespace", { ratio: " 1.5 " }, { ratio: 1.5 }],
+    [
+      "number ← numeric string with whitespace",
+      { ratio: " 1.5 " },
+      { ratio: 1.5 },
+    ],
     ["boolean ← true", { flag: "true" }, { flag: true }],
     ["boolean ← uppercase FALSE", { flag: "FALSE" }, { flag: false }],
     [
@@ -127,8 +138,16 @@ describe("coerceBySchema contract", () => {
       { labels: { item: ["a", "b"] } },
       { labels: ["a", "b"] },
     ],
-    ["array ← comma-separated string", { labels: "a, b" }, { labels: ["a", "b"] }],
-    ["array recurses through items", { ports: ["8080", "9090"] }, { ports: [8080, 9090] }],
+    [
+      "array ← comma-separated string",
+      { labels: "a, b" },
+      { labels: ["a", "b"] },
+    ],
+    [
+      "array recurses through items",
+      { ports: ["8080", "9090"] },
+      { ports: [8080, 9090] },
+    ],
     [
       "object recurses through properties, including nested levels",
       { config: { replicas: "4", features: { item: ["x"] } } },
@@ -306,7 +325,9 @@ describe("three-way routing", () => {
   test("official endpoint detection", () => {
     expect(isOfficialAnthropicEndpoint("")).toBe(true);
     expect(isOfficialAnthropicEndpoint("https://api.anthropic.com")).toBe(true);
-    expect(isOfficialAnthropicEndpoint("https://api.minimaxi.com/anthropic")).toBe(false);
+    expect(
+      isOfficialAnthropicEndpoint("https://api.minimaxi.com/anthropic"),
+    ).toBe(false);
   });
 
   test("small schema size loads everything eagerly", () => {
@@ -322,7 +343,9 @@ describe("three-way routing", () => {
   });
 
   test("third-party endpoint uses McpCall dispatch", () => {
-    expect(decideMode("https://api.minimaxi.com/anthropic", 200000, 500000)).toBe("dispatch");
+    expect(
+      decideMode("https://api.minimaxi.com/anthropic", 200000, 500000),
+    ).toBe("dispatch");
   });
 
   test("only MCP tools count toward schema size", () => {
@@ -335,7 +358,9 @@ describe("three-way routing", () => {
 
 describe("applyMode effect on tools[]", () => {
   function mcpSchemas(registry: ToolRegistry) {
-    return registry.getAllSchemas("anthropic").filter((s) => s.name.startsWith("mcp__"));
+    return registry
+      .getAllSchemas("anthropic")
+      .filter((s) => s.name.startsWith("mcp__"));
   }
 
   test("eager: included in the array without defer_loading", () => {
@@ -384,7 +409,11 @@ describe("permission content normalization", () => {
     // Short name and fully qualified name must produce the same content,
     // otherwise permission rules would fail to match
     ["chrome-devtools", "click", "chrome_devtools__click"],
-    ["chrome-devtools", "mcp__chrome_devtools__click", "chrome_devtools__click"],
+    [
+      "chrome-devtools",
+      "mcp__chrome_devtools__click",
+      "chrome_devtools__click",
+    ],
   ];
   for (const [server, tool, want] of cases) {
     test(`${server} + ${tool}`, () => {
@@ -403,7 +432,9 @@ describe("permission content normalization", () => {
 
   test("content extraction for other tools is unchanged", () => {
     expect(extractContent("Bash", { command: "ls" })).toBe("ls");
-    expect(extractContent("mcp__linear__create_issue", { title: "x" })).toBe("");
+    expect(extractContent("mcp__linear__create_issue", { title: "x" })).toBe(
+      "",
+    );
   });
 });
 
@@ -437,13 +468,17 @@ describe("beta header for native deferred loading", () => {
   });
 
   test("defer_loading set to false does not count", () => {
-    expect(needsToolSearchBeta([{ ...toolSchema, name: "x", defer_loading: false }])).toBe(false);
+    expect(
+      needsToolSearchBeta([{ ...toolSchema, name: "x", defer_loading: false }]),
+    ).toBe(false);
   });
 });
 
 describe("tool naming", () => {
   test("double underscore separator", () => {
-    expect(buildMcpToolName("linear", "create_issue")).toBe("mcp__linear__create_issue");
+    expect(buildMcpToolName("linear", "create_issue")).toBe(
+      "mcp__linear__create_issue",
+    );
   });
 
   test("hyphens and dots become underscores, consistent with Go/Python", () => {
@@ -453,9 +488,11 @@ describe("tool naming", () => {
   });
 
   test("the prefix helper matches the composed name", () => {
-    expect(buildMcpToolName("chrome-2", "click").startsWith(mcpToolNamePrefix("chrome-2"))).toBe(
-      true,
-    );
+    expect(
+      buildMcpToolName("chrome-2", "click").startsWith(
+        mcpToolNamePrefix("chrome-2"),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -480,7 +517,10 @@ describe("per-mode tool selection", () => {
   });
 
   test("native: only ToolSearch is sent", () => {
-    expect(names("native")).toEqual(["ToolSearch", "mcp__linear__create_issue"]);
+    expect(names("native")).toEqual([
+      "ToolSearch",
+      "mcp__linear__create_issue",
+    ]);
   });
 
   test.each(["select:mcp__linear__create_issue", "fake"])(

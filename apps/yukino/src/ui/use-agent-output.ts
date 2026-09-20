@@ -20,7 +20,13 @@
  * SOFTWARE.
  */
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 import type { ChatMessage, ToolSummaryItem } from "./chat.js";
 import type { ToolBlockInfo, ToolCardStatus } from "./tool-display.js";
@@ -40,12 +46,16 @@ export interface AgentCardDecoration {
   progress?: string;
 }
 
-export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[]>>) {
+export function useAgentOutput(
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
+) {
   const [streamingText, setStreamingText] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
   const [retryStatus, setRetryStatus] = useState<string | undefined>();
   const [activeTools, setActiveTools] = useState<ToolBlockInfo[]>([]);
-  const [persistentAgentTools, setPersistentAgentTools] = useState<ToolBlockInfo[]>([]);
+  const [persistentAgentTools, setPersistentAgentTools] = useState<
+    ToolBlockInfo[]
+  >([]);
   const [inputTokens, setInputTokens] = useState(0);
   const [outputTokens, setOutputTokens] = useState(0);
   const streamingTextRef = useRef("");
@@ -108,7 +118,11 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
     };
 
     return (event: AgentEvent) => {
-      if (event.type !== "retry" && event.type !== "usage" && event.type !== "permission_request") {
+      if (
+        event.type !== "retry" &&
+        event.type !== "usage" &&
+        event.type !== "permission_request"
+      ) {
         setRetryStatus(undefined);
       }
       switch (event.type) {
@@ -136,7 +150,10 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
           break;
         }
         case "tool_use": {
-          pendingToolArgs.set(`${event.toolName}:${event.toolId}`, formatToolArgs(event.args));
+          pendingToolArgs.set(
+            `${event.toolName}:${event.toolId}`,
+            formatToolArgs(event.args),
+          );
           turnToolCalls.set(event.toolId, undefined);
           const tool: ToolBlockInfo = {
             toolId: event.toolId,
@@ -149,7 +166,11 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
           // agents (run_in_background) commit to history like any other tool
           // call — their result reaches the user as a task notification.
           const teamName = event.args.team_name;
-          if (event.toolName === "Agent" && typeof teamName === "string" && teamName) {
+          if (
+            event.toolName === "Agent" &&
+            typeof teamName === "string" &&
+            teamName
+          ) {
             persistentAgentToolIds.add(event.toolId);
             setPersistentAgentTools((tools) => [
               ...tools.filter((item) => item.toolId !== event.toolId),
@@ -162,7 +183,10 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
               },
             ]);
           }
-          if (event.toolName === "TeamDelete" && typeof event.args.name === "string") {
+          if (
+            event.toolName === "TeamDelete" &&
+            typeof event.args.name === "string"
+          ) {
             pendingTeamDeletes.set(event.toolId, event.args.name);
           }
           break;
@@ -173,7 +197,9 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
           // stopped / failed) so the card keeps it after commit; plain tools
           // derive their look from isError alone.
           const decoration =
-            event.toolName === "Agent" ? resolveAgentCard?.(event.toolId) : undefined;
+            event.toolName === "Agent"
+              ? resolveAgentCard?.(event.toolId)
+              : undefined;
           const completeTool = (tool: ToolBlockInfo): ToolBlockInfo =>
             tool.toolId === event.toolId
               ? {
@@ -183,7 +209,9 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
                   elapsed: event.elapsed,
                   loading: false,
                   ...(decoration?.status ? { status: decoration.status } : {}),
-                  ...(decoration?.progress ? { progress: decoration.progress } : {}),
+                  ...(decoration?.progress
+                    ? { progress: decoration.progress }
+                    : {}),
                 }
               : tool;
           setActiveTools((tools) => tools.map(completeTool));
@@ -213,12 +241,15 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
             }
             turnToolCalls.set(event.toolId, {
               toolName: event.toolName,
-              argsSummary: pendingToolArgs.get(`${event.toolName}:${event.toolId}`) ?? "",
+              argsSummary:
+                pendingToolArgs.get(`${event.toolName}:${event.toolId}`) ?? "",
               output,
               isError: event.isError,
               elapsed: event.elapsed,
               ...(decoration?.status ? { status: decoration.status } : {}),
-              ...(decoration?.progress ? { progress: decoration.progress } : {}),
+              ...(decoration?.progress
+                ? { progress: decoration.progress }
+                : {}),
             });
           }
           break;
@@ -261,7 +292,8 @@ export function useAgentOutput(setMessages: Dispatch<SetStateAction<ChatMessage[
             commits.push({
               role: "turn_summary",
               content: turnThinkingText,
-              thinkingDuration: turnThinkingDuration > 0 ? turnThinkingDuration : undefined,
+              thinkingDuration:
+                turnThinkingDuration > 0 ? turnThinkingDuration : undefined,
             });
           }
           if (turnText) {

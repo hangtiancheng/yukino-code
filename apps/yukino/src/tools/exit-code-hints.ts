@@ -142,7 +142,10 @@ const EXIT_CODE_HINTS = new Map<string, Map<number, string>>([
       [2, "syntax error"],
     ]),
   ],
-  ["find", new Map([[1, "partial success — some inputs could not be processed"]])],
+  [
+    "find",
+    new Map([[1, "partial success — some inputs could not be processed"]]),
+  ],
 
   // Process / batch helpers
   [
@@ -198,7 +201,10 @@ const EXIT_CODE_HINTS = new Map<string, Map<number, string>>([
   ["python3", new Map([[1, "unhandled exception"]])],
 
   // Network / remote tools
-  ["git", new Map([[128, "fatal error (e.g. invalid ref or not a git repository)"]])],
+  [
+    "git",
+    new Map([[128, "fatal error (e.g. invalid ref or not a git repository)"]]),
+  ],
   ["ssh", new Map([[255, "ssh error"]])],
   [
     "wget",
@@ -269,7 +275,8 @@ const GENERIC_HINTS = new Map<number, string>([
  */
 export function exitCodeHint(command: string, exitCode: number): string {
   const baseCmd = extractBaseCmd(command);
-  const hint = EXIT_CODE_HINTS.get(baseCmd)?.get(exitCode) ?? GENERIC_HINTS.get(exitCode);
+  const hint =
+    EXIT_CODE_HINTS.get(baseCmd)?.get(exitCode) ?? GENERIC_HINTS.get(exitCode);
   if (hint) {
     return hint;
   }

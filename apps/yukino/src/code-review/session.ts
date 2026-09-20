@@ -33,18 +33,25 @@ export interface ReviewRequest {
   author: string;
   branch: string;
   files: string[];
-  status: "pending" | "in-review" | "approved" | "rejected" | "changes-requested";
+  status:
+    "pending" | "in-review" | "approved" | "rejected" | "changes-requested";
   createdAt: string;
   updatedAt: string;
   reviewers: string[];
   comments: ReviewComment[];
 }
 
-export type CommentResolution = "accepted" | "rejected" | "pending" | "resolved";
-export type CriticEvaluation = "reasonable" | "unreasonable" | "partially-reasonable";
+export type CommentResolution =
+  "accepted" | "rejected" | "pending" | "resolved";
+export type CriticEvaluation =
+  "reasonable" | "unreasonable" | "partially-reasonable";
 
 export function isCriticEvaluation(str: string): str is CriticEvaluation {
-  return str === "reasonable" || str === "unreasonable" || str === "partially-reasonable";
+  return (
+    str === "reasonable" ||
+    str === "unreasonable" ||
+    str === "partially-reasonable"
+  );
 }
 
 export function asCriticEvaluation(str: string): CriticEvaluation {
@@ -150,7 +157,9 @@ export class ReviewSession {
       throw new Error(`Team '${teamName}' not found`);
     }
 
-    const reviewers = this.manager.getActiveReviewers(teamName).map((r) => r.name);
+    const reviewers = this.manager
+      .getActiveReviewers(teamName)
+      .map((r) => r.name);
     if (reviewers.length === 0) {
       throw new Error(`No active reviewers in team '${teamName}'`);
     }
@@ -229,7 +238,11 @@ export class ReviewSession {
     request.updatedAt = new Date().toISOString();
   }
 
-  acceptComment(requestId: string, commentId: string, authorResponse?: string): void {
+  acceptComment(
+    requestId: string,
+    commentId: string,
+    authorResponse?: string,
+  ): void {
     const request = this.requests.get(requestId);
     if (!request) {
       throw new Error(`Request '${requestId}' not found`);
@@ -245,7 +258,11 @@ export class ReviewSession {
     request.updatedAt = new Date().toISOString();
   }
 
-  rejectComment(requestId: string, commentId: string, authorResponse?: string): void {
+  rejectComment(
+    requestId: string,
+    commentId: string,
+    authorResponse?: string,
+  ): void {
     const request = this.requests.get(requestId);
     if (!request) {
       throw new Error(`Request '${requestId}' not found`);
@@ -297,8 +314,16 @@ export class ReviewSession {
     isReasonable: boolean,
     reasoning: string,
   ): CriticAssessment {
-    const evaluation: CriticEvaluation = isReasonable ? "reasonable" : "unreasonable";
-    return this.addCriticAssessment(requestId, commentId, criticName, evaluation, reasoning);
+    const evaluation: CriticEvaluation = isReasonable
+      ? "reasonable"
+      : "unreasonable";
+    return this.addCriticAssessment(
+      requestId,
+      commentId,
+      criticName,
+      evaluation,
+      reasoning,
+    );
   }
 
   getCriticSummary(requestId: string): string {
@@ -359,9 +384,13 @@ export class ReviewSession {
     summary += `* Partially Reasonable: ${String(partiallyReasonableCount)}\n`;
     summary += `* Not Evaluated: ${String(notEvaluatedCount)}\n`;
 
-    const totalEvaluated = reasonableCount + unreasonableCount + partiallyReasonableCount;
+    const totalEvaluated =
+      reasonableCount + unreasonableCount + partiallyReasonableCount;
     if (totalEvaluated > 0) {
-      const reasonablePercentage = ((reasonableCount / totalEvaluated) * 100).toFixed(1);
+      const reasonablePercentage = (
+        (reasonableCount / totalEvaluated) *
+        100
+      ).toFixed(1);
       summary += `* Reasonable Rate: ${reasonablePercentage}%\n`;
     }
 
@@ -374,8 +403,12 @@ export class ReviewSession {
       throw new Error(`Request '${requestId}' not found`);
     }
 
-    const acceptedCount = request.comments.filter((c) => c.resolution === "accepted").length;
-    const rejectedCount = request.comments.filter((c) => c.resolution === "rejected").length;
+    const acceptedCount = request.comments.filter(
+      (c) => c.resolution === "accepted",
+    ).length;
+    const rejectedCount = request.comments.filter(
+      (c) => c.resolution === "rejected",
+    ).length;
     const pendingCount = request.comments.filter(
       (c) => !c.resolution || c.resolution === "pending",
     ).length;

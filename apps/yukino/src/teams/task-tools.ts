@@ -22,13 +22,23 @@
 
 import type { TeamManager } from "./index.js";
 
-import type { Tool, ToolContext, ToolResult, ToolSchema } from "@/tools/types.js";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
 import { strArg, strList } from "@/utils/index.js";
 
 // Team shared task-board tools: TaskCreate / TaskGet / TaskList / TaskUpdate.
 // All four tools operate on the same team's SharedTaskStore, so teammates share a single task list.
 
-const VALID_STATUSES = new Set(["pending", "in_progress", "completed", "blocked"]);
+const VALID_STATUSES = new Set([
+  "pending",
+  "in_progress",
+  "completed",
+  "blocked",
+]);
 
 export class TeamTaskCreateTool implements Tool {
   name = "TaskCreate";
@@ -68,7 +78,10 @@ export class TeamTaskCreateTool implements Tool {
       },
     };
   }
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const title = strArg(args, "title");
     if (!title) {
       return Promise.resolve({
@@ -102,7 +115,8 @@ export class TeamTaskCreateTool implements Tool {
 
 export class TeamTaskGetTool implements Tool {
   name = "TaskGet";
-  description = "Get details of a shared task by ID, including dependency information.";
+  description =
+    "Get details of a shared task by ID, including dependency information.";
   category = "read" as const;
   constructor(
     private mgr: TeamManager,
@@ -121,7 +135,10 @@ export class TeamTaskGetTool implements Tool {
       },
     };
   }
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const taskId = strArg(args, "task_id");
     if (!taskId) {
       return Promise.resolve({
@@ -186,7 +203,10 @@ export class TeamTaskListTool implements Tool {
       },
     };
   }
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const store = this.mgr.getTaskStore(this.teamName);
     if (!store) {
       return Promise.resolve({
@@ -221,7 +241,9 @@ export class TeamTaskListTool implements Tool {
     for (const t of tasks) {
       const icon = icons[t.status] ?? "?";
       const assigneeStr = t.assignee ? ` [${t.assignee}]` : "";
-      const deps = t.blockedBy.length ? ` (blocked by: ${t.blockedBy.join(", ")})` : "";
+      const deps = t.blockedBy.length
+        ? ` (blocked by: ${t.blockedBy.join(", ")})`
+        : "";
       lines.push(`  ${icon} [${t.id}] ${t.title}${assigneeStr}${deps}`);
     }
     return Promise.resolve({ output: lines.join("\n"), isError: false });
@@ -266,7 +288,10 @@ export class TeamTaskUpdateTool implements Tool {
       },
     };
   }
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const taskId = strArg(args, "task_id");
     if (!taskId) {
       return Promise.resolve({

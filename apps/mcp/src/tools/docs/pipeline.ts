@@ -44,7 +44,10 @@ export interface SyncStats {
 }
 
 /** Split a document into index chunks with deterministic ids (idempotent re-index). */
-export async function buildChunks(source: string, content: string): Promise<IndexChunk[]> {
+export async function buildChunks(
+  source: string,
+  content: string,
+): Promise<IndexChunk[]> {
   const sourceHash = sha256(source);
   const parts = await splitMarkdown(content);
   return parts
@@ -65,7 +68,10 @@ export async function buildChunks(source: string, content: string): Promise<Inde
  * sync; a lock conflict means a sibling server instance is already handling
  * that source and counts as skipped, not failed.
  */
-export async function syncDocs(ctx: DocsContext, docsDir: string): Promise<SyncStats> {
+export async function syncDocs(
+  ctx: DocsContext,
+  docsDir: string,
+): Promise<SyncStats> {
   const docs = await scanDocsDir(docsDir);
   const known = await readSourceHashes(ctx);
   const stats: SyncStats = {
@@ -86,14 +92,20 @@ export async function syncDocs(ctx: DocsContext, docsDir: string): Promise<SyncS
     }
     try {
       await deleteBySource(ctx, doc.source);
-      const count = await indexChunks(ctx, await buildChunks(doc.source, doc.content));
+      const count = await indexChunks(
+        ctx,
+        await buildChunks(doc.source, doc.content),
+      );
       await writeSourceHash(ctx, doc.source, hash);
       stats.indexed++;
       stats.chunks += count;
     } catch (err) {
       if (err instanceof LockConflictError) {
         stats.skipped++;
-        logger.info({ source: doc.source }, "another instance is indexing this source, skipping");
+        logger.info(
+          { source: doc.source },
+          "another instance is indexing this source, skipping",
+        );
         continue;
       }
       stats.failed++;
@@ -115,7 +127,10 @@ export async function syncDocs(ctx: DocsContext, docsDir: string): Promise<SyncS
         continue;
       }
       stats.failed++;
-      logger.warn({ err, source }, "failed to remove deleted document from index");
+      logger.warn(
+        { err, source },
+        "failed to remove deleted document from index",
+      );
     }
   }
 

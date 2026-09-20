@@ -97,7 +97,10 @@ export class SkillCatalog {
   private snapshotDirModTimes(): void {
     // Watch each skill directory too: adding/removing SKILL.md does not change
     // the parent skills directory's mtime.
-    for (const dir of new Set([...this.skillDirPaths(), ...this.dirModTimes.keys()])) {
+    for (const dir of new Set([
+      ...this.skillDirPaths(),
+      ...this.dirModTimes.keys(),
+    ])) {
       try {
         this.dirModTimes.set(dir, statSync(dir).mtimeMs);
       } catch {
@@ -107,8 +110,8 @@ export class SkillCatalog {
   }
 
   private skillDirPaths(): string[] {
-    return [homedir(), ...(this.workDir ? [this.workDir] : [])].flatMap((root) =>
-      [".agents"].map((ecosystem) => join(root, ecosystem, "skills")),
+    return [homedir(), ...(this.workDir ? [this.workDir] : [])].flatMap(
+      (root) => [".agents"].map((ecosystem) => join(root, ecosystem, "skills")),
     );
   }
 
@@ -261,7 +264,9 @@ export function parseSkillFile(content: string): {
 } | null {
   // Delimiters occupy their own lines; `---` inside YAML strings is content.
   const normalized = content.replace(/^\uFEFF/, "");
-  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(normalized);
+  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(
+    normalized,
+  );
   if (!match) {
     return null;
   }
@@ -288,11 +293,17 @@ export function parseSkillFile(content: string): {
 }
 
 export function escapeSkillXml(text: string): string {
-  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 /** Metadata-only conversation reminder; bodies load on demand without changing the system prefix. */
-export function buildSkillSection(catalog: SkillCatalog, workDir: string): string {
+export function buildSkillSection(
+  catalog: SkillCatalog,
+  workDir: string,
+): string {
   const metas = catalog.list();
   if (metas.length === 0) {
     return "";

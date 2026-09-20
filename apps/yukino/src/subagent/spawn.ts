@@ -25,7 +25,11 @@ import { formatAgentTaskNotification, TaskManager } from "./task-manager.js";
 import { filterToolsForAgent } from "./tool-filter.js";
 
 import { Agent, type AgentConfig } from "@/agent/index.js";
-import { getContextWindow, getMaxOutputTokens, type ProviderConfig } from "@/config/index.js";
+import {
+  getContextWindow,
+  getMaxOutputTokens,
+  type ProviderConfig,
+} from "@/config/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createClient } from "@/llm/client.js";
@@ -91,10 +95,13 @@ export async function spawnSubagent(
   // Determine the model: call-level override > definition-level model > parent Agent's model
 
   const effectiveModel = modelOverride ?? definition.model;
-  const resolvedModel = effectiveModel ? resolveModelId(effectiveModel) : parentProvider.model;
+  const resolvedModel = effectiveModel
+    ? resolveModelId(effectiveModel)
+    : parentProvider.model;
   const env = detectEnvironment(workDir);
   env.model = resolvedModel;
-  const systemPrompt = definition.systemPromptOverride ?? buildSystemPrompt(env);
+  const systemPrompt =
+    definition.systemPromptOverride ?? buildSystemPrompt(env);
   const provider = {
     ...parentProvider,
     model: resolvedModel,
@@ -131,7 +138,8 @@ export async function spawnSubagent(
   // notificationFn below), not the main thread. Null when the caller opted out
   // (in-process teammate turns) — the explicit null also blocks the tools'
   // fallback to their host-wired instance manager.
-  const taskManager = options.backgroundTasks === false ? null : new TaskManager();
+  const taskManager =
+    options.backgroundTasks === false ? null : new TaskManager();
 
   const agent = new Agent({
     client,

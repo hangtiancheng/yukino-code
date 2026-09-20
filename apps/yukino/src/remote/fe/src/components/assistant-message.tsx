@@ -31,7 +31,10 @@ interface AssistantMessageProps {
   streaming: boolean;
 }
 
-export function AssistantMessage({ content, streaming }: AssistantMessageProps) {
+export function AssistantMessage({
+  content,
+  streaming,
+}: AssistantMessageProps) {
   const { thinking, body } = splitThinking(content);
   const showOpenThinking = streaming && isOpenThinking(content);
 
@@ -48,7 +51,11 @@ export function AssistantMessage({ content, streaming }: AssistantMessageProps) 
     <div className="mb-5 leading-relaxed">
       {thinking && <ThinkingBlock text={thinking} label="✻ Thought" />}
       {showOpenThinking && (
-        <ThinkingBlock text={stripThinkOpen(content)} label="✻ Thinking..." streaming />
+        <ThinkingBlock
+          text={stripThinkOpen(content)}
+          label="✻ Thinking..."
+          streaming
+        />
       )}
       {bodyHtml && (
         <div

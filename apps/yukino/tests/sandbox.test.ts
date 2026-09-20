@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BwrapSandbox } from "@/sandbox/bwrap.js";
-import { SandboxRuntimeSandbox, createSandboxRuntimeConfig } from "@/sandbox/sandbox-runtime.js";
+import {
+  SandboxRuntimeSandbox,
+  createSandboxRuntimeConfig,
+} from "@/sandbox/sandbox-runtime.js";
 import { SeatbeltSandbox } from "@/sandbox/seatbelt.js";
 
 const runtimeMock = vi.hoisted(() => {
@@ -19,7 +22,10 @@ const runtimeMock = vi.hoisted(() => {
         Promise.resolve({ errors: [], warnings: [] }),
     ),
     wrapWithSandboxArgv: vi.fn(() =>
-      Promise.resolve({ argv: ["/bin/bash", "-c", "wrapped"], env: { TEST_SANDBOX: "1" } }),
+      Promise.resolve({
+        argv: ["/bin/bash", "-c", "wrapped"],
+        env: { TEST_SANDBOX: "1" },
+      }),
     ),
     cleanupAfterCommand: vi.fn(),
     reset: vi.fn(() => {
@@ -42,7 +48,8 @@ vi.mock("@anthropic-ai/sandbox-runtime", () => ({
     wrapWithSandboxArgv: runtimeMock.wrapWithSandboxArgv,
     cleanupAfterCommand: runtimeMock.cleanupAfterCommand,
     reset: runtimeMock.reset,
-    annotateStderrWithSandboxFailures: runtimeMock.annotateStderrWithSandboxFailures,
+    annotateStderrWithSandboxFailures:
+      runtimeMock.annotateStderrWithSandboxFailures,
   },
 }));
 
@@ -54,10 +61,18 @@ const config = {
 
 describe("native sandboxes", () => {
   it("prepares bwrap argv without passing the command through an outer shell", () => {
-    const prepared = new BwrapSandbox().prepare("true; echo still-contained", config);
+    const prepared = new BwrapSandbox().prepare(
+      "true; echo still-contained",
+      config,
+    );
 
     expect(prepared.executable).toBe("bwrap");
-    expect(prepared.args.slice(-4)).toEqual(["--", "bash", "-c", "true; echo still-contained"]);
+    expect(prepared.args.slice(-4)).toEqual([
+      "--",
+      "bash",
+      "-c",
+      "true; echo still-contained",
+    ]);
   });
 
   it("prepares seatbelt as an executable and argument vector", () => {

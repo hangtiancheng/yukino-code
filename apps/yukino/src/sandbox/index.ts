@@ -78,7 +78,9 @@ export interface Sandbox {
  * Creates the requested sandbox backend.
  * native: seatbelt on macOS, bubblewrap on Linux.
  */
-export async function createSandbox(backend: SandboxBackend = "native"): Promise<Sandbox | null> {
+export async function createSandbox(
+  backend: SandboxBackend = "native",
+): Promise<Sandbox | null> {
   if (backend === "sandbox-runtime") {
     const { SandboxRuntimeSandbox } = await import("./sandbox-runtime.js");
     return new SandboxRuntimeSandbox();

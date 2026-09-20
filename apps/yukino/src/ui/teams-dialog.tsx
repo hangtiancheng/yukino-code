@@ -39,7 +39,8 @@ interface Props {
 export function TeamsDialog({ teammates, onClose, onKill, onShutdown }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [detailName, setDetailName] = useState<string | null>(null);
-  const selected = teammates[Math.min(selectedIndex, Math.max(0, teammates.length - 1))];
+  const selected =
+    teammates[Math.min(selectedIndex, Math.max(0, teammates.length - 1))];
   const detail = detailName
     ? teammates.find((teammate) => teammate.name === detailName)
     : undefined;
@@ -59,9 +60,13 @@ export function TeamsDialog({ teammates, onClose, onKill, onShutdown }: Props) {
     if (key.escape) {
       onClose();
     } else if (key.upArrow) {
-      setSelectedIndex((current) => (current > 0 ? current - 1 : teammates.length - 1));
+      setSelectedIndex((current) =>
+        current > 0 ? current - 1 : teammates.length - 1,
+      );
     } else if (key.downArrow) {
-      setSelectedIndex((current) => (current < teammates.length - 1 ? current + 1 : 0));
+      setSelectedIndex((current) =>
+        current < teammates.length - 1 ? current + 1 : 0,
+      );
     } else if (key.return && selected) {
       setDetailName(selected.name);
     } else if (input === "k" && selected && onKill) {
@@ -80,7 +85,9 @@ export function TeamsDialog({ teammates, onClose, onKill, onShutdown }: Props) {
       hint="↑↓ navigate · Enter detail · k kill · s shutdown · Escape close"
       title="Teams"
     >
-      {teammates.length === 0 ? <Text color={THEME.muted}>No active teammates</Text> : null}
+      {teammates.length === 0 ? (
+        <Text color={THEME.muted}>No active teammates</Text>
+      ) : null}
       {teammates.map((teammate, _index) => {
         const active = teammate === selected;
         return (
@@ -115,7 +122,10 @@ function TeamDetail({ teammate }: { teammate: TeammateUIState }) {
     >
       {activities.length > 0 ? (
         activities.map((activity, index) => (
-          <Text key={`${String(index)}-${activity.activityDescription}`} color={THEME.muted}>
+          <Text
+            key={`${String(index)}-${activity.activityDescription}`}
+            color={THEME.muted}
+          >
             {index === activities.length - 1 ? "└─ " : "├─ "}
             {activity.activityDescription}
           </Text>

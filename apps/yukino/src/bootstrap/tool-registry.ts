@@ -26,7 +26,12 @@ import type { SkillCatalog } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
 import type { SkillHost } from "@/skills/index.js";
 import type { TaskList } from "@/todo/index.js";
-import { TaskCreateTool, TaskGetTool, TaskListTool, TaskUpdateTool } from "@/todo/tools.js";
+import {
+  TaskCreateTool,
+  TaskGetTool,
+  TaskListTool,
+  TaskUpdateTool,
+} from "@/todo/tools.js";
 import { BashTool } from "@/tools/bash.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
 import { EditFileTool } from "@/tools/edit-file.js";
@@ -44,7 +49,9 @@ import { WebFetchTool } from "@/tools/web-fetch.js";
 import { WriteFileTool } from "@/tools/write-file.js";
 
 export function countMcpTools(registry: ToolRegistry): number {
-  return registry.listTools().filter((tool) => tool.name.startsWith(MCP_TOOL_PREFIX)).length;
+  return registry
+    .listTools()
+    .filter((tool) => tool.name.startsWith(MCP_TOOL_PREFIX)).length;
 }
 
 /**
@@ -52,7 +59,10 @@ export function countMcpTools(registry: ToolRegistry): number {
  * server names. Used during /mcp reload so removed servers and stale schemas do
  * not linger while unchanged wrappers keep their discovery state.
  */
-export function removeMcpTools(registry: ToolRegistry, serverNames?: ReadonlySet<string>): void {
+export function removeMcpTools(
+  registry: ToolRegistry,
+  serverNames?: ReadonlySet<string>,
+): void {
   for (const tool of registry.listTools()) {
     if (
       tool.name.startsWith(MCP_TOOL_PREFIX) &&
@@ -66,7 +76,10 @@ export function removeMcpTools(registry: ToolRegistry, serverNames?: ReadonlySet
   }
 }
 
-export function createToolRegistry(workDir: string, taskList: TaskList): ToolRegistry {
+export function createToolRegistry(
+  workDir: string,
+  taskList: TaskList,
+): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(new TaskCreateTool(taskList));
   registry.register(new TaskGetTool(taskList));
@@ -128,5 +141,7 @@ export function buildComposedToolFilter(
   coordinator: (name: string) => boolean,
   skillFilter: ((name: string) => boolean) | null,
 ): (name: string) => boolean {
-  return skillFilter ? (name: string) => coordinator(name) && skillFilter(name) : coordinator;
+  return skillFilter
+    ? (name: string) => coordinator(name) && skillFilter(name)
+    : coordinator;
 }

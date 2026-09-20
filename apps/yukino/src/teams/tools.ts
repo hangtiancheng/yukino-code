@@ -34,7 +34,12 @@ import { getNameRegistry } from "./registry.js";
 import type { TeamManager, RunAgent, Team } from "./index.js";
 
 import { createChildLogger } from "@/logger/index.js";
-import type { Tool, ToolContext, ToolResult, ToolSchema } from "@/tools/types.js";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "teams" });
@@ -62,7 +67,10 @@ export class TeamCreateTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const requested = strArg(args, "team_name");
     if (!requested) {
       return Promise.resolve({
@@ -126,7 +134,10 @@ export class SpawnTeammateTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const team = strArg(args, "team");
     const name = strArg(args, "name");
     const task = strArg(args, "task");
@@ -153,7 +164,8 @@ export class SpawnTeammateTool implements Tool {
 
 export class SendMessageTool implements Tool {
   name = "SendMessage";
-  description = "Send a message to a teammate's mailbox. Use to='*' to broadcast to all teammates.";
+  description =
+    "Send a message to a teammate's mailbox. Use to='*' to broadcast to all teammates.";
   category = "read" as const;
   constructor(
     private mgr: TeamManager,
@@ -221,7 +233,10 @@ export class SendMessageTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const to = strArg(args, "to");
     const message = strArg(args, "content");
     const t = this.senderTeam();
@@ -234,8 +249,10 @@ export class SendMessageTool implements Tool {
     // guess intent from natural language — regressing to "coordination by prose parsing".
     const msgType = typeof args.type === "string" ? args.type : MSG_TEXT;
     if (msgType !== MSG_TEXT) {
-      const requestId = typeof args.request_id === "string" ? args.request_id : "";
-      const approve = typeof args.approve === "boolean" ? args.approve : undefined;
+      const requestId =
+        typeof args.request_id === "string" ? args.request_id : "";
+      const approve =
+        typeof args.approve === "boolean" ? args.approve : undefined;
       let structured;
       switch (msgType) {
         case MSG_SHUTDOWN_REQUEST:
@@ -248,16 +265,27 @@ export class SendMessageTool implements Tool {
               isError: true,
             };
           }
-          structured = shutdownResponse(this.senderName, requestId, approve, message);
+          structured = shutdownResponse(
+            this.senderName,
+            requestId,
+            approve,
+            message,
+          );
           break;
         case MSG_PLAN_APPROVAL_RESPONSE:
           if (!requestId || approve === undefined) {
             return {
-              output: "plan_approval_response requires both 'request_id' and 'approve'.",
+              output:
+                "plan_approval_response requires both 'request_id' and 'approve'.",
               isError: true,
             };
           }
-          structured = planApprovalResponse(this.senderName, requestId, approve, message);
+          structured = planApprovalResponse(
+            this.senderName,
+            requestId,
+            approve,
+            message,
+          );
           break;
         default:
           return {
@@ -365,7 +393,10 @@ export class TeamDeleteTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const name = strArg(args, "name");
     await this.mgr.delete(name);
     return { output: `Team '${name}' deleted.`, isError: false };

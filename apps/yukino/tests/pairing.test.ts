@@ -23,7 +23,10 @@
 import { describe, it, expect } from "vitest";
 
 import type { Message } from "@/conversation/index.js";
-import { ensureToolPairing, INTERRUPTED_TOOL_RESULT } from "@/conversation/pairing.js";
+import {
+  ensureToolPairing,
+  INTERRUPTED_TOOL_RESULT,
+} from "@/conversation/pairing.js";
 
 function assistantWithTool(id: string): Message {
   return {
@@ -53,7 +56,10 @@ describe("ensureToolPairing", () => {
   });
 
   it("fills a dangling tool_use with an error result", () => {
-    const got = ensureToolPairing([{ role: "user", content: "hi" }, assistantWithTool("t1")]);
+    const got = ensureToolPairing([
+      { role: "user", content: "hi" },
+      assistantWithTool("t1"),
+    ]);
     expect(got).toHaveLength(3);
     const filled = got[2].toolResults?.[0];
     expect(filled?.toolUseId).toBe("t1");

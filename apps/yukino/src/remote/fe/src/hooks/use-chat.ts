@@ -98,7 +98,9 @@ function finalizeAssistant(state: ChatState): ChatState {
     ...state,
     currentAssistantId: null,
     items: state.items.map((it) =>
-      it.kind === "assistant" && it.id === id ? { ...it, streaming: false } : it,
+      it.kind === "assistant" && it.id === id
+        ? { ...it, streaming: false }
+        : it,
     ),
   };
 }
@@ -137,7 +139,10 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "system":
       return {
         ...state,
-        items: [...state.items, { kind: "system", id: nextId("sys"), content: msg.data.message }],
+        items: [
+          ...state.items,
+          { kind: "system", id: nextId("sys"), content: msg.data.message },
+        ],
       };
 
     case "clear":
@@ -160,7 +165,10 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "replay_user":
       return {
         ...state,
-        items: [...state.items, { kind: "user", id: nextId("usr"), content: msg.data.content }],
+        items: [
+          ...state.items,
+          { kind: "user", id: nextId("usr"), content: msg.data.content },
+        ],
       };
 
     case "replay_assistant":
@@ -328,7 +336,10 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       return {
         ...next,
         streaming: false,
-        items: [...next.items, { kind: "done", id: nextId("done"), elapsed: msg.data.elapsed }],
+        items: [
+          ...next.items,
+          { kind: "done", id: nextId("done"), elapsed: msg.data.elapsed },
+        ],
       };
     }
 
@@ -339,7 +350,10 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       return {
         ...state,
         streaming: false,
-        items: [...state.items, { kind: "error", id: nextId("err"), content: msg.data.message }],
+        items: [
+          ...state.items,
+          { kind: "error", id: nextId("err"), content: msg.data.message },
+        ],
       };
 
     case "compact":
@@ -398,7 +412,9 @@ function reducer(state: ChatState, action: Action): ChatState {
       return {
         ...state,
         items: state.items.map((it) =>
-          it.kind === "askUser" && it.id === action.id ? { ...it, answered: true } : it,
+          it.kind === "askUser" && it.id === action.id
+            ? { ...it, answered: true }
+            : it,
         ),
       };
 
@@ -426,9 +442,12 @@ export function useChat(): ChatApi {
     dispatch({ kind: "connection", status });
   }, []);
 
-  const respondPermission = useCallback((id: string, response: PermissionResponse) => {
-    dispatch({ kind: "respondPermission", id, response });
-  }, []);
+  const respondPermission = useCallback(
+    (id: string, response: PermissionResponse) => {
+      dispatch({ kind: "respondPermission", id, response });
+    },
+    [],
+  );
 
   const markAskAnswered = useCallback((id: string) => {
     dispatch({ kind: "markAskAnswered", id });

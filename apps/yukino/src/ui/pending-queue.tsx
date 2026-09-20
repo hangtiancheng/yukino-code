@@ -36,7 +36,11 @@ export function PendingQueue({ messages }: PendingQueueProps) {
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
       {messages.map((message, index) => (
-        <Text key={`${String(index)}-${message}`} color={THEME.dim} wrap="truncate-end">
+        <Text
+          key={`${String(index)}-${message}`}
+          color={THEME.dim}
+          wrap="truncate-end"
+        >
           Follow-up: {message.replaceAll("\n", " ")}
         </Text>
       ))}

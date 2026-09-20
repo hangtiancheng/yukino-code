@@ -20,7 +20,13 @@
  * SOFTWARE.
  */
 
-import type { Tool, ToolCategory, ToolContext, ToolResult, ToolSchema } from "./types.js";
+import type {
+  Tool,
+  ToolCategory,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "./types.js";
 
 import { asErrorString } from "@/utils/index.js";
 
@@ -47,7 +53,8 @@ export class SyntheticOutputTool implements Tool {
         type: "object",
         properties: {
           output: {
-            description: "The structured result: an object, an array, or a plain string",
+            description:
+              "The structured result: an object, an array, or a plain string",
           },
         },
         required: ["output"],
@@ -55,9 +62,15 @@ export class SyntheticOutputTool implements Tool {
     };
   }
 
-  execute(_ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    _ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     if (!("output" in args)) {
-      return Promise.resolve({ output: "Error: output is required", isError: true });
+      return Promise.resolve({
+        output: "Error: output is required",
+        isError: true,
+      });
     }
     const output = args.output;
 
@@ -75,7 +88,10 @@ export class SyntheticOutputTool implements Tool {
     }
 
     try {
-      return Promise.resolve({ output: JSON.stringify(output, null, 2), isError: false });
+      return Promise.resolve({
+        output: JSON.stringify(output, null, 2),
+        isError: false,
+      });
     } catch (e) {
       return Promise.resolve({
         output: `Error: output is not serializable: ${asErrorString(e)}`,
@@ -116,7 +132,9 @@ export class SyntheticOutputTool implements Tool {
       data !== null &&
       !Array.isArray(data)
     ) {
-      const missing = required.filter((k): k is string => typeof k === "string" && !(k in data));
+      const missing = required.filter(
+        (k): k is string => typeof k === "string" && !(k in data),
+      );
       if (missing.length > 0) {
         return `Missing required fields: ${missing.join(", ")}`;
       }

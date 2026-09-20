@@ -82,7 +82,10 @@ export function buildPlanModeReminder(
  * Builds the reminder displayed after exiting Plan Mode.
  * If a plan file exists, prompts the model to reference the file path.
  */
-export function buildPlanModeExitReminder(planPath: string, planExists: boolean): string {
+export function buildPlanModeExitReminder(
+  planPath: string,
+  planExists: boolean,
+): string {
   let extra = "";
   if (planExists) {
     extra = ` The plan file is located at ${planPath} if you need to reference it.`;
@@ -94,7 +97,10 @@ export function buildPlanModeExitReminder(planPath: string, planExists: boolean)
  * Builds the reminder displayed when re-entering Plan Mode.
  * Only returns non-empty content if a plan file already exists, reminding the model to continue editing the existing plan.
  */
-export function buildPlanModeReentryReminder(planPath: string, planFileExists: boolean): string {
+export function buildPlanModeReentryReminder(
+  planPath: string,
+  planFileExists: boolean,
+): string {
   if (!planFileExists) {
     return "";
   }

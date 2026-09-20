@@ -23,7 +23,13 @@
 import type { TeamManager } from "./index.js";
 
 import type { TaskManager } from "@/subagent/task-manager.js";
-import type { Tool, ToolCategory, ToolContext, ToolResult, ToolSchema } from "@/tools/types.js";
+import type {
+  Tool,
+  ToolCategory,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
 import { strArg } from "@/utils/index.js";
 
 /** Abort a running teammate or one-shot background Agent/Bash/PowerShell task. */
@@ -59,11 +65,17 @@ export class TaskStopTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const name = strArg(args, "teammate", "");
     const taskId = strArg(args, "task_id", "");
     if ((!name && !taskId) || (name && taskId)) {
-      return { output: "Error: pass exactly one of teammate or task_id", isError: true };
+      return {
+        output: "Error: pass exactly one of teammate or task_id",
+        isError: true,
+      };
     }
 
     if (taskId) {
@@ -73,10 +85,15 @@ export class TaskStopTool implements Tool {
       // (host-level) manager may be a different task. Fall back to that
       // injected manager so a fork can still stop tasks it saw in its
       // pre-fork conversation snapshot.
-      const manager = ctx.taskManager?.get(taskId) ? ctx.taskManager : this.taskManager;
+      const manager = ctx.taskManager?.get(taskId)
+        ? ctx.taskManager
+        : this.taskManager;
       const task = manager?.get(taskId);
       if (!task) {
-        return { output: `Error: background task '${taskId}' not found`, isError: true };
+        return {
+          output: `Error: background task '${taskId}' not found`,
+          isError: true,
+        };
       }
       if (task.status !== "running") {
         return {

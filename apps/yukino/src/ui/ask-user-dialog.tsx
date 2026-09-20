@@ -60,7 +60,10 @@ function reducer(state: State, action: Action): State {
     case "next":
       return {
         ...state,
-        currentIndex: Math.min(state.currentIndex + 1, state.questionStates.length),
+        currentIndex: Math.min(
+          state.currentIndex + 1,
+          state.questionStates.length,
+        ),
       };
     case "prev":
       return { ...state, currentIndex: Math.max(state.currentIndex - 1, 0) };
@@ -104,7 +107,12 @@ function NavigationBar({
         const check = answered ? "☑" : "☐";
         if (active) {
           return (
-            <Text key={i} backgroundColor={THEME.selectedBg} color={THEME.text} bold>
+            <Text
+              key={i}
+              backgroundColor={THEME.selectedBg}
+              color={THEME.text}
+              bold
+            >
               {` ${check} ${q.header} `}
             </Text>
           );
@@ -146,7 +154,9 @@ function QuestionContent({
     <Box flexDirection="column" paddingLeft={1}>
       <Text bold>{question.question}</Text>
       {question.multiSelect && (
-        <Text color={THEME.dim}>{"  (Space to toggle · Enter to confirm)"}</Text>
+        <Text color={THEME.dim}>
+          {"  (Space to toggle · Enter to confirm)"}
+        </Text>
       )}
       <Text> </Text>
       {options.map((opt, i) => {
@@ -156,13 +166,21 @@ function QuestionContent({
         const pointer = isFocused ? ICONS.arrow : " ";
         const checked =
           question.multiSelect &&
-          (Array.isArray(state.selectedValue) ? state.selectedValue.includes(opt.label) : false);
+          (Array.isArray(state.selectedValue)
+            ? state.selectedValue.includes(opt.label)
+            : false);
         const checkMark = question.multiSelect ? (checked ? "☑ " : "☐ ") : "";
-        const color = isFocused ? THEME.accent : isSelected ? THEME.success : THEME.muted;
+        const color = isFocused
+          ? THEME.accent
+          : isSelected
+            ? THEME.success
+            : THEME.muted;
         return (
           <Box key={opt.label} flexDirection="column">
             <Text>
-              <Text color={isFocused ? THEME.accent : THEME.dim}>{pointer}</Text>
+              <Text color={isFocused ? THEME.accent : THEME.dim}>
+                {pointer}
+              </Text>
               <Text color={THEME.dim}> {idx}. </Text>
               <Text color={color}>
                 {checkMark}
@@ -183,7 +201,10 @@ function QuestionContent({
           <Text color={state.cursor === otherIndex ? THEME.accent : THEME.dim}>
             {state.cursor === otherIndex ? ICONS.arrow : " "}
           </Text>
-          <Text color={THEME.dim}> {String(otherIndex + 1).padStart(maxIdxWidth, " ")}. </Text>
+          <Text color={THEME.dim}>
+            {" "}
+            {String(otherIndex + 1).padStart(maxIdxWidth, " ")}.{" "}
+          </Text>
           <Text color={state.cursor === otherIndex ? THEME.accent : THEME.dim}>
             Other (type your own)
           </Text>
@@ -220,7 +241,9 @@ function SubmitContent({
       <Text bold>Review your answers</Text>
       <Text> </Text>
       {!allAnswered && (
-        <Text color={THEME.warning}>{"  Warning: You have not answered all questions"}</Text>
+        <Text color={THEME.warning}>
+          {"  Warning: You have not answered all questions"}
+        </Text>
       )}
       {questions.map((q, i) => (
         <Box key={q.question} flexDirection="column" marginBottom={0}>
@@ -247,7 +270,10 @@ function SubmitContent({
             <Text color={submitCursor === 0 ? THEME.accent : THEME.dim}>
               {submitCursor === 0 ? ICONS.arrow : " "}
             </Text>
-            <Text color={submitCursor === 0 ? THEME.accent : THEME.dim} bold={submitCursor === 0}>
+            <Text
+              color={submitCursor === 0 ? THEME.accent : THEME.dim}
+              bold={submitCursor === 0}
+            >
               {" Submit answers"}
             </Text>
           </Text>
@@ -255,7 +281,9 @@ function SubmitContent({
             <Text color={submitCursor === 1 ? THEME.accent : THEME.dim}>
               {submitCursor === 1 ? ICONS.arrow : " "}
             </Text>
-            <Text color={submitCursor === 1 ? THEME.accent : THEME.dim}>{" Cancel"}</Text>
+            <Text color={submitCursor === 1 ? THEME.accent : THEME.dim}>
+              {" Cancel"}
+            </Text>
           </Text>
         </Box>
       )}
@@ -422,7 +450,9 @@ export function AskUserDialog({ questions, onComplete }: Props) {
         },
       });
     } else if (input === " " && q.multiSelect && qs.cursor < q.options.length) {
-      const current = Array.isArray(qs.selectedValue) ? [...qs.selectedValue] : [];
+      const current = Array.isArray(qs.selectedValue)
+        ? [...qs.selectedValue]
+        : [];
       const label = q.options[qs.cursor].label;
       const idx = current.indexOf(label);
       if (idx >= 0) {
@@ -444,7 +474,9 @@ export function AskUserDialog({ questions, onComplete }: Props) {
           updates: { otherMode: true },
         });
       } else if (q.multiSelect) {
-        const selected = Array.isArray(qs.selectedValue) ? qs.selectedValue : [];
+        const selected = Array.isArray(qs.selectedValue)
+          ? qs.selectedValue
+          : [];
         if (selected.length > 0) {
           commitAnswer(selected.join(", "));
         } else {

@@ -56,7 +56,10 @@ export function SessionSelector({
     [sessions],
   );
   const matches = useMemo(
-    () => (query.trim() ? fuse.search(query.trim()).map(({ item }) => item) : sessions),
+    () =>
+      query.trim()
+        ? fuse.search(query.trim()).map(({ item }) => item)
+        : sessions,
     [fuse, query, sessions],
   );
   const cursor = Math.max(
@@ -69,7 +72,8 @@ export function SessionSelector({
       onCancel();
     } else if (key.upArrow || key.downArrow) {
       if (matches.length > 0) {
-        const next = (cursor + (key.upArrow ? -1 : 1) + matches.length) % matches.length;
+        const next =
+          (cursor + (key.upArrow ? -1 : 1) + matches.length) % matches.length;
         setFocusedId(matches[next].id);
       }
     } else if (key.return) {

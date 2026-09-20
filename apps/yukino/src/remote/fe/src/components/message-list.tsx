@@ -35,15 +35,27 @@ import { UserMessage } from "./user-message";
 
 interface MessageListProps {
   items: ChatItem[];
-  onRespondPermission: (id: string, response: "allow" | "deny" | "allowAlways") => void;
+  onRespondPermission: (
+    id: string,
+    response: "allow" | "deny" | "allowAlways",
+  ) => void;
   onAnswerAsk: (id: string, answers: Record<string, string>) => void;
 }
 
-export function MessageList({ items, onRespondPermission, onAnswerAsk }: MessageListProps) {
+export function MessageList({
+  items,
+  onRespondPermission,
+  onAnswerAsk,
+}: MessageListProps) {
   const { ref } = useAutoScroll<HTMLDivElement>(items);
 
   return (
-    <div ref={ref} role="log" aria-live="polite" className="flex-1 overflow-y-auto">
+    <div
+      ref={ref}
+      role="log"
+      aria-live="polite"
+      className="flex-1 overflow-y-auto"
+    >
       <div className="mx-auto w-full max-w-3xl px-5 py-6">
         {items.map((item) => {
           switch (item.kind) {
@@ -51,7 +63,11 @@ export function MessageList({ items, onRespondPermission, onAnswerAsk }: Message
               return <UserMessage key={item.id} content={item.content} />;
             case "assistant":
               return (
-                <AssistantMessage key={item.id} content={item.content} streaming={item.streaming} />
+                <AssistantMessage
+                  key={item.id}
+                  content={item.content}
+                  streaming={item.streaming}
+                />
               );
             case "system":
               return <SystemMessage key={item.id} content={item.content} />;
@@ -69,9 +85,21 @@ export function MessageList({ items, onRespondPermission, onAnswerAsk }: Message
             case "tool":
               return <ToolBlock key={item.id} item={item} />;
             case "permission":
-              return <PermissionDialog key={item.id} item={item} onRespond={onRespondPermission} />;
+              return (
+                <PermissionDialog
+                  key={item.id}
+                  item={item}
+                  onRespond={onRespondPermission}
+                />
+              );
             case "askUser":
-              return <AskUserDialog key={item.id} item={item} onAnswer={onAnswerAsk} />;
+              return (
+                <AskUserDialog
+                  key={item.id}
+                  item={item}
+                  onAnswer={onAnswerAsk}
+                />
+              );
             case "done":
               return <DoneIndicator key={item.id} elapsed={item.elapsed} />;
             default:

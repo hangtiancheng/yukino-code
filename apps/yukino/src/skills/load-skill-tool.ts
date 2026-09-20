@@ -25,7 +25,12 @@ import { runFork, runInline } from "./executor.js";
 
 import type { SkillForkHost, SkillHost } from "./index.js";
 
-import type { Tool, ToolContext, ToolResult, ToolSchema } from "@/tools/types.js";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 
 // On-demand skill activation: returns the full SOP body so it enters the
@@ -63,7 +68,10 @@ export class LoadSkillTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const name = strArg(args, "name");
     const skill = this.catalog.get(name);
     if (!skill) {
@@ -84,7 +92,10 @@ export class LoadSkillTool implements Tool {
     // semantics — the declared isolation intent takes effect on both paths.
     if (skill.meta.mode === "fork" && this.forkHost) {
       try {
-        return { output: await runFork(skill, "", this.forkHost), isError: false };
+        return {
+          output: await runFork(skill, "", this.forkHost),
+          isError: false,
+        };
       } catch (err) {
         return {
           output: `Skill '${name}' fork execution failed: ${asErrorString(err)}`,

@@ -65,11 +65,16 @@ function cwdInWorkspace(cwd: string, workspaceFolders: string[]): boolean {
       return false;
     }
     const resolved = resolve(folder).normalize("NFC");
-    return normalizedCwd === resolved || normalizedCwd.startsWith(resolved + sep);
+    return (
+      normalizedCwd === resolved || normalizedCwd.startsWith(resolved + sep)
+    );
   });
 }
 
-async function readLockfile(dir: string, filename: string): Promise<DetectedIde | null> {
+async function readLockfile(
+  dir: string,
+  filename: string,
+): Promise<DetectedIde | null> {
   const port = parseInt(filename.replace(".lock", ""), 10);
   if (Number.isNaN(port)) {
     return null;
@@ -117,10 +122,13 @@ export async function detectIde(cwd: string): Promise<DetectedIde | null> {
     return null; // no ~/.claude/ide directory → extension never ran
   }
 
-  const lockfiles = (await Promise.all(filenames.map((f) => readLockfile(dir, f)))).filter(
+  const lockfiles = (
+    await Promise.all(filenames.map((f) => readLockfile(dir, f)))
+  ).filter(
     // Stale lockfiles (extension crashed without cleanup) would win the
     // workspace match or make it ambiguous; drop entries with a dead pid.
-    (l): l is DetectedIde => l !== null && (l.pid === undefined || isPidAlive(l.pid)),
+    (l): l is DetectedIde =>
+      l !== null && (l.pid === undefined || isPidAlive(l.pid)),
   );
 
   const envPort = process.env.CLAUDE_CODE_SSE_PORT
@@ -133,6 +141,8 @@ export async function detectIde(cwd: string): Promise<DetectedIde | null> {
     }
   }
 
-  const byWorkspace = lockfiles.filter((l) => cwdInWorkspace(cwd, l.workspaceFolders));
+  const byWorkspace = lockfiles.filter((l) =>
+    cwdInWorkspace(cwd, l.workspaceFolders),
+  );
   return byWorkspace.length === 1 ? byWorkspace[0] : null;
 }

@@ -71,7 +71,10 @@ const noKey: Key = {
   capsLock: false,
   numLock: false,
 };
-const initialColumns = Object.getOwnPropertyDescriptor(process.stdout, "columns");
+const initialColumns = Object.getOwnPropertyDescriptor(
+  process.stdout,
+  "columns",
+);
 const initialRows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
 const initialColorLevel = chalk.level;
 const colors = new Chalk({ level: 3 });
@@ -156,12 +159,14 @@ function dock(node: ReactNode) {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.mocked(useInput).mockClear();
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
-    frame = stripVTControlCharacters(
-      typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(),
-    );
-    return true;
-  });
+  vi.spyOn(process.stdout, "write").mockImplementation(
+    (chunk: string | Uint8Array) => {
+      frame = stripVTControlCharacters(
+        typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(),
+      );
+      return true;
+    },
+  );
   resize(80, 24);
   frame = "";
 });
@@ -478,7 +483,9 @@ describe("selector layout", () => {
             );
           });
           const plain = stripVTControlCharacters(output);
-          expect(plain.split("\n").every((line) => visibleWidth(line) <= columns)).toBe(true);
+          expect(
+            plain.split("\n").every((line) => visibleWidth(line) <= columns),
+          ).toBe(true);
           if (columns >= 20) {
             expect(plain).toContain("Select provider");
             expect(plain).toContain("Enter");
@@ -488,9 +495,13 @@ describe("selector layout", () => {
           if (colorLevel === 0) {
             expect(output).toBe(plain);
           } else {
-            expect(output).toContain(colors.hex(THEME.borderMuted)("─".repeat(columns)));
+            expect(output).toContain(
+              colors.hex(THEME.borderMuted)("─".repeat(columns)),
+            );
             if (columns >= 20) {
-              expect(output).toContain(colors.hex(THEME.accent)("Select provider"));
+              expect(output).toContain(
+                colors.hex(THEME.accent)("Select provider"),
+              );
             }
           }
         }
@@ -532,10 +543,14 @@ describe("selector layout", () => {
       );
       expect(frame.split("\n").length).toBeLessThanOrEqual(rows);
       expect(frame).toContain("Footer path\nFooter tokens");
-      expect((frame.match(/Provider-\d+/g) ?? []).length).toBeLessThanOrEqual(10);
+      expect((frame.match(/Provider-\d+/g) ?? []).length).toBeLessThanOrEqual(
+        10,
+      );
       if (rows >= 12) {
         expect(frame).toContain(`${ICONS.arrow} Provider-15 ${ICONS.success}`);
-        expect(frame.match(/Provider-\d+/g)).toHaveLength(Math.min(10, rows - 10));
+        expect(frame.match(/Provider-\d+/g)).toHaveLength(
+          Math.min(10, rows - 10),
+        );
       }
     },
   );
@@ -557,7 +572,9 @@ describe("selector layout", () => {
       expect(frame.split("\n").length).toBeLessThanOrEqual(rows);
       expect(frame).toContain("Footer path\nFooter tokens");
       if (rows >= 12) {
-        expect(frame).toContain(`${ICONS.arrow} Conversation-15 ${ICONS.success}`);
+        expect(frame).toContain(
+          `${ICONS.arrow} Conversation-15 ${ICONS.success}`,
+        );
         expect(frame.match(/Conversation-\d+/g)).toHaveLength(
           Math.min(10, Math.floor((rows - 10) / 2)),
         );
@@ -652,13 +669,21 @@ describe("search input boundaries and independent dialog controls", () => {
       "meta",
       "super",
     ] satisfies (keyof Key)[]) {
-      expect(updateSelectorQuery("find", "x", { ...noKey, [key]: true })).toBe("find");
+      expect(updateSelectorQuery("find", "x", { ...noKey, [key]: true })).toBe(
+        "find",
+      );
     }
     expect(updateSelectorQuery("find", "\u001b[<0;1;2M", noKey)).toBe("find");
     expect(updateSelectorQuery("find", "[<0;1;2M", noKey)).toBe("find");
-    expect(updateSelectorQuery("", "12 中文\nsearch", noKey)).toBe("12 中文 search");
-    expect(updateSelectorQuery("a👩‍💻", "", { ...noKey, backspace: true })).toBe("a");
-    expect(updateSelectorQuery("ae\u0301", "", { ...noKey, delete: true })).toBe("a");
+    expect(updateSelectorQuery("", "12 中文\nsearch", noKey)).toBe(
+      "12 中文 search",
+    );
+    expect(updateSelectorQuery("a👩‍💻", "", { ...noKey, backspace: true })).toBe(
+      "a",
+    );
+    expect(
+      updateSelectorQuery("ae\u0301", "", { ...noKey, delete: true }),
+    ).toBe("a");
     expect(updateSelectorQuery("find", "u", { ...noKey, ctrl: true })).toBe("");
   });
 

@@ -27,7 +27,8 @@ import type { ConversationManager } from "@/conversation/index.js";
 import { registerLlmClient } from "@/telemetry/instrumentation.js";
 import type { ProviderToolSchema, ToolProtocol } from "@/tools/types.js";
 
-export interface LLMClient extends Partial<MaxTokensSetter>, Partial<ThinkingLevelControl> {
+export interface LLMClient
+  extends Partial<MaxTokensSetter>, Partial<ThinkingLevelControl> {
   readonly protocol?: ToolProtocol;
 
   stream(
@@ -52,7 +53,10 @@ export interface ThinkingLevelControl {
 }
 
 // Use dynamic import for lazy loading
-export async function createClient(config: ProviderConfig, systemPrompt: string) {
+export async function createClient(
+  config: ProviderConfig,
+  systemPrompt: string,
+) {
   switch (config.protocol) {
     case "anthropic": {
       const { AnthropicClient } = await import("./anthropic.js");

@@ -112,10 +112,14 @@ async function runAgent(
 
 describe("Agent loop", () => {
   it("streams text and completes on end_turn", async () => {
-    const client = new MockClient([[{ type: "text_delta", text: "hello" }, end()]]);
+    const client = new MockClient([
+      [{ type: "text_delta", text: "hello" }, end()],
+    ]);
     const { events, conversation } = await runAgent(client);
 
-    expect(events.some((e) => e.type === "stream_text" && e.text === "hello")).toBe(true);
+    expect(
+      events.some((e) => e.type === "stream_text" && e.text === "hello"),
+    ).toBe(true);
     const lc = events.find((e) => e.type === "loop_complete");
     expect(lc?.type === "loop_complete" && lc.stopReason).toBe("end_turn");
 
@@ -139,7 +143,9 @@ describe("Agent loop", () => {
     ]);
     const { events } = await runAgent(client, { tool: echoTool });
 
-    expect(events.some((e) => e.type === "tool_use" && e.toolName === "Echo")).toBe(true);
+    expect(
+      events.some((e) => e.type === "tool_use" && e.toolName === "Echo"),
+    ).toBe(true);
     const tr = events.find((e) => e.type === "tool_result");
     expect(tr?.type === "tool_result" && tr.output).toBe("echoed");
     expect(tr?.type === "tool_result" && tr.isError).toBe(false);
@@ -154,7 +160,9 @@ describe("Agent loop", () => {
     ]);
     const { events } = await runAgent(client, { maxOutput: 8192 });
 
-    expect(events.some((e) => e.type === "retry" && e.reason.includes("max_tokens"))).toBe(true);
+    expect(
+      events.some((e) => e.type === "retry" && e.reason.includes("max_tokens")),
+    ).toBe(true);
     expect(client.maxTokensSet).toBe(64000);
     expect(events.some((e) => e.type === "loop_complete")).toBe(true);
   });
@@ -181,7 +189,9 @@ describe("Agent loop", () => {
     expect(events.some((e) => e.type === "error")).toBe(false);
     const results = events.filter((e) => e.type === "tool_result");
     expect(results.length).toBe(3);
-    expect(results.every((e) => e.type === "tool_result" && e.isError)).toBe(true);
+    expect(results.every((e) => e.type === "tool_result" && e.isError)).toBe(
+      true,
+    );
     expect(events.some((e) => e.type === "loop_complete")).toBe(true);
   });
 
@@ -201,8 +211,12 @@ describe("Agent loop", () => {
     const { events } = await runAgent(client);
 
     const usage = events.find((e) => e.type === "usage");
-    expect(usage?.type === "usage" && usage.usage.cacheReadInputTokens).toBe(1000);
-    expect(usage?.type === "usage" && usage.usage.cacheCreationInputTokens).toBe(200);
+    expect(usage?.type === "usage" && usage.usage.cacheReadInputTokens).toBe(
+      1000,
+    );
+    expect(
+      usage?.type === "usage" && usage.usage.cacheCreationInputTokens,
+    ).toBe(200);
   });
 
   it("aborting during a tool call interrupts it and ends the loop without another LLM call", async () => {
@@ -274,11 +288,15 @@ describe("Agent loop", () => {
 
     const tr = events.find((e) => e.type === "tool_result");
     expect(tr?.type === "tool_result" && tr.isError).toBe(true);
-    expect(tr?.type === "tool_result" && tr.output).toContain("not in plan mode");
+    expect(tr?.type === "tool_result" && tr.output).toContain(
+      "not in plan mode",
+    );
     // The errored call must not end the loop: the model gets a second turn to self-correct.
     expect(client.calls).toBe(2);
     expect(
-      conversation.getMessages().some((m) => contentToText(m.content).includes("recovered")),
+      conversation
+        .getMessages()
+        .some((m) => contentToText(m.content).includes("recovered")),
     ).toBe(true);
   });
 
@@ -332,7 +350,9 @@ describe("Agent loop", () => {
     });
 
     expect(
-      conversation.getMessages().some((m) => contentToText(m.content).includes("REMINDER_NOTE")),
+      conversation
+        .getMessages()
+        .some((m) => contentToText(m.content).includes("REMINDER_NOTE")),
     ).toBe(true);
   });
 });

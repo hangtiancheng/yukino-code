@@ -84,7 +84,10 @@ export class EditFileTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const requestedPath = strArg(args, "file_path");
     const oldString = strArg(args, "old_string");
     const replaceAll = boolArg(args, "replace_all");
@@ -170,7 +173,11 @@ export class EditFileTool implements Tool {
         await writeFile(filePath, newContent, "utf-8");
         ctx.fileStateCache?.update(filePath);
         // Include the concrete diff rather than just saying "updated": both the model and UI need to know which lines changed
-        const { text: diffText, additions, removals } = buildDiff(content, newContent);
+        const {
+          text: diffText,
+          additions,
+          removals,
+        } = buildDiff(content, newContent);
         const summary =
           replaceAll && count > 1
             ? `Updated ${filePath} with ${String(additions)} addition${additions === 1 ? "" : "s"} and ${String(removals)} removal${removals === 1 ? "" : "s"} (${String(count)} replacements)`

@@ -100,7 +100,9 @@ export class RecoveryState {
   }
 
   snapshotFiles(limit = RECOVERY_FILE_LIMIT): FileReadRecord[] {
-    const sorted = [...this.files.values()].sort((a, b) => b.timestamp - a.timestamp);
+    const sorted = [...this.files.values()].sort(
+      (a, b) => b.timestamp - a.timestamp,
+    );
     return sorted.slice(0, limit);
   }
 
@@ -119,7 +121,9 @@ export class RecoveryState {
       );
       for (const f of recentFiles) {
         const content = truncateByTokens(f.content, RECOVERY_TOKENS_PER_FILE);
-        const ts = new Date(f.timestamp).toISOString().replace(/\.\d{3}Z$/, "Z");
+        const ts = new Date(f.timestamp)
+          .toISOString()
+          .replace(/\.\d{3}Z$/, "Z");
         sections.push(
           `### ${f.path}  (read ${ts})\n\n\`\`\`\n${content}${content.endsWith("\n") ? "" : "\n"}\`\`\``,
         );

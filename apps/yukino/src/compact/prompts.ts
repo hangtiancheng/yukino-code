@@ -49,16 +49,26 @@ Keep every section concise. Distinguish verified results from plans and interrup
 
 export function buildSummaryInstructions(customInstructions = ""): string {
   const focus = customInstructions.trim();
-  return focus ? `${SUMMARY_INSTRUCTIONS}\n\nAdditional focus:\n${focus}` : SUMMARY_INSTRUCTIONS;
+  return focus
+    ? `${SUMMARY_INSTRUCTIONS}\n\nAdditional focus:\n${focus}`
+    : SUMMARY_INSTRUCTIONS;
 }
 
-export function buildSummaryPrompt(conversationText: string, customInstructions = ""): string {
+export function buildSummaryPrompt(
+  conversationText: string,
+  customInstructions = "",
+): string {
   return `<conversation>\n${conversationText}\n</conversation>\n\n${buildSummaryInstructions(customInstructions)}`;
 }
 
-export function buildCompactionSummaryMessage(summary: string, hasRecentMessages: boolean): string {
+export function buildCompactionSummaryMessage(
+  summary: string,
+  hasRecentMessages: boolean,
+): string {
   return (
     `The conversation history before this point was compacted into the following summary:\n\n<summary>\n${summary}\n</summary>` +
-    (hasRecentMessages ? "\n\nRecent messages have been preserved verbatim." : "")
+    (hasRecentMessages
+      ? "\n\nRecent messages have been preserved verbatim."
+      : "")
   );
 }

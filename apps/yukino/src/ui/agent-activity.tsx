@@ -22,7 +22,10 @@
 
 import { memo } from "react";
 
-import { AgentToolProgress, type SubagentProgress } from "./agent-tool-progress.js";
+import {
+  AgentToolProgress,
+  type SubagentProgress,
+} from "./agent-tool-progress.js";
 import type { ToolBlockInfo } from "./tool-display.js";
 
 import type { AgentTask } from "@/subagent/task-manager.js";
@@ -49,7 +52,9 @@ export const AgentActivity = memo(function AgentActivity({
   isAsking,
   expanded,
 }: Props) {
-  const merged = new Map(persistentAgentTools.map((tool) => [tool.toolId, tool]));
+  const merged = new Map(
+    persistentAgentTools.map((tool) => [tool.toolId, tool]),
+  );
   for (const tool of tools) {
     merged.set(tool.toolId, tool);
   }

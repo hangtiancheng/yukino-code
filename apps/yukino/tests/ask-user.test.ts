@@ -52,7 +52,9 @@ describe("AskUserQuestionTool", () => {
   it("rejects 0 or more than 4 questions", async () => {
     // eslint-disable-next-line @typescript-eslint/require-await
     const tool = new AskUserQuestionTool(async () => ({}));
-    expect((await tool.execute(toolContext, { questions: [] })).isError).toBe(true);
+    expect((await tool.execute(toolContext, { questions: [] })).isError).toBe(
+      true,
+    );
     expect(
       (
         await tool.execute(toolContext, {

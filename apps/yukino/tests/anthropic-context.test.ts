@@ -25,7 +25,9 @@ import { describe, it, expect, afterEach } from "vitest";
 import type { ProviderConfig } from "@/config/index.js";
 import { fetchModelContextWindow } from "@/llm/anthropic.js";
 
-const anthropicProvider = (over: Partial<ProviderConfig> = {}): ProviderConfig => ({
+const anthropicProvider = (
+  over: Partial<ProviderConfig> = {},
+): ProviderConfig => ({
   name: "p",
   protocol: "anthropic",
   base_url: "https://api.example.com",
@@ -55,7 +57,9 @@ describe("fetchModelContextWindow (layer 2 auto-fetch)", () => {
 
     const got = await fetchModelContextWindow(anthropicProvider());
     expect(got).toBe(750_000);
-    expect(calledUrl).toBe("https://api.example.com/v1/models/claude-sonnet-4-6");
+    expect(calledUrl).toBe(
+      "https://api.example.com/v1/models/claude-sonnet-4-6",
+    );
   });
 
   it("returns 0 (graceful) when fetch throws — never propagates", async () => {
@@ -102,7 +106,9 @@ describe("fetchModelContextWindow (layer 2 auto-fetch)", () => {
       };
     };
 
-    const got = await fetchModelContextWindow(anthropicProvider({ protocol: "openai-compat" }));
+    const got = await fetchModelContextWindow(
+      anthropicProvider({ protocol: "openai-compat" }),
+    );
     expect(got).toBe(0);
     expect(called).toBe(false);
   });

@@ -13,7 +13,9 @@ const redisState = vi.hoisted(() => ({
 interface FakeClient {
   isOpen: boolean;
   ft: {
-    search: (...args: unknown[]) => Promise<{ total: number; documents: unknown[] }>;
+    search: (
+      ...args: unknown[]
+    ) => Promise<{ total: number; documents: unknown[] }>;
   };
 }
 
@@ -61,24 +63,32 @@ import { docsModule } from "@/tools/docs/tool.js";
 
 const CallToolResultSchema = z.looseObject({
   isError: z.boolean().optional(),
-  content: z.array(z.looseObject({ type: z.string(), text: z.string().optional() })),
+  content: z.array(
+    z.looseObject({ type: z.string(), text: z.string().optional() }),
+  ),
 });
 
 async function connect(): Promise<Client> {
   const server = new McpServer({ name: "test-server", version: "0.0.0" });
   docsModule.register(server);
   const client = new Client({ name: "test-client", version: "0.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   await server.connect(clientTransport);
   await client.connect(serverTransport);
   return client;
 }
 
-async function queryDocs(client: Client): Promise<{ text: string; isError: boolean }> {
+async function queryDocs(
+  client: Client,
+): Promise<{ text: string; isError: boolean }> {
   const result = CallToolResultSchema.parse(
     await client.callTool({ name: "docs", arguments: { query: "test query" } }),
   );
-  return { text: result.content[0]?.text ?? "", isError: result.isError === true };
+  return {
+    text: result.content[0]?.text ?? "",
+    isError: result.isError === true,
+  };
 }
 
 describe("docs engine recovery", () => {

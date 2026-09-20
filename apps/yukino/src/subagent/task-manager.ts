@@ -80,7 +80,9 @@ export class TaskManager {
     const task: AgentTask = {
       id,
       name,
-      ...(options.originToolCallId ? { originToolCallId: options.originToolCallId } : {}),
+      ...(options.originToolCallId
+        ? { originToolCallId: options.originToolCallId }
+        : {}),
       ...(options.kind ? { kind: options.kind } : {}),
       status: "running",
       output: "",
@@ -107,9 +109,14 @@ export class TaskManager {
         if (task.status === "running") {
           task.status = "failed";
           task.output =
-            error instanceof TaskFailure ? error.output : `Error: ${asErrorString(error)}`;
+            error instanceof TaskFailure
+              ? error.output
+              : `Error: ${asErrorString(error)}`;
           this.emitChange();
-        } else if (task.status === "cancelled" && error instanceof TaskFailure) {
+        } else if (
+          task.status === "cancelled" &&
+          error instanceof TaskFailure
+        ) {
           // A stopped task whose runner still produced deliberately formatted
           // output (e.g. a killed background shell command's captured output
           // and exit facts): keep it instead of the generic "Stopped by user"
@@ -179,7 +186,9 @@ export class TaskManager {
   }
 
   async stopAll(): Promise<void> {
-    const running = this.list().filter((task) => this.pendingTaskIds.has(task.id));
+    const running = this.list().filter((task) =>
+      this.pendingTaskIds.has(task.id),
+    );
     for (const task of running) {
       this.stop(task.id);
     }

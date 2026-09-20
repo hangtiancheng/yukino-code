@@ -93,10 +93,15 @@ export function syncMcpInstructions(
   return true;
 }
 
-function formatMcpInstructionsDelta(added: McpInstruction[], removed: string[]): string {
+function formatMcpInstructionsDelta(
+  added: McpInstruction[],
+  removed: string[],
+): string {
   const parts: string[] = [];
   if (added.length > 0) {
-    const blocks = added.map(({ serverName, text }) => `## ${serverName}\n${text}`).join("\n\n");
+    const blocks = added
+      .map(({ serverName, text }) => `## ${serverName}\n${text}`)
+      .join("\n\n");
     parts.push(
       `${MCP_INSTRUCTIONS_MARKER}\n\nThe following MCP servers have provided instructions for how to use their tools and resources:\n\n${blocks}`,
     );

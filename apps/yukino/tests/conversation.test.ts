@@ -23,7 +23,10 @@
 import { describe, it, expect } from "vitest";
 
 import { ConversationManager } from "@/conversation/index.js";
-import { buildAnthropicMessages, markLastUserTailForCache } from "@/llm/anthropic.js";
+import {
+  buildAnthropicMessages,
+  markLastUserTailForCache,
+} from "@/llm/anthropic.js";
 import { buildOpenAIInput } from "@/llm/openai.js";
 import { asRecord, strArg } from "@/utils/index.js";
 
@@ -200,7 +203,9 @@ describe("ConversationManager", () => {
       const content = result[0].content;
       expect(strArg(asRecord(content[0]), "type")).toBe("thinking");
       expect(strArg(asRecord(content[0]), "signature")).toBe("sig-1");
-      expect(strArg(asRecord(content[content.length - 1]), "type")).toBe("tool_use");
+      expect(strArg(asRecord(content[content.length - 1]), "type")).toBe(
+        "tool_use",
+      );
     });
 
     it("passes user image content blocks through and merges them into a previous user turn", () => {
@@ -237,11 +242,9 @@ describe("ConversationManager", () => {
       const result = buildAnthropicMessages(mgr.getMessages());
       expect(result).toHaveLength(1);
       const content = result[0].content;
-      expect(Array.isArray(content) ? content.map((b) => asRecord(b).type) : []).toEqual([
-        "text",
-        "image",
-        "text",
-      ]);
+      expect(
+        Array.isArray(content) ? content.map((b) => asRecord(b).type) : [],
+      ).toEqual(["text", "image", "text"]);
     });
 
     it("embeds tool_result image blocks as a content block array", () => {
@@ -257,24 +260,28 @@ describe("ConversationManager", () => {
       const block = asRecord(result[0].content[0]);
       expect(strArg(block, "type")).toBe("tool_result");
       const inner = block.content;
-      expect(Array.isArray(inner) ? inner.map((b) => asRecord(b).type) : []).toEqual([
-        "text",
-        "image",
-      ]);
+      expect(
+        Array.isArray(inner) ? inner.map((b) => asRecord(b).type) : [],
+      ).toEqual(["text", "image"]);
     });
 
     it("passes native tool references through without duplicating the fallback", () => {
       const mgr = new ConversationManager();
-      mgr.addToolResultMessage("tu-search", "Loaded mcp__linear__create_issue", false, [
-        { type: "tool_reference", tool_name: "mcp__linear__create_issue" },
-      ]);
+      mgr.addToolResultMessage(
+        "tu-search",
+        "Loaded mcp__linear__create_issue",
+        false,
+        [{ type: "tool_reference", tool_name: "mcp__linear__create_issue" }],
+      );
 
       const result = buildAnthropicMessages(mgr.getMessages());
       const block = asRecord(result[0].content[0]);
       expect(block.content).toEqual([
         { type: "tool_reference", tool_name: "mcp__linear__create_issue" },
       ]);
-      expect(JSON.stringify(block.content)).not.toContain("Loaded mcp__linear__create_issue");
+      expect(JSON.stringify(block.content)).not.toContain(
+        "Loaded mcp__linear__create_issue",
+      );
     });
 
     it("marks the last non-image block for caching, not the trailing image", () => {
@@ -368,7 +375,11 @@ describe("ConversationManager", () => {
               contentBlocks: [
                 {
                   type: "image",
-                  source: { type: "base64", media_type: "image/png", data: "QUJD" },
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data: "QUJD",
+                  },
                 },
               ],
               isError: false,

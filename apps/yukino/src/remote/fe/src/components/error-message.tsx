@@ -38,8 +38,19 @@ export function ErrorMessage({ content }: ErrorMessageProps) {
         fill="none"
         aria-hidden="true"
       >
-        <circle cx="7" cy="7" r="6.25" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M5 5l4 4M9 5l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <circle
+          cx="7"
+          cy="7"
+          r="6.25"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <path
+          d="M5 5l4 4M9 5l-4 4"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
       <span className="min-w-0 whitespace-pre-wrap">{content}</span>
     </div>

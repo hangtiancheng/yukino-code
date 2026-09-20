@@ -30,7 +30,13 @@ import { useWebSocket } from "./hooks/use-web-socket";
 import type { ClientMessage, PermissionResponse } from "./types";
 
 export function App() {
-  const { state, dispatchMessage, setConnection, respondPermission, markAskAnswered } = useChat();
+  const {
+    state,
+    dispatchMessage,
+    setConnection,
+    respondPermission,
+    markAskAnswered,
+  } = useChat();
 
   const { send } = useWebSocket({
     onMessage: dispatchMessage,
@@ -83,7 +89,11 @@ export function App() {
 
   return (
     <div className="flex h-screen w-full flex-col bg-bg font-sans text-sm text-base antialiased">
-      <StatusBar connection={state.connection} usage={state.usage} cwd={state.cwd} />
+      <StatusBar
+        connection={state.connection}
+        usage={state.usage}
+        cwd={state.cwd}
+      />
       <MessageList
         items={state.items}
         onRespondPermission={handleRespondPermission}

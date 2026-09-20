@@ -37,7 +37,11 @@ import {
   type ThinkingLevel,
 } from "@/config/index.js";
 import { ProviderLoginSchema } from "@/config/provider-login.js";
-import { discoverModels, modelListUrl, type DiscoveredModel } from "@/llm/model-discovery.js";
+import {
+  discoverModels,
+  modelListUrl,
+  type DiscoveredModel,
+} from "@/llm/model-discovery.js";
 import { THEME } from "@/ui/styles.js";
 
 const PROTOCOLS = ["anthropic", "openai", "openai-compat"] as const;
@@ -89,7 +93,9 @@ const FIELD_LABELS: Record<FieldKey, string> = {
   max_output_tokens: "Max output tokens",
 };
 
-function normalizeThinkingLevel(value: ProviderConfig["thinking"]): ThinkingLevel {
+function normalizeThinkingLevel(
+  value: ProviderConfig["thinking"],
+): ThinkingLevel {
   return value ?? DEFAULT_THINKING_LEVEL;
 }
 
@@ -101,8 +107,12 @@ function createInitialForm(initialValues?: Partial<ProviderConfig>): FormState {
     api_key: initialValues?.api_key ?? "",
     model: initialValues?.model ?? "",
     thinking: normalizeThinkingLevel(initialValues?.thinking),
-    context_window: String(initialValues?.context_window ?? DEFAULT_CONTEXT_WINDOW),
-    max_output_tokens: String(initialValues?.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
+    context_window: String(
+      initialValues?.context_window ?? DEFAULT_CONTEXT_WINDOW,
+    ),
+    max_output_tokens: String(
+      initialValues?.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    ),
   };
 }
 
@@ -130,7 +140,11 @@ function validateForm(
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       const path = issue.path[0];
-      if (typeof path === "string" && FIELD_KEYS.some((key) => key === path) && !errors[path]) {
+      if (
+        typeof path === "string" &&
+        FIELD_KEYS.some((key) => key === path) &&
+        !errors[path]
+      ) {
         errors[path] = issue.message;
       }
     }
@@ -161,7 +175,11 @@ function displayValue(form: FormState, field: FieldKey): string {
   return form[field];
 }
 
-function cursorValue(value: string, cursor: number, maxWidth: number): ReactNode {
+function cursorValue(
+  value: string,
+  cursor: number,
+  maxWidth: number,
+): ReactNode {
   const position = Math.min(cursor, value.length);
   if (value.length + 1 <= maxWidth) {
     return (
@@ -176,7 +194,10 @@ function cursorValue(value: string, cursor: number, maxWidth: number): ReactNode
   const contentWidth = Math.max(1, maxWidth - 1);
   const start = Math.max(
     0,
-    Math.min(position - Math.floor(contentWidth / 2), value.length - contentWidth),
+    Math.min(
+      position - Math.floor(contentWidth / 2),
+      value.length - contentWidth,
+    ),
   );
   const end = Math.min(value.length, start + contentWidth);
   const before = value.slice(start, position);
@@ -193,9 +214,15 @@ function cursorValue(value: string, cursor: number, maxWidth: number): ReactNode
   );
 }
 
-export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLoginProps) {
+export function ProviderLogin({
+  initialValues,
+  onSubmit,
+  onCancel,
+}: ProviderLoginProps) {
   const { columns } = useWindowSize();
-  const [form, setForm] = useState<FormState>(() => createInitialForm(initialValues));
+  const [form, setForm] = useState<FormState>(() =>
+    createInitialForm(initialValues),
+  );
   const [field, setField] = useState<FieldKey>("name");
   const [cursor, setCursor] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -296,7 +323,13 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
       controller.abort();
       discoveryGeneration.current += 1;
     };
-  }, [form.protocol, form.base_url, form.api_key, editingConnection, resetDiscovery]);
+  }, [
+    form.protocol,
+    form.base_url,
+    form.api_key,
+    editingConnection,
+    resetDiscovery,
+  ]);
 
   const updateText = (value: string, nextCursor = value.length) => {
     const activeField = fieldRef.current;
@@ -373,7 +406,9 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
     setField(nextField);
     fieldRef.current = nextField;
     const nextCursor =
-      nextField === "protocol" || nextField === "thinking" ? 0 : formRef.current[nextField].length;
+      nextField === "protocol" || nextField === "thinking"
+        ? 0
+        : formRef.current[nextField].length;
     setCursor(nextCursor);
     cursorRef.current = nextCursor;
   };
@@ -414,7 +449,9 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
     if (activeField === "protocol") {
       if (key.leftArrow || key.rightArrow) {
         const index = PROTOCOLS.indexOf(formRef.current.protocol);
-        const next = (index + (key.rightArrow ? 1 : -1) + PROTOCOLS.length) % PROTOCOLS.length;
+        const next =
+          (index + (key.rightArrow ? 1 : -1) + PROTOCOLS.length) %
+          PROTOCOLS.length;
         const protocol = PROTOCOLS[next] ?? PROTOCOLS[0];
         const nextForm = { ...formRef.current, protocol };
         resetDiscovery();
@@ -430,7 +467,8 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
         const provider = thinkingProvider();
         const levels = getSupportedThinkingLevels(provider);
         const index = levels.indexOf(getThinkingLevel(provider));
-        const next = (index + (key.rightArrow ? 1 : -1) + levels.length) % levels.length;
+        const next =
+          (index + (key.rightArrow ? 1 : -1) + levels.length) % levels.length;
         const thinking = levels[next] ?? "off";
         const nextForm = { ...formRef.current, thinking };
         formRef.current = nextForm;
@@ -456,7 +494,8 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
           ? key.rightArrow
             ? 0
             : discovery.models.length - 1
-          : (index + (key.rightArrow ? 1 : -1) + discovery.models.length) % discovery.models.length;
+          : (index + (key.rightArrow ? 1 : -1) + discovery.models.length) %
+            discovery.models.length;
       const model = discovery.models[next];
       if (model) {
         updateText(model.id);
@@ -479,9 +518,15 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
       cursorRef.current = value.length;
     } else if (key.backspace || key.delete) {
       if (key.backspace && position > 0) {
-        updateText(value.slice(0, position - 1) + value.slice(position), position - 1);
+        updateText(
+          value.slice(0, position - 1) + value.slice(position),
+          position - 1,
+        );
       } else if (key.delete && position < value.length) {
-        updateText(value.slice(0, position) + value.slice(position + 1), position);
+        updateText(
+          value.slice(0, position) + value.slice(position + 1),
+          position,
+        );
       }
     } else if (input && !key.ctrl && !key.meta) {
       insertText(input);
@@ -492,7 +537,10 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
   const framePadding = frameWidth > 2 ? 2 : 0;
   const contentWidth = Math.max(1, frameWidth - framePadding);
   const labelWidth = Math.max(1, Math.min(24, Math.floor(contentWidth * 0.36)));
-  const valueWidth = Math.max(1, contentWidth - labelWidth - (contentWidth > labelWidth ? 1 : 0));
+  const valueWidth = Math.max(
+    1,
+    contentWidth - labelWidth - (contentWidth > labelWidth ? 1 : 0),
+  );
   const discoveryHelp: Record<ModelDiscoveryState["status"], string> = {
     idle: editingConnection
       ? "Tab to finish connection and fetch models"
@@ -506,7 +554,11 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
   return (
     <SelectorFrame
       hint="↑↓/Tab field · ←→ choose · Enter submit · Esc cancel"
-      subtitle={submitting ? "Saving provider…" : formError || "Add a provider connection"}
+      subtitle={
+        submitting
+          ? "Saving provider…"
+          : formError || "Add a provider connection"
+      }
       title="Provider login"
       width={frameWidth}
     >
@@ -514,7 +566,9 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
         {FIELD_KEYS.map((key) => {
           const selected = key === field;
           const rawValue =
-            key === "thinking" ? getThinkingLevel(thinkingProvider()) : displayValue(form, key);
+            key === "thinking"
+              ? getThinkingLevel(thinkingProvider())
+              : displayValue(form, key);
           const value =
             key === "protocol" && selected
               ? `‹ ${rawValue} ›`
@@ -531,11 +585,20 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
                 width="100%"
               >
                 <Box flexShrink={0} width={labelWidth}>
-                  <Text color={selected ? THEME.accent : THEME.muted} wrap="truncate-end">
-                    {truncateToWidth(`${selected ? "›" : " "} ${FIELD_LABELS[key]}:`, labelWidth)}
+                  <Text
+                    color={selected ? THEME.accent : THEME.muted}
+                    wrap="truncate-end"
+                  >
+                    {truncateToWidth(
+                      `${selected ? "›" : " "} ${FIELD_LABELS[key]}:`,
+                      labelWidth,
+                    )}
                   </Text>
                 </Box>
-                <Text color={selected ? THEME.text : THEME.muted} wrap="truncate-end">
+                <Text
+                  color={selected ? THEME.text : THEME.muted}
+                  wrap="truncate-end"
+                >
                   {value}
                 </Text>
               </Box>
@@ -550,7 +613,9 @@ export function ProviderLogin({ initialValues, onSubmit, onCancel }: ProviderLog
         <Text color={THEME.muted}>{discoveryHelp[discovery.status]}</Text>
         <Text color={THEME.dim}>Model: type/paste any ID; Ctrl+U clears.</Text>
         {discovery.models.length > 0 ? (
-          <Text color={THEME.dim}>Home/End or Ctrl+B/F move the model cursor.</Text>
+          <Text color={THEME.dim}>
+            Home/End or Ctrl+B/F move the model cursor.
+          </Text>
         ) : null}
       </Box>
     </SelectorFrame>

@@ -80,7 +80,10 @@ export function StatusBorder({
     border = `── ${status} ${"─".repeat(columns - visibleWidth(status) - 4)}`;
   } else if (status) {
     const compact = truncateToWidth(spinner, columns, "");
-    const prefixWidth = Math.min(3, Math.max(0, columns - visibleWidth(compact)));
+    const prefixWidth = Math.min(
+      3,
+      Math.max(0, columns - visibleWidth(compact)),
+    );
     border =
       "─".repeat(prefixWidth) +
       compact +

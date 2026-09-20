@@ -23,7 +23,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { computeKeepStartIndex, forceCompact } from "@/compact/compact.js";
-import { buildCompactionSummaryMessage, buildSummaryPrompt } from "@/compact/prompts.js";
+import {
+  buildCompactionSummaryMessage,
+  buildSummaryPrompt,
+} from "@/compact/prompts.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError } from "@/llm/errors.js";
@@ -35,10 +38,17 @@ function history() {
     conv.addAssistantMessage("answer");
   }
   conv.addAssistantMessageWithTools("read image", [
-    { toolUseId: "read", toolName: "ReadFile", arguments: { file_path: "a.png" } },
+    {
+      toolUseId: "read",
+      toolName: "ReadFile",
+      arguments: { file_path: "a.png" },
+    },
   ]);
   conv.addToolResultMessage("read", "image read", false, [
-    { type: "image", source: { type: "base64", media_type: "image/png", data: "QUJD" } },
+    {
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: "QUJD" },
+    },
   ]);
   conv.addSystemReminder("Keep the latest user constraints");
   return conv;
@@ -58,7 +68,9 @@ describe("compaction integrity", () => {
         controller.abort();
       },
     };
-    await expect(forceCompact(conv, client, null, [], [], "", controller.signal)).rejects.toThrow();
+    await expect(
+      forceCompact(conv, client, null, [], [], "", controller.signal),
+    ).rejects.toThrow();
     expect(conv.getMessages()).toEqual(before);
   });
 
@@ -72,7 +84,9 @@ describe("compaction integrity", () => {
         yield { type: "text_delta", text: "<summary>older task</summary>" };
       },
     };
-    await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow("changed");
+    await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow(
+      "changed",
+    );
     expect(conv.getMessages().at(-1)?.content).toBe("A newer task");
   });
   it("summarizes only the immutable prefix and preserves the recent rich tail verbatim", async () => {
@@ -83,8 +97,13 @@ describe("compaction integrity", () => {
       setSystemPrompt: vi.fn(),
       async *stream(request) {
         await Promise.resolve();
-        expect(request.getMessages().slice(0, -1)).toEqual(before.slice(0, keepStart));
-        yield { type: "text_delta", text: "<summary>Retained context</summary>" };
+        expect(request.getMessages().slice(0, -1)).toEqual(
+          before.slice(0, keepStart),
+        );
+        yield {
+          type: "text_delta",
+          text: "<summary>Retained context</summary>",
+        };
       },
     };
     const setSystemPrompt = vi.spyOn(client, "setSystemPrompt");
@@ -94,28 +113,29 @@ describe("compaction integrity", () => {
     expect(conv.getMessages()[0].content).toBe(
       buildCompactionSummaryMessage("Retained context", true),
     );
-    expect(conv.getMessages().flatMap((m) => m.toolResults ?? [])[0].contentBlocks).toEqual(
-      before.at(-2)?.toolResults?.[0].contentBlocks,
-    );
+    expect(
+      conv.getMessages().flatMap((m) => m.toolResults ?? [])[0].contentBlocks,
+    ).toEqual(before.at(-2)?.toolResults?.[0].contentBlocks);
     expect(setSystemPrompt).not.toHaveBeenCalled();
   });
 
-  it.each(["", "<analysis>unfinished reasoning</analysis>", "<summary>   </summary>"])(
-    "preserves history when the summary is unusable: %j",
-    async (text) => {
-      const conv = history();
-      const before = structuredClone(conv.getMessages());
-      const client: LLMClient = {
-        setSystemPrompt: vi.fn(),
-        // eslint-disable-next-line @typescript-eslint/require-await
-        async *stream() {
-          yield { type: "text_delta", text };
-        },
-      };
-      await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow();
-      expect(conv.getMessages()).toEqual(before);
-    },
-  );
+  it.each([
+    "",
+    "<analysis>unfinished reasoning</analysis>",
+    "<summary>   </summary>",
+  ])("preserves history when the summary is unusable: %j", async (text) => {
+    const conv = history();
+    const before = structuredClone(conv.getMessages());
+    const client: LLMClient = {
+      setSystemPrompt: vi.fn(),
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async *stream() {
+        yield { type: "text_delta", text };
+      },
+    };
+    await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow();
+    expect(conv.getMessages()).toEqual(before);
+  });
 
   it("retries typed context errors during the text fallback", async () => {
     const conv = history();
@@ -127,10 +147,15 @@ describe("compaction integrity", () => {
         if (attempts++ < 2) {
           throw new ContextTooLongError("context too long");
         }
-        yield { type: "text_delta", text: "<summary>Retained context</summary>" };
+        yield {
+          type: "text_delta",
+          text: "<summary>Retained context</summary>",
+        };
       },
     };
-    expect((await forceCompact(conv, client, null, [], [])).compacted).toBe(true);
+    expect((await forceCompact(conv, client, null, [], [])).compacted).toBe(
+      true,
+    );
     expect(attempts).toBe(3);
   });
 
@@ -152,10 +177,21 @@ describe("compaction integrity", () => {
         yield { type: "text_delta", text: "<summary>Checkpoint</summary>" };
       },
     };
-    await forceCompact(conv, client, null, [], [], "", undefined, "Keep the failing test names");
+    await forceCompact(
+      conv,
+      client,
+      null,
+      [],
+      [],
+      "",
+      undefined,
+      "Keep the failing test names",
+    );
     expect(requests).toHaveLength(2);
     for (const request of requests) {
-      expect(request).toContain("Additional focus:\nKeep the failing test names");
+      expect(request).toContain(
+        "Additional focus:\nKeep the failing test names",
+      );
       expect(request).toContain("## Constraints & Preferences");
     }
     expect(requests[1]).toContain("<conversation>");
@@ -171,11 +207,20 @@ describe("compaction integrity", () => {
       setSystemPrompt: vi.fn(),
       async *stream() {
         await Promise.resolve();
-        yield { type: "text_delta", text: "<summary>Not a checkpoint</summary>" };
-        yield { type: "tool_call_start", toolName: "Bash", toolId: "wrong-task" };
+        yield {
+          type: "text_delta",
+          text: "<summary>Not a checkpoint</summary>",
+        };
+        yield {
+          type: "tool_call_start",
+          toolName: "Bash",
+          toolId: "wrong-task",
+        };
       },
     };
-    await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow("requested a tool");
+    await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow(
+      "requested a tool",
+    );
     expect(conv.getMessages()).toEqual(before);
   });
 });

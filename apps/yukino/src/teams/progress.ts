@@ -99,7 +99,10 @@ export function recordToolStart(
   input: Record<string, unknown>,
 ): void {
   recordToolUse(p, toolName, input);
-  p.activeTools = [...p.activeTools.filter((tool) => tool.toolId !== toolId), { toolId, toolName }];
+  p.activeTools = [
+    ...p.activeTools.filter((tool) => tool.toolId !== toolId),
+    { toolId, toolName },
+  ];
 }
 
 export function recordToolResult(p: AgentProgress, toolId: string): void {
@@ -116,12 +119,19 @@ export function clearActiveTools(p: AgentProgress): void {
 }
 
 // Call this on each usage event
-export function recordTokens(p: AgentProgress, inputTokens: number, outputTokens: number): void {
+export function recordTokens(
+  p: AgentProgress,
+  inputTokens: number,
+  outputTokens: number,
+): void {
   p.tokenCount += inputTokens + outputTokens;
 }
 
 // Generate human-readable description for a tool use
-function describeToolActivity(toolName: string, input: Record<string, unknown>): string {
+function describeToolActivity(
+  toolName: string,
+  input: Record<string, unknown>,
+): string {
   switch (toolName) {
     case "ReadFile":
       return `Reading ${strArg(input, "file_path", "file")}`;

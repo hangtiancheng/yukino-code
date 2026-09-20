@@ -42,7 +42,11 @@ const RESPONSE_OPTIONS: {
     label: "Allow Always",
     className: "border border-accent/40 text-accent hover:bg-accent/8",
   },
-  { value: "deny", label: "Deny", className: "border border-red/30 text-red hover:bg-red/6" },
+  {
+    value: "deny",
+    label: "Deny",
+    className: "border border-red/30 text-red hover:bg-red/6",
+  },
 ];
 
 export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
@@ -52,7 +56,13 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
       className="my-3 rounded-xl border border-yellow/35 bg-surface p-4 shadow-xs"
     >
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-yellow">
-        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 13 13"
+          fill="none"
+          aria-hidden="true"
+        >
           <rect
             x="2"
             y="5.5"
@@ -62,7 +72,11 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
             stroke="currentColor"
             strokeWidth="1.4"
           />
-          <path d="M4 5.5V4a2.5 2.5 0 015 0v1.5" stroke="currentColor" strokeWidth="1.4" />
+          <path
+            d="M4 5.5V4a2.5 2.5 0 015 0v1.5"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
         </svg>
         Permission Required: <span className="font-mono">{item.toolName}</span>
       </div>

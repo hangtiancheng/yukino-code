@@ -70,7 +70,8 @@ function parseMetadata(raw: unknown): Record<string, unknown> {
 
 // Convert COSINE distance [0, 2] to a similarity score [0, 1], higher is better.
 function distanceToScore(distance: unknown): number {
-  const d = typeof distance === "number" ? distance : Number(distance ?? Number.NaN);
+  const d =
+    typeof distance === "number" ? distance : Number(distance ?? Number.NaN);
   if (!Number.isFinite(d)) {
     return 0;
   }

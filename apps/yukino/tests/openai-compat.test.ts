@@ -53,7 +53,9 @@ describe("openai-compat chat message building", () => {
       {
         role: "assistant",
         content: "",
-        toolUses: [{ toolUseId: "c1", toolName: "Bash", arguments: { command: "ls" } }],
+        toolUses: [
+          { toolUseId: "c1", toolName: "Bash", arguments: { command: "ls" } },
+        ],
       },
       {
         role: "user",
@@ -85,7 +87,10 @@ describe("openai-compat chat message building", () => {
     const assistantWithTools = msgs.find(
       (m) => m.role === "assistant" && Array.isArray(m.tool_calls),
     );
-    const { success, data } = safeParse(AssistantWithToolsSchema, assistantWithTools);
+    const { success, data } = safeParse(
+      AssistantWithToolsSchema,
+      assistantWithTools,
+    );
 
     expect(assistantWithTools).toBeDefined();
     expect(success).toBe(true);
@@ -96,7 +101,10 @@ describe("openai-compat chat message building", () => {
     });
 
     const toolMessage = msgs.find((m) => m.role === "tool");
-    const { success: success2, data: data2 } = safeParse(ToolMessageSchema, toolMessage);
+    const { success: success2, data: data2 } = safeParse(
+      ToolMessageSchema,
+      toolMessage,
+    );
 
     expect(toolMessage).toBeDefined();
     expect(success2).toBe(true);
@@ -104,8 +112,12 @@ describe("openai-compat chat message building", () => {
     expect(data2?.content).toBe("a.txt");
 
     // The plain user + final assistant turns survive too.
-    expect(msgs.some((m) => m.role === "user" && m.content === "list files")).toBe(true);
-    expect(msgs.some((m) => m.role === "assistant" && m.content === "Found a.txt")).toBe(true);
+    expect(
+      msgs.some((m) => m.role === "user" && m.content === "list files"),
+    ).toBe(true);
+    expect(
+      msgs.some((m) => m.role === "assistant" && m.content === "Found a.txt"),
+    ).toBe(true);
   });
 });
 
@@ -149,7 +161,9 @@ describe("image tool results over OpenAI endpoints", () => {
     expect(toolMsg?.content).toContain("[Image: a.png]");
     expect(JSON.stringify(toolMsg)).not.toContain(DATA);
 
-    const synthetic = msgs.find((m) => m.role === "user" && Array.isArray(m.content));
+    const synthetic = msgs.find(
+      (m) => m.role === "user" && Array.isArray(m.content),
+    );
     expect(synthetic).toBeDefined();
     const PartsSchema = z.array(
       z.looseObject({
@@ -167,7 +181,9 @@ describe("image tool results over OpenAI endpoints", () => {
 
   it("responses API: converts rich tool output inside function_call_output", () => {
     const items = buildOpenAIInput(history);
-    const fco = items.find((item) => "type" in item && item.type === "function_call_output");
+    const fco = items.find(
+      (item) => "type" in item && item.type === "function_call_output",
+    );
     const output = fco && "output" in fco ? fco.output : null;
     expect(Array.isArray(output)).toBe(true);
     const PartsSchema = z.array(
@@ -217,7 +233,9 @@ describe("image tool results over OpenAI endpoints", () => {
 
     const responses = buildOpenAIInput(rich);
     const responseOutput =
-      "output" in responses[0] && Array.isArray(responses[0].output) ? responses[0].output : [];
+      "output" in responses[0] && Array.isArray(responses[0].output)
+        ? responses[0].output
+        : [];
     expect(responseOutput).toEqual([
       { type: "input_text", text: "image and document" },
       {
@@ -232,7 +250,9 @@ describe("image tool results over OpenAI endpoints", () => {
     const synthetic = chat.find(
       (message) => message.role === "user" && Array.isArray(message.content),
     );
-    expect(synthetic && Array.isArray(synthetic.content) ? synthetic.content : []).toEqual([
+    expect(
+      synthetic && Array.isArray(synthetic.content) ? synthetic.content : [],
+    ).toEqual([
       { type: "text", text: "[Rich content returned by tool call c-rich]" },
       {
         type: "image_url",
@@ -258,11 +278,15 @@ describe("image tool results over OpenAI endpoints", () => {
       },
     ];
     const chat = buildChatCompletionMessages(textOnly);
-    expect(chat.some((message) => message.role === "user" && Array.isArray(message.content))).toBe(
-      false,
-    );
+    expect(
+      chat.some(
+        (message) => message.role === "user" && Array.isArray(message.content),
+      ),
+    ).toBe(false);
     const responses = buildOpenAIInput(textOnly);
-    const fco = responses.find((item) => "type" in item && item.type === "function_call_output");
+    const fco = responses.find(
+      (item) => "type" in item && item.type === "function_call_output",
+    );
     expect(fco && "output" in fco ? fco.output : null).toEqual([
       { type: "input_text", text: "plain" },
     ]);
@@ -286,7 +310,9 @@ describe("image tool results over OpenAI endpoints", () => {
     expect(chat).toHaveLength(1);
     const chatParts = chat[0].content;
     expect(Array.isArray(chatParts)).toBe(true);
-    expect(JSON.stringify(chatParts)).toContain(`data:image/png;base64,${DATA}`);
+    expect(JSON.stringify(chatParts)).toContain(
+      `data:image/png;base64,${DATA}`,
+    );
 
     const responses = buildOpenAIInput(userWithImage);
     expect(responses).toHaveLength(1);

@@ -64,7 +64,9 @@ function Spinner({ label, inputTokens = 0, outputTokens = 0 }: SpinnerProps) {
   }, []);
 
   const details = [
-    inputTokens > 0 ? `↑${formatTokens(inputTokens)} ↓${formatTokens(outputTokens)}` : "",
+    inputTokens > 0
+      ? `↑${formatTokens(inputTokens)} ↓${formatTokens(outputTokens)}`
+      : "",
     elapsed > 0 ? `${String(elapsed)}s` : "",
   ].filter(Boolean);
 

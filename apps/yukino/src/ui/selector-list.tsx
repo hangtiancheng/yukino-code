@@ -76,16 +76,27 @@ export function SelectorList({
   const visibleCount = Math.min(10, Math.floor(listRows / itemHeight));
   const windowStart = getListWindowStart(itemCount, cursor, visibleCount);
   const position = `${String(itemCount ? cursor + 1 : 0)}/${String(itemCount)}`;
-  const status = query.trim() ? `${position} · ${String(totalCount)} total` : position;
+  const status = query.trim()
+    ? `${position} · ${String(totalCount)} total`
+    : position;
   const searchWidth = Math.max(0, contentWidth - visibleWidth(status) - 1);
 
   return (
-    <Box ref={ref} flexDirection="column" maxHeight={availableRows} overflow="hidden" width="100%">
+    <Box
+      ref={ref}
+      flexDirection="column"
+      maxHeight={availableRows}
+      overflow="hidden"
+      width="100%"
+    >
       <SelectorFrame compact={compact} hint={hint} title={title} width={width}>
         <Box width="100%">
           <Box flexGrow={1} minWidth={0}>
             <Text color={query ? THEME.text : THEME.dim} wrap="truncate-end">
-              {truncateToWidth(query ? `Search: ${query}` : "Search: type to filter", searchWidth)}
+              {truncateToWidth(
+                query ? `Search: ${query}` : "Search: type to filter",
+                searchWidth,
+              )}
             </Text>
           </Box>
           <Text color={THEME.dim} wrap="truncate-end">
@@ -129,7 +140,10 @@ export function SelectorListRow({
   const rowWidth = Math.max(0, width - padding * 2);
   const pointer = focused ? `${ICONS.arrow} ` : "  ";
   const marker = current ? ` ${ICONS.success}` : "";
-  const labelWidth = Math.max(0, rowWidth - visibleWidth(pointer) - visibleWidth(marker));
+  const labelWidth = Math.max(
+    0,
+    rowWidth - visibleWidth(pointer) - visibleWidth(marker),
+  );
   const singleLineLabel = label.replace(/[\r\n\t]+/g, " ");
   const remainingWidth = labelWidth - visibleWidth(singleLineLabel) - 2;
   // Preserve the name and current marker before spending columns on metadata.

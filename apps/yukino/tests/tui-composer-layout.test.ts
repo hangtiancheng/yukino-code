@@ -39,7 +39,11 @@ import type { InputDraft } from "@/ui/input.js";
 import { InteractionDock } from "@/ui/interaction-dock.js";
 import { StatusBorder } from "@/ui/status-border.js";
 import { ICONS, THEME } from "@/ui/styles.js";
-import { truncateToWidth, visibleWidth, wrapToLines } from "@/ui/terminal-text.js";
+import {
+  truncateToWidth,
+  visibleWidth,
+  wrapToLines,
+} from "@/ui/terminal-text.js";
 
 const terminal = vi.hoisted(() => {
   const input: { current: ((text: string, key: Key) => void) | null } = {
@@ -59,7 +63,10 @@ vi.mock("ink", async (importOriginal) => {
     useStdout: () => ({
       stdout: { columns: terminal.columns, rows: terminal.rows },
     }),
-    useInput: (handler: (text: string, key: Key) => void, options?: { isActive?: boolean }) => {
+    useInput: (
+      handler: (text: string, key: Key) => void,
+      options?: { isActive?: boolean },
+    ) => {
       useEffect(() => {
         if (options?.isActive === false) {
           return;
@@ -70,7 +77,10 @@ vi.mock("ink", async (importOriginal) => {
         };
       }, [handler, options?.isActive]);
     },
-    usePaste: (handler: (text: string) => void, options?: { isActive?: boolean }) => {
+    usePaste: (
+      handler: (text: string) => void,
+      options?: { isActive?: boolean },
+    ) => {
       useEffect(() => {
         if (options?.isActive === false) {
           return;
@@ -124,7 +134,11 @@ const stats = "↑1.3k ↓230 20.0%/200k";
 const initialColorLevel = chalk.level;
 let instance: Instance | undefined;
 
-function draftRef(lines = [""], cursorLine = 0, cursorCol = lines[cursorLine].length) {
+function draftRef(
+  lines = [""],
+  cursorLine = 0,
+  cursorCol = lines[cursorLine].length,
+) {
   const ref: { current: InputDraft | null } = {
     current: {
       lines,
@@ -163,12 +177,21 @@ function key(overrides: Partial<Key> = {}): Key {
   };
 }
 
-function composer(columns: number, props: Partial<ComponentProps<typeof InputBox>> = {}) {
+function composer(
+  columns: number,
+  props: Partial<ComponentProps<typeof InputBox>> = {},
+) {
   terminal.columns = columns;
-  return renderToString(createElement(InputBox, { onSubmit: vi.fn(), ...props }), { columns });
+  return renderToString(
+    createElement(InputBox, { onSubmit: vi.fn(), ...props }),
+    { columns },
+  );
 }
 
-function footer(columns: number, props: Partial<ComponentProps<typeof Footer>> = {}) {
+function footer(
+  columns: number,
+  props: Partial<ComponentProps<typeof Footer>> = {},
+) {
   terminal.columns = columns;
   return stripVTControlCharacters(
     renderToString(createElement(Footer, { ...footerProps, ...props }), {
@@ -180,10 +203,13 @@ function footer(columns: number, props: Partial<ComponentProps<typeof Footer>> =
 function mount(props: Partial<ComponentProps<typeof InputBox>> = {}) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   act(() => {
-    instance = render(createElement(InputBox, { onSubmit: vi.fn(), ...props }), {
-      interactive: false,
-      patchConsole: false,
-    });
+    instance = render(
+      createElement(InputBox, { onSubmit: vi.fn(), ...props }),
+      {
+        interactive: false,
+        patchConsole: false,
+      },
+    );
   });
 }
 
@@ -304,7 +330,10 @@ describe("composer status borders", () => {
   });
 
   it("uses both borders in InputBox and removes its duplicate permission row", () => {
-    const lines = Array.from({ length: 20 }, (_, index) => `line ${String(index)}`);
+    const lines = Array.from(
+      { length: 20 },
+      (_, index) => `line ${String(index)}`,
+    );
     const output = composer(60, {
       draftRef: draftRef(lines, 10),
       statusLabel: "Thinking",
@@ -319,12 +348,15 @@ describe("composer status borders", () => {
     expect(output.join("\n")).not.toMatch(/Accept Edits|Shift\+Tab/);
   });
 
-  it.each([1, 2, 4, 7])("does not impose an eight-column minimum at width %i", (width) => {
-    const output = composer(width).split("\n");
-    expect(visibleWidth(output[0])).toBe(width);
-    expect(visibleWidth(output.at(-1) ?? "")).toBe(width);
-    expect(output.every((line) => visibleWidth(line) <= width)).toBe(true);
-  });
+  it.each([1, 2, 4, 7])(
+    "does not impose an eight-column minimum at width %i",
+    (width) => {
+      const output = composer(width).split("\n");
+      expect(visibleWidth(output[0])).toBe(width);
+      expect(visibleWidth(output.at(-1) ?? "")).toBe(width);
+      expect(output.every((line) => visibleWidth(line) <= width)).toBe(true);
+    },
+  );
 
   it("preserves the inverse cursor in the input body", () => {
     chalk.level = 3;
@@ -386,7 +418,9 @@ describe("composer completion rows", () => {
       draftRef: draftRef(["/"]),
     });
     expect(output.split("\n")).toHaveLength(5);
-    expect(output.split("\n").every((line) => visibleWidth(line) <= 18)).toBe(true);
+    expect(output.split("\n").every((line) => visibleWidth(line) <= 18)).toBe(
+      true,
+    );
     expect(output).toContain("…");
   });
 
@@ -396,8 +430,11 @@ describe("composer completion rows", () => {
       workDir: "/virtual",
       draftRef: draftRef(["@"]),
     });
-    const row = output.split("\n").find((line) => line.includes("@one.ts")) ?? "";
-    expect(stripVTControlCharacters(row).startsWith(` ${ICONS.arrow} @one.ts`)).toBe(true);
+    const row =
+      output.split("\n").find((line) => line.includes("@one.ts")) ?? "";
+    expect(
+      stripVTControlCharacters(row).startsWith(` ${ICONS.arrow} @one.ts`),
+    ).toBe(true);
     expect(visibleWidth(row)).toBe(30);
     const background = chalk.bgHex(THEME.selectedBg)(" ").split(" ")[0];
     expect(row.startsWith(background)).toBe(true);
@@ -411,7 +448,9 @@ describe("composer completion rows", () => {
       draftRef: draftRef(["@"]),
     });
     expect(output.split("\n")).toHaveLength(5);
-    expect(output.split("\n").every((line) => visibleWidth(line) <= 20)).toBe(true);
+    expect(output.split("\n").every((line) => visibleWidth(line) <= 20)).toBe(
+      true,
+    );
   });
 });
 
@@ -506,7 +545,9 @@ describe("composer queue recall and visual navigation", () => {
       terminal.input.current?.("\r", key({ return: true }));
       terminal.input.current?.("\r", key({ return: true }));
     });
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(`first\n${"x".repeat(1099)}!`);
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
+      `first\n${"x".repeat(1099)}!`,
+    );
     expect(onRecallQueuedMessage).toHaveBeenCalledOnce();
   });
 
@@ -557,19 +598,22 @@ describe("composer queue recall and visual navigation", () => {
     expect(onSubmit).toHaveBeenCalledExactlyOnceWith("queued");
   });
 
-  it.each(["/help", "@one"])("submits recalled %s literally rather than completing it", (text) => {
-    const ref = draftRef();
-    const onSubmit = vi.fn();
-    mount({
-      draftRef: ref,
-      commands,
-      onSubmit,
-      onRecallQueuedMessage: () => text,
-    });
-    press("", { upArrow: true });
-    press("", { return: true });
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(text);
-  });
+  it.each(["/help", "@one"])(
+    "submits recalled %s literally rather than completing it",
+    (text) => {
+      const ref = draftRef();
+      const onSubmit = vi.fn();
+      mount({
+        draftRef: ref,
+        commands,
+        onSubmit,
+        onRecallQueuedMessage: () => text,
+      });
+      press("", { upArrow: true });
+      press("", { return: true });
+      expect(onSubmit).toHaveBeenCalledExactlyOnceWith(text);
+    },
+  );
 
   it("prioritizes slash completion over a soft-wrapped row and history", () => {
     terminal.columns = 3;
@@ -698,22 +742,25 @@ describe("composer queue recall and visual navigation", () => {
     expect(ref.current?.lines).toEqual(["abcdefghijk", "x", "abcdefghijk"]);
   });
 
-  it.each([1, 20, 40, 80])("bounds the visual viewport and inverse caret at width %i", (width) => {
-    chalk.level = 3;
-    const line = "界👩‍💻é".repeat(200);
-    const ref = draftRef([line], 0, "界👩‍💻é".repeat(100).length);
-    const output = composer(width, { draftRef: ref });
-    const rows = output.split("\n");
-    expect(rows).toHaveLength(9);
-    expect(rows.every((row) => visibleWidth(row) <= width)).toBe(true);
-    expect(output).toContain("\x1b[7m");
-    expect(ref.current?.lines).toEqual([line]);
-    if (width > 1) {
-      expect(output).toContain("\x1b[7m界\x1b[27m");
-      expect(rows[0]).toContain("more");
-      expect(rows.at(-1)).toContain("more");
-    }
-  });
+  it.each([1, 20, 40, 80])(
+    "bounds the visual viewport and inverse caret at width %i",
+    (width) => {
+      chalk.level = 3;
+      const line = "界👩‍💻é".repeat(200);
+      const ref = draftRef([line], 0, "界👩‍💻é".repeat(100).length);
+      const output = composer(width, { draftRef: ref });
+      const rows = output.split("\n");
+      expect(rows).toHaveLength(9);
+      expect(rows.every((row) => visibleWidth(row) <= width)).toBe(true);
+      expect(output).toContain("\x1b[7m");
+      expect(ref.current?.lines).toEqual([line]);
+      if (width > 1) {
+        expect(output).toContain("\x1b[7m界\x1b[27m");
+        expect(rows[0]).toContain("more");
+        expect(rows.at(-1)).toContain("more");
+      }
+    },
+  );
 });
 
 describe("footer priorities", () => {
@@ -721,12 +768,15 @@ describe("footer priorities", () => {
     const output = footer(150);
     expect(output.split("\n")).toHaveLength(2);
     expect(output).toContain(stats);
-    expect(output).toContain("very-long-provider-name/compact-model · Plan  Shift+Tab to cycle");
+    expect(output).toContain(
+      "very-long-provider-name/compact-model · Plan  Shift+Tab to cycle",
+    );
     expect(output).toContain(footerProps.sessionId);
   });
 
   it("drops the hint and provider before shortening the model with a two-column gap", () => {
-    const width = visibleWidth(stats) + 2 + visibleWidth("compact-model · Plan") + 2;
+    const width =
+      visibleWidth(stats) + 2 + visibleWidth("compact-model · Plan") + 2;
     const line = footer(width).split("\n").at(-1) ?? "";
     expect(line.trim()).toBe(`${stats}  compact-model · Plan`);
     expect(line).not.toContain("provider");
@@ -735,7 +785,9 @@ describe("footer priorities", () => {
       footer(width - 5)
         .split("\n")
         .at(-1) ?? "";
-    expect(narrower.trim()).toBe(`${stats}  ${truncateToWidth("compact-model", 8)} · Plan`);
+    expect(narrower.trim()).toBe(
+      `${stats}  ${truncateToWidth("compact-model", 8)} · Plan`,
+    );
   });
 
   it("only truncates cwd and keeps the complete session ID on the first row when possible", () => {
@@ -749,7 +801,9 @@ describe("footer priorities", () => {
   it("gives the complete session ID its own wrapped rows on tiny terminals", () => {
     const output = footer(16).split("\n");
     const sessionRows = wrapToLines(footerProps.sessionId, 14);
-    expect(output.slice(1, sessionRows.length + 1).map((line) => line.trim())).toEqual(sessionRows);
+    expect(
+      output.slice(1, sessionRows.length + 1).map((line) => line.trim()),
+    ).toEqual(sessionRows);
     expect(
       output
         .slice(1, sessionRows.length + 1)
@@ -759,23 +813,31 @@ describe("footer priorities", () => {
     expect(output.join("\n")).toContain("Plan");
   });
 
-  it.each([1, 2, 3, 8, 16, 24, 40, 80, 120])("never overflows a %i-column terminal", (width) => {
-    const output = footer(width, {
-      model: "模型-".repeat(30),
-      permissionMode: "acceptEdits",
-      workDir: "/工作区/项目/".repeat(10),
-    });
-    expect(output.split("\n").every((line) => visibleWidth(line) <= width)).toBe(true);
-  });
+  it.each([1, 2, 3, 8, 16, 24, 40, 80, 120])(
+    "never overflows a %i-column terminal",
+    (width) => {
+      const output = footer(width, {
+        model: "模型-".repeat(30),
+        permissionMode: "acceptEdits",
+        workDir: "/工作区/项目/".repeat(10),
+      });
+      expect(
+        output.split("\n").every((line) => visibleWidth(line) <= width),
+      ).toBe(true);
+    },
+  );
 
   it.each([
     ["default", "Default"],
     ["acceptEdits", "Accept Edits"],
     ["plan", "Plan"],
     ["bypassPermissions", "YOLO"],
-  ])("keeps %s mode identifiable on a narrow footer", (permissionMode, label) => {
-    expect(footer(24, { permissionMode })).toContain(label);
-  });
+  ])(
+    "keeps %s mode identifiable on a narrow footer",
+    (permissionMode, label) => {
+      expect(footer(24, { permissionMode })).toContain(label);
+    },
+  );
 
   it("preserves the existing token rounding and zero-context semantics", () => {
     const output = footer(150, {
@@ -966,7 +1028,10 @@ describe("persistent composer drafts and input behavior", () => {
   });
 
   it("collapses 124 pasted lines to the PI marker and preserves the payload across remounts", () => {
-    const text = Array.from({ length: 124 }, (_, i) => `line ${String(i + 1)}`).join("\n");
+    const text = Array.from(
+      { length: 124 },
+      (_, i) => `line ${String(i + 1)}`,
+    ).join("\n");
     const ref = draftRef(["Review: "]);
     const onSubmit = vi.fn();
     mount({ draftRef: ref, onSubmit });
@@ -999,7 +1064,9 @@ describe("persistent composer drafts and input behavior", () => {
     press("", { leftArrow: true });
     expect(ref.current?.cursorCol).toBe(first.length);
     press("", { rightArrow: true });
-    expect(ref.current?.cursorCol).toBe(first.length + "[paste #2 1002 chars]".length);
+    expect(ref.current?.cursorCol).toBe(
+      first.length + "[paste #2 1002 chars]".length,
+    );
     press("", { backspace: true });
     expect(ref.current?.lines).toEqual([first]);
     press("", { leftArrow: true });
@@ -1078,7 +1145,9 @@ describe("persistent composer drafts and input behavior", () => {
       terminal.paste.current?.("");
       await Promise.resolve();
     });
-    expect(ref.current?.lines).toEqual(["[paste #1 1001 chars] [Image #1] [Image #2] "]);
+    expect(ref.current?.lines).toEqual([
+      "[paste #1 1001 chars] [Image #1] [Image #2] ",
+    ]);
     unmount();
     mount({ draftRef: ref, onSubmit, clearRef, workDir: "/virtual" });
     press("", { leftArrow: true });

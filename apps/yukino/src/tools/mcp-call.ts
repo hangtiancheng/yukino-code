@@ -52,7 +52,13 @@
  */
 
 import type { ToolRegistry } from "./registry.js";
-import type { MCPToolLike, Tool, ToolContext, ToolResult, ToolSchema } from "./types.js";
+import type {
+  MCPToolLike,
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "./types.js";
 
 import {
   MCP_NAME_SEP,
@@ -66,7 +72,11 @@ function coerceScalar(value: unknown, want: string): unknown {
   // boolean must be excluded first: typeof true !== "number", but in other
   // languages bool is a subclass of int, so all four languages uniformly treat
   // booleans as not participating in numeric conversion
-  if (want === "string" && typeof value === "number" && Number.isFinite(value)) {
+  if (
+    want === "string" &&
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
     return String(value);
   }
   if ((want === "integer" || want === "number") && typeof value === "string") {
@@ -77,11 +87,15 @@ function coerceScalar(value: unknown, want: string): unknown {
     // Only accept when the whole string is numeric; "5abc" is left untouched.
     // integer further requires no fractional part, and "5.7" is not truncated —
     // it's passed through as-is so the MCP server reports its own domain error
-    const shape = want === "integer" ? /^[+-]?\d+$/ : /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+    const shape =
+      want === "integer"
+        ? /^[+-]?\d+$/
+        : /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
     if (!shape.test(text)) {
       return value;
     }
-    const parsed = want === "integer" ? Number.parseInt(text, 10) : Number.parseFloat(text);
+    const parsed =
+      want === "integer" ? Number.parseInt(text, 10) : Number.parseFloat(text);
     return Number.isFinite(parsed) ? parsed : value;
   }
   if (want === "boolean" && typeof value === "string") {
@@ -103,7 +117,12 @@ export function coerceBySchema(value: unknown, schema: unknown): unknown {
   const schemaObj = asRecord(schema);
   const want = strArg(schemaObj, "type", "");
 
-  if (want === "object" && typeof value === "object" && value !== null && !Array.isArray(value)) {
+  if (
+    want === "object" &&
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  ) {
     const props = asRecord(schemaObj.properties ?? {});
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
@@ -116,7 +135,11 @@ export function coerceBySchema(value: unknown, schema: unknown): unknown {
     const itemSchema = schemaObj.items ?? {};
     let working: unknown = value;
     // The model often wraps arrays in single-key objects like {"item": [...]}
-    if (typeof working === "object" && working !== null && !Array.isArray(working)) {
+    if (
+      typeof working === "object" &&
+      working !== null &&
+      !Array.isArray(working)
+    ) {
       const entries = Object.values(working);
       if (entries.length === 1 && Array.isArray(entries[0])) {
         working = entries[0];
@@ -221,7 +244,9 @@ export class McpCallTool implements Tool {
     if (!server || !name) {
       return undefined;
     }
-    const fullName = name.startsWith(MCP_TOOL_PREFIX) ? name : buildMcpToolName(server, name);
+    const fullName = name.startsWith(MCP_TOOL_PREFIX)
+      ? name
+      : buildMcpToolName(server, name);
     const target = this.registry.get(fullName);
     // The routed server must be the one that permission rules evaluated.
     return target &&
@@ -239,7 +264,10 @@ export class McpCallTool implements Tool {
       .sort();
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const server = strArg(args, "server", "");
     const tool = strArg(args, "tool", "");
     if (tool === "") {
@@ -262,7 +290,8 @@ export class McpCallTool implements Tool {
       Array.isArray(args.arguments)
     ) {
       return {
-        output: "McpCall requires an 'arguments' object matching the target schema",
+        output:
+          "McpCall requires an 'arguments' object matching the target schema",
         isError: true,
       };
     }
@@ -272,7 +301,11 @@ export class McpCallTool implements Tool {
       const schema = target.mcpInputSchema();
       if (Object.keys(schema).length > 0) {
         const fixed = coerceBySchema(inner, schema);
-        if (typeof fixed === "object" && fixed !== null && !Array.isArray(fixed)) {
+        if (
+          typeof fixed === "object" &&
+          fixed !== null &&
+          !Array.isArray(fixed)
+        ) {
           inner = asRecord(fixed);
         }
       }

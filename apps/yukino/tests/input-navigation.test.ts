@@ -22,7 +22,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { layoutInputRows, locateInputCursor, moveInputVertically } from "@/ui/input-navigation.js";
+import {
+  layoutInputRows,
+  locateInputCursor,
+  moveInputVertically,
+} from "@/ui/input-navigation.js";
 import { collapsePaste, inputBoundary } from "@/ui/input-paste.js";
 import { visibleWidth } from "@/ui/terminal-text.js";
 
@@ -84,11 +88,9 @@ describe("input visual-row navigation", () => {
   it("moves through soft-wrapped rows without introducing logical newlines", () => {
     const lines = ["abcdefghi"];
     const rows = layoutInputRows(lines, 4);
-    expect(rows.map((row) => row.cells.map((cell) => cell.text).join(""))).toEqual([
-      "abcd",
-      "efgh",
-      "i ",
-    ]);
+    expect(
+      rows.map((row) => row.cells.map((cell) => cell.text).join("")),
+    ).toEqual(["abcd", "efgh", "i "]);
     expect(locateInputCursor(rows, 0, 9)).toEqual({
       row: 2,
       cell: 1,
@@ -128,34 +130,43 @@ describe("input visual-row navigation", () => {
     const paste = collapsePaste("x".repeat(1001));
     const line = `ab${paste.text}cd`;
     const rows = layoutInputRows([line], 4, paste.store);
-    expect(rows.map((row) => row.cells.map((cell) => cell.text).join(""))).toEqual([
-      "ab",
-      "[pa…",
-      "cd ",
-    ]);
+    expect(
+      rows.map((row) => row.cells.map((cell) => cell.text).join("")),
+    ).toEqual(["ab", "[pa…", "cd "]);
     expect(moveInputVertically(rows, 0, line.length, -1)?.cursorCol).toBe(2);
-    expect(moveInputVertically(rows, 0, 2, 1)?.cursorCol).toBe(2 + paste.text.length);
+    expect(moveInputVertically(rows, 0, 2, 1)?.cursorCol).toBe(
+      2 + paste.text.length,
+    );
     for (const row of rows) {
       for (const cell of row.cells) {
-        expect(inputBoundary(line, cell.offset, "clamp", paste.store)).toBe(cell.offset);
+        expect(inputBoundary(line, cell.offset, "clamp", paste.store)).toBe(
+          cell.offset,
+        );
       }
     }
   });
 
-  it.each([1, 20, 40, 80])("fits graphemes and paste atoms into %i cells", (width) => {
-    const paste = collapsePaste("x".repeat(1001));
-    const line = `${"界👩‍💻é ".repeat(25)}${paste.text}`;
-    const rows = layoutInputRows([line], width, paste.store);
-    for (const row of rows) {
-      expect(row.width).toBeLessThanOrEqual(width);
-      expect(visibleWidth(row.cells.map((cell) => cell.text).join(""))).toBe(row.width);
-      for (const cell of row.cells) {
-        expect(inputBoundary(line, cell.offset, "clamp", paste.store)).toBe(cell.offset);
-        expect(cell.text).not.toMatch(/[\ud800-\udfff]/u);
+  it.each([1, 20, 40, 80])(
+    "fits graphemes and paste atoms into %i cells",
+    (width) => {
+      const paste = collapsePaste("x".repeat(1001));
+      const line = `${"界👩‍💻é ".repeat(25)}${paste.text}`;
+      const rows = layoutInputRows([line], width, paste.store);
+      for (const row of rows) {
+        expect(row.width).toBeLessThanOrEqual(width);
+        expect(visibleWidth(row.cells.map((cell) => cell.text).join(""))).toBe(
+          row.width,
+        );
+        for (const cell of row.cells) {
+          expect(inputBoundary(line, cell.offset, "clamp", paste.store)).toBe(
+            cell.offset,
+          );
+          expect(cell.text).not.toMatch(/[\ud800-\udfff]/u);
+        }
       }
-    }
-    expect(locateInputCursor(rows, 0, line.length).row).toBe(rows.length - 1);
-  });
+      expect(locateInputCursor(rows, 0, line.length).row).toBe(rows.length - 1);
+    },
+  );
 
   it("reflows narrow resizes without changing logical positions or content", () => {
     const lines = ["abcdefghijk"];

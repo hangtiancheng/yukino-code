@@ -46,7 +46,10 @@ export class BwrapSandbox implements Sandbox {
     return this.detected;
   }
 
-  prepare(command: string, config: SandboxConfig): { executable: string; args: string[] } {
+  prepare(
+    command: string,
+    config: SandboxConfig,
+  ): { executable: string; args: string[] } {
     const args = ["--unshare-user", "--unshare-pid"];
 
     // Mount the root filesystem as read-only

@@ -30,8 +30,17 @@ import { useState, useMemo, useRef, useEffect } from "react";
 
 import { useInputDraft } from "./input-draft.js";
 import type { InputDraft } from "./input-draft.js";
-import { layoutInputRows, locateInputCursor, moveInputVertically } from "./input-navigation.js";
-import { collapseImage, collapsePaste, expandPastes, inputBoundary } from "./input-paste.js";
+import {
+  layoutInputRows,
+  locateInputCursor,
+  moveInputVertically,
+} from "./input-navigation.js";
+import {
+  collapseImage,
+  collapsePaste,
+  expandPastes,
+  inputBoundary,
+} from "./input-paste.js";
 import { getListWindowStart } from "./list-window.js";
 import { StatusBorder } from "./status-border.js";
 import { truncateToWidth, visibleWidth } from "./terminal-text.js";
@@ -49,7 +58,18 @@ const log = createChildLogger({ module: "terminal" });
 
 // Suffix appended to skill-backed command descriptions (see wireSkillsToRegistry).
 const SKILL_TAG = "[skill]";
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const SPINNER_FRAMES = [
+  "⠋",
+  "⠙",
+  "⠹",
+  "⠸",
+  "⠼",
+  "⠴",
+  "⠦",
+  "⠧",
+  "⠇",
+  "⠏",
+] as const;
 
 function scanWorkdirFiles(root: string, max = 2000): string[] {
   const out: string[] = [];
@@ -93,7 +113,12 @@ function scanWorkdirFiles(root: string, max = 2000): string[] {
 
 export type { InputDraft } from "./input-draft.js";
 
-const MODEL_CYCLE: PermissionMode[] = ["default", "acceptEdits", "plan", "bypassPermissions"];
+const MODEL_CYCLE: PermissionMode[] = [
+  "default",
+  "acceptEdits",
+  "plan",
+  "bypassPermissions",
+];
 
 interface InputBoxProps {
   onSubmit: (text: string) => void;
@@ -151,7 +176,9 @@ export function InputBox(props: InputBoxProps) {
   const borderWidth = Math.max(1, stdout.columns || 80);
   const horizontalPadding = borderWidth > 2 ? 1 : 0;
   const rowWidth = borderWidth - horizontalPadding * 2;
-  const preferredColumnRef = useRef<{ width: number; column: number } | null>(null);
+  const preferredColumnRef = useRef<{ width: number; column: number } | null>(
+    null,
+  );
 
   const {
     lines,
@@ -267,7 +294,9 @@ export function InputBox(props: InputBoxProps) {
     }
     const query = first.slice(1).toLowerCase();
     const thinkingMatch = /^(thinking|think)[ \t]+([a-z]*)$/u.exec(query);
-    const thinkingCommand = commands.find((command) => command.name === "thinking");
+    const thinkingCommand = commands.find(
+      (command) => command.name === "thinking",
+    );
     if (thinkingMatch && thinkingCommand) {
       return {
         filteredCmds: thinkingLevels
@@ -351,8 +380,15 @@ export function InputBox(props: InputBoxProps) {
     !isMultiline &&
     !dropdownDismissed &&
     historyIndex < 0;
-  const commandWindowStart = getListWindowStart(filteredCmds.length, dropdownIndex, 8);
-  const visibleCommands = filteredCmds.slice(commandWindowStart, commandWindowStart + 8);
+  const commandWindowStart = getListWindowStart(
+    filteredCmds.length,
+    dropdownIndex,
+    8,
+  );
+  const visibleCommands = filteredCmds.slice(
+    commandWindowStart,
+    commandWindowStart + 8,
+  );
 
   // @-file-mention autocomplete: active when the text before the caret ends with an
   // @<partial> token (and we're not typing a slash command).
@@ -385,7 +421,9 @@ export function InputBox(props: InputBoxProps) {
       return files.slice(0, 8);
     }
     const pre = files.filter((f) => f.toLowerCase().startsWith(q));
-    const sub = files.filter((f) => !f.toLowerCase().startsWith(q) && f.toLowerCase().includes(q));
+    const sub = files.filter(
+      (f) => !f.toLowerCase().startsWith(q) && f.toLowerCase().includes(q),
+    );
     return [...pre, ...sub].slice(0, 8);
   }, [atQuery, workDir]);
 
@@ -398,7 +436,9 @@ export function InputBox(props: InputBoxProps) {
 
   const completeAt = (path: string) => {
     const line = lines[cursorLine] ?? "";
-    const before = line.slice(0, cursorCol).replace(/@([^\s]*)$/, () => `@${path}`);
+    const before = line
+      .slice(0, cursorCol)
+      .replace(/@([^\s]*)$/, () => `@${path}`);
     const after = line.slice(cursorCol).replace(/^\S*/, "");
     const separator = after.startsWith(" ") ? "" : " ";
     const newLine = before + separator + after;
@@ -425,7 +465,12 @@ export function InputBox(props: InputBoxProps) {
       setPastes(collapsed.store);
     }
     const cl = current.cursorLine;
-    const col = inputBoundary(current.lines[cl] ?? "", current.cursorCol, "clamp", current.pastes);
+    const col = inputBoundary(
+      current.lines[cl] ?? "",
+      current.cursorCol,
+      "clamp",
+      current.pastes,
+    );
     const before = (current.lines[cl] ?? "").slice(0, col);
     const pad = image && before.length > 0 && !/\s$/.test(before) ? " " : "";
     const pasteLines = (pad + collapsed.text + (image ? " " : "")).split("\n");
@@ -435,7 +480,8 @@ export function InputBox(props: InputBoxProps) {
       const line = updated[cl] ?? "";
       const segments = [...pasteLines];
       segments[0] = line.slice(0, col) + segments[0];
-      segments[segments.length - 1] = segments[segments.length - 1] + line.slice(col);
+      segments[segments.length - 1] =
+        segments[segments.length - 1] + line.slice(col);
       updated.splice(cl, 1, ...segments);
       return updated;
     });
@@ -493,7 +539,8 @@ export function InputBox(props: InputBoxProps) {
 
   const handleInput = (input: string, key: Key) => {
     // Ink can deliver another key before React commits the preceding paste.
-    const { lines, cursorLine, cursorCol, historyIndex, historyDraft, pastes } = getDraft();
+    const { lines, cursorLine, cursorCol, historyIndex, historyDraft, pastes } =
+      getDraft();
     const isMultiline = lines.length > 1;
     if (input.includes("[<") && /\[<\d+;\d+;\d+[Mm]/.test(input)) {
       return;
@@ -532,7 +579,10 @@ export function InputBox(props: InputBoxProps) {
     // press (Enter arrives as a lone "\r", "\n", or "\r\n"). Insert it as multi-line text
     // at the cursor instead of submitting.
     const isLoneEnter = input === "\r" || input === "\n" || input === "\r\n";
-    if ((hasLineBreak && !isLoneEnter) || (!key.ctrl && !key.meta && input.length > 1000)) {
+    if (
+      (hasLineBreak && !isLoneEnter) ||
+      (!key.ctrl && !key.meta && input.length > 1000)
+    ) {
       insertPastedText(input);
       return;
     }
@@ -636,7 +686,9 @@ export function InputBox(props: InputBoxProps) {
 
     if (key.leftArrow) {
       if (cursorCol > 0) {
-        setCursorCol(inputBoundary(lines[cursorLine] ?? "", cursorCol, "previous", pastes));
+        setCursorCol(
+          inputBoundary(lines[cursorLine] ?? "", cursorCol, "previous", pastes),
+        );
       } else if (isMultiline && cursorLine > 0) {
         setCursorLine(cursorLine - 1);
         setCursorCol((lines[cursorLine - 1] ?? "").length);
@@ -647,7 +699,9 @@ export function InputBox(props: InputBoxProps) {
     if (key.rightArrow) {
       const lineLen = (lines[cursorLine] ?? "").length;
       if (cursorCol < lineLen) {
-        setCursorCol(inputBoundary(lines[cursorLine] ?? "", cursorCol, "next", pastes));
+        setCursorCol(
+          inputBoundary(lines[cursorLine] ?? "", cursorCol, "next", pastes),
+        );
       } else if (isMultiline && cursorLine < lines.length - 1) {
         setCursorLine(cursorLine + 1);
         setCursorCol(0);
@@ -662,7 +716,8 @@ export function InputBox(props: InputBoxProps) {
         setLines((prev) => {
           const updated = [...prev];
           const current = updated[cursorLine] ?? "";
-          updated[cursorLine] = current.slice(0, cursorCol) + current.slice(nextCol);
+          updated[cursorLine] =
+            current.slice(0, cursorCol) + current.slice(nextCol);
           return updated;
         });
       } else if (key.backspace && cursorCol > 0) {
@@ -701,7 +756,9 @@ export function InputBox(props: InputBoxProps) {
       const direction = key.upArrow ? -1 : 1;
       if (showAtDropdown || showDropdown) {
         preferredColumnRef.current = null;
-        const count = showAtDropdown ? filteredFiles.length : filteredCmds.length;
+        const count = showAtDropdown
+          ? filteredFiles.length
+          : filteredCmds.length;
         setDropdownIndex((index) => (index + direction + count) % count);
         return;
       }
@@ -755,7 +812,8 @@ export function InputBox(props: InputBoxProps) {
             ...(pastes ? { pastes } : {}),
           });
         }
-        const nextIdx = historyIndex < history.length - 1 ? historyIndex + 1 : historyIndex;
+        const nextIdx =
+          historyIndex < history.length - 1 ? historyIndex + 1 : historyIndex;
         setHistoryIndex(nextIdx);
         const entry = history[history.length - 1 - nextIdx] ?? "";
         const entryLines = entry.split("\n");
@@ -842,9 +900,15 @@ export function InputBox(props: InputBoxProps) {
       inputRows.length - maxVisibleLines,
     ),
   );
-  const visibleRows = inputRows.slice(visibleStart, visibleStart + maxVisibleLines);
+  const visibleRows = inputRows.slice(
+    visibleStart,
+    visibleStart + maxVisibleLines,
+  );
   const hiddenAbove = visibleStart;
-  const hiddenBelow = Math.max(0, inputRows.length - visibleStart - visibleRows.length);
+  const hiddenBelow = Math.max(
+    0,
+    inputRows.length - visibleStart - visibleRows.length,
+  );
   const spinner = SPINNER_FRAMES[statusFrame] ?? SPINNER_FRAMES[0];
 
   const ghostText = useMemo(() => {
@@ -872,7 +936,11 @@ export function InputBox(props: InputBoxProps) {
         spinner={inputState === "error" ? "!" : spinner}
         hiddenLineCount={hiddenAbove}
       />
-      <Box flexDirection="column" paddingLeft={horizontalPadding} paddingRight={horizontalPadding}>
+      <Box
+        flexDirection="column"
+        paddingLeft={horizontalPadding}
+        paddingRight={horizontalPadding}
+      >
         {disabled ? (
           <Text color={THEME.muted} wrap="truncate-end">
             Waiting...
@@ -903,7 +971,9 @@ export function InputBox(props: InputBoxProps) {
                 <Text inverse>{caret.text}</Text>
                 {after}
                 {atEnd && row.line === 0 && ghostText ? (
-                  <Text color={THEME.dim}>{truncateToWidth(ghostText, rowWidth - row.width)}</Text>
+                  <Text color={THEME.dim}>
+                    {truncateToWidth(ghostText, rowWidth - row.width)}
+                  </Text>
                 ) : null}
               </Text>
             );
@@ -929,19 +999,30 @@ export function InputBox(props: InputBoxProps) {
       {showDropdown && (
         <Box flexDirection="column">
           <Text color={THEME.dim} wrap="truncate-end">
-            {recentCount > 0 && commandWindowStart === 0 ? "RECENTLY USED" : "COMMANDS"}
+            {recentCount > 0 && commandWindowStart === 0
+              ? "RECENTLY USED"
+              : "COMMANDS"}
             {filteredCmds.length > 8
               ? ` (${String(dropdownIndex + 1)}/${String(filteredCmds.length)})`
               : ""}
           </Text>
           {visibleCommands.map((cmd, visibleIndex) => {
-            const selected = commandWindowStart + visibleIndex === dropdownIndex;
+            const selected =
+              commandWindowStart + visibleIndex === dropdownIndex;
             const desc = cmd.description.replace(/\s+/g, " ").trim();
             const isSkill = desc.endsWith(SKILL_TAG);
-            const body = isSkill ? desc.slice(0, -SKILL_TAG.length).trimEnd() : desc;
-            const label = truncateToWidth(`${selected ? ICONS.arrow : " "} /${cmd.name}`, rowWidth);
+            const body = isSkill
+              ? desc.slice(0, -SKILL_TAG.length).trimEnd()
+              : desc;
+            const label = truncateToWidth(
+              `${selected ? ICONS.arrow : " "} /${cmd.name}`,
+              rowWidth,
+            );
             const descriptionWidth =
-              rowWidth - visibleWidth(label) - 1 - (isSkill ? visibleWidth(SKILL_TAG) + 1 : 0);
+              rowWidth -
+              visibleWidth(label) -
+              1 -
+              (isSkill ? visibleWidth(SKILL_TAG) + 1 : 0);
             const showDescription = borderWidth >= 60 && descriptionWidth >= 10;
             return (
               <Box
@@ -951,11 +1032,18 @@ export function InputBox(props: InputBoxProps) {
                 paddingRight={horizontalPadding}
                 width="100%"
               >
-                <Text wrap="truncate-end" color={selected ? THEME.accent : THEME.muted}>
+                <Text
+                  wrap="truncate-end"
+                  color={selected ? THEME.accent : THEME.muted}
+                >
                   {label}
-                  {showDescription && ` ${truncateToWidth(body, descriptionWidth)}`}
+                  {showDescription &&
+                    ` ${truncateToWidth(body, descriptionWidth)}`}
                   {showDescription && isSkill && (
-                    <Text color={selected ? THEME.accent : THEME.dim}> {SKILL_TAG}</Text>
+                    <Text color={selected ? THEME.accent : THEME.dim}>
+                      {" "}
+                      {SKILL_TAG}
+                    </Text>
                   )}
                 </Text>
               </Box>
@@ -971,13 +1059,21 @@ export function InputBox(props: InputBoxProps) {
           {filteredFiles.map((file, i) => (
             <Box
               key={file}
-              backgroundColor={i === dropdownIndex ? THEME.selectedBg : undefined}
+              backgroundColor={
+                i === dropdownIndex ? THEME.selectedBg : undefined
+              }
               paddingLeft={horizontalPadding}
               paddingRight={horizontalPadding}
               width="100%"
             >
-              <Text color={i === dropdownIndex ? THEME.accent : THEME.muted} wrap="truncate-end">
-                {truncateToWidth(`${i === dropdownIndex ? ICONS.arrow : " "} @${file}`, rowWidth)}
+              <Text
+                color={i === dropdownIndex ? THEME.accent : THEME.muted}
+                wrap="truncate-end"
+              >
+                {truncateToWidth(
+                  `${i === dropdownIndex ? ICONS.arrow : " "} @${file}`,
+                  rowWidth,
+                )}
               </Text>
             </Box>
           ))}

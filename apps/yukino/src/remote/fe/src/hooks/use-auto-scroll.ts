@@ -54,7 +54,8 @@ export function useAutoScroll<T extends HTMLElement>(dep: unknown) {
       return;
     }
     const onScroll = () => {
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
       setAutoScroll(distanceFromBottom < 60);
     };
     el.addEventListener("scroll", onScroll, { passive: true });

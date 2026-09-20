@@ -36,10 +36,7 @@ const log = createChildLogger({ module: "permissions" });
 
 export type DecisionEffect = "allow" | "deny" | "ask";
 export type PermissionMode =
-  | "default"
-  | "acceptEdits"
-  | "plan"
-  | "bypassPermissions";
+  "default" | "acceptEdits" | "plan" | "bypassPermissions";
 
 export interface Decision {
   effect: DecisionEffect;

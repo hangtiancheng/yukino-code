@@ -32,7 +32,11 @@ interface QuestionDraft {
   useOther: boolean;
 }
 
-const emptyDraft = (): QuestionDraft => ({ selected: [], other: "", useOther: false });
+const emptyDraft = (): QuestionDraft => ({
+  selected: [],
+  other: "",
+  useOther: false,
+});
 
 interface AskUserDialogProps {
   item: AskUserItem;
@@ -45,7 +49,10 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
   const getDraft = (key: string): QuestionDraft => drafts[key] ?? emptyDraft();
 
   const updateDraft = (key: string, patch: Partial<QuestionDraft>) => {
-    setDrafts((prev) => ({ ...prev, [key]: { ...(prev[key] ?? emptyDraft()), ...patch } }));
+    setDrafts((prev) => ({
+      ...prev,
+      [key]: { ...(prev[key] ?? emptyDraft()), ...patch },
+    }));
   };
 
   const handleSubmit = () => {
@@ -169,7 +176,9 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
             />
             <span className="min-w-0">
               <span className="text-sm text-bright">{opt.label}</span>
-              {opt.description && <span className="ml-2 text-xs text-dim">{opt.description}</span>}
+              {opt.description && (
+                <span className="ml-2 text-xs text-dim">{opt.description}</span>
+              )}
             </span>
           </label>
         );
@@ -187,7 +196,10 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
           value="__other__"
           checked={draft.useOther}
           onChange={() => {
-            onChange({ useOther: true, selected: question.multiSelect ? draft.selected : [] });
+            onChange({
+              useOther: true,
+              selected: question.multiSelect ? draft.selected : [],
+            });
           }}
           className="accent-accent"
         />
@@ -196,7 +208,10 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
           type="text"
           value={draft.other}
           onFocus={() => {
-            onChange({ useOther: true, selected: question.multiSelect ? draft.selected : [] });
+            onChange({
+              useOther: true,
+              selected: question.multiSelect ? draft.selected : [],
+            });
           }}
           onChange={(e) => {
             onChange({ other: e.target.value, useOther: true });

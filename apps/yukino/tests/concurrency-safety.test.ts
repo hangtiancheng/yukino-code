@@ -35,7 +35,14 @@ describe("Bash concurrency safety is determined per command", () => {
   const bash = new BashTool();
 
   it("read-only commands are considered safe", () => {
-    for (const command of ["ls", "ls -la", "cat a.txt", "git status", "wc -l f", "pwd"]) {
+    for (const command of [
+      "ls",
+      "ls -la",
+      "cat a.txt",
+      "git status",
+      "wc -l f",
+      "pwd",
+    ]) {
       expect(bash.isConcurrencySafe({ command })).toBe(true);
     }
   });

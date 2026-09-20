@@ -36,7 +36,10 @@ import {
   toolUsesToRecords,
   toolResultsToRecords,
 } from "@/session/index.js";
-import type { ProviderToolSchema, ToolResultContentBlock } from "@/tools/types.js";
+import type {
+  ProviderToolSchema,
+  ToolResultContentBlock,
+} from "@/tools/types.js";
 import { asErrorString, contentToText, strArg } from "@/utils/index.js";
 
 // Structured outcome of a compaction. When `compacted` is true, `boundary`
@@ -56,7 +59,8 @@ export interface CompactResult {
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 const MAX_PTL_RETRIES = 3;
-const PTL_RETRY_MARKER = "[earlier conversation truncated for compaction retry]";
+const PTL_RETRY_MARKER =
+  "[earlier conversation truncated for compaction retry]";
 const CHARS_PER_TOKEN = 3.5;
 
 // Recent-history retention budget for compaction. When we compact we keep the tail of
@@ -90,7 +94,9 @@ export function computeCompactThreshold(
   manual = false,
 ): number {
   const effective = contextWindow - Math.min(maxOutput, SUMMARY_OUTPUT_RESERVE);
-  const margin = manual ? MANUAL_COMPACT_SAFETY_MARGIN : AUTO_COMPACT_SAFETY_MARGIN;
+  const margin = manual
+    ? MANUAL_COMPACT_SAFETY_MARGIN
+    : AUTO_COMPACT_SAFETY_MARGIN;
   return effective - margin;
 }
 
@@ -153,7 +159,10 @@ function toolResultBlocksChars(blocks: ToolResultContentBlock[]): {
       }
       case "search_result": {
         richChars += block.source.length + block.title.length;
-        richChars += block.content.reduce((sum, content) => sum + content.text.length, 0);
+        richChars += block.content.reduce(
+          (sum, content) => sum + content.text.length,
+          0,
+        );
         break;
       }
       case "document": {
@@ -176,7 +185,10 @@ function toolResultBlocksChars(blocks: ToolResultContentBlock[]): {
               break;
             }
             for (const content of block.source.content) {
-              richChars += content.type === "text" ? content.text.length : IMAGE_CHAR_EQUIV;
+              richChars +=
+                content.type === "text"
+                  ? content.text.length
+                  : IMAGE_CHAR_EQUIV;
             }
             break;
           }
@@ -201,7 +213,9 @@ export function estimateMessages(messages: Message[]): number {
       for (const tr of msg.toolResults) {
         if (tr.contentBlocks?.length) {
           const blockChars = toolResultBlocksChars(tr.contentBlocks);
-          totalChars += Math.max(tr.content.length, blockChars.textChars) + blockChars.richChars;
+          totalChars +=
+            Math.max(tr.content.length, blockChars.textChars) +
+            blockChars.richChars;
         } else {
           totalChars += tr.content.length;
         }
@@ -279,10 +293,15 @@ function backUpPastToolUse(messages: Message[], keepStart: number): number {
     return keepStart;
   }
 
-  const ids = new Set((messages[keepStart].toolResults ?? []).map((tr) => tr.toolUseId));
+  const ids = new Set(
+    (messages[keepStart].toolResults ?? []).map((tr) => tr.toolUseId),
+  );
   for (let i = keepStart - 1; i >= 0; i--) {
     const m = messages[i];
-    if (m.role === "assistant" && m.toolUses?.some((tu) => ids.has(tu.toolUseId))) {
+    if (
+      m.role === "assistant" &&
+      m.toolUses?.some((tu) => ids.has(tu.toolUseId))
+    ) {
       return i;
     }
   }
@@ -296,7 +315,10 @@ function backUpPastToolUse(messages: Message[], keepStart: number): number {
 // messages appended after it (baseline + increment). On a cold start (no anchor
 // yet) we fall back to estimating the entire transcript so the very first turn
 // still works. Extended with cache tokens for a more accurate baseline.
-export function currentContextTokens(conv: ConversationManager, anchor?: UsageAnchor): number {
+export function currentContextTokens(
+  conv: ConversationManager,
+  anchor?: UsageAnchor,
+): number {
   const a = anchor ?? conv.usageAnchorState();
   if (!a) {
     return estimateTokens(conv);
@@ -330,7 +352,10 @@ export async function manageContext(
 
   // Past the hard-block line we must compact even if the circuit breaker tripped.
   const forced = tokens >= hardBlock;
-  if (!forced && trackingState.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+  if (
+    !forced &&
+    trackingState.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES
+  ) {
     return {
       compacted: false,
       message: `Auto-compact circuit breaker: ${String(MAX_CONSECUTIVE_FAILURES)} consecutive failures`,
@@ -402,7 +427,10 @@ function groupMessagesByAPIRound(messages: Message[]): Message[][] {
 }
 
 /** Drop the oldest API round groups until enough tokens are freed */
-function truncateHeadForPTL(prefix: Message[], tokenGap: number): Message[] | null {
+function truncateHeadForPTL(
+  prefix: Message[],
+  tokenGap: number,
+): Message[] | null {
   const groups = groupMessagesByAPIRound(prefix);
   if (groups.length < 2) {
     return null;
@@ -496,7 +524,10 @@ async function collectSummary(
   let text = "";
   for await (const event of client.stream(conv, tools, abortSignal)) {
     abortSignal?.throwIfAborted();
-    if (event.type === "tool_call_start" || event.type === "tool_call_complete") {
+    if (
+      event.type === "tool_call_start" ||
+      event.type === "tool_call_complete"
+    ) {
       throw new Error("Compaction requested a tool instead of a summary");
     }
     if (event.type === "text_delta") {
@@ -537,7 +568,12 @@ async function requestSummaryWithPTLRetry(
     summaryConv.addUserMessage(buildSummaryPrompt(text, customInstructions));
 
     try {
-      return await collectSummary(client, summaryConv, toolSchemas, abortSignal);
+      return await collectSummary(
+        client,
+        summaryConv,
+        toolSchemas,
+        abortSignal,
+      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message.toLowerCase() : "";
       const isPTL =
@@ -548,7 +584,8 @@ async function requestSummaryWithPTLRetry(
       if (!isPTL || attempt >= MAX_PTL_RETRIES) {
         throw e;
       }
-      const tokenGap = currentPrefix.reduce((sum, m) => sum + estimateOne(m), 0) / 5;
+      const tokenGap =
+        currentPrefix.reduce((sum, m) => sum + estimateOne(m), 0) / 5;
       const truncated = truncateHeadForPTL(currentPrefix, tokenGap);
       if (!truncated) {
         throw e;
@@ -620,16 +657,23 @@ async function doCompact(
   const currentMessages = conv.getMessages();
   if (
     currentMessages.length !== estimationMessages.length ||
-    currentMessages.some((message, index) => message !== estimationMessages[index])
+    currentMessages.some(
+      (message, index) => message !== estimationMessages[index],
+    )
   ) {
-    throw new Error("Conversation changed during compaction; keeping the current history");
+    throw new Error(
+      "Conversation changed during compaction; keeping the current history",
+    );
   }
 
   const recoveryAttachment = recoveryState
     ? recoveryState.buildRecoveryAttachment(toolSchemaNames)
     : "";
 
-  let summaryContent = buildCompactionSummaryMessage(summary, toKeep.length > 0);
+  let summaryContent = buildCompactionSummaryMessage(
+    summary,
+    toKeep.length > 0,
+  );
   if (sessionFilePath) {
     summaryContent += `\n\nIf you need specific details from before compaction (code snippets, error messages, etc.), use ReadFile to read the full session transcript: ${sessionFilePath}`;
   }
@@ -648,12 +692,16 @@ async function doCompact(
     .filter(
       (m) =>
         (m.role === "user" || m.role === "assistant") &&
-        (m.content || (m.toolUses?.length ?? 0) || (m.toolResults?.length ?? 0)),
+        (m.content ||
+          (m.toolUses?.length ?? 0) ||
+          (m.toolResults?.length ?? 0)),
     )
     .map((m) => ({
       role: m.role,
       content: m.content,
-      ...(m.toolUses?.length ? { tool_uses: toolUsesToRecords(m.toolUses) } : {}),
+      ...(m.toolUses?.length
+        ? { tool_uses: toolUsesToRecords(m.toolUses) }
+        : {}),
       ...(m.toolResults?.length
         ? {
             tool_results: toolResultsToRecords(m.toolResults),

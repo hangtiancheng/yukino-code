@@ -113,7 +113,8 @@ export const BROWSER_TOOLS = [
       properties: {
         ref: {
           type: "string",
-          description: 'Element reference ID from the read_page tool (e.g., "ref_1", "ref_2")',
+          description:
+            'Element reference ID from the read_page tool (e.g., "ref_1", "ref_2")',
         },
         value: {
           type: ["string", "boolean", "number"],
@@ -172,7 +173,8 @@ export const BROWSER_TOOLS = [
           type: "number",
           minimum: 0,
           maximum: 30,
-          description: "The number of seconds to wait. Required for `wait`. Maximum 30 seconds.",
+          description:
+            "The number of seconds to wait. Required for `wait`. Maximum 30 seconds.",
         },
         scroll_direction: {
           type: "string",
@@ -183,14 +185,16 @@ export const BROWSER_TOOLS = [
           type: "number",
           minimum: 1,
           maximum: 10,
-          description: "The number of scroll wheel ticks. Optional for `scroll`, defaults to 3.",
+          description:
+            "The number of scroll wheel ticks. Optional for `scroll`, defaults to 3.",
         },
         start_coordinate: {
           type: "array",
           items: { type: "number" },
           minItems: 2,
           maxItems: 2,
-          description: "(x, y): The starting coordinates for `left_click_drag`.",
+          description:
+            "(x, y): The starting coordinates for `left_click_drag`.",
         },
         region: {
           type: "array",
@@ -286,7 +290,8 @@ export const BROWSER_TOOLS = [
         },
         tabId: {
           type: "number",
-          description: "Tab ID to identify which tab group this operation applies to",
+          description:
+            "Tab ID to identify which tab group this operation applies to",
         },
         download: {
           type: "boolean",
@@ -305,7 +310,8 @@ export const BROWSER_TOOLS = [
           properties: {
             showClickIndicators: {
               type: "boolean",
-              description: "Show orange circles at click locations (default: true)",
+              description:
+                "Show orange circles at click locations (default: true)",
             },
             showDragPaths: {
               type: "boolean",
@@ -313,7 +319,8 @@ export const BROWSER_TOOLS = [
             },
             showActionLabels: {
               type: "boolean",
-              description: "Show black labels describing actions (default: true)",
+              description:
+                "Show black labels describing actions (default: true)",
             },
             showProgressBar: {
               type: "boolean",
@@ -366,7 +373,8 @@ export const BROWSER_TOOLS = [
         },
         filename: {
           type: "string",
-          description: 'Optional filename for the uploaded file (default: "image.png")',
+          description:
+            'Optional filename for the uploaded file (default: "image.png")',
         },
       },
       required: ["imageId", "tabId"],

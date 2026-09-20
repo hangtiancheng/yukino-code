@@ -29,7 +29,9 @@ export * as Verbs from "./verbs.js";
 const log = createChildLogger({ module: "utils" });
 
 /** Convert message or legacy-session blocks to a base64-free text fallback. */
-export function contentToText(content: string | Record<string, unknown>[]): string {
+export function contentToText(
+  content: string | Record<string, unknown>[],
+): string {
   if (typeof content === "string") {
     return content;
   }
@@ -39,15 +41,21 @@ export function contentToText(content: string | Record<string, unknown>[]): stri
       parts.push(block.text);
     } else if (block.type === "image" && isRecord(block.source)) {
       const mediaType =
-        block.source.type === "base64" && typeof block.source.media_type === "string"
+        block.source.type === "base64" &&
+        typeof block.source.media_type === "string"
           ? block.source.media_type
           : "image";
       parts.push(`[Image: ${mediaType}]`);
-    } else if (block.type === "tool_reference" && typeof block.tool_name === "string") {
+    } else if (
+      block.type === "tool_reference" &&
+      typeof block.tool_name === "string"
+    ) {
       parts.push(`[Tool reference: ${block.tool_name}]`);
     } else if (block.type === "search_result") {
-      const title = typeof block.title === "string" ? block.title : "search result";
-      const source = typeof block.source === "string" ? ` (${block.source})` : "";
+      const title =
+        typeof block.title === "string" ? block.title : "search result";
+      const source =
+        typeof block.source === "string" ? ` (${block.source})` : "";
       const nested = Array.isArray(block.content)
         ? contentToText(block.content.filter(isRecord))
         : "";
@@ -99,11 +107,17 @@ export function isObject(value: unknown) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function toTry<T extends (...args: any) => any>(fn: T, ctx?: ThisParameterType<T>) {
+export function toTry<T extends (...args: any) => any>(
+  fn: T,
+  ctx?: ThisParameterType<T>,
+) {
   if (typeof fn !== "function") {
     return fn;
   }
-  return function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> | undefined {
+  return function (
+    this: ThisParameterType<T>,
+    ...args: Parameters<T>
+  ): ReturnType<T> | undefined {
     let ret: ReturnType<T>;
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -125,7 +139,11 @@ export function asError(err: unknown) {
   return new Error(String(err));
 }
 
-export function intArg(args: Record<string, unknown>, key: string, fallback: number): number {
+export function intArg(
+  args: Record<string, unknown>,
+  key: string,
+  fallback: number,
+): number {
   const v = args[key];
   if (typeof v === "number") {
     return Math.floor(v);
@@ -145,7 +163,11 @@ export function strList(raw: unknown): string[] {
   return [];
 }
 
-export function strArg(args: Record<string, unknown>, key: string, fallback?: string): string {
+export function strArg(
+  args: Record<string, unknown>,
+  key: string,
+  fallback?: string,
+): string {
   const v = args[key];
   if (typeof v === "string") {
     return v;
@@ -154,7 +176,11 @@ export function strArg(args: Record<string, unknown>, key: string, fallback?: st
   return fallback ?? "";
 }
 
-export function boolArg(args: Record<string, unknown>, key: string, fallback?: boolean): boolean {
+export function boolArg(
+  args: Record<string, unknown>,
+  key: string,
+  fallback?: boolean,
+): boolean {
   const v = args[key];
   if (typeof v === "boolean") {
     return v;

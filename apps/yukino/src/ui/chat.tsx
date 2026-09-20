@@ -69,7 +69,8 @@ function StreamingText({ text }: { text: string }) {
   const rendered = renderStreamingMarkdown(text, width, cache.current);
   const lines = wrapToLines(rendered, width);
   const limit = Math.max(2, (stdout.rows || 24) - 12);
-  const visible = lines.length > limit ? ["…", ...lines.slice(-(limit - 1))] : lines;
+  const visible =
+    lines.length > limit ? ["…", ...lines.slice(-(limit - 1))] : lines;
   return <Text>{visible.join("\n")}</Text>;
 }
 
@@ -80,7 +81,9 @@ export const ChatView = React.memo(function (props: ChatViewProps) {
       {messages.map((msg, i) => (
         <MessageBlock key={i} message={msg} expanded={expanded} />
       ))}
-      {thinkingText ? <ThinkingBlock text={thinkingText} expanded={expanded} streaming /> : null}
+      {thinkingText ? (
+        <ThinkingBlock text={thinkingText} expanded={expanded} streaming />
+      ) : null}
       {streamingText !== undefined && streamingText !== "" && (
         <Box marginTop={1} paddingLeft={1}>
           <StreamingText text={streamingText} />
@@ -114,7 +117,11 @@ function TurnSummaryBlock({ message, expanded }: TurnSummaryBlockProps) {
   const { content, thinkingDuration, toolSummary = [] } = message;
   return (
     <Box flexDirection="column">
-      <ThinkingBlock text={content} duration={thinkingDuration} expanded={expanded} />
+      <ThinkingBlock
+        text={content}
+        duration={thinkingDuration}
+        expanded={expanded}
+      />
       {toolSummary.map((tool, index) => (
         <ToolCard key={index} {...tool} expanded={expanded} />
       ))}
@@ -152,7 +159,9 @@ function MessageBlock(props: MessageBlockProps) {
                   [skill]
                 </Text>{" "}
                 {skill.name}{" "}
-                <Text color={THEME.muted}>(Ctrl+O to {expanded ? "collapse" : "expand"})</Text>
+                <Text color={THEME.muted}>
+                  (Ctrl+O to {expanded ? "collapse" : "expand"})
+                </Text>
               </Text>
               {expanded && (
                 <>
@@ -174,7 +183,9 @@ function MessageBlock(props: MessageBlockProps) {
               width={width}
             >
               <Text color={THEME.userMessageText}>
-                {skill ? text : renderMarkdown(text, Math.max(1, width - 2), "user")}
+                {skill
+                  ? text
+                  : renderMarkdown(text, Math.max(1, width - 2), "user")}
               </Text>
             </Box>
           )}
@@ -220,7 +231,11 @@ function MessageBlock(props: MessageBlockProps) {
       }
       return (
         <Box marginTop={1} paddingLeft={1} paddingRight={1}>
-          <Text color={isError ? THEME.error : isWarning ? THEME.warning : THEME.muted}>
+          <Text
+            color={
+              isError ? THEME.error : isWarning ? THEME.warning : THEME.muted
+            }
+          >
             {message.content.replace(/^↻\s*/u, "Retrying: ")}
           </Text>
         </Box>

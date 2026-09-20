@@ -76,7 +76,10 @@ export class ToolRegistry {
   }
 
   getAllSchemas(): ToolSchema[];
-  getAllSchemas(protocol: "anthropic", filter?: (name: string) => boolean): AnthropicToolSchema[];
+  getAllSchemas(
+    protocol: "anthropic",
+    filter?: (name: string) => boolean,
+  ): AnthropicToolSchema[];
   getAllSchemas(
     protocol: "openai",
     filter?: (name: string) => boolean,
@@ -85,10 +88,17 @@ export class ToolRegistry {
     protocol: "openai-compat",
     filter?: (name: string) => boolean,
   ): OpenAICompatToolSchema[];
-  getAllSchemas(protocol: ToolProtocol, filter?: (name: string) => boolean): ProviderToolSchema[];
-  getAllSchemas(protocol?: ToolProtocol, filter?: (name: string) => boolean): ProviderToolSchema[] {
+  getAllSchemas(
+    protocol: ToolProtocol,
+    filter?: (name: string) => boolean,
+  ): ProviderToolSchema[];
+  getAllSchemas(
+    protocol?: ToolProtocol,
+    filter?: (name: string) => boolean,
+  ): ProviderToolSchema[] {
     const resolvedProtocol = protocol ?? "anthropic";
-    const isOpenAI = resolvedProtocol === "openai" || resolvedProtocol === "openai-compat";
+    const isOpenAI =
+      resolvedProtocol === "openai" || resolvedProtocol === "openai-compat";
     // The official endpoint uses native deferral: tools stay in tools[] but are
     // flagged with defer_loading, and the server decides whether to show them to
     // the model. This keeps the tools array byte-identical even when new tools are
@@ -110,7 +120,8 @@ export class ToolRegistry {
       ) {
         continue;
       }
-      const deferred = Boolean(tool.deferred) && !this.discovered.has(tool.name);
+      const deferred =
+        Boolean(tool.deferred) && !this.discovered.has(tool.name);
       if (deferred && !native) {
         continue;
       }
@@ -134,7 +145,11 @@ export class ToolRegistry {
           },
         });
       } else {
-        schemas.push({ ...s, type: "custom", ...(deferred ? { defer_loading: true } : {}) });
+        schemas.push({
+          ...s,
+          type: "custom",
+          ...(deferred ? { defer_loading: true } : {}),
+        });
       }
     }
     return schemas;
@@ -158,7 +173,9 @@ export class ToolRegistry {
   }
 
   getDeferredTools(): Tool[] {
-    return [...this.tools.values()].filter((t) => t.deferred && !this.discovered.has(t.name));
+    return [...this.tools.values()].filter(
+      (t) => t.deferred && !this.discovered.has(t.name),
+    );
   }
 
   searchDeferred(query: string, maxResults = 5): Tool[] {

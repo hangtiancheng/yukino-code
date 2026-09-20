@@ -23,7 +23,10 @@
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { detectBackend, spawnTeammate as spawnTeammateProcess } from "./backend.js";
+import {
+  detectBackend,
+  spawnTeammate as spawnTeammateProcess,
+} from "./backend.js";
 import type { SpawnConfig } from "./backend.js";
 import { FileMailbox, type FileMailMessage } from "./file-mailbox.js";
 import type { TeammateUIState } from "./progress.js";
@@ -46,7 +49,13 @@ import {
 } from "./protocol.js";
 import { getNameRegistry } from "./registry.js";
 import { SharedTaskStore } from "./shared-task.js";
-import { listTeamNames, readTeamFile, teamDir, writeTeamFile, type TeamFile } from "./team-file.js";
+import {
+  listTeamNames,
+  readTeamFile,
+  teamDir,
+  writeTeamFile,
+  type TeamFile,
+} from "./team-file.js";
 import { saveTranscript } from "./transcript.js";
 
 import type { ConversationManager } from "@/conversation/index.js";
@@ -338,13 +347,22 @@ export class Team {
     const onEvent: AgentEventCallback = (event) => {
       switch (event.type) {
         case "tool_use":
-          recordToolStart(uiState.progress, event.toolId, event.toolName, event.args);
+          recordToolStart(
+            uiState.progress,
+            event.toolId,
+            event.toolName,
+            event.args,
+          );
           break;
         case "tool_result":
           recordToolResult(uiState.progress, event.toolId);
           break;
         case "usage":
-          recordTokens(uiState.progress, event.usage.inputTokens, event.usage.outputTokens);
+          recordTokens(
+            uiState.progress,
+            event.usage.inputTokens,
+            event.usage.outputTokens,
+          );
           break;
         case "turn_complete":
           recordTurnComplete(uiState.progress);
@@ -366,10 +384,14 @@ export class Team {
             abortController.signal,
           );
           clearActiveTools(uiState.progress);
-          uiState.lastMessage = result.length > 200 ? result.slice(0, 200) + "..." : result;
+          uiState.lastMessage =
+            result.length > 200 ? result.slice(0, 200) + "..." : result;
           if (abortController.signal.aborted || !member.active) {
             uiState.status = "stopped";
-            await this.leadMailbox.send(name, `[idle] ${name} (reason: stopped)`);
+            await this.leadMailbox.send(
+              name,
+              `[idle] ${name} (reason: stopped)`,
+            );
             break;
           }
           // Plan-mode teammate: a completed turn means it called ExitPlanMode and the plan
@@ -377,7 +399,10 @@ export class Team {
           // approval is the read-only restriction lifted and execution begins.
           if (member.checker?.mode === "plan") {
             uiState.status = "idle";
-            const next = await this.runPlanApproval(member, this.readPlanForReview());
+            const next = await this.runPlanApproval(
+              member,
+              this.readPlanForReview(),
+            );
             if (next === null) {
               break;
             }
@@ -387,7 +412,10 @@ export class Team {
 
           // Send idle notification to the lead
           uiState.status = "idle";
-          await this.leadMailbox.send(name, `[idle] ${name} (reason: ${idleReason})`);
+          await this.leadMailbox.send(
+            name,
+            `[idle] ${name} (reason: ${idleReason})`,
+          );
           idleReason = "available";
 
           // Poll mailbox for new messages or shutdown
@@ -499,7 +527,10 @@ export class Team {
    * drive progress from the Lead side. Returns null when the teammate has been
    * deactivated; the caller should exit the main loop.
    */
-  private async runPlanApproval(member: Member, plan: string): Promise<string | null> {
+  private async runPlanApproval(
+    member: Member,
+    plan: string,
+  ): Promise<string | null> {
     const req = planApprovalRequest(member.name, plan);
     await this.leadMailbox.send(member.name, req.text, req);
 
@@ -507,7 +538,10 @@ export class Team {
       await new Promise((r) => setTimeout(r, Team.IDLE_POLL_INTERVAL_MS));
       for (const m of member.mailbox.receiveSync()) {
         // Only accept the approval response matching this request; other messages are deferred to the next turn
-        if (m.type === MSG_PLAN_APPROVAL_RESPONSE && m.requestId === req.requestId) {
+        if (
+          m.type === MSG_PLAN_APPROVAL_RESPONSE &&
+          m.requestId === req.requestId
+        ) {
           // On approval, switch back to normal permissions so the teammate can modify files; on rejection, stay in plan mode to revise
           if (approved(m) && member.checker) {
             member.checker.mode = "default";
@@ -545,7 +579,9 @@ export class Team {
   }
 
   async stopAll(): Promise<void> {
-    await Promise.allSettled([...this.members.values()].map((member) => this.stopOne(member)));
+    await Promise.allSettled(
+      [...this.members.values()].map((member) => this.stopOne(member)),
+    );
   }
 
   /**
@@ -556,7 +592,10 @@ export class Team {
    */
   private async stopOne(member: Member): Promise<void> {
     member.active = false;
-    if (member.uiState?.status === "running" || member.uiState?.status === "idle") {
+    if (
+      member.uiState?.status === "running" ||
+      member.uiState?.status === "idle"
+    ) {
       member.uiState.status = "stopped";
     }
     if (member.external) {
@@ -575,7 +614,9 @@ export class Team {
   }
 
   getTeammateStates(): TeammateUIState[] {
-    return this.listMembers().flatMap((member) => (member.uiState ? [member.uiState] : []));
+    return this.listMembers().flatMap((member) =>
+      member.uiState ? [member.uiState] : [],
+    );
   }
 }
 
@@ -629,7 +670,11 @@ export class TeamManager {
     }
 
     const mode = tf.members.find((m) => m.backendType)?.backendType;
-    const team = new Team(tf.name, isTeamMode(mode) ? mode : "in-process", this.workDir);
+    const team = new Team(
+      tf.name,
+      isTeamMode(mode) ? mode : "in-process",
+      this.workDir,
+    );
     team.leadAgentId = tf.leadAgentId;
     team.description = tf.description;
     team.createdAt = tf.createdAt;
@@ -652,7 +697,9 @@ export class TeamManager {
     if (cached) {
       return cached;
     }
-    const store = new SharedTaskStore(join(this.teamDir(teamName), "tasks.json"));
+    const store = new SharedTaskStore(
+      join(this.teamDir(teamName), "tasks.json"),
+    );
     this.taskStores.set(teamName, store);
     return store;
   }

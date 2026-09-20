@@ -132,13 +132,16 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
   });
 
   it("rejects empty buffers", async () => {
-    await expect(maybeResizeAndDownsampleImage(Buffer.alloc(0), "image/png")).rejects.toThrow(
-      ImageTooLargeError,
-    );
+    await expect(
+      maybeResizeAndDownsampleImage(Buffer.alloc(0), "image/png"),
+    ).rejects.toThrow(ImageTooLargeError);
   });
 
   it("compresses an oversized PNG, preferring PNG output and keeping dimensions", async () => {
-    const result = await maybeResizeAndDownsampleImage(oversizedPng, "image/png");
+    const result = await maybeResizeAndDownsampleImage(
+      oversizedPng,
+      "image/png",
+    );
     expect(result.mediaType).toBe("image/png");
     expect(result.byteLength).toBeLessThanOrEqual(MAX_IMAGE_BYTES_PASSTHROUGH);
     // The output must be a real decodable PNG; 1600px is already under the
@@ -150,7 +153,10 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
   }, 30_000);
 
   it("compresses an oversized JPEG via the quality ladder and caps dimensions at 2000px", async () => {
-    const result = await maybeResizeAndDownsampleImage(oversizedJpeg, "image/jpeg");
+    const result = await maybeResizeAndDownsampleImage(
+      oversizedJpeg,
+      "image/jpeg",
+    );
     expect(result.mediaType).toBe("image/jpeg");
     expect(result.byteLength).toBeLessThanOrEqual(MAX_IMAGE_BYTES_PASSTHROUGH);
     const meta = await sharp(Buffer.from(result.data, "base64")).metadata();
@@ -160,7 +166,10 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
   }, 30_000);
 
   it("round-trips the compressed payload as valid base64 binary", async () => {
-    const result = await maybeResizeAndDownsampleImage(oversizedJpeg, "image/jpeg");
+    const result = await maybeResizeAndDownsampleImage(
+      oversizedJpeg,
+      "image/jpeg",
+    );
     const decoded = Buffer.from(result.data, "base64");
     expect(decoded.length).toBe(result.byteLength);
     expect(sniffMediaType(decoded)).toBe("image/jpeg");
@@ -175,12 +184,12 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
       PNG_MAGIC,
       Buffer.alloc(Math.floor(MAX_IMAGE_BYTES_PASSTHROUGH) + 1024, 0xab),
     ]);
-    await expect(maybeResizeAndDownsampleImage(corrupt, "image/png")).rejects.toThrow(
-      ImageTooLargeError,
-    );
-    await expect(maybeResizeAndDownsampleImage(corrupt, "image/png")).rejects.toThrow(
-      /compression failed/,
-    );
+    await expect(
+      maybeResizeAndDownsampleImage(corrupt, "image/png"),
+    ).rejects.toThrow(ImageTooLargeError);
+    await expect(
+      maybeResizeAndDownsampleImage(corrupt, "image/png"),
+    ).rejects.toThrow(/compression failed/);
   });
 
   it("still passes a small corrupt buffer through (sharp never consulted)", async () => {

@@ -29,7 +29,12 @@ interface SlashMenuProps {
   onHover: (index: number) => void;
 }
 
-export function SlashMenu({ commands, cursor, onSelect, onHover }: SlashMenuProps) {
+export function SlashMenu({
+  commands,
+  cursor,
+  onSelect,
+  onHover,
+}: SlashMenuProps) {
   if (commands.length === 0) {
     return null;
   }

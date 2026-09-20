@@ -38,7 +38,11 @@ describe("ACP conversion", () => {
     expect(
       promptToText([
         { type: "text", text: "Review this" },
-        { type: "resource_link", name: "README", uri: "file:///repo/README.md" },
+        {
+          type: "resource_link",
+          name: "README",
+          uri: "file:///repo/README.md",
+        },
         {
           type: "resource",
           resource: { uri: "file:///repo/context.txt", text: "context" },
@@ -50,14 +54,20 @@ describe("ACP conversion", () => {
   });
 
   it("rejects unsupported and empty prompt blocks", () => {
-    expect(() => promptToText([])).toThrow("Prompt must contain text or a resource link");
+    expect(() => promptToText([])).toThrow(
+      "Prompt must contain text or a resource link",
+    );
     expect(() =>
-      promptToText([{ type: "image", data: "aGVsbG8=", mimeType: "image/png" }]),
+      promptToText([
+        { type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+      ]),
     ).toThrow("Image prompts are not supported");
   });
 
   it("maps agent output, tools and usage", () => {
-    expect(agentEventToUpdate({ type: "stream_text", text: "hello" }, "/repo", 1000)).toEqual({
+    expect(
+      agentEventToUpdate({ type: "stream_text", text: "hello" }, "/repo", 1000),
+    ).toEqual({
       sessionUpdate: "agent_message_chunk",
       content: { type: "text", text: "hello" },
     });
@@ -142,7 +152,9 @@ describe("ACP conversion", () => {
       },
     ];
 
-    expect([...historyNotifications("session-1", messages, "/repo")]).toMatchObject([
+    expect([
+      ...historyNotifications("session-1", messages, "/repo"),
+    ]).toMatchObject([
       { update: { sessionUpdate: "user_message_chunk" } },
       { update: { sessionUpdate: "agent_message_chunk" } },
       { update: { sessionUpdate: "tool_call", toolCallId: "tool-1" } },

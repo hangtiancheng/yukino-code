@@ -55,17 +55,29 @@ export function promptToText(prompt: ContentBlock[]): string {
           parts.push(`Resource: ${block.resource.uri}\n${block.resource.text}`);
           break;
         }
-        throw RequestError.invalidParams(undefined, "Binary resources are not supported.");
+        throw RequestError.invalidParams(
+          undefined,
+          "Binary resources are not supported.",
+        );
       case "image":
-        throw RequestError.invalidParams(undefined, "Image prompts are not supported.");
+        throw RequestError.invalidParams(
+          undefined,
+          "Image prompts are not supported.",
+        );
       case "audio":
-        throw RequestError.invalidParams(undefined, "Audio prompts are not supported.");
+        throw RequestError.invalidParams(
+          undefined,
+          "Audio prompts are not supported.",
+        );
     }
   }
 
   const text = parts.join("\n\n").trim();
   if (!text) {
-    throw RequestError.invalidParams(undefined, "Prompt must contain text or a resource link.");
+    throw RequestError.invalidParams(
+      undefined,
+      "Prompt must contain text or a resource link.",
+    );
   }
   return text;
 }
@@ -83,7 +95,9 @@ export function toolKind(toolName: string): ToolKind {
   if (/^(Bash|PowerShell|ComputerUse)$/u.test(toolName)) {
     return "execute";
   }
-  if (/^(Agent|TaskCreate|TaskGet|TaskList|TaskUpdate|TaskStop)$/u.test(toolName)) {
+  if (
+    /^(Agent|TaskCreate|TaskGet|TaskList|TaskUpdate|TaskStop)$/u.test(toolName)
+  ) {
     return "think";
   }
   if (toolName === "ExitPlanMode") {
@@ -130,7 +144,9 @@ function toolResultUpdate(
     sessionUpdate: "tool_call_update",
     toolCallId,
     status: isError ? "failed" : "completed",
-    content: output ? [{ type: "content", content: { type: "text", text: output } }] : undefined,
+    content: output
+      ? [{ type: "content", content: { type: "text", text: output } }]
+      : undefined,
     rawOutput: {
       output,
       isError,
@@ -158,7 +174,12 @@ export function agentEventToUpdate(
     case "tool_use":
       return toolCallUpdate(event.toolName, event.toolId, event.args, workDir);
     case "tool_result":
-      return toolResultUpdate(event.toolId, event.output, event.isError, event.elapsed);
+      return toolResultUpdate(
+        event.toolId,
+        event.output,
+        event.isError,
+        event.elapsed,
+      );
     case "usage":
       return {
         sessionUpdate: "usage_update",
@@ -173,17 +194,23 @@ export function agentEventToUpdate(
   }
 }
 
-export function addUsage(total: Usage, event: Extract<AgentEvent, { type: "usage" }>): Usage {
+export function addUsage(
+  total: Usage,
+  event: Extract<AgentEvent, { type: "usage" }>,
+): Usage {
   const inputTokens = total.inputTokens + event.usage.inputTokens;
   const outputTokens = total.outputTokens + event.usage.outputTokens;
-  const cachedReadTokens = (total.cachedReadTokens ?? 0) + event.usage.cacheReadInputTokens;
-  const cachedWriteTokens = (total.cachedWriteTokens ?? 0) + event.usage.cacheCreationInputTokens;
+  const cachedReadTokens =
+    (total.cachedReadTokens ?? 0) + event.usage.cacheReadInputTokens;
+  const cachedWriteTokens =
+    (total.cachedWriteTokens ?? 0) + event.usage.cacheCreationInputTokens;
   return {
     inputTokens,
     outputTokens,
     cachedReadTokens,
     cachedWriteTokens,
-    totalTokens: inputTokens + outputTokens + cachedReadTokens + cachedWriteTokens,
+    totalTokens:
+      inputTokens + outputTokens + cachedReadTokens + cachedWriteTokens,
   };
 }
 
@@ -232,7 +259,9 @@ export function* historyNotifications(
         sessionId,
         update: {
           sessionUpdate:
-            message.role === "assistant" ? "agent_message_chunk" : "user_message_chunk",
+            message.role === "assistant"
+              ? "agent_message_chunk"
+              : "user_message_chunk",
           content: { type: "text", text },
         },
       };
@@ -241,7 +270,12 @@ export function* historyNotifications(
     for (const tool of message.tool_uses ?? []) {
       yield {
         sessionId,
-        update: toolCallUpdate(tool.tool_name, tool.tool_use_id, tool.arguments ?? {}, workDir),
+        update: toolCallUpdate(
+          tool.tool_name,
+          tool.tool_use_id,
+          tool.arguments ?? {},
+          workDir,
+        ),
       };
     }
 
@@ -249,7 +283,11 @@ export function* historyNotifications(
       const output = contentToText(result.content);
       yield {
         sessionId,
-        update: toolResultUpdate(result.tool_use_id, output, result.is_error ?? false),
+        update: toolResultUpdate(
+          result.tool_use_id,
+          output,
+          result.is_error ?? false,
+        ),
       };
     }
   }

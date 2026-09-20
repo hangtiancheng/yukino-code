@@ -26,7 +26,13 @@ import chalk from "chalk";
 import { highlight as highlightCli } from "cli-highlight";
 import type { HighlightOptions } from "cli-highlight";
 import Table from "cli-table3";
-import type { MarkedExtension, MarkedOptions, RendererObject, Tokens, Parser } from "marked";
+import type {
+  MarkedExtension,
+  MarkedOptions,
+  RendererObject,
+  Tokens,
+  Parser,
+} from "marked";
 import * as emoji from "node-emoji";
 import supportsHyperlinks from "supports-hyperlinks";
 
@@ -81,7 +87,8 @@ const HARD_RETURN_GFM_RE = new RegExp(HARD_RETURN + "|<br />");
 const BULLET_POINT = "* ";
 const BULLET_POINT_REGEX = "\\*";
 const NUMBERED_POINT_REGEX = "\\d+\\.";
-const POINT_REGEX = "(?:" + [BULLET_POINT_REGEX, NUMBERED_POINT_REGEX].join("|") + ")";
+const POINT_REGEX =
+  "(?:" + [BULLET_POINT_REGEX, NUMBERED_POINT_REGEX].join("|") + ")";
 
 function asTabNumber(tab: number | string) {
   if (typeof tab === "number") {
@@ -142,7 +149,10 @@ class Renderer {
   private parser: Parser | undefined;
   markedOptions: MarkedOptions | undefined;
 
-  constructor(options?: Partial<TerminalRendererOptions>, highlightOptions?: HighlightOptions) {
+  constructor(
+    options?: Partial<TerminalRendererOptions>,
+    highlightOptions?: HighlightOptions,
+  ) {
     this.config = { ...defaultOptions, ...options };
     this.tabStr = sanitizeTab(this.config.tab, asTabNumber(defaultOptions.tab));
     this.tableSettings = this.config.tableOptions;
@@ -159,7 +169,9 @@ class Renderer {
 
   private getParser(): Parser {
     if (this.parser === undefined) {
-      throw new Error("TerminalRenderer: parser not set. Call setContext() before rendering.");
+      throw new Error(
+        "TerminalRenderer: parser not set. Call setContext() before rendering.",
+      );
     }
     return this.parser;
   }
@@ -178,7 +190,9 @@ class Renderer {
     if (fallback !== undefined) {
       return fallback;
     }
-    throw new Error("TerminalRenderer: options not set. Call setContext() before rendering.");
+    throw new Error(
+      "TerminalRenderer: options not set. Call setContext() before rendering.",
+    );
   }
 
   textLength(str: string): number {
@@ -195,7 +209,10 @@ class Renderer {
 
   code(token: Tokens.Code): string {
     return section(
-      identify(this.tabStr, highlight(token.text, token.lang, this.config, this.highlightOptions)),
+      identify(
+        this.tabStr,
+        highlight(token.text, token.lang, this.config, this.highlightOptions),
+      ),
     );
   }
 
@@ -212,18 +229,30 @@ class Renderer {
     let text = this.getParser().parseInline(token.tokens);
     text = this.transform(text);
 
-    const prefix = this.config.showSectionPrefix ? "#".repeat(token.depth) + " " : "";
+    const prefix = this.config.showSectionPrefix
+      ? "#".repeat(token.depth) + " "
+      : "";
     text = prefix + text;
 
     if (this.config.reflowText) {
-      text = reflowText(text, this.config.width, this.getMarkedOptions().gfm ?? false);
+      text = reflowText(
+        text,
+        this.config.width,
+        this.getMarkedOptions().gfm ?? false,
+      );
     }
 
-    return section(token.depth === 1 ? this.config.firstHeading(text) : this.config.heading(text));
+    return section(
+      token.depth === 1
+        ? this.config.firstHeading(text)
+        : this.config.heading(text),
+    );
   }
 
   hr(_token: Tokens.Hr): string {
-    return section(this.config.hr(hr("-", this.config.reflowText && this.config.width)));
+    return section(
+      this.config.hr(hr("-", this.config.reflowText && this.config.width)),
+    );
   }
 
   list(token: Tokens.List): string {
@@ -295,14 +324,20 @@ class Renderer {
     text = transform(text);
 
     if (this.config.reflowText) {
-      text = reflowText(text, this.config.width, this.getMarkedOptions().gfm ?? false);
+      text = reflowText(
+        text,
+        this.config.width,
+        this.getMarkedOptions().gfm ?? false,
+      );
     }
 
     return section(text);
   }
 
   table(token: Tokens.Table): string {
-    const headerCells = token.header.map((cell) => this.getParser().parseInline(cell.tokens));
+    const headerCells = token.header.map((cell) =>
+      this.getParser().parseInline(cell.tokens),
+    );
 
     const table = new Table({
       ...this.tableSettings,
@@ -310,7 +345,9 @@ class Renderer {
     });
 
     for (const row of token.rows) {
-      const cells = row.map((cell) => this.transform(this.getParser().parseInline(cell.tokens)));
+      const cells = row.map((cell) =>
+        this.transform(this.getParser().parseInline(cell.tokens)),
+      );
       table.push(cells);
     }
 
@@ -641,7 +678,11 @@ function numberedPoint(n: number): string {
   return String(n) + ". ";
 }
 
-function numberedLine(indent: string, line: string, num: number): { num: number; line: string } {
+function numberedLine(
+  indent: string,
+  line: string,
+  num: number,
+): { num: number; line: string } {
   if (isPointedLine(line, indent)) {
     return {
       num: num + 1,
@@ -669,7 +710,9 @@ function numberedLines(lines: string, indent: string): string {
 
 function list(body: string, ordered: boolean, indent: string): string {
   const trimmed = body.trim();
-  return ordered ? numberedLines(trimmed, indent) : bulletPointLines(trimmed, indent);
+  return ordered
+    ? numberedLines(trimmed, indent)
+    : bulletPointLines(trimmed, indent);
 }
 
 function section(text: string): string {
@@ -736,7 +779,9 @@ function identity(str: string): string {
   return str;
 }
 
-function compose(...funcs: ((text: string) => string)[]): (text: string) => string {
+function compose(
+  ...funcs: ((text: string) => string)[]
+): (text: string) => string {
   return (input: string): string => {
     let result = input;
     for (let i = funcs.length - 1; i >= 0; i--) {
@@ -747,7 +792,9 @@ function compose(...funcs: ((text: string) => string)[]): (text: string) => stri
 }
 
 function isAllowedTabString(str: string): boolean {
-  return TAB_ALLOWED_CHARACTERS.some((char) => new RegExp("^(" + char + ")+$").test(str));
+  return TAB_ALLOWED_CHARACTERS.some((char) =>
+    new RegExp("^(" + char + ")+$").test(str),
+  );
 }
 
 function sanitizeTab(tab: number | string, fallbackTab: number): string {

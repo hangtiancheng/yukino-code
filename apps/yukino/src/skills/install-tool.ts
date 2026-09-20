@@ -39,7 +39,12 @@ import yaml from "js-yaml";
 import { parseSkillFile, type SkillCatalog } from "./catalog.js";
 
 import { createChildLogger } from "@/logger/index.js";
-import type { Tool, ToolContext, ToolResult, ToolSchema } from "@/tools/types.js";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "skills" });
@@ -48,7 +53,8 @@ const log = createChildLogger({ module: "skills" });
 // .agents/skills/<name>/SKILL.md, then reloads the catalog.
 export class InstallSkillTool implements Tool {
   name = "InstallSkill";
-  description = "Install a skill from a local file path or an https URL into .agents/skills.";
+  description =
+    "Install a skill from a local file path or an https URL into .agents/skills.";
   category = "write" as const;
 
   constructor(
@@ -66,7 +72,8 @@ export class InstallSkillTool implements Tool {
         properties: {
           source: {
             type: "string",
-            description: "Local file path or raw SKILL.md URL (not an HTML or repository page)",
+            description:
+              "Local file path or raw SKILL.md URL (not an HTML or repository page)",
           },
           name: {
             type: "string",
@@ -79,7 +86,10 @@ export class InstallSkillTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const source = strArg(args, "source");
     if (!source) {
       return { output: "Error: source is required", isError: true };
@@ -92,7 +102,10 @@ export class InstallSkillTool implements Tool {
         const timeout = new AbortController();
         const timer = setTimeout(() => {
           timeout.abort(
-            new DOMException("Skill download timed out after 30 seconds", "TimeoutError"),
+            new DOMException(
+              "Skill download timed out after 30 seconds",
+              "TimeoutError",
+            ),
           );
         }, 30_000);
         timer.unref();
@@ -120,14 +133,16 @@ export class InstallSkillTool implements Tool {
       const parsed = parseSkillFile(content);
       if (!parsed) {
         return {
-          output: "Error: source must be a valid SKILL.md with a frontmatter name",
+          output:
+            "Error: source must be a valid SKILL.md with a frontmatter name",
           isError: true,
         };
       }
       const name = strArg(args, "name") || parsed.meta.name;
       if (!/^[a-zA-Z0-9_-][a-zA-Z0-9._-]*$/.test(name) || name.endsWith(".")) {
         return {
-          output: "Error: invalid skill name; use letters, digits, dots, underscores and hyphens",
+          output:
+            "Error: invalid skill name; use letters, digits, dots, underscores and hyphens",
           isError: true,
         };
       }
@@ -145,7 +160,9 @@ export class InstallSkillTool implements Tool {
         const stat = lstatSync(dir, { throwIfNoEntry: false });
         if (stat) {
           if (stat.isSymbolicLink() || !stat.isDirectory()) {
-            throw new Error(`Installation directory must be a real directory: ${dir}`);
+            throw new Error(
+              `Installation directory must be a real directory: ${dir}`,
+            );
           }
         } else {
           mkdirSync(dir);
@@ -154,7 +171,9 @@ export class InstallSkillTool implements Tool {
       const destination = join(dir, "SKILL.md");
       const stat = lstatSync(destination, { throwIfNoEntry: false });
       if (stat && (stat.isSymbolicLink() || !stat.isFile())) {
-        throw new Error(`Installation target must be a regular file: ${destination}`);
+        throw new Error(
+          `Installation target must be a regular file: ${destination}`,
+        );
       }
 
       // Replace only this directory entry. This also avoids truncating a file

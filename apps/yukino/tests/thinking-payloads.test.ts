@@ -35,8 +35,15 @@ import type { LLMClient } from "@/llm/client.js";
 import { OpenAIClient, OpenAICompatClient } from "@/llm/openai.js";
 import type { ToolSchema } from "@/tools/types.js";
 
-const protocols: ProviderConfig["protocol"][] = ["anthropic", "openai", "openai-compat"];
-const openAIProtocols: ProviderConfig["protocol"][] = ["openai", "openai-compat"];
+const protocols: ProviderConfig["protocol"][] = [
+  "anthropic",
+  "openai",
+  "openai-compat",
+];
+const openAIProtocols: ProviderConfig["protocol"][] = [
+  "openai",
+  "openai-compat",
+];
 const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
@@ -69,7 +76,9 @@ function createClient(config: ProviderConfig) {
   }
 }
 
-function terminalEvents(protocol: ProviderConfig["protocol"]): Record<string, unknown>[] {
+function terminalEvents(
+  protocol: ProviderConfig["protocol"],
+): Record<string, unknown>[] {
   if (protocol === "anthropic") {
     return [
       {
@@ -124,7 +133,10 @@ async function request(
     return Promise.resolve(
       new Response(
         events
-          .map((event) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`)
+          .map(
+            (event) =>
+              `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`,
+          )
           .join(""),
         { headers: { "content-type": "text/event-stream" } },
       ),
@@ -168,8 +180,12 @@ describe.each(openAIProtocols)("%s thinking payloads", (protocol) => {
       provider(protocol, { thinking_mode: "adaptive", thinking: "minimal" }),
     );
     const payload = await request(client, protocol);
-    expect(protocol === "openai" ? payload.reasoning : payload.reasoning_effort).toEqual(
-      protocol === "openai" ? { effort: "minimal", summary: "auto" } : "minimal",
+    expect(
+      protocol === "openai" ? payload.reasoning : payload.reasoning_effort,
+    ).toEqual(
+      protocol === "openai"
+        ? { effort: "minimal", summary: "auto" }
+        : "minimal",
     );
     expect(payload).not.toHaveProperty("output_config");
   });
@@ -191,14 +207,21 @@ describe.each(protocols)("%s explicit capabilities", (protocol) => {
       expect(client.getThinkingLevel()).toBe("off");
       expect(client.setThinkingLevel(level)).toBe("off");
       const payload = await request(client, protocol);
-      for (const field of ["reasoning", "reasoning_effort", "thinking", "output_config"]) {
+      for (const field of [
+        "reasoning",
+        "reasoning_effort",
+        "thinking",
+        "output_config",
+      ]) {
         expect(payload).not.toHaveProperty(field);
       }
     },
   );
 
   it("maps native effort without relabeling the effective logical level", async () => {
-    const client = createClient(provider(protocol, { thinking_level_map: { low: "medium" } }));
+    const client = createClient(
+      provider(protocol, { thinking_level_map: { low: "medium" } }),
+    );
     expect(client.setThinkingLevel("low")).toBe("low");
     expect(client.getThinkingLevel()).toBe("low");
     const payload = await request(client, protocol);
@@ -221,7 +244,12 @@ describe.each(protocols)("%s explicit capabilities", (protocol) => {
         thinking_level_map: { max: null, xhigh: null, high: "none" },
       }),
     );
-    expect(client.getSupportedThinkingLevels()).toEqual(["off", "minimal", "low", "medium"]);
+    expect(client.getSupportedThinkingLevels()).toEqual([
+      "off",
+      "minimal",
+      "low",
+      "medium",
+    ]);
     expect(client.getThinkingLevel()).toBe("medium");
     expect(client.setThinkingLevel("high")).toBe("medium");
     const payload = await request(client, protocol);
@@ -265,18 +293,24 @@ describe.each(protocols)("%s explicit capabilities", (protocol) => {
 });
 
 describe("Anthropic thinking modes", () => {
-  it.each(THINKING_LEVELS)("uses budget mode by default for %s", async (level) => {
-    const client = new AnthropicClient(provider("anthropic", { thinking: level }), "system");
-    const payload = await request(client, "anthropic");
-    expect(client.getThinkingLevel()).toBe(level);
-    expect(payload.thinking).toEqual(
-      level === "off"
-        ? { type: "disabled" }
-        : { type: "enabled", budget_tokens: thinkingBudgetForLevel(level) },
-    );
-    expect(payload.max_tokens).toBe(128000);
-    expect(payload).not.toHaveProperty("output_config");
-  });
+  it.each(THINKING_LEVELS)(
+    "uses budget mode by default for %s",
+    async (level) => {
+      const client = new AnthropicClient(
+        provider("anthropic", { thinking: level }),
+        "system",
+      );
+      const payload = await request(client, "anthropic");
+      expect(client.getThinkingLevel()).toBe(level);
+      expect(payload.thinking).toEqual(
+        level === "off"
+          ? { type: "disabled" }
+          : { type: "enabled", budget_tokens: thinkingBudgetForLevel(level) },
+      );
+      expect(payload.max_tokens).toBe(128000);
+      expect(payload).not.toHaveProperty("output_config");
+    },
+  );
 
   it.each([
     { level: "off", effort: null },
@@ -286,23 +320,26 @@ describe("Anthropic thinking modes", () => {
     { level: "high", effort: "high" },
     { level: "xhigh", effort: "high" },
     { level: "max", effort: "max" },
-  ])("uses adaptive thinking and mapped effort for $level", async ({ level, effort }) => {
-    const thinking = z.enum(THINKING_LEVELS).parse(level);
-    const client = new AnthropicClient(
-      provider("anthropic", { thinking_mode: "adaptive", thinking }),
-      "system",
-    );
-    const payload = await request(client, "anthropic");
-    expect(client.getThinkingLevel()).toBe(thinking);
-    expect(payload.thinking).toEqual({
-      type: thinking === "off" ? "disabled" : "adaptive",
-    });
-    if (effort === null) {
-      expect(payload).not.toHaveProperty("output_config");
-    } else {
-      expect(payload.output_config).toEqual({ effort });
-    }
-  });
+  ])(
+    "uses adaptive thinking and mapped effort for $level",
+    async ({ level, effort }) => {
+      const thinking = z.enum(THINKING_LEVELS).parse(level);
+      const client = new AnthropicClient(
+        provider("anthropic", { thinking_mode: "adaptive", thinking }),
+        "system",
+      );
+      const payload = await request(client, "anthropic");
+      expect(client.getThinkingLevel()).toBe(thinking);
+      expect(payload.thinking).toEqual({
+        type: thinking === "off" ? "disabled" : "adaptive",
+      });
+      if (effort === null) {
+        expect(payload).not.toHaveProperty("output_config");
+      } else {
+        expect(payload.output_config).toEqual({ effort });
+      }
+    },
+  );
 
   it("supports explicit adaptive overrides but never sends an illegal native effort", async () => {
     const client = new AnthropicClient(
@@ -356,7 +393,10 @@ describe("Anthropic thinking modes", () => {
   );
 
   it("recalculates availability and effective level when runtime output limits change", async () => {
-    const client = new AnthropicClient(provider("anthropic", { context_window: 4096 }), "system");
+    const client = new AnthropicClient(
+      provider("anthropic", { context_window: 4096 }),
+      "system",
+    );
     client.setMaxOutputTokens(1151);
     expect(client.getSupportedThinkingLevels()).toEqual(["off"]);
     expect(client.getThinkingLevel()).toBe("off");
@@ -416,8 +456,14 @@ describe.each(protocols)("%s tool schema fidelity", (protocol) => {
       },
     ];
     const original = structuredClone(tools);
-    const payload = await request(createClient(provider(protocol)), protocol, tools);
-    const sent = z.array(z.record(z.string(), z.unknown())).parse(payload.tools);
+    const payload = await request(
+      createClient(provider(protocol)),
+      protocol,
+      tools,
+    );
+    const sent = z
+      .array(z.record(z.string(), z.unknown()))
+      .parse(payload.tools);
     expect(sent).toHaveLength(3);
     for (const tool of sent) {
       if (protocol === "anthropic") {

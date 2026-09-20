@@ -50,13 +50,17 @@ export function sourcesKey(redis: RedisConfig): string {
   return `${redis.indexName}:sources`;
 }
 
-export async function connectRedis(redis: RedisConfig): Promise<RedisClientType> {
+export async function connectRedis(
+  redis: RedisConfig,
+): Promise<RedisClientType> {
   const client = createClient({
     url: redis.url,
     socket: {
       connectTimeout: CONNECT_TIMEOUT_MS,
       reconnectStrategy: (retries: number) =>
-        retries >= MAX_RECONNECT_ATTEMPTS ? false : Math.min(retries * 100, 1000),
+        retries >= MAX_RECONNECT_ATTEMPTS
+          ? false
+          : Math.min(retries * 100, 1000),
     },
   });
   client.on("error", (err: unknown) => {

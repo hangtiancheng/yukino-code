@@ -78,7 +78,10 @@ export class GlobTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const pattern = strArg(args, "pattern");
     if (!pattern) {
       return {
@@ -132,7 +135,10 @@ export class GlobTool implements Tool {
         }
         mtimes.set(match, mtime);
       }
-      matches.sort((a, b) => (mtimes.get(b) ?? 0) - (mtimes.get(a) ?? 0) || a.localeCompare(b));
+      matches.sort(
+        (a, b) =>
+          (mtimes.get(b) ?? 0) - (mtimes.get(a) ?? 0) || a.localeCompare(b),
+      );
 
       let output = matches.join("\n");
       if (matches.length >= maxResults) {

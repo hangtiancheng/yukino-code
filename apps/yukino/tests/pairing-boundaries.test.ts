@@ -23,8 +23,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { Message } from "@/conversation/index.js";
-import { ensureToolPairing, INTERRUPTED_TOOL_RESULT } from "@/conversation/pairing.js";
-import { buildAnthropicMessages, markLastUserTailForCache } from "@/llm/anthropic.js";
+import {
+  ensureToolPairing,
+  INTERRUPTED_TOOL_RESULT,
+} from "@/conversation/pairing.js";
+import {
+  buildAnthropicMessages,
+  markLastUserTailForCache,
+} from "@/llm/anthropic.js";
 import { buildChatCompletionMessages, buildOpenAIInput } from "@/llm/openai.js";
 
 function call(...ids: string[]): Message {
@@ -51,14 +57,21 @@ describe("tool pairing at turn boundaries", () => {
   it("repairs a call before an intervening turn and discards its late duplicate result", () => {
     const late = result("a");
     late.content = "<system-reminder>still relevant</system-reminder>";
-    const history: Message[] = [call("a"), { role: "user", content: "continue" }, late];
+    const history: Message[] = [
+      call("a"),
+      { role: "user", content: "continue" },
+      late,
+    ];
     const original = structuredClone(history);
     const repaired = ensureToolPairing(history);
 
     expect(repaired[1].toolResults).toEqual([
       { toolUseId: "a", content: INTERRUPTED_TOOL_RESULT, isError: true },
     ]);
-    expect(repaired.slice(2).map((m) => m.content)).toEqual(["continue", late.content]);
+    expect(repaired.slice(2).map((m) => m.content)).toEqual([
+      "continue",
+      late.content,
+    ]);
     expect(repaired.flatMap((m) => m.toolResults ?? [])).toHaveLength(1);
     expect(history).toEqual(original);
     expect(ensureToolPairing(repaired)).toEqual(repaired);
@@ -73,7 +86,9 @@ describe("tool pairing at turn boundaries", () => {
 
   it("deduplicates results and fills a missing sibling before user content", () => {
     const first = result("a");
-    first.content = [{ type: "text", text: "<system-reminder>note</system-reminder>" }];
+    first.content = [
+      { type: "text", text: "<system-reminder>note</system-reminder>" },
+    ];
     const repaired = ensureToolPairing([call("a", "b"), first, result("a")]);
     expect(repaired).toHaveLength(2);
     expect(repaired[1].content).toEqual(first.content);
@@ -109,7 +124,11 @@ describe("tool pairing at turn boundaries", () => {
       { type: "tool_result", tool_use_id: "b" },
     ]);
     const chat = buildChatCompletionMessages(repaired);
-    expect(chat.slice(0, 3).map((m) => m.role)).toEqual(["assistant", "tool", "tool"]);
+    expect(chat.slice(0, 3).map((m) => m.role)).toEqual([
+      "assistant",
+      "tool",
+      "tool",
+    ]);
     const responses = buildOpenAIInput(repaired);
     expect(responses.slice(0, 4).map((m) => m.type)).toEqual([
       "function_call",

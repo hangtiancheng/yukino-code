@@ -6,5 +6,12 @@
     "incremental": false
   },
   "include": ["shims.d.ts", "src"],
-  "exclude": ["node_modules", "dist", "docs", "src/remote/fe", "tests", "examples"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "docs",
+    "src/remote/fe",
+    "tests",
+    "examples"
+  ]
 }

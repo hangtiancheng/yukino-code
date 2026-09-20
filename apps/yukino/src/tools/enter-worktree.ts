@@ -51,7 +51,8 @@ export class EnterWorktreeTool implements Tool {
       properties: {
         slug: {
           type: "string" as const,
-          description: "Short identifier for the worktree (branch name suffix).",
+          description:
+            "Short identifier for the worktree (branch name suffix).",
         },
       },
       required: ["slug"],
@@ -64,7 +65,10 @@ export class EnterWorktreeTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const slug = strArg(args, "slug");
     if (!slug) {
       return Promise.resolve({
@@ -75,7 +79,8 @@ export class EnterWorktreeTool implements Tool {
 
     if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
       return Promise.resolve({
-        output: "Error: slug must contain only alphanumeric, hyphen, underscore",
+        output:
+          "Error: slug must contain only alphanumeric, hyphen, underscore",
         isError: true,
       });
     }

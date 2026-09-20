@@ -200,7 +200,11 @@ export class FileMailbox {
    * Delivers a message. When `structured` is provided the entire message object is
    * persisted as-is, preserving the type / requestId / approve fields of structured messages.
    */
-  async send(from: string, text: string, structured?: FileMailMessage): Promise<void> {
+  async send(
+    from: string,
+    text: string,
+    structured?: FileMailMessage,
+  ): Promise<void> {
     const msg: FileMailMessage = structured ?? {
       from,
       text,

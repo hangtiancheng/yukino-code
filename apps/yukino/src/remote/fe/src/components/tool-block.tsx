@@ -29,7 +29,10 @@ interface ToolBlockProps {
   item: ToolItem;
 }
 
-const STATUS_META: Record<ToolItem["status"], { label: string; className: string }> = {
+const STATUS_META: Record<
+  ToolItem["status"],
+  { label: string; className: string }
+> = {
   running: {
     label: "running...",
     className: "animate-pulse bg-yellow/10 text-yellow",
@@ -41,7 +44,9 @@ const STATUS_META: Record<ToolItem["status"], { label: string; className: string
 export function ToolBlock({ item }: ToolBlockProps) {
   const meta = STATUS_META[item.status];
   const statusText =
-    item.status === "running" ? meta.label : `${meta.label} ${item.elapsed.toFixed(1)}s`;
+    item.status === "running"
+      ? meta.label
+      : `${meta.label} ${item.elapsed.toFixed(1)}s`;
   const preview = argsPreview(item.args);
   const argsStr = formatArgs(item.args);
   const output = item.output ? truncateOutput(item.output) : "";
@@ -50,7 +55,9 @@ export function ToolBlock({ item }: ToolBlockProps) {
     <Collapsible
       header={
         <>
-          <span className="font-mono font-semibold text-accent">{item.toolName}</span>
+          <span className="font-mono font-semibold text-accent">
+            {item.toolName}
+          </span>
           {preview && (
             <span className="ml-0.5 max-w-105 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-dim">
               {preview}

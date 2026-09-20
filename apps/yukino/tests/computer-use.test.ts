@@ -32,7 +32,10 @@ import { ConversationManager } from "@/conversation/index.js";
 import { AnthropicClient } from "@/llm/anthropic.js";
 import { OpenAIClient } from "@/llm/openai.js";
 import { extractContent } from "@/permissions/index.js";
-import { cloneRegistryForFork, filterToolsForAgent } from "@/subagent/tool-filter.js";
+import {
+  cloneRegistryForFork,
+  filterToolsForAgent,
+} from "@/subagent/tool-filter.js";
 import { TaskList } from "@/todo/index.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
 import { ToolRegistry } from "@/tools/registry.js";
@@ -47,7 +50,10 @@ afterEach(() => {
 
 describe("ComputerUseTool", () => {
   it("exposes Anthropic actions and OpenAI aliases through one custom schema", () => {
-    const tool = new ComputerUseTool({ platform: "linux", environment: "browser" });
+    const tool = new ComputerUseTool({
+      platform: "linux",
+      environment: "browser",
+    });
     const schema = tool.schema();
     const action = schema.input_schema.properties.action;
 
@@ -58,7 +64,13 @@ describe("ComputerUseTool", () => {
     expect(action).toMatchObject({ type: "string" });
     expect(action).toHaveProperty(
       "enum",
-      expect.arrayContaining(["left_click", "zoom", "click", "drag", "keypress"]),
+      expect.arrayContaining([
+        "left_click",
+        "zoom",
+        "click",
+        "drag",
+        "keypress",
+      ]),
     );
     expect(tool.description).toContain("browser");
   });
@@ -112,7 +124,9 @@ describe("ComputerUseTool", () => {
       type: "array",
       minItems: 1,
     });
-    expect(schema.input_schema.properties.pendingSafetyChecks).toMatchObject({ type: "array" });
+    expect(schema.input_schema.properties.pendingSafetyChecks).toMatchObject({
+      type: "array",
+    });
     expect(schema.input_schema.properties.status).toHaveProperty("enum", [
       "in_progress",
       "completed",
@@ -179,11 +193,16 @@ describe("ComputerUseTool", () => {
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    for await (const _event of client.stream(conversation, registry.getAllSchemas("openai"))) {
+    for await (const _event of client.stream(
+      conversation,
+      registry.getAllSchemas("openai"),
+    )) {
       // drain
     }
 
-    const tools = z.array(z.record(z.string(), z.unknown())).parse(request.tools);
+    const tools = z
+      .array(z.record(z.string(), z.unknown()))
+      .parse(request.tools);
     expect(tools).toHaveLength(1);
     expect(tools[0]).toMatchObject({
       type: "function",
@@ -224,7 +243,10 @@ describe("ComputerUseTool", () => {
         return Promise.resolve(
           new Response(
             events
-              .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+              .map(
+                (event) =>
+                  `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+              )
               .join(""),
             { headers: { "content-type": "text/event-stream" } },
           ),
@@ -247,11 +269,16 @@ describe("ComputerUseTool", () => {
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    for await (const _event of client.stream(conversation, registry.getAllSchemas("anthropic"))) {
+    for await (const _event of client.stream(
+      conversation,
+      registry.getAllSchemas("anthropic"),
+    )) {
       // drain
     }
 
-    const tools = z.array(z.record(z.string(), z.unknown())).parse(request.tools);
+    const tools = z
+      .array(z.record(z.string(), z.unknown()))
+      .parse(request.tools);
     expect(tools).toHaveLength(1);
     expect(tools[0]).toMatchObject({
       type: "custom",
@@ -293,7 +320,10 @@ describe("ComputerUseTool", () => {
         return Promise.resolve(
           new Response(
             events
-              .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+              .map(
+                (event) =>
+                  `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+              )
               .join(""),
             { headers: { "content-type": "text/event-stream" } },
           ),
@@ -316,11 +346,16 @@ describe("ComputerUseTool", () => {
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    for await (const _event of client.stream(conversation, registry.getAllSchemas("anthropic"))) {
+    for await (const _event of client.stream(
+      conversation,
+      registry.getAllSchemas("anthropic"),
+    )) {
       // drain
     }
 
-    const tools = z.array(z.record(z.string(), z.unknown())).parse(request.tools);
+    const tools = z
+      .array(z.record(z.string(), z.unknown()))
+      .parse(request.tools);
     expect(tools).toHaveLength(1);
     expect(tools[0]).toMatchObject({
       name: "ComputerUse",
@@ -337,17 +372,19 @@ describe("ComputerUseTool", () => {
       .png()
       .toBuffer();
     const calls: { command: string; args: readonly string[] }[] = [];
-    const runCommand = vi.fn(async (command: string, args: readonly string[]) => {
-      calls.push({ command, args });
-      if (command === "gnome-screenshot") {
-        const outputPath = args[1];
-        if (!outputPath) {
-          throw new Error("missing screenshot path");
+    const runCommand = vi.fn(
+      async (command: string, args: readonly string[]) => {
+        calls.push({ command, args });
+        if (command === "gnome-screenshot") {
+          const outputPath = args[1];
+          if (!outputPath) {
+            throw new Error("missing screenshot path");
+          }
+          await writeFile(outputPath, png);
         }
-        await writeFile(outputPath, png);
-      }
-      return { code: 0, stdout: Buffer.alloc(0), stderr: "" };
-    });
+        return { code: 0, stdout: Buffer.alloc(0), stderr: "" };
+      },
+    );
     const tool = new ComputerUseTool({ platform: "linux", runCommand });
 
     const result = await tool.execute(context, {
@@ -378,7 +415,9 @@ describe("ComputerUseTool", () => {
       type: "image",
       source: { type: "base64", media_type: "image/png" },
     });
-    expect(result.output).toContain("Executed 3 action(s): move, click, screenshot.");
+    expect(result.output).toContain(
+      "Executed 3 action(s): move, click, screenshot.",
+    );
     expect(result.output).toContain("Status: in_progress.");
     expect(result.output).toContain("Acknowledged safety checks: check_1.");
   });
@@ -390,13 +429,15 @@ describe("ComputerUseTool", () => {
       .png()
       .toBuffer();
     const commands: string[] = [];
-    const runCommand = vi.fn(async (command: string, args: readonly string[]) => {
-      commands.push(command);
-      if (command === "gnome-screenshot" && args[1]) {
-        await writeFile(args[1], png);
-      }
-      return { code: 0, stdout: Buffer.alloc(0), stderr: "" };
-    });
+    const runCommand = vi.fn(
+      async (command: string, args: readonly string[]) => {
+        commands.push(command);
+        if (command === "gnome-screenshot" && args[1]) {
+          await writeFile(args[1], png);
+        }
+        return { code: 0, stdout: Buffer.alloc(0), stderr: "" };
+      },
+    );
     const tool = new ComputerUseTool({ platform: "linux", runCommand });
 
     const result = await tool.execute(context, {
@@ -452,17 +493,19 @@ describe("ComputerUseTool", () => {
       .png()
       .toBuffer();
     const calls: { command: string; args: readonly string[] }[] = [];
-    const runCommand = vi.fn(async (command: string, args: readonly string[]) => {
-      calls.push({ command, args });
-      if (command === "gnome-screenshot") {
-        const outputPath = args[1];
-        if (!outputPath) {
-          throw new Error("missing screenshot path");
+    const runCommand = vi.fn(
+      async (command: string, args: readonly string[]) => {
+        calls.push({ command, args });
+        if (command === "gnome-screenshot") {
+          const outputPath = args[1];
+          if (!outputPath) {
+            throw new Error("missing screenshot path");
+          }
+          await writeFile(outputPath, png);
         }
-        await writeFile(outputPath, png);
-      }
-      return { code: 0, stdout: Buffer.alloc(0), stderr: "" };
-    });
+        return { code: 0, stdout: Buffer.alloc(0), stderr: "" };
+      },
+    );
     const tool = new ComputerUseTool({ platform: "linux", runCommand });
 
     const screenshot = await tool.execute(context, { action: "screenshot" });
@@ -473,7 +516,10 @@ describe("ComputerUseTool", () => {
       source: { type: "base64", media_type: "image/png" },
     });
 
-    await tool.execute(context, { action: "mouse_move", coordinate: [683, 342] });
+    await tool.execute(context, {
+      action: "mouse_move",
+      coordinate: [683, 342],
+    });
     expect(calls.at(-1)).toEqual({
       command: "xdotool",
       args: ["mousemove", "--sync", "1000", "501"],
@@ -494,7 +540,9 @@ describe("ComputerUse availability", () => {
   });
 
   it("scopes permission rules to the requested action", () => {
-    expect(extractContent("ComputerUse", { action: "screenshot" })).toBe("screenshot");
+    expect(extractContent("ComputerUse", { action: "screenshot" })).toBe(
+      "screenshot",
+    );
   });
 
   it("summarizes batched OpenAI-style actions for permission rules", () => {
@@ -512,6 +560,8 @@ describe("ComputerUse availability", () => {
     const registry = new ToolRegistry();
     registry.register(new ComputerUseTool({ platform: "linux" }));
 
-    expect(filterToolsForAgent(registry, undefined, undefined, false).listTools()).toEqual([]);
+    expect(
+      filterToolsForAgent(registry, undefined, undefined, false).listTools(),
+    ).toEqual([]);
   });
 });

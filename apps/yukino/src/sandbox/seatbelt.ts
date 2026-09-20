@@ -38,7 +38,10 @@ export class SeatbeltSandbox implements Sandbox {
     return existsSync(SANDBOX_EXEC_PATH);
   }
 
-  prepare(command: string, config: SandboxConfig): { executable: string; args: string[] } {
+  prepare(
+    command: string,
+    config: SandboxConfig,
+  ): { executable: string; args: string[] } {
     return {
       executable: SANDBOX_EXEC_PATH,
       args: ["-p", buildProfile(config), "bash", "-c", command],
@@ -73,7 +76,8 @@ function buildProfile(config: SandboxConfig): string {
   // Deny write access for denied paths; seatbelt evaluates later rules with higher priority.
   // Use 'literal' for exact file matching, 'subpath' for directory prefix matching.
   for (const path of config.denyWrite) {
-    const matcher = existsSync(path) && statSync(path).isDirectory() ? "subpath" : "literal";
+    const matcher =
+      existsSync(path) && statSync(path).isDirectory() ? "subpath" : "literal";
     lines.push(`(deny file-write* (${matcher} "${path}"))`);
   }
 

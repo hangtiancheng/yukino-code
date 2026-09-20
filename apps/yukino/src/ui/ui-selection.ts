@@ -20,7 +20,9 @@
  * SOFTWARE.
  */
 
-export function parseResumeArgument(args: readonly string[]): true | string | undefined {
+export function parseResumeArgument(
+  args: readonly string[],
+): true | string | undefined {
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
     if (argument === "--resume") {

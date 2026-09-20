@@ -20,7 +20,14 @@
  * SOFTWARE.
  */
 
-import { Box, Text, measureElement, useBoxMetrics, useInput, useWindowSize } from "ink";
+import {
+  Box,
+  Text,
+  measureElement,
+  useBoxMetrics,
+  useInput,
+  useWindowSize,
+} from "ink";
 import type { DOMElement } from "ink";
 import { useLayoutEffect, useRef, useState } from "react";
 
@@ -76,10 +83,17 @@ export function ThinkingSelect({
   useInput((_input, key) => {
     if (key.escape) {
       onCancel();
-    } else if (key.upArrow || key.leftArrow || key.downArrow || key.rightArrow) {
+    } else if (
+      key.upArrow ||
+      key.leftArrow ||
+      key.downArrow ||
+      key.rightArrow
+    ) {
       if (levels.length > 0) {
         const direction = key.upArrow || key.leftArrow ? -1 : 1;
-        const next = levels.at((cursor + direction + levels.length) % levels.length);
+        const next = levels.at(
+          (cursor + direction + levels.length) % levels.length,
+        );
         if (next) {
           setFocusedLevel(next);
         }
@@ -90,7 +104,13 @@ export function ThinkingSelect({
   });
 
   return (
-    <Box ref={ref} flexDirection="column" width="100%" maxHeight={availableRows} overflow="hidden">
+    <Box
+      ref={ref}
+      flexDirection="column"
+      width="100%"
+      maxHeight={availableRows}
+      overflow="hidden"
+    >
       <SelectorFrame
         compact
         title="Thinking level"
@@ -105,10 +125,16 @@ export function ThinkingSelect({
         ) : (
           levels.slice(start, start + count).map((level, index) => {
             const focused = start + index === cursor;
-            const pointer = contentWidth > 2 ? (focused ? `${ICONS.arrow} ` : "  ") : "";
+            const pointer =
+              contentWidth > 2 ? (focused ? `${ICONS.arrow} ` : "  ") : "";
             const marker =
-              level === currentLevel && contentWidth >= level.length + 4 ? ` ${ICONS.success}` : "";
-            const labelWidth = Math.max(0, contentWidth - visibleWidth(pointer + marker));
+              level === currentLevel && contentWidth >= level.length + 4
+                ? ` ${ICONS.success}`
+                : "";
+            const labelWidth = Math.max(
+              0,
+              contentWidth - visibleWidth(pointer + marker),
+            );
             const descriptionWidth = labelWidth - visibleWidth(level) - 2;
             return (
               <Box

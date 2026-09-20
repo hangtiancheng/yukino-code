@@ -74,7 +74,10 @@ export class WriteFileTool implements Tool {
     };
   }
 
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const requestedPath = strArg(args, "file_path");
     if (!requestedPath) {
       return Promise.resolve({
@@ -99,7 +102,10 @@ export class WriteFileTool implements Tool {
         });
       }
       // Gate: read-before-write enforcement (skip for genuinely new files).
-      if (ctx.fileStateCache && (existsSync(filePath) || ctx.fileStateCache.has(filePath))) {
+      if (
+        ctx.fileStateCache &&
+        (existsSync(filePath) || ctx.fileStateCache.has(filePath))
+      ) {
         const gate = ctx.fileStateCache.check(filePath);
         if (!gate.ok) {
           return Promise.resolve({ output: gate.error, isError: true });

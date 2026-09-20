@@ -29,7 +29,11 @@ import { THEME } from "@/ui/styles.js";
 
 const colors = new Chalk({ level: 3 });
 
-export function formatToolOutputPreview(toolName: string, text: string, width = 80): string {
+export function formatToolOutputPreview(
+  toolName: string,
+  text: string,
+  width = 80,
+): string {
   const normalized = text.trimEnd();
   const styled = isDiffTool(toolName)
     ? normalized
@@ -49,7 +53,9 @@ export function formatToolOutputPreview(toolName: string, text: string, width = 
   const lowerName = toolName.toLowerCase();
   const limit = lowerName.includes("grep")
     ? 15
-    : lowerName.includes("glob") || lowerName.includes("find") || lowerName.includes("list")
+    : lowerName.includes("glob") ||
+        lowerName.includes("find") ||
+        lowerName.includes("list")
       ? 20
       : lowerName.includes("bash") || lowerName.includes("powershell")
         ? 5

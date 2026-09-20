@@ -55,9 +55,13 @@ describe("MCPManager", () => {
   });
 
   test("reconciles added, removed, changed, and unchanged servers", async () => {
-    const disconnect = vi.spyOn(MCPClient.prototype, "disconnect").mockResolvedValue();
+    const disconnect = vi
+      .spyOn(MCPClient.prototype, "disconnect")
+      .mockResolvedValue();
     vi.spyOn(MCPClient.prototype, "connect").mockResolvedValue();
-    vi.spyOn(MCPClient.prototype, "listTools").mockImplementation(function (this: MCPClient) {
+    vi.spyOn(MCPClient.prototype, "listTools").mockImplementation(function (
+      this: MCPClient,
+    ) {
       return Promise.resolve([
         {
           name: `${this.name}-tool`,
@@ -66,9 +70,11 @@ describe("MCPManager", () => {
         },
       ]);
     });
-    vi.spyOn(MCPClient.prototype, "getInstructions").mockImplementation(function (this: MCPClient) {
-      return `${this.name}-instructions`;
-    });
+    vi.spyOn(MCPClient.prototype, "getInstructions").mockImplementation(
+      function (this: MCPClient) {
+        return `${this.name}-instructions`;
+      },
+    );
 
     const mgr = new MCPManager();
     await mgr.connectAll([
@@ -97,7 +103,10 @@ describe("MCPManager", () => {
       unchanged: ["same"],
       servers: ["changed", "added"],
     });
-    expect(result.tools.map(({ tool }) => tool.name)).toEqual(["changed-tool", "added-tool"]);
+    expect(result.tools.map(({ tool }) => tool.name)).toEqual([
+      "changed-tool",
+      "added-tool",
+    ]);
     expect(mgr.connectedInstructions()).toEqual([
       { serverName: "same", text: "same-instructions" },
       { serverName: "changed", text: "changed-instructions" },
@@ -114,7 +123,9 @@ describe("MCPManager", () => {
       .spyOn(MCPClient.prototype, "connect")
       .mockImplementationOnce(() => gate)
       .mockResolvedValue(undefined);
-    const disconnect = vi.spyOn(MCPClient.prototype, "disconnect").mockResolvedValue();
+    const disconnect = vi
+      .spyOn(MCPClient.prototype, "disconnect")
+      .mockResolvedValue();
     vi.spyOn(MCPClient.prototype, "listTools").mockResolvedValue([]);
 
     const mgr = new MCPManager();

@@ -189,7 +189,9 @@ export class MCPManager {
 
   /** The configured servers that are still not connected. */
   missingServers(configs: MCPServerConfig[]): string[] {
-    return configs.filter((cfg) => !this.clients.has(cfg.name)).map((cfg) => cfg.name);
+    return configs
+      .filter((cfg) => !this.clients.has(cfg.name))
+      .map((cfg) => cfg.name);
   }
 
   async disconnectAll(): Promise<void> {

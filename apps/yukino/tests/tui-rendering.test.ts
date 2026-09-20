@@ -32,9 +32,17 @@ import { runInline } from "@/skills/executor.js";
 import { AgentActivity } from "@/ui/agent-activity.js";
 import { CommittedMessage } from "@/ui/chat.js";
 import { Footer } from "@/ui/footer.js";
-import { renderMarkdown, renderStreamingMarkdown, type MarkdownCache } from "@/ui/markdown.js";
+import {
+  renderMarkdown,
+  renderStreamingMarkdown,
+  type MarkdownCache,
+} from "@/ui/markdown.js";
 import { setThemeMode, THEME, thinkingLevelColor } from "@/ui/styles.js";
-import { truncateToWidth, visibleWidth, wrapToLines } from "@/ui/terminal-text.js";
+import {
+  truncateToWidth,
+  visibleWidth,
+  wrapToLines,
+} from "@/ui/terminal-text.js";
 import { ThinkingBlock } from "@/ui/thinking-block.js";
 import { ToolBlock } from "@/ui/tool-display.js";
 import { formatToolOutputPreview } from "@/ui/tool-preview.js";
@@ -70,17 +78,20 @@ describe("terminal column handling", () => {
     expect(visibleWidth(text)).toBe(5);
     expect(visibleWidth(truncateToWidth(text, 4))).toBeLessThanOrEqual(4);
     expect(stripVTControlCharacters(truncateToWidth(text, 4))).toBe("中…");
-    expect(wrapToLines(colors.green("中文中文"), 4).map(stripVTControlCharacters)).toEqual([
-      "中文",
-      "中文",
-    ]);
+    expect(
+      wrapToLines(colors.green("中文中文"), 4).map(stripVTControlCharacters),
+    ).toEqual(["中文", "中文"]);
     expect(truncateToWidth(text, 0)).toBe("");
   });
 
   it("counts shell previews in visual lines", () => {
     const output = "1234567890".repeat(6);
-    const preview = stripVTControlCharacters(formatToolOutputPreview("Bash", output, 10));
-    expect(preview.split("\n").slice(0, 5)).toEqual(Array.from({ length: 5 }, () => "1234567890"));
+    const preview = stripVTControlCharacters(
+      formatToolOutputPreview("Bash", output, 10),
+    );
+    expect(preview.split("\n").slice(0, 5)).toEqual(
+      Array.from({ length: 5 }, () => "1234567890"),
+    );
     expect(preview).toContain("1 more lines");
   });
 });
@@ -97,41 +108,51 @@ describe("skill transcript presentation", () => {
     { activateSkill: () => undefined },
   );
 
-  it.each([20, 40, 100])("separates the skill card and arguments at %i columns", (columns) => {
-    terminal.columns = columns;
-    for (const theme of ["light", "dark"] as const) {
-      setThemeMode(theme);
-      for (const expanded of [false, true]) {
-        const output = stripVTControlCharacters(
-          renderToString(
-            createElement(CommittedMessage, {
-              message: { role: "user", content: prompt },
-              expanded,
-            }),
-            { columns },
-          ),
-        );
-        const normalized = output.replace(/\s+/gu, " ");
-        expect(normalized).toContain("[skill] demo");
-        expect(normalized).toContain(`Ctrl+O to ${expanded ? "collapse" : "expand"}`);
-        expect(normalized).toContain("Update <docs> & keep &lt; literal");
-        expect(output).toMatch(/literal\s*\n\s*Second line 中文/u);
-        expect(normalized.includes("Hidden body.")).toBe(expanded);
-        expect(output).not.toContain("<skill-body>");
-        expect(output).not.toContain("<skill-arguments>");
-        expect(output).not.toContain("host tool permissions");
-        expect(output.split("\n").every((line) => visibleWidth(line) <= columns)).toBe(true);
+  it.each([20, 40, 100])(
+    "separates the skill card and arguments at %i columns",
+    (columns) => {
+      terminal.columns = columns;
+      for (const theme of ["light", "dark"] as const) {
+        setThemeMode(theme);
+        for (const expanded of [false, true]) {
+          const output = stripVTControlCharacters(
+            renderToString(
+              createElement(CommittedMessage, {
+                message: { role: "user", content: prompt },
+                expanded,
+              }),
+              { columns },
+            ),
+          );
+          const normalized = output.replace(/\s+/gu, " ");
+          expect(normalized).toContain("[skill] demo");
+          expect(normalized).toContain(
+            `Ctrl+O to ${expanded ? "collapse" : "expand"}`,
+          );
+          expect(normalized).toContain("Update <docs> & keep &lt; literal");
+          expect(output).toMatch(/literal\s*\n\s*Second line 中文/u);
+          expect(normalized.includes("Hidden body.")).toBe(expanded);
+          expect(output).not.toContain("<skill-body>");
+          expect(output).not.toContain("<skill-arguments>");
+          expect(output).not.toContain("host tool permissions");
+          expect(
+            output.split("\n").every((line) => visibleWidth(line) <= columns),
+          ).toBe(true);
+        }
       }
-    }
-  });
+    },
+  );
 
   it("shows only the skill card when no arguments were supplied", () => {
     terminal.columns = 100;
     const content = prompt.replace(/\n\n<skill-arguments>[\s\S]*$/u, "");
     const output = stripVTControlCharacters(
-      renderToString(createElement(CommittedMessage, { message: { role: "user", content } }), {
-        columns: 100,
-      }),
+      renderToString(
+        createElement(CommittedMessage, { message: { role: "user", content } }),
+        {
+          columns: 100,
+        },
+      ),
     );
     expect(output.trim()).toBe("[skill] demo (Ctrl+O to expand)");
   });
@@ -148,49 +169,59 @@ describe("skill transcript presentation", () => {
         { columns: 40 },
       ),
     );
-    expect(output.replace(/\s+/gu, "")).toContain("Explain<skill-body>markup</skill-body>");
+    expect(output.replace(/\s+/gu, "")).toContain(
+      "Explain<skill-body>markup</skill-body>",
+    );
     expect(output).not.toContain("Ctrl+O");
   });
 });
 
 describe("pi Markdown presentation", () => {
-  it.each(["```", "~~~~"])("does not flash partial closing %s fences during streaming", (fence) => {
-    const cache: MarkdownCache = {
-      prefix: "",
-      rendered: "",
-      width: 0,
-      theme: "",
-    };
-    const source = `${fence}ts\nconst value = 1;\n`;
-    const expected = renderMarkdown(source + fence, 40);
-    for (let count = 1; count < fence.length; count++) {
-      expect(renderStreamingMarkdown(source + fence.slice(0, count), 40, cache)).toBe(expected);
-    }
-    // Completed content is never silently stripped, even if it ends in fence-like text.
-    expect(renderMarkdown(source + fence[0], 40)).not.toBe(expected);
-    expect(renderStreamingMarkdown(source + fence[0] + "\n", 40, cache)).toBe(
-      renderMarkdown(source + fence[0] + "\n", 40),
-    );
-    expect(renderStreamingMarkdown(`${fence}ts\n${fence[0]}`, 40, cache)).toBe(
-      renderMarkdown(`${fence}ts\n${fence}`, 40),
-    );
-  });
-  it.each([20, 40, 80, 120])("fits long text, code and tables in %i columns", (width) => {
-    for (const source of [
-      "中文测试".repeat(30),
-      "```unknown-language\n" + "const value = 123; ".repeat(20) + "\n```",
-      "| Long column one | Long column two |\n| --- | --- |\n| " +
-        "value".repeat(15) +
-        " | 中文测试中文测试 |",
-      "[label](https://example.com/" + "long-path/".repeat(15) + ")",
-    ]) {
+  it.each(["```", "~~~~"])(
+    "does not flash partial closing %s fences during streaming",
+    (fence) => {
+      const cache: MarkdownCache = {
+        prefix: "",
+        rendered: "",
+        width: 0,
+        theme: "",
+      };
+      const source = `${fence}ts\nconst value = 1;\n`;
+      const expected = renderMarkdown(source + fence, 40);
+      for (let count = 1; count < fence.length; count++) {
+        expect(
+          renderStreamingMarkdown(source + fence.slice(0, count), 40, cache),
+        ).toBe(expected);
+      }
+      // Completed content is never silently stripped, even if it ends in fence-like text.
+      expect(renderMarkdown(source + fence[0], 40)).not.toBe(expected);
+      expect(renderStreamingMarkdown(source + fence[0] + "\n", 40, cache)).toBe(
+        renderMarkdown(source + fence[0] + "\n", 40),
+      );
       expect(
-        renderMarkdown(source, width)
-          .split("\n")
-          .every((line) => visibleWidth(line) <= width),
-      ).toBe(true);
-    }
-  });
+        renderStreamingMarkdown(`${fence}ts\n${fence[0]}`, 40, cache),
+      ).toBe(renderMarkdown(`${fence}ts\n${fence}`, 40));
+    },
+  );
+  it.each([20, 40, 80, 120])(
+    "fits long text, code and tables in %i columns",
+    (width) => {
+      for (const source of [
+        "中文测试".repeat(30),
+        "```unknown-language\n" + "const value = 123; ".repeat(20) + "\n```",
+        "| Long column one | Long column two |\n| --- | --- |\n| " +
+          "value".repeat(15) +
+          " | 中文测试中文测试 |",
+        "[label](https://example.com/" + "long-path/".repeat(15) + ")",
+      ]) {
+        expect(
+          renderMarkdown(source, width)
+            .split("\n")
+            .every((line) => visibleWidth(line) <= width),
+        ).toBe(true);
+      }
+    },
+  );
 
   it("preserves the source numbering and escaped syntax of user messages", () => {
     const text = renderMarkdown("3. first\n8. \\*literal\\*\n", 80, "user");
@@ -213,21 +244,33 @@ describe("pi Markdown presentation", () => {
       "A [reference][target]\n\n[target]: https://example.com",
     ];
     for (const text of sources) {
-      expect(renderStreamingMarkdown(text, 40, cache)).toBe(renderMarkdown(text, 40));
+      expect(renderStreamingMarkdown(text, 40, cache)).toBe(
+        renderMarkdown(text, 40),
+      );
     }
     setThemeMode("light");
-    expect(renderStreamingMarkdown(sources[1], 20, cache)).toBe(renderMarkdown(sources[1], 20));
+    expect(renderStreamingMarkdown(sources[1], 20, cache)).toBe(
+      renderMarkdown(sources[1], 20),
+    );
   });
 
   it("collapses thinking to one line and expands it as italic Markdown", () => {
     const text = "**Reasoning**\n\n" + "detail ".repeat(40);
-    const collapsed = renderToString(createElement(ThinkingBlock, { text, expanded: false }), {
-      columns: 40,
-    });
-    expect(stripVTControlCharacters(collapsed).trim()).toBe("Thinking · Ctrl+O details");
-    const expanded = renderToString(createElement(ThinkingBlock, { text, expanded: true }), {
-      columns: 40,
-    });
+    const collapsed = renderToString(
+      createElement(ThinkingBlock, { text, expanded: false }),
+      {
+        columns: 40,
+      },
+    );
+    expect(stripVTControlCharacters(collapsed).trim()).toBe(
+      "Thinking · Ctrl+O details",
+    );
+    const expanded = renderToString(
+      createElement(ThinkingBlock, { text, expanded: true }),
+      {
+        columns: 40,
+      },
+    );
     expect(stripVTControlCharacters(expanded)).toContain("Reasoning");
     expect(stripVTControlCharacters(expanded)).not.toContain("**Reasoning**");
   });
@@ -285,63 +328,71 @@ describe("shared live and committed tool cards", () => {
     expect(output).toContain("Agent second-task  running");
     expect(output).toContain("explorer subagent | 3 turns | ReadFile");
     expect(output).not.toContain("• explorer subagent");
-    expect(output.split("\n").every((line) => visibleWidth(line) <= 80)).toBe(true);
+    expect(output.split("\n").every((line) => visibleWidth(line) <= 80)).toBe(
+      true,
+    );
   });
 
   it.each([
     ["running", "running", THEME.toolPendingBg],
     ["idle", "completed", THEME.toolSuccessBg],
-  ] as const)("maps teammate %s to a %s Agent card", (memberStatus, cardStatus, background) => {
-    terminal.columns = 80;
-    chalk.level = 3;
-    const rendered = renderToString(
-      createElement(AgentActivity, {
-        tools: [],
-        persistentAgentTools: [
-          {
-            toolId: "team-agent",
-            toolName: "Agent",
-            args: { description: "reviewer", team_name: "squad" },
-            output: "Teammate spawned",
-            loading: false,
-          },
-        ],
-        subagents: [],
-        backgroundTasks: [],
-        teammates: [
-          {
-            name: "reviewer",
-            teamName: "squad",
-            status: memberStatus,
-            originToolCallId: "team-agent",
-            progress: {
-              toolUseCount: 4,
-              turnCount: 2,
-              tokenCount: 1300,
-              activeTools: memberStatus === "running" ? [{ toolId: "grep", toolName: "Grep" }] : [],
-              recentActivities: [],
+  ] as const)(
+    "maps teammate %s to a %s Agent card",
+    (memberStatus, cardStatus, background) => {
+      terminal.columns = 80;
+      chalk.level = 3;
+      const rendered = renderToString(
+        createElement(AgentActivity, {
+          tools: [],
+          persistentAgentTools: [
+            {
+              toolId: "team-agent",
+              toolName: "Agent",
+              args: { description: "reviewer", team_name: "squad" },
+              output: "Teammate spawned",
+              loading: false,
             },
-            startTime: 0,
-            spinnerVerb: "working",
-          },
-        ],
-        isAsking: false,
-        expanded: false,
-      }),
-      { columns: 80 },
-    );
-    const output = stripVTControlCharacters(rendered);
-    expect(rendered).toContain(colors.bgHex(background)(" ").split(" ")[0]);
-    expect(output).toContain(`Agent reviewer  ${cardStatus}`);
-    expect(output).toContain(
-      memberStatus === "running"
-        ? "@reviewer | Grep | 2 turns | 1.3k tokens"
-        : "@reviewer | 2 turns | 1.3k tokens",
-    );
-    expect(output).not.toContain(`2 turns | ${memberStatus}`);
-    expect(output).not.toContain("team lead");
-    expect(output).not.toContain("├─");
-  });
+          ],
+          subagents: [],
+          backgroundTasks: [],
+          teammates: [
+            {
+              name: "reviewer",
+              teamName: "squad",
+              status: memberStatus,
+              originToolCallId: "team-agent",
+              progress: {
+                toolUseCount: 4,
+                turnCount: 2,
+                tokenCount: 1300,
+                activeTools:
+                  memberStatus === "running"
+                    ? [{ toolId: "grep", toolName: "Grep" }]
+                    : [],
+                recentActivities: [],
+              },
+              startTime: 0,
+              spinnerVerb: "working",
+            },
+          ],
+          isAsking: false,
+          expanded: false,
+        }),
+        { columns: 80 },
+      );
+      const output = stripVTControlCharacters(rendered);
+      expect(rendered).toContain(colors.bgHex(background)(" ").split(" ")[0]);
+      expect(output).toContain(`Agent reviewer  ${cardStatus}`);
+      expect(output).toContain(
+        memberStatus === "running"
+          ? "@reviewer | Grep | 2 turns | 1.3k tokens"
+          : "@reviewer | 2 turns | 1.3k tokens",
+      );
+      expect(output).not.toContain(`2 turns | ${memberStatus}`);
+      expect(output).not.toContain("team lead");
+      expect(output).not.toContain("├─");
+    },
+  );
   it.each(["dark", "light"] as const)(
     "keeps live and saved tool layout identical in %s mode",
     (mode) => {
@@ -424,7 +475,9 @@ describe("shared live and committed tool cards", () => {
         );
         const background = loading ? THEME.toolPendingBg : THEME.toolErrorBg;
         expect(output).toContain(colors.bgHex(background)(" ").split(" ")[0]);
-        expect(stripVTControlCharacters(output)).toContain(loading ? "running" : "failed");
+        expect(stripVTControlCharacters(output)).toContain(
+          loading ? "running" : "failed",
+        );
         chalk.level = 0;
         const plain = renderToString(
           createElement(ToolBlock, {
@@ -457,7 +510,9 @@ describe("shared live and committed tool cards", () => {
         );
         expect(diff).toContain(colors.hex(THEME.toolDiffRemoved)("- old"));
         expect(diff).toContain(colors.hex(THEME.toolDiffAdded)("+ new"));
-        expect(diff).toContain(colors.bgHex(THEME.toolSuccessBg)(" ").split(" ")[0]);
+        expect(diff).toContain(
+          colors.bgHex(THEME.toolSuccessBg)(" ").split(" ")[0],
+        );
       }
     },
   );
@@ -467,7 +522,10 @@ describe("shared live and committed tool cards", () => {
       toolId: "shell",
       toolName: "Bash",
       args: { command: "test" },
-      output: Array.from({ length: 20 }, (_, index) => `line-${String(index)}`).join("\n"),
+      output: Array.from(
+        { length: 20 },
+        (_, index) => `line-${String(index)}`,
+      ).join("\n"),
     };
     const collapsed = stripVTControlCharacters(
       renderToString(createElement(ToolBlock, { tool }), { columns: 40 }),
@@ -570,7 +628,9 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
               ),
             );
             const lines = footer.split("\n");
-            expect(lines.every((line) => visibleWidth(line) <= columns)).toBe(true);
+            expect(lines.every((line) => visibleWidth(line) <= columns)).toBe(
+              true,
+            );
             const width = columns - (columns > 2 ? 2 : 0);
             if (width < visibleWidth(footerProps.sessionId) + 4) {
               const idRows = wrapToLines(footerProps.sessionId, width);
@@ -610,10 +670,16 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
               }),
             ]) {
               const output = renderToString(node, { columns });
-              expect(output.split("\n").every((line) => visibleWidth(line) <= columns)).toBe(true);
+              expect(
+                output
+                  .split("\n")
+                  .every((line) => visibleWidth(line) <= columns),
+              ).toBe(true);
               if (!expanded && columns >= 20 && node.type === ThinkingBlock) {
                 expect(stripVTControlCharacters(output)).toContain("Ctrl+O");
-                expect(stripVTControlCharacters(output)).not.toContain("Ctrl+T");
+                expect(stripVTControlCharacters(output)).not.toContain(
+                  "Ctrl+T",
+                );
               }
             }
           }
@@ -644,7 +710,9 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
           expect(plain).not.toContain("Shift+Tab");
         }
         if (columns === 120) {
-          expect(plain).toContain("very-long-provider-name/compact-model · high · Plan");
+          expect(plain).toContain(
+            "very-long-provider-name/compact-model · high · Plan",
+          );
           expect(plain).toContain("Shift+Tab to cycle");
         }
       }
@@ -654,7 +722,10 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
       chalk.level = 3;
       const output = renderToString(
         createElement(ThinkingBlock, {
-          text: Array.from({ length: 20 }, (_, index) => `detail-${String(index)}`).join("\n\n"),
+          text: Array.from(
+            { length: 20 },
+            (_, index) => `detail-${String(index)}`,
+          ).join("\n\n"),
           expanded: true,
           streaming: true,
         }),
@@ -665,9 +736,12 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
       expect(plain).toContain("detail-19");
       expect(plain).not.toContain("detail-0");
       expect(plain.split("\n").length).toBeLessThanOrEqual(6);
-      const empty = renderToString(createElement(ThinkingBlock, { text: " ", expanded: false }), {
-        columns: 40,
-      });
+      const empty = renderToString(
+        createElement(ThinkingBlock, { text: " ", expanded: false }),
+        {
+          columns: 40,
+        },
+      );
       expect(empty).toBe("");
     });
   },

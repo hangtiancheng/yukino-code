@@ -29,23 +29,32 @@ import type { DocsContext } from "@/tools/docs/redis-client.js";
 import { sha256 } from "@/tools/docs/utils.js";
 
 const indexerMocks = vi.hoisted(() => ({
-  deleteBySource: vi.fn<(ctx: unknown, source: string) => Promise<void>>(async () => undefined),
-  indexChunks: vi.fn<(ctx: unknown, chunks: { id: string }[]) => Promise<number>>(
-    async (_ctx, chunks) => chunks.length,
-  ),
-  readSourceHashes: vi.fn<() => Promise<Map<string, string>>>(async () => new Map()),
-  removeSourceHash: vi.fn<(ctx: unknown, source: string) => Promise<void>>(async () => undefined),
-  writeSourceHash: vi.fn<(ctx: unknown, source: string, hash: string) => Promise<void>>(
+  deleteBySource: vi.fn<(ctx: unknown, source: string) => Promise<void>>(
     async () => undefined,
   ),
+  indexChunks: vi.fn<
+    (ctx: unknown, chunks: { id: string }[]) => Promise<number>
+  >(async (_ctx, chunks) => chunks.length),
+  readSourceHashes: vi.fn<() => Promise<Map<string, string>>>(
+    async () => new Map(),
+  ),
+  removeSourceHash: vi.fn<(ctx: unknown, source: string) => Promise<void>>(
+    async () => undefined,
+  ),
+  writeSourceHash: vi.fn<
+    (ctx: unknown, source: string, hash: string) => Promise<void>
+  >(async () => undefined),
 }));
 
 const scannerMocks = vi.hoisted(() => ({
-  scanDocsDir: vi.fn<() => Promise<{ source: string; content: string }[]>>(async () => []),
+  scanDocsDir: vi.fn<() => Promise<{ source: string; content: string }[]>>(
+    async () => [],
+  ),
 }));
 
 vi.mock("@/tools/docs/indexer.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/tools/docs/indexer.js")>();
+  const actual =
+    await importOriginal<typeof import("@/tools/docs/indexer.js")>();
   return { ...indexerMocks, LockConflictError: actual.LockConflictError };
 });
 vi.mock("@/tools/docs/scanner.js", () => scannerMocks);
@@ -77,7 +86,9 @@ describe("buildChunks", () => {
     const chunks = await buildChunks("a.md", "# One\nx\n\n# Two\ny");
     const prefix = sha256("a.md");
     expect(chunks.length).toBeGreaterThan(0);
-    expect(chunks.map((c) => c.id)).toEqual(chunks.map((_, i) => `${prefix}:${String(i)}`));
+    expect(chunks.map((c) => c.id)).toEqual(
+      chunks.map((_, i) => `${prefix}:${String(i)}`),
+    );
     expect(await buildChunks("a.md", "# One\nx\n\n# Two\ny")).toEqual(chunks);
   });
 
@@ -95,7 +106,10 @@ describe("syncDocs", () => {
 
     const stats = await syncDocs(makeCtx(), "/docs");
 
-    expect(indexerMocks.deleteBySource).toHaveBeenCalledWith(expect.anything(), "new.md");
+    expect(indexerMocks.deleteBySource).toHaveBeenCalledWith(
+      expect.anything(),
+      "new.md",
+    );
     expect(indexerMocks.indexChunks).toHaveBeenCalledTimes(1);
     expect(indexerMocks.writeSourceHash).toHaveBeenCalledWith(
       expect.anything(),
@@ -113,8 +127,12 @@ describe("syncDocs", () => {
 
   it("skips files whose content hash is unchanged", async () => {
     const content = "# Same";
-    scannerMocks.scanDocsDir.mockResolvedValue([{ source: "same.md", content }]);
-    indexerMocks.readSourceHashes.mockResolvedValue(new Map([["same.md", sha256(content)]]));
+    scannerMocks.scanDocsDir.mockResolvedValue([
+      { source: "same.md", content },
+    ]);
+    indexerMocks.readSourceHashes.mockResolvedValue(
+      new Map([["same.md", sha256(content)]]),
+    );
 
     const stats = await syncDocs(makeCtx(), "/docs");
 
@@ -124,12 +142,20 @@ describe("syncDocs", () => {
   });
 
   it("removes index records for files deleted from disk", async () => {
-    indexerMocks.readSourceHashes.mockResolvedValue(new Map([["gone.md", "stale-hash"]]));
+    indexerMocks.readSourceHashes.mockResolvedValue(
+      new Map([["gone.md", "stale-hash"]]),
+    );
 
     const stats = await syncDocs(makeCtx(), "/docs");
 
-    expect(indexerMocks.deleteBySource).toHaveBeenCalledWith(expect.anything(), "gone.md");
-    expect(indexerMocks.removeSourceHash).toHaveBeenCalledWith(expect.anything(), "gone.md");
+    expect(indexerMocks.deleteBySource).toHaveBeenCalledWith(
+      expect.anything(),
+      "gone.md",
+    );
+    expect(indexerMocks.removeSourceHash).toHaveBeenCalledWith(
+      expect.anything(),
+      "gone.md",
+    );
     expect(stats.removed).toBe(1);
   });
 
@@ -155,8 +181,12 @@ describe("syncDocs", () => {
   });
 
   it("counts lock conflicts as skipped, not failed", async () => {
-    scannerMocks.scanDocsDir.mockResolvedValue([{ source: "busy.md", content: "# Busy" }]);
-    indexerMocks.deleteBySource.mockRejectedValueOnce(new LockConflictError("busy.md"));
+    scannerMocks.scanDocsDir.mockResolvedValue([
+      { source: "busy.md", content: "# Busy" },
+    ]);
+    indexerMocks.deleteBySource.mockRejectedValueOnce(
+      new LockConflictError("busy.md"),
+    );
 
     const stats = await syncDocs(makeCtx(), "/docs");
 

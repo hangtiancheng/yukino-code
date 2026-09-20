@@ -142,11 +142,7 @@ const ComputerUseInputSchema = z.object({
 type ComputerUseInput = z.infer<typeof ComputerUseInputSchema>;
 type OpenAIAction = z.infer<typeof OpenAIActionSchema>;
 type ComputerUseEnvironment =
-  | "windows"
-  | "mac"
-  | "browser"
-  | "linux"
-  | "ubuntu";
+  "windows" | "mac" | "browser" | "linux" | "ubuntu";
 interface Point {
   x: number;
   y: number;

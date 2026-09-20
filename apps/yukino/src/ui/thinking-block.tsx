@@ -34,7 +34,12 @@ interface Props {
   streaming?: boolean;
 }
 
-export function ThinkingBlock({ text, duration, expanded, streaming = false }: Props) {
+export function ThinkingBlock({
+  text,
+  duration,
+  expanded,
+  streaming = false,
+}: Props) {
   const { stdout } = useStdout();
   if (!text.trim() && !duration) {
     return null;
@@ -48,11 +53,16 @@ export function ThinkingBlock({ text, duration, expanded, streaming = false }: P
       ? "Thinking…"
       : "Thinking";
   const collapsed =
-    [`${label} · Ctrl+O details`, `${label} · Ctrl+O`, "Thinking · Ctrl+O"].find(
-      (candidate) => visibleWidth(candidate) <= width,
-    ) ?? `${truncateToWidth(label, width)}\nCtrl+O`;
+    [
+      `${label} · Ctrl+O details`,
+      `${label} · Ctrl+O`,
+      "Thinking · Ctrl+O",
+    ].find((candidate) => visibleWidth(candidate) <= width) ??
+    `${truncateToWidth(label, width)}\nCtrl+O`;
   let content = wrapToLines(
-    expanded && text.trim() ? renderMarkdown(text.trim(), width, "thinking") : collapsed,
+    expanded && text.trim()
+      ? renderMarkdown(text.trim(), width, "thinking")
+      : collapsed,
     width,
   )
     .map((line) => truncateToWidth(line, width))
@@ -61,7 +71,8 @@ export function ThinkingBlock({ text, duration, expanded, streaming = false }: P
     const lines = wrapToLines(content, width);
     const limit = Math.max(1, Math.floor((stdout.rows || 24) / 4));
     if (lines.length > limit) {
-      content = limit === 1 ? "…" : ["…", ...lines.slice(-(limit - 1))].join("\n");
+      content =
+        limit === 1 ? "…" : ["…", ...lines.slice(-(limit - 1))].join("\n");
     }
   }
   return (

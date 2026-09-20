@@ -43,11 +43,18 @@ export function collapsePaste(
     return { text, store };
   }
   const counter = (store?.counter ?? 0) + 1;
-  const detail = lineCount > 10 ? `+${String(lineCount)} lines` : `${String(text.length)} chars`;
+  const detail =
+    lineCount > 10
+      ? `+${String(lineCount)} lines`
+      : `${String(text.length)} chars`;
   const marker = `[paste #${String(counter)} ${detail}]`;
   return {
     text: marker,
-    store: { ...store, counter, entries: { ...store?.entries, [marker]: text } },
+    store: {
+      ...store,
+      counter,
+      entries: { ...store?.entries, [marker]: text },
+    },
   };
 }
 
@@ -100,7 +107,10 @@ export function inputBoundary(
       if (direction === "next" && start <= index && index < end) {
         return end;
       }
-      if (start < index && (index < end || (direction === "previous" && index === end))) {
+      if (
+        start < index &&
+        (index < end || (direction === "previous" && index === end))
+      ) {
         return start;
       }
     }

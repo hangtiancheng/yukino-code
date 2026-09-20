@@ -50,9 +50,7 @@ import { version } from "@/version.js";
 const log = createChildLogger({ module: "mcp" });
 // eslint-disable-next-line @typescript-eslint/no-deprecated
 type MCPTransport =
-  | StdioClientTransport
-  | StreamableHTTPClientTransport
-  | SSEClientTransport;
+  StdioClientTransport | StreamableHTTPClientTransport | SSEClientTransport;
 
 export interface MCPTool {
   name: string;
@@ -254,8 +252,7 @@ export class MCPClient {
       const headers = config.headers ?? {};
 
       const opts:
-        | StreamableHTTPClientTransportOptions
-        | SSEClientTransportOptions = {
+        StreamableHTTPClientTransportOptions | SSEClientTransportOptions = {
         requestInit: { headers },
       };
 

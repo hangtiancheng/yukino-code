@@ -23,7 +23,12 @@
 import { Box, Text, useStdout } from "ink";
 
 import { DiffLines } from "./diff-render.js";
-import { expandTabs, truncateToWidth, visibleWidth, wrapToLines } from "./terminal-text.js";
+import {
+  expandTabs,
+  truncateToWidth,
+  visibleWidth,
+  wrapToLines,
+} from "./terminal-text.js";
 import { formatToolOutputPreview } from "./tool-preview.js";
 
 import { isDiffTool } from "@/tools/is-diff-tool.js";
@@ -71,7 +76,8 @@ export function ToolCard({
   const width = Math.max(1, stdout.columns || 80);
   const padding = width > 2 ? 1 : 0;
   const contentWidth = width - padding * 2;
-  const resolvedStatus = status ?? (loading ? "running" : isError ? "failed" : undefined);
+  const resolvedStatus =
+    status ?? (loading ? "running" : isError ? "failed" : undefined);
   const backgroundColor =
     resolvedStatus === "running"
       ? THEME.toolPendingBg
@@ -85,10 +91,13 @@ export function ToolCard({
       : `${toolName}${argsSummary ? ` ${argsSummary}` : ""}`
   ).replace(/[\r\n\t]+/g, " ");
   const statusLabel = resolvedStatus ?? "";
-  const timing = elapsed !== undefined && elapsed > 0 ? `${elapsed.toFixed(1)}s` : "";
+  const timing =
+    elapsed !== undefined && elapsed > 0 ? `${elapsed.toFixed(1)}s` : "";
   const metadata = [statusLabel, timing].filter(Boolean).join(" · ");
   const inlineMetadata = metadata && contentWidth >= visibleWidth(metadata) + 4;
-  const titleWidth = inlineMetadata ? contentWidth - visibleWidth(metadata) - 2 : contentWidth;
+  const titleWidth = inlineMetadata
+    ? contentWidth - visibleWidth(metadata) - 2
+    : contentWidth;
   const preview = output
     ? expanded
       ? expandTabs(output.trimEnd())
@@ -103,7 +112,11 @@ export function ToolCard({
       : preview;
   const metadataDetail = (
     <Text
-      color={resolvedStatus === "failed" || resolvedStatus === "stopped" ? THEME.error : THEME.dim}
+      color={
+        resolvedStatus === "failed" || resolvedStatus === "stopped"
+          ? THEME.error
+          : THEME.dim
+      }
     >
       {wrapToLines(metadata, contentWidth).join("\n")}
     </Text>
@@ -127,7 +140,9 @@ export function ToolCard({
       </Text>
       {metadata && !inlineMetadata ? metadataDetail : null}
       {progress ? (
-        <Text color={THEME.toolOutput}>{wrapToLines(progress, contentWidth).join("\n")}</Text>
+        <Text color={THEME.toolOutput}>
+          {wrapToLines(progress, contentWidth).join("\n")}
+        </Text>
       ) : null}
       {shown ? (
         isDiffTool(toolName) ? (
@@ -140,8 +155,20 @@ export function ToolCard({
   );
 }
 
-export function ToolBlock({ tool, expanded = false }: { tool: ToolBlockInfo; expanded?: boolean }) {
-  return <ToolCard {...tool} argsSummary={formatToolArgs(tool.args)} expanded={expanded} />;
+export function ToolBlock({
+  tool,
+  expanded = false,
+}: {
+  tool: ToolBlockInfo;
+  expanded?: boolean;
+}) {
+  return (
+    <ToolCard
+      {...tool}
+      argsSummary={formatToolArgs(tool.args)}
+      expanded={expanded}
+    />
+  );
 }
 
 export function ToolDisplay({

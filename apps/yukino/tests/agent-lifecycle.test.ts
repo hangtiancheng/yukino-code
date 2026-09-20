@@ -44,7 +44,10 @@ const end: StreamEvent = {
   },
 };
 
-function fixture(stream: LLMClient["stream"], options: Partial<AgentConfig> = {}) {
+function fixture(
+  stream: LLMClient["stream"],
+  options: Partial<AgentConfig> = {},
+) {
   const conversation = new ConversationManager();
   conversation.addUserMessage("task");
   const config: AgentConfig = {
@@ -86,8 +89,12 @@ describe("agent lifecycle and retry boundaries", () => {
       type: "error",
       error: { message: "stream ended early" },
     });
-    expect(config.conversation.getMessages().at(-1)?.content).toBe("Partial evidence");
-    expect(config.conversation.getMessages().at(-1)?.toolUses ?? []).toEqual([]);
+    expect(config.conversation.getMessages().at(-1)?.content).toBe(
+      "Partial evidence",
+    );
+    expect(config.conversation.getMessages().at(-1)?.toolUses ?? []).toEqual(
+      [],
+    );
   });
 
   it("injects pre-send output before the first request and ends a text-only turn", async () => {
@@ -106,7 +113,9 @@ describe("agent lifecycle and retry boundaries", () => {
         expect(
           conversation
             .getMessages()
-            .some((m) => contentToText(m.content).includes("CURRENT_REQUEST_NOTE")),
+            .some((m) =>
+              contentToText(m.content).includes("CURRENT_REQUEST_NOTE"),
+            ),
         ).toBe(true);
         yield { type: "text_delta", text: "done" };
         yield end;
@@ -140,7 +149,9 @@ describe("agent lifecycle and retry boundaries", () => {
       effect: "ask",
       reason: "approval",
     });
-    const execute = vi.fn(() => Promise.resolve({ output: "written", isError: false }));
+    const execute = vi.fn(() =>
+      Promise.resolve({ output: "written", isError: false }),
+    );
     config.registry.register({
       name: "WriteFile",
       description: "write",
@@ -160,8 +171,12 @@ describe("agent lifecycle and retry boundaries", () => {
       toolId: "write",
       isError: true,
     });
-    expect(result?.type === "tool_result" ? result.output : "").toContain("dialog closed");
-    expect(config.conversation.getMessages().flatMap((m) => m.toolResults ?? [])).toHaveLength(1);
+    expect(result?.type === "tool_result" ? result.output : "").toContain(
+      "dialog closed",
+    );
+    expect(
+      config.conversation.getMessages().flatMap((m) => m.toolResults ?? []),
+    ).toHaveLength(1);
     expect(calls).toBe(2);
   });
 
@@ -240,7 +255,9 @@ describe("agent lifecycle and retry boundaries", () => {
       type: "error",
       error: { message: "quota exhausted" },
     });
-    expect(hookCalls).toEqual(Array.from({ length: 4 }, () => ["turn_start", "turn_end"]).flat());
+    expect(hookCalls).toEqual(
+      Array.from({ length: 4 }, () => ["turn_start", "turn_end"]).flat(),
+    );
   });
 
   it.each([

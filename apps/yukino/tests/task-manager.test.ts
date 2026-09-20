@@ -30,13 +30,18 @@ describe("TaskManager", () => {
     expect(stopped).toBe(false);
     reject(new TaskFailure("captured before stop"));
     await stopping;
-    expect(tasks.drainNotifications().map((item) => item.output)).toEqual(["captured before stop"]);
+    expect(tasks.drainNotifications().map((item) => item.output)).toEqual([
+      "captured before stop",
+    ]);
     expect(tasks.drainNotifications()).toEqual([]);
   });
 
   it("records the task kind from create options", async () => {
     const tasks = new TaskManager();
-    const shell = tasks.create("s", ok, noop, { idPrefix: "bash", kind: "shell" });
+    const shell = tasks.create("s", ok, noop, {
+      idPrefix: "bash",
+      kind: "shell",
+    });
     const agent = tasks.create("a", ok, noop);
     expect(shell.kind).toBe("shell");
     expect(shell.id).toBe("bash-1");

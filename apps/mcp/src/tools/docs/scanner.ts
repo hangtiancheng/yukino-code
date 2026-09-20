@@ -48,7 +48,10 @@ export async function scanDocsDir(dir: string): Promise<ScannedDoc[]> {
 
   const docs: ScannedDoc[] = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+    if (
+      !entry.isFile() ||
+      !SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase())
+    ) {
       continue;
     }
     const absolute = path.join(entry.parentPath, entry.name);

@@ -88,7 +88,9 @@ describe("currentContextTokens (real-usage anchoring)", () => {
 
     // Append a new message after the anchor → baseline + estimate of only that.
     conversation.addUserMessage("z".repeat(70)); // 70 chars → ceil(70/3.5) = 20
-    expect(currentContextTokens(conversation, anchor)).toBe(5000 + estChars(70));
+    expect(currentContextTokens(conversation, anchor)).toBe(
+      5000 + estChars(70),
+    );
     expect(currentContextTokens(conversation, anchor)).toBe(5020);
   });
 
@@ -103,7 +105,9 @@ describe("currentContextTokens (real-usage anchoring)", () => {
     // But the API reported a small real context (e.g. mostly cache-read).
     const anchor: UsageAnchor = { baselineTokens: 6000, anchorCount: 1 };
     expect(currentContextTokens(conversation, anchor)).toBe(6000);
-    expect(currentContextTokens(conversation, anchor)).toBeLessThan(charEstimate);
+    expect(currentContextTokens(conversation, anchor)).toBeLessThan(
+      charEstimate,
+    );
   });
 
   it("clamps when the transcript was truncated below the anchor index", () => {
@@ -118,7 +122,9 @@ describe("currentContextTokens (real-usage anchoring)", () => {
 
   it("estimateMessages matches the documented chars/3.5 rounding", () => {
     expect(estimateMessages([])).toBe(0);
-    expect(estimateMessages([{ role: "user", content: "x".repeat(7) }])).toBe(estChars(7));
+    expect(estimateMessages([{ role: "user", content: "x".repeat(7) }])).toBe(
+      estChars(7),
+    );
   });
 
   it("estimateMessages counts image blocks at the fixed char equivalent", () => {
@@ -206,8 +212,12 @@ describe("computeKeepStartIndex (recent-history retention)", () => {
     expect(messages[keepStart].toolUses?.[0]?.toolUseId).toBe("tid-1");
     // And the matching tool_result is inside the kept slice (not orphaned out).
     const kept = messages.slice(keepStart);
-    const hasUse = kept.some((m) => m.toolUses?.some((t) => t.toolUseId === "tid-1"));
-    const hasResult = kept.some((m) => m.toolResults?.some((t) => t.toolUseId === "tid-1"));
+    const hasUse = kept.some((m) =>
+      m.toolUses?.some((t) => t.toolUseId === "tid-1"),
+    );
+    const hasResult = kept.some((m) =>
+      m.toolResults?.some((t) => t.toolUseId === "tid-1"),
+    );
     expect(hasUse && hasResult).toBe(true);
   });
 
@@ -232,7 +242,9 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     const conversation = new ConversationManager();
     // A long prefix that must be summarized away...
     for (let i = 0; i < 20; i++) {
-      conversation.addUserMessage(`OLD-PREFIX-${String(i)}-` + "p".repeat(1200));
+      conversation.addUserMessage(
+        `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
+      );
       conversation.addAssistantMessage(`old-reply-${String(i)}`);
     }
     // ...and a recent tail we expect to survive untouched.
@@ -242,13 +254,21 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
 
     const { client, lastPrompt } = stubClient("THE SUMMARY BODY");
     const before = conversation.getMessages().length;
-    const { message: msg, boundary } = await forceCompact(conversation, client, null, [], []);
+    const { message: msg, boundary } = await forceCompact(
+      conversation,
+      client,
+      null,
+      [],
+      [],
+    );
 
     // forceCompact returns the structured boundary the session owner persists:
     // the bare summary plus the verbatim kept tail inlined as role+text.
     expect(boundary).toBeDefined();
     expect(boundary?.summary).toBe("THE SUMMARY BODY");
-    const keepJoined = boundary?.keep.map((k) => contentToText(k.content)).join("\n");
+    const keepJoined = boundary?.keep
+      .map((k) => contentToText(k.content))
+      .join("\n");
     expect(keepJoined).toContain("marker-recent-q");
     expect(keepJoined).toContain("marker-recent-f");
     // The boundary summary is bare (no recovery attachment / no framing
@@ -266,7 +286,9 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     expect(joined).toContain("marker-recent-f");
     // The summary is present with the framing wrapper...
     expect(joined).toContain("THE SUMMARY BODY");
-    expect(joined).toContain("The conversation history before this point was compacted");
+    expect(joined).toContain(
+      "The conversation history before this point was compacted",
+    );
     expect(joined).toContain("Recent messages have been preserved verbatim");
     // ...but the summary prompt only covered the prefix, NOT the kept tail.
     expect(lastPrompt()).toContain("OLD-PREFIX-0");
@@ -288,7 +310,11 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     conversation.addAssistantMessageWithTools("running read", [
       { toolUseId: "keep-tid", toolName: "Read", arguments: { path: "/a" } },
     ]);
-    conversation.addToolResultMessage("keep-tid", "RESULT-CONTENT-marker", false);
+    conversation.addToolResultMessage(
+      "keep-tid",
+      "RESULT-CONTENT-marker",
+      false,
+    );
     conversation.addAssistantMessage("done with tool");
     conversation.addUserMessage("thanks");
 
@@ -296,8 +322,12 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     await forceCompact(conversation, client, null, [], []);
 
     const after = conversation.getMessages();
-    const hasUse = after.some((m) => m.toolUses?.some((t) => t.toolUseId === "keep-tid"));
-    const hasResult = after.some((m) => m.toolResults?.some((t) => t.toolUseId === "keep-tid"));
+    const hasUse = after.some((m) =>
+      m.toolUses?.some((t) => t.toolUseId === "keep-tid"),
+    );
+    const hasResult = after.some((m) =>
+      m.toolResults?.some((t) => t.toolUseId === "keep-tid"),
+    );
     // Either both halves of the pair survive, or neither — never an orphan.
     expect(hasUse).toBe(hasResult);
     // In this layout the pair is in the recent tail, so both survive.
@@ -311,7 +341,13 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
 
     const { client } = stubClient("should-not-be-used");
     const before = conversation.getMessages();
-    const { message: msg } = await forceCompact(conversation, client, null, [], []);
+    const { message: msg } = await forceCompact(
+      conversation,
+      client,
+      null,
+      [],
+      [],
+    );
     const after = conversation.getMessages();
 
     // Everything is inside the kept tail → compaction skipped, transcript intact.
@@ -320,7 +356,9 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     // The verbatim originals are untouched (no summary injected).
     const joined = after.map((m) => contentToText(m.content)).join("\n");
     expect(joined).toContain("only-q marker");
-    expect(joined).not.toContain("The conversation history before this point was compacted");
+    expect(joined).not.toContain(
+      "The conversation history before this point was compacted",
+    );
   });
 });
 
@@ -329,7 +367,10 @@ describe("RecoveryState retention", () => {
     const recovery = new RecoveryState();
 
     for (let index = 0; index < 10; index++) {
-      recovery.recordFileRead(`/tmp/file-${String(index)}.txt`, "x".repeat(30_000));
+      recovery.recordFileRead(
+        `/tmp/file-${String(index)}.txt`,
+        "x".repeat(30_000),
+      );
     }
 
     const files = recovery.snapshotFiles(100);
@@ -343,7 +384,10 @@ describe("RecoveryState retention", () => {
   it("refreshes an existing path without growing retention", () => {
     const recovery = new RecoveryState();
     for (let index = 0; index < 5; index++) {
-      recovery.recordFileRead(`/tmp/file-${String(index)}.txt`, `old-${String(index)}`);
+      recovery.recordFileRead(
+        `/tmp/file-${String(index)}.txt`,
+        `old-${String(index)}`,
+      );
     }
 
     recovery.recordFileRead("/tmp/file-0.txt", "new-content");
@@ -352,6 +396,8 @@ describe("RecoveryState retention", () => {
     const files = recovery.snapshotFiles(100);
     expect(files).toHaveLength(5);
     expect(files.some((file) => file.path === "/tmp/file-1.txt")).toBe(false);
-    expect(files.find((file) => file.path === "/tmp/file-0.txt")?.content).toBe("new-content");
+    expect(files.find((file) => file.path === "/tmp/file-0.txt")?.content).toBe(
+      "new-content",
+    );
   });
 });

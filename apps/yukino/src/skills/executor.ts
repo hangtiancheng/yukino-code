@@ -33,7 +33,9 @@ function buildSkillPrompt(skill: Skill, args: string): string {
     SKILL_INSTRUCTIONS,
     `<skill-metadata><name>${escapeSkillXml(skill.meta.name)}</name><directory>${escapeSkillXml(skill.sourceDir)}</directory></skill-metadata>`,
     `<skill-body>\n${body}\n</skill-body>`,
-    ...(args ? [`<skill-arguments>${escapeSkillXml(args)}</skill-arguments>`] : []),
+    ...(args
+      ? [`<skill-arguments>${escapeSkillXml(args)}</skill-arguments>`]
+      : []),
   ].join("\n\n");
 }
 
@@ -52,7 +54,10 @@ export function parseSkillPrompt(
     return undefined;
   }
   const decode = (text: string) =>
-    text.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+    text
+      .replaceAll("&lt;", "<")
+      .replaceAll("&gt;", ">")
+      .replaceAll("&amp;", "&");
   return {
     name: decode(match[1] ?? ""),
     directory: decode(match[2] ?? ""),
@@ -69,11 +74,17 @@ export function runInline(skill: Skill, args: string, host: SkillHost): string {
 }
 
 /** Runs a skill in an isolated subagent and returns its result unchanged. */
-export async function runFork(skill: Skill, args: string, host: SkillForkHost): Promise<string> {
+export async function runFork(
+  skill: Skill,
+  args: string,
+  host: SkillForkHost,
+): Promise<string> {
   let prompt = buildSkillPrompt(skill, args);
   const contextMode = skill.meta.forkContext ?? "none";
   if (contextMode !== "none") {
-    const context = host.snapshotParentMessages(contextMode === "recent" ? 5 : 100);
+    const context = host.snapshotParentMessages(
+      contextMode === "recent" ? 5 : 100,
+    );
     prompt = `<parent-context>\n${escapeSkillXml(context)}\n</parent-context>\n\n${prompt}`;
   }
 

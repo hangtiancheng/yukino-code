@@ -24,7 +24,11 @@
 
 import type { AgentEvent } from "./agent/events.js";
 import { Agent } from "./agent/index.js";
-import { forkEnabled, loadConfig, withProjectMcpServers } from "./config/index.js";
+import {
+  forkEnabled,
+  loadConfig,
+  withProjectMcpServers,
+} from "./config/index.js";
 import { getContextWindow, getMaxOutputTokens } from "./config/index.js";
 import { ConversationManager } from "./conversation/index.js";
 import { createClient } from "./llm/client.js";
@@ -37,11 +41,21 @@ import { buildSystemPrompt, detectEnvironment } from "./prompt/builder.js";
 import { AgentTool } from "./subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "./subagent/definition.js";
 import { spawnSubagent } from "./subagent/spawn.js";
-import { TaskManager, formatAgentTaskNotification } from "./subagent/task-manager.js";
-import { coordinatorToolFilter, coordinatorActive } from "./teams/coordinator.js";
+import {
+  TaskManager,
+  formatAgentTaskNotification,
+} from "./subagent/task-manager.js";
+import {
+  coordinatorToolFilter,
+  coordinatorActive,
+} from "./teams/coordinator.js";
 import { TeamManager } from "./teams/index.js";
 import { TaskStopTool } from "./teams/task-stop.js";
-import { TeamCreateTool, SendMessageTool, TeamDeleteTool } from "./teams/tools.js";
+import {
+  TeamCreateTool,
+  SendMessageTool,
+  TeamDeleteTool,
+} from "./teams/tools.js";
 import { BashTool } from "./tools/bash.js";
 import { ComputerUseTool } from "./tools/computer-use.js";
 import { EditFileTool } from "./tools/edit-file.js";
@@ -90,7 +104,9 @@ export function parsePrintFlags(args: string[]): PrintArgs | null {
     if (fmt === "stream-json") {
       outputFormat = "stream-json";
     } else if (fmt !== "text") {
-      console.error(`Error: unknown output format '${fmt}', expected 'text' or 'stream-json'`);
+      console.error(
+        `Error: unknown output format '${fmt}', expected 'text' or 'stream-json'`,
+      );
       process.exit(1);
     }
   }
@@ -255,10 +271,13 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       // Completion reports are drained each turn as system reminders delivered to the Lead.
       notificationFn: () => [
         ...teamManager.drainLeads(),
-        ...backgroundTaskManager.drainNotifications().map(formatAgentTaskNotification),
+        ...backgroundTaskManager
+          .drainNotifications()
+          .map(formatAgentTaskNotification),
       ],
       toolFilter: coordinatorToolFilter(cfg.enable_coordinator_mode ?? false),
-      coordinatorActiveFn: () => coordinatorActive(cfg.enable_coordinator_mode ?? false),
+      coordinatorActiveFn: () =>
+        coordinatorActive(cfg.enable_coordinator_mode ?? false),
     });
 
     // Statistics
@@ -289,7 +308,10 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         case "tool_result":
           // Update elapsed time for the most recent matching tool call
           for (let i = toolCalls.length - 1; i >= 0; i--) {
-            if (toolCalls[i].tool === event.toolName && toolCalls[i].elapsed === 0) {
+            if (
+              toolCalls[i].tool === event.toolName &&
+              toolCalls[i].elapsed === 0
+            ) {
               toolCalls[i].elapsed = event.elapsed;
               break;
             }
@@ -320,18 +342,26 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     // answer. Shell/JS tasks can run indefinitely (dev servers, auto-backgrounded
     // timeouts) and would hang -p mode forever — whatever finished by now is
     // drained below, and the finally block's stopAll() kills the rest.
-    await backgroundTaskManager.waitAll((task) => (task.kind ?? "agent") === "agent");
+    await backgroundTaskManager.waitAll(
+      (task) => (task.kind ?? "agent") === "agent",
+    );
     const backgroundNotifications = backgroundTaskManager.drainNotifications();
     const durationMs = Date.now() - startTime;
 
     // text mode: ensure trailing newline
-    if (args.outputFormat === "text" && resultText && !resultText.endsWith("\n")) {
+    if (
+      args.outputFormat === "text" &&
+      resultText &&
+      !resultText.endsWith("\n")
+    ) {
       process.stdout.write("\n");
     }
     for (const task of backgroundNotifications) {
       const notification = formatAgentTaskNotification(task);
       if (args.outputFormat === "stream-json") {
-        console.log(JSON.stringify({ type: "task_notification", notification }));
+        console.log(
+          JSON.stringify({ type: "task_notification", notification }),
+        );
       } else {
         process.stdout.write(`${notification}\n`);
       }

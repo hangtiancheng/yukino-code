@@ -31,7 +31,8 @@ export * as Conversion from "./conversion.js";
 export * as Stdio from "./stdio.js";
 export * as Websocket from "./websocket.js";
 
-export type AcpMode = { transport: "stdio" } | { transport: "websocket"; address?: string };
+export type AcpMode =
+  { transport: "stdio" } | { transport: "websocket"; address?: string };
 
 export function parseAcpMode(args: string[]): AcpMode | null {
   const stdioIndex = args.indexOf("--acp");

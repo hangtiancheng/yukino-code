@@ -33,7 +33,9 @@ describe("model alias resolution", () => {
   });
 
   it("passes through an unknown / already-full model id unchanged", () => {
-    expect(resolveModelId("claude-some-future-model")).toBe("claude-some-future-model");
+    expect(resolveModelId("claude-some-future-model")).toBe(
+      "claude-some-future-model",
+    );
   });
 
   it("the explore builtin runs on the cheaper haiku model", () => {

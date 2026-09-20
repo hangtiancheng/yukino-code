@@ -20,7 +20,13 @@
  * SOFTWARE.
  */
 
-import type { Tool, ToolCategory, ToolContext, ToolResult, ToolSchema } from "./types.js";
+import type {
+  Tool,
+  ToolCategory,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "./types.js";
 
 export class ExitPlanModeTool implements Tool {
   // Use a hardcoded string instead of ExitPlanModeTool.name.replace("Tool", "")
@@ -48,7 +54,10 @@ export class ExitPlanModeTool implements Tool {
     };
   }
 
-  execute(_ctx: ToolContext, _args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    _ctx: ToolContext,
+    _args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     if (this.isPlanMode && !this.isPlanMode()) {
       if (this.planExists?.()) {
         return Promise.resolve({

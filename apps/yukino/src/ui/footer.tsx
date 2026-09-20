@@ -74,7 +74,11 @@ function formatTokens(value: number): string {
   return `${(value / 1_000_000).toFixed(1)}M`;
 }
 
-function locationLines(workDir: string, sessionId: string, width: number): string[] {
+function locationLines(
+  workDir: string,
+  sessionId: string,
+  width: number,
+): string[] {
   const path = compactPath(workDir);
   if (!sessionId) {
     return [truncateToWidth(path, width)];
@@ -82,7 +86,9 @@ function locationLines(workDir: string, sessionId: string, width: number): strin
   const pathWidth = width - visibleWidth(sessionId) - 3;
   if (pathWidth >= 1) {
     const cwd = truncateToWidth(path, pathWidth);
-    return [`${cwd}${" ".repeat(pathWidth - visibleWidth(cwd))} · ${sessionId}`];
+    return [
+      `${cwd}${" ".repeat(pathWidth - visibleWidth(cwd))} · ${sessionId}`,
+    ];
   }
   // Session IDs are copyable identifiers, never ellipsize them to make room
   // for a path. On very small terminals they get their own wrapped rows.
@@ -115,9 +121,14 @@ export function Footer(props: FooterProps) {
   const width = columns - padding * 2;
   // Context occupancy, not the cumulative session total: the latter grows
   // unboundedly across turns and would report well over 100%.
-  const percentage = contextWindow > 0 ? (contextTokens / contextWindow) * 100 : 0;
+  const percentage =
+    contextWindow > 0 ? (contextTokens / contextWindow) * 100 : 0;
   const contextColor =
-    percentage >= 90 ? THEME.error : percentage >= 70 ? THEME.warning : THEME.dim;
+    percentage >= 90
+      ? THEME.error
+      : percentage >= 70
+        ? THEME.warning
+        : THEME.dim;
   const tokens = `↑${formatTokens(inputTokens)} ↓${formatTokens(outputTokens)}`;
   const context = `${percentage.toFixed(1)}%/${formatTokens(contextWindow)}`;
   const statsWidth = visibleWidth(`${tokens} ${context}`);
@@ -125,23 +136,31 @@ export function Footer(props: FooterProps) {
   const rightWidth = width - statsWidth - 2;
   const thinkingSuffix = thinkingLevel ? ` · ${thinkingLevel}` : "";
   const minimumIdentityWidth = (model ? 2 : 0) + visibleWidth(thinkingSuffix);
-  const separateIdentity = rightWidth < visibleWidth(mode) + 3 + minimumIdentityWidth;
-  const identityWidth = separateIdentity ? width : rightWidth - visibleWidth(mode) - 3;
+  const separateIdentity =
+    rightWidth < visibleWidth(mode) + 3 + minimumIdentityWidth;
+  const identityWidth = separateIdentity
+    ? width
+    : rightWidth - visibleWidth(mode) - 3;
   const modelWidth = Math.max(0, identityWidth - visibleWidth(thinkingSuffix));
   const fullIdentity = provider ? `${provider}/${model}` : model;
   // Keep the model and complete thinking level before provider names or shortcuts.
   const identity =
-    visibleWidth(fullIdentity) <= modelWidth ? fullIdentity : truncateToWidth(model, modelWidth);
+    visibleWidth(fullIdentity) <= modelWidth
+      ? fullIdentity
+      : truncateToWidth(model, modelWidth);
   const separateThinking = thinkingLevel !== undefined && modelWidth < 2;
   const cycleHint = "  Shift+Tab to cycle";
   const hint =
     !separateIdentity &&
-    visibleWidth(`${fullIdentity}${thinkingSuffix} · ${mode}${cycleHint}`) <= rightWidth
+    visibleWidth(`${fullIdentity}${thinkingSuffix} · ${mode}${cycleHint}`) <=
+      rightWidth
       ? cycleHint
       : "";
   const gap = Math.max(
     2,
-    width - statsWidth - visibleWidth(`${identity}${thinkingSuffix} · ${mode}${hint}`),
+    width -
+      statsWidth -
+      visibleWidth(`${identity}${thinkingSuffix} · ${mode}${hint}`),
   );
   const thinking = thinkingLevel ? (
     <Text color={thinkingLevelColor(thinkingLevel)}>
@@ -182,7 +201,9 @@ export function Footer(props: FooterProps) {
       paddingLeft={padding}
       paddingRight={padding}
     >
-      <Text color={THEME.dim}>{locationLines(workDir, sessionId, width).join("\n")}</Text>
+      <Text color={THEME.dim}>
+        {locationLines(workDir, sessionId, width).join("\n")}
+      </Text>
       {separateIdentity ? (
         <>
           {visibleWidth(context) + 2 + visibleWidth(mode) <= width ? (

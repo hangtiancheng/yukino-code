@@ -174,7 +174,11 @@ describe("follow-up scheduling", () => {
       queue().enqueue("new request");
       await Promise.resolve();
     });
-    expect(send.mock.calls.map(([message]) => message)).toEqual(["first", "second", "new request"]);
+    expect(send.mock.calls.map(([message]) => message)).toEqual([
+      "first",
+      "second",
+      "new request",
+    ]);
   });
 
   it("does not dispatch pending work after unmount", async () => {

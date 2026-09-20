@@ -34,8 +34,7 @@ export interface EmbeddingConfig {
 }
 
 export type EmbeddingConfigResult =
-  | { ok: true; config: EmbeddingConfig }
-  | { ok: false; reason: string };
+  { ok: true; config: EmbeddingConfig } | { ok: false; reason: string };
 
 export interface RedisConfig {
   url: string;

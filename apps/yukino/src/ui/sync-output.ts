@@ -77,7 +77,9 @@ export function installSyncOutput(): void {
     return;
   }
 
-  const originalWrite: typeof process.stdout.write = process.stdout.write.bind(process.stdout);
+  const originalWrite: typeof process.stdout.write = process.stdout.write.bind(
+    process.stdout,
+  );
   let frameBuffer = "";
   let scheduled = false;
 
@@ -87,7 +89,11 @@ export function installSyncOutput(): void {
     callback?: (err?: Error) => void,
   ): boolean {
     const str =
-      typeof chunk === "string" ? chunk : Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk);
+      typeof chunk === "string"
+        ? chunk
+        : Buffer.isBuffer(chunk)
+          ? chunk.toString()
+          : String(chunk);
     frameBuffer += str;
 
     if (!scheduled) {

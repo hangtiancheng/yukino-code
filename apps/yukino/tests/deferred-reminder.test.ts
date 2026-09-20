@@ -104,7 +104,11 @@ const toolTurn = (id: string): StreamEvent[] => [
   end("tool_use"),
 ];
 
-function makeAgent(client: LLMClient, registry: ToolRegistry, conv: ConversationManager): Agent {
+function makeAgent(
+  client: LLMClient,
+  registry: ToolRegistry,
+  conv: ConversationManager,
+): Agent {
   return new Agent({
     client,
     registry,
@@ -117,7 +121,9 @@ function makeAgent(client: LLMClient, registry: ToolRegistry, conv: Conversation
 function count(conv: ConversationManager): number {
   return conv
     .getMessages()
-    .filter((m) => m.role === "user" && contentToText(m.content).includes(MARKER)).length;
+    .filter(
+      (m) => m.role === "user" && contentToText(m.content).includes(MARKER),
+    ).length;
 }
 
 async function drain(agent: Agent): Promise<void> {
@@ -197,7 +203,9 @@ describe("deferred tool reminder", () => {
   });
 
   it("injects nothing when there are no deferred tools", async () => {
-    const client = new MockClient([[{ type: "text_delta", text: "hi" }, end()]]);
+    const client = new MockClient([
+      [{ type: "text_delta", text: "hi" }, end()],
+    ]);
     const conv = new ConversationManager();
     conv.addUserMessage("hi");
     await drain(makeAgent(client, new ToolRegistry(), conv));

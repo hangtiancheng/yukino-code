@@ -51,7 +51,11 @@ export class TerminalInput extends Transform {
     source.pipe(this);
   }
 
-  override _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback) {
+  override _transform(
+    chunk: Buffer,
+    _encoding: BufferEncoding,
+    callback: TransformCallback,
+  ) {
     clearTimeout(this.escapeTimer);
     this.pending += this.decoder.write(chunk);
     let output = "";
@@ -82,7 +86,9 @@ export class TerminalInput extends Transform {
         this.pending = this.pending.slice(pasteMarker.length);
         continue;
       }
-      const prefixes = this.pasting ? [PASTE_END] : [OSC_BACKGROUND, COLOR_SCHEME, PASTE_START];
+      const prefixes = this.pasting
+        ? [PASTE_END]
+        : [OSC_BACKGROUND, COLOR_SCHEME, PASTE_START];
       if (prefixes.some((prefix) => prefix.startsWith(this.pending))) {
         break;
       }

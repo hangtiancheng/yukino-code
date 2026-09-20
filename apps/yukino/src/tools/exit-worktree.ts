@@ -70,7 +70,10 @@ export class ExitWorktreeTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const path = strArg(args, "path");
     const branch = strArg(args, "branch");
     const gitRoot = strArg(args, "git_root");

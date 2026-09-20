@@ -69,7 +69,10 @@ export class ToolSearchTool implements Tool {
     };
   }
 
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const query = strArg(args, "query");
     const maxResults = intArg(args, "max_results", 5);
 
@@ -88,7 +91,10 @@ export class ToolSearchTool implements Tool {
             .map((name) => name.trim())
             .filter(Boolean),
         )
-      : this.registry.searchDeferred(query, Math.max(1, Math.min(maxResults, 50)));
+      : this.registry.searchDeferred(
+          query,
+          Math.max(1, Math.min(maxResults, 50)),
+        );
     if (tools.length === 0) {
       return Promise.resolve({
         output: "No deferred tools matched the query.",
@@ -97,12 +103,16 @@ export class ToolSearchTool implements Tool {
     }
 
     const mcp = tools.filter((tool) => tool.name.startsWith(MCP_TOOL_PREFIX));
-    const local = tools.filter((tool) => !tool.name.startsWith(MCP_TOOL_PREFIX));
+    const local = tools.filter(
+      (tool) => !tool.name.startsWith(MCP_TOOL_PREFIX),
+    );
     for (const tool of local) {
       this.registry.markDiscovered(tool.name);
     }
     const native = this.registry.mcpLoadingMode === "native";
-    const schemas = (native ? local : tools).map((tool) => JSON.stringify(tool.schema(), null, 2));
+    const schemas = (native ? local : tools).map((tool) =>
+      JSON.stringify(tool.schema(), null, 2),
+    );
     const routing =
       mcp.length === 0
         ? ""
@@ -121,12 +131,10 @@ export class ToolSearchTool implements Tool {
         ? {
             contentBlocks: [
               { type: "text", text: output },
-              ...mcp.map(
-                (tool): ToolResultContentBlock => ({
-                  type: "tool_reference",
-                  tool_name: tool.name,
-                }),
-              ),
+              ...mcp.map((tool): ToolResultContentBlock => ({
+                type: "tool_reference",
+                tool_name: tool.name,
+              })),
             ] satisfies ToolResultContentBlock[],
           }
         : {}),

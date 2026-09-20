@@ -56,7 +56,9 @@ const SHUTDOWN_RE = /^\[shutdown\]\s*/;
  * - completed: green checkmark + content
  * - text (default): cyan @name with content summary
  */
-export function TeammateMessage(props: PropsWithRef<TeammateMessageProps, TeammateMessageExpose>) {
+export function TeammateMessage(
+  props: PropsWithRef<TeammateMessageProps, TeammateMessageExpose>,
+) {
   const { from, content, type = "text", ref } = props;
 
   /**
@@ -72,28 +74,31 @@ export function TeammateMessage(props: PropsWithRef<TeammateMessageProps, Teamma
    * drainLeads no longer produces this format, so this always returns null
    * for current drainLeads output.
    */
-  const parseTeammateMessage = useCallback((raw: string): TeammateMessageProps | null => {
-    const m = TEAM_MSG_RE.exec(raw);
-    if (!m) {
-      return null;
-    }
+  const parseTeammateMessage = useCallback(
+    (raw: string): TeammateMessageProps | null => {
+      const m = TEAM_MSG_RE.exec(raw);
+      if (!m) {
+        return null;
+      }
 
-    const from = m[1];
-    const body = m[2];
+      const from = m[1];
+      const body = m[2];
 
-    if (IDLE_RE.test(body)) {
-      return { from, content: body.replace(IDLE_RE, ""), type: "idle" };
-    }
-    if (SHUTDOWN_RE.test(body)) {
-      return {
-        from,
-        content: body.replace(SHUTDOWN_RE, ""),
-        type: "shutdown",
-      };
-    }
+      if (IDLE_RE.test(body)) {
+        return { from, content: body.replace(IDLE_RE, ""), type: "idle" };
+      }
+      if (SHUTDOWN_RE.test(body)) {
+        return {
+          from,
+          content: body.replace(SHUTDOWN_RE, ""),
+          type: "shutdown",
+        };
+      }
 
-    return { from, content: body, type: "text" };
-  }, []);
+      return { from, content: body, type: "text" };
+    },
+    [],
+  );
 
   useImperativeHandle(
     ref,

@@ -25,7 +25,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderConfig } from "@/config/index.js";
 import { discoverModels, modelListUrl } from "@/llm/model-discovery.js";
 
-const protocols: ProviderConfig["protocol"][] = ["anthropic", "openai", "openai-compat"];
+const protocols: ProviderConfig["protocol"][] = [
+  "anthropic",
+  "openai",
+  "openai-compat",
+];
 const connection = {
   protocol: protocols[0] ?? "anthropic",
   base_url: "https://provider.example",
@@ -69,9 +73,9 @@ describe.each(protocols)("modelListUrl (%s)", (protocol) => {
   it.each(["/v1", "/v1/messages", "/v1/responses", "/v1/chat/completions/"])(
     "preserves custom proxy prefixes: %s",
     (path) => {
-      expect(modelListUrl(protocol, `https://proxy.example/gateway/team${path}`)).toBe(
-        "https://proxy.example/gateway/team/v1/models",
-      );
+      expect(
+        modelListUrl(protocol, `https://proxy.example/gateway/team${path}`),
+      ).toBe("https://proxy.example/gateway/team/v1/models");
     },
   );
 
@@ -83,7 +87,10 @@ describe.each(protocols)("modelListUrl (%s)", (protocol) => {
 
   it("strips completion query parameters and fragments", () => {
     expect(
-      modelListUrl(protocol, " https://provider.example/v1/responses?stream=true#fragment "),
+      modelListUrl(
+        protocol,
+        " https://provider.example/v1/responses?stream=true#fragment ",
+      ),
     ).toBe("https://provider.example/v1/models");
   });
 
@@ -101,34 +108,43 @@ describe.each(protocols)("modelListUrl (%s)", (protocol) => {
 });
 
 describe("discoverModels", () => {
-  it.each(protocols)("uses %s authentication without redirecting credentials", async (protocol) => {
-    await discoverModels({ ...connection, protocol });
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith("https://provider.example/v1/models", {
-      method: "GET",
-      headers:
-        protocol === "anthropic"
-          ? {
-              Accept: "application/json",
-              "anthropic-version": "2023-06-01",
-              "x-api-key": "secret-key",
-            }
-          : {
-              Accept: "application/json",
-              Authorization: "Bearer secret-key",
-            },
-      redirect: "error",
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      signal: expect.any(AbortSignal),
-    });
-    expect(vi.getTimerCount()).toBe(0);
-  });
+  it.each(protocols)(
+    "uses %s authentication without redirecting credentials",
+    async (protocol) => {
+      await discoverModels({ ...connection, protocol });
+      expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+        "https://provider.example/v1/models",
+        {
+          method: "GET",
+          headers:
+            protocol === "anthropic"
+              ? {
+                  Accept: "application/json",
+                  "anthropic-version": "2023-06-01",
+                  "x-api-key": "secret-key",
+                }
+              : {
+                  Accept: "application/json",
+                  Authorization: "Bearer secret-key",
+                },
+          redirect: "error",
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          signal: expect.any(AbortSignal),
+        },
+      );
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 
-  it.each(protocols)("does not inject environment credentials for %s", async (protocol) => {
-    await discoverModels({ ...connection, protocol, api_key: "" });
-    const headers = fetchMock.mock.calls[0]?.[1]?.headers;
-    expect(headers).not.toHaveProperty("Authorization");
-    expect(headers).not.toHaveProperty("x-api-key");
-  });
+  it.each(protocols)(
+    "does not inject environment credentials for %s",
+    async (protocol) => {
+      await discoverModels({ ...connection, protocol, api_key: "" });
+      const headers = fetchMock.mock.calls[0]?.[1]?.headers;
+      expect(headers).not.toHaveProperty("Authorization");
+      expect(headers).not.toHaveProperty("x-api-key");
+    },
+  );
 
   it("validates model metadata, deduplicates IDs and ignores capability guesses", async () => {
     fetchMock.mockResolvedValue(
@@ -154,7 +170,9 @@ describe("discoverModels", () => {
   });
 
   it("accepts an empty model list", async () => {
-    fetchMock.mockResolvedValue(Response.json({ data: [], has_more: false, last_id: null }));
+    fetchMock.mockResolvedValue(
+      Response.json({ data: [], has_more: false, last_id: null }),
+    );
     await expect(discoverModels(connection)).resolves.toEqual([]);
   });
 
@@ -169,24 +187,42 @@ describe("discoverModels", () => {
     { data: [{ id: "a", name: null }] },
     { data: [], has_more: "true" },
     { data: [], last_id: 123 },
-  ])("rejects invalid boundary data without leaking its contents: %j", async (body) => {
-    fetchMock.mockResolvedValue(Response.json(body));
-    await expect(discoverModels(connection)).rejects.toThrow("Model discovery failed");
-  });
+  ])(
+    "rejects invalid boundary data without leaking its contents: %j",
+    async (body) => {
+      fetchMock.mockResolvedValue(Response.json(body));
+      await expect(discoverModels(connection)).rejects.toThrow(
+        "Model discovery failed",
+      );
+    },
+  );
 
-  it.each([301, 401, 403, 404, 500])("does not read HTTP %s error bodies", async (status) => {
-    const response = new Response("sensitive error body", { status });
-    const json = vi.spyOn(response, "json");
-    fetchMock.mockResolvedValue(response);
-    await expect(discoverModels(connection)).rejects.toThrow(/^Model discovery failed$/);
-    expect(json).not.toHaveBeenCalled();
-  });
+  it.each([301, 401, 403, 404, 500])(
+    "does not read HTTP %s error bodies",
+    async (status) => {
+      const response = new Response("sensitive error body", { status });
+      const json = vi.spyOn(response, "json");
+      fetchMock.mockResolvedValue(response);
+      await expect(discoverModels(connection)).rejects.toThrow(
+        /^Model discovery failed$/,
+      );
+      expect(json).not.toHaveBeenCalled();
+    },
+  );
 
   it("sanitizes network and JSON errors", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("secret-key at https://private.example"));
-    await expect(discoverModels(connection)).rejects.toThrow(/^Model discovery failed$/);
-    fetchMock.mockResolvedValueOnce(new Response("not JSON containing secret-key"));
-    await expect(discoverModels(connection)).rejects.toThrow(/^Model discovery failed$/);
+    fetchMock.mockRejectedValueOnce(
+      new Error("secret-key at https://private.example"),
+    );
+    await expect(discoverModels(connection)).rejects.toThrow(
+      /^Model discovery failed$/,
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response("not JSON containing secret-key"),
+    );
+    await expect(discoverModels(connection)).rejects.toThrow(
+      /^Model discovery failed$/,
+    );
   });
 
   it("rejects invalid URLs before fetching", async () => {
@@ -199,7 +235,9 @@ describe("discoverModels", () => {
   it("honors a signal aborted before the request", async () => {
     const controller = new AbortController();
     controller.abort();
-    await expect(discoverModels(connection, controller.signal)).rejects.toMatchObject({
+    await expect(
+      discoverModels(connection, controller.signal),
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -227,7 +265,9 @@ describe("discoverModels", () => {
     stallUntilAborted();
     const controller = new AbortController();
     const removeListener = vi.spyOn(controller.signal, "removeEventListener");
-    const result = expect(discoverModels(connection, controller.signal)).rejects.toMatchObject({
+    const result = expect(
+      discoverModels(connection, controller.signal),
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
     controller.abort();
@@ -258,7 +298,9 @@ describe("discoverModels", () => {
       }),
     );
     const controller = new AbortController();
-    const result = expect(discoverModels(connection, controller.signal)).rejects.toMatchObject({
+    const result = expect(
+      discoverModels(connection, controller.signal),
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
     await vi.advanceTimersByTimeAsync(0);
@@ -285,7 +327,9 @@ describe("discoverModels", () => {
           last_id: "b",
         }),
       )
-      .mockResolvedValueOnce(Response.json({ data: [{ id: "c" }], has_more: false, last_id: "c" }));
+      .mockResolvedValueOnce(
+        Response.json({ data: [{ id: "c" }], has_more: false, last_id: "c" }),
+      );
     await expect(discoverModels(connection)).resolves.toEqual([
       { id: "a" },
       { id: "b" },
@@ -298,11 +342,18 @@ describe("discoverModels", () => {
     ]);
   });
 
-  it.each([undefined, null, ""])("rejects missing pagination cursors: %s", async (last_id) => {
-    fetchMock.mockResolvedValue(Response.json({ data: [{ id: "a" }], has_more: true, last_id }));
-    await expect(discoverModels(connection)).rejects.toThrow("Model discovery failed");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+  it.each([undefined, null, ""])(
+    "rejects missing pagination cursors: %s",
+    async (last_id) => {
+      fetchMock.mockResolvedValue(
+        Response.json({ data: [{ id: "a" }], has_more: true, last_id }),
+      );
+      await expect(discoverModels(connection)).rejects.toThrow(
+        "Model discovery failed",
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("stops repeated cursors", async () => {
     fetchMock.mockImplementation(() =>
@@ -314,7 +365,9 @@ describe("discoverModels", () => {
         }),
       ),
     );
-    await expect(discoverModels(connection)).rejects.toThrow("Model discovery failed");
+    await expect(discoverModels(connection)).rejects.toThrow(
+      "Model discovery failed",
+    );
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -328,7 +381,9 @@ describe("discoverModels", () => {
         }),
       ),
     );
-    await expect(discoverModels(connection)).rejects.toThrow("Model discovery failed");
+    await expect(discoverModels(connection)).rejects.toThrow(
+      "Model discovery failed",
+    );
     expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -337,9 +392,9 @@ describe("discoverModels", () => {
     fetchMock.mockResolvedValue(
       Response.json({ data: [{ id: "a" }], has_more: true, last_id: "a" }),
     );
-    await expect(discoverModels({ ...connection, protocol: "openai" })).resolves.toEqual([
-      { id: "a" },
-    ]);
+    await expect(
+      discoverModels({ ...connection, protocol: "openai" }),
+    ).resolves.toEqual([{ id: "a" }]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

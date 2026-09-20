@@ -133,14 +133,22 @@ export function readOutputFile(
     const buf = Buffer.alloc(readLen);
     let bytesRead = 0;
     while (bytesRead < readLen) {
-      const count = readSync(fd, buf, bytesRead, readLen - bytesRead, bytesRead);
+      const count = readSync(
+        fd,
+        buf,
+        bytesRead,
+        readLen - bytesRead,
+        bytesRead,
+      );
       if (count === 0) {
         break;
       }
       bytesRead += count;
     }
     return {
-      text: sliceUtf8Safe(buf.subarray(0, bytesRead), maxBytes).toString("utf-8"),
+      text: sliceUtf8Safe(buf.subarray(0, bytesRead), maxBytes).toString(
+        "utf-8",
+      ),
       size,
       truncated: size > maxBytes,
     };
@@ -173,7 +181,10 @@ export function openOutputFd(path: string): number {
   const flags =
     process.platform === "win32"
       ? "w"
-      : fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_APPEND | fsConstants.O_NOFOLLOW;
+      : fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_APPEND |
+        fsConstants.O_NOFOLLOW;
   return openSync(path, flags, 0o600);
 }
 
@@ -234,7 +245,9 @@ export function formatFinalResult(
   }
   if (exit.aborted || exit.timedOut) {
     const captured =
-      merged || truncated ? formatShellOutput(prompt, command, merged, "", truncated) : "";
+      merged || truncated
+        ? formatShellOutput(prompt, command, merged, "", truncated)
+        : "";
     const error = exit.aborted
       ? "Error: command interrupted"
       : `Error: command timed out after ${String(timeout)}s`;
@@ -291,7 +304,14 @@ export function buildBackgroundBody(
   if (size <= BACKGROUND_NOTIFICATION_CHARS) {
     const read = readOutputFile(outputPath, MAX_SHELL_OUTPUT_BYTES);
     const merged = annotate ? annotate(read.text) : read.text;
-    result = formatFinalResult(prompt, command, exit, merged, read.truncated, timeout);
+    result = formatFinalResult(
+      prompt,
+      command,
+      exit,
+      merged,
+      read.truncated,
+      timeout,
+    );
     unlinkQuiet(outputPath);
   } else {
     const header = formatFinalResult(prompt, command, exit, "", false, timeout);
@@ -338,7 +358,10 @@ function asBackgroundable(tool: unknown): BackgroundableTool | null {
  * registry, so run_in_background, Ctrl+B and timeout auto-background deliver
  * results through the same task-notification drain as background agents.
  */
-export function attachBackgroundTaskManager(registry: ToolRegistry, manager: TaskManager): void {
+export function attachBackgroundTaskManager(
+  registry: ToolRegistry,
+  manager: TaskManager,
+): void {
   for (const name of BACKGROUNDABLE_TOOL_NAMES) {
     const tool = asBackgroundable(registry.get(name));
     if (tool) {

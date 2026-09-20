@@ -35,7 +35,11 @@ type MarkdownKind = "assistant" | "user" | "thinking";
 
 function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
   const textColor =
-    kind === "thinking" ? THEME.thinkingText : kind === "user" ? THEME.userMessageText : THEME.text;
+    kind === "thinking"
+      ? THEME.thinkingText
+      : kind === "user"
+        ? THEME.userMessageText
+        : THEME.text;
   const terminal = markedTerminal(
     {
       blockquote: (value) =>
@@ -133,9 +137,14 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
           token.items
             .map((item, index) => {
               const sourceMarker =
-                kind === "user" ? /^\s*(\d+[.)])\s/u.exec(item.raw)?.[1] : undefined;
+                kind === "user"
+                  ? /^\s*(\d+[.)])\s/u.exec(item.raw)?.[1]
+                  : undefined;
               const marker =
-                sourceMarker ?? (token.ordered ? `${String(Number(token.start) + index)}.` : "•");
+                sourceMarker ??
+                (token.ordered
+                  ? `${String(Number(token.start) + index)}.`
+                  : "•");
               const prefix = item.task ? `[${item.checked ? "x" : " "}] ` : "";
               const body = prefix + this.parser.parse(item.tokens).trimEnd();
               const indent = visibleWidth(marker) + 1;
@@ -157,7 +166,11 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
         if (rendered.split("\n").every((line) => visibleWidth(line) <= width)) {
           return rendered;
         }
-        return chalk.hex(textColor)(wrapToLines(token.raw.trimEnd(), width).join("\n")) + "\n\n";
+        return (
+          chalk.hex(textColor)(
+            wrapToLines(token.raw.trimEnd(), width).join("\n"),
+          ) + "\n\n"
+        );
       },
       text(token) {
         if (kind === "user" && token.type === "escape") {
@@ -187,7 +200,11 @@ export interface MarkdownCache {
   theme: string;
 }
 
-export function renderStreamingMarkdown(text: string, width: number, cache: MarkdownCache): string {
+export function renderStreamingMarkdown(
+  text: string,
+  width: number,
+  cache: MarkdownCache,
+): string {
   const normalized = text.replace(/\r\n?/gu, "\n");
   const markdown = createMarkdown(width, "assistant", true);
   const tokens = markdown.lexer(normalized);
@@ -195,14 +212,21 @@ export function renderStreamingMarkdown(text: string, width: number, cache: Mark
   if (Object.keys(tokens.links).length > 0) {
     cache.prefix = "";
     cache.rendered = "";
-    return wrapToLines(markdown.parse(normalized, { async: false }).trimEnd(), width).join("\n");
+    return wrapToLines(
+      markdown.parse(normalized, { async: false }).trimEnd(),
+      width,
+    ).join("\n");
   }
   const prefix = tokens
     .slice(0, -1)
     .map((token) => token.raw)
     .join("");
   const theme = JSON.stringify(THEME);
-  if (cache.prefix !== prefix || cache.width !== width || cache.theme !== theme) {
+  if (
+    cache.prefix !== prefix ||
+    cache.width !== width ||
+    cache.theme !== theme
+  ) {
     cache.prefix = prefix;
     cache.rendered = markdown.parse(prefix, { async: false });
     cache.width = width;

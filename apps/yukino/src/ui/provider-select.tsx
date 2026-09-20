@@ -56,7 +56,10 @@ export function ProviderSelect({
     [providers],
   );
   const matches = useMemo(
-    () => (query.trim() ? fuse.search(query.trim()).map(({ item }) => item) : providers),
+    () =>
+      query.trim()
+        ? fuse.search(query.trim()).map(({ item }) => item)
+        : providers,
     [fuse, providers, query],
   );
   const cursor = Math.max(
@@ -69,7 +72,8 @@ export function ProviderSelect({
       onCancel?.();
     } else if (key.upArrow || key.downArrow) {
       if (matches.length > 0) {
-        const next = (cursor + (key.upArrow ? -1 : 1) + matches.length) % matches.length;
+        const next =
+          (cursor + (key.upArrow ? -1 : 1) + matches.length) % matches.length;
         setFocusedBaseUrl(matches[next].base_url);
       }
     } else if (key.return) {
@@ -89,7 +93,9 @@ export function ProviderSelect({
   return (
     <SelectorList
       cursor={cursor}
-      emptyText={query.trim() ? "No matching providers" : "No providers configured"}
+      emptyText={
+        query.trim() ? "No matching providers" : "No providers configured"
+      }
       hint={`↑↓ navigate · Enter select${onCancel ? " · Esc cancel" : ""} · Ctrl+U clear`}
       itemCount={matches.length}
       itemHeight={1}

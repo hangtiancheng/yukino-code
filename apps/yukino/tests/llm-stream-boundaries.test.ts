@@ -26,7 +26,12 @@ import type { ProviderConfig } from "@/config/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { AnthropicClient } from "@/llm/anthropic.js";
 import type { LLMClient } from "@/llm/client.js";
-import { ContextTooLongError, LLMError, NetworkError, RateLimitError } from "@/llm/errors.js";
+import {
+  ContextTooLongError,
+  LLMError,
+  NetworkError,
+  RateLimitError,
+} from "@/llm/errors.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { OpenAIClient, OpenAICompatClient } from "@/llm/openai.js";
 
@@ -51,7 +56,10 @@ function mockStream(events: { type: string; [key: string]: unknown }[]): void {
       Promise.resolve(
         new Response(
           events
-            .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+            .map(
+              (event) =>
+                `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+            )
             .join(""),
           { headers: { "content-type": "text/event-stream" } },
         ),
@@ -60,7 +68,10 @@ function mockStream(events: { type: string; [key: string]: unknown }[]): void {
   );
 }
 
-async function collect(client: LLMClient, events: StreamEvent[] = []): Promise<StreamEvent[]> {
+async function collect(
+  client: LLMClient,
+  events: StreamEvent[] = [],
+): Promise<StreamEvent[]> {
   const conversation = new ConversationManager();
   conversation.addUserMessage("hello");
   for await (const event of client.stream(conversation, [])) {
@@ -86,13 +97,32 @@ describe("Responses terminal events", () => {
       status: "in_progress",
       actions: [
         { type: "move", x: 10, y: 20, keys: null },
-        { type: "scroll", x: 10, y: 20, scroll_x: 30, scroll_y: -40, keys: ["SHIFT"] },
+        {
+          type: "scroll",
+          x: 10,
+          y: 20,
+          scroll_x: 30,
+          scroll_y: -40,
+          keys: ["SHIFT"],
+        },
       ],
-      pending_safety_checks: [{ id: "check_1", code: "navigation", message: "Review navigation" }],
+      pending_safety_checks: [
+        { id: "check_1", code: "navigation", message: "Review navigation" },
+      ],
     };
     mockStream([
-      { type: "response.output_item.added", sequence_number: 0, output_index: 0, item },
-      { type: "response.output_item.done", sequence_number: 1, output_index: 0, item },
+      {
+        type: "response.output_item.added",
+        sequence_number: 0,
+        output_index: 0,
+        item,
+      },
+      {
+        type: "response.output_item.done",
+        sequence_number: 1,
+        output_index: 0,
+        item,
+      },
       {
         type: "response.completed",
         sequence_number: 2,
@@ -114,9 +144,18 @@ describe("Responses terminal events", () => {
       arguments: {
         actions: [
           { type: "move", x: 10, y: 20 },
-          { type: "scroll", x: 10, y: 20, scrollX: 30, scrollY: -40, keys: ["SHIFT"] },
+          {
+            type: "scroll",
+            x: 10,
+            y: 20,
+            scrollX: 30,
+            scrollY: -40,
+            keys: ["SHIFT"],
+          },
         ],
-        pendingSafetyChecks: [{ id: "check_1", code: "navigation", message: "Review navigation" }],
+        pendingSafetyChecks: [
+          { id: "check_1", code: "navigation", message: "Review navigation" },
+        ],
         status: "in_progress",
       },
     });
@@ -133,12 +172,16 @@ describe("Responses terminal events", () => {
             id: "resp_test",
             status: type === "response.completed" ? "completed" : "incomplete",
             incomplete_details:
-              type === "response.incomplete" ? { reason: "max_output_tokens" } : null,
+              type === "response.incomplete"
+                ? { reason: "max_output_tokens" }
+                : null,
             usage,
           },
         },
       ]);
-      const events = await collect(new OpenAIClient(config("openai"), "system"));
+      const events = await collect(
+        new OpenAIClient(config("openai"), "system"),
+      );
       expect(events).toEqual([
         {
           type: "stream_end",
@@ -184,9 +227,9 @@ describe("Responses terminal events", () => {
       },
     ]);
     const events: StreamEvent[] = [];
-    await expect(collect(new OpenAIClient(config("openai"), "system"), events)).rejects.toThrow(
-      "content_filter",
-    );
+    await expect(
+      collect(new OpenAIClient(config("openai"), "system"), events),
+    ).rejects.toThrow("content_filter");
     expect(events).toEqual([]);
   });
 
@@ -203,7 +246,9 @@ describe("Responses terminal events", () => {
           },
         },
       ]);
-      await expect(collect(new OpenAIClient(config("openai"), "system"))).rejects.toBeInstanceOf(
+      await expect(
+        collect(new OpenAIClient(config("openai"), "system")),
+      ).rejects.toBeInstanceOf(
         code === "context_length_exceeded" ? ContextTooLongError : LLMError,
       );
     },
@@ -219,9 +264,9 @@ describe("Responses terminal events", () => {
         sequence_number: 0,
       },
     ]);
-    await expect(collect(new OpenAIClient(config("openai"), "system"))).rejects.toThrow(
-      "stream failed",
-    );
+    await expect(
+      collect(new OpenAIClient(config("openai"), "system")),
+    ).rejects.toThrow("stream failed");
   });
 
   it("rejects an EOF after partial output", async () => {
@@ -245,12 +290,17 @@ describe("Chat Completions terminal boundaries", () => {
     mockStream([
       {
         type: "chunk",
-        choices: [{ index: 0, delta: { content: "partial" }, finish_reason: null }],
+        choices: [
+          { index: 0, delta: { content: "partial" }, finish_reason: null },
+        ],
       },
     ]);
     const events: StreamEvent[] = [];
     await expect(
-      collect(new OpenAICompatClient(config("openai-compat"), "system"), events),
+      collect(
+        new OpenAICompatClient(config("openai-compat"), "system"),
+        events,
+      ),
     ).rejects.toBeInstanceOf(NetworkError);
     expect(events).toEqual([{ type: "text_delta", text: "partial" }]);
   });
@@ -271,7 +321,9 @@ describe("Chat Completions terminal boundaries", () => {
         },
       },
     ]);
-    const events = await collect(new OpenAICompatClient(config("openai-compat"), "system"));
+    const events = await collect(
+      new OpenAICompatClient(config("openai-compat"), "system"),
+    );
     expect(events).toEqual([
       {
         type: "stream_end",
@@ -306,12 +358,20 @@ describe("Anthropic thinking replay", () => {
       {
         type: "content_block_start",
         index: 0,
-        content_block: { type: "tool_use", id: "tool_1", name: "computer", input: {} },
+        content_block: {
+          type: "tool_use",
+          id: "tool_1",
+          name: "computer",
+          input: {},
+        },
       },
       {
         type: "content_block_delta",
         index: 0,
-        delta: { type: "input_json_delta", partial_json: '{"action":"screenshot"}' },
+        delta: {
+          type: "input_json_delta",
+          partial_json: '{"action":"screenshot"}',
+        },
       },
       { type: "content_block_stop", index: 0 },
       {
@@ -322,7 +382,9 @@ describe("Anthropic thinking replay", () => {
       { type: "message_stop" },
     ]);
 
-    const events = await collect(new AnthropicClient(config("anthropic"), "system"));
+    const events = await collect(
+      new AnthropicClient(config("anthropic"), "system"),
+    );
     expect(events).toContainEqual({
       type: "tool_call_start",
       toolName: "ComputerUse",
@@ -379,7 +441,9 @@ describe("Anthropic thinking replay", () => {
       },
       { type: "message_stop" },
     ]);
-    const events = await collect(new AnthropicClient(config("anthropic"), "system"));
+    const events = await collect(
+      new AnthropicClient(config("anthropic"), "system"),
+    );
     expect(events.find((event) => event.type === "thinking_complete")).toEqual({
       type: "thinking_complete",
       thinking: "thought",

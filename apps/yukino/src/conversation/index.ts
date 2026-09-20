@@ -90,7 +90,11 @@ export class ConversationManager {
     this.history.push({ role: "assistant", content: text, toolUses });
   }
 
-  addAssistantFull(text: string, thinking: ThinkingBlock[], toolUses: ToolUseBlock[]): void {
+  addAssistantFull(
+    text: string,
+    thinking: ThinkingBlock[],
+    toolUses: ToolUseBlock[],
+  ): void {
     this.history.push({
       role: "assistant",
       content: text,
@@ -142,10 +146,16 @@ export class ConversationManager {
    * caller uses this result to re-inject without hooking into the compaction path.
    */
   hasReminderContaining(marker: string): boolean {
-    return this.history.some((m) => m.role === "user" && contentToText(m.content).includes(marker));
+    return this.history.some(
+      (m) => m.role === "user" && contentToText(m.content).includes(marker),
+    );
   }
 
-  injectLongTermMemory(instructions: string, memories: string, skills = ""): void {
+  injectLongTermMemory(
+    instructions: string,
+    memories: string,
+    skills = "",
+  ): void {
     if (this.longTermMemoryInjected) {
       return;
     }
@@ -231,13 +241,24 @@ export class ConversationManager {
   // summary first, then kept messages. No assistant ack — the kept tail already starts with an
   // assistant message in most cases, and injecting an artificial ack wastes
   // tokens and confuses the model's sense of conversation flow.
-  replaceWithCompacted(summaryContent: string, messagesToKeep: Message[]): void {
-    this.history = [{ role: "user", content: summaryContent }, ...messagesToKeep];
+  replaceWithCompacted(
+    summaryContent: string,
+    messagesToKeep: Message[],
+  ): void {
+    this.history = [
+      { role: "user", content: summaryContent },
+      ...messagesToKeep,
+    ];
     this.longTermMemoryInjected = false;
     this.clearUsageAnchor();
   }
 
-  recordUsageAnchor(input: number, output: number, cacheRead: number, cacheCreation: number): void {
+  recordUsageAnchor(
+    input: number,
+    output: number,
+    cacheRead: number,
+    cacheCreation: number,
+  ): void {
     const baseline = input + cacheRead + cacheCreation + output;
     if (baseline <= 0) {
       return;

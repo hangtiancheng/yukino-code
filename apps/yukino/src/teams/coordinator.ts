@@ -74,7 +74,9 @@ export function isCoordinatorTool(name: string): boolean {
  * easily return thousands of tokens — flooding the Lead's context is no different
  * from letting it read files directly. Delegate such work to teammates.
  */
-export function coordinatorToolFilter(enabled = false): (name: string) => boolean {
+export function coordinatorToolFilter(
+  enabled = false,
+): (name: string) => boolean {
   if (!enabled) {
     return () => true;
   }

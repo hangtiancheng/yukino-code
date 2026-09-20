@@ -54,7 +54,8 @@ export function buildDiff(oldContent: string, newContent: string): DiffResult {
   const maxSuffix = maxPrefix - prefixLen;
   while (
     suffixLen < maxSuffix &&
-    oldLines[oldLines.length - 1 - suffixLen] === newLines[newLines.length - 1 - suffixLen]
+    oldLines[oldLines.length - 1 - suffixLen] ===
+      newLines[newLines.length - 1 - suffixLen]
   ) {
     suffixLen++;
   }
@@ -64,7 +65,10 @@ export function buildDiff(oldContent: string, newContent: string): DiffResult {
 
   const contextStart = Math.max(0, prefixLen - CONTEXT_LINES);
   const contextBefore = oldLines.slice(contextStart, prefixLen);
-  const contextEnd = Math.min(oldLines.length, oldLines.length - suffixLen + CONTEXT_LINES);
+  const contextEnd = Math.min(
+    oldLines.length,
+    oldLines.length - suffixLen + CONTEXT_LINES,
+  );
   const contextAfter = oldLines.slice(oldLines.length - suffixLen, contextEnd);
 
   const out: string[] = [];

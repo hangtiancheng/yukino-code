@@ -73,7 +73,8 @@ export function append(dir: string, text: string): string[] {
     entries.push(text);
   }
   const retained = entries.slice(-MAX_HISTORY_ENTRIES);
-  const lines = retained.map((entry) => JSON.stringify({ text: entry })).join("\n") + "\n";
+  const lines =
+    retained.map((entry) => JSON.stringify({ text: entry })).join("\n") + "\n";
   writeFileSync(filePath, lines, "utf-8");
   return retained;
 }

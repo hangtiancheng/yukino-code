@@ -290,7 +290,6 @@ export function buildAnthropicMessages(
 
       result.push({ role: "user", content: blocks });
     } //! end if (m.toolResults && m.toolResults.length > 0)
-
     // The first message's role MUST be user
     else {
       // Summary (role: "user")

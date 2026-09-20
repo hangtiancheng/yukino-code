@@ -38,7 +38,10 @@ const ModelListSchema = z.object({
   last_id: z.string().trim().min(1).nullable().optional(),
 });
 
-type DiscoveryConfig = Pick<ProviderConfig, "protocol" | "base_url" | "api_key">;
+type DiscoveryConfig = Pick<
+  ProviderConfig,
+  "protocol" | "base_url" | "api_key"
+>;
 export type DiscoveredModel = z.infer<typeof ModelSchema>;
 
 export function modelListUrl(
@@ -50,12 +53,19 @@ export function modelListUrl(
     return undefined;
   }
   const url = new URL(parsed.data);
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password
+  ) {
     return undefined;
   }
 
   let path = url.pathname.replace(/\/+$/, "");
-  path = path.replace(/\/(?:chat\/completions|completions|responses|messages|models)$/, "");
+  path = path.replace(
+    /\/(?:chat\/completions|completions|responses|messages|models)$/,
+    "",
+  );
   if (!path || (protocol === "anthropic" && !path.endsWith("/v1"))) {
     path += "/v1";
   }
@@ -71,7 +81,9 @@ export async function discoverModels(
 ): Promise<DiscoveredModel[]> {
   const endpoint = modelListUrl(config.protocol, config.base_url);
   if (!endpoint) {
-    throw new Error("Model discovery requires an HTTP(S) URL without embedded credentials");
+    throw new Error(
+      "Model discovery requires an HTTP(S) URL without embedded credentials",
+    );
   }
 
   const controller = new AbortController();
@@ -129,7 +141,10 @@ export async function discoverModels(
     throw new Error("Model discovery failed");
   } catch {
     if (controller.signal.aborted) {
-      throw new DOMException("Model discovery cancelled or timed out", "AbortError");
+      throw new DOMException(
+        "Model discovery cancelled or timed out",
+        "AbortError",
+      );
     }
     throw new Error("Model discovery failed");
   } finally {

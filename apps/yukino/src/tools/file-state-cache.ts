@@ -46,7 +46,8 @@ export class FileStateCache {
     if (mtimeMs === undefined) {
       return {
         ok: false,
-        error: "Error: file has not been read yet, read it first before editing.",
+        error:
+          "Error: file has not been read yet, read it first before editing.",
       };
     }
 
@@ -58,14 +59,16 @@ export class FileStateCache {
       log.error({ err }, "file state cache operation failed");
       return {
         ok: false,
-        error: "Error: file was deleted or is no longer accessible; read it again before editing.",
+        error:
+          "Error: file was deleted or is no longer accessible; read it again before editing.",
       };
     }
 
     if (currentModifiedTime !== mtimeMs) {
       return {
         ok: false,
-        error: "Error: file has been modified since last read, read it again before editing.",
+        error:
+          "Error: file has been modified since last read, read it again before editing.",
       };
     }
     return { ok: true };

@@ -55,7 +55,9 @@ export class SandboxRuntimeSandbox implements Sandbox {
     context: SandboxExecutionContext,
   ): Promise<PreparedSandboxCommand> {
     if (!(await this.available())) {
-      throw new Error(this.availabilityError ?? "sandbox runtime is unavailable");
+      throw new Error(
+        this.availabilityError ?? "sandbox runtime is unavailable",
+      );
     }
 
     const runtime = await this.loadRuntime();
@@ -67,7 +69,10 @@ export class SandboxRuntimeSandbox implements Sandbox {
     if (this.initializationPromise) {
       await this.initializationPromise;
     }
-    if (this.configKey !== configKey || !runtime.SandboxManager.isSandboxingEnabled()) {
+    if (
+      this.configKey !== configKey ||
+      !runtime.SandboxManager.isSandboxingEnabled()
+    ) {
       this.initializationPromise = (async () => {
         if (runtime.SandboxManager.isSandboxingEnabled()) {
           await runtime.SandboxManager.reset();
@@ -104,7 +109,10 @@ export class SandboxRuntimeSandbox implements Sandbox {
       args,
       env: prepared.env,
       annotateStderr: (stderr) =>
-        runtime.SandboxManager.annotateStderrWithSandboxFailures(commandId, stderr),
+        runtime.SandboxManager.annotateStderrWithSandboxFailures(
+          commandId,
+          stderr,
+        ),
       cleanup: () => {
         runtime.SandboxManager.cleanupAfterCommand();
       },
@@ -125,10 +133,12 @@ export class SandboxRuntimeSandbox implements Sandbox {
     try {
       const runtime = await this.loadRuntime();
       if (!runtime.SandboxManager.isSupportedPlatform()) {
-        this.availabilityError = "sandbox runtime does not support this platform";
+        this.availabilityError =
+          "sandbox runtime does not support this platform";
         return false;
       }
-      const dependencies = await runtime.SandboxManager.checkDependenciesAsync();
+      const dependencies =
+        await runtime.SandboxManager.checkDependenciesAsync();
       if (dependencies.errors.length > 0) {
         this.availabilityError = dependencies.errors.join("; ");
         return false;
@@ -136,7 +146,8 @@ export class SandboxRuntimeSandbox implements Sandbox {
       this.availabilityError = undefined;
       return true;
     } catch (error) {
-      this.availabilityError = error instanceof Error ? error.message : String(error);
+      this.availabilityError =
+        error instanceof Error ? error.message : String(error);
       return false;
     }
   }

@@ -34,7 +34,12 @@ interface InputAreaProps {
 
 const MAX_TEXTAREA_HEIGHT = 200;
 
-export function InputArea({ streaming, commands, onSend, onCancel }: InputAreaProps) {
+export function InputArea({
+  streaming,
+  commands,
+  onSend,
+  onCancel,
+}: InputAreaProps) {
   const [value, setValue] = useState("");
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashCursor, setSlashCursor] = useState(0);
@@ -153,7 +158,12 @@ export function InputArea({ streaming, commands, onSend, onCancel }: InputAreaPr
               title="Stop generating"
               className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-red/30 bg-red/5 px-3.5 text-[13px] font-semibold text-red transition-colors hover:bg-red/10"
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                aria-hidden="true"
+              >
                 <rect width="10" height="10" rx="1.5" fill="currentColor" />
               </svg>
               Stop
@@ -165,7 +175,13 @@ export function InputArea({ streaming, commands, onSend, onCancel }: InputAreaPr
               aria-label="Send message"
               className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-accent text-white shadow-xs transition-colors hover:bg-accent-dim disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                aria-hidden="true"
+              >
                 <path
                   d="M7 12V2M7 2L2.5 6.5M7 2l4.5 4.5"
                   stroke="currentColor"

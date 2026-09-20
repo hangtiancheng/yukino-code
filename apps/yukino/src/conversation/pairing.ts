@@ -62,7 +62,11 @@ export function ensureToolPairing(messages: Message[]): Message[] {
       const resultMessages: Message[] = [];
       while (i + 1 < messages.length) {
         const next = messages[i + 1];
-        if (next.role !== "user" || !next.toolResults?.length || next.toolUses?.length) {
+        if (
+          next.role !== "user" ||
+          !next.toolResults?.length ||
+          next.toolUses?.length
+        ) {
           break;
         }
         i++;
@@ -74,7 +78,11 @@ export function ensureToolPairing(messages: Message[]): Message[] {
         }
       }
       for (const toolUseId of pending) {
-        results.push({ toolUseId, content: INTERRUPTED_TOOL_RESULT, isError: true });
+        results.push({
+          toolUseId,
+          content: INTERRUPTED_TOOL_RESULT,
+          isError: true,
+        });
       }
 
       // A single result group also keeps Chat Completions' synthetic image user
@@ -92,7 +100,11 @@ export function ensureToolPairing(messages: Message[]): Message[] {
     }
 
     if ((m.toolResults?.length ?? 0) > 0) {
-      if (m.content.length === 0 && !m.toolUses?.length && !m.thinkingBlocks?.length) {
+      if (
+        m.content.length === 0 &&
+        !m.toolUses?.length &&
+        !m.thinkingBlocks?.length
+      ) {
         continue; // The message is now an empty shell; drop it to preserve role alternation
       }
       out.push({ ...m, toolResults: [] });

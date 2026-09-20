@@ -48,7 +48,13 @@ export function useInputDraft(draftRef?: { current: InputDraft | null }) {
             ? { ...saved.historyDraft, lines: [...saved.historyDraft.lines] }
             : null,
         }
-      : { lines: [""], cursorLine: 0, cursorCol: 0, historyIndex: -1, historyDraft: null };
+      : {
+          lines: [""],
+          cursorLine: 0,
+          cursorCol: 0,
+          historyIndex: -1,
+          historyDraft: null,
+        };
   });
   const latest = useRef(draft);
 
@@ -59,7 +65,10 @@ export function useInputDraft(draftRef?: { current: InputDraft | null }) {
   }, [draftRef]);
 
   const update = useCallback(
-    <Field extends keyof InputDraft>(field: Field, value: SetStateAction<InputDraft[Field]>) => {
+    <Field extends keyof InputDraft>(
+      field: Field,
+      value: SetStateAction<InputDraft[Field]>,
+    ) => {
       const previous = latest.current;
       const next = {
         ...previous,

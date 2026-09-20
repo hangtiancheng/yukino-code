@@ -136,7 +136,10 @@ export class GrepTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const pattern = strArg(args, "pattern");
     if (!pattern) {
       return {
@@ -170,10 +173,14 @@ export class GrepTool implements Tool {
     // matchBase: bare patterns ("*.ts") match the basename at any depth;
     // patterns with "/" match the workDir-relative path (gitignore/ripgrep
     // semantics, same form as printed results).
-    const includeMatcher = include ? new Minimatch(include, { dot: true, matchBase: true }) : null;
+    const includeMatcher = include
+      ? new Minimatch(include, { dot: true, matchBase: true })
+      : null;
     const matchesInclude = (fullPath: string): boolean =>
       includeMatcher === null ||
-      includeMatcher.match(relative(ctx.workDir, fullPath).split(sep).join("/"));
+      includeMatcher.match(
+        relative(ctx.workDir, fullPath).split(sep).join("/"),
+      );
     const results: string[] = [];
 
     const walk = async (dir: string): Promise<void> => {

@@ -27,7 +27,12 @@ import type { StoredTaskStatus } from "./store.js";
 
 import type { TaskList } from "./index.js";
 
-import type { Tool, ToolResult, ToolContext, ToolSchema } from "@/tools/types.js";
+import type {
+  Tool,
+  ToolResult,
+  ToolContext,
+  ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 
 export class TaskCreateTool implements Tool {
@@ -60,7 +65,10 @@ export class TaskCreateTool implements Tool {
     };
   }
 
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const subject = strArg(args, "subject");
     const description = strArg(args, "description");
     const activeForm = strArg(args, "activeForm") || undefined;
@@ -101,7 +109,10 @@ export class TaskGetTool implements Tool {
     };
   }
 
-  execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const id = strArg(args, "taskId");
     const task = this.list.get(id);
     if (!task) {
@@ -139,7 +150,8 @@ export class TaskListTool implements Tool {
       return Promise.resolve({ output: "No tasks found", isError: false });
     }
     const lines = tasks.map(
-      (t) => `#${t.id}. [${t.status}] ${t.subject}${t.owner ? ` (${t.owner})` : ""}`,
+      (t) =>
+        `#${t.id}. [${t.status}] ${t.subject}${t.owner ? ` (${t.owner})` : ""}`,
     );
     return Promise.resolve({ output: lines.join("\n"), isError: false });
   }
@@ -187,7 +199,10 @@ export class TaskUpdateTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const result = await safeParseAsync(TaskUpdateArgsSchema, args);
     if (!result.success) {
       return {
@@ -196,7 +211,15 @@ export class TaskUpdateTool implements Tool {
       };
     }
 
-    const { taskId, status, subject, description, owner, addBlocks, addBlockedBy } = result.data;
+    const {
+      taskId,
+      status,
+      subject,
+      description,
+      owner,
+      addBlocks,
+      addBlockedBy,
+    } = result.data;
 
     if (!taskId) {
       return Promise.resolve({

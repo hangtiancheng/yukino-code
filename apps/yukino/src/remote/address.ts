@@ -20,7 +20,10 @@
  * SOFTWARE.
  */
 
-export function parseRemoteAddress(address: string): { host: string; port: number } {
+export function parseRemoteAddress(address: string): {
+  host: string;
+  port: number;
+} {
   const value = address.trim();
   const match = /^(?:\[([^\]]+)\]|([^:]*))(?::(\d+))?$/.exec(value);
   if (!match) {

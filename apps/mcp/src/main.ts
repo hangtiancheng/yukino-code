@@ -68,7 +68,8 @@ function registerSignalHandlers(closeTransport: () => Promise<void>): void {
 }
 
 async function main(): Promise<void> {
-  const useHttp = process.argv.includes("--http") || process.env["MCP_TRANSPORT"] === "http";
+  const useHttp =
+    process.argv.includes("--http") || process.env["MCP_TRANSPORT"] === "http";
 
   if (useHttp) {
     const { host, port } = loadConfig();

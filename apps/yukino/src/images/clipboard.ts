@@ -28,8 +28,7 @@ import { join } from "node:path";
 import { fileHistoryDir } from "@/file-history/index.js";
 
 export type SaveClipboardImageResult =
-  | { ok: true; value: string }
-  | { ok: false; reason: string };
+  { ok: true; value: string } | { ok: false; reason: string };
 
 const CLIPBOARD_TIMEOUT_MS = 5_000;
 const MAX_CLIPBOARD_IMAGE_BYTES = 32 * 1024 * 1024;

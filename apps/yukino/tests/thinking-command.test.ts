@@ -155,7 +155,9 @@ describe("/thinking command", () => {
       persistThinkingLevel,
     });
     expect(persistThinkingLevel).toHaveBeenCalledWith("medium");
-    expect(output).toBe("Thinking level set to medium (requested max) and saved.");
+    expect(output).toBe(
+      "Thinking level set to medium (requested max) and saved.",
+    );
   });
 
   it("keeps the effective runtime level when saving fails", () => {
@@ -178,26 +180,28 @@ describe("/thinking command", () => {
 
   it("reports unavailable runtime control without attempting to save", () => {
     const persistThinkingLevel = vi.fn();
-    expect(command?.handler({ workDir: "/tmp", args: "low", persistThinkingLevel })).toContain(
-      "control is not available",
-    );
+    expect(
+      command?.handler({ workDir: "/tmp", args: "low", persistThinkingLevel }),
+    ).toContain("control is not available");
     expect(persistThinkingLevel).not.toHaveBeenCalled();
   });
 
-  it.each(["/thinking\tlow", "/thinking\nlow", "/thinking\r\n low", "/think  \t LOW \n"])(
-    "parses whitespace and executes %s",
-    (input) => {
-      const parsed = parse(input);
-      expect(parsed?.args.toLowerCase()).toBe("low");
-      const setThinkingLevel = vi.fn();
-      registry.find(parsed?.name ?? "")?.handler({
-        workDir: "/tmp",
-        args: parsed?.args ?? "",
-        setThinkingLevel,
-      });
-      expect(setThinkingLevel).toHaveBeenCalledWith("low");
-    },
-  );
+  it.each([
+    "/thinking\tlow",
+    "/thinking\nlow",
+    "/thinking\r\n low",
+    "/think  \t LOW \n",
+  ])("parses whitespace and executes %s", (input) => {
+    const parsed = parse(input);
+    expect(parsed?.args.toLowerCase()).toBe("low");
+    const setThinkingLevel = vi.fn();
+    registry.find(parsed?.name ?? "")?.handler({
+      workDir: "/tmp",
+      args: parsed?.args ?? "",
+      setThinkingLevel,
+    });
+    expect(setThinkingLevel).toHaveBeenCalledWith("low");
+  });
 
   it.each([
     "/tmp/file.ts",

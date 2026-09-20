@@ -22,7 +22,13 @@
 
 import { safeParseAsync, z } from "zod";
 
-import type { Tool, ToolCategory, ToolContext, ToolResult, ToolSchema } from "./types.js";
+import type {
+  Tool,
+  ToolCategory,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "./types.js";
 
 const QuestionOptionSchema = z.object({
   label: z.string(),
@@ -44,7 +50,9 @@ export type Question = z.infer<typeof QuestionSchema>;
 
 export type Asker = (
   questions: Question[],
-) => Promise<Record<string /** question text */, string /** user chosen answer */>>;
+) => Promise<
+  Record<string /** question text */, string /** user chosen answer */>
+>;
 
 // Structured multiple-choices question tool
 // The actual prompting is delegated to an injected asker (the UI dialog),
@@ -105,7 +113,8 @@ export class AskUserQuestionTool implements Tool {
               },
               multiSelect: {
                 type: "boolean" as const,
-                description: "Set to true for multiple-choice, false for single-choice",
+                description:
+                  "Set to true for multiple-choice, false for single-choice",
               },
             },
             required: ["question", "header", "options", "multiSelect"],
@@ -122,12 +131,18 @@ export class AskUserQuestionTool implements Tool {
     };
   }
 
-  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const {
       success,
       data: argsData,
       error,
-    } = await safeParseAsync(z.object({ questions: z.array(QuestionSchema) }), args);
+    } = await safeParseAsync(
+      z.object({ questions: z.array(QuestionSchema) }),
+      args,
+    );
     if (!success) {
       return {
         output: error.message,
@@ -136,12 +151,20 @@ export class AskUserQuestionTool implements Tool {
     }
 
     const questions = argsData.questions;
-    if (!Array.isArray(questions) || questions.length < 1 || questions.length > 4) {
+    if (
+      !Array.isArray(questions) ||
+      questions.length < 1 ||
+      questions.length > 4
+    ) {
       return { output: "Error: must have 1-4 questions", isError: true };
     }
 
     for (const q of questions) {
-      if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) {
+      if (
+        !Array.isArray(q.options) ||
+        q.options.length < 2 ||
+        q.options.length > 4
+      ) {
         return {
           output: `Error: question '${q.question}' must have 2-4 options`,
           isError: true,

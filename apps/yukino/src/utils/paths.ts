@@ -22,7 +22,15 @@
 
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 
 /** Resolve symlinks even when the final file or some parent directories do not exist yet. */
 export function canonicalPath(path: string): string {
@@ -51,7 +59,10 @@ export function canonicalPath(path: string): string {
 
 export function isPathWithin(root: string, path: string): boolean {
   const child = relative(root, path);
-  return child === "" || (child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child));
+  return (
+    child === "" ||
+    (child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child))
+  );
 }
 
 export function compactPath(path: string): string {

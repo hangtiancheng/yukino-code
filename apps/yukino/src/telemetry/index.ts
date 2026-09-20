@@ -20,7 +20,8 @@
  * SOFTWARE.
  */
 
-export type TelemetryMode = "print" | "remote" | "teammate" | "terminal" | "unknown";
+export type TelemetryMode =
+  "print" | "remote" | "teammate" | "terminal" | "unknown";
 export type TelemetryObservationKind = "agent" | "generation" | "tool";
 export type TelemetryMetricKind = "counter" | "histogram";
 export type TelemetryAttributes = Record<string, string | number | boolean>;
@@ -106,8 +107,13 @@ function shouldInitialize(): boolean {
     hasExporter(process.env.OTEL_TRACES_EXPORTER) ||
     hasExporter(process.env.OTEL_LOGS_EXPORTER) ||
     hasExporter(process.env.OTEL_METRICS_EXPORTER);
-  const hasLangfuse = Boolean(process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY);
-  return Boolean(process.env.SENTRY_DSN) || (otelEnabled && (hasOtelExporter || hasLangfuse));
+  const hasLangfuse = Boolean(
+    process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY,
+  );
+  return (
+    Boolean(process.env.SENTRY_DSN) ||
+    (otelEnabled && (hasOtelExporter || hasLangfuse))
+  );
 }
 
 export function getTelemetryRuntime(): TelemetryRuntime {

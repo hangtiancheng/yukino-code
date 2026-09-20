@@ -23,7 +23,11 @@
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
-import { isImagePath, MAX_IMAGES_PER_MESSAGE, loadImageAttachment } from "@/images/index.js";
+import {
+  isImagePath,
+  MAX_IMAGES_PER_MESSAGE,
+  loadImageAttachment,
+} from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "terminal" });
@@ -49,7 +53,11 @@ function parseRef(ref: string): {
   };
 }
 
-function sliceLines(content: string, lineStart: number, lineEnd: number): string {
+function sliceLines(
+  content: string,
+  lineStart: number,
+  lineEnd: number,
+): string {
   const all = content.split("\n");
   const from = Math.max(1, lineStart);
   const to = Math.min(all.length, Math.max(lineEnd, from));
@@ -58,7 +66,8 @@ function sliceLines(content: string, lineStart: number, lineEnd: number): string
 
 function collectAtRefs(text: string): string[] {
   // Clipboard images and paths containing spaces use quoted mentions.
-  const pattern = /(?:^|\s)(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s]+))/g;
+  const pattern =
+    /(?:^|\s)(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s]+))/g;
   return [...text.matchAll(pattern)].map(
     (match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5],
   );
@@ -89,7 +98,11 @@ export function expandAtRefs(text: string, workDir: string): string {
       }
       if (lineStart !== undefined && lineEnd !== undefined) {
         if (st.size <= MAX_RANGE_FILE_BYTES) {
-          const snippet = sliceLines(readFileSync(p, "utf-8"), lineStart, lineEnd);
+          const snippet = sliceLines(
+            readFileSync(p, "utf-8"),
+            lineStart,
+            lineEnd,
+          );
           if (snippet.length <= MAX_INLINE_BYTES) {
             appendix += `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`;
           }
@@ -157,7 +170,11 @@ export async function expandAtRefsWithImages(
         }
       } else if (lineStart !== undefined && lineEnd !== undefined) {
         if (st.size <= MAX_RANGE_FILE_BYTES) {
-          const snippet = sliceLines(readFileSync(p, "utf-8"), lineStart, lineEnd);
+          const snippet = sliceLines(
+            readFileSync(p, "utf-8"),
+            lineStart,
+            lineEnd,
+          );
           if (snippet.length <= MAX_INLINE_BYTES) {
             appendix += `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`;
           }

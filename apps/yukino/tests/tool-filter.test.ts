@@ -85,10 +85,21 @@ describe("main-agent-only tool policy", () => {
   });
 
   it("strips main-agent-only tools plus Agent and TaskStop from defined subagents", () => {
-    const filtered = filterToolsForAgent(buildRegistry(ALL), ["*"], undefined, false);
+    const filtered = filterToolsForAgent(
+      buildRegistry(ALL),
+      ["*"],
+      undefined,
+      false,
+    );
     const names = new Set(filtered.listTools().map((t) => t.name));
 
-    for (const name of ["ComputerUse", "AskUserQuestion", "ExitPlanMode", "Agent", "TaskStop"]) {
+    for (const name of [
+      "ComputerUse",
+      "AskUserQuestion",
+      "ExitPlanMode",
+      "Agent",
+      "TaskStop",
+    ]) {
       expect(names.has(name)).toBe(false);
     }
     for (const name of ["ReadFile", "Bash"]) {
@@ -97,7 +108,12 @@ describe("main-agent-only tool policy", () => {
   });
 
   it("keeps Bash available to asynchronous agents", () => {
-    const filtered = filterToolsForAgent(buildRegistry(["Bash"]), ["*"], undefined, true);
+    const filtered = filterToolsForAgent(
+      buildRegistry(["Bash"]),
+      ["*"],
+      undefined,
+      true,
+    );
     expect(filtered.get("Bash")).toBeDefined();
   });
 });

@@ -25,7 +25,10 @@
 // speaks ws (subprotocol "mcp"), so we implement the Transport interface here.
 
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { type JSONRPCMessage, JSONRPCMessageSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  type JSONRPCMessage,
+  JSONRPCMessageSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import WebSocket from "ws";
 
 export class WebSocketTransport implements Transport {
@@ -108,7 +111,8 @@ export class WebSocketTransport implements Transport {
   close(): Promise<void> {
     if (
       this.ws &&
-      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+      (this.ws.readyState === WebSocket.OPEN ||
+        this.ws.readyState === WebSocket.CONNECTING)
     ) {
       this.ws.close();
     }

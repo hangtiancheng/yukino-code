@@ -62,7 +62,10 @@ const noKey: Key = {
   capsLock: false,
   numLock: false,
 };
-const initialColumns = Object.getOwnPropertyDescriptor(process.stdout, "columns");
+const initialColumns = Object.getOwnPropertyDescriptor(
+  process.stdout,
+  "columns",
+);
 const initialRows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
 const initialColorLevel = chalk.level;
 const colors = new Chalk({ level: 3 });
@@ -106,11 +109,13 @@ function send(key: Partial<Key>, text = "") {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.mocked(useInput).mockClear();
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
-    raw = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString();
-    frame = stripVTControlCharacters(raw);
-    return true;
-  });
+  vi.spyOn(process.stdout, "write").mockImplementation(
+    (chunk: string | Uint8Array) => {
+      raw = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString();
+      frame = stripVTControlCharacters(raw);
+      return true;
+    },
+  );
   chalk.level = 0;
   resize(80);
   frame = "";
@@ -226,7 +231,13 @@ describe("thinking selector controls", () => {
     callbacks.onSelect.mockClear();
     update([]);
     expect(frame).toContain("No levels available");
-    for (const key of ["upArrow", "downArrow", "leftArrow", "rightArrow", "return"]) {
+    for (const key of [
+      "upArrow",
+      "downArrow",
+      "leftArrow",
+      "rightArrow",
+      "return",
+    ]) {
       send({ [key]: true });
     }
     expect(callbacks.onSelect).not.toHaveBeenCalled();
@@ -238,37 +249,48 @@ describe("thinking selector controls", () => {
 describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
   "%s thinking selector layout",
   (mode) => {
-    it.each([1, 20, 32, 48, 80, 120])("fits %i columns with and without color", (columns) => {
-      setThemeMode(mode);
-      resize(columns);
-      mount();
-      expect(frame.split("\n").every((line) => visibleWidth(line) <= columns)).toBe(true);
-      expect(raw).toBe(frame);
-      if (columns >= 20) {
-        expect(frame).toContain(`${ICONS.arrow} high ${ICONS.success}`);
-        expect(frame).toContain("Enter");
-        expect(frame).toContain("Esc");
-        expect(frame).toContain("Deep reasoning");
-      }
-      chalk.level = 3;
-      send({ leftArrow: true });
-      expect(raw.split("\n").every((line) => visibleWidth(line) <= columns)).toBe(true);
-      if (columns >= 20) {
-        for (const level of THINKING_LEVELS) {
-          const opening = colors.hex(thinkingLevelColor(level))(" ").split(" ")[0];
-          const row = raw
-            .split("\n")
-            .find(
-              (line) =>
-                stripVTControlCharacters(line).trim().startsWith(level) ||
-                stripVTControlCharacters(line).trim().startsWith(`${ICONS.arrow} ${level}`),
-            );
-          expect(row).toContain(opening);
+    it.each([1, 20, 32, 48, 80, 120])(
+      "fits %i columns with and without color",
+      (columns) => {
+        setThemeMode(mode);
+        resize(columns);
+        mount();
+        expect(
+          frame.split("\n").every((line) => visibleWidth(line) <= columns),
+        ).toBe(true);
+        expect(raw).toBe(frame);
+        if (columns >= 20) {
+          expect(frame).toContain(`${ICONS.arrow} high ${ICONS.success}`);
+          expect(frame).toContain("Enter");
+          expect(frame).toContain("Esc");
+          expect(frame).toContain("Deep reasoning");
         }
-        expect(frame).toContain(`${ICONS.arrow} medium`);
-        expect(frame).toContain(`high ${ICONS.success}`);
-      }
-    });
+        chalk.level = 3;
+        send({ leftArrow: true });
+        expect(
+          raw.split("\n").every((line) => visibleWidth(line) <= columns),
+        ).toBe(true);
+        if (columns >= 20) {
+          for (const level of THINKING_LEVELS) {
+            const opening = colors
+              .hex(thinkingLevelColor(level))(" ")
+              .split(" ")[0];
+            const row = raw
+              .split("\n")
+              .find(
+                (line) =>
+                  stripVTControlCharacters(line).trim().startsWith(level) ||
+                  stripVTControlCharacters(line)
+                    .trim()
+                    .startsWith(`${ICONS.arrow} ${level}`),
+              );
+            expect(row).toContain(opening);
+          }
+          expect(frame).toContain(`${ICONS.arrow} medium`);
+          expect(frame).toContain(`high ${ICONS.success}`);
+        }
+      },
+    );
 
     it("keeps the focused choice and footer visible as the available height shrinks", () => {
       resize(32, 12);

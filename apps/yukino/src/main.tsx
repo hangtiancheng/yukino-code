@@ -28,7 +28,11 @@ import {
   formatInteractionSummary,
   type InteractionSummary,
 } from "./bootstrap/interaction-summary.js";
-import { forkEnabled, loadConfig, withProjectMcpServers } from "./config/index.js";
+import {
+  forkEnabled,
+  loadConfig,
+  withProjectMcpServers,
+} from "./config/index.js";
 import { initLogger, logger } from "./logger/index.js";
 import { parsePrintFlags, runPrintMode } from "./print-mode.js";
 import { recover, recordError, recordExit } from "./recover.js";

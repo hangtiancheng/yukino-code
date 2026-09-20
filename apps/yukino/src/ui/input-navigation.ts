@@ -42,7 +42,11 @@ export interface InputRow {
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 /** Hard-wrap editable atoms, keeping the stored draft independent of terminal size. */
-export function layoutInputRows(lines: string[], width: number, pastes?: PasteStore): InputRow[] {
+export function layoutInputRows(
+  lines: string[],
+  width: number,
+  pastes?: PasteStore,
+): InputRow[] {
   const columns = Math.max(1, Math.floor(width));
   const rows: InputRow[] = [];
   for (const [lineIndex, line] of lines.entries()) {
@@ -51,8 +55,12 @@ export function layoutInputRows(lines: string[], width: number, pastes?: PasteSt
     const append = (offset: number, raw: string) => {
       // A wide grapheme cannot fit a one-cell terminal. Show a placeholder, not
       // half a grapheme. Oversized paste markers are clipped as one editable atom.
-      const display = raw === "\t" ? "    " : visibleWidth(raw) === 0 ? " " : raw;
-      const text = visibleWidth(display) > columns ? truncateToWidth(display, columns) : display;
+      const display =
+        raw === "\t" ? "    " : visibleWidth(raw) === 0 ? " " : raw;
+      const text =
+        visibleWidth(display) > columns
+          ? truncateToWidth(display, columns)
+          : display;
       const cellWidth = visibleWidth(text);
       if (row.width > 0 && row.width + cellWidth > columns) {
         row = { line: lineIndex, cells: [], width: 0 };
@@ -65,7 +73,10 @@ export function layoutInputRows(lines: string[], width: number, pastes?: PasteSt
     // ANSI is not editable display content. Skip whole sequences while retaining
     // their original offsets so layout never exposes partial escape sequences.
     const escapes = new Map(
-      Array.from(line.matchAll(ansiRegex()), (match) => [match.index, match[0].length]),
+      Array.from(line.matchAll(ansiRegex()), (match) => [
+        match.index,
+        match[0].length,
+      ]),
     );
     let next = 0;
     for (const part of segmenter.segment(line)) {
@@ -90,7 +101,11 @@ export function layoutInputRows(lines: string[], width: number, pastes?: PasteSt
   return rows;
 }
 
-export function locateInputCursor(rows: InputRow[], cursorLine: number, cursorCol: number) {
+export function locateInputCursor(
+  rows: InputRow[],
+  cursorLine: number,
+  cursorCol: number,
+) {
   const firstRow = Math.max(
     0,
     rows.findIndex((row) => row.line === cursorLine),
@@ -134,5 +149,9 @@ export function moveInputVertically(
     offset = cell.offset;
     displayColumn += cell.width;
   }
-  return { cursorLine: target.line, cursorCol: offset, preferredColumn: column };
+  return {
+    cursorLine: target.line,
+    cursorCol: offset,
+    preferredColumn: column,
+  };
 }

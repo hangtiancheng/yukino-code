@@ -90,7 +90,8 @@ export function startHttpServer(host: string, port: number): HttpServerHandle {
 
   router.post("/messages", async (ctx) => {
     const sessionId = ctx.query["sessionId"];
-    const transport = typeof sessionId === "string" ? sseTransports.get(sessionId) : undefined;
+    const transport =
+      typeof sessionId === "string" ? sseTransports.get(sessionId) : undefined;
     if (!transport) {
       ctx.status = 400;
       ctx.body = { error: "Unknown session" };
@@ -109,7 +110,12 @@ export function startHttpServer(host: string, port: number): HttpServerHandle {
 
   const server = app.listen(port, host, () => {
     logger.info(
-      { host, port, streamableHttp: "POST /mcp", sse: "GET /sse, POST /messages?sessionId=..." },
+      {
+        host,
+        port,
+        streamableHttp: "POST /mcp",
+        sse: "GET /sse, POST /messages?sessionId=...",
+      },
       "MCP HTTP server listening",
     );
   });

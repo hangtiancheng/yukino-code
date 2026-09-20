@@ -76,7 +76,10 @@ const validProvider: ProviderConfig = {
 let instance: Instance | undefined;
 let outputChunks: string[] = [];
 const fetchMock = vi.fn<typeof fetch>();
-const stdoutColumns = Object.getOwnPropertyDescriptor(process.stdout, "columns");
+const stdoutColumns = Object.getOwnPropertyDescriptor(
+  process.stdout,
+  "columns",
+);
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -86,10 +89,12 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.mocked(useWindowSize).mockReturnValue({ columns: 80, rows: 24 });
   outputChunks = [];
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
-    outputChunks.push(String(chunk));
-    return true;
-  });
+  vi.spyOn(process.stdout, "write").mockImplementation(
+    (chunk: string | Uint8Array) => {
+      outputChunks.push(String(chunk));
+      return true;
+    },
+  );
 });
 
 afterEach(() => {
@@ -114,11 +119,14 @@ function mount(
   onCancel = vi.fn(),
 ) {
   act(() => {
-    instance = render(createElement(ProviderLogin, { initialValues, onSubmit, onCancel }), {
-      patchConsole: false,
-      interactive: false,
-      debug: true,
-    });
+    instance = render(
+      createElement(ProviderLogin, { initialValues, onSubmit, onCancel }),
+      {
+        patchConsole: false,
+        interactive: false,
+        debug: true,
+      },
+    );
   });
   return { onSubmit, onCancel };
 }
@@ -187,30 +195,35 @@ function mockModels(...ids: string[]): void {
 }
 
 describe("ProviderLogin", () => {
-  it.each([32, 48])("renders defaults and masks the API key at %s columns", (columns) => {
-    vi.mocked(useWindowSize).mockReturnValue({ columns, rows: 24 });
-    let rendered = "";
-    act(() => {
-      rendered = stripVTControlCharacters(
-        renderToString(
-          createElement(ProviderLogin, {
-            initialValues: validProvider,
-            onSubmit: vi.fn(),
-            onCancel: vi.fn(),
-          }),
-          { columns },
-        ),
-      );
-    });
+  it.each([32, 48])(
+    "renders defaults and masks the API key at %s columns",
+    (columns) => {
+      vi.mocked(useWindowSize).mockReturnValue({ columns, rows: 24 });
+      let rendered = "";
+      act(() => {
+        rendered = stripVTControlCharacters(
+          renderToString(
+            createElement(ProviderLogin, {
+              initialValues: validProvider,
+              onSubmit: vi.fn(),
+              onCancel: vi.fn(),
+            }),
+            { columns },
+          ),
+        );
+      });
 
-    expect(rendered.split("\n").every((line) => stringWidth(line) <= columns)).toBe(true);
-    expect(rendered).toContain("type/paste any ID");
-    expect(rendered).toContain("Provider login");
-    expect(rendered).toContain("1000000");
-    expect(rendered).toContain("128000");
-    expect(rendered).toContain("high");
-    expect(rendered).not.toContain("sk-secret-value");
-  });
+      expect(
+        rendered.split("\n").every((line) => stringWidth(line) <= columns),
+      ).toBe(true);
+      expect(rendered).toContain("type/paste any ID");
+      expect(rendered).toContain("Provider login");
+      expect(rendered).toContain("1000000");
+      expect(rendered).toContain("128000");
+      expect(rendered).toContain("high");
+      expect(rendered).not.toContain("sk-secret-value");
+    },
+  );
 
   it("preserves pasted text, supports Ctrl+U, and submits ProviderConfig", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -287,7 +300,9 @@ describe("ProviderLogin", () => {
   });
 
   it("shows a rejected onSubmit error and cancels with Escape", async () => {
-    const onSubmit = vi.fn().mockRejectedValue(new Error("invalid credentials"));
+    const onSubmit = vi
+      .fn()
+      .mockRejectedValue(new Error("invalid credentials"));
     const onCancel = vi.fn();
     mount(validProvider, onSubmit, onCancel);
 
@@ -444,7 +459,9 @@ describe("ProviderLogin model discovery", () => {
         model: "manuaXl-id",
       });
       expect(terminalOutput()).toContain(
-        outcome === "failure" ? "Model discovery unavailable" : "No models returned",
+        outcome === "failure"
+          ? "Model discovery unavailable"
+          : "No models returned",
       );
       expect(terminalOutput()).not.toContain("private error body");
       expect(terminalOutput()).not.toContain(validProvider.api_key);
@@ -491,13 +508,18 @@ describe("ProviderLogin model discovery", () => {
     paste("https://new.example/proxy/v1");
     nextFields(2);
     await advance();
-    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("https://new.example/proxy/v1/models");
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe(
+      "https://new.example/proxy/v1/models",
+    );
     send("", { upArrow: true });
     send("u", { ctrl: true });
     paste("new-secret");
     nextFields(1);
     await advance();
-    expect(fetchMock.mock.calls.at(-1)?.[1]?.headers).toHaveProperty("x-api-key", "new-secret");
+    expect(fetchMock.mock.calls.at(-1)?.[1]?.headers).toHaveProperty(
+      "x-api-key",
+      "new-secret",
+    );
     send("", { upArrow: true });
     send("", { upArrow: true });
     send("", { upArrow: true });
@@ -587,31 +609,34 @@ describe("ProviderLogin model discovery", () => {
     });
   });
 
-  it.each([false, true])("cancels discovery on unmount (request started: %s)", async (started) => {
-    const pending = deferredResponse();
-    fetchMock.mockReturnValue(pending.promise);
-    mount();
-    if (started) {
-      await advance();
-    }
-    const signal = fetchMock.mock.calls[0]?.[1]?.signal;
-    act(() => {
-      instance?.unmount();
-      instance?.cleanup();
-    });
-    instance = undefined;
-    if (started) {
-      expect(signal?.aborted).toBe(true);
-    }
-    outputChunks = [];
-    await act(async () => {
-      pending.resolve(Response.json({ data: [{ id: "late-model" }] }));
-      await pending.promise;
-    });
-    await advance(1_000);
-    expect(fetchMock).toHaveBeenCalledTimes(started ? 1 : 0);
-    expect(terminalOutput()).not.toContain("late-model");
-  });
+  it.each([false, true])(
+    "cancels discovery on unmount (request started: %s)",
+    async (started) => {
+      const pending = deferredResponse();
+      fetchMock.mockReturnValue(pending.promise);
+      mount();
+      if (started) {
+        await advance();
+      }
+      const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+      act(() => {
+        instance?.unmount();
+        instance?.cleanup();
+      });
+      instance = undefined;
+      if (started) {
+        expect(signal?.aborted).toBe(true);
+      }
+      outputChunks = [];
+      await act(async () => {
+        pending.resolve(Response.json({ data: [{ id: "late-model" }] }));
+        await pending.promise;
+      });
+      await advance(1_000);
+      expect(fetchMock).toHaveBeenCalledTimes(started ? 1 : 0);
+      expect(terminalOutput()).not.toContain("late-model");
+    },
+  );
 
   it.each([32, 48])(
     "keeps discovery and manual-input hints readable at %s columns",
@@ -628,7 +653,9 @@ describe("ProviderLogin model discovery", () => {
       expect(output).toContain("2 models available");
       expect(output).toContain("type/paste any ID");
       expect(output).toContain("Ctrl+B/F");
-      const lines = outputChunks.flatMap((chunk) => stripVTControlCharacters(chunk).split("\n"));
+      const lines = outputChunks.flatMap((chunk) =>
+        stripVTControlCharacters(chunk).split("\n"),
+      );
       expect(lines.filter((line) => stringWidth(line) > columns)).toEqual([]);
       expect(output).not.toContain(validProvider.api_key);
     },

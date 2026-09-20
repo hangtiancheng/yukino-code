@@ -44,7 +44,10 @@ class FakeHistory implements ReminderHistory {
   }
 }
 
-const source = (live: string[], instructions: McpInstruction[]): McpInstructionSource => ({
+const source = (
+  live: string[],
+  instructions: McpInstruction[],
+): McpInstructionSource => ({
   connectedServers: () => live,
   connectedInstructions: () => instructions,
 });
@@ -77,11 +80,19 @@ describe("MCP instruction announcements", () => {
   it("sends late connections and disconnections as a single delta", () => {
     const history = new FakeHistory();
     const announced = new Set<string>();
-    syncMcpInstructions(history, announced, source(["a", "b"], [guidance("a"), guidance("b")]));
+    syncMcpInstructions(
+      history,
+      announced,
+      source(["a", "b"], [guidance("a"), guidance("b")]),
+    );
 
     // `b` stays up, `a` is gone, `c` joined: only the change goes out.
     expect(
-      syncMcpInstructions(history, announced, source(["b", "c"], [guidance("b"), guidance("c")])),
+      syncMcpInstructions(
+        history,
+        announced,
+        source(["b", "c"], [guidance("b"), guidance("c")]),
+      ),
     ).toBe(true);
 
     const delta = history.reminders[1];
@@ -95,7 +106,9 @@ describe("MCP instruction announcements", () => {
     const history = new FakeHistory();
     const announced = new Set<string>();
 
-    expect(syncMcpInstructions(history, announced, source(["quiet"], []))).toBe(false);
+    expect(syncMcpInstructions(history, announced, source(["quiet"], []))).toBe(
+      false,
+    );
     expect(history.reminders).toEqual([]);
 
     // Nothing was announced for it, so its departure is not news either.
@@ -131,7 +144,9 @@ describe("MCP instruction announcements", () => {
     expect(syncMcpInstructions(conv, announced, mgr)).toBe(false);
     const announcements = conv
       .getMessages()
-      .filter((m) => contentToText(m.content).includes(MCP_INSTRUCTIONS_MARKER));
+      .filter((m) =>
+        contentToText(m.content).includes(MCP_INSTRUCTIONS_MARKER),
+      );
     expect(announcements).toHaveLength(1);
 
     conv.reset();

@@ -53,7 +53,11 @@ import {
   getMaxOutputTokens,
   getSupportedThinkingLevels,
 } from "@/config/index.js";
-import type { HookConfig, MCPServerConfig, ProviderConfig } from "@/config/index.js";
+import type {
+  HookConfig,
+  MCPServerConfig,
+  ProviderConfig,
+} from "@/config/index.js";
 import { persistThinkingLevel } from "@/config/provider-login.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
@@ -87,16 +91,35 @@ import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/definition.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager, formatAgentTaskNotification } from "@/subagent/task-manager.js";
+import {
+  TaskManager,
+  formatAgentTaskNotification,
+} from "@/subagent/task-manager.js";
 import { filterToolsForAgent } from "@/subagent/tool-filter.js";
-import { coordinatorToolFilter, coordinatorActive } from "@/teams/coordinator.js";
+import {
+  coordinatorToolFilter,
+  coordinatorActive,
+} from "@/teams/coordinator.js";
 import { TeamManager, type RunAgent } from "@/teams/index.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
-import { TeamCreateTool, SendMessageTool, TeamDeleteTool } from "@/teams/tools.js";
+import {
+  TeamCreateTool,
+  SendMessageTool,
+  TeamDeleteTool,
+} from "@/teams/tools.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
-import { TaskCreateTool, TaskGetTool, TaskListTool, TaskUpdateTool } from "@/todo/tools.js";
-import { AskUserQuestionTool, type Question, type Asker } from "@/tools/ask-user.js";
+import {
+  TaskCreateTool,
+  TaskGetTool,
+  TaskListTool,
+  TaskUpdateTool,
+} from "@/todo/tools.js";
+import {
+  AskUserQuestionTool,
+  type Question,
+  type Asker,
+} from "@/tools/ask-user.js";
 import { BashTool } from "@/tools/bash.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
 import { EditFileTool } from "@/tools/edit-file.js";
@@ -255,7 +278,9 @@ class AgentHandleImpl implements RemoteAgentHandle {
 
   private abortController: AbortController | null = null;
 
-  constructor(agentHandleImpl: Omit<AgentHandleImpl, "abortController" | "run" | "abort">) {
+  constructor(
+    agentHandleImpl: Omit<AgentHandleImpl, "abortController" | "run" | "abort">,
+  ) {
     this.client = agentHandleImpl.client;
     this.conv = agentHandleImpl.conv;
     this.registry = agentHandleImpl.registry;
@@ -275,14 +300,19 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.forkDisabled = agentHandleImpl.forkDisabled;
     this.memoryManager = agentHandleImpl.memoryManager;
     this.contextWindow = agentHandleImpl.contextWindow;
-    this.longTermMemoryInstructions = agentHandleImpl.longTermMemoryInstructions;
-    this.longTermMemoryMemoryContent = agentHandleImpl.longTermMemoryMemoryContent;
+    this.longTermMemoryInstructions =
+      agentHandleImpl.longTermMemoryInstructions;
+    this.longTermMemoryMemoryContent =
+      agentHandleImpl.longTermMemoryMemoryContent;
     this.provider = agentHandleImpl.provider;
     this.workDir = agentHandleImpl.workDir;
     this.abortController = null;
   }
 
-  async *run(text: string, callbacks: RunCallbacks): AsyncGenerator<AgentEvent> {
+  async *run(
+    text: string,
+    callbacks: RunCallbacks,
+  ): AsyncGenerator<AgentEvent> {
     // Add user message to conversation
     this.conv.addUserMessage(text);
 
@@ -320,19 +350,26 @@ class AgentHandleImpl implements RemoteAgentHandle {
           }
           return this.toolFilter ? this.toolFilter(name) : true;
         },
-        coordinatorActiveFn: () => coordinatorActive(this.enableCoordinatorMode),
+        coordinatorActiveFn: () =>
+          coordinatorActive(this.enableCoordinatorMode),
         instructions: this.longTermMemoryInstructions,
         memoryContent: this.longTermMemoryMemoryContent,
-        skillSection: this.skillCatalog ? buildSkillSection(this.skillCatalog, this.workDir) : "",
+        skillSection: this.skillCatalog
+          ? buildSkillSection(this.skillCatalog, this.workDir)
+          : "",
         skillDeltaFn: () => {
           const section = this.skillCatalog
             ? buildSkillSection(this.skillCatalog, this.workDir)
             : "";
-          return section && !this.conv.hasReminderContaining(section) ? section : "";
+          return section && !this.conv.hasReminderContaining(section)
+            ? section
+            : "";
         },
         notificationFn: () => [
           ...this.teamManager.drainLeads(),
-          ...this.backgroundTaskManager.drainNotifications().map(formatAgentTaskNotification),
+          ...this.backgroundTaskManager
+            .drainNotifications()
+            .map(formatAgentTaskNotification),
         ],
         onPermissionRequest: callbacks.onPermissionRequest,
         onLoopComplete: (conv) => {
@@ -343,9 +380,11 @@ class AgentHandleImpl implements RemoteAgentHandle {
             .map((m) => `[${m.role}]: ${contentToText(m.content)}`)
             .filter((s) => s.length > 12)
             .join("\n");
-          new MemoryExtractor(this.client, this.workDir).extract(summary).catch(() => {
-            /* non-fatal */
-          });
+          new MemoryExtractor(this.client, this.workDir)
+            .extract(summary)
+            .catch(() => {
+              /* non-fatal */
+            });
 
           // Background memory consolidation (fire-and-forget)
           new MemoryConsolidator(this.client, this.workDir, {
@@ -488,7 +527,8 @@ export async function createRemoteAgent(
         workDir,
         maxIterations: 200,
         taskManager,
-        notificationFn: () => taskManager.drainNotifications().map(formatAgentTaskNotification),
+        notificationFn: () =>
+          taskManager.drainNotifications().map(formatAgentTaskNotification),
       });
 
       let output = "";
@@ -523,7 +563,11 @@ export async function createRemoteAgent(
   // registry (with shared task-board tools injected) and returns the callback
   // that runs the teammate agent's main loop.
   const teamRunAgentFactory =
-    (registry: ToolRegistry, teamChecker?: PermissionChecker, memberWorkDir = workDir): RunAgent =>
+    (
+      registry: ToolRegistry,
+      teamChecker?: PermissionChecker,
+      memberWorkDir = workDir,
+    ): RunAgent =>
     (task, onEvent, abortSignal) =>
       spawnSubagent(
         BUILTIN_AGENTS[0],
@@ -556,7 +600,14 @@ export async function createRemoteAgent(
   const agentTool = new AgentTool(
     workDir,
     registry,
-    async (def, prompt, background, modelOverride?, workDirOverride?, context?) => {
+    async (
+      def,
+      prompt,
+      background,
+      modelOverride?,
+      workDirOverride?,
+      context?,
+    ) => {
       return spawnSubagent(
         def,
         prompt,
@@ -582,16 +633,22 @@ export async function createRemoteAgent(
     async (prompt, forkConv, forkRegistry, modelOverride?, context?) => {
       const forkWorkDir = context?.workDir ?? workDir;
       // Fork path: create an isolated agent on the forked conversation
-      const resolvedModel = modelOverride ? resolveModelId(modelOverride) : provider.model;
+      const resolvedModel = modelOverride
+        ? resolveModelId(modelOverride)
+        : provider.model;
       const forkEnv = detectEnvironment(forkWorkDir);
       forkEnv.model = resolvedModel;
       const forkSystemPrompt = buildSystemPrompt(forkEnv);
       const forkClient = modelOverride
-        ? await createClient({ ...provider, model: resolvedModel }, forkSystemPrompt)
+        ? await createClient(
+            { ...provider, model: resolvedModel },
+            forkSystemPrompt,
+          )
         : client;
 
       const checker =
-        context?.permissionChecker ?? new PermissionChecker(forkWorkDir, "acceptEdits");
+        context?.permissionChecker ??
+        new PermissionChecker(forkWorkDir, "acceptEdits");
       forkConv.addUserMessage(prompt);
 
       // Per-run background task registry (parity with subagent/spawn.ts): the
@@ -614,7 +671,8 @@ export async function createRemoteAgent(
         instructions,
         memoryContent: memReminder,
         taskManager: forkTaskManager,
-        notificationFn: () => forkTaskManager.drainNotifications().map(formatAgentTaskNotification),
+        notificationFn: () =>
+          forkTaskManager.drainNotifications().map(formatAgentTaskNotification),
       });
 
       let output = "";
@@ -764,7 +822,9 @@ function wireSkillsToCommands(
         type: isFork ? "skill_fork" : "prompt",
         description: `${meta.description} [skill]`,
         isSkill: true,
-        handler: isFork ? () => "" : (ctx) => runSkillInline(skill, ctx.args, skillHost),
+        handler: isFork
+          ? () => ""
+          : (ctx) => runSkillInline(skill, ctx.args, skillHost),
       });
     } catch {
       // Name conflict: skip
@@ -822,7 +882,10 @@ export class RemoteServer {
     string,
     (response: "allow" | "deny" | "allowAlways") => void
   >();
-  private pendingAsks = new Map<string, (answers: Record<string, string>) => void>();
+  private pendingAsks = new Map<
+    string,
+    (answers: Record<string, string>) => void
+  >();
 
   constructor(opts: RemoteServerOptions) {
     this.opts = opts;
@@ -915,7 +978,9 @@ export class RemoteServer {
   }
 
   /** Handles incoming WebSocket messages from the Web UI. */
-  private async handleWsMessage(msg: z.infer<typeof WsInboundSchema>): Promise<void> {
+  private async handleWsMessage(
+    msg: z.infer<typeof WsInboundSchema>,
+  ): Promise<void> {
     switch (msg.type) {
       case "user_message": {
         const parsed = UserMessageSchema.safeParse(msg.data);
@@ -1288,7 +1353,10 @@ export class RemoteServer {
   }
 
   /** Handles local_ui commands (clear, compact, plan, resume, rewind, quit, etc.). */
-  private async handleLocalUICommand(name: string, args: string): Promise<void> {
+  private async handleLocalUICommand(
+    name: string,
+    args: string,
+  ): Promise<void> {
     if (!this.agentHandle) {
       this.broadcast({ type: "command_done", data: null });
       return;
@@ -1327,7 +1395,8 @@ export class RemoteServer {
         this.broadcast({
           type: "system",
           data: {
-            message: "Quit is not supported in remote mode. Close the browser tab.",
+            message:
+              "Quit is not supported in remote mode. Close the browser tab.",
           },
         });
         this.broadcast({ type: "command_done", data: null });
@@ -1402,13 +1471,17 @@ export class RemoteServer {
       memoryList: () => handle.memoryManager.getMemories().map((m) => m.name),
       model: handle.provider.model,
       thinkingLevel: () =>
-        handle.client.getThinkingLevel?.() ?? handle.provider.thinking ?? DEFAULT_THINKING_LEVEL,
+        handle.client.getThinkingLevel?.() ??
+        handle.provider.thinking ??
+        DEFAULT_THINKING_LEVEL,
       availableThinkingLevels: () =>
-        handle.client.getSupportedThinkingLevels?.() ?? getSupportedThinkingLevels(handle.provider),
+        handle.client.getSupportedThinkingLevels?.() ??
+        getSupportedThinkingLevels(handle.provider),
       setThinkingLevel: handle.client.setThinkingLevel
         ? (level) => {
             handle.client.setThinkingLevel?.(level);
-            handle.provider.thinking = handle.client.getThinkingLevel?.() ?? level;
+            handle.provider.thinking =
+              handle.client.getThinkingLevel?.() ?? level;
           }
         : undefined,
       persistThinkingLevel: (level) => {
@@ -1546,14 +1619,18 @@ export class RemoteServer {
         return;
       }
 
-      const lines: string[] = [`Available sessions (${String(sessions.length)}):\n`];
+      const lines: string[] = [
+        `Available sessions (${String(sessions.length)}):\n`,
+      ];
       for (let i = 0; i < Math.min(sessions.length, 20); i++) {
         const sess = sessions[i];
         let first = sess.firstMessage;
         if (first.length > 60) {
           first = first.slice(0, 60) + "...";
         }
-        lines.push(`  ${String(i + 1)}. [${sess.id}] ${first} (${String(sess.messageCount)} msgs)`);
+        lines.push(
+          `  ${String(i + 1)}. [${sess.id}] ${first} (${String(sess.messageCount)} msgs)`,
+        );
       }
       if (sessions.length > 20) {
         lines.push(`  ... and ${String(sessions.length - 20)} more`);

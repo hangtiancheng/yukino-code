@@ -30,7 +30,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { CREATED_APP_RESOURCE_URI, createAppModule } from "@/tools/create-app/tool.js";
+import {
+  CREATED_APP_RESOURCE_URI,
+  createAppModule,
+} from "@/tools/create-app/tool.js";
 
 // The SDK types these results loosely (index signatures, text/blob unions), so
 // narrow them with zod before asserting on specific fields.
@@ -62,14 +65,17 @@ const CallToolResultSchema = z.looseObject({
     .optional(),
 });
 
-const builtAppPath = fileURLToPath(new URL("../../dist/create-app.html", import.meta.url));
+const builtAppPath = fileURLToPath(
+  new URL("../../dist/create-app.html", import.meta.url),
+);
 const hiddenAppPath = `${builtAppPath}.test-hidden`;
 
 async function connect(): Promise<Client> {
   const server = new McpServer({ name: "test-server", version: "0.0.0" });
   createAppModule.register(server);
   const client = new Client({ name: "test-client", version: "0.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   await server.connect(clientTransport);
   await client.connect(serverTransport);
   return client;
@@ -100,7 +106,9 @@ describe("create_app", () => {
     await rename(builtAppPath, hiddenAppPath);
     try {
       const client = await connect();
-      await expect(client.readResource({ uri: CREATED_APP_RESOURCE_URI })).rejects.toThrow();
+      await expect(
+        client.readResource({ uri: CREATED_APP_RESOURCE_URI }),
+      ).rejects.toThrow();
     } finally {
       await rename(hiddenAppPath, builtAppPath);
     }
