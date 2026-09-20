@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@yukino.js/lit-jsx": "^0.0.4",
+    "@yukino.js/lit-jsx": "latest",
     "lit": "^3.3.3",
     "lucide-static": "^1.47.0",
     "motion": "^13.4.0"
