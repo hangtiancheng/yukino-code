@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/hangtiancheng/github/swifty-cli/apps/mcp -type f -not -path \"*/node_modules/*\" -not -path \"*/dist/*\" -not -path \"*/.git/*\" | head -50)"
+    ]
+  }
+}

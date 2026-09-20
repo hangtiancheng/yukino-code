@@ -1,0 +1,57 @@
+{
+  "name": "yukino-code",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "yukino-code",
+  "private": true,
+  "scripts": {
+    "git:commit": "git add -A && git commit -m \"feat: Introduce new features\"",
+    "git:commit:skip": "git add -A && git commit -m \"feat: Introduce new features [skip ci]\"",
+    "git:push": "pnpm git:commit && git push origin main",
+    "git:push:skip": "pnpm git:commit:skip && git push origin main",
+    "format:sh": "shfmt -w ./install.sh",
+    "format": "concurrently \"pnpm --filter @yukino.js/docs format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
+    "build": "pnpm --filter @yukino.js/yukino build",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "yukino",
+    "code"
+  ],
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1"
+  },
+  "lint-staged": {
+    "apps/docs/**/*.{json,jsonc,js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue,css,scss,md,mdx}": [
+      "pnpm --filter @yukino.js/docs format"
+    ],
+    "apps/mcp/**/*.{json,jsonc,js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue,css,scss,md,mdx}": [
+      "pnpm --filter @yukino.js/mcp format"
+    ],
+    "apps/yukino/**/*.{json,jsonc,js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue,css,scss,md,mdx}": [
+      "pnpm --filter @yukino.js/yukino format"
+    ]
+  },
+  "author": "https://github.com/hangtiancheng",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.1",
+  "pnpm": {
+    "overrides": {
+      "@yukino.js/docs": "workspace:*",
+      "@yukino.js/yukino": "workspace:*",
+      "@yukino.js/mcp": "workspace:*"
+    },
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@swc/core",
+      "better-sqlite3",
+      "core-js",
+      "esbuild",
+      "protobufjs",
+      "sharp",
+      "unrs-resolver"
+    ]
+  }
+}
