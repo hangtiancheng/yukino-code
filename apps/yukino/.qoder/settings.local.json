@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "mcp__codegraph__codegraph_explore",
-      "mcp__codegraph__*"
-    ]
-  }
-}
