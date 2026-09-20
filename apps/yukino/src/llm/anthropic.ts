@@ -26,6 +26,7 @@ import { safeParseAsync, z } from "zod";
 import type { LLMClient } from "./client.js";
 import {
   AuthenticationError,
+  containsContextLengthError,
   ContextTooLongError,
   LLMError,
   NetworkError,
@@ -136,12 +137,18 @@ function toAnthropicToolSchema(
 const log = createChildLogger({ module: "llm" });
 
 enum AnthropicErrorCode {
-  /** 413 Payload Too Large — The request entity is larger than the server is willing or able to process. */
+  /**
+   * 413 Request Too Large — the request body itself exceeds size limits.
+   * Note: prompt-too-long (token count over the context window) arrives as
+   * 400 invalid_request_error, not 413.
+   */
   PromptTooLong = 413,
   /** 401 Unauthorized — The request lacks valid authentication credentials. */
   InvalidAPIKey = 401,
   /** 429 Too Many Requests — The client has sent too many requests in a given amount of time, triggering rate limiting. */
   RateLimitError = 429,
+  /** 400 Bad Request — invalid_request_error; carries "prompt is too long: N tokens > M maximum" on context overflow. */
+  BadRequest = 400,
 }
 
 // Auto-fetch the context window for an anthropic-protocol provider
@@ -683,7 +690,8 @@ function classifyAnthropicError(err: unknown) {
   if (err instanceof Anthropic.APIError) {
     if (
       err.status === AnthropicErrorCode.PromptTooLong ||
-      /prompts?\s+too\s+long/i.test(err.message)
+      (err.status === AnthropicErrorCode.BadRequest &&
+        containsContextLengthError(err.message))
     ) {
       return new ContextTooLongError(`Prompt too long: ${err.message}`);
     }

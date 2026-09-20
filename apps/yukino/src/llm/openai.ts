@@ -25,6 +25,7 @@ import OpenAI from "openai";
 import type { LLMClient } from "./client.js";
 import {
   AuthenticationError,
+  containsContextLengthError,
   ContextTooLongError,
   LLMError,
   NetworkError,
@@ -793,14 +794,6 @@ export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
   }
 
   return result;
-}
-
-function containsContextLengthError(msg: string): boolean {
-  return (
-    /context_length_exceeded/i.test(msg) ||
-    /maximum\scontext\slength/i.test(msg) ||
-    /prompts?\s+too\s+long/i.test(msg)
-  );
 }
 
 // LLM client for openai-compat (Chat Completions) endpoints.
