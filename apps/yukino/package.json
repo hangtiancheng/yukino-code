@@ -61,7 +61,7 @@
     "gen:pb": "buf generate ../../yukino/pb --template ../../yukino/pb/buf.gen.yaml"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^1.4.0",
+    "@agentclientprotocol/sdk": "^1.5.0",
     "@anthropic-ai/sandbox-runtime": "^0.0.76",
     "@anthropic-ai/sdk": "^0.104.2",
     "@bufbuild/protobuf": "^2.15.0",
@@ -88,7 +88,7 @@
     "@opentelemetry/sdk-metrics": "^2.11.0",
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
-    "@sentry/node": "^10.75.0",
+    "@sentry/node": "^10.75.1",
     "ansi-escapes": "^7.3.0",
     "ansi-regex": "^6.3.0",
     "chalk": "^5.6.2",
@@ -112,7 +112,7 @@
     "string-width": "^8.2.2",
     "supports-hyperlinks": "^4.5.0",
     "turndown": "^7.2.4",
-    "wrap-ansi": "^10.0.1",
+    "wrap-ansi": "^10.0.2",
     "ws": "^8.21.3",
     "zod": "^4.6.5"
   },
@@ -141,7 +141,7 @@
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.70.0",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^4.1.11"
   },
   "engines": {

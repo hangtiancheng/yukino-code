@@ -146,7 +146,7 @@ describe("discoverModels", () => {
     },
   );
 
-  it("validates model metadata, deduplicates IDs and ignores capability guesses", async () => {
+  it("validates model metadata, deduplicates IDs and preserves extra provider fields", async () => {
     fetchMock.mockResolvedValue(
       Response.json({
         object: "list",
@@ -163,7 +163,9 @@ describe("discoverModels", () => {
       }),
     );
     await expect(discoverModels(connection)).resolves.toEqual([
-      { id: "model-a", display_name: "Friendly A" },
+      // looseObject keeps unknown provider metadata (capabilities) and trims
+      // the id; the first occurrence of a duplicate id wins.
+      { id: "model-a", display_name: "Friendly A", capabilities: ["thinking"] },
       { id: "model-b", name: "Friendly B" },
       { id: "unknown-model" },
     ]);
