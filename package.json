@@ -10,8 +10,15 @@
     "git:push": "pnpm git:commit && git push origin main",
     "git:push:skip": "pnpm git:commit:skip && git push origin main",
     "format": "concurrently \"pnpm --filter @yukino.js/docs format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
-    "build": "pnpm --filter @yukino.js/yukino build",
-    "prepare": "husky"
+    "build": "concurrently \"pnpm --filter @yukino.js/docs build\" \"pnpm --filter @yukino.js/mcp build\" \"pnpm --filter @yukino.js/yukino build\"",
+    "prepare": "husky",
+    "build:yukino:rpc": "",
+    "build:yukino:stdio": "",
+    "build:yukino:ws": "",
+    "build:yukino": "",
+    "dev:yukino:rpc": "",
+    "dev:yukino:stdio": "",
+    "dev:yukino:ws": ""
   },
   "keywords": [
     "yukino",
