@@ -1,0 +1,142 @@
+// Copyright (c) 2026 hangtiancheng
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+package worktree
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+)
+
+func TestHasWorktreeChanges_Clean(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+
+	repo := t.TempDir()
+	initTestRepo(t, repo)
+
+	// Get HEAD commit
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repo
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := trimNewline(string(out))
+
+	// Clean repo should return false
+	if HasWorktreeChanges(context.Background(), repo, head) {
+		t.Fatal("expected no changes in clean repo")
+	}
+}
+
+func TestHasWorktreeChanges_Dirty(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+
+	repo := t.TempDir()
+	initTestRepo(t, repo)
+
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repo
+	out, _ := cmd.Output()
+	head := trimNewline(string(out))
+
+	// Create uncommitted file
+	os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("dirty"), 0o644)
+
+	if !HasWorktreeChanges(context.Background(), repo, head) {
+		t.Fatal("expected changes with uncommitted file")
+	}
+}
+
+func TestHasWorktreeChanges_NewCommit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+
+	repo := t.TempDir()
+	initTestRepo(t, repo)
+
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repo
+	out, _ := cmd.Output()
+	head := trimNewline(string(out))
+
+	// Add a new commit
+	os.WriteFile(filepath.Join(repo, "new.txt"), []byte("new"), 0o644)
+	exec.Command("git", "-C", repo, "add", ".").Run()
+	exec.Command("git", "-C", repo, "commit", "-m", "new").Run()
+
+	if !HasWorktreeChanges(context.Background(), repo, head) {
+		t.Fatal("expected changes with new commit")
+	}
+}
+
+func TestHasWorktreeChanges_ResetToAncestor(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+
+	repo := t.TempDir()
+	initTestRepo(t, repo)
+
+	// Second commit; record HEAD there.
+	os.WriteFile(filepath.Join(repo, "second.txt"), []byte("second"), 0o644)
+	for _, args := range [][]string{
+		{"add", "."},
+		{"-c", "commit.gpgsign=false", "commit", "-m", "second"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repo
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := trimNewline(string(out))
+
+	// Reset back to the ancestor: `rev-list --count head..HEAD` would report 0
+	// and miss the discarded commit; SHA comparison must report changes.
+	if out, err := exec.Command("git", "-C", repo, "reset", "--hard", "HEAD~1").CombinedOutput(); err != nil {
+		t.Fatalf("git reset: %v\n%s", err, out)
+	}
+
+	if !HasWorktreeChanges(context.Background(), repo, head) {
+		t.Fatal("expected changes after reset to ancestor")
+	}
+}
+
+func TestHasWorktreeChanges_FailClosed(t *testing.T) {
+	// Non-existent path should return true (fail-closed)
+	if !HasWorktreeChanges(context.Background(), "/nonexistent-path-xyz", "abc123") {
+		t.Fatal("expected true for non-existent path (fail-closed)")
+	}
+}

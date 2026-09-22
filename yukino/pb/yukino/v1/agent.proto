@@ -1,0 +1,350 @@
+// Copyright (c) 2026 hangtiancheng
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package yukino.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/hangtiancheng/yukino-code/yukino/pb/gen/yukino/v1;yukinov1";
+
+// AgentService is the protobuf/Connect transport for the Yukino agent bridge
+// (yukino/bridge). It mirrors the bridge's JSON-RPC vocabulary 1:1:
+//
+//   - Downstream agent progress travels as Events on the Watch stream, one
+//     Event per bridge notification. Attaching replays session state and any
+//     prompt still waiting on an answer (bridge.Session.Attach semantics).
+//   - Upstream control (prompts, permission answers, question answers, cancel,
+//     ping) travels as unary RPCs backed by bridge.Session.HandleControl and
+//     SubmitPrompt.
+//
+// Permission and question prompts are deliberately events carrying their own
+// id, answered by a separate unary RPC — not bidirectional in-band requests —
+// so a reconnecting client can be re-sent the prompts it still owes an answer
+// to.
+service AgentService {
+  // Watch attaches a client to the session and streams every server event
+  // until the call is cancelled or the server shuts down. Concurrent Watch
+  // calls are independent attachments of the same session (fan-out is handled
+  // by the bridge).
+  rpc Watch(WatchRequest) returns (stream Event) {}
+
+  // SendPrompt queues one user turn (bridge session/prompt). Slash commands
+  // (content starting with "/") are handled server-side.
+  rpc SendPrompt(SendPromptRequest) returns (SendPromptResponse) {}
+
+  // RespondPermission answers a pending permission prompt (bridge
+  // permission/respond).
+  rpc RespondPermission(RespondPermissionRequest) returns (RespondPermissionResponse) {}
+
+  // RespondQuestions answers a pending AskUserQuestion prompt (bridge
+  // question/respond).
+  rpc RespondQuestions(RespondQuestionsRequest) returns (RespondQuestionsResponse) {}
+
+  // Cancel interrupts the running turn, if any (bridge session/cancel).
+  rpc Cancel(CancelRequest) returns (CancelResponse) {}
+
+  // Ping is a liveness check (bridge ping).
+  rpc Ping(PingRequest) returns (PingResponse) {}
+
+  // SelectProvider switches the session's active LLM provider by name (a
+  // provider from the server's config). It mirrors the local UI's provider
+  // switch: the conversation is preserved and only the LLM client is rebuilt.
+  // It fails if a turn is currently running.
+  rpc SelectProvider(SelectProviderRequest) returns (SelectProviderResponse) {}
+}
+
+// WatchRequest carries no fields in v1: an attach always receives the current
+// session state plus any pending prompts. A resume cursor for mid-run
+// reconnects is a future extension.
+message WatchRequest {}
+
+// Event is one bridge notification. Field names inside each payload follow
+// the bridge's lowerCamelCase JSON keys so the server adapter can translate
+// with protojson directly.
+message Event {
+  oneof event {
+    SessionConnected session_connected = 1;
+    SessionReady session_ready = 2;
+    SessionCommands session_commands = 3;
+    ContextCleared context_cleared = 4;
+    CommandDone command_done = 5;
+    RunStart run_start = 6;
+    StreamText stream_text = 7;
+    StreamEnd stream_end = 8;
+    ThinkingText thinking_text = 9;
+    ThinkingComplete thinking_complete = 10;
+    ToolUse tool_use = 11;
+    ToolResult tool_result = 12;
+    TurnComplete turn_complete = 13;
+    LoopComplete loop_complete = 14;
+    Usage usage = 15;
+    SystemMessage system = 16;
+    AgentError error = 17;
+    Compact compact = 18;
+    Retry retry = 19;
+    PermissionRequest permission_request = 20;
+    QuestionAsk question_ask = 21;
+  }
+}
+
+// SessionConnected is delivered once on attach (bridge session/connected):
+// the snapshot a client needs to render the current state.
+message SessionConnected {
+  string model = 1;
+  bool streaming = 2;
+  bool ready = 3;
+  string anchor_id = 4;
+  int32 input_tokens = 5;
+  int32 output_tokens = 6;
+  string permission_mode = 7;
+}
+
+// SessionReady signals the end of session warm-up (bridge session/ready).
+message SessionReady {}
+
+// CommandInfo describes one slash command for the composer's command menu.
+message CommandInfo {
+  string name = 1;
+  string description = 2;
+}
+
+// SessionCommands carries the full command menu (bridge session/commands).
+message SessionCommands {
+  repeated CommandInfo commands = 1;
+}
+
+// ContextCleared reports a successful /clear (bridge session/context_cleared).
+message ContextCleared {}
+
+// CommandDone reports the end of a slash command (bridge
+// session/command_done).
+message CommandDone {}
+
+// RunStart marks the beginning of one agent turn (bridge agent/run_start).
+message RunStart {
+  string user_message_id = 1;
+}
+
+// StreamText carries one assistant text delta (bridge agent/stream_text).
+message StreamText {
+  string text = 1;
+}
+
+// StreamEnd commits one finished text block (bridge agent/stream_end).
+message StreamEnd {
+  string text = 1;
+  string message_id = 2;
+}
+
+// ThinkingText carries one thinking delta (bridge agent/thinking_text).
+message ThinkingText {
+  string text = 1;
+}
+
+// ThinkingComplete carries a finalized thinking block (bridge
+// agent/thinking_complete).
+message ThinkingComplete {
+  string thinking = 1;
+  string signature = 2;
+}
+
+// ToolUse announces one model tool call (bridge agent/tool_use).
+message ToolUse {
+  string tool_id = 1;
+  string tool_name = 2;
+  google.protobuf.Struct args = 3;
+}
+
+// ToolResult carries one finished tool call (bridge agent/tool_result).
+// elapsed is in seconds.
+message ToolResult {
+  string tool_id = 1;
+  string tool_name = 2;
+  string output = 3;
+  bool is_error = 4;
+  double elapsed = 5;
+}
+
+// TurnComplete marks the end of one loop iteration (bridge
+// agent/turn_complete).
+message TurnComplete {
+  int32 turn = 1;
+}
+
+// LoopComplete marks the end of the whole run (bridge agent/loop_complete).
+// elapsed is in seconds.
+message LoopComplete {
+  int32 total_turns = 1;
+  double elapsed = 2;
+  string stop_reason = 3;
+}
+
+// Usage carries the turn's token counts (bridge agent/usage).
+message Usage {
+  int32 input_tokens = 1;
+  int32 output_tokens = 2;
+}
+
+// SystemMessage is an out-of-band system notice (bridge agent/system).
+message SystemMessage {
+  string message = 1;
+}
+
+// AgentError surfaces a run error (bridge agent/error).
+message AgentError {
+  string message = 1;
+}
+
+// Compact reports context compaction (bridge agent/compact).
+message Compact {
+  string message = 1;
+}
+
+// Retry reports an automatic retry (bridge agent/retry).
+message Retry {
+  string reason = 1;
+  int64 wait_ms = 2;
+}
+
+// PermissionRequest is a prompt the run blocks on, answered by
+// RespondPermission (bridge permission/request).
+message PermissionRequest {
+  string id = 1;
+  string tool_name = 2;
+  string description = 3;
+}
+
+// QuestionOption is one selectable option of a Question.
+message QuestionOption {
+  string label = 1;
+  string description = 2;
+}
+
+// Question is one AskUserQuestion item (tools.Question).
+message Question {
+  string question = 1;
+  string header = 2;
+  repeated QuestionOption options = 3;
+  bool multi_select = 4;
+}
+
+// QuestionAsk is a prompt the run blocks on, answered by RespondQuestions
+// (bridge question/ask).
+message QuestionAsk {
+  string id = 1;
+  repeated Question questions = 2;
+}
+
+// PermissionResponse is the answer to one PermissionRequest.
+enum PermissionResponse {
+  PERMISSION_RESPONSE_UNSPECIFIED = 0;
+  PERMISSION_RESPONSE_ALLOW = 1;
+  PERMISSION_RESPONSE_DENY = 2;
+  PERMISSION_RESPONSE_ALLOW_ALWAYS = 3;
+}
+
+// SendPromptRequest is one user turn's content. A text-only turn is a single
+// text block; a multimodal turn interleaves text and image blocks (mirroring
+// the TS conversation content-block model).
+message SendPromptRequest {
+  repeated ContentBlock content = 1;
+}
+
+// ContentBlock is one piece of a user turn: either text or an image.
+message ContentBlock {
+  oneof block {
+    string text = 1;
+    ImageBlock image = 2;
+  }
+}
+
+// ImageBlock carries an image either inline (base64) or by URL.
+message ImageBlock {
+  oneof source {
+    Base64ImageSource base64 = 1;
+    string url = 2;
+  }
+}
+
+// Base64ImageSource is an inline image: base64-encoded bytes plus its MIME type.
+message Base64ImageSource {
+  // media_type is one of image/jpeg, image/png, image/gif, image/webp.
+  string media_type = 1;
+  // data is the base64-encoded image bytes, without any data: URL prefix.
+  string data = 2;
+}
+
+// SendPromptResponse reports whether the turn was queued; queued=false means
+// the turn queue is full and the client was told to slow down via a
+// SystemMessage event.
+message SendPromptResponse {
+  bool queued = 1;
+}
+
+// RespondPermissionRequest answers the prompt with the given id.
+message RespondPermissionRequest {
+  string id = 1;
+  PermissionResponse response = 2;
+}
+
+// RespondPermissionResponse reports whether the prompt was still pending; a
+// late reply to an already-settled prompt yields applied=false.
+message RespondPermissionResponse {
+  bool applied = 1;
+}
+
+// RespondQuestionsRequest answers the prompt with the given id. Answers are
+// keyed by question text.
+message RespondQuestionsRequest {
+  string id = 1;
+  map<string, string> answers = 2;
+}
+
+// RespondQuestionsResponse reports whether the prompt was still pending.
+message RespondQuestionsResponse {
+  bool applied = 1;
+}
+
+// CancelRequest interrupts the running turn.
+message CancelRequest {}
+
+// CancelResponse is empty; the run's end arrives as a LoopComplete event.
+message CancelResponse {}
+
+// PingRequest is a liveness check.
+message PingRequest {}
+
+// PingResponse is empty.
+message PingResponse {}
+
+// SelectProviderRequest names the provider to switch to.
+message SelectProviderRequest {
+  string name = 1;
+}
+
+// SelectProviderResponse reports the newly active provider's resolved settings.
+message SelectProviderResponse {
+  string model = 1;
+  string protocol = 2;
+  int32 context_window = 3;
+  int32 max_output_tokens = 4;
+}

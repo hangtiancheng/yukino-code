@@ -1,0 +1,15 @@
+# Invoked from the terminal/ package directory (pnpm gen:pb) so the
+# npm-installed protoc-gen-es is on PATH; Go plugin paths resolve from PATH
+# too (go install google.golang.org/protobuf/cmd/protoc-gen-go and
+# connectrpc.com/connect/cmd/protoc-gen-connect-go).
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: ../yukino/pb/gen
+    opt: paths=source_relative
+  - local: protoc-gen-connect-go
+    out: ../yukino/pb/gen
+    opt: paths=source_relative
+  - local: protoc-gen-es
+    out: src/pb
+    opt: target=ts

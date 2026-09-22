@@ -1,0 +1,17 @@
+# The protobuf contract for the Yukino agent bridge transports. Generated
+# output lands in gen/ (Go) and in the terminal app's src/pb/ (TypeScript) —
+# run `pnpm --dir terminal gen:pb` from the repository root (protoc-gen-go and
+# protoc-gen-connect-go must be on PATH; protoc-gen-es comes from terminal's
+# devDependencies).
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # Each streamed item is one agent event; "Event" is the meaningful name.
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE
