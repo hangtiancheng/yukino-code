@@ -203,3 +203,18 @@ export function persistThinkingLevel(
   }
   writeConfigAtomic(path, { ...config, providers });
 }
+
+/**
+ * Persist the index (into the config's providers array) of the provider the
+ * user selected last, so the next start selects it directly instead of showing
+ * the provider picker. No-op when the stored index already matches, so the file
+ * is not rewritten (and reformatted) on every selection.
+ */
+export function persistDefaultProvider(index: number): void {
+  const path = globalConfigPath();
+  const config = readConfigRaw(path);
+  if (config.default_provider === index) {
+    return;
+  }
+  writeConfigAtomic(path, { ...config, default_provider: index });
+}

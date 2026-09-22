@@ -343,6 +343,7 @@ const SandboxYamlConfigSchema = z.looseObject({
 export type SandboxYamlConfig = z.infer<typeof SandboxYamlConfigSchema>;
 
 const AppConfigSchema = z.looseObject({
+  default_provider: z.number().default(0),
   providers: z.array(ProviderConfigSchema),
   permission_mode: z.string().optional(),
   mcp_servers: z.array(MCPServerConfigSchema).default([]),
@@ -374,7 +375,7 @@ function loadSingleFile(path: string): AppConfig {
   const raw: unknown = yaml.load(data);
   if (!isRecord(raw)) {
     log.error({ path }, "invalid yaml");
-    return { providers: [], mcp_servers: [], hooks: [] };
+    return { default_provider: 0, providers: [], mcp_servers: [], hooks: [] };
   }
   const parsed = safeParse(AppConfigSchema, raw);
   if (parsed.success) {
@@ -385,6 +386,7 @@ function loadSingleFile(path: string): AppConfig {
     };
   }
   log.error({ error: parsed.error }, "config error");
+  let defaultProvider = 0;
   let providers: ProviderConfig[] = [];
   let permissionMode: string | undefined;
   let mcpServers: MCPServerConfig[] = [];
@@ -393,6 +395,12 @@ function loadSingleFile(path: string): AppConfig {
   let enableCoordinatorMode = false;
   let enableFork = true;
 
+  if ("default_provider" in raw) {
+    const parsed = safeParse(z.number(), raw.default_provider);
+    if (parsed.success) {
+      defaultProvider = parsed.data;
+    }
+  }
   if ("providers" in raw) {
     const parsed = safeParse(z.array(ProviderConfigSchema), raw.providers);
     if (parsed.success) {
@@ -441,6 +449,7 @@ function loadSingleFile(path: string): AppConfig {
     enableFork = Boolean(raw.enable_fork);
   }
   return {
+    default_provider: defaultProvider,
     providers,
     permission_mode: permissionMode,
     mcp_servers: mcpServers,
@@ -660,7 +669,7 @@ export function loadConfig(
 
   if (!existsSync(candidate)) {
     if (options.allowEmptyProviders) {
-      return { providers: [], mcp_servers: [], hooks: [] };
+      return { default_provider: 0, providers: [], mcp_servers: [], hooks: [] };
     }
     throw new ConfigError(`No config file found, expected ${candidate}.`);
   }

@@ -24,6 +24,7 @@
   },
   "files": [
     "dist",
+    "postinstall.mjs",
     "README.md"
   ],
   "type": "module",
@@ -58,7 +59,8 @@
     "add:user": "pnpm adduser --registry=https://registry.npmjs.org/",
     "publish:latest": "pnpm publish --access public --registry=https://registry.npmjs.org/",
     "publish:nightly": "pnpm publish --access public --registry=https://registry.npmjs.org/ --tag nightly",
-    "gen:pb": "buf generate ../../yukino/pb --template ../../yukino/pb/buf.gen.yaml"
+    "gen:pb": "buf generate ../../yukino/pb --template ../../yukino/pb/buf.gen.yaml",
+    "postinstall": "node postinstall.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.5.0",
@@ -146,6 +148,5 @@
   },
   "engines": {
     "node": ">=20"
-  },
-  "packageManager": "pnpm@10.33.1"
+  }
 }

@@ -43,7 +43,7 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:7861", "listen address for the websocket server")
 	path := flag.String("path", "/ws", "websocket route path")
 	workDir := flag.String("workdir", "", "agent workspace directory (default: process working directory)")
-	provider := flag.String("provider", "", "provider name from ~/.yukino/config.yaml (default: first provider)")
+	provider := flag.String("provider", "", "provider name from ~/.yukino/config.yaml (default: default_provider entry, else first)")
 	permMode := flag.String("permission-mode", "", "override permission_mode (default/acceptEdits/plan/bypassPermissions)")
 	flag.Parse()
 

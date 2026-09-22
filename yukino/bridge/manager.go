@@ -120,7 +120,7 @@ func NewManager(sink ChatSink) *Manager {
 		log.Printf("bridge: assistant disabled: %v", err)
 	default:
 		m.cfg = cfg
-		m.provider = cfg.Providers[0]
+		m.provider = cfg.DefaultProviderEntry()
 		log.Printf("bridge: assistant ready (model %s, workspaces %s)", m.provider.Model, m.root)
 	}
 	go m.sweepIdle()
@@ -178,11 +178,12 @@ func (m *Manager) NewStandaloneSession(userID, workDir string) (*Session, error)
 }
 
 // UseProvider switches the active provider to the one named in the loaded
-// config, overriding the default (the first provider). It must be called
-// before any session is created; sessions copy the manager's provider at
-// construction. An unknown name or an unloaded config is an error. This is the
-// hook the standalone transports (stdio, pb/Connect) use to serve a specific
-// endpoint without reordering the user's config file.
+// config, overriding the default (the config's default_provider entry, else
+// the first provider). It must be called before any session is created;
+// sessions copy the manager's provider at construction. An unknown name or an
+// unloaded config is an error. This is the hook the standalone transports
+// (stdio, pb/Connect) use to serve a specific endpoint without reordering the
+// user's config file.
 func (m *Manager) UseProvider(name string) error {
 	if m.cfg == nil {
 		return fmt.Errorf("Yukino is not configured on this server: %w", m.cfgErr)

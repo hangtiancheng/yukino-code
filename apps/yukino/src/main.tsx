@@ -36,6 +36,7 @@ import {
 import { initLogger, logger } from "./logger/index.js";
 import { parsePrintFlags, runPrintMode } from "./print-mode.js";
 import { recover, recordError, recordExit } from "./recover.js";
+import { killBridgeServers, resolveBridgeBinary } from "./rpc/bootstrap.js";
 import type { RemoteTransport } from "./rpc/transport.js";
 import { newSessionId } from "./session/index.js";
 import { parseTeammateFlags, runTeammate } from "./teammate.js";
@@ -124,8 +125,17 @@ async function main() {
   // rpc. Only one bridge is driven per session.
   let remote: RemoteTransport | undefined;
   if (stdioCommand) {
-    remote = { kind: "stdio", command: stdioCommand, args: [] };
+    // Prefer the downloaded / locally built binary in ~/.yukino/bin over the
+    // PATH lookup, but only for the default command — an explicit --stdio
+    // value or YUKINO_STDIO_CMD wins untouched.
+    const command =
+      stdioCommand === "yukino-code-stdio"
+        ? (resolveBridgeBinary("stdio") ?? stdioCommand)
+        : stdioCommand;
+    remote = { kind: "stdio", command, args: [] };
   } else if (wsUrl) {
+    // The ws/rpc bridge server is not spawned here: the App bootstraps it
+    // (ensureBridgeServer) once the session's provider is known.
     remote = { kind: "ws", url: wsUrl };
   } else if (rpcUrl) {
     remote = { kind: "connect", url: rpcUrl };
@@ -202,6 +212,7 @@ async function main() {
     sandboxConfig: cfg.sandbox,
     enableCoordinatorMode: cfg.enable_coordinator_mode,
     forkDisabled: !forkEnabled(cfg),
+    defaultProvider: cfg.default_provider,
     remote,
   };
   const application = (
@@ -231,11 +242,16 @@ async function main() {
 main()
   .then(() => {
     recordExit(process.exitCode ?? 0);
+    // Terminate any ws/rpc bridge server spawned for this session; the stdio
+    // child is released by the App's RemoteAgent dispose on unmount.
+    killBridgeServers();
+    // TODO: Cleanup mcp servers bootstrapped through command (stdio)
   })
   .catch(async (err: unknown) => {
     captureTelemetryError(err, "main");
     recordError("main", err);
     logger.fatal({ err }, "main() unhandled error");
+    killBridgeServers();
     await shutdownTelemetry();
     process.exit(-1);
   });

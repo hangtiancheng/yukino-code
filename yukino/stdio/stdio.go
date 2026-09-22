@@ -60,14 +60,14 @@ const maxLineLen = 4 << 20
 const userID = "stdio"
 
 // Options configure the standalone session a stdio bridge serves. The zero
-// value is the common case: the process working directory, the config's first
-// provider and its permission_mode.
+// value is the common case: the process working directory, the config's
+// default_provider entry (else its first provider) and its permission_mode.
 type Options struct {
 	// WorkDir is the agent workspace. Empty means the process working
 	// directory, which is what a spawning terminal UI inherits to the child.
 	WorkDir string
 	// Provider selects a provider from the loaded config by name. Empty keeps
-	// the default (the first provider).
+	// the default (the default_provider entry, else the first provider).
 	Provider string
 	// PermissionMode overrides the config's permission_mode. Empty leaves it
 	// untouched.

@@ -37,7 +37,7 @@ const QuestionOptionSchema = z.looseObject({
 
 export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 
-const QuestionSchema = z.looseObject({
+const QuestionSchema = z.object({
   question: z.string(),
   header: z.string(),
   options: z.array(QuestionOptionSchema),

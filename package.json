@@ -12,13 +12,14 @@
     "format": "concurrently \"pnpm --filter @yukino.js/docs format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
     "build": "concurrently \"pnpm --filter @yukino.js/docs build\" \"pnpm --filter @yukino.js/mcp build\" \"pnpm --filter @yukino.js/yukino build\"",
     "prepare": "husky",
-    "build:yukino:rpc": "",
-    "build:yukino:stdio": "",
-    "build:yukino:ws": "",
-    "build:yukino": "",
-    "dev:yukino:rpc": "",
-    "dev:yukino:stdio": "",
-    "dev:yukino:ws": ""
+    "build:yukino:rpc": "node release.js build rpc",
+    "build:yukino:stdio": "node release.js build stdio",
+    "build:yukino:ws": "node release.js build ws",
+    "build:yukino": "node release.js build",
+    "dev:yukino:rpc": "node release.js dev rpc",
+    "dev:yukino:stdio": "node release.js dev stdio",
+    "dev:yukino:ws": "node release.js dev ws",
+    "release:yukino": "node release.js release"
   },
   "keywords": [
     "yukino",

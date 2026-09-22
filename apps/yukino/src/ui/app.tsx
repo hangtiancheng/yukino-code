@@ -79,7 +79,11 @@ import {
   loadConfig,
   withProjectMcpServers,
 } from "@/config/index.js";
-import { persistThinkingLevel, saveProvider } from "@/config/provider-login.js";
+import {
+  persistDefaultProvider,
+  persistThinkingLevel,
+  saveProvider,
+} from "@/config/provider-login.js";
 import { expandAtRefsWithImages } from "@/conversation/at-expand.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
@@ -108,6 +112,7 @@ import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
+import { ensureBridgeServer } from "@/rpc/bootstrap.js";
 import {
   type AgentRpc,
   type RemoteEvent,
@@ -189,6 +194,13 @@ interface Props {
   resume?: true | string;
   onExitSummary?: (summary: InteractionSummary) => void;
   /**
+   * Index into `providers` of the provider selected last (persisted as
+   * default_provider in ~/.yukino/config.yaml, 0 when absent). The picker is
+   * skipped and that provider starts selected — in remote mode this lets the
+   * Go bridge bootstrap before the user does anything.
+   */
+  defaultProvider?: number;
+  /**
    * When set, the agent runs over a Go agent bridge (yukino-code-rpc /
    * yukino-code-ws / yukino-code-stdio) instead of the in-process Agent. The
    * local agent machinery is bypassed for execution; prompts,
@@ -265,20 +277,25 @@ export function App({
   resume,
   onExitSummary,
   remote,
+  defaultProvider = 0,
 }: Props) {
   const { exit } = useApp();
   const [providers, setProviders] = useState(initialProviders);
   const [loginActive, setLoginActive] = useState(initialProviders.length === 0);
+  // The remembered selection (default_provider) starts selected directly, so
+  // the provider picker only shows when there is nothing to select yet.
+  const rememberedProvider = initialProviders[defaultProvider];
   const [appState, setAppState] = useState<AppState>(
-    providers.length === 1 ? "chat" : "providerSelect",
+    initialProviders.length === 0 ? "providerSelect" : "chat",
   );
   const [selectedProvider, setSelectedProvider] = useState<ProviderConfig>(
-    providers[0] ?? {
-      name: "",
-      protocol: "anthropic",
-      base_url: "",
-      model: "",
-    },
+    rememberedProvider ??
+      providers[0] ?? {
+        name: "",
+        protocol: "anthropic",
+        base_url: "",
+        model: "",
+      },
   );
   const selectedProviderRef = useRef(selectedProvider);
   const [providerDialogActive, setProviderDialogActive] = useState(false);
@@ -543,6 +560,35 @@ export function App({
     },
     [],
   );
+  // Remote mode warmup: the session's provider is already decided at start (a
+  // remembered default_provider or the only provider), so spawn the local
+  // bridge server (ws/rpc) and align the Go session's provider right away
+  // instead of waiting for the first prompt. stdio benefits too — the
+  // selectProvider call makes the stdio client spawn its child early.
+  const bridgeAlignedRef = useRef(false);
+  const bridgeWarmupStartedRef = useRef(false);
+  useEffect(() => {
+    if (!remote || appState !== "chat" || bridgeWarmupStartedRef.current) {
+      return;
+    }
+    const rpc = rpcRef.current;
+    if (!rpc) {
+      return;
+    }
+    bridgeWarmupStartedRef.current = true;
+    void (async () => {
+      try {
+        await ensureBridgeServer(remote);
+        if (bridgeAlignedRef.current) {
+          return;
+        }
+        await rpc.selectProvider(selectedProviderRef.current.name);
+        bridgeAlignedRef.current = true;
+      } catch (err) {
+        setError(`Failed to start the agent bridge: ${asErrorString(err)}`);
+      }
+    })();
+  }, [remote, appState]);
   const teammateStates = useTeammateStates(teamManagerRef.current);
   const [teamsDialogOpen, setTeamsDialogOpen] = useState(false);
   const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
@@ -1178,7 +1224,31 @@ export function App({
     }
   }, [appState, selectedProvider, initClient, remote]);
 
-  const handleProviderSelect = (provider: ProviderConfig) => {
+  // Remember a selection as default_provider (its index in the config's
+  // providers array) so the next start skips the picker and remote mode can
+  // bootstrap the Go bridge immediately. Best effort: a persistence failure
+  // must not block the selection itself.
+  const rememberProvider = (
+    provider: ProviderConfig,
+    list: ProviderConfig[] = providers,
+  ): void => {
+    const index = list.findIndex(
+      (candidate) =>
+        candidate === provider ||
+        (candidate.base_url === provider.base_url &&
+          candidate.name === provider.name),
+    );
+    try {
+      persistDefaultProvider(Math.max(index, 0));
+    } catch {
+      /* best effort */
+    }
+  };
+
+  const handleProviderSelect = (
+    provider: ProviderConfig,
+    list?: ProviderConfig[],
+  ) => {
     // Remote mode: the Go bridge owns the LLM client, conversation and registry,
     // so a provider selection is a server-side switch over the bridge rather
     // than a local client rebuild. Works for both the initial pick and a
@@ -1188,8 +1258,16 @@ export function App({
       selectedProviderRef.current = provider;
       setSelectedProvider(provider);
       setAppState("chat");
-      void rpcRef.current.selectProvider(provider.name).then(
-        (res) => {
+      rememberProvider(provider, list);
+      bridgeWarmupStartedRef.current = true;
+      const rpc = rpcRef.current;
+      void (async () => {
+        try {
+          // ws/rpc: spawn the local bridge server before the first bridge I/O
+          // (a no-op once running); stdio's child is spawned by the client.
+          await ensureBridgeServer(remote);
+          const res = await rpc.selectProvider(provider.name);
+          bridgeAlignedRef.current = true;
           setMessages((prev) => [
             ...prev,
             {
@@ -1197,11 +1275,10 @@ export function App({
               content: `Provider switched to ${provider.name} · ${res.model}.`,
             },
           ]);
-        },
-        (err: unknown) => {
+        } catch (err) {
           setError(`Failed to switch provider: ${asErrorString(err)}`);
-        },
-      );
+        }
+      })();
       return;
     }
 
@@ -1209,6 +1286,7 @@ export function App({
       selectedProviderRef.current = provider;
       setSelectedProvider(provider);
       setAppState("chat");
+      rememberProvider(provider, list);
       return;
     }
 
@@ -1226,6 +1304,7 @@ export function App({
         clientRef.current = client;
         selectedProviderRef.current = provider;
         setSelectedProvider(provider);
+        rememberProvider(provider, list);
         contextWindowRef.current = getContextWindow(provider);
         maxOutputRef.current = getMaxOutputTokens(provider);
         decideAndApply(
@@ -2323,6 +2402,14 @@ export function App({
       if (remote && remoteAgentRef.current) {
         // Remote mode: the Go bridge owns the conversation and transcript; the
         // turn is submitted as content blocks (text + optional images).
+        // ensureBridgeServer covers prompts that beat the startup warmup (or
+        // retry after a warmup failure); the alignment call makes the Go
+        // session use the UI-selected provider.
+        await ensureBridgeServer(remote);
+        if (!bridgeAlignedRef.current && rpcRef.current) {
+          await rpcRef.current.selectProvider(selectedProviderRef.current.name);
+          bridgeAlignedRef.current = true;
+        }
         const queued = await remoteAgentRef.current.send(toRpcBlocks(expanded));
         if (!queued) {
           setError(
@@ -2569,6 +2656,7 @@ export function App({
       clientRef.current = client;
       selectedProviderRef.current = saved.provider;
       setSelectedProvider(saved.provider);
+      rememberProvider(saved.provider, saved.providers);
       contextWindowRef.current = getContextWindow(saved.provider);
       maxOutputRef.current = getMaxOutputTokens(saved.provider);
       decideAndApply(
@@ -2585,7 +2673,7 @@ export function App({
         },
       ]);
     } else {
-      handleProviderSelect(saved.provider);
+      handleProviderSelect(saved.provider, saved.providers);
     }
     setLoginActive(false);
   };

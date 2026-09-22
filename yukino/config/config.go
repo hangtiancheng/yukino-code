@@ -412,6 +412,7 @@ func (s SandboxYamlConfig) BackendOrDefault() string {
 }
 
 type AppConfig struct {
+	DefaultProvider       int               `yaml:"default_provider"`
 	Providers             []ProviderConfig  `yaml:"providers"`
 	PermissionMode        string            `yaml:"permission_mode"`
 	MCPServers            []MCPServerConfig `yaml:"mcp_servers"`
@@ -436,6 +437,18 @@ type AppConfig struct {
 // the config does not specify a value.
 func (c *AppConfig) ForkEnabled() bool {
 	return c.EnableFork == nil || *c.EnableFork
+}
+
+// DefaultProviderEntry returns the provider selected by default_provider —
+// the index into Providers the terminal UI persists for the user's last
+// selection — falling back to the first provider when the index is out of
+// range (TS: the rememberedProvider lookup in app.tsx). Callers must only use
+// it on a config with at least one provider.
+func (c *AppConfig) DefaultProviderEntry() ProviderConfig {
+	if c.DefaultProvider >= 0 && c.DefaultProvider < len(c.Providers) {
+		return c.Providers[c.DefaultProvider]
+	}
+	return c.Providers[0]
 }
 
 // log mirrors the TS module-scoped child logger (createChildLogger({module:"config"})).
@@ -849,6 +862,15 @@ func loadSingleFile(path string) (*AppConfig, error) {
 		var concurrent bool
 		if err := node.Decode(&concurrent); err == nil {
 			out.Concurrent = concurrent
+		}
+	}
+	// default_provider is z.number().default(0) in the TS schema: salvage it
+	// as a numeric scalar so a partially-invalid config keeps the remembered
+	// provider selection.
+	if node, ok := fields["default_provider"]; ok && node.Kind == yaml.ScalarNode {
+		var idx int
+		if err := node.Decode(&idx); err == nil {
+			out.DefaultProvider = idx
 		}
 	}
 	return out, nil
