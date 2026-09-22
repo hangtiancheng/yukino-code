@@ -9,7 +9,6 @@
     "git:commit:skip": "git add -A && git commit -m \"feat: Introduce new features [skip ci]\"",
     "git:push": "pnpm git:commit && git push origin main",
     "git:push:skip": "pnpm git:commit:skip && git push origin main",
-    "format:sh": "shfmt -w ./install.sh",
     "format": "concurrently \"pnpm --filter @yukino.js/docs format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
     "build": "pnpm --filter @yukino.js/yukino build",
     "prepare": "husky"
