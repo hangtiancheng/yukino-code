@@ -46,6 +46,7 @@ import {
 } from "./use-agent-output.js";
 import { useTerminalControls } from "./use-terminal-controls.js";
 
+import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
 import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
 import {
@@ -107,6 +108,13 @@ import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
+import {
+  createAgentRpc,
+  type AgentRpc,
+  type RemoteEvent,
+  type RpcContentBlock,
+} from "@/rpc/client.js";
+import { RemoteAgent } from "@/rpc/remote-agent.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import * as sessionMod from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
@@ -180,10 +188,70 @@ interface Props {
   forkDisabled?: boolean;
   resume?: true | string;
   onExitSummary?: (summary: InteractionSummary) => void;
+  /**
+   * When set, the agent runs over the protobuf/Connect RPC bridge
+   * (yukino-agent server) instead of the in-process Agent. The local agent
+   * machinery is bypassed for execution; prompts, permission/question answers
+   * and interrupts travel over RPC.
+   */
+  rpcUrl?: string;
 }
 
 // Maximum number of recent tool names (deduplicated) passed to the memory recall selector
 const MAX_RECENT_TOOLS = 10;
+
+// AgentEvent `type` tags, used to separate model-progress events (which the
+// transcript handler renders) from the RPC-only session-lifecycle events the
+// Watch stream also carries (session_connected, run_start, stream_end, ...).
+const AGENT_EVENT_TYPES = new Set<string>([
+  "stream_text",
+  "thinking_text",
+  "thinking_complete",
+  "tool_use",
+  "tool_result",
+  "turn_complete",
+  "loop_complete",
+  "usage",
+  "error",
+  "compact",
+  "retry",
+  "permission_request",
+]);
+
+function isAgentEvent(ev: RemoteEvent): ev is AgentEvent {
+  return AGENT_EVENT_TYPES.has(ev.type);
+}
+
+// toRpcBlocks turns expandAtRefsWithImages output (a plain string, or a block
+// list of {type:"text"} / {type:"image",source:{...}}) into the RPC content
+// blocks the bridge forwards to the conversation.
+function toRpcBlocks(
+  expanded: string | Record<string, unknown>[],
+): RpcContentBlock[] {
+  if (typeof expanded === "string") {
+    return [{ text: expanded }];
+  }
+  const blocks: RpcContentBlock[] = [];
+  for (const b of expanded) {
+    if (b.type === "text" && typeof b.text === "string") {
+      blocks.push({ text: b.text });
+    } else if (b.type === "image") {
+      const src = asRecord(b.source);
+      if (
+        src?.type === "base64" &&
+        typeof src.media_type === "string" &&
+        typeof src.data === "string"
+      ) {
+        blocks.push({
+          image: { base64: { mediaType: src.media_type, data: src.data } },
+        });
+      } else if (src?.type === "url" && typeof src.url === "string") {
+        blocks.push({ image: { url: src.url } });
+      }
+    }
+  }
+  return blocks;
+}
 
 export function App({
   providers: initialProviders,
@@ -195,6 +263,7 @@ export function App({
   forkDisabled,
   resume,
   onExitSummary,
+  rpcUrl,
 }: Props) {
   const { exit } = useApp();
   const [providers, setProviders] = useState(initialProviders);
@@ -437,6 +506,32 @@ export function App({
   const askResolveRef = useRef<((a: Record<string, string>) => void) | null>(
     null,
   );
+  // RPC mode: drive the Go agent over the Connect transport. RemoteAgent is
+  // attached once (constructing it does no I/O — the Watch stream starts on the
+  // first run()). Its hooks reuse the exact permission/question dialog state the
+  // in-process agent uses, so the dialogs render identically in both modes; the
+  // only difference is the answer travels back over a respond RPC.
+  const rpcRef = useRef<AgentRpc | null>(null);
+  const remoteAgentRef = useRef<RemoteAgent | null>(null);
+  if (rpcUrl && !remoteAgentRef.current) {
+    rpcRef.current = createAgentRpc({ url: rpcUrl });
+    remoteAgentRef.current = new RemoteAgent(rpcRef.current, {
+      onPermissionRequest: (toolName, description) =>
+        new Promise((resolve) => {
+          permissionResolveRef.current = resolve;
+          setPermissionRequest({
+            toolName,
+            argsSummary: description,
+            reason: "",
+          });
+        }),
+      onQuestions: (questions) =>
+        new Promise((resolve) => {
+          askResolveRef.current = resolve;
+          setAskRequest(questions);
+        }),
+    });
+  }
   const teammateStates = useTeammateStates(teamManagerRef.current);
   const [teamsDialogOpen, setTeamsDialogOpen] = useState(false);
   const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
@@ -1067,12 +1162,38 @@ export function App({
   );
 
   useEffect(() => {
-    if (appState === "chat" && !clientRef.current) {
+    if (appState === "chat" && !clientRef.current && !rpcUrl) {
       void initClient(selectedProvider);
     }
-  }, [appState, selectedProvider, initClient]);
+  }, [appState, selectedProvider, initClient, rpcUrl]);
 
   const handleProviderSelect = (provider: ProviderConfig) => {
+    // RPC mode: the Go bridge owns the LLM client, conversation and registry,
+    // so a provider selection is a server-side switch over RPC rather than a
+    // local client rebuild. Works for both the initial pick and a mid-session
+    // switch; the bridge rejects a switch while a turn is running.
+    if (rpcUrl && rpcRef.current) {
+      setProviderDialogActive(false);
+      selectedProviderRef.current = provider;
+      setSelectedProvider(provider);
+      setAppState("chat");
+      void rpcRef.current.selectProvider(provider.name).then(
+        (res) => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "system",
+              content: `Provider switched to ${provider.name} · ${res.model}.`,
+            },
+          ]);
+        },
+        (err: unknown) => {
+          setError(`Failed to switch provider: ${asErrorString(err)}`);
+        },
+      );
+      return;
+    }
+
     if (appState === "providerSelect" || !clientRef.current) {
       selectedProviderRef.current = provider;
       setSelectedProvider(provider);
@@ -1859,12 +1980,91 @@ export function App({
     return false;
   };
 
+  // runRpcTurn drives one turn over the RPC bridge: it forwards model-progress
+  // events to the transcript handler (mirroring the local loop's stats/plan
+  // bookkeeping) and turns a local abort into a server-side Cancel so the Go run
+  // actually stops. Session-lifecycle events carry no per-event UI and are skipped.
+  const runRpcTurn = async (
+    agent: RemoteAgent,
+    onAgentEvent: (event: AgentEvent) => void,
+    controller: AbortController,
+  ) => {
+    let exitPlanSucceeded = false;
+    const onAbort = () => {
+      void agent.interrupt();
+    };
+    controller.signal.addEventListener("abort", onAbort);
+    try {
+      for await (const ev of agent.run()) {
+        if (!isAgentEvent(ev)) {
+          continue;
+        }
+        onAgentEvent(ev);
+        switch (ev.type) {
+          case "tool_use": {
+            if (activeToolIdsRef.current.size === 0) {
+              activeToolBatchStartedAtRef.current = Date.now();
+            }
+            activeToolIdsRef.current.add(ev.toolId);
+            break;
+          }
+          case "tool_result": {
+            activeToolIdsRef.current.delete(ev.toolId);
+            if (
+              activeToolIdsRef.current.size === 0 &&
+              activeToolBatchStartedAtRef.current !== null
+            ) {
+              interactionStatsRef.current.toolTimeMs +=
+                Date.now() - activeToolBatchStartedAtRef.current;
+              activeToolBatchStartedAtRef.current = null;
+            }
+            if (ev.isError) {
+              interactionStatsRef.current.failedToolCalls += 1;
+            } else {
+              interactionStatsRef.current.successfulToolCalls += 1;
+            }
+            if (ev.toolName === "ExitPlanMode" && !ev.isError) {
+              exitPlanSucceeded = true;
+            }
+            const recent = recentToolsRef.current;
+            const dup = recent.indexOf(ev.toolName);
+            if (dup >= 0) {
+              recent.splice(dup, 1);
+            }
+            recent.push(ev.toolName);
+            if (recent.length > MAX_RECENT_TOOLS) {
+              recent.shift();
+            }
+            break;
+          }
+          case "loop_complete": {
+            if (permModeRef.current === "plan" && exitPlanSucceeded) {
+              setPlanApprovalActive(true);
+            }
+            break;
+          }
+          case "error": {
+            throw ev.error;
+          }
+        }
+      }
+    } finally {
+      controller.signal.removeEventListener("abort", onAbort);
+    }
+  };
+
   const runAgentLoop = async (modeOverride?: PermissionMode) => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     const onAgentEvent = output.createEventHandler((toolId) =>
       subagentCardsRef.current.get(toolId),
     );
+
+    // RPC mode: the Go bridge runs the agent; skip all local agent assembly.
+    if (rpcUrl && remoteAgentRef.current) {
+      await runRpcTurn(remoteAgentRef.current, onAgentEvent, controller);
+      return;
+    }
 
     // modeOverride avoids a stale-closure read of permMode right after a
     // setPermMode call (e.g. plan approval switching out of plan mode in the same tick).
@@ -2096,7 +2296,7 @@ export function App({
   };
 
   const runUserTurn = async (text: string, modeOverride?: PermissionMode) => {
-    if (!clientRef.current) {
+    if (!rpcUrl && !clientRef.current) {
       setError("LLM client not ready yet");
       return;
     }
@@ -2109,18 +2309,32 @@ export function App({
 
     try {
       const expanded = await expandAtRefsWithImages(text, workDir);
-      conversationRef.current.addUserMessage(expanded);
-      sessionMod.saveMessage(workDir, sessionIdRef.current, {
-        role: "user",
-        content:
-          typeof expanded === "string"
-            ? text
-            : [
-                { type: "text", text },
-                ...expanded.filter((block) => block.type === "image"),
-              ],
-        timestamp: Math.floor(Date.now() / 1000),
-      });
+      if (rpcUrl && remoteAgentRef.current) {
+        // RPC mode: the Go bridge owns the conversation and transcript; the
+        // turn is submitted as content blocks (text + optional images).
+        const queued = await remoteAgentRef.current.send(toRpcBlocks(expanded));
+        if (!queued) {
+          setError(
+            "The agent is busy working through earlier messages — please wait.",
+          );
+          setIsStreaming(false);
+          output.finishTurn();
+          return;
+        }
+      } else {
+        conversationRef.current.addUserMessage(expanded);
+        sessionMod.saveMessage(workDir, sessionIdRef.current, {
+          role: "user",
+          content:
+            typeof expanded === "string"
+              ? text
+              : [
+                  { type: "text", text },
+                  ...expanded.filter((block) => block.type === "image"),
+                ],
+          timestamp: Math.floor(Date.now() / 1000),
+        });
+      }
 
       await runAgentLoopWithStats(modeOverride);
     } catch (err) {
@@ -2303,7 +2517,7 @@ export function App({
   const followUps = useFollowUpQueue({
     blocked:
       appState !== "chat" ||
-      !clientRef.current ||
+      (!rpcUrl && !clientRef.current) ||
       isStreaming ||
       isCompacting ||
       providerSwitching ||

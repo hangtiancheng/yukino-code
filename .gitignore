@@ -205,3 +205,6 @@ target
 **/.yukino/
 
 .playwright-cli/
+
+yukino/bin-yukino-agent
+apps/yukino/src/pb

@@ -91,6 +91,19 @@ async function main() {
     }
   }
 
+  // Parse --rpc mode: drive the Go agent bridge over protobuf/Connect instead
+  // of the in-process agent. Also honours YUKINO_RPC_URL.
+  let rpcUrl = process.env.YUKINO_RPC_URL ?? "";
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--rpc") {
+      rpcUrl = "http://127.0.0.1:7860";
+      if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
+        rpcUrl = args[i + 1];
+        i++;
+      }
+    }
+  }
+
   const printArgs = parsePrintFlags(args);
   if (printArgs) {
     setTelemetryMode("print");
@@ -109,7 +122,7 @@ async function main() {
   let cfg;
   try {
     cfg = withProjectMcpServers(
-      loadConfig(undefined, { allowEmptyProviders: !remoteAddr }),
+      loadConfig(undefined, { allowEmptyProviders: !remoteAddr && !rpcUrl }),
       process.cwd(),
     );
   } catch (err) {
@@ -162,6 +175,7 @@ async function main() {
     sandboxConfig: cfg.sandbox,
     enableCoordinatorMode: cfg.enable_coordinator_mode,
     forkDisabled: !forkEnabled(cfg),
+    rpcUrl: rpcUrl || undefined,
   };
   const application = (
     <App

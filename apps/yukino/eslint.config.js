@@ -40,6 +40,7 @@ export default defineConfig(
     "eslint.config.js",
     "tsup.config.ts",
     "vitest.config.ts",
+    "src/pb/yukino/v1",
   ]),
   {
     files: ["**/*.{ts,tsx}"],

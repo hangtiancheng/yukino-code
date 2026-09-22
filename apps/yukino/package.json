@@ -57,12 +57,16 @@
     "prepublishOnly": "pnpm build",
     "add:user": "pnpm adduser --registry=https://registry.npmjs.org/",
     "publish:latest": "pnpm publish --access public --registry=https://registry.npmjs.org/",
-    "publish:nightly": "pnpm publish --access public --registry=https://registry.npmjs.org/ --tag nightly"
+    "publish:nightly": "pnpm publish --access public --registry=https://registry.npmjs.org/ --tag nightly",
+    "gen:pb": "buf generate ../../yukino/pb --template ../../yukino/pb/buf.gen.yaml"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.4.0",
     "@anthropic-ai/sandbox-runtime": "^0.0.76",
     "@anthropic-ai/sdk": "^0.104.2",
+    "@bufbuild/protobuf": "^2.15.0",
+    "@connectrpc/connect": "^2.2.0",
+    "@connectrpc/connect-node": "^2.2.0",
     "@langfuse/otel": "^5.11.1",
     "@langfuse/tracing": "^5.11.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
