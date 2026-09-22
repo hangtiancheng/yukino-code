@@ -109,12 +109,12 @@ import {
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
 import {
-  createAgentRpc,
   type AgentRpc,
   type RemoteEvent,
   type RpcContentBlock,
 } from "@/rpc/client.js";
 import { RemoteAgent } from "@/rpc/remote-agent.js";
+import { createAgentRpcFor, type RemoteTransport } from "@/rpc/transport.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import * as sessionMod from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
@@ -189,12 +189,13 @@ interface Props {
   resume?: true | string;
   onExitSummary?: (summary: InteractionSummary) => void;
   /**
-   * When set, the agent runs over the protobuf/Connect RPC bridge
-   * (yukino-agent server) instead of the in-process Agent. The local agent
-   * machinery is bypassed for execution; prompts, permission/question answers
-   * and interrupts travel over RPC.
+   * When set, the agent runs over a Go agent bridge (yukino-code-rpc /
+   * yukino-code-ws / yukino-code-stdio) instead of the in-process Agent. The
+   * local agent machinery is bypassed for execution; prompts,
+   * permission/question answers and interrupts travel over the bridge. Left
+   * undefined, the in-process TypeScript harness runs.
    */
-  rpcUrl?: string;
+  remote?: RemoteTransport;
 }
 
 // Maximum number of recent tool names (deduplicated) passed to the memory recall selector
@@ -263,7 +264,7 @@ export function App({
   forkDisabled,
   resume,
   onExitSummary,
-  rpcUrl,
+  remote,
 }: Props) {
   const { exit } = useApp();
   const [providers, setProviders] = useState(initialProviders);
@@ -506,15 +507,15 @@ export function App({
   const askResolveRef = useRef<((a: Record<string, string>) => void) | null>(
     null,
   );
-  // RPC mode: drive the Go agent over the Connect transport. RemoteAgent is
-  // attached once (constructing it does no I/O — the Watch stream starts on the
-  // first run()). Its hooks reuse the exact permission/question dialog state the
-  // in-process agent uses, so the dialogs render identically in both modes; the
-  // only difference is the answer travels back over a respond RPC.
+  // Remote mode: drive the Go agent bridge (Connect, websocket or stdio).
+  // RemoteAgent is attached once (constructing it does no I/O — the event stream
+  // starts on the first run()). Its hooks reuse the exact permission/question
+  // dialog state the in-process agent uses, so the dialogs render identically in
+  // both modes; the only difference is the answer travels back over the bridge.
   const rpcRef = useRef<AgentRpc | null>(null);
   const remoteAgentRef = useRef<RemoteAgent | null>(null);
-  if (rpcUrl && !remoteAgentRef.current) {
-    rpcRef.current = createAgentRpc({ url: rpcUrl });
+  if (remote && !remoteAgentRef.current) {
+    rpcRef.current = createAgentRpcFor(remote);
     remoteAgentRef.current = new RemoteAgent(rpcRef.current, {
       onPermissionRequest: (toolName, description) =>
         new Promise((resolve) => {
@@ -532,6 +533,16 @@ export function App({
         }),
     });
   }
+  // Release the bridge on unmount: closes the websocket or terminates the
+  // spawned stdio child so a remote harness never outlives the UI.
+  useEffect(
+    () => () => {
+      remoteAgentRef.current?.dispose();
+      remoteAgentRef.current = null;
+      rpcRef.current = null;
+    },
+    [],
+  );
   const teammateStates = useTeammateStates(teamManagerRef.current);
   const [teamsDialogOpen, setTeamsDialogOpen] = useState(false);
   const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
@@ -1162,17 +1173,17 @@ export function App({
   );
 
   useEffect(() => {
-    if (appState === "chat" && !clientRef.current && !rpcUrl) {
+    if (appState === "chat" && !clientRef.current && !remote) {
       void initClient(selectedProvider);
     }
-  }, [appState, selectedProvider, initClient, rpcUrl]);
+  }, [appState, selectedProvider, initClient, remote]);
 
   const handleProviderSelect = (provider: ProviderConfig) => {
-    // RPC mode: the Go bridge owns the LLM client, conversation and registry,
-    // so a provider selection is a server-side switch over RPC rather than a
-    // local client rebuild. Works for both the initial pick and a mid-session
-    // switch; the bridge rejects a switch while a turn is running.
-    if (rpcUrl && rpcRef.current) {
+    // Remote mode: the Go bridge owns the LLM client, conversation and registry,
+    // so a provider selection is a server-side switch over the bridge rather
+    // than a local client rebuild. Works for both the initial pick and a
+    // mid-session switch; the bridge rejects a switch while a turn is running.
+    if (remote && rpcRef.current) {
       setProviderDialogActive(false);
       selectedProviderRef.current = provider;
       setSelectedProvider(provider);
@@ -2060,8 +2071,8 @@ export function App({
       subagentCardsRef.current.get(toolId),
     );
 
-    // RPC mode: the Go bridge runs the agent; skip all local agent assembly.
-    if (rpcUrl && remoteAgentRef.current) {
+    // Remote mode: the Go bridge runs the agent; skip all local agent assembly.
+    if (remote && remoteAgentRef.current) {
       await runRpcTurn(remoteAgentRef.current, onAgentEvent, controller);
       return;
     }
@@ -2296,7 +2307,7 @@ export function App({
   };
 
   const runUserTurn = async (text: string, modeOverride?: PermissionMode) => {
-    if (!rpcUrl && !clientRef.current) {
+    if (!remote && !clientRef.current) {
       setError("LLM client not ready yet");
       return;
     }
@@ -2309,8 +2320,8 @@ export function App({
 
     try {
       const expanded = await expandAtRefsWithImages(text, workDir);
-      if (rpcUrl && remoteAgentRef.current) {
-        // RPC mode: the Go bridge owns the conversation and transcript; the
+      if (remote && remoteAgentRef.current) {
+        // Remote mode: the Go bridge owns the conversation and transcript; the
         // turn is submitted as content blocks (text + optional images).
         const queued = await remoteAgentRef.current.send(toRpcBlocks(expanded));
         if (!queued) {
@@ -2517,7 +2528,7 @@ export function App({
   const followUps = useFollowUpQueue({
     blocked:
       appState !== "chat" ||
-      (!rpcUrl && !clientRef.current) ||
+      (!remote && !clientRef.current) ||
       isStreaming ||
       isCompacting ||
       providerSwitching ||

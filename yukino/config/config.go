@@ -513,7 +513,7 @@ func parseProvidersSection(node *yaml.Node) ([]ProviderConfig, error) {
 
 // nullKnownField returns the first listed field whose value node is an
 // explicit null, or "". zod's optional fields are never nullable, so an
-// explicit null fails the entry; z.object strips unknown keys before
+// explicit null fails the entry; z.looseObject strips unknown keys before
 // validation, so nulls on keys outside the list must NOT fail it.
 func nullKnownField(node *yaml.Node, fields ...string) string {
 	if node == nil || node.Kind != yaml.MappingNode {

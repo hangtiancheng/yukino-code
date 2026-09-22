@@ -92,7 +92,7 @@ describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
       encoding: "utf-8",
     });
 
-    const LoadedSchema = z.object({
+    const LoadedSchema = z.looseObject({
       totalExports: z.number().int().positive(),
       version: z.string().regex(/^\d+\.\d+/),
       symbols: z.record(z.string(), z.string()),

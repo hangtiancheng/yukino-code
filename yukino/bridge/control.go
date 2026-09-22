@@ -63,7 +63,49 @@ func (s *Session) HandleControl(req *jsonrpc.Request) (any, *jsonrpc.Error) {
 	case MethodPing:
 		return nil, nil
 
+	case MethodSessionSelectProvider:
+		var p selectProviderParams
+		if err := req.DecodeParams(&p); err != nil {
+			return nil, jsonrpc.InvalidParams(err.Error())
+		}
+		if p.Name == "" {
+			return nil, jsonrpc.InvalidParams(`"name" is required`)
+		}
+		model, protocol, contextWindow, maxOutput, err := s.SwitchProvider(p.Name)
+		if err != nil {
+			// A refused switch (unknown provider, or a turn already running) is
+			// reported as a protocol error; the Connect transport maps the same
+			// outcomes onto NotFound / FailedPrecondition.
+			return nil, jsonrpc.NewError(jsonrpc.CodeInternalError, err.Error())
+		}
+		return map[string]any{
+			"model":           model,
+			"protocol":        protocol,
+			"contextWindow":   contextWindow,
+			"maxOutputTokens": maxOutput,
+		}, nil
+
 	default:
 		return nil, jsonrpc.MethodNotFound(req.Method)
 	}
+}
+
+// SubmitPromptRequest handles one session/prompt request: it decodes the params
+// and queues the turn, reporting whether it was accepted. Multimodal turns
+// (non-empty Blocks) go through SubmitPromptBlocks; text-only turns through
+// SubmitPrompt. Only the standalone transports (stdio and the standalone
+// websocket server) expose this method — the chat websocket deployment routes
+// prompts through Manager.Dispatch instead.
+func (s *Session) SubmitPromptRequest(req *jsonrpc.Request) (any, *jsonrpc.Error) {
+	var p PromptParams
+	if err := req.DecodeParams(&p); err != nil {
+		return nil, jsonrpc.InvalidParams(err.Error())
+	}
+	if p.Content == "" && len(p.Blocks) == 0 {
+		return nil, jsonrpc.InvalidParams(`"content" is required`)
+	}
+	if len(p.Blocks) > 0 {
+		return map[string]bool{"queued": s.SubmitPromptBlocks(p.Content, p.Blocks)}, nil
+	}
+	return map[string]bool{"queued": s.SubmitPrompt(p.Content)}, nil
 }

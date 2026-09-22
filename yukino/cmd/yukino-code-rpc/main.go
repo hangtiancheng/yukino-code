@@ -18,13 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// Command yukino-code serves one standalone agent session over Connect
+// Command yukino-code-rpc serves one standalone agent session over Connect
 // (protobuf RPC), the transport the terminal UI speaks. It mirrors the stdio
 // deployment: no chat pipeline (the sink is a no-op), the workspace is the
 // process working directory unless -workdir says otherwise, and the session
 // lives as long as the process.
 //
-//	yukino-code [-addr 127.0.0.1:7860] [-workdir DIR]
+//	yukino-code-rpc [-addr 127.0.0.1:7860] [-workdir DIR]
 package main
 
 import (
@@ -73,14 +73,14 @@ func main() {
 	if *provider != "" {
 		if err := mgr.UseProvider(*provider); err != nil {
 			mgr.Stop()
-			log.Fatalf("yukino-code: %v", err)
+			log.Fatalf("yukino-code-rpc: %v", err)
 		}
 	}
 	mgr.OverridePermissionMode(*permMode)
 	sess, err := mgr.NewStandaloneSession("terminal", wd)
 	if err != nil {
 		mgr.Stop()
-		log.Fatalf("yukino-code: %v", err)
+		log.Fatalf("yukino-code-rpc: %v", err)
 	}
 	defer sess.Close()
 
@@ -91,14 +91,14 @@ func main() {
 	httpSrv := &http.Server{Addr: *addr, Handler: mux}
 	go func() {
 		<-ctx.Done()
-		log.Printf("yukino-code: shutting down")
+		log.Printf("yukino-code-rpc: shutting down")
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(shutCtx)
 	}()
 
-	log.Printf("yukino-code: serving %s on http://%s%s", wd, *addr, path)
+	log.Printf("yukino-code-rpc: serving %s on http://%s%s", wd, *addr, path)
 	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("yukino-code: %v", err)
+		log.Fatalf("yukino-code-rpc: %v", err)
 	}
 }

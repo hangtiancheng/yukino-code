@@ -86,7 +86,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
-const SelectedMemoriesSchema = z.object({
+const SelectedMemoriesSchema = z.looseObject({
   selected_memories: z.array(z.string()),
 });
 

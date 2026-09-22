@@ -51,9 +51,9 @@ export interface IdeConnection {
   close: () => Promise<void>;
 }
 
-const AtMentionedSchema = z.object({
+const AtMentionedSchema = z.looseObject({
   method: z.literal("at_mentioned"),
-  params: z.object({
+  params: z.looseObject({
     filePath: z.string(),
     lineStart: z.number().optional(),
     lineEnd: z.number().optional(),

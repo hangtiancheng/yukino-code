@@ -30,7 +30,7 @@ import { isRecord } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "commands" });
 
-const UsageEntrySchema = z.object({
+const UsageEntrySchema = z.looseObject({
   usageCount: z.coerce.number(),
   lastUsedAt: z.coerce.number(),
 });

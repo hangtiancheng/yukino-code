@@ -32,19 +32,19 @@ import { contentToText } from "@/utils/index.js";
 const log = createChildLogger({ module: "teams" });
 
 // Serialized data structure
-const TranscriptToolUseSchema = z.object({
+const TranscriptToolUseSchema = z.looseObject({
   tool_use_id: z.string(),
   tool_name: z.string(),
   arguments: z.record(z.string(), z.unknown()),
 });
 
-const TranscriptToolResultSchema = z.object({
+const TranscriptToolResultSchema = z.looseObject({
   tool_use_id: z.string(),
   content: z.string(),
   is_error: z.boolean().optional(),
 });
 
-const TranscriptEntrySchema = z.object({
+const TranscriptEntrySchema = z.looseObject({
   role: z.string(),
   content: z.string().optional(),
   tool_uses: z.array(TranscriptToolUseSchema).optional(),

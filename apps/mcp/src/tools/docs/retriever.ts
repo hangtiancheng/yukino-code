@@ -42,10 +42,10 @@ const DocValueSchema = z.looseObject({
   __vector_score: z.unknown().optional(),
 });
 
-const SearchResultSchema = z.object({
+const SearchResultSchema = z.looseObject({
   total: z.number(),
   documents: z.array(
-    z.object({
+    z.looseObject({
       id: z.string(),
       value: DocValueSchema,
     }),

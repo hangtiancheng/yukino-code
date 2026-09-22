@@ -420,7 +420,7 @@ describe("multimodal provider requests", () => {
       const body = z
         .object({
           max_tokens: z.number(),
-          thinking: z.object({
+          thinking: z.looseObject({
             type: z.string(),
             budget_tokens: z.number().optional(),
           }),
@@ -502,7 +502,7 @@ describe("Anthropic thinking budget under an output cap", () => {
     return z
       .object({
         max_tokens: z.number(),
-        thinking: z.object({
+        thinking: z.looseObject({
           type: z.string(),
           budget_tokens: z.number().optional(),
         }),

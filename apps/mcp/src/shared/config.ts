@@ -53,7 +53,7 @@ export interface AppConfig {
   port: number;
 }
 
-const EnvSchema = z.object({
+const EnvSchema = z.looseObject({
   EMBEDDING_PROTOCOL: z.string().optional(),
   EMBEDDING_MODEL: z.string().optional(),
   EMBEDDING_API_KEY: z.string().optional(),

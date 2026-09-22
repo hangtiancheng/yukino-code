@@ -89,7 +89,7 @@ function commandName(base: string, full: string): string {
     .join(":");
 }
 
-const YamlFrontmatterSchema = z.object({
+const YamlFrontmatterSchema = z.looseObject({
   description: z.string().optional(),
   "argument-hint": z.string().optional(),
   aliases: z.array(z.string()).optional(),

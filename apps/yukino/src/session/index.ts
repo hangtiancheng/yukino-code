@@ -62,7 +62,7 @@ const SESSION_EXPIRY_DAYS = 30;
 /** Persisted form of a tool invocation. Stores a provider-agnostic internal representation rather than
  *  any vendor-specific wire format, so sessions can be restored even after switching providers. */
 
-const ToolUseRecordSchema = z.object({
+const ToolUseRecordSchema = z.looseObject({
   tool_use_id: z.string(),
   tool_name: z.string(),
   arguments: z.record(z.string(), z.unknown()).optional(),
@@ -78,7 +78,7 @@ const ContentSchema = z.union([
 ]);
 
 /** Persisted form of a tool result, paired with a ToolUseRecord via tool_use_id. */
-const ToolResultRecordSchema = z.object({
+const ToolResultRecordSchema = z.looseObject({
   tool_use_id: z.string(),
   content: ContentSchema,
   content_blocks: z.array(z.unknown()).optional(),
@@ -87,7 +87,7 @@ const ToolResultRecordSchema = z.object({
 
 export type ToolResultRecord = z.infer<typeof ToolResultRecordSchema>;
 
-const SessionMessageSchema = z.object({
+const SessionMessageSchema = z.looseObject({
   role: z.string(),
   content: ContentSchema.default(""),
   timestamp: z.number(),
@@ -100,7 +100,7 @@ export type SessionMessage = z.infer<typeof SessionMessageSchema>;
 
 // A recent message preserved verbatim when compaction occurs. Like SessionMessage, it carries tool blocks
 // so that the tool call chain remains intact when the session is restored after compaction.
-const KeptMessageSchema = z.object({
+const KeptMessageSchema = z.looseObject({
   role: z.string(),
   content: ContentSchema,
   tool_uses: z.array(ToolUseRecordSchema).optional(),
@@ -139,7 +139,7 @@ export function toolResultsToRecords(
   }));
 }
 
-const CompactBoundaryPayloadSchema = z.object({
+const CompactBoundaryPayloadSchema = z.looseObject({
   summary: z.string(),
   keep: z.array(KeptMessageSchema),
 });

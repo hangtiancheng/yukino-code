@@ -109,6 +109,9 @@ export class RemoteAgent {
   dispose(): void {
     this.watchAbort.abort();
     this.close();
+    // Releases the underlying transport (websocket close / child termination);
+    // the Connect transport is a no-op here and tears down via the abort above.
+    this.rpc.dispose?.();
   }
 
   private startPump(): void {

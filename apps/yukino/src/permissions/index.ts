@@ -387,7 +387,7 @@ function loadRulesFile(path: string): Rule[] {
     }
     return [];
   }
-  const YamlEntrySchema = z.object({
+  const YamlEntrySchema = z.looseObject({
     rule: z.string().optional(),
     effect: z.string().optional(),
   });

@@ -269,7 +269,7 @@ export class TaskUpdateTool implements Tool {
   }
 }
 
-const TaskUpdateArgsSchema = z.object({
+const TaskUpdateArgsSchema = z.looseObject({
   taskId: z.string(),
   subject: z.string().optional(),
   description: z.string().optional(),

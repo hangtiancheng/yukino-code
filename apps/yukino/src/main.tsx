@@ -36,6 +36,7 @@ import {
 import { initLogger, logger } from "./logger/index.js";
 import { parsePrintFlags, runPrintMode } from "./print-mode.js";
 import { recover, recordError, recordExit } from "./recover.js";
+import type { RemoteTransport } from "./rpc/transport.js";
 import { newSessionId } from "./session/index.js";
 import { parseTeammateFlags, runTeammate } from "./teammate.js";
 import {
@@ -91,17 +92,43 @@ async function main() {
     }
   }
 
-  // Parse --rpc mode: drive the Go agent bridge over protobuf/Connect instead
-  // of the in-process agent. Also honours YUKINO_RPC_URL.
-  let rpcUrl = process.env.YUKINO_RPC_URL ?? "";
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--rpc") {
-      rpcUrl = "http://127.0.0.1:7860";
-      if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
-        rpcUrl = args[i + 1];
-        i++;
+  // Parse the remote-harness flags. Each one drives the Go agent bridge instead
+  // of the in-process TypeScript agent; when none is given the local harness
+  // runs. An optional value follows the flag, otherwise the bracketed default
+  // (or the matching env var) is used:
+  //   --rpc     protobuf/Connect over HTTP   (yukino-code-rpc)   [YUKINO_RPC_URL]
+  //   --ws      JSON-RPC 2.0 over websocket  (yukino-code-ws)    [YUKINO_WS_URL]
+  //   --stdio   JSON-RPC 2.0 over a spawned child (yukino-code-stdio) [YUKINO_STDIO_CMD]
+  const flagValue = (flag: string, fallback: string): string => {
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === flag) {
+        if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
+          return args[i + 1];
+        }
+        return fallback;
       }
     }
+    return "";
+  };
+  const rpcUrl =
+    flagValue("--rpc", "http://127.0.0.1:7860") ||
+    (process.env.YUKINO_RPC_URL ?? "");
+  const wsUrl =
+    flagValue("--ws", "ws://127.0.0.1:7861/ws") ||
+    (process.env.YUKINO_WS_URL ?? "");
+  const stdioCommand =
+    flagValue("--stdio", "yukino-code-stdio") ||
+    (process.env.YUKINO_STDIO_CMD ?? "");
+
+  // Precedence when more than one transport is requested: stdio, then ws, then
+  // rpc. Only one bridge is driven per session.
+  let remote: RemoteTransport | undefined;
+  if (stdioCommand) {
+    remote = { kind: "stdio", command: stdioCommand, args: [] };
+  } else if (wsUrl) {
+    remote = { kind: "ws", url: wsUrl };
+  } else if (rpcUrl) {
+    remote = { kind: "connect", url: rpcUrl };
   }
 
   const printArgs = parsePrintFlags(args);
@@ -122,7 +149,7 @@ async function main() {
   let cfg;
   try {
     cfg = withProjectMcpServers(
-      loadConfig(undefined, { allowEmptyProviders: !remoteAddr && !rpcUrl }),
+      loadConfig(undefined, { allowEmptyProviders: !remoteAddr && !remote }),
       process.cwd(),
     );
   } catch (err) {
@@ -175,7 +202,7 @@ async function main() {
     sandboxConfig: cfg.sandbox,
     enableCoordinatorMode: cfg.enable_coordinator_mode,
     forkDisabled: !forkEnabled(cfg),
-    rpcUrl: rpcUrl || undefined,
+    remote,
   };
   const application = (
     <App

@@ -149,21 +149,21 @@ interface WsOutbound {
   data: unknown;
 }
 
-const WsInboundSchema = z.object({
+const WsInboundSchema = z.looseObject({
   type: z.string(),
   data: z.unknown(),
 });
 
-const UserMessageSchema = z.object({
+const UserMessageSchema = z.looseObject({
   content: z.string(),
 });
 
-const PermissionResponseSchema = z.object({
+const PermissionResponseSchema = z.looseObject({
   id: z.string(),
   response: z.enum(["allow", "deny", "allowAlways"]),
 });
 
-const AskUserResponseSchema = z.object({
+const AskUserResponseSchema = z.looseObject({
   id: z.string(),
   answers: z.record(z.string(), z.string()),
 });

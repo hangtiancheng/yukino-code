@@ -302,7 +302,7 @@ export function resolveAPIKey(p: ProviderConfig): string {
   return process.env[envVar] ?? "";
 }
 
-const MCPServerConfigSchema = z.object({
+const MCPServerConfigSchema = z.looseObject({
   name: z.string(),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
@@ -314,11 +314,11 @@ const MCPServerConfigSchema = z.object({
 
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>;
 
-export const HookConfigSchema = z.object({
+export const HookConfigSchema = z.looseObject({
   id: z.string().optional(),
   event: z.string(),
   condition: z.string().optional(),
-  action: z.object({
+  action: z.looseObject({
     type: z.string(),
     command: z.string().optional(),
     url: z.string().optional(),
@@ -333,7 +333,7 @@ export const HookConfigSchema = z.object({
 
 export type HookConfig = z.infer<typeof HookConfigSchema>;
 
-const SandboxYamlConfigSchema = z.object({
+const SandboxYamlConfigSchema = z.looseObject({
   enabled: z.boolean().optional(),
   backend: z.enum(["native", "sandbox-runtime"]).optional(),
   auto_allow: z.boolean().optional(),

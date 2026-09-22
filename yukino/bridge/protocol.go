@@ -75,10 +75,16 @@ const (
 	MethodQuestionRespond   = "question/respond"
 	MethodSessionCancel     = "session/cancel"
 	MethodPing              = "ping"
-	// MethodSessionPrompt is only exposed by the stdio transport: in the
-	// websocket deployment prompts travel the chat pipeline (so they are
-	// persisted and echoed like any other message) and never reach the socket.
+	// MethodSessionPrompt is exposed by the standalone transports (stdio and
+	// the standalone websocket server), where a client drives the agent
+	// directly. In the chat websocket deployment prompts instead travel the
+	// chat pipeline (so they are persisted and echoed like any other message)
+	// and never reach the socket.
 	MethodSessionPrompt = "session/prompt"
+	// MethodSessionSelectProvider switches the session's active LLM provider by
+	// name, mirroring the Connect transport's SelectProvider RPC. It is refused
+	// while a turn is running.
+	MethodSessionSelectProvider = "session/select_provider"
 )
 
 // Conn is one attached client connection. WriteMessage delivers a single
@@ -118,7 +124,16 @@ type questionRespondParams struct {
 	Answers map[string]string `json:"answers"`
 }
 
-// PromptParams are the params of session/prompt (stdio transport only).
+// PromptParams are the params of session/prompt (the standalone transports).
+// Content is the display/transcript form of the turn; Blocks, when non-empty,
+// carries the multimodal content-block list (text + image) the model actually
+// sees, in the conversation's block shape. Text-only turns leave Blocks nil.
 type PromptParams struct {
-	Content string `json:"content"`
+	Content string           `json:"content"`
+	Blocks  []map[string]any `json:"blocks,omitempty"`
+}
+
+// selectProviderParams are the params of session/select_provider.
+type selectProviderParams struct {
+	Name string `json:"name"`
 }

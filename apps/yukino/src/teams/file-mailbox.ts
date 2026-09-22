@@ -38,7 +38,7 @@ import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "teams" });
 
-const FileMailMessageSchema = z.object({
+const FileMailMessageSchema = z.looseObject({
   from: z.string(),
   text: z.string(),
   timestamp: z.string(),

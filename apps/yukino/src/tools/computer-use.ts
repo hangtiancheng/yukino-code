@@ -74,7 +74,7 @@ const CoordinateSchema = z.tuple([
   z.number().int().nonnegative(),
   z.number().int().nonnegative(),
 ]);
-const PathPointSchema = z.object({
+const PathPointSchema = z.looseObject({
   x: z.number().int().nonnegative(),
   y: z.number().int().nonnegative(),
 });
@@ -93,7 +93,7 @@ const OPENAI_ACTION_TYPES = [
   "wait",
 ] as const;
 const MAX_BATCH_ACTIONS = 100;
-const OpenAIActionSchema = z.object({
+const OpenAIActionSchema = z.looseObject({
   type: z.enum(OPENAI_ACTION_TYPES),
   button: z.enum(["left", "right", "wheel", "back", "forward"]).optional(),
   x: z.number().int().nonnegative().optional(),
@@ -104,12 +104,12 @@ const OpenAIActionSchema = z.object({
   scrollY: z.number().optional(),
   text: z.string().max(10_000).optional(),
 });
-const SafetyCheckSchema = z.object({
+const SafetyCheckSchema = z.looseObject({
   id: z.string().min(1),
   code: z.string().optional(),
   message: z.string().optional(),
 });
-const ComputerUseInputSchema = z.object({
+const ComputerUseInputSchema = z.looseObject({
   action: z.enum(ACTIONS).optional(),
   actions: z.array(OpenAIActionSchema).min(1).max(MAX_BATCH_ACTIONS).optional(),
   pendingSafetyChecks: z.array(SafetyCheckSchema).optional(),

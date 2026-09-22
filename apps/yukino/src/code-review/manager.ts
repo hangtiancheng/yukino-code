@@ -41,7 +41,7 @@ const CodeReviewMemberSchema = z.object({
 
 export type CodeReviewMember = z.infer<typeof CodeReviewMemberSchema>;
 
-const CodeReviewTeamSchema = z.object({
+const CodeReviewTeamSchema = z.looseObject({
   name: z.string(),
   members: z.array(CodeReviewMemberSchema),
   createdAt: z.string(),

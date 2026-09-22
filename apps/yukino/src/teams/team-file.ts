@@ -37,7 +37,7 @@ import z from "zod";
  * three-state semantics: absent means just registered and not yet started,
  * true means actively running, false means idle.
  */
-export const TeamMemberEntrySchema = z.object({
+export const TeamMemberEntrySchema = z.looseObject({
   agentId: z.string(),
   name: z.string(),
   agentType: z.string().optional(),
@@ -61,7 +61,7 @@ export type TeamMemberEntry = z.infer<typeof TeamMemberEntrySchema>;
  * independent processes that need to know which team they belong to and who their
  * peers are after startup; users restarting Yukino must be able to resume prior teams.
  */
-const TeamFileSchema = z.object({
+const TeamFileSchema = z.looseObject({
   name: z.string(),
   description: z.string().optional(),
   createdAt: z.number(),

@@ -59,15 +59,46 @@ const maxLineLen = 4 << 20
 // logs and sink calls (the sink is a no-op here).
 const userID = "stdio"
 
-// Run serves the bridge until stdin reaches EOF or ctx is cancelled. It
-// returns a non-nil error only when the session could not be created (for
-// example because yukino is not configured); a normal shutdown returns nil.
+// Options configure the standalone session a stdio bridge serves. The zero
+// value is the common case: the process working directory, the config's first
+// provider and its permission_mode.
+type Options struct {
+	// WorkDir is the agent workspace. Empty means the process working
+	// directory, which is what a spawning terminal UI inherits to the child.
+	WorkDir string
+	// Provider selects a provider from the loaded config by name. Empty keeps
+	// the default (the first provider).
+	Provider string
+	// PermissionMode overrides the config's permission_mode. Empty leaves it
+	// untouched.
+	PermissionMode string
+}
+
+// Run serves the bridge until stdin reaches EOF or ctx is cancelled, using the
+// default Options. It returns a non-nil error only when the session could not
+// be created (for example because yukino is not configured); a normal shutdown
+// returns nil.
 func Run(ctx context.Context, in io.Reader, out io.Writer) error {
-	wd, err := os.Getwd()
-	if err != nil {
-		wd = "."
+	return RunWithOptions(ctx, in, out, Options{})
+}
+
+// RunWithOptions is Run with an explicit session configuration.
+func RunWithOptions(ctx context.Context, in io.Reader, out io.Writer, opts Options) error {
+	wd := opts.WorkDir
+	if wd == "" {
+		var err error
+		if wd, err = os.Getwd(); err != nil {
+			wd = "."
+		}
 	}
 	mgr := bridge.NewManager(noopSink{})
+	if opts.Provider != "" {
+		if err := mgr.UseProvider(opts.Provider); err != nil {
+			mgr.Stop()
+			return err
+		}
+	}
+	mgr.OverridePermissionMode(opts.PermissionMode)
 	sess, err := mgr.NewStandaloneSession(userID, wd)
 	if err != nil {
 		mgr.Stop()
@@ -189,16 +220,9 @@ func handleLine(sess *bridge.Session, conn *lineConn, line []byte) {
 
 	var result any
 	if req.Method == bridge.MethodSessionPrompt {
-		var p bridge.PromptParams
-		if err := req.DecodeParams(&p); err != nil {
-			rpcErr = jsonrpc.InvalidParams(err.Error())
-		} else if p.Content == "" {
-			rpcErr = jsonrpc.InvalidParams(`"content" is required`)
-		} else {
-			// queued=false means the turn queue is full; the session has
-			// already told the client to slow down via agent/system.
-			result = map[string]bool{"queued": sess.SubmitPrompt(p.Content)}
-		}
+		// queued=false means the turn queue is full; the session has already
+		// told the client to slow down via agent/system.
+		result, rpcErr = sess.SubmitPromptRequest(req)
 	} else {
 		result, rpcErr = sess.HandleControl(req)
 	}

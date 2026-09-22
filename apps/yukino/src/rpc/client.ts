@@ -122,6 +122,12 @@ export interface AgentRpc {
     contextWindow: number;
     maxOutputTokens: number;
   }>;
+  /**
+   * Releases the transport (closes the socket or terminates the spawned child).
+   * Optional: the Connect transport tears down through the watch abort signal
+   * alone, while the websocket and stdio transports close their channel here.
+   */
+  dispose?(): void;
 }
 
 const PERMISSION_WIRE: Record<PermissionAnswer, PermissionResponse> = {
@@ -271,7 +277,7 @@ export function mapEvent(ev: Event): RemoteEvent | null {
 
 /** Options for createAgentRpc. */
 export interface AgentRpcOptions {
-  /** Base URL of the yukino-agent Connect server, e.g. http://127.0.0.1:7860. */
+  /** Base URL of the yukino-code Connect server, e.g. http://127.0.0.1:7860. */
   url: string;
 }
 

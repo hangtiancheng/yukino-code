@@ -31,7 +31,7 @@ import { z } from "zod";
 
 declare const __YUKINO_VERSION__: string | undefined;
 
-const PackageJsonSchema = z.object({
+const PackageJsonSchema = z.looseObject({
   version: z.string(),
 });
 

@@ -27,12 +27,12 @@ import type { ProviderConfig } from "@/config/index.js";
 const DISCOVERY_TIMEOUT_MS = 5_000;
 const MAX_MODEL_PAGES = 10;
 const HttpUrlSchema = z.url();
-const ModelSchema = z.object({
+const ModelSchema = z.looseObject({
   id: z.string().trim().min(1),
   display_name: z.string().optional(),
   name: z.string().optional(),
 });
-const ModelListSchema = z.object({
+const ModelListSchema = z.looseObject({
   data: z.array(ModelSchema),
   has_more: z.boolean().optional(),
   last_id: z.string().trim().min(1).nullable().optional(),

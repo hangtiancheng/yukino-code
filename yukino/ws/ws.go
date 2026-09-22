@@ -61,9 +61,11 @@ func (w wsConn) WriteMessage(data []byte) error {
 	return w.c.WriteMessage(yukino_http.TextMessage, data)
 }
 
-// Serve runs the control socket for one client: it reports progress for the
-// user's agent as JSON-RPC notifications and answers the control requests
-// permission and question prompts block on.
+// Serve runs the control socket for one chat client: it reports progress for
+// the user's agent as JSON-RPC notifications and answers the control requests
+// permission and question prompts block on. Prompts do not arrive here — in the
+// chat deployment they travel the pipeline (Manager.Dispatch), so the socket is
+// control-only.
 func (m *Manager) Serve(userID string, c *yukino_http.WSConn) {
 	defer c.Close()
 
@@ -72,7 +74,24 @@ func (m *Manager) Serve(userID string, c *yukino_http.WSConn) {
 		writeNotification(c, bridge.MethodAgentError, map[string]string{"message": err.Error()})
 		return
 	}
+	serveConn(userID, sess, c, false)
+}
 
+// ServeSession runs the control socket for one standalone session — the
+// terminal deployment, where a client drives the agent directly over the socket
+// and there is no chat pipeline. It is the websocket counterpart of the stdio
+// transport: prompts arrive as session/prompt requests and finalized text is
+// streamed back as notifications rather than filed into a transcript.
+func ServeSession(sess *bridge.Session, c *yukino_http.WSConn) {
+	defer c.Close()
+	serveConn("terminal", sess, c, true)
+}
+
+// serveConn attaches one websocket client to sess and answers its JSON-RPC
+// requests until the socket closes. allowPrompt gates session/prompt: the chat
+// deployment leaves it off (prompts travel the chat pipeline), the standalone
+// terminal deployment turns it on.
+func serveConn(userID string, sess *bridge.Session, c *yukino_http.WSConn, allowPrompt bool) {
 	conn := wsConn{c}
 	sess.Attach(conn)
 	defer sess.Detach(conn)
@@ -95,7 +114,12 @@ func (m *Manager) Serve(userID string, c *yukino_http.WSConn) {
 			// unanswerable message is ignored rather than rejected.
 			continue
 		}
-		result, rpcErr := sess.HandleControl(req)
+		var result any
+		if allowPrompt && req.Method == bridge.MethodSessionPrompt {
+			result, rpcErr = sess.SubmitPromptRequest(req)
+		} else {
+			result, rpcErr = sess.HandleControl(req)
+		}
 		writeResponse(c, jsonrpc.Response{ID: req.ID, Result: result, Err: rpcErr})
 	}
 }

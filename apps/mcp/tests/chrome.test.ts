@@ -130,7 +130,7 @@ describe("Chrome tools", () => {
     const server = new McpServer({ name: "test-server", version: "0.0.0" });
     server.registerTool(
       "sentinel",
-      { inputSchema: z.object({}) },
+      { inputSchema: z.looseObject({}) },
       async () => ({
         content: [{ type: "text", text: "ok" }],
       }),

@@ -30,14 +30,14 @@ import type {
   ToolSchema,
 } from "./types.js";
 
-const QuestionOptionSchema = z.object({
+const QuestionOptionSchema = z.looseObject({
   label: z.string(),
   description: z.string().optional(),
 });
 
 export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 
-const QuestionSchema = z.object({
+const QuestionSchema = z.looseObject({
   question: z.string(),
   header: z.string(),
   options: z.array(QuestionOptionSchema),
@@ -140,7 +140,7 @@ export class AskUserQuestionTool implements Tool {
       data: argsData,
       error,
     } = await safeParseAsync(
-      z.object({ questions: z.array(QuestionSchema) }),
+      z.looseObject({ questions: z.array(QuestionSchema) }),
       args,
     );
     if (!success) {

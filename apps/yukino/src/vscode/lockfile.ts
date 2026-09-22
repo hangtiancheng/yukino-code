@@ -35,7 +35,7 @@ import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "vscode" });
 
-const LockfileSchema = z.object({
+const LockfileSchema = z.looseObject({
   workspaceFolders: z.array(z.string()).optional(),
   pid: z.number().optional(),
   ideName: z.string().optional(),

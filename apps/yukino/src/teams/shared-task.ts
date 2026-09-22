@@ -38,7 +38,7 @@ export interface SharedTask {
 }
 
 /** On-disk task structure; field names use snake_case for cross-language consistency. */
-const SerializedTaskSchema = z.object({
+const SerializedTaskSchema = z.looseObject({
   id: z.string(),
   title: z.string(),
   description: z.string().default(""),
@@ -50,7 +50,7 @@ const SerializedTaskSchema = z.object({
 });
 
 /** Top-level structure of tasks.json: next available id + task list. */
-const StoreDataSchema = z.object({
+const StoreDataSchema = z.looseObject({
   next_id: z.number().int().positive().default(1),
   tasks: z.array(SerializedTaskSchema).default([]),
 });

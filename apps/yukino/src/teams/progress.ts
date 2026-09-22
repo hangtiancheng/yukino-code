@@ -25,20 +25,20 @@ import { z } from "zod";
 import { strArg } from "@/utils/index.js";
 
 // Tool activity description
-export const ToolActivitySchema = z.object({
+export const ToolActivitySchema = z.looseObject({
   toolName: z.string(),
   input: z.record(z.string(), z.unknown()),
   activityDescription: z.string(), // e.g. "Reading src/foo.ts"
 });
 export type ToolActivity = z.infer<typeof ToolActivitySchema>;
 
-export const ActiveToolSchema = z.object({
+export const ActiveToolSchema = z.looseObject({
   toolId: z.string(),
   toolName: z.string(),
 });
 export type ActiveTool = z.infer<typeof ActiveToolSchema>;
 
-export const AgentProgressSchema = z.object({
+export const AgentProgressSchema = z.looseObject({
   toolUseCount: z.number(),
   turnCount: z.number(),
   tokenCount: z.number(),
@@ -49,7 +49,7 @@ export const AgentProgressSchema = z.object({
 export type AgentProgress = z.infer<typeof AgentProgressSchema>;
 
 // Full teammate UI state
-export const TeammateUIStateSchema = z.object({
+export const TeammateUIStateSchema = z.looseObject({
   name: z.string(),
   teamName: z.string(),
   status: z.enum(["running", "idle", "completed", "failed", "stopped"]),
