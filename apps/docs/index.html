@@ -1,0 +1,116 @@
+<!doctype html>
+<!--
+ Copyright (c) 2026 hangtiancheng
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+-->
+
+<html lang="en" class="scroll-pt-24 scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#849a72"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#0a0d09"
+    />
+    <title>Yukino — The AI coding agent that lives in your terminal</title>
+    <meta
+      name="description"
+      content="Yukino is a terminal-based AI coding agent. Chat with any LLM, edit files, run commands, and orchestrate multi-agent workflows — all from one CLI."
+    />
+    <link rel="canonical" href="https://hangtiancheng.github.io/yukino-code/" />
+    <meta
+      property="og:title"
+      content="Yukino — The AI coding agent that lives in your terminal"
+    />
+    <meta
+      property="og:description"
+      content="Multi-provider LLMs, a rich streaming TUI, sandboxed tools, long-term memory and multi-agent teams — in a single CLI."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://hangtiancheng.github.io/yukino-code/"
+    />
+    <meta property="og:site_name" content="Yukino" />
+    <meta property="og:locale" content="en_US" />
+    <meta
+      property="og:image"
+      content="https://hangtiancheng.github.io/yukino-code/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Yukino — The AI coding agent that lives in your terminal"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Yukino — The AI coding agent that lives in your terminal"
+    />
+    <meta
+      name="twitter:description"
+      content="Multi-provider LLMs, a rich streaming TUI, sandboxed tools, long-term memory and multi-agent teams — in a single CLI."
+    />
+    <meta
+      name="twitter:image"
+      content="https://hangtiancheng.github.io/yukino-code/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Yukino",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": ["macOS", "Linux", "Windows"],
+        "url": "https://github.com/hangtiancheng/yukino-code",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "description": "Yukino is a terminal-based AI coding agent. Chat with any LLM, edit files, run commands, and orchestrate multi-agent workflows — all from one CLI."
+      }
+    </script>
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem("yukino-theme");
+          const dark = stored
+            ? stored === "dark"
+            : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          if (dark) document.documentElement.classList.add("dark");
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch {
+          /* ignore */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

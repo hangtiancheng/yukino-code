@@ -1,0 +1,27 @@
+{
+  "name": "docs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "format": "prettier -w ./ --experimental-cli",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@yukino.js/lit-jsx": "^0.0.4",
+    "lit": "^3.3.3",
+    "lucide-static": "^1.47.0",
+    "motion": "^13.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.5",
+    "prettier": "^3.9.8",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.0"
+  }
+}

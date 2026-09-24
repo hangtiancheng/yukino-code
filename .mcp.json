@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "command": "codegraph",
+      "args": ["serve", "--mcp"],
+      "disabled": false
+    },
+    "yukino-mcp": {
+      "url": "http://127.0.0.1:3300/mcp"
+    }
+  }
+}

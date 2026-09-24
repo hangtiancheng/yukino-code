@@ -1,0 +1,138 @@
+# Copyright (c) 2026 hangtiancheng
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HUSKY: 0
+
+jobs:
+  ci:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # --- @yukino.js/yukino ---
+
+      - name: Typecheck yukino
+        run: pnpm --filter @yukino.js/yukino typecheck
+
+      # Build before test: tests/library-entry.test.ts asserts on dist/ artifacts
+      # (bin shebang, library boundary), so a fresh runner must have them.
+      - name: Build yukino
+        run: pnpm --filter @yukino.js/yukino build
+
+      - name: Test yukino
+        run: pnpm --filter @yukino.js/yukino test
+
+      - name: Lint yukino
+        run: pnpm --filter @yukino.js/yukino lint
+
+      - name: Build yukino frontend
+        run: pnpm --filter @yukino.js/yukino build:fe
+
+      # --- @yukino.js/mcp ---
+
+      - name: Typecheck mcp
+        run: pnpm --filter @yukino.js/mcp typecheck
+
+      - name: Test mcp
+        run: pnpm --filter @yukino.js/mcp test
+
+      - name: Build mcp
+        run: pnpm --filter @yukino.js/mcp build
+
+      - name: Build mcp frontend
+        run: pnpm --filter @yukino.js/mcp build:fe
+
+  # --- Docs site (apps/docs) → GitHub Pages ---
+  # Publishes on every push to main, after the test/build job passes.
+  deploy-docs:
+    name: Deploy Docs to GitHub Pages
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build docs
+        run: pnpm --filter docs build
+        env:
+          # Project pages live under /<repo>/; swap DOCS_BASE for a custom domain.
+          DOCS_BASE: /${{ github.event.repository.name }}/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/docs/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,18 @@
+# Yukino runtime artifacts (auto-generated, not committed)
+
+# Session transcripts & file history snapshots (per-session, runtime)
+.yukino/sessions/
+.yukino/file-history/
+
+# Plan files (per-session, runtime)
+.yukino/plans/
+
+# Log files (per-session, runtime)
+.yukino/logs/
+.yukino/teams/*/logs/
+
+# ── Committed (do NOT ignore) ──────────────────────────────────────────
+# .yukino/permissions.yaml       — project permission rules (shared)
+# .yukino/memory/                — project-level memories (shared, team)
+# .agents/skills/                — installed skills (shared)
+# .yukino/agents/                — custom agent definitions (shared)
