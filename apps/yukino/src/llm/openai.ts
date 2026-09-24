@@ -25,6 +25,7 @@ import OpenAI from "openai";
 import type { LLMClient } from "./client.js";
 import {
   AuthenticationError,
+  containsContextLengthError,
   ContextTooLongError,
   LLMError,
   NetworkError,
@@ -795,14 +796,6 @@ export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
   return result;
 }
 
-function containsContextLengthError(msg: string): boolean {
-  return (
-    /context_length_exceeded/i.test(msg) ||
-    /maximum\scontext\slength/i.test(msg) ||
-    /prompts?\s+too\s+long/i.test(msg)
-  );
-}
-
 // LLM client for openai-compat (Chat Completions) endpoints.
 export class OpenAICompatClient implements LLMClient {
   readonly protocol = "openai-compat" as const;
@@ -989,13 +982,16 @@ export class OpenAICompatClient implements LLMClient {
                 log.error({ err }, "llm operation failed");
                 args = {};
               }
-              yield {
-                type: "tool_call_complete",
-                toolName: tu.name,
-                toolId: tu.id,
-                arguments: args,
-              };
             }
+            // Emit unconditionally: some compat servers send "" (or nothing)
+            // instead of "{}" for no-argument tool calls, and gating the
+            // completion on non-empty arguments would silently drop the call.
+            yield {
+              type: "tool_call_complete",
+              toolName: tu.name,
+              toolId: tu.id,
+              arguments: args,
+            };
           }
         }
       }

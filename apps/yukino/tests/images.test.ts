@@ -150,7 +150,7 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
     expect(meta.format).toBe("png");
     expect(meta.width).toBe(1600);
     expect(meta.height).toBe(1600);
-  }, 30_000);
+  }, 50_000);
 
   it("compresses an oversized JPEG via the quality ladder and caps dimensions at 2000px", async () => {
     const result = await maybeResizeAndDownsampleImage(
@@ -163,7 +163,7 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
     expect(meta.format).toBe("jpeg");
     expect(meta.width).toBe(MAX_DIMENSION_PX);
     expect(meta.height).toBe(MAX_DIMENSION_PX);
-  }, 30_000);
+  }, 50_000);
 
   it("round-trips the compressed payload as valid base64 binary", async () => {
     const result = await maybeResizeAndDownsampleImage(

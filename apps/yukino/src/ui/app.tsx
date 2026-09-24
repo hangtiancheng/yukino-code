@@ -23,12 +23,16 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { Box, Text, useApp } from "ink";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import { AgentActivity, type SubagentProgress } from "./agent-activity.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "./chat.js";
 import { Footer } from "./footer.js";
 import { InteractionDock } from "./interaction-dock.js";
+import {
+  createInterruptHandlers,
+  isForegroundBusy,
+} from "./interrupt-scope.js";
 import { PendingQueue } from "./pending-queue.js";
 import type { PlanChoice } from "./plan-approval.js";
 import { ProviderLogin } from "./provider-login.js";
@@ -74,7 +78,11 @@ import {
   loadConfig,
   withProjectMcpServers,
 } from "@/config/index.js";
-import { persistThinkingLevel, saveProvider } from "@/config/provider-login.js";
+import {
+  persistDefaultProvider,
+  persistThinkingLevel,
+  saveProvider,
+} from "@/config/provider-login.js";
 import { expandAtRefsWithImages } from "@/conversation/at-expand.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
@@ -92,12 +100,7 @@ import { MemoryExtractor } from "@/memory/extractor.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { MemoryManager, type RecallResult } from "@/memory/manager.js";
 import { PermissionChecker, type PermissionMode } from "@/permissions/index.js";
-import {
-  getOrCreatePlanPath,
-  loadPlan,
-  planExists,
-  resetPlanPath,
-} from "@/plan-file/index.js";
+import { getOrCreatePlanPath, planExists } from "@/plan-file/index.js";
 import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
 import {
   buildPlanModeExitReminder,
@@ -176,6 +179,7 @@ interface Props {
   forkDisabled?: boolean;
   resume?: true | string;
   onExitSummary?: (summary: InteractionSummary) => void;
+  defaultProvider?: number;
 }
 
 // Maximum number of recent tool names (deduplicated) passed to the memory recall selector
@@ -191,20 +195,23 @@ export function App({
   forkDisabled,
   resume,
   onExitSummary,
+  defaultProvider = 0,
 }: Props) {
   const { exit } = useApp();
   const [providers, setProviders] = useState(initialProviders);
   const [loginActive, setLoginActive] = useState(initialProviders.length === 0);
+  const rememberedProvider = initialProviders[defaultProvider];
   const [appState, setAppState] = useState<AppState>(
-    providers.length === 1 ? "chat" : "providerSelect",
+    initialProviders.length === 0 ? "providerSelect" : "chat",
   );
   const [selectedProvider, setSelectedProvider] = useState<ProviderConfig>(
-    providers[0] ?? {
-      name: "",
-      protocol: "anthropic",
-      base_url: "",
-      model: "",
-    },
+    rememberedProvider ??
+      providers[0] ?? {
+        name: "",
+        protocol: "anthropic",
+        base_url: "",
+        model: "",
+      },
   );
   const selectedProviderRef = useRef(selectedProvider);
   const [providerDialogActive, setProviderDialogActive] = useState(false);
@@ -451,17 +458,25 @@ export function App({
     [],
   );
 
-  const interruptAll = useCallback(() => {
-    abortControllerRef.current?.abort();
-    permissionResolveRef.current?.("deny");
-    permissionResolveRef.current = null;
-    setPermissionRequest(null);
-    askResolveRef.current?.({});
-    askResolveRef.current = null;
-    setAskRequest(null);
-    void backgroundTaskManagerRef.current.stopAll();
-    void teamManagerRef.current.stopAll();
-  }, []);
+  // Interrupt scope: a single Ctrl+C / Esc routes to interruptForeground,
+  // which only stops the in-flight agent loop (its signal is shared by
+  // synchronous tool calls and run_in_background=false subagents). Background
+  // tasks, background subagents and teammates own separate abort controllers
+  // and keep running; only the TUI-exit path (double Ctrl+C, /quit) tears
+  // them down through interruptAll().
+  const { interruptForeground, interruptAll } = useMemo(
+    () =>
+      createInterruptHandlers({
+        abortControllerRef,
+        permissionResolveRef,
+        setPermissionRequest,
+        askResolveRef,
+        setAskRequest,
+        backgroundTasks: backgroundTaskManagerRef.current,
+        teams: teamManagerRef.current,
+      }),
+    [],
+  );
 
   const requestExit = useCallback(() => {
     interruptAll();
@@ -476,17 +491,15 @@ export function App({
     exit();
   }, [exit, interruptAll, onExitSummary]);
 
-  const hasRunningChildren =
-    subagents.some((subagent) => subagent.status === "running") ||
-    backgroundTasks.some((task) => task.status === "running") ||
-    teammateStates.some(
-      (teammate) => teammate.status === "running" || teammate.status === "idle",
-    );
+  // Foreground-only work gate for Ctrl+C/Esc: while only background work is
+  // running, a press must fall through to the press-twice-to-exit flow
+  // instead of interrupting anything.
+  const foregroundBusy = isForegroundBusy(isStreaming, isCompacting, subagents);
   const { termWidth, toolsExpanded, ctrlCHint } = useTerminalControls({
     isStreaming,
-    hasRunningWork: isStreaming || isCompacting || hasRunningChildren,
+    hasRunningWork: foregroundBusy,
     clearInputRef,
-    onInterrupt: interruptAll,
+    onInterrupt: interruptForeground,
     onExit: requestExit,
     teamsDialogOpen,
     onToggleTeams: () => {
@@ -1062,11 +1075,32 @@ export function App({
     }
   }, [appState, selectedProvider, initClient]);
 
-  const handleProviderSelect = (provider: ProviderConfig) => {
+  const rememberProvider = (
+    provider: ProviderConfig,
+    list: ProviderConfig[] = providers,
+  ): void => {
+    const index = list.findIndex(
+      (candidate) =>
+        candidate === provider ||
+        (candidate.base_url === provider.base_url &&
+          candidate.name === provider.name),
+    );
+    try {
+      persistDefaultProvider(Math.max(index, 0));
+    } catch {
+      /* best effort */
+    }
+  };
+
+  const handleProviderSelect = (
+    provider: ProviderConfig,
+    list?: ProviderConfig[],
+  ) => {
     if (appState === "providerSelect" || !clientRef.current) {
       selectedProviderRef.current = provider;
       setSelectedProvider(provider);
       setAppState("chat");
+      rememberProvider(provider, list);
       return;
     }
 
@@ -1084,6 +1118,7 @@ export function App({
         clientRef.current = client;
         selectedProviderRef.current = provider;
         setSelectedProvider(provider);
+        rememberProvider(provider, list);
         contextWindowRef.current = getContextWindow(provider);
         maxOutputRef.current = getMaxOutputTokens(provider);
         decideAndApply(
@@ -1339,46 +1374,6 @@ export function App({
           }
           if (parsed.args) {
             await runUserTurn(parsed.args, "plan");
-          }
-          break;
-        }
-        case "do": {
-          setPermMode("default");
-          // Exit plan mode for manual approval
-          hasExitedPlanModeRef.current = true;
-          const planContent = loadPlan(/** workDir */);
-          const exitPlanPath = getOrCreatePlanPath(workDir);
-          conversationRef.current.addSystemReminder(
-            buildPlanModeExitReminder(exitPlanPath, !!planContent),
-          );
-          if (planContent?.trim()) {
-            // Feed the approved plan back to the agent and execute it.
-            conversationRef.current.addUserMessage(
-              "The plan below has been approved. Exit plan mode and carry it out now.\n\n# Approved Plan\n" +
-                planContent,
-            );
-            resetPlanPath();
-            setMessages((prev) => [
-              ...prev,
-              { role: "system", content: "✓ Plan approved — executing." },
-            ]);
-            setIsStreaming(true);
-            setSubagents([]);
-            output.prepareTurn();
-            await runAgentLoopWithStats("default")
-              .then(() => {
-                setIsStreaming(false);
-                output.clearTools();
-              })
-              .catch((err: unknown) => {
-                setError(asErrorString(err));
-                setIsStreaming(false);
-              });
-          } else {
-            setMessages((prev) => [
-              ...prev,
-              { role: "system", content: "Exited plan mode." },
-            ]);
           }
           break;
         }
@@ -2334,6 +2329,7 @@ export function App({
       clientRef.current = client;
       selectedProviderRef.current = saved.provider;
       setSelectedProvider(saved.provider);
+      rememberProvider(saved.provider, saved.providers);
       contextWindowRef.current = getContextWindow(saved.provider);
       maxOutputRef.current = getMaxOutputTokens(saved.provider);
       decideAndApply(
@@ -2350,7 +2346,7 @@ export function App({
         },
       ]);
     } else {
-      handleProviderSelect(saved.provider);
+      handleProviderSelect(saved.provider, saved.providers);
     }
     setLoginActive(false);
   };
@@ -2603,8 +2599,8 @@ export function App({
           insertTextRef: insertInputTextRef,
           clearRef: clearInputRef,
           onEscape: () => {
-            if (isStreaming || isCompacting || hasRunningChildren) {
-              interruptAll();
+            if (foregroundBusy) {
+              interruptForeground();
             }
           },
         }}

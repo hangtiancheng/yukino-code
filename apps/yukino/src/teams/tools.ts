@@ -316,6 +316,14 @@ export class SendMessageTool implements Tool {
       };
     }
 
+    // The lead is not a registered member (it runs in the parent process and
+    // only reads its own mailbox), so route plain text to it directly —
+    // mirroring the structured-message path above.
+    if (to === "lead") {
+      await t.leadMailbox.send(this.senderName, message);
+      return { output: `Message sent to '${to}'.`, isError: false };
+    }
+
     // Resolve the recipient name to a delivery identifier via the global name registry; fall back to the original name if unresolved
     const recipient = getNameRegistry().resolve(to) ?? to;
     try {

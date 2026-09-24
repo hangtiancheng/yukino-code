@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-export const MACOS_SNIPPET = `
+export const MACOS_SNIPPET = String.raw`
 import AppKit
 import ApplicationServices
 import Foundation
@@ -97,13 +97,13 @@ func mouseEvent(_ type: CGEventType, _ point: CGPoint, _ button: CGMouseButton, 
 
 if action == "screen_size" {
   let bounds = CGDisplayBounds(CGMainDisplayID())
-  print("\\(Int(bounds.width)),\\(Int(bounds.height))")
+  print("\(Int(bounds.width)),\(Int(bounds.height))")
   exit(0)
 }
 
 if action == "cursor_position" {
   guard let event = CGEvent(source: nil) else { fail("Unable to read cursor position.") }
-  print("\\(Int(event.location.x)),\\(Int(event.location.y))")
+  print("\(Int(event.location.x)),\(Int(event.location.y))")
   exit(0)
 }
 

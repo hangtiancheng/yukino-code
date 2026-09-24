@@ -36,12 +36,12 @@ it("truncates output on a UTF-8 boundary", () => {
   const dir = mkdtempSync(join(tmpdir(), "yukino-output-"));
   try {
     const path = join(dir, "output");
-    writeFileSync(path, "a你好🙂z");
+    writeFileSync(path, "a日本🙂z");
     for (const [limit, expected] of [
       [2, "a"],
-      [4, "a你"],
-      [6, "a你"],
-      [9, "a你好"],
+      [4, "a日"],
+      [6, "a日"],
+      [9, "a日本"],
     ] as const) {
       expect(readOutputFile(path, limit)).toEqual({
         text: expected,

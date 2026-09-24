@@ -81,6 +81,7 @@ beforeEach(() => {
   previousExitCode = process.exitCode;
   process.exitCode = 0;
   cfg = {
+    default_provider: 0,
     providers: [
       {
         name: "test",

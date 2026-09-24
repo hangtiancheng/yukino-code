@@ -20,7 +20,14 @@
  * SOFTWARE.
  */
 
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -35,6 +42,7 @@ import {
   rebuildFromSession,
   toolUsesToRecords,
   toolResultsToRecords,
+  cleanExpiredSessions,
   COMPACT_BOUNDARY,
 } from "@/session/index.js";
 import { asString, contentToText } from "@/utils/index.js";
@@ -496,5 +504,81 @@ describe("rebuildFromSession (compacted-state resume)", () => {
       summary: "s",
       keep: [],
     });
+  });
+});
+
+describe("cleanExpiredSessions", () => {
+  it("removes expired .jsonl files together with their tool-results subdirectory", () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-sess-"));
+    const expiredId = "expired-session";
+    const freshId = "fresh-session";
+    const sessionsRoot = join(workDir, ".yukino", "sessions");
+
+    saveMessage(workDir, expiredId, {
+      role: "user",
+      content: "old",
+      timestamp: t0,
+    });
+    saveMessage(workDir, freshId, {
+      role: "user",
+      content: "new",
+      timestamp: t0,
+    });
+
+    // Spill files under the real (hyphenated) directory name used by
+    // spillDir() — the cleanup must delete these, not a "tool_results" path.
+    const expiredSpill = join(sessionsRoot, expiredId, "tool-results");
+    const freshSpill = join(sessionsRoot, freshId, "tool-results");
+    mkdirSync(expiredSpill, { recursive: true });
+    mkdirSync(freshSpill, { recursive: true });
+    writeFileSync(join(expiredSpill, "toolu_old.txt"), "spilled", "utf-8");
+    writeFileSync(join(freshSpill, "toolu_new.txt"), "spilled", "utf-8");
+
+    // Age the expired session beyond SESSION_EXPIRY_DAYS (30 days).
+    const aged = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    utimesSync(join(sessionsRoot, `${expiredId}.jsonl`), aged, aged);
+
+    expect(cleanExpiredSessions(workDir)).toBe(1);
+    expect(existsSync(join(sessionsRoot, `${expiredId}.jsonl`))).toBe(false);
+    expect(existsSync(join(sessionsRoot, expiredId))).toBe(false);
+    // The fresh session and its spill files are untouched.
+    expect(existsSync(join(sessionsRoot, `${freshId}.jsonl`))).toBe(true);
+    expect(existsSync(join(freshSpill, "toolu_new.txt"))).toBe(true);
+  });
+
+  it("returns 0 when the sessions directory does not exist", () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-sess-"));
+    expect(cleanExpiredSessions(workDir)).toBe(0);
+  });
+
+  it("sweeps expired sessions lazily on the first listSessions call", () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-sess-"));
+    const expiredId = "expired-listed";
+    const freshId = "fresh-listed";
+    const sessionsRoot = join(workDir, ".yukino", "sessions");
+
+    saveMessage(workDir, expiredId, {
+      role: "user",
+      content: "old",
+      timestamp: t0,
+    });
+    saveMessage(workDir, freshId, {
+      role: "user",
+      content: "new",
+      timestamp: t0,
+    });
+    const expiredSpill = join(sessionsRoot, expiredId, "tool-results");
+    mkdirSync(expiredSpill, { recursive: true });
+    writeFileSync(join(expiredSpill, "toolu_x.txt"), "spilled", "utf-8");
+
+    const aged = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    utimesSync(join(sessionsRoot, `${expiredId}.jsonl`), aged, aged);
+
+    // The expired session is removed before the listing is built, so it
+    // never shows up in the resume picker.
+    const listed = listSessions(workDir);
+    expect(listed.map((s) => s.id)).toEqual([freshId]);
+    expect(existsSync(join(sessionsRoot, `${expiredId}.jsonl`))).toBe(false);
+    expect(existsSync(join(sessionsRoot, expiredId))).toBe(false);
   });
 });
