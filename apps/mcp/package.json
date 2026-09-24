@@ -24,18 +24,18 @@
     "build:fe": "vite build",
     "test": "pnpm build:fe && vitest run",
     "test:watch": "pnpm build:fe && vitest",
-    "format": "oxfmt --write ./",
+    "format": "prettier -w ./ --experimental-cli",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.52",
+    "@ai-sdk/openai-compatible": "^3.0.53",
     "@koa/bodyparser": "^6.1.0",
     "@koa/router": "^15.7.0",
-    "@langchain/core": "^1.2.11",
+    "@langchain/core": "^1.2.12",
     "@langchain/textsplitters": "^1.0.1",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "ai": "^7.0.106",
+    "ai": "^7.0.109",
     "koa": "^3.2.1",
     "pino": "^10.3.1",
     "redis": "^6.2.1",
@@ -45,25 +45,24 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/koa": "^3.0.3",
     "@types/koa__router": "^12.0.5",
-    "@types/node": "^24.13.5",
+    "@types/node": "^24.13.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "daisyui": "^5.7.40",
+    "daisyui": "^5.7.43",
     "dotenv": "^17.4.2",
-    "oxfmt": "^0.62.0",
+    "prettier": "^3.9.8",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "tailwindcss": "^4.3.3",
     "tsup": "^8.5.1",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^8.3.0",
     "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=20.12"
-  },
-  "packageManager": "pnpm@10.33.1"
+    "node": ">=20"
+  }
 }

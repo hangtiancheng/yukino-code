@@ -72,10 +72,12 @@ export function startHttpServer(host: string, port: number): HttpServerHandle {
 
   // Legacy SSE: one long-lived transport per GET /sse connection, messages
   // posted back on /messages correlated by sessionId.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   const sseTransports = new Map<string, SSEServerTransport>();
 
   router.get("/sse", async (ctx) => {
     ctx.respond = false;
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     const transport = new SSEServerTransport("/messages", ctx.res);
     sseTransports.set(transport.sessionId, transport);
     const server = createServer();
