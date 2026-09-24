@@ -22,7 +22,8 @@
 
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
-import { workflowSteps } from "@/lib/content";
+import { shortcuts, workflowSteps } from "@/lib/content";
+import { t } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { container, gradientText, heading, line, muted } from "@/lib/styles";
 import { Section, SectionHeader } from "./ui/section";
@@ -31,13 +32,14 @@ export function Workflow() {
   return (
     <Section id="workflow">
       <SectionHeader
-        eyebrow="Workflow"
+        eyebrow={t("workflow.eyebrow")}
         title={
           <>
-            From prompt to <span className={gradientText}>ship</span>
+            {t("workflow.titleA")}{" "}
+            <span className={gradientText}>{t("workflow.titleHighlight")}</span>
           </>
         }
-        description="No new mental model to learn. Describe the task, review what matters, and keep a rewind button for everything else."
+        description={t("workflow.description")}
       />
 
       <div className={cn(container, "mt-16")}>
@@ -50,7 +52,7 @@ export function Workflow() {
             <docs-reveal delay={index * 0.08} className="relative">
               <div className="flex flex-col">
                 <div className="flex items-center gap-3">
-                  <span className="shadow-soft border-brand-950/8 relative grid h-12 w-12 place-items-center rounded-2xl border bg-white dark:border-white/8 dark:bg-[#0e110c] dark:shadow-none">
+                  <span className="shadow-soft border-brand-950/8 relative grid h-12 w-12 place-items-center rounded-2xl border bg-white dark:border-white/8 dark:bg-[#1e1f20] dark:shadow-none">
                     {unsafeHTML(
                       icon(
                         step.icon,
@@ -68,10 +70,10 @@ export function Workflow() {
                     heading,
                   )}
                 >
-                  {step.title}
+                  {t(`workflow.steps.${step.id}.title`)}
                 </h3>
                 <p className={cn("mt-2 text-sm leading-relaxed", muted)}>
-                  {step.description}
+                  {t(`workflow.steps.${step.id}.description`)}
                 </p>
               </div>
             </docs-reveal>
@@ -87,19 +89,14 @@ export function Workflow() {
           >
             <div className="sm:col-span-1">
               <p className={cn("text-sm font-semibold", heading)}>
-                Built to be interrupted
+                {t("workflow.interruptTitle")}
               </p>
               <p className={cn("mt-2 text-sm leading-relaxed", muted)}>
-                Ctrl+C clears the prompt or stops a stream. Checkpoints let you
-                rewind a turn, fork a session, or hand the thread to a teammate.
+                {t("workflow.interruptBody")}
               </p>
             </div>
             <dl className="grid grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-3">
-              {[
-                { term: "Ctrl+O", detail: "Toggle full tool output" },
-                { term: "Shift+Tab", detail: "Cycle permission modes" },
-                { term: "Ctrl+T", detail: "Open the teams overlay" },
-              ].map((item) => (
+              {shortcuts.map((shortcut) => (
                 <div
                   className={cn(
                     "rounded-xl border bg-white px-4 py-3 dark:bg-white/2",
@@ -107,10 +104,10 @@ export function Workflow() {
                   )}
                 >
                   <dt className="text-brand-600 dark:text-brand-300 font-mono text-xs font-semibold">
-                    {item.term}
+                    {shortcut.term}
                   </dt>
                   <dd className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    {item.detail}
+                    {t(`workflow.shortcuts.${shortcut.id}`)}
                   </dd>
                 </div>
               ))}

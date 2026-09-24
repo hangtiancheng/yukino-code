@@ -25,6 +25,9 @@ import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { animate, stagger } from "motion";
 import { cn } from "@/lib/cn";
 import { permissionModes } from "@/lib/content";
+import type { PermissionModeId } from "@/lib/content";
+import { LocaleController, t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { animateIn, animateOut, EASE } from "@/lib/motion";
@@ -38,102 +41,149 @@ const MODE_ICON: Record<string, string> = {
   bypassPermissions: icons.zap,
 };
 
-interface DialogView {
-  chip: string;
-  title: string;
-  meta: string;
-  rows: {
-    label: string;
-    value: string;
-    tone: "allow" | "ask" | "deny" | "auto";
-  }[];
-  note: string;
+type RowTone = "allow" | "ask" | "deny" | "auto";
+
+interface DialogRow {
+  labelKey: MessageKey;
+  value: string;
+  tone: RowTone;
 }
 
-const DIALOGS: Record<string, DialogView> = {
+interface DialogView {
+  chipKey: MessageKey;
+  noteKey: MessageKey;
+  title?: string;
+  titleKey?: MessageKey;
+  meta?: string;
+  metaKey?: MessageKey;
+  rows: DialogRow[];
+}
+
+const DIALOGS: Record<PermissionModeId, DialogView> = {
   default: {
-    chip: "Permission required",
+    chipKey: "safety.dialogs.default.chip",
+    noteKey: "safety.dialogs.default.note",
     title: "Bash",
     meta: "pnpm add drizzle-orm",
     rows: [
-      { label: "Allow once", value: "Enter", tone: "allow" },
-      { label: "Allow always", value: "A", tone: "auto" },
-      { label: "Deny", value: "Esc", tone: "deny" },
+      {
+        labelKey: "safety.dialogs.default.rows.allowOnce",
+        value: "Enter",
+        tone: "allow",
+      },
+      {
+        labelKey: "safety.dialogs.default.rows.allowAlways",
+        value: "A",
+        tone: "auto",
+      },
+      {
+        labelKey: "safety.dialogs.default.rows.deny",
+        value: "Esc",
+        tone: "deny",
+      },
     ],
-    note: "Reads run freely. Writes and shell commands wait for you.",
   },
   acceptEdits: {
-    chip: "Auto-accepted",
+    chipKey: "safety.dialogs.acceptEdits.chip",
+    noteKey: "safety.dialogs.acceptEdits.note",
     title: "EditFile",
     meta: "src/db/schema.ts",
     rows: [
-      { label: "Edit applied", value: "auto", tone: "auto" },
-      { label: "Bash still asks", value: "ask", tone: "ask" },
-      { label: "Deny rule wins", value: "deny", tone: "deny" },
+      {
+        labelKey: "safety.dialogs.acceptEdits.rows.applied",
+        value: "auto",
+        tone: "auto",
+      },
+      {
+        labelKey: "safety.dialogs.acceptEdits.rows.bashAsks",
+        value: "ask",
+        tone: "ask",
+      },
+      {
+        labelKey: "safety.dialogs.acceptEdits.rows.denyWins",
+        value: "deny",
+        tone: "deny",
+      },
     ],
-    note: "File edits flow through; commands still pause for approval.",
   },
   plan: {
-    chip: "Plan mode",
-    title: "Read-only investigation",
-    meta: "no writes will be made",
+    chipKey: "safety.dialogs.plan.chip",
+    noteKey: "safety.dialogs.plan.note",
+    titleKey: "safety.dialogs.plan.title",
+    metaKey: "safety.dialogs.plan.meta",
     rows: [
-      { label: "ReadFile · Glob · Grep", value: "allow", tone: "allow" },
-      { label: "WriteFile · EditFile", value: "ask", tone: "ask" },
-      { label: "ExitPlanMode", value: "approve", tone: "auto" },
+      {
+        labelKey: "safety.dialogs.plan.rows.reads",
+        value: "allow",
+        tone: "allow",
+      },
+      {
+        labelKey: "safety.dialogs.plan.rows.writes",
+        value: "ask",
+        tone: "ask",
+      },
+      {
+        labelKey: "safety.dialogs.plan.rows.exit",
+        value: "approve",
+        tone: "auto",
+      },
     ],
-    note: "Explore and design first — approve the plan before anything changes.",
   },
   bypassPermissions: {
-    chip: "Auto-allowed",
+    chipKey: "safety.dialogs.bypassPermissions.chip",
+    noteKey: "safety.dialogs.bypassPermissions.note",
     title: "Bash",
     meta: "pnpm test -- --coverage",
     rows: [
-      { label: "No prompts", value: "bypass", tone: "auto" },
-      { label: "Full autonomy", value: "on", tone: "auto" },
-      { label: "Deny rules still enforced", value: "deny", tone: "deny" },
+      {
+        labelKey: "safety.dialogs.bypassPermissions.rows.noPrompts",
+        value: "bypass",
+        tone: "auto",
+      },
+      {
+        labelKey: "safety.dialogs.bypassPermissions.rows.autonomy",
+        value: "on",
+        tone: "auto",
+      },
+      {
+        labelKey: "safety.dialogs.bypassPermissions.rows.denyStill",
+        value: "deny",
+        tone: "deny",
+      },
     ],
-    note: "For sandboxes, CI and disposable worktrees.",
   },
 };
 
-const TONE: Record<DialogView["rows"][number]["tone"], string> = {
+const TONE: Record<RowTone, string> = {
   allow:
-    "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  ask: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  deny: "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300",
+    "border-accent-500/25 bg-accent-500/10 text-accent-700 dark:text-accent-300",
+  ask: "border-g-yellow/40 bg-g-yellow/10 text-[#b06000] dark:text-[#fdd663]",
+  deny: "border-g-red/25 bg-g-red/10 text-g-red dark:text-[#f28b82]",
   auto: "border-brand-500/25 bg-brand-500/10 text-brand-700 dark:text-brand-300",
 };
 
-const SAFETY_FEATURES = [
-  {
-    icon: icons.shieldCheck,
-    title: "OS-level sandbox",
-    body: "Wrap command tools with seatbelt on macOS or bwrap on Linux, with optional auto-approval.",
-  },
-  {
-    icon: icons.shieldAlert,
-    title: "Two-tier allow / deny rules",
-    body: "User + project rule files like Bash(git push*). Deny always wins — and Yukino can never rewrite its own permissions.yaml.",
-  },
-  {
-    icon: icons.gitBranch,
-    title: "Worktree isolation",
-    body: "Risky parallel work runs in its own git worktree, so your main tree stays clean.",
-  },
+const SAFETY_FEATURES: Array<{
+  id: "sandbox" | "rules" | "worktree";
+  icon: string;
+}> = [
+  { id: "sandbox", icon: icons.shieldCheck },
+  { id: "rules", icon: icons.shieldAlert },
+  { id: "worktree", icon: icons.gitBranch },
 ];
 
 @customElement("docs-safety")
 export class SafetyElement extends LitElement {
-  @state() private active = permissionModes[0].mode;
+  @state() private active: PermissionModeId = permissionModes[0].id;
 
   private swapping = false;
+
+  locale = new LocaleController(this);
 
   override createRenderRoot() {
     return this;
   }
 
-  private async selectMode(mode: string) {
+  private async selectMode(mode: PermissionModeId) {
     if (mode === this.active || this.swapping) return;
     this.swapping = true;
     const panel = this.querySelector<HTMLElement>("[data-dialog-panel]");
@@ -172,13 +222,17 @@ export class SafetyElement extends LitElement {
     return (
       <Section id="safety">
         <SectionHeader
-          eyebrow="Guardrails"
+          eyebrow={t("safety.eyebrow")}
           title={
             <>
-              Safety that <span className="text-brand-500">you</span> dial in
+              {t("safety.titleA")}{" "}
+              <span className="text-brand-500">
+                {t("safety.titleHighlight")}
+              </span>{" "}
+              {t("safety.titleB")}
             </>
           }
-          description="Four permission modes, rule files and an optional OS sandbox. Yukino asks before it changes anything — until you tell it not to."
+          description={t("safety.description")}
         />
 
         <div
@@ -190,11 +244,11 @@ export class SafetyElement extends LitElement {
           <docs-reveal>
             <div className="flex flex-col gap-3">
               {permissionModes.map((mode) => {
-                const selected = mode.mode === this.active;
+                const selected = mode.id === this.active;
                 return (
                   <button
                     type="button"
-                    onClick={() => void this.selectMode(mode.mode)}
+                    onClick={() => void this.selectMode(mode.id)}
                     className={cn(
                       "group relative overflow-hidden rounded-2xl border p-5 text-left transition-all duration-300",
                       focusRing,
@@ -216,7 +270,7 @@ export class SafetyElement extends LitElement {
                         )}
                       >
                         {unsafeHTML(
-                          icon(MODE_ICON[mode.mode] ?? icons.lock, "h-5 w-5"),
+                          icon(MODE_ICON[mode.id] ?? icons.lock, "h-5 w-5"),
                         )}
                       </span>
                       <div className="min-w-0">
@@ -231,17 +285,17 @@ export class SafetyElement extends LitElement {
                           </span>
                           {selected ? (
                             <span className="bg-brand-500/15 text-brand-600 dark:text-brand-300 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
-                              selected
+                              {t("common.selected")}
                             </span>
                           ) : null}
                         </div>
                         <p
                           className={cn("mt-1 text-sm leading-relaxed", muted)}
                         >
-                          {mode.description}
+                          {t(`safety.modes.${mode.id}.description`)}
                         </p>
                         <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-600">
-                          {mode.detail}
+                          {t(`safety.modes.${mode.id}.detail`)}
                         </p>
                       </div>
                     </div>
@@ -255,25 +309,25 @@ export class SafetyElement extends LitElement {
             <div className={cn("sticky top-24 overflow-hidden p-1", card)}>
               <div className="bg-brand-50 rounded-[0.9rem] p-1.5 dark:bg-black/40">
                 <div className="flex items-center gap-2 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+                  <span className="bg-g-blue h-2.5 w-2.5 rounded-full" />
+                  <span className="bg-g-red h-2.5 w-2.5 rounded-full" />
+                  <span className="bg-g-yellow h-2.5 w-2.5 rounded-full" />
                   <span className="ml-2 font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
-                    yukino · approval
+                    {t("safety.dialogChrome")}
                   </span>
                 </div>
 
                 <div
                   data-dialog-panel
-                  className="rounded-xl bg-white p-5 dark:bg-[#0e110c]"
+                  className="rounded-xl bg-white p-5 dark:bg-[#1e1f20]"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="border-brand-950/10 bg-brand-50/70 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium text-zinc-600 dark:border-white/10 dark:bg-white/4 dark:text-zinc-300">
                       <span className="bg-brand-500 dark:bg-brand-400 h-1.5 w-1.5 rounded-full" />
-                      {view.chip}
+                      {t(view.chipKey)}
                     </span>
                     <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
-                      {view.title}
+                      {view.titleKey ? t(view.titleKey) : view.title}
                     </span>
                   </div>
 
@@ -281,7 +335,7 @@ export class SafetyElement extends LitElement {
                     <span className="text-brand-600 dark:text-brand-400">
                       ${" "}
                     </span>
-                    {view.meta}
+                    {view.metaKey ? t(view.metaKey) : view.meta}
                   </div>
 
                   <ul className="mt-4 space-y-2">
@@ -291,7 +345,7 @@ export class SafetyElement extends LitElement {
                         className="border-brand-950/10 bg-brand-50/50 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 dark:border-white/6 dark:bg-white/2"
                       >
                         <span className="text-[13px] text-zinc-600 dark:text-zinc-300">
-                          {row.label}
+                          {t(row.labelKey)}
                         </span>
                         <span
                           className={cn(
@@ -307,7 +361,7 @@ export class SafetyElement extends LitElement {
                 </div>
               </div>
               <p className={cn("px-4 py-3 text-center text-xs", muted)}>
-                {view.note}
+                {t(view.noteKey)}
               </p>
             </div>
           </docs-reveal>
@@ -334,10 +388,10 @@ export class SafetyElement extends LitElement {
                   ),
                 )}
                 <h3 className={cn("mt-4 text-sm font-semibold", heading)}>
-                  {feature.title}
+                  {t(`safety.features.${feature.id}.title`)}
                 </h3>
                 <p className={cn("mt-2 text-sm leading-relaxed", muted)}>
-                  {feature.body}
+                  {t(`safety.features.${feature.id}.body`)}
                 </p>
               </div>
             </docs-reveal>
@@ -353,14 +407,14 @@ export class SafetyElement extends LitElement {
           >
             <span className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
               {unsafeHTML(icon(icons.hardDrive, "h-4 w-4 text-zinc-400"))}
-              Sessions, memory &amp; file history stay under
+              {t("safety.localNoteA")}
               <code className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
                 .yukino/
               </code>
             </span>
             <span className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
-              {unsafeHTML(icon(icons.shieldCheck, "h-4 w-4 text-emerald-500"))}
-              Nothing leaves your machine but the model request
+              {unsafeHTML(icon(icons.shieldCheck, "h-4 w-4 text-accent-600"))}
+              {t("safety.localNoteB")}
             </span>
           </div>
         </docs-reveal>

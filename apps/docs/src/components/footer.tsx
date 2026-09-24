@@ -23,6 +23,7 @@
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
 import { INSTALL_METHODS, VERSION, footerColumns } from "@/lib/content";
+import { t } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { container, focusRing, ghostButton, heading, line } from "@/lib/styles";
@@ -47,13 +48,12 @@ export function Footer({
             <a
               href="#top"
               className={cn("inline-flex rounded-xl", focusRing)}
-              aria-label="Yukino home"
+              aria-label={t("nav.ariaHome")}
             >
               <Logo />
             </a>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-              A terminal-based AI coding agent with multi-provider models,
-              sandboxed tools and multi-agent teams.
+              {t("footer.tagline")}
             </p>
             <div
               className={cn(
@@ -74,7 +74,7 @@ export function Footer({
                 href={repoUrl}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="GitHub"
+                aria-label={t("nav.ariaGithub")}
                 className={cn(ghostButton, "h-9 w-9 px-0", focusRing)}
               >
                 <GithubIcon className="h-4.5 w-4.5" />
@@ -103,7 +103,7 @@ export function Footer({
                   heading,
                 )}
               >
-                {column.title}
+                {t(`footer.columns.${column.id}`)}
               </h3>
               <ul className="mt-4 space-y-2.5">
                 {column.links.map((link) => (
@@ -118,7 +118,7 @@ export function Footer({
                       }
                       className="group hover:text-brand-800 inline-flex items-center gap-1 text-sm text-zinc-500 transition-colors dark:text-zinc-400 dark:hover:text-white"
                     >
-                      {link.label}
+                      {t(link.labelKey)}
                       {link.href.startsWith("http") ? (
                         <span className="opacity-0 transition-opacity group-hover:opacity-100">
                           {unsafeHTML(icon(icons.arrowUpRight, "h-3 w-3"))}
@@ -138,12 +138,10 @@ export function Footer({
             line,
           )}
         >
-          <p>
-            © {new Date().getFullYear()} Yukino. Released under the MIT License.
-          </p>
+          <p>{t("footer.copyright", { year: new Date().getFullYear() })}</p>
           <p className="inline-flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Built for the terminal · {VERSION}
+            <span className="bg-accent-500 h-1.5 w-1.5 rounded-full" />
+            {t("footer.builtFor", { version: VERSION })}
           </p>
         </div>
       </div>

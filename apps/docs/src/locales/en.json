@@ -1,0 +1,497 @@
+{
+  "meta": {
+    "title": "Yukino — The AI coding agent that lives in your terminal",
+    "description": "Yukino is a terminal-based AI coding agent. Chat with any LLM, edit files, run commands, and orchestrate multi-agent workflows — all from one CLI."
+  },
+  "common": {
+    "getStarted": "Get started",
+    "readDocs": "Read the docs",
+    "viewDocs": "View documentation",
+    "starOnGithub": "Star on GitHub",
+    "github": "GitHub",
+    "copy": "Copy",
+    "copied": "Copied",
+    "language": "Language",
+    "selected": "selected",
+    "live": "live",
+    "backToTop": "Back to top",
+    "obsOtel": "OTLP traces · metrics · logs",
+    "obsLangfuse": "LLM tracing",
+    "obsSentry": "error reporting"
+  },
+  "nav": {
+    "features": "Features",
+    "modes": "Modes",
+    "workflow": "Workflow",
+    "tools": "Tools",
+    "providers": "Providers",
+    "safety": "Safety",
+    "agents": "Agents",
+    "install": "Install",
+    "ariaHome": "Yukino home",
+    "ariaThemeToLight": "Switch to light mode",
+    "ariaThemeToDark": "Switch to dark mode",
+    "ariaGithub": "Yukino on GitHub",
+    "ariaMenu": "Toggle menu"
+  },
+  "hero": {
+    "badge": "{version} is out",
+    "badgeNote": "— ACP, observability & web fetch",
+    "titleA": "The",
+    "titleHighlight": "coding agent",
+    "titleB": "that lives in your terminal",
+    "subtitle": "Yukino connects to any LLM, edits files, runs commands and orchestrates multi-agent workflows — all from a single CLI that stays out of your way.",
+    "quickTui": "Interactive TUI",
+    "quickPrint": "Print mode",
+    "quickRemote": "Browser UI",
+    "statsProtocols": "LLM protocols",
+    "statsTools": "Built-in tools",
+    "statsModes": "Run modes",
+    "statsContext": "Context window"
+  },
+  "showcase": {
+    "eyebrow": "See it work",
+    "titleA": "One agent,",
+    "titleHighlight": "every surface",
+    "description": "The same engine drives the terminal UI, a browser session over WebSocket, and a scriptable print mode for CI.",
+    "tabTerminal": "Terminal",
+    "tabBrowser": "Browser UI",
+    "tabPrint": "Print mode",
+    "tablistAria": "Interface",
+    "sceneAria": "Scene {n}",
+    "statusReady": "ready",
+    "statusModel": "model {model}",
+    "statusSandboxOn": "sandbox on",
+    "statusTokens": "{count} tokens",
+    "statusHint": "Ctrl+O output · Shift+Tab mode",
+    "captionA": "Illustrative session. Run",
+    "captionB": "for the real thing.",
+    "browserUser": "Wire up the retry logic and show me the diff",
+    "browserQuestion": "Wrapped the request in a 3-attempt exponential backoff. Approve to write it?",
+    "scenes": {
+      "refactor": {
+        "prompt": "Refactor token verification into a single helper",
+        "thinking": "Scanning the auth module and every call site…",
+        "answer": "Moved verification into a single verifyToken() helper, updated 4 call sites, and all 12 tests pass."
+      },
+      "ratelimit": {
+        "prompt": "Where is the rate limiter configured?",
+        "thinking": "Locating the rate-limit middleware and its config…",
+        "answer": "In src/middleware/rate-limit.ts — a sliding-window limiter backed by Redis, capped at 100 req/min per route."
+      },
+      "darkmode": {
+        "prompt": "Add a persisted dark mode toggle to settings",
+        "thinking": "Reading the settings page and the theme provider…",
+        "answer": "Added a persisted dark mode toggle wired into the existing provider. Typecheck is clean."
+      },
+      "audit": {
+        "prompt": "Audit the payments module in parallel",
+        "thinking": "Spawning two teammates in isolated worktrees…",
+        "answer": "Both auditors finished. 3 issues found — one critical (missing idempotency key). Full report attached."
+      }
+    }
+  },
+  "features": {
+    "eyebrow": "Capabilities",
+    "titleA": "Everything a serious agent needs,",
+    "titleB": "none of the bloat",
+    "description": "Yukino is built as a harness: a tight loop, a real toolbelt, and guardrails that you decide how tight to pull.",
+    "footnote": "Built with TypeScript and React + Ink — MIT licensed.",
+    "exploreTools": "Explore the toolbelt →",
+    "teammates": "teammates",
+    "items": {
+      "multiProvider": {
+        "title": "Multi-provider by design",
+        "description": "Anthropic, OpenAI, or any OpenAI-compatible endpoint. /login discovers available models automatically, keys resolve from the environment, and /provider switches live."
+      },
+      "terminalUi": {
+        "title": "A terminal UI that keeps up",
+        "description": "Streaming text, thinking blocks and live tool output rendered with React + Ink. Queue follow-ups while a task runs, paste images, and cycle modes with Shift+Tab."
+      },
+      "toolbelt": {
+        "title": "A real toolbelt",
+        "description": "Read, write and edit files, run Bash or PowerShell, glob and grep the tree, fetch web pages as Markdown, search deferred tools and call MCP servers."
+      },
+      "safety": {
+        "title": "Safety you can tune",
+        "description": "Four permission modes, two-tier allow/deny/ask rules, lifecycle hooks, and OS-level sandboxing via seatbelt on macOS and bwrap on Linux."
+      },
+      "memory": {
+        "title": "Memory that compounds",
+        "description": "Memories are extracted in the background, recalled per turn and consolidated overnight, so Yukino remembers how your codebase works."
+      },
+      "sessions": {
+        "title": "Sessions & compaction",
+        "description": "JSONL session logs resume exactly where you left off, while automatic compaction keeps long conversations inside the window."
+      },
+      "skills": {
+        "title": "Skills & slash commands",
+        "description": "A skill catalog with hot-reload, inline and fork execution, plus user-defined slash commands from .yukino/commands."
+      },
+      "multiAgent": {
+        "title": "Multi-agent workflows",
+        "description": "Spawn subagents, coordinate teams over file mailboxes, and isolate parallel work in git worktrees."
+      },
+      "mcp": {
+        "title": "MCP, three ways",
+        "description": "Eager, native deferred loading, or dispatch — chosen automatically so a fleet of MCP tools never blows up your context cache."
+      },
+      "planMode": {
+        "title": "Plan before it writes",
+        "description": "Plan mode locks the agent to read-only exploration. The plan lands in a file, and ExitPlanMode hands you an approval dialog before anything changes."
+      },
+      "codeReview": {
+        "title": "Code review in the box",
+        "description": "/review runs a structured review pass and /code-review audits your diff with actionable findings — no extra tooling, no leaving the session."
+      },
+      "rewind": {
+        "title": "Rewind & checkpoints",
+        "description": "Every turn snapshots the files it touched. /rewind rolls the conversation and the working tree back to any checkpoint, or forks a new branch from it."
+      },
+      "background": {
+        "title": "Background tasks",
+        "description": "Long-running shells keep going in the background and notify the agent when they finish — tests, builds and dev servers never block the loop."
+      },
+      "hooks": {
+        "title": "Hooks on every event",
+        "description": "Fire commands, prompts or HTTP calls on session, turn and tool events — with a condition DSL and the power to reject a tool call before it runs."
+      },
+      "ide": {
+        "title": "IDE & browser companions",
+        "description": "@-mention files straight from VS Code, or run yukino --remote to drive the same agent from a browser over WebSocket."
+      },
+      "observability": {
+        "title": "Observability, opt-in",
+        "description": "Export traces, metrics and logs over OTLP with OpenTelemetry, stream LLM observations to Langfuse, and report crashes to Sentry. Off by default, configured purely through environment variables — prompts, model output, tool arguments and file paths are never sent, and session IDs are hashed."
+      },
+      "acp": {
+        "title": "Agent Client Protocol",
+        "description": "yukino --acp speaks ACP over stdio, --acp-ws over WebSocket — editors like Zed can open sessions, stream tool calls and answer permission requests natively."
+      }
+    }
+  },
+  "modes": {
+    "eyebrow": "Run modes",
+    "titleA": "One engine,",
+    "titleHighlight": "five ways to run it",
+    "description": "The same agent loop powers every surface: an interactive TUI, a scriptable print mode, a browser session, headless teammates and native editor integration.",
+    "defaultChip": "default",
+    "items": {
+      "tui": {
+        "tagline": "Interactive TUI",
+        "description": "The default experience: streaming chat, tool previews, permission dialogs, slash commands and keyboard-driven everything in a React + Ink terminal UI."
+      },
+      "print": {
+        "tagline": "Print mode",
+        "description": "Non-interactive one-shots for scripts and CI. Emit plain text or stream-json events, pipe prompts in, and exit with a status code."
+      },
+      "remote": {
+        "tagline": "Remote mode",
+        "description": "Serves the agent over HTTP + WebSocket and streams it to a browser UI — same session, same tools, any device on your network."
+      },
+      "teammate": {
+        "tagline": "Teammate mode",
+        "description": "Runs one headless team member per process. A lead agent spawns teammates in tmux or iTerm2 panes; they coordinate through file mailboxes."
+      },
+      "acp": {
+        "tagline": "ACP mode",
+        "description": "Speaks the Agent Client Protocol over stdio or WebSocket, so editors like Zed can drive sessions, tool calls and permissions natively."
+      }
+    }
+  },
+  "workflow": {
+    "eyebrow": "Workflow",
+    "titleA": "From prompt to",
+    "titleHighlight": "ship",
+    "description": "No new mental model to learn. Describe the task, review what matters, and keep a rewind button for everything else.",
+    "steps": {
+      "connect": {
+        "title": "Connect a provider",
+        "description": "Run /login or drop a config.yaml. Anthropic, OpenAI and OpenAI-compatible endpoints all work out of the box."
+      },
+      "describe": {
+        "title": "Describe the task",
+        "description": "Ask in plain language. Yukino plans, streams its reasoning and reaches for the right tools on its own."
+      },
+      "approve": {
+        "title": "Approve the risky bits",
+        "description": "Every write and command surfaces as a reviewable prompt — with allow-always rules when you want them out of the way."
+      },
+      "ship": {
+        "title": "Ship and rewind",
+        "description": "Snapshots and checkpoints let you undo a turn, fork the conversation, or hand the work to a teammate agent."
+      }
+    },
+    "interruptTitle": "Built to be interrupted",
+    "interruptBody": "Ctrl+C clears the prompt or stops a stream. Checkpoints let you rewind a turn, fork a session, or hand the thread to a teammate.",
+    "shortcuts": {
+      "ctrlO": "Toggle full tool output",
+      "shiftTab": "Cycle permission modes",
+      "ctrlT": "Open the teams overlay"
+    }
+  },
+  "tools": {
+    "eyebrow": "Toolbelt",
+    "titleA": "A real set of tools,",
+    "titleHighlight": "not just chat",
+    "description": "Read and write files, run shells, search the tree, fetch the web, spawn teammates and call MCP servers — each one permission-checked before it runs.",
+    "groups": {
+      "Files": "Files",
+      "Shell": "Shell",
+      "Search": "Search",
+      "Orchestrate": "Orchestrate",
+      "Teams": "Teams",
+      "Integrate": "Integrate"
+    },
+    "slashTitle": "Slash commands",
+    "slashDescription": "Drive the session without leaving the prompt."
+  },
+  "providers": {
+    "eyebrow": "Providers",
+    "titleA": "Bring your own",
+    "titleHighlight": "model",
+    "description": "One YAML file decides everything. Configure several providers and switch live with /provider — keys resolve from the environment, so nothing secret lands in git.",
+    "protocols": {
+      "anthropic": {
+        "note": "Native tool use, thinking blocks and deferred tool loading."
+      },
+      "openai": {
+        "note": "Function calling with streaming across the Responses API."
+      },
+      "openaiCompat": {
+        "note": "Any OpenAI-compatible gateway, proxy or self-hosted endpoint."
+      }
+    }
+  },
+  "safety": {
+    "eyebrow": "Guardrails",
+    "titleA": "Safety that",
+    "titleHighlight": "you",
+    "titleB": "dial in",
+    "description": "Four permission modes, rule files and an optional OS sandbox. Yukino asks before it changes anything — until you tell it not to.",
+    "dialogChrome": "yukino · approval",
+    "modes": {
+      "default": {
+        "description": "Reads run freely. Writes and commands ask first.",
+        "detail": "The safe baseline for everyday work."
+      },
+      "acceptEdits": {
+        "description": "File edits are accepted, commands still ask.",
+        "detail": "Move fast on refactors you already trust."
+      },
+      "plan": {
+        "description": "Read-only investigation. No writes at all.",
+        "detail": "Explore, then approve the plan before anything changes."
+      },
+      "bypassPermissions": {
+        "description": "No prompts. Full autonomy.",
+        "detail": "For sandboxes, CI and disposable worktrees."
+      }
+    },
+    "dialogs": {
+      "default": {
+        "chip": "Permission required",
+        "note": "Reads run freely. Writes and shell commands wait for you.",
+        "rows": {
+          "allowOnce": "Allow once",
+          "allowAlways": "Allow always",
+          "deny": "Deny"
+        }
+      },
+      "acceptEdits": {
+        "chip": "Auto-accepted",
+        "note": "File edits flow through; commands still pause for approval.",
+        "rows": {
+          "applied": "Edit applied",
+          "bashAsks": "Bash still asks",
+          "denyWins": "Deny rule wins"
+        }
+      },
+      "plan": {
+        "chip": "Plan mode",
+        "title": "Read-only investigation",
+        "meta": "no writes will be made",
+        "note": "Explore and design first — approve the plan before anything changes.",
+        "rows": {
+          "reads": "ReadFile · Glob · Grep",
+          "writes": "WriteFile · EditFile",
+          "exit": "ExitPlanMode"
+        }
+      },
+      "bypassPermissions": {
+        "chip": "Auto-allowed",
+        "note": "For sandboxes, CI and disposable worktrees.",
+        "rows": {
+          "noPrompts": "No prompts",
+          "autonomy": "Full autonomy",
+          "denyStill": "Deny rules still enforced"
+        }
+      }
+    },
+    "features": {
+      "sandbox": {
+        "title": "OS-level sandbox",
+        "body": "Wrap command tools with seatbelt on macOS or bwrap on Linux, with optional auto-approval."
+      },
+      "rules": {
+        "title": "Two-tier allow / deny rules",
+        "body": "User + project rule files like Bash(git push*). Deny always wins — and Yukino can never rewrite its own permissions.yaml."
+      },
+      "worktree": {
+        "title": "Worktree isolation",
+        "body": "Risky parallel work runs in its own git worktree, so your main tree stays clean."
+      }
+    },
+    "localNoteA": "Sessions, memory & file history stay under",
+    "localNoteB": "Nothing leaves your machine but the model request"
+  },
+  "agents": {
+    "eyebrow": "Multi-agent",
+    "titleA": "One lead,",
+    "titleHighlight": "a whole team",
+    "description": "Fork your own context, fire off background subagents, or coordinate a full team over file mailboxes — with risky work isolated in its own git worktree.",
+    "cards": {
+      "generalPurpose": {
+        "role": "Executor",
+        "description": "Researches complex questions, explores the codebase and runs multi-step tasks.",
+        "tool1": "all tools",
+        "tool2": "full context"
+      },
+      "plan": {
+        "role": "Architect",
+        "description": "Read-only planning. Understands requirements and designs the solution before code.",
+        "tool1": "read-only",
+        "tool2": "no writes"
+      },
+      "explore": {
+        "role": "Scout",
+        "description": "Fast code exploration with parallel Glob, Grep and ReadFile calls.",
+        "tool1": "read-only",
+        "tool2": "parallel"
+      }
+    },
+    "customTitle": "Custom agents",
+    "customBodyA": "Define your own agents as Markdown files with YAML front-matter in",
+    "customBodyB": ". Pick the tools, model and permission mode each one gets.",
+    "delegateTitle": "Three ways to delegate",
+    "delegateFork": "omit subagent_type — inherits your full conversation",
+    "delegateBackground": "run_in_background=true — results arrive as a task notification",
+    "delegateTeam": "persistent teammates with mailboxes and a shared task board",
+    "team": {
+      "members": "{count} members · in-process",
+      "mailbox": "mailbox",
+      "worktrees": "2 worktrees",
+      "mailboxes": "2 mailboxes",
+      "teamsKey": "Ctrl+T teams",
+      "tasks": {
+        "lead": "coordinating",
+        "security": "Auditing auth flows",
+        "perf": "Tracing N+1 queries",
+        "docs": "Drafting the changelog"
+      },
+      "messages": {
+        "m1": "audit src/payments for idempotency",
+        "m2": "found missing idempotency key → report",
+        "m3": "2 N+1 queries in listInvoices()"
+      }
+    }
+  },
+  "install": {
+    "eyebrow": "Install",
+    "titleA": "Up and running in",
+    "titleHighlight": "one command",
+    "description": "Requires Node.js 20 or newer. The installer picks the latest release; npm and pnpm work just as well.",
+    "installCta": "Install Yukino",
+    "methods": {
+      "curl": { "hint": "macOS · Linux · one-liner" },
+      "powershell": { "hint": "Windows · one-liner" },
+      "npm": { "hint": "Node.js 20+" },
+      "pnpm": { "hint": "Node.js 20+" }
+    },
+    "checks": {
+      "node": "Node.js 20+",
+      "platforms": "macOS, Linux & Windows",
+      "license": "MIT licensed · {version}"
+    },
+    "ctaTitle": "Give Yukino a real task",
+    "ctaBody": "Point it at your repository, describe what you want, and watch it plan, edit and verify — with you in control of every write."
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "titleA": "Questions,",
+    "titleHighlight": "answered",
+    "bodyA": "Still curious? The full documentation lives in the repository and the CLI answers",
+    "bodyB": "any time.",
+    "items": {
+      "providers": {
+        "question": "Which models and providers are supported?",
+        "answer": "Any provider that speaks the Anthropic or OpenAI protocol — Anthropic, OpenAI, and any OpenAI-compatible endpoint such as a local gateway. Configure several in ~/.yukino/config.yaml, switch anytime with /provider, and /login discovers available models for you."
+      },
+      "planMode": {
+        "question": "What is plan mode?",
+        "answer": "A read-only mode for investigation and design. Enter it with /plan or Shift+Tab: Yukino explores freely, writes its plan to a file, and only ExitPlanMode ends the mode — with an approval dialog before any write happens."
+      },
+      "sandbox": {
+        "question": "Do I need to run it in a sandbox?",
+        "answer": "No, but you can. Yukino ships with OS-level sandboxing: seatbelt on macOS and bwrap on Linux. Enable it in config.yaml (or toggle with /sandbox) and command tools run isolated, with optional auto-approval."
+      },
+      "data": {
+        "question": "How does it handle my data?",
+        "answer": "Everything is local. Sessions, memory, file history and logs live under .yukino/ in your project or ~/.yukino in your home directory. Nothing is sent anywhere except your configured model provider."
+      },
+      "headless": {
+        "question": "Can it run without a terminal?",
+        "answer": "Yes. Use print mode for scripts and CI (yukino -p \"…\" --output-format stream-json), or start remote mode (yukino --remote) to drive the same agent from a browser over WebSocket."
+      },
+      "ide": {
+        "question": "Does Yukino work inside my IDE?",
+        "answer": "Yes — in VS Code it connects to the Claude Code extension and turns editor @-mentions into file references in your prompt, with line ranges included. Any other editor works through the plain terminal, and ACP-compatible editors such as Zed can drive Yukino natively."
+      },
+      "hooks": {
+        "question": "Can I hook into the agent lifecycle?",
+        "answer": "Hooks in config.yaml fire on session, turn and tool events. Actions run shell commands, inject prompts or call HTTP endpoints, and a pre_tool_use hook can even reject a tool call before it runs."
+      },
+      "teammates": {
+        "question": "What are teammate agents?",
+        "answer": "A lead agent can spawn named teammates that work in parallel, exchanging messages through file mailboxes and isolating risky work in git worktrees. Backends: in-process, tmux or iTerm2."
+      },
+      "delegation": {
+        "question": "Forks, subagents, teammates — what's the difference?",
+        "answer": "A fork (Agent without subagent_type) inherits your entire conversation and keeps nearly the full toolset — it's you, with full context. A defined subagent (explore, plan, general-purpose, or your own Markdown definition) starts fresh with a restricted toolbelt; pass run_in_background=true and it returns a task id immediately, delivering its result as a notification. Teammates are persistent named agents that outlive a single call and coordinate through mailboxes and a shared task board."
+      },
+      "skills": {
+        "question": "What are skills?",
+        "answer": "Markdown playbooks that teach Yukino a workflow. The catalog loads from three tiers — built-in, user-global (~/.agents/skills/) and project-level (.agents/skills/) — hot-reloads when you edit them, and runs either inline or as a forked subagent. InstallSkill fetches new ones from a URL."
+      },
+      "memory": {
+        "question": "How does long-term memory work?",
+        "answer": "Yukino extracts memories from finished sessions in the background, stores them as Markdown under .yukino/, and recalls the relevant ones per turn — prefetched in parallel with the model call so nothing slows down. Consolidation periodically merges and prunes them, and /memory lets you inspect or edit everything by hand."
+      },
+      "telemetry": {
+        "question": "Can I send traces to my observability stack?",
+        "answer": "Yes, and it's opt-in. Set OTEL_* variables to export traces, metrics and logs over OTLP (gRPC or HTTP), LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY to stream LLM observations to Langfuse, and SENTRY_DSN to report process errors to Sentry. Telemetry is off by default, and traces never carry prompts, model output, tool arguments or results, file paths or API keys — session IDs are hashed."
+      },
+      "acp": {
+        "question": "What is ACP support?",
+        "answer": "Yukino speaks the Agent Client Protocol. Run yukino --acp for stdio or yukino --acp-ws [host:port] for WebSocket, and ACP-compatible editors such as Zed can create, load and resume sessions, stream tool-call updates and answer permission requests natively."
+      }
+    }
+  },
+  "footer": {
+    "tagline": "A terminal-based AI coding agent with multi-provider models, sandboxed tools and multi-agent teams.",
+    "columns": {
+      "product": "Product",
+      "developers": "Developers",
+      "resources": "Resources"
+    },
+    "links": {
+      "documentation": "Documentation",
+      "npmPackage": "npm package",
+      "github": "GitHub",
+      "releases": "Releases",
+      "license": "License"
+    },
+    "copyright": "© {year} Yukino. Released under the MIT License.",
+    "builtFor": "Built for the terminal · {version}"
+  }
+}

@@ -1,0 +1,505 @@
+{
+  "meta": {
+    "title": "Yukino —— 常驻终端的 AI 编码 Agent",
+    "description": "Yukino 是一款基于终端的 AI 编码 Agent：连接任意大模型，编辑文件、执行命令、编排多智能体，一个 CLI 即可全部完成。"
+  },
+  "common": {
+    "getStarted": "快速开始",
+    "readDocs": "阅读文档",
+    "viewDocs": "查看文档",
+    "starOnGithub": "在 GitHub 上 Star",
+    "github": "GitHub",
+    "copy": "复制",
+    "copied": "已复制",
+    "language": "语言",
+    "selected": "已选中",
+    "live": "运行中",
+    "backToTop": "返回顶部",
+    "obsOtel": "OTLP 追踪 · 指标 · 日志",
+    "obsLangfuse": "LLM 链路追踪",
+    "obsSentry": "错误上报"
+  },
+  "nav": {
+    "features": "特性",
+    "modes": "模式",
+    "workflow": "流程",
+    "tools": "工具",
+    "providers": "接入",
+    "safety": "安全",
+    "agents": "智能体",
+    "install": "安装",
+    "ariaHome": "Yukino 首页",
+    "ariaThemeToLight": "切换到浅色模式",
+    "ariaThemeToDark": "切换到深色模式",
+    "ariaGithub": "GitHub 上的 Yukino",
+    "ariaMenu": "打开或关闭菜单"
+  },
+  "hero": {
+    "badge": "{version} 已发布",
+    "badgeNote": "——新增 ACP、可观测性与网页抓取",
+    "titleA": "常驻终端的",
+    "titleHighlight": "编码 Agent",
+    "titleB": "你的命令行编程搭档",
+    "subtitle": "Yukino 连接任意大模型：编辑文件、执行命令、编排多智能体，一个 CLI 全部完成，且不打扰你的工作流。",
+    "quickTui": "交互式 TUI",
+    "quickPrint": "Print 模式",
+    "quickRemote": "浏览器 UI",
+    "statsProtocols": "LLM 协议",
+    "statsTools": "内置工具",
+    "statsModes": "运行模式",
+    "statsContext": "上下文窗口"
+  },
+  "showcase": {
+    "eyebrow": "眼见为实",
+    "titleA": "一个引擎，",
+    "titleHighlight": "处处可用",
+    "description": "同一个引擎驱动终端 UI、基于 WebSocket 的浏览器会话，以及面向 CI 的可脚本化 Print 模式。",
+    "tabTerminal": "终端",
+    "tabBrowser": "浏览器 UI",
+    "tabPrint": "Print 模式",
+    "tablistAria": "界面",
+    "sceneAria": "场景 {n}",
+    "statusReady": "就绪",
+    "statusModel": "模型 {model}",
+    "statusSandboxOn": "沙箱已启用",
+    "statusTokens": "{count} tokens",
+    "statusHint": "Ctrl+O 输出 · Shift+Tab 模式",
+    "captionA": "演示会话。运行",
+    "captionB": "即可体验真实效果。",
+    "browserUser": "接好重试逻辑，把 diff 给我看看",
+    "browserQuestion": "已为请求加上 3 次指数退避重试。批准写入吗？",
+    "scenes": {
+      "refactor": {
+        "prompt": "把 token 校验重构为一个辅助函数",
+        "thinking": "扫描 auth 模块与所有调用点……",
+        "answer": "校验逻辑已收敛到 verifyToken() 辅助函数，更新了 4 处调用点，12 个测试全部通过。"
+      },
+      "ratelimit": {
+        "prompt": "限流器配置在哪里？",
+        "thinking": "定位限流中间件及其配置……",
+        "answer": "在 src/middleware/rate-limit.ts——基于 Redis 的滑动窗口限流器，每个路由限 100 次/分钟。"
+      },
+      "darkmode": {
+        "prompt": "在设置中增加一个可持久化的深色模式开关",
+        "thinking": "阅读设置页与主题 Provider……",
+        "answer": "已添加可持久化的深色模式开关并接入现有 Provider，类型检查通过。"
+      },
+      "audit": {
+        "prompt": "并行审计 payments 模块",
+        "thinking": "在隔离的 worktree 中派出两名队友……",
+        "answer": "两名审计员已完成，共发现 3 个问题——其中一个严重（缺少幂等键），完整报告已附上。"
+      }
+    }
+  },
+  "features": {
+    "eyebrow": "核心能力",
+    "titleA": "生产级 Agent 所需一应俱全，",
+    "titleB": "且无冗余",
+    "description": "Yukino 按挽具的思路构建：循环紧凑、工具扎实，护栏的松紧由你决定。",
+    "footnote": "基于 TypeScript 与 React + Ink 构建——MIT 协议。",
+    "exploreTools": "浏览工具带 →",
+    "teammates": "队友",
+    "items": {
+      "multiProvider": {
+        "title": "天生多供应商",
+        "description": "支持 Anthropic、OpenAI 及任意 OpenAI 兼容端点。/login 自动发现可用模型，密钥从环境变量解析，/provider 实时热切换。"
+      },
+      "terminalUi": {
+        "title": "跟得上节奏的终端 UI",
+        "description": "基于 React + Ink 渲染流式文本、思考块与实时工具输出。任务运行时可排队追问、粘贴图片，用 Shift+Tab 循环切换模式。"
+      },
+      "toolbelt": {
+        "title": "一套真正的工具带",
+        "description": "读写与编辑文件、运行 Bash 或 PowerShell、glob/grep 搜索目录树、网页抓取为 Markdown、检索延迟加载工具并调用 MCP 服务器。"
+      },
+      "safety": {
+        "title": "可调节的安全护栏",
+        "description": "四种权限模式、两级 allow/deny/ask 规则、生命周期钩子，以及 macOS seatbelt 与 Linux bwrap 操作系统级沙箱。"
+      },
+      "memory": {
+        "title": "持续积累的记忆",
+        "description": "记忆在后台提取、每轮按需召回、定期整合沉淀——让 Yukino 记住你的代码库如何运转。"
+      },
+      "sessions": {
+        "title": "会话与压缩",
+        "description": "JSONL 会话日志可从中断处精确恢复；自动压缩让长对话始终保持在上下文窗口之内。"
+      },
+      "skills": {
+        "title": "技能与斜杠命令",
+        "description": "技能目录支持热重载，可内联执行，也可 fork 为子智能体执行；另有 .yukino/commands 中的用户自定义斜杠命令。"
+      },
+      "multiAgent": {
+        "title": "多智能体工作流",
+        "description": "派生子智能体、通过文件邮箱协调团队，并用 git worktree 隔离并行工作。"
+      },
+      "mcp": {
+        "title": "MCP 三种加载方式",
+        "description": "急切加载、原生延迟加载或调度模式，自动择优——再多 MCP 工具也不会撑爆上下文缓存。"
+      },
+      "planMode": {
+        "title": "先规划，后动手",
+        "description": "Plan 模式将 Agent 锁定为只读探索。计划写入文件，ExitPlanMode 会在任何改动前弹出审批对话框。"
+      },
+      "codeReview": {
+        "title": "内置代码评审",
+        "description": "/review 运行结构化评审流程，/code-review 审计 diff 并给出可落地的发现——无需额外工具，也无需离开会话。"
+      },
+      "rewind": {
+        "title": "回退与检查点",
+        "description": "每轮自动为所涉文件留存快照。/rewind 可将会话与工作区一并回退至任意检查点，或从检查点 fork 出新分支。"
+      },
+      "background": {
+        "title": "后台任务",
+        "description": "长时间运行的 shell 命令转入后台继续执行，完成后通知 Agent——测试、构建与开发服务器不再阻塞主循环。"
+      },
+      "hooks": {
+        "title": "覆盖每个事件的钩子",
+        "description": "在会话、轮次与工具事件上触发命令、注入提示词或调用 HTTP——附带条件 DSL，甚至可以在工具调用执行前否决它。"
+      },
+      "ide": {
+        "title": "IDE 与浏览器伴侣",
+        "description": "在 VS Code 中直接用 @ 引用文件，或运行 yukino --remote，通过 WebSocket 在浏览器中驱动同一个 Agent。"
+      },
+      "observability": {
+        "title": "默认关闭的可观测性",
+        "description": "用 OpenTelemetry 通过 OTLP 导出追踪、指标与日志，将 LLM 观测流式发送到 Langfuse，将崩溃上报到 Sentry。默认关闭，仅通过环境变量配置——提示词、模型输出、工具参数与文件路径绝不上报，会话 ID 一律哈希。"
+      },
+      "acp": {
+        "title": "Agent Client Protocol",
+        "description": "yukino --acp 通过 stdio、--acp-ws 通过 WebSocket 讲 ACP 协议——Zed 等编辑器可原生打开会话、流式接收工具调用并响应权限请求。"
+      }
+    }
+  },
+  "modes": {
+    "eyebrow": "运行模式",
+    "titleA": "一个引擎，",
+    "titleHighlight": "五种运行方式",
+    "description": "同一个 Agent 循环驱动所有界面：交互式 TUI、可脚本化的 Print 模式、浏览器会话、无头队友，以及原生编辑器集成。",
+    "defaultChip": "默认",
+    "items": {
+      "tui": {
+        "tagline": "交互式 TUI",
+        "description": "默认体验：React + Ink 终端 UI 中的流式对话、工具预览、权限对话框与斜杠命令，一切由键盘驱动。"
+      },
+      "print": {
+        "tagline": "Print 模式",
+        "description": "面向脚本与 CI 的非交互一次性执行。输出纯文本或 stream-json 事件流，提示词可从管道输入，以状态码退出。"
+      },
+      "remote": {
+        "tagline": "Remote 模式",
+        "description": "通过 HTTP + WebSocket 对外提供 Agent 服务，并流式接入浏览器 UI——同一会话、同一工具，网络内任意设备可用。"
+      },
+      "teammate": {
+        "tagline": "Teammate 模式",
+        "description": "每个进程运行一个无头队友。Lead Agent 在 tmux 或 iTerm2 窗格中派生队友，它们通过文件邮箱相互协作。"
+      },
+      "acp": {
+        "tagline": "ACP 模式",
+        "description": "通过 stdio 或 WebSocket 讲 Agent Client Protocol，让 Zed 等编辑器原生驱动会话、工具调用与权限审批。"
+      }
+    }
+  },
+  "workflow": {
+    "eyebrow": "流程",
+    "titleA": "从一句话到",
+    "titleHighlight": "上线",
+    "description": "无需学习新的心智模型。描述任务、审阅关键操作，其余一切皆可回溯。",
+    "steps": {
+      "connect": {
+        "title": "连接供应商",
+        "description": "运行 /login，或放一份 config.yaml。Anthropic、OpenAI 及 OpenAI 兼容端点均开箱即用。"
+      },
+      "describe": {
+        "title": "描述任务",
+        "description": "用自然语言提出请求即可。Yukino 自行规划、流式输出推理过程，并自主选用合适的工具。"
+      },
+      "approve": {
+        "title": "审批高风险操作",
+        "description": "每个写入与命令都会以可审阅的提示呈现——想省去打扰，配置永久允许规则即可。"
+      },
+      "ship": {
+        "title": "交付与回退",
+        "description": "快照与检查点让你可以撤销某一轮、fork 会话，或将工作移交给队友 Agent。"
+      }
+    },
+    "interruptTitle": "随时可以中断",
+    "interruptBody": "Ctrl+C 可清空输入或中止流式输出。检查点让你回退一轮、fork 会话，或将线索移交队友。",
+    "shortcuts": {
+      "ctrlO": "展开/收起完整工具输出",
+      "shiftTab": "循环切换权限模式",
+      "ctrlT": "打开团队面板"
+    }
+  },
+  "tools": {
+    "eyebrow": "工具带",
+    "titleA": "一套真正的工具，",
+    "titleHighlight": "不止于聊天",
+    "description": "读写文件、运行 shell、搜索目录树、抓取网页、派生队友、调用 MCP 服务器——每一项在执行前都要先过权限检查。",
+    "groups": {
+      "Files": "文件",
+      "Shell": "命令行",
+      "Search": "搜索",
+      "Orchestrate": "编排",
+      "Teams": "团队",
+      "Integrate": "集成"
+    },
+    "slashTitle": "斜杠命令",
+    "slashDescription": "不离开输入框即可掌控整个会话。"
+  },
+  "providers": {
+    "eyebrow": "模型接入",
+    "titleA": "带上你自己的",
+    "titleHighlight": "模型",
+    "description": "一个 YAML 文件决定一切。配置多个供应商，用 /provider 随时热切换——密钥从环境变量解析，机密不进 git。",
+    "protocols": {
+      "anthropic": {
+        "note": "原生工具调用、思考块与延迟工具加载。"
+      },
+      "openai": {
+        "note": "Responses API 全程流式的函数调用。"
+      },
+      "openaiCompat": {
+        "note": "任意 OpenAI 兼容网关、代理或自托管端点。"
+      }
+    }
+  },
+  "safety": {
+    "eyebrow": "护栏",
+    "titleA": "安全与否，",
+    "titleHighlight": "由你",
+    "titleB": "决定",
+    "description": "四种权限模式、规则文件与可选的操作系统沙箱。Yukino 在改动任何内容之前都会先询问你——除非你要求它不要问。",
+    "dialogChrome": "yukino · 审批",
+    "modes": {
+      "default": {
+        "description": "读取直接执行，写入与命令先询问。",
+        "detail": "日常工作的安全基线。"
+      },
+      "acceptEdits": {
+        "description": "文件编辑自动接受，命令仍然询问。",
+        "detail": "在有把握的重构上快速推进。"
+      },
+      "plan": {
+        "description": "只读调研，绝不写入。",
+        "detail": "先探索，待计划获批后再动手。"
+      },
+      "bypassPermissions": {
+        "description": "零询问，完全自主。",
+        "detail": "适用于沙箱、CI 与一次性 worktree。"
+      }
+    },
+    "dialogs": {
+      "default": {
+        "chip": "需要授权",
+        "note": "读取直接执行，写入与 shell 命令等待你确认。",
+        "rows": {
+          "allowOnce": "允许一次",
+          "allowAlways": "永久允许",
+          "deny": "拒绝"
+        }
+      },
+      "acceptEdits": {
+        "chip": "自动接受",
+        "note": "文件编辑直接放行，命令仍会暂停等待批准。",
+        "rows": {
+          "applied": "编辑已应用",
+          "bashAsks": "Bash 仍会询问",
+          "denyWins": "拒绝规则优先"
+        }
+      },
+      "plan": {
+        "chip": "Plan 模式",
+        "title": "只读调研",
+        "meta": "不会进行任何写入",
+        "note": "先探索与设计——待计划获批后再动手。",
+        "rows": {
+          "reads": "ReadFile · Glob · Grep",
+          "writes": "WriteFile · EditFile",
+          "exit": "ExitPlanMode"
+        }
+      },
+      "bypassPermissions": {
+        "chip": "自动放行",
+        "note": "适用于沙箱、CI 与一次性 worktree。",
+        "rows": {
+          "noPrompts": "零询问",
+          "autonomy": "完全自主",
+          "denyStill": "拒绝规则依然生效"
+        }
+      }
+    },
+    "features": {
+      "sandbox": {
+        "title": "操作系统级沙箱",
+        "body": "用 macOS 的 seatbelt 或 Linux 的 bwrap 包裹命令工具，可选自动批准。"
+      },
+      "rules": {
+        "title": "两级 allow / deny 规则",
+        "body": "用户级与项目级规则文件，如 Bash(git push*)。deny 始终优先——且 Yukino 永远无法改写自己的 permissions.yaml。"
+      },
+      "worktree": {
+        "title": "Worktree 隔离",
+        "body": "高风险的并行工作在独立的 git worktree 中运行，主工作区保持干净。"
+      }
+    },
+    "localNoteA": "会话、记忆与文件历史均保存在",
+    "localNoteB": "除模型请求外，没有任何数据离开你的机器"
+  },
+  "agents": {
+    "eyebrow": "多智能体",
+    "titleA": "一个领队，",
+    "titleHighlight": "一整支队伍",
+    "description": "fork 你的上下文、随手派出后台子智能体，或通过文件邮箱协调一整支队伍——高风险工作隔离在独立的 git worktree 中。",
+    "cards": {
+      "generalPurpose": {
+        "role": "执行者",
+        "description": "研究复杂问题，探索代码库，执行多步骤任务。",
+        "tool1": "全部工具",
+        "tool2": "完整上下文"
+      },
+      "plan": {
+        "role": "架构师",
+        "description": "只读规划。先明确需求、再定方案，最后才动手写代码。",
+        "tool1": "只读",
+        "tool2": "禁止写入"
+      },
+      "explore": {
+        "role": "侦察兵",
+        "description": "并行调用 Glob、Grep 与 ReadFile，快速探索代码。",
+        "tool1": "只读",
+        "tool2": "并行"
+      }
+    },
+    "customTitle": "自定义 Agent",
+    "customBodyA": "你可以在",
+    "customBodyB": "中以带 YAML front-matter 的 Markdown 文件定义自己的 Agent，并为每个 Agent 配置工具、模型与权限模式。",
+    "delegateTitle": "三种委派方式",
+    "delegateFork": "省略 subagent_type——继承你的完整对话",
+    "delegateBackground": "run_in_background=true——结果以任务通知送达",
+    "delegateTeam": "常驻队友，配备邮箱与共享任务板",
+    "team": {
+      "members": "{count} 名成员 · 进程内",
+      "mailbox": "邮箱",
+      "worktrees": "2 个 worktree",
+      "mailboxes": "2 个邮箱",
+      "teamsKey": "Ctrl+T 团队",
+      "tasks": {
+        "lead": "协调中",
+        "security": "审计认证流程",
+        "perf": "追踪 N+1 查询",
+        "docs": "起草变更日志"
+      },
+      "messages": {
+        "m1": "审计 src/payments 的幂等性",
+        "m2": "发现缺失的幂等键 → 已出报告",
+        "m3": "listInvoices() 中有 2 处 N+1 查询"
+      }
+    }
+  },
+  "install": {
+    "eyebrow": "安装",
+    "titleA": "一条命令，",
+    "titleHighlight": "即刻上手",
+    "description": "需要 Node.js 20 或更高版本。安装脚本自动选择最新发行版；npm 与 pnpm 同样可用。",
+    "installCta": "安装 Yukino",
+    "methods": {
+      "curl": {
+        "hint": "macOS · Linux · 一行命令"
+      },
+      "powershell": {
+        "hint": "Windows · 一行命令"
+      },
+      "npm": {
+        "hint": "Node.js 20+"
+      },
+      "pnpm": {
+        "hint": "Node.js 20+"
+      }
+    },
+    "checks": {
+      "node": "Node.js 20+",
+      "platforms": "macOS、Linux 与 Windows",
+      "license": "MIT 协议 · {version}"
+    },
+    "ctaTitle": "给 Yukino 一个真实任务",
+    "ctaBody": "把它指向你的仓库，描述你想要什么，看它规划、编辑、验证——每一次写入都由你决定。"
+  },
+  "faq": {
+    "eyebrow": "常见问题",
+    "titleA": "你的疑问，",
+    "titleHighlight": "这里都有答案",
+    "bodyA": "还有好奇的问题？完整文档在仓库中，CLI 也可以随时问",
+    "bodyB": "，有问必答。",
+    "items": {
+      "providers": {
+        "question": "支持哪些模型与供应商？",
+        "answer": "任何讲 Anthropic 或 OpenAI 协议的供应商都可以——Anthropic、OpenAI，以及本地网关等任意 OpenAI 兼容端点。在 ~/.yukino/config.yaml 中配置多个，用 /provider 随时切换，/login 会自动发现可用模型。"
+      },
+      "planMode": {
+        "question": "什么是 Plan 模式？",
+        "answer": "用于调研与设计的只读模式。用 /plan 或 Shift+Tab 进入：Yukino 可以自由探索、将计划写入文件，只有 ExitPlanMode 能退出该模式——且在任何写入发生前都会弹出审批对话框。"
+      },
+      "sandbox": {
+        "question": "必须在沙箱中运行吗？",
+        "answer": "不是必须，但可以选择。Yukino 自带操作系统级沙箱：macOS 的 seatbelt 与 Linux 的 bwrap。在 config.yaml 中启用（或用 /sandbox 切换）后，命令工具将在隔离环境中运行，可选自动批准。"
+      },
+      "data": {
+        "question": "我的数据如何处理？",
+        "answer": "一切都在本地。会话、记忆、文件历史与日志保存在项目的 .yukino/ 或主目录的 ~/.yukino 下。除你配置的模型供应商外，不向任何地方发送数据。"
+      },
+      "headless": {
+        "question": "可以脱离终端运行吗？",
+        "answer": "可以。脚本与 CI 使用 Print 模式（yukino -p \"…\" --output-format stream-json），或启动 Remote 模式（yukino --remote），在浏览器中通过 WebSocket 驱动同一个 Agent。"
+      },
+      "ide": {
+        "question": "Yukino 能在我的 IDE 中工作吗？",
+        "answer": "可以——在 VS Code 中它会连接 Claude Code 扩展，将编辑器里的 @ 引用转换为提示词中的文件引用（含行号范围）。其他编辑器可以直接使用终端，Zed 等支持 ACP 的编辑器可以原生驱动 Yukino。"
+      },
+      "hooks": {
+        "question": "可以挂接 Agent 的生命周期吗？",
+        "answer": "config.yaml 中的钩子可在会话、轮次与工具事件上触发。动作可以执行 shell 命令、注入提示词或调用 HTTP 端点，pre_tool_use 钩子甚至能在工具调用执行前否决它。"
+      },
+      "teammates": {
+        "question": "什么是队友 Agent？",
+        "answer": "Lead Agent 可以派生具名的队友并行工作：它们通过文件邮箱交换消息，并将高风险工作隔离在 git worktree 中。后端支持进程内、tmux 或 iTerm2。"
+      },
+      "delegation": {
+        "question": "fork、子智能体、队友——三者有什么区别？",
+        "answer": "fork（不带 subagent_type 的 Agent）继承你的整个对话、保留几乎完整的工具集——相当于带着完整上下文的你。定义好的子智能体（explore、plan、general-purpose，或你自己的 Markdown 定义）从零开始、工具集受限；传 run_in_background=true 会立即返回任务 id，结果以通知送达。队友则是常驻的具名 Agent，生命周期超出单次调用，通过邮箱与共享任务板协作。"
+      },
+      "skills": {
+        "question": "什么是技能（Skills）？",
+        "answer": "技能是教 Yukino 执行某套工作流的 Markdown 剧本。目录从三层加载——内置、用户全局（~/.agents/skills/）与项目级（.agents/skills/）——编辑后热重载，可内联执行，也可 fork 为子智能体执行。InstallSkill 可以从 URL 安装新技能。"
+      },
+      "memory": {
+        "question": "长期记忆如何运作？",
+        "answer": "Yukino 在后台从已完成的会话中提取记忆，以 Markdown 形式存储在 .yukino/ 下，并在每轮召回相关记忆——与模型调用并行预取，不拖慢节奏。整合流程会定期合并与修剪记忆，/memory 让你随时手动查看或编辑。"
+      },
+      "telemetry": {
+        "question": "能把追踪数据发到我自己的可观测性平台吗？",
+        "answer": "可以，且默认关闭。设置 OTEL_* 变量即可通过 OTLP（gRPC 或 HTTP）导出追踪、指标与日志；设置 LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY 可将 LLM 观测流式发送到 Langfuse；设置 SENTRY_DSN 可将进程错误上报到 Sentry。追踪中绝不包含提示词、模型输出、工具参数或结果、文件路径与 API 密钥——会话 ID 一律哈希。"
+      },
+      "acp": {
+        "question": "什么是 ACP 支持？",
+        "answer": "Yukino 讲 Agent Client Protocol。运行 yukino --acp 走 stdio，或 yukino --acp-ws [host:port] 走 WebSocket，Zed 等 ACP 兼容编辑器即可创建、加载与恢复会话，流式接收工具调用更新，并原生响应权限请求。"
+      }
+    }
+  },
+  "footer": {
+    "tagline": "基于终端的 AI 编码 Agent：多供应商模型、沙箱化工具与多智能体团队。",
+    "columns": {
+      "product": "产品",
+      "developers": "开发者",
+      "resources": "资源"
+    },
+    "links": {
+      "documentation": "文档",
+      "npmPackage": "npm 包",
+      "github": "GitHub",
+      "releases": "版本发布",
+      "license": "许可证"
+    },
+    "copyright": "© {year} Yukino. 基于 MIT 协议发布。",
+    "builtFor": "为终端而生 · {version}"
+  }
+}

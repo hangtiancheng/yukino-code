@@ -33,7 +33,6 @@ export class RevealElement extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    // Reduced motion: stay visible from the start — nothing will animate us in.
     if (prefersReducedMotion()) return;
     this.style.opacity = "0";
     this.style.transform = `translateY(${this.distance}px)`;

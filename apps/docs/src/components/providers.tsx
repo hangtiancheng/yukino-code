@@ -22,6 +22,7 @@
 
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
+import { t } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { container, heading, line, muted } from "@/lib/styles";
@@ -29,27 +30,27 @@ import { Section, SectionHeader } from "./ui/section";
 
 const PROTOCOLS = [
   {
+    id: "anthropic",
     icon: icons.blocks,
     name: "anthropic",
     base: "api.anthropic.com",
     env: "ANTHROPIC_API_KEY",
-    note: "Native tool use, thinking blocks and deferred tool loading.",
   },
   {
+    id: "openai",
     icon: icons.terminal,
     name: "openai",
     base: "api.openai.com",
     env: "OPENAI_API_KEY",
-    note: "Function calling with streaming across the Responses API.",
   },
   {
+    id: "openaiCompat",
     icon: icons.slidersHorizontal,
     name: "openai-compat",
     base: "your-gateway",
     env: "OPENAI_API_KEY",
-    note: "Any OpenAI-compatible gateway, proxy or self-hosted endpoint.",
   },
-];
+] as const;
 
 const YAML: Array<
   Array<{ text: string; tone?: "key" | "str" | "comment" | "num" }>
@@ -76,13 +77,16 @@ export function Providers() {
   return (
     <Section id="providers" className="bg-brand-50/50 dark:bg-white/1.5">
       <SectionHeader
-        eyebrow="Providers"
+        eyebrow={t("providers.eyebrow")}
         title={
           <>
-            Bring your own <span className="text-brand-500">model</span>
+            {t("providers.titleA")}{" "}
+            <span className="text-brand-500">
+              {t("providers.titleHighlight")}
+            </span>
           </>
         }
-        description="One YAML file decides everything. Configure several providers and switch live with /provider — keys resolve from the environment, so nothing secret lands in git."
+        description={t("providers.description")}
       />
 
       <div
@@ -112,7 +116,7 @@ export function Providers() {
                     </span>
                   </div>
                   <p className={cn("mt-1.5 text-sm leading-relaxed", muted)}>
-                    {protocol.note}
+                    {t(`providers.protocols.${protocol.id}.note`)}
                   </p>
                   <p className="mt-2 inline-flex items-center gap-1.5 font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
                     {unsafeHTML(icon(icons.keyRound, "h-3 w-3"))}
@@ -128,7 +132,7 @@ export function Providers() {
           <div
             className={cn(
               "shadow-card bg-brand-50/70 overflow-hidden rounded-2xl border",
-              "border-brand-950/10 dark:border-white/10 dark:bg-[#0c0f0a] dark:shadow-none",
+              "border-brand-950/10 dark:border-white/10 dark:bg-[#1e1f20] dark:shadow-none",
             )}
           >
             <div className="border-brand-950/10 flex items-center justify-between border-b px-5 py-3 dark:border-white/8">
@@ -160,7 +164,7 @@ export function Providers() {
                               token.tone === "str" &&
                                 "text-accent-700 dark:text-accent-300",
                               token.tone === "num" &&
-                                "text-amber-600 dark:text-amber-300",
+                                "text-g-yellow dark:text-[#fdd663]",
                               token.tone === "key" &&
                                 "text-brand-700 dark:text-brand-300",
                             )}

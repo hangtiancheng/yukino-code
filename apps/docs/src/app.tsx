@@ -22,6 +22,7 @@
 
 import { Features } from "./components/features";
 import { Footer } from "./components/footer";
+import { Modes } from "./components/modes";
 import { Providers } from "./components/providers";
 import { ToolsShowcase } from "./components/tools-showcase";
 import { Workflow } from "./components/workflow";
@@ -46,6 +47,7 @@ export function App() {
         <docs-hero docsUrl={DOCS_URL} />
         <docs-terminal-showcase />
         <Features />
+        <Modes />
         <Workflow />
         <ToolsShowcase />
         <Providers />

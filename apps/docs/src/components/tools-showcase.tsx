@@ -24,6 +24,7 @@ import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
 import { slashCommands, tools } from "@/lib/content";
 import type { ToolItem } from "@/lib/content";
+import { t } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { chip, container, heading, line, muted } from "@/lib/styles";
@@ -41,8 +42,6 @@ const GROUPS: Array<ToolItem["group"]> = [
 function Marquee({ items, reverse }: { items: string[]; reverse?: boolean }) {
   const doubled = [...items, ...items];
   return (
-    // Decorative: every name also appears in the grouped cards below, so skip
-    // the duplicated (and animated) strip for assistive tech.
     <div
       aria-hidden="true"
       className="flex overflow-hidden mask-[linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]"
@@ -73,14 +72,14 @@ export function ToolsShowcase() {
   return (
     <Section id="tools" className="bg-brand-50/50 dark:bg-white/1.5">
       <SectionHeader
-        eyebrow="Toolbelt"
+        eyebrow={t("tools.eyebrow")}
         title={
           <>
-            A real set of tools,{" "}
-            <span className="text-brand-500">not just chat</span>
+            {t("tools.titleA")}{" "}
+            <span className="text-brand-500">{t("tools.titleHighlight")}</span>
           </>
         }
-        description="Read and write files, run shells, search the tree, fetch the web, spawn teammates and call MCP servers — each one permission-checked before it runs."
+        description={t("tools.description")}
       />
 
       <docs-reveal delay={0.08} className="mt-12 space-y-3">
@@ -102,7 +101,9 @@ export function ToolsShowcase() {
                 line,
               )}
             >
-              <h3 className={cn("text-sm font-semibold", heading)}>{group}</h3>
+              <h3 className={cn("text-sm font-semibold", heading)}>
+                {t(`tools.groups.${group}`)}
+              </h3>
               <ul className="mt-4 space-y-2">
                 {tools
                   .filter((tool) => tool.group === group)
@@ -138,16 +139,18 @@ export function ToolsShowcase() {
             </span>
             <div>
               <h3 className={cn("text-base font-semibold", heading)}>
-                Slash commands
+                {t("tools.slashTitle")}
               </h3>
               <p className={cn("text-sm", muted)}>
-                Drive the session without leaving the prompt.
+                {t("tools.slashDescription")}
               </p>
             </div>
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
             {slashCommands.map((command) => (
-              <span className={cn(chip, "text-[11px]")}>{command}</span>
+              <span className={cn(chip, "text-[11px]")} title={command.desc}>
+                {command.cmd}
+              </span>
             ))}
           </div>
         </div>

@@ -19,7 +19,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
 import {
@@ -28,10 +27,13 @@ import {
   observabilityList,
   permissionModes,
   providerList,
+  tools,
 } from "@/lib/content";
-import type { Feature } from "@/lib/content";
+import type { Feature, ObsBadge } from "@/lib/content";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
+import type { MessageKey } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
 import {
   card,
   cardHover,
@@ -67,7 +69,7 @@ function SpotlightCard({
         className,
       )}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(260px_circle_at_var(--spot-x,50%)_var(--spot-y,50%),rgba(132,154,114,0.16),transparent_70%)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(260px_circle_at_var(--spot-x,50%)_var(--spot-y,50%),rgba(66,133,244,0.13),transparent_70%)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       <div className="relative h-full">{children}</div>
     </div>
   );
@@ -79,7 +81,13 @@ const ACCENT_TILE: Record<NonNullable<Feature["accent"]>, string> = {
   accent:
     "bg-accent-500/12 text-accent-600 dark:bg-accent-400/12 dark:text-accent-300",
   neutral:
-    "bg-brand-900/[0.05] text-brand-800 dark:bg-white/[0.06] dark:text-zinc-300",
+    "bg-[#f1f3f4] text-[#3c4043] dark:bg-white/[0.06] dark:text-[#e8eaed]",
+};
+
+const OBS_DETAIL_KEY: Record<ObsBadge["id"], MessageKey> = {
+  otel: "common.obsOtel",
+  langfuse: "common.obsLangfuse",
+  sentry: "common.obsSentry",
 };
 
 function Decor({ kind }: { kind: NonNullable<Feature["decor"]> }) {
@@ -93,14 +101,28 @@ function Decor({ kind }: { kind: NonNullable<Feature["decor"]> }) {
             )}
           >
             <span className="bg-brand-500 h-1.5 w-1.5 rounded-full" />
-            {provider.protocol}
+            {provider.name}
           </span>
         ))}
       </div>
     );
   }
 
-  if (kind === "safety") {
+  if (kind === "tools") {
+    return (
+      <div className="mt-6 flex flex-wrap gap-2">
+        {tools.slice(0, 6).map((tool) => (
+          <span className={chip}>
+            {unsafeHTML(icon(tool.icon, "text-brand-500 h-3 w-3"))}
+            {tool.name}
+          </span>
+        ))}
+        <span className={chip}>+{tools.length - 6}</span>
+      </div>
+    );
+  }
+
+  if (kind === "sandbox") {
     return (
       <div className="mt-6 flex flex-wrap gap-2">
         {permissionModes.map((mode) => (
@@ -113,7 +135,7 @@ function Decor({ kind }: { kind: NonNullable<Feature["decor"]> }) {
     );
   }
 
-  if (kind === "observability") {
+  if (kind === "obs") {
     return (
       <div className="mt-6 flex flex-wrap gap-2">
         {observabilityList.map((backend) => (
@@ -125,7 +147,7 @@ function Decor({ kind }: { kind: NonNullable<Feature["decor"]> }) {
             <span className="bg-brand-500 h-1.5 w-1.5 rounded-full" />
             {backend.name}
             <span className="text-zinc-400 dark:text-zinc-500">
-              {backend.detail}
+              {t(OBS_DETAIL_KEY[backend.id])}
             </span>
           </span>
         ))}
@@ -143,7 +165,7 @@ function Decor({ kind }: { kind: NonNullable<Feature["decor"]> }) {
       ))}
       <span className="border-brand-950/8 inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-700 dark:border-white/8 dark:bg-white/3 dark:text-zinc-300">
         {unsafeHTML(icon(icons.bot, "text-accent-500 h-3 w-3"))}
-        teammates
+        {t("features.teammates")}
       </span>
     </div>
   );
@@ -153,14 +175,14 @@ export function Features() {
   return (
     <Section id="features">
       <SectionHeader
-        eyebrow="Capabilities"
+        eyebrow={t("features.eyebrow")}
         title={
           <>
-            Everything a serious agent needs,
-            <br className="hidden sm:block" /> none of the bloat
+            {t("features.titleA")}
+            <br className="hidden sm:block" /> {t("features.titleB")}
           </>
         }
-        description="Yukino is built as a harness: a tight loop, a real toolbelt, and guardrails that you decide how tight to pull."
+        description={t("features.description")}
       />
 
       <div
@@ -199,10 +221,10 @@ export function Features() {
                   heading,
                 )}
               >
-                {feature.title}
+                {t(`features.items.${feature.id}.title`)}
               </h3>
               <p className={cn("mt-2.5 text-sm leading-relaxed", muted)}>
-                {feature.description}
+                {t(`features.items.${feature.id}.description`)}
               </p>
               {feature.decor ? <Decor kind={feature.decor} /> : null}
             </SpotlightCard>
@@ -221,15 +243,13 @@ export function Features() {
             <span className="bg-brand-700 dark:bg-brand-300 dark:text-brand-950 grid h-9 w-9 place-items-center rounded-lg text-white">
               {unsafeHTML(icon(icons.sparkle, "h-4 w-4"))}
             </span>
-            <p className={cn("text-sm", muted)}>
-              Built with TypeScript and React + Ink — MIT licensed.
-            </p>
+            <p className={cn("text-sm", muted)}>{t("features.footnote")}</p>
           </div>
           <a
             href="#tools"
             className="text-brand-600 hover:text-brand-500 dark:text-brand-300 dark:hover:text-brand-200 text-sm font-semibold transition-colors"
           >
-            Explore the toolbelt →
+            {t("features.exploreTools")}
           </a>
         </div>
       </docs-reveal>

@@ -1,0 +1,497 @@
+{
+  "meta": {
+    "title": "Yukino — ターミナルに住む AI コーディングエージェント",
+    "description": "Yukino はターミナルベースの AI コーディングエージェントです。任意の LLM と対話し、ファイルを編集し、コマンドを実行し、マルチエージェントのワークフローを編成できます — すべて 1 つの CLI から。"
+  },
+  "common": {
+    "getStarted": "はじめる",
+    "readDocs": "ドキュメントを読む",
+    "viewDocs": "ドキュメントを見る",
+    "starOnGithub": "GitHub でスターを付ける",
+    "github": "GitHub",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "language": "言語",
+    "selected": "選択中",
+    "live": "実行中",
+    "backToTop": "トップへ戻る",
+    "obsOtel": "OTLP トレース · メトリクス · ログ",
+    "obsLangfuse": "LLM トレース",
+    "obsSentry": "エラーレポート"
+  },
+  "nav": {
+    "features": "機能",
+    "modes": "実行モード",
+    "workflow": "ワークフロー",
+    "tools": "ツール",
+    "providers": "プロバイダー",
+    "safety": "安全性",
+    "agents": "エージェント",
+    "install": "インストール",
+    "ariaHome": "Yukino ホーム",
+    "ariaThemeToLight": "ライトモードに切り替え",
+    "ariaThemeToDark": "ダークモードに切り替え",
+    "ariaGithub": "GitHub の Yukino",
+    "ariaMenu": "メニューを切り替え"
+  },
+  "hero": {
+    "badge": "{version} 公開",
+    "badgeNote": "— ACP · オブザーバビリティ · Web フェッチ",
+    "titleA": "ターミナルに住む",
+    "titleHighlight": "コーディングエージェント",
+    "titleB": "あなたのコマンドラインの相棒",
+    "subtitle": "Yukino は任意の LLM に接続し、ファイルを編集し、コマンドを実行し、マルチエージェントのワークフローを編成します — すべてが邪魔にならない 1 つの CLI から。",
+    "quickTui": "対話型 TUI",
+    "quickPrint": "Print モード",
+    "quickRemote": "ブラウザ UI",
+    "statsProtocols": "LLM プロトコル",
+    "statsTools": "組み込みツール",
+    "statsModes": "実行モード",
+    "statsContext": "コンテキストウィンドウ"
+  },
+  "showcase": {
+    "eyebrow": "実際に動く様子",
+    "titleA": "1 つのエンジンが、",
+    "titleHighlight": "あらゆる画面を駆動",
+    "description": "同じエンジンがターミナル UI、WebSocket 経由のブラウザセッション、そして CI 向けのスクリプト可能な Print モードを駆動します。",
+    "tabTerminal": "ターミナル",
+    "tabBrowser": "ブラウザ UI",
+    "tabPrint": "Print モード",
+    "tablistAria": "インターフェース",
+    "sceneAria": "シーン {n}",
+    "statusReady": "準備完了",
+    "statusModel": "モデル {model}",
+    "statusSandboxOn": "サンドボックス有効",
+    "statusTokens": "{count} トークン",
+    "statusHint": "Ctrl+O 出力 · Shift+Tab モード",
+    "captionA": "これはデモセッションです。",
+    "captionB": "を実行して本物を体験してください。",
+    "browserUser": "リトライロジックを組み込んで、diff を見せて",
+    "browserQuestion": "リクエストを 3 回の指数バックオフでラップしました。書き込みを承認しますか？",
+    "scenes": {
+      "refactor": {
+        "prompt": "トークン検証を 1 つのヘルパーにリファクタリングして",
+        "thinking": "auth モジュールとすべての呼び出し箇所をスキャン中……",
+        "answer": "検証ロジックを単一の verifyToken() ヘルパーに集約し、4 つの呼び出し箇所を更新、12 件のテストがすべて成功しました。"
+      },
+      "ratelimit": {
+        "prompt": "レートリミッターはどこで設定されていますか？",
+        "thinking": "レート制限ミドルウェアとその設定を特定中……",
+        "answer": "src/middleware/rate-limit.ts にあります — Redis をバックエンドとするスライディングウィンドウ方式で、ルートごとに毎分 100 リクエストが上限です。"
+      },
+      "darkmode": {
+        "prompt": "設定に永続化されるダークモードのトグルを追加して",
+        "thinking": "設定ページとテーマプロバイダーを読み込み中……",
+        "answer": "既存のプロバイダーに接続された永続化ダークモードトグルを追加しました。型チェックもクリーンです。"
+      },
+      "audit": {
+        "prompt": "payments モジュールを並列で監査して",
+        "thinking": "隔離された worktree に 2 人のチームメイトを起動中……",
+        "answer": "両名の監査が完了しました。3 件の問題を発見 — うち 1 件は重大（冪等キーの欠落）。詳細レポートを添付しました。"
+      }
+    }
+  },
+  "features": {
+    "eyebrow": "機能",
+    "titleA": "本物のエージェントに必要なものをすべて、",
+    "titleB": "無駄は一切なし",
+    "description": "Yukino はハーネスとして設計されています：タイトなループ、本物のツールベルト、そして締め具合をあなたが決めるガードレール。",
+    "footnote": "TypeScript と React + Ink で構築 — MIT ライセンス。",
+    "exploreTools": "ツールベルトを見る →",
+    "teammates": "チームメイト",
+    "items": {
+      "multiProvider": {
+        "title": "設計段階からマルチプロバイダー",
+        "description": "Anthropic、OpenAI、または任意の OpenAI 互換エンドポイントに対応。/login が利用可能なモデルを自動検出し、キーは環境変数から解決、/provider でライブに切り替えできます。"
+      },
+      "terminalUi": {
+        "title": "ついてくるターミナル UI",
+        "description": "React + Ink でストリーミングテキスト、思考ブロック、ライブツール出力を描画。タスク実行中でも追加の質問をキューでき、画像を貼り付けられ、Shift+Tab でモードを巡回できます。"
+      },
+      "toolbelt": {
+        "title": "本物のツールベルト",
+        "description": "ファイルの読み書きと編集、Bash や PowerShell の実行、ツリーの glob/grep 検索、Web ページの Markdown 取得、遅延ツールの検索、MCP サーバーの呼び出し。"
+      },
+      "safety": {
+        "title": "調整できる安全性",
+        "description": "4 つの権限モード、2 層の allow/deny/ask ルール、ライフサイクルフック、そして macOS の seatbelt と Linux の bwrap による OS レベルのサンドボックス。"
+      },
+      "memory": {
+        "title": "積み重なるメモリ",
+        "description": "メモリはバックグラウンドで抽出され、ターンごとに呼び出され、定期的に統合されます — Yukino はあなたのコードベースの動き方を覚えていきます。"
+      },
+      "sessions": {
+        "title": "セッションと圧縮",
+        "description": "JSONL セッションログで中断した場所から正確に再開でき、自動圧縮が長い会話をコンテキストウィンドウ内に収めます。"
+      },
+      "skills": {
+        "title": "スキルとスラッシュコマンド",
+        "description": "ホットリロード対応のスキルカタログ、インラインとフォークの 2 つの実行方式、さらに .yukino/commands 由来のユーザースラッシュコマンド。"
+      },
+      "multiAgent": {
+        "title": "マルチエージェントのワークフロー",
+        "description": "サブエージェントを起動し、ファイルメールボックスでチームを編成し、並行作業を git worktree で隔離します。"
+      },
+      "mcp": {
+        "title": "MCP を 3 つの方式で",
+        "description": "イーガー、ネイティブ遅延、ディスパッチ — 自動で最適なものを選ぶので、大量の MCP ツールがコンテキストキャッシュを破壊することはありません。"
+      },
+      "planMode": {
+        "title": "書く前に計画を",
+        "description": "Plan モードはエージェントを読み取り専用の探索に固定します。計画はファイルに保存され、ExitPlanMode が変更前に承認ダイアログを表示します。"
+      },
+      "codeReview": {
+        "title": "コードレビューを内蔵",
+        "description": "/review が構造化されたレビューを実行し、/code-review が diff を監査して実行可能な指摘を返します — 追加ツールもセッション離脱も不要です。"
+      },
+      "rewind": {
+        "title": "巻き戻しとチェックポイント",
+        "description": "各ターンが触れたファイルのスナップショットを保存。/rewind で会話と作業ツリーを任意のチェックポイントに戻したり、そこから新しいブランチをフォークできます。"
+      },
+      "background": {
+        "title": "バックグラウンドタスク",
+        "description": "長時間実行されるシェルはバックグラウンドで動き続け、完了時にエージェントへ通知します — テスト、ビルド、開発サーバーがループをブロックしません。"
+      },
+      "hooks": {
+        "title": "あらゆるイベントのフック",
+        "description": "セッション、ターン、ツールイベントでコマンド実行、プロンプト注入、HTTP 呼び出しを発火 — 条件 DSL 付きで、ツール呼び出しを実行前に拒否することもできます。"
+      },
+      "ide": {
+        "title": "IDE とブラウザの仲間",
+        "description": "VS Code からファイルを直接 @ メンションしたり、yukino --remote で WebSocket 経由のブラウザから同じエージェントを操作できます。"
+      },
+      "observability": {
+        "title": "オプトインのオブザーバビリティ",
+        "description": "OpenTelemetry で OTLP 経由のトレース、メトリクス、ログをエクスポートし、LLM の観測データを Langfuse にストリームし、クラッシュを Sentry に報告します。デフォルトはオフ、設定は環境変数のみ — プロンプト、モデル出力、ツール引数、ファイルパスは送信されず、セッション ID はハッシュ化されます。"
+      },
+      "acp": {
+        "title": "Agent Client Protocol",
+        "description": "yukino --acp は stdio で、--acp-ws は WebSocket で ACP を話します — Zed などのエディターがセッションを開き、ツール呼び出しをストリームし、権限リクエストにネイティブに応答できます。"
+      }
+    }
+  },
+  "modes": {
+    "eyebrow": "実行モード",
+    "titleA": "1 つのエンジン、",
+    "titleHighlight": "5 つの動かし方",
+    "description": "同じエージェントループがすべての画面を駆動します：対話型 TUI、スクリプト可能な Print モード、ブラウザセッション、ヘッドレスなチームメイト、そしてネイティブのエディター統合。",
+    "defaultChip": "デフォルト",
+    "items": {
+      "tui": {
+        "tagline": "対話型 TUI",
+        "description": "デフォルトの体験：React + Ink ターミナル UI でのストリーミングチャット、ツールプレビュー、権限ダイアログ、スラッシュコマンド、すべてがキーボード駆動。"
+      },
+      "print": {
+        "tagline": "Print モード",
+        "description": "スクリプトと CI 向けの非対話ワンショット。プレーンテキストまたは stream-json イベントを出力し、プロンプトをパイプで渡し、ステータスコードで終了します。"
+      },
+      "remote": {
+        "tagline": "Remote モード",
+        "description": "HTTP + WebSocket でエージェントを公開し、ブラウザ UI にストリームします — 同じセッション、同じツールを、ネットワーク内のどのデバイスからでも。"
+      },
+      "teammate": {
+        "tagline": "チームメイトモード",
+        "description": "プロセスごとに 1 人のヘッドレスチームメイトを実行。リードエージェントが tmux や iTerm2 ペインにチームメイトを起動し、ファイルメールボックスで連携します。"
+      },
+      "acp": {
+        "tagline": "ACP モード",
+        "description": "stdio または WebSocket で Agent Client Protocol を話し、Zed などのエディターがセッション、ツール呼び出し、権限をネイティブに駆動できます。"
+      }
+    }
+  },
+  "workflow": {
+    "eyebrow": "ワークフロー",
+    "titleA": "プロンプトから",
+    "titleHighlight": "リリースまで",
+    "description": "新しいメンタルモデルは不要です。タスクを説明し、重要なところだけレビューし、その他は巻き戻しボタンにお任せ。",
+    "steps": {
+      "connect": {
+        "title": "プロバイダーに接続",
+        "description": "/login を実行するか config.yaml を置くだけ。Anthropic、OpenAI、OpenAI 互換エンドポイントがすぐ使えます。"
+      },
+      "describe": {
+        "title": "タスクを説明",
+        "description": "自然言語で依頼します。Yukino が計画し、推論をストリームし、適切なツールを自分で選びます。"
+      },
+      "approve": {
+        "title": "リスクのある操作を承認",
+        "description": "すべての書き込みとコマンドがレビュー可能なプロンプトとして表示されます — 邪魔なら常時許可ルールを設定できます。"
+      },
+      "ship": {
+        "title": "出荷して巻き戻す",
+        "description": "スナップショットとチェックポイントで、ターンを取り消したり、会話をフォークしたり、チームメイトエージェントに引き継げます。"
+      }
+    },
+    "interruptTitle": "中断されるために設計",
+    "interruptBody": "Ctrl+C で入力をクリアするかストリームを停止。チェックポイントでターンを巻き戻し、セッションをフォークし、スレッドをチームメイトに引き継げます。",
+    "shortcuts": {
+      "ctrlO": "ツールの完全な出力を切り替え",
+      "shiftTab": "権限モードを巡回",
+      "ctrlT": "チームオーバーレイを開く"
+    }
+  },
+  "tools": {
+    "eyebrow": "ツールベルト",
+    "titleA": "チャットだけじゃない、",
+    "titleHighlight": "本物のツール群",
+    "description": "ファイルの読み書き、シェルの実行、ツリー検索、Web フェッチ、チームメイトの起動、MCP サーバーの呼び出し — すべて実行前に権限チェックされます。",
+    "groups": {
+      "Files": "ファイル",
+      "Shell": "シェル",
+      "Search": "検索",
+      "Orchestrate": "オーケストレーション",
+      "Teams": "チーム",
+      "Integrate": "統合"
+    },
+    "slashTitle": "スラッシュコマンド",
+    "slashDescription": "プロンプトを離れずにセッションを操作。"
+  },
+  "providers": {
+    "eyebrow": "プロバイダー",
+    "titleA": "あなたの",
+    "titleHighlight": "モデルを持ち込む",
+    "description": "1 つの YAML ファイルがすべてを決めます。複数のプロバイダーを設定して /provider でライブに切り替え — キーは環境変数から解決されるので、秘密情報が git に入ることはありません。",
+    "protocols": {
+      "anthropic": {
+        "note": "ネイティブのツール使用、思考ブロック、遅延ツール読み込み。"
+      },
+      "openai": {
+        "note": "Responses API 全体でのストリーミング関数呼び出し。"
+      },
+      "openaiCompat": {
+        "note": "任意の OpenAI 互換ゲートウェイ、プロキシ、セルフホストエンドポイント。"
+      }
+    }
+  },
+  "safety": {
+    "eyebrow": "ガードレール",
+    "titleA": "安全性は",
+    "titleHighlight": "あなたが",
+    "titleB": "決める",
+    "description": "4 つの権限モード、ルールファイル、オプションの OS サンドボックス。Yukino は何かを変える前に必ず尋ねます — 尋ねるなと言うまでは。",
+    "dialogChrome": "yukino · 承認",
+    "modes": {
+      "default": {
+        "description": "読み取りは自由。書き込みとコマンドは先に確認。",
+        "detail": "日常作業の安全なベースライン。"
+      },
+      "acceptEdits": {
+        "description": "ファイル編集は自動承認、コマンドは引き続き確認。",
+        "detail": "信頼できるリファクタリングを高速に。"
+      },
+      "plan": {
+        "description": "読み取り専用の調査。書き込みは一切なし。",
+        "detail": "まず探索し、変更前に計画を承認。"
+      },
+      "bypassPermissions": {
+        "description": "プロンプトなし。完全な自律性。",
+        "detail": "サンドボックス、CI、使い捨て worktree 向け。"
+      }
+    },
+    "dialogs": {
+      "default": {
+        "chip": "権限が必要です",
+        "note": "読み取りは自由。書き込みとシェルコマンドはあなたの確認を待ちます。",
+        "rows": {
+          "allowOnce": "一度だけ許可",
+          "allowAlways": "常に許可",
+          "deny": "拒否"
+        }
+      },
+      "acceptEdits": {
+        "chip": "自動承認",
+        "note": "ファイル編集はそのまま通り、コマンドは承認のために一時停止します。",
+        "rows": {
+          "applied": "編集を適用",
+          "bashAsks": "Bash は引き続き確認",
+          "denyWins": "拒否ルールが優先"
+        }
+      },
+      "plan": {
+        "chip": "Plan モード",
+        "title": "読み取り専用の調査",
+        "meta": "書き込みは行われません",
+        "note": "まず探索と設計 — 変更前に計画を承認してください。",
+        "rows": {
+          "reads": "ReadFile · Glob · Grep",
+          "writes": "WriteFile · EditFile",
+          "exit": "ExitPlanMode"
+        }
+      },
+      "bypassPermissions": {
+        "chip": "自動許可",
+        "note": "サンドボックス、CI、使い捨て worktree 向け。",
+        "rows": {
+          "noPrompts": "プロンプトなし",
+          "autonomy": "完全な自律性",
+          "denyStill": "拒否ルールは有効"
+        }
+      }
+    },
+    "features": {
+      "sandbox": {
+        "title": "OS レベルのサンドボックス",
+        "body": "macOS の seatbelt または Linux の bwrap でコマンドツールをラップ。自動承認もオプションで可能です。"
+      },
+      "rules": {
+        "title": "2 層の allow / deny ルール",
+        "body": "Bash(git push*) のようなユーザー + プロジェクトのルールファイル。deny が常に優先され、Yukino は自分の permissions.yaml を書き換えられません。"
+      },
+      "worktree": {
+        "title": "Worktree 隔離",
+        "body": "リスクのある並行作業は専用の git worktree で実行され、メインツリーはクリーンなままです。"
+      }
+    },
+    "localNoteA": "セッション、メモリ、ファイル履歴は",
+    "localNoteB": "モデルリクエスト以外、マシンから出るものはありません"
+  },
+  "agents": {
+    "eyebrow": "マルチエージェント",
+    "titleA": "1 人のリードと、",
+    "titleHighlight": "チーム全体",
+    "description": "自分のコンテキストをフォークし、バックグラウンドのサブエージェントを起動し、ファイルメールボックスでチーム全体を編成 — リスクのある作業は専用の git worktree に隔離されます。",
+    "cards": {
+      "generalPurpose": {
+        "role": "実行者",
+        "description": "複雑な問題を調査し、コードベースを探索し、多段階のタスクを実行します。",
+        "tool1": "全ツール",
+        "tool2": "フルコンテキスト"
+      },
+      "plan": {
+        "role": "アーキテクト",
+        "description": "読み取り専用の計画。コードの前に要件を理解し、ソリューションを設計します。",
+        "tool1": "読み取り専用",
+        "tool2": "書き込み禁止"
+      },
+      "explore": {
+        "role": "スカウト",
+        "description": "Glob、Grep、ReadFile を並列に呼び出し、コードを高速に探索します。",
+        "tool1": "読み取り専用",
+        "tool2": "並列"
+      }
+    },
+    "customTitle": "カスタムエージェント",
+    "customBodyA": "",
+    "customBodyB": "に YAML フロントマター付きの Markdown ファイルとして独自のエージェントを定義し、ツール、モデル、権限モードをそれぞれ指定できます。",
+    "delegateTitle": "3 つの委任方法",
+    "delegateFork": "subagent_type を省略 — 会話全体を継承",
+    "delegateBackground": "run_in_background=true — 結果はタスク通知として届く",
+    "delegateTeam": "メールボックスと共有タスクボードを持つ永続チームメイト",
+    "team": {
+      "members": "{count} 人のメンバー · プロセス内",
+      "mailbox": "メールボックス",
+      "worktrees": "2 worktrees",
+      "mailboxes": "2 メールボックス",
+      "teamsKey": "Ctrl+T チーム",
+      "tasks": {
+        "lead": "編成中",
+        "security": "認証フローを監査中",
+        "perf": "N+1 クエリを追跡中",
+        "docs": "チェンジログを起草中"
+      },
+      "messages": {
+        "m1": "src/payments の冪等性を監査して",
+        "m2": "冪等キーの欠落を発見 → レポート",
+        "m3": "listInvoices() に N+1 クエリが 2 件"
+      }
+    }
+  },
+  "install": {
+    "eyebrow": "インストール",
+    "titleA": "1 つのコマンドで",
+    "titleHighlight": "すぐ動かす",
+    "description": "Node.js 20 以降が必要です。インストーラーは最新リリースを自動選択。npm と pnpm も同様に使えます。",
+    "installCta": "Yukino をインストール",
+    "methods": {
+      "curl": { "hint": "macOS · Linux · ワンライナー" },
+      "powershell": { "hint": "Windows · ワンライナー" },
+      "npm": { "hint": "Node.js 20+" },
+      "pnpm": { "hint": "Node.js 20+" }
+    },
+    "checks": {
+      "node": "Node.js 20+",
+      "platforms": "macOS · Linux · Windows",
+      "license": "MIT ライセンス · {version}"
+    },
+    "ctaTitle": "Yukino に本物のタスクを",
+    "ctaBody": "リポジトリを指定し、やりたいことを説明すれば、計画・編集・検証まで見られます — すべての書き込みはあなたの管理下で。"
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "titleA": "よくある質問に",
+    "titleHighlight": "答えます",
+    "bodyA": "まだ知りたい？完全なドキュメントはリポジトリにあり、CLI はいつでも",
+    "bodyB": "に答えます。",
+    "items": {
+      "providers": {
+        "question": "どのモデルとプロバイダーに対応していますか？",
+        "answer": "Anthropic または OpenAI プロトコルを話すプロバイダーなら何でも — Anthropic、OpenAI、そしてローカルゲートウェイなどの任意の OpenAI 互換エンドポイント。~/.yukino/config.yaml に複数を設定し、/provider でいつでも切り替え、/login が利用可能なモデルを検出します。"
+      },
+      "planMode": {
+        "question": "Plan モードとは何ですか？",
+        "answer": "調査と設計のための読み取り専用モードです。/plan または Shift+Tab で入ると、Yukino は自由に探索し、計画をファイルに書き込み、ExitPlanMode だけがモードを終了できます — 書き込みの前には必ず承認ダイアログが表示されます。"
+      },
+      "sandbox": {
+        "question": "サンドボックスで実行する必要がありますか？",
+        "answer": "必須ではありませんが、可能です。Yukino は OS レベルのサンドボックスを同梱しています：macOS では seatbelt、Linux では bwrap。config.yaml で有効にする（または /sandbox で切り替える）と、コマンドツールが隔離環境で実行され、自動承認もオプションで選べます。"
+      },
+      "data": {
+        "question": "私のデータはどう扱われますか？",
+        "answer": "すべてローカルです。セッション、メモリ、ファイル履歴、ログはプロジェクトの .yukino/ またはホームディレクトリの ~/.yukino に保存されます。設定したモデルプロバイダー以外には何も送信されません。"
+      },
+      "headless": {
+        "question": "ターミナルなしで実行できますか？",
+        "answer": "できます。スクリプトや CI には Print モード（yukino -p \"…\" --output-format stream-json）を使い、Remote モード（yukino --remote）を起動すればブラウザから WebSocket 経由で同じエージェントを操作できます。"
+      },
+      "ide": {
+        "question": "Yukino は IDE の中で動きますか？",
+        "answer": "動きます — VS Code では Claude Code 拡張に接続し、エディターの @ メンションを行範囲付きのファイル参照としてプロンプトに変換します。他のエディターは通常のターミナルで動作し、Zed など ACP 対応のエディターは Yukino をネイティブに駆動できます。"
+      },
+      "hooks": {
+        "question": "エージェントのライフサイクルにフックできますか？",
+        "answer": "config.yaml のフックがセッション、ターン、ツールイベントで発火します。アクションはシェルコマンドの実行、プロンプトの注入、HTTP エンドポイントの呼び出しが可能で、pre_tool_use フックはツール呼び出しを実行前に拒否することもできます。"
+      },
+      "teammates": {
+        "question": "チームメイトエージェントとは何ですか？",
+        "answer": "リードエージェントが名前付きのチームメイトを起動して並列に作業させ、ファイルメールボックスでメッセージを交換し、リスクのある作業を git worktree に隔離します。バックエンドはプロセス内、tmux、iTerm2 です。"
+      },
+      "delegation": {
+        "question": "フォーク、サブエージェント、チームメイトの違いは？",
+        "answer": "フォーク（subagent_type なしの Agent）は会話全体を継承し、ほぼ完全なツールセットを保持します — フルコンテキストのあなた自身です。定義済みサブエージェント（explore、plan、general-purpose、または独自の Markdown 定義）は制限されたツールベルトで新規に開始します。run_in_background=true を渡すと即座にタスク id を返し、結果は通知として届きます。チームメイトは単発の呼び出しを超えて存続する名前付きエージェントで、メールボックスと共有タスクボードで連携します。"
+      },
+      "skills": {
+        "question": "スキルとは何ですか？",
+        "answer": "Yukino にワークフローを教える Markdown のプレイブックです。カタログは 3 層 — 組み込み、ユーザーグローバル（~/.agents/skills/）、プロジェクトレベル（.agents/skills/）— から読み込まれ、編集するとホットリロードされ、インラインでもフォークされたサブエージェントとしても実行できます。InstallSkill で URL から新しいスキルをインストールできます。"
+      },
+      "memory": {
+        "question": "長期メモリはどう動きますか？",
+        "answer": "Yukino は完了したセッションからバックグラウンドでメモリを抽出し、.yukino/ に Markdown として保存し、ターンごとに関連するものを呼び出します — モデル呼び出しと並行してプリフェッチするので遅くなりません。統合プロセスが定期的にマージと剪定を行い、/memory ですべてを手動で確認・編集できます。"
+      },
+      "telemetry": {
+        "question": "トレースを自分のオブザーバビリティ基盤に送れますか？",
+        "answer": "送れます。しかもオプトインです。OTEL_* 変数を設定すると OTLP（gRPC または HTTP）でトレース、メトリクス、ログをエクスポートし、LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY で LLM の観測データを Langfuse にストリームし、SENTRY_DSN でプロセスエラーを Sentry に報告します。テレメトリはデフォルトでオフで、トレースにはプロンプト、モデル出力、ツール引数や結果、ファイルパス、API キーは一切含まれません — セッション ID はハッシュ化されます。"
+      },
+      "acp": {
+        "question": "ACP サポートとは何ですか？",
+        "answer": "Yukino は Agent Client Protocol を話します。yukino --acp で stdio、yukino --acp-ws [host:port] で WebSocket を使い、Zed など ACP 対応のエディターがセッションの作成・読み込み・再開、ツール呼び出しのストリーム更新、権限リクエストへの応答をネイティブに行えます。"
+      }
+    }
+  },
+  "footer": {
+    "tagline": "マルチプロバイダーモデル、サンドボックス化ツール、マルチエージェントチームを備えたターミナルベースの AI コーディングエージェント。",
+    "columns": {
+      "product": "プロダクト",
+      "developers": "開発者",
+      "resources": "リソース"
+    },
+    "links": {
+      "documentation": "ドキュメント",
+      "npmPackage": "npm パッケージ",
+      "github": "GitHub",
+      "releases": "リリース",
+      "license": "ライセンス"
+    },
+    "copyright": "© {year} Yukino. MIT ライセンスで公開。",
+    "builtFor": "ターミナルのために構築 · {version}"
+  }
+}

@@ -24,6 +24,8 @@ import { LitElement, customElement, state } from "@yukino.js/lit-jsx";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
 import { VERSION } from "@/lib/content";
+import { LocaleController, t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import {
@@ -46,15 +48,17 @@ import {
 } from "@/lib/styles";
 import { Section, SectionHeader } from "./ui/section";
 
+type SceneId = "refactor" | "ratelimit" | "darkmode" | "audit";
+
 type Step =
-  | { kind: "thinking"; text: string }
+  | { kind: "thinking" }
   | { kind: "tool"; name: string; arg: string }
-  | { kind: "answer"; text: string };
+  | { kind: "answer" };
 
 type VisibleStep = Step & { live?: boolean };
 
 interface Scene {
-  prompt: string;
+  id: SceneId;
   steps: Step[];
   model: string;
   tokens: string;
@@ -63,81 +67,57 @@ interface Scene {
 
 const SCENES: Scene[] = [
   {
-    prompt: "Refactor token verification into a single helper",
+    id: "refactor",
     model: "claude-sonnet-4",
     tokens: "18.4k",
     elapsed: "6.1s",
     steps: [
-      {
-        kind: "thinking",
-        text: "Scanning the auth module and every call site…",
-      },
+      { kind: "thinking" },
       { kind: "tool", name: "Grep", arg: '"verifyToken" · src' },
       { kind: "tool", name: "ReadFile", arg: "src/auth/session.ts" },
       { kind: "tool", name: "EditFile", arg: "src/auth/session.ts" },
       { kind: "tool", name: "Bash", arg: "pnpm test" },
-      {
-        kind: "answer",
-        text: "Moved verification into a single verifyToken() helper, updated 4 call sites, and all 12 tests pass.",
-      },
+      { kind: "answer" },
     ],
   },
   {
-    prompt: "Where is the rate limiter configured?",
+    id: "ratelimit",
     model: "gpt-5-codex",
     tokens: "9.2k",
     elapsed: "3.4s",
     steps: [
-      {
-        kind: "thinking",
-        text: "Locating the rate-limit middleware and its config…",
-      },
+      { kind: "thinking" },
       { kind: "tool", name: "Glob", arg: "src/**/*.ts" },
       { kind: "tool", name: "Grep", arg: '"rateLimit" · include *.ts' },
       { kind: "tool", name: "ReadFile", arg: "src/middleware/rate-limit.ts" },
-      {
-        kind: "answer",
-        text: "In src/middleware/rate-limit.ts — a sliding-window limiter backed by Redis, capped at 100 req/min per route.",
-      },
+      { kind: "answer" },
     ],
   },
   {
-    prompt: "Add a persisted dark mode toggle to settings",
+    id: "darkmode",
     model: "claude-opus-4",
     tokens: "27.8k",
     elapsed: "9.7s",
     steps: [
-      {
-        kind: "thinking",
-        text: "Reading the settings page and the theme provider…",
-      },
+      { kind: "thinking" },
       { kind: "tool", name: "ReadFile", arg: "src/settings/Appearance.tsx" },
       { kind: "tool", name: "EditFile", arg: "src/settings/Appearance.tsx" },
       { kind: "tool", name: "EditFile", arg: "src/theme/provider.tsx" },
       { kind: "tool", name: "Bash", arg: "pnpm typecheck" },
-      {
-        kind: "answer",
-        text: "Added a persisted dark mode toggle wired into the existing provider. Typecheck is clean.",
-      },
+      { kind: "answer" },
     ],
   },
   {
-    prompt: "Audit the payments module in parallel",
+    id: "audit",
     model: "claude-sonnet-4",
     tokens: "41.3k",
     elapsed: "22.6s",
     steps: [
-      {
-        kind: "thinking",
-        text: "Spawning two teammates in isolated worktrees…",
-      },
+      { kind: "thinking" },
       { kind: "tool", name: "EnterWorktree", arg: "payments-audit" },
       { kind: "tool", name: "SpawnTeammate", arg: "security-auditor" },
       { kind: "tool", name: "SpawnTeammate", arg: "perf-auditor" },
-      {
-        kind: "answer",
-        text: "Both auditors finished. 3 issues found — one critical (missing idempotency key). Full report attached.",
-      },
+      { kind: "answer" },
     ],
   },
 ];
@@ -153,12 +133,18 @@ const TOOL_ICONS: Record<string, string> = {
 };
 
 const TABS = [
-  { id: "terminal", label: "Terminal", icon: icons.squareTerminal },
-  { id: "browser", label: "Browser UI", icon: icons.monitor },
-  { id: "print", label: "Print mode", icon: icons.arrowRight },
+  { id: "terminal", icon: icons.squareTerminal },
+  { id: "browser", icon: icons.monitor },
+  { id: "print", icon: icons.arrowRight },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+const TAB_LABEL_KEY: Record<TabId, MessageKey> = {
+  terminal: "showcase.tabTerminal",
+  browser: "showcase.tabBrowser",
+  print: "showcase.tabPrint",
+};
 
 const PRINT_LINES = [
   {
@@ -204,6 +190,8 @@ export class TerminalShowcaseElement extends LitElement {
   private started = false;
   private visibility?: IntersectionObserver;
 
+  locale = new LocaleController(this);
+
   override createRenderRoot() {
     return this;
   }
@@ -211,9 +199,6 @@ export class TerminalShowcaseElement extends LitElement {
   override firstUpdated() {
     this.positionPill();
     setupReveals(this);
-    // The scene loop types and auto-advances forever; only run it while the
-    // section is actually on screen. First paint already shows a finished
-    // session, so entering the view (re)starts the loop.
     this.visibility = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -246,8 +231,6 @@ export class TerminalShowcaseElement extends LitElement {
     if (this.looping || prefersReducedMotion()) return;
     this.looping = true;
     const generation = this.generation;
-    // On first sight hold the finished session briefly, then animate; on
-    // re-entry replay the current scene right away.
     const hold = first ? 3800 : 400;
     const next = first ? 1 : this.sceneIndex;
     void sleep(hold).then(() => {
@@ -269,9 +252,8 @@ export class TerminalShowcaseElement extends LitElement {
 
   private async runScene(generation: number) {
     const scene = SCENES[this.sceneIndex];
+    const prompt = t(`showcase.scenes.${scene.id}.prompt`);
     if (prefersReducedMotion()) {
-      // No typing, no step-by-step reveal, no autoplay: show the finished
-      // session immediately. Scene dots still switch scenes instantly.
       this.typing = null;
       this.visible = scene.steps.map((step) => ({ ...step }));
       return;
@@ -281,8 +263,8 @@ export class TerminalShowcaseElement extends LitElement {
     await sleep(320);
     if (generation !== this.generation) return;
 
-    for (let i = 1; i <= scene.prompt.length; i++) {
-      this.typing = scene.prompt.slice(0, i);
+    for (let i = 1; i <= prompt.length; i++) {
+      this.typing = prompt.slice(0, i);
       await sleep(30);
       if (generation !== this.generation) return;
     }
@@ -315,9 +297,6 @@ export class TerminalShowcaseElement extends LitElement {
     const rows = this.querySelectorAll<HTMLElement>("[data-step-row]");
     const row = rows[rows.length - 1];
     if (row) {
-      // Pre-hide inline, not with a class: batch-rendered rows (the initial
-      // finished session, and everything under reduced motion) are never
-      // animated in and must stay visible.
       row.style.opacity = "0";
       animateIn(row, { opacity: [0, 1], y: [6, 0] }, { duration: 0.4 });
     }
@@ -374,7 +353,7 @@ export class TerminalShowcaseElement extends LitElement {
             "grid h-5 w-5 shrink-0 place-items-center rounded-md",
             step.live
               ? "bg-brand-500/15 text-brand-600 dark:bg-brand-400/15 dark:text-brand-300"
-              : "bg-emerald-500/12 text-emerald-600 dark:bg-emerald-400/12 dark:text-emerald-400",
+              : "bg-accent-500/12 text-accent-600 dark:bg-accent-400/12 dark:text-accent-400",
           )}
         >
           {step.live
@@ -399,15 +378,15 @@ export class TerminalShowcaseElement extends LitElement {
 
   private renderTerminalPanel() {
     const scene = SCENES[this.sceneIndex];
+    const prompt = t(`showcase.scenes.${scene.id}.prompt`);
     return (
       <div className="relative">
         <div
           className={cn(
-            "shadow-card overflow-hidden rounded-2xl border bg-white dark:bg-[#0c0f0a] dark:shadow-none",
+            "shadow-card overflow-hidden rounded-2xl border bg-white dark:bg-[#1e1f20] dark:shadow-none",
             line,
           )}
         >
-          {/* window chrome */}
           <div
             className={cn(
               "bg-brand-50/70 flex items-center gap-3 border-b px-4 py-3 dark:bg-white/2",
@@ -415,9 +394,9 @@ export class TerminalShowcaseElement extends LitElement {
             )}
           >
             <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-              <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-              <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+              <span className="bg-g-blue h-3 w-3 rounded-full" />
+              <span className="bg-g-red h-3 w-3 rounded-full" />
+              <span className="bg-g-yellow h-3 w-3 rounded-full" />
             </div>
             <div className="flex flex-1 items-center justify-center gap-2 font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
               {unsafeHTML(icon(icons.terminal, "h-3 w-3"))}
@@ -427,7 +406,7 @@ export class TerminalShowcaseElement extends LitElement {
               {SCENES.map((_, index) => (
                 <button
                   type="button"
-                  aria-label={`Scene ${index + 1}`}
+                  aria-label={t("showcase.sceneAria", { n: index + 1 })}
                   onClick={() => this.selectScene(index)}
                   className={cn(
                     "h-1.5 rounded-full transition-all duration-300",
@@ -440,7 +419,6 @@ export class TerminalShowcaseElement extends LitElement {
             </div>
           </div>
 
-          {/* body */}
           <div
             data-terminal-scroll
             className="h-84 overflow-hidden px-4 py-5 font-mono text-[12.5px] leading-relaxed sm:h-92 sm:px-5 sm:text-[13px]"
@@ -451,9 +429,11 @@ export class TerminalShowcaseElement extends LitElement {
               </span>
               <span>{VERSION}</span>
               <span>·</span>
-              <span>model {scene.model}</span>
+              <span>{t("showcase.statusModel", { model: scene.model })}</span>
               <span>·</span>
-              <span className="text-emerald-500">● ready</span>
+              <span className="text-accent-600 dark:text-accent-300">
+                ● {t("showcase.statusReady")}
+              </span>
             </div>
 
             <div className="flex items-start gap-2">
@@ -461,7 +441,7 @@ export class TerminalShowcaseElement extends LitElement {
                 ›
               </span>
               <span className="text-brand-950 dark:text-zinc-100">
-                {this.typing !== null ? this.typing : scene.prompt}
+                {this.typing !== null ? this.typing : prompt}
                 {this.typing !== null ? (
                   <span className="animate-blink bg-brand-500 dark:bg-brand-400 ml-0.5 inline-block h-[1.05em] w-1.75 translate-y-0.5" />
                 ) : null}
@@ -476,8 +456,8 @@ export class TerminalShowcaseElement extends LitElement {
                       data-step-row
                       className="flex gap-2 pl-5 text-[12px] text-zinc-400 italic dark:text-zinc-500"
                     >
-                      <span className="text-amber-400 not-italic">✻</span>
-                      {step.text}
+                      <span className="text-g-yellow not-italic">✻</span>
+                      {t(`showcase.scenes.${scene.id}.thinking`)}
                     </p>
                   );
                 }
@@ -493,7 +473,7 @@ export class TerminalShowcaseElement extends LitElement {
                       ●
                     </span>
                     <span className="font-sans text-[13px] leading-relaxed sm:text-sm">
-                      {step.text}
+                      {t(`showcase.scenes.${scene.id}.answer`)}
                     </span>
                   </p>
                 );
@@ -501,7 +481,6 @@ export class TerminalShowcaseElement extends LitElement {
             </div>
           </div>
 
-          {/* status bar */}
           <div
             className={cn(
               "bg-brand-50/70 flex items-center justify-between gap-3 border-t px-4 py-2.5 font-mono text-[11px] text-zinc-400 dark:bg-white/2 dark:text-zinc-500",
@@ -509,25 +488,25 @@ export class TerminalShowcaseElement extends LitElement {
             )}
           >
             <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 text-emerald-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-accent-600 dark:text-accent-300 inline-flex items-center gap-1.5">
+                <span className="bg-accent-500 h-1.5 w-1.5 rounded-full" />
                 acceptEdits
               </span>
-              <span>sandbox on</span>
+              <span>{t("showcase.statusSandboxOn")}</span>
             </div>
             <div className="flex items-center gap-3">
-              <span>{scene.tokens} tokens</span>
+              <span>{t("showcase.statusTokens", { count: scene.tokens })}</span>
               <span>{scene.elapsed}</span>
               <span className="hidden sm:inline">
-                Ctrl+O output · Shift+Tab mode
+                {t("showcase.statusHint")}
               </span>
             </div>
           </div>
         </div>
 
         <p className={cn("mt-4 text-center text-xs", muted)}>
-          Illustrative session. Run <span className="font-mono">yukino</span>{" "}
-          for the real thing.
+          {t("showcase.captionA")} <span className="font-mono">yukino</span>{" "}
+          {t("showcase.captionB")}
         </p>
       </div>
     );
@@ -537,7 +516,7 @@ export class TerminalShowcaseElement extends LitElement {
     return (
       <div
         className={cn(
-          "shadow-card overflow-hidden rounded-2xl border bg-white dark:bg-[#0c0f0a] dark:shadow-none",
+          "shadow-card overflow-hidden rounded-2xl border bg-white dark:bg-[#1e1f20] dark:shadow-none",
           line,
         )}
       >
@@ -548,12 +527,12 @@ export class TerminalShowcaseElement extends LitElement {
           )}
         >
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-            <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-            <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+            <span className="bg-g-blue h-3 w-3 rounded-full" />
+            <span className="bg-g-red h-3 w-3 rounded-full" />
+            <span className="bg-g-yellow h-3 w-3 rounded-full" />
           </div>
           <div className="border-brand-950/10 flex flex-1 items-center gap-2 rounded-lg border bg-white px-3 py-1.5 font-mono text-[11px] text-zinc-400 dark:border-white/10 dark:bg-white/3 dark:text-zinc-500">
-            <span className="text-emerald-500">●</span>
+            <span className="text-accent-500">●</span>
             http://127.0.0.1:18888
           </div>
         </div>
@@ -563,7 +542,7 @@ export class TerminalShowcaseElement extends LitElement {
             data-reveal-y="12"
             className="bg-brand-600 dark:bg-brand-500 ml-auto max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm text-white opacity-0"
           >
-            Wire up the retry logic and show me the diff
+            {t("showcase.browserUser")}
           </div>
           <div
             data-reveal
@@ -578,16 +557,15 @@ export class TerminalShowcaseElement extends LitElement {
               EditFile · src/net/retry.ts
             </div>
             <div className="border-brand-950/10 overflow-hidden rounded-xl border font-mono text-xs dark:border-white/10">
-              <div className="bg-red-500/10 px-3 py-1 text-red-600 dark:text-red-400">
+              <div className="bg-g-red/10 text-g-red px-3 py-1 dark:text-[#f28b82]">
                 - await fetch(url, opts)
               </div>
-              <div className="bg-emerald-500/10 px-3 py-1 text-emerald-700 dark:text-emerald-400">
+              <div className="bg-accent-500/10 text-accent-700 dark:text-accent-400 px-3 py-1">
                 + await retry(() =&gt; fetch(url, opts), {"{ attempts: 3 }"})
               </div>
             </div>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Wrapped the request in a 3-attempt exponential backoff. Approve to
-              write it?
+              {t("showcase.browserQuestion")}
             </p>
           </div>
         </div>
@@ -599,7 +577,7 @@ export class TerminalShowcaseElement extends LitElement {
     return (
       <div
         className={cn(
-          "shadow-card bg-brand-50/70 overflow-hidden rounded-2xl border dark:bg-[#0c0f0a] dark:shadow-none",
+          "shadow-card bg-brand-50/70 overflow-hidden rounded-2xl border dark:bg-[#1e1f20] dark:shadow-none",
           "border-brand-950/10 dark:border-white/10",
         )}
       >
@@ -610,9 +588,9 @@ export class TerminalShowcaseElement extends LitElement {
           )}
         >
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-            <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-            <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+            <span className="bg-g-blue h-3 w-3 rounded-full" />
+            <span className="bg-g-red h-3 w-3 rounded-full" />
+            <span className="bg-g-yellow h-3 w-3 rounded-full" />
           </div>
           <div className="flex flex-1 items-center justify-center font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
             ci — stream-json
@@ -628,9 +606,9 @@ export class TerminalShowcaseElement extends LitElement {
               className={cn(
                 "truncate opacity-0",
                 item.tone === "cmd" && "text-brand-950 dark:text-zinc-100",
-                item.tone === "text" && "text-sky-700 dark:text-sky-300/90",
+                item.tone === "text" && "text-brand-600 dark:text-brand-300",
                 item.tone === "tool" && "text-brand-700 dark:text-brand-300",
-                item.tone === "ok" && "text-emerald-600 dark:text-emerald-400",
+                item.tone === "ok" && "text-accent-600 dark:text-accent-400",
                 item.tone === "muted" && "text-zinc-400 dark:text-zinc-500",
               )}
             >
@@ -641,7 +619,7 @@ export class TerminalShowcaseElement extends LitElement {
             </div>
           ))}
           <div className="flex items-center gap-2 pt-2 text-zinc-400 dark:text-zinc-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="bg-accent-500 h-1.5 w-1.5 rounded-full" />
             exit 0 · 0.9s
           </div>
         </div>
@@ -666,13 +644,16 @@ export class TerminalShowcaseElement extends LitElement {
         </div>
 
         <SectionHeader
-          eyebrow="See it work"
+          eyebrow={t("showcase.eyebrow")}
           title={
             <>
-              One agent, <span className={gradientText}>every surface</span>
+              {t("showcase.titleA")}{" "}
+              <span className={gradientText}>
+                {t("showcase.titleHighlight")}
+              </span>
             </>
           }
-          description="The same engine drives the terminal UI, a browser session over WebSocket, and a scriptable print mode for CI."
+          description={t("showcase.description")}
         />
 
         <docs-reveal delay={0.1} className={cn(container, "relative mt-12")}>
@@ -685,7 +666,7 @@ export class TerminalShowcaseElement extends LitElement {
                   line,
                 )}
                 role="tablist"
-                aria-label="Interface"
+                aria-label={t("showcase.tablistAria")}
               >
                 <span
                   data-tab-pill
@@ -712,7 +693,9 @@ export class TerminalShowcaseElement extends LitElement {
                       )}
                     >
                       {unsafeHTML(icon(item.icon, "relative h-3.5 w-3.5"))}
-                      <span className="relative">{item.label}</span>
+                      <span className="relative">
+                        {t(TAB_LABEL_KEY[item.id])}
+                      </span>
                     </button>
                   );
                 })}
