@@ -183,7 +183,7 @@
       },
       "print": {
         "tagline": "Print モード",
-        "description": "スクリプトと CI 向けの非対話ワンショット。プレーンテキストまたは stream-json イベントを出力し、プロンプトをパイプで渡し、ステータスコードで終了します。"
+        "description": "スクリプトと CI 向けの非対話ワンショット。プレーンテキストまたは stream-json イベントを出力し、ステータスコードで終了します。"
       },
       "remote": {
         "tagline": "Remote モード",
@@ -335,7 +335,7 @@
       },
       "rules": {
         "title": "2 層の allow / deny ルール",
-        "body": "Bash(git push*) のようなユーザー + プロジェクトのルールファイル。deny が常に優先され、Yukino は自分の permissions.yaml を書き換えられません。"
+        "body": "Bash(git push*) のようなユーザー + プロジェクトのルールファイル。deny は常に ask と allow に優先し、ルールファイルへの書き込みは毎回あなたの承認が必要です。"
       },
       "worktree": {
         "title": "Worktree 隔離",
