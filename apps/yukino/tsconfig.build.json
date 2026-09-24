@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["shims.d.ts", "src"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "docs",
+    "src/remote/fe",
+    "tests",
+    "examples"
+  ]
+}
