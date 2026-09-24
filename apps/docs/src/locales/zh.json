@@ -183,7 +183,7 @@
       },
       "print": {
         "tagline": "Print 模式",
-        "description": "面向脚本与 CI 的非交互一次性执行。输出纯文本或 stream-json 事件流，提示词可从管道输入，以状态码退出。"
+        "description": "面向脚本与 CI 的非交互一次性执行。输出纯文本或 stream-json 事件流，以状态码退出。"
       },
       "remote": {
         "tagline": "Remote 模式",
@@ -335,7 +335,7 @@
       },
       "rules": {
         "title": "两级 allow / deny 规则",
-        "body": "用户级与项目级规则文件，如 Bash(git push*)。deny 始终优先——且 Yukino 永远无法改写自己的 permissions.yaml。"
+        "body": "用户级与项目级规则文件，如 Bash(git push*)。deny 始终优先于 ask 与 allow，且规则文件的每次写入都要先经你批准。"
       },
       "worktree": {
         "title": "Worktree 隔离",

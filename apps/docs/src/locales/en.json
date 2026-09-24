@@ -118,7 +118,7 @@
       },
       "memory": {
         "title": "Memory that compounds",
-        "description": "Memories are extracted in the background, recalled per turn and consolidated overnight, so Yukino remembers how your codebase works."
+        "description": "Memories are extracted in the background, recalled per turn and consolidated periodically, so Yukino remembers how your codebase works."
       },
       "sessions": {
         "title": "Sessions & compaction",
@@ -183,7 +183,7 @@
       },
       "print": {
         "tagline": "Print mode",
-        "description": "Non-interactive one-shots for scripts and CI. Emit plain text or stream-json events, pipe prompts in, and exit with a status code."
+        "description": "Non-interactive one-shots for scripts and CI. Emit plain text or stream-json events, and exit with a status code."
       },
       "remote": {
         "tagline": "Remote mode",
@@ -335,7 +335,7 @@
       },
       "rules": {
         "title": "Two-tier allow / deny rules",
-        "body": "User + project rule files like Bash(git push*). Deny always wins — and Yukino can never rewrite its own permissions.yaml."
+        "body": "User + project rule files like Bash(git push*). Deny always wins over ask and allow, and every write to the rule files still needs your approval."
       },
       "worktree": {
         "title": "Worktree isolation",
