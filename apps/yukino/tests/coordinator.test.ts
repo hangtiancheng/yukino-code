@@ -294,7 +294,7 @@ describe("coordinator prompt", () => {
   // actually delivers, otherwise the Lead would look up teammate names against a field that doesn't exist.
   it("matches the notification format the system actually sends", () => {
     const p = coordinatorReminder(1);
-    expect(p).toContain("<team-notification");
+    expect(p).toContain("<task-notification");
     expect(p).toContain("from=");
     expect(p).not.toContain("<task_id>");
   });

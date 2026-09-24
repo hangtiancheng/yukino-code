@@ -26,9 +26,10 @@ import {
   writeFileSync,
   readFileSync,
   existsSync,
+  rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
@@ -100,5 +101,30 @@ describe("FileHistory rewind", () => {
 
     expect(existsSync(newFile)).toBe(true);
     expect(readFileSync(newFile, "utf-8")).toBe("export const x = 1;");
+  });
+
+  it("restores a file whose parent directory was deleted after the snapshot", () => {
+    const { base, projectDir } = makeTempProject();
+    const fh = new FileHistory(base, "session-1");
+
+    const nestedDir = join(projectDir, "src", "deep");
+    const nested = join(nestedDir, "file.ts");
+    mkdirSync(nestedDir, { recursive: true });
+    writeFileSync(nested, "original");
+
+    fh.trackEdit(nested);
+    fh.makeSnapshot(0, "Round 1: nested file present");
+
+    writeFileSync(nested, "modified");
+    fh.makeSnapshot(2, "Round 2: content changed");
+
+    // The whole directory tree disappears before the rewind (e.g. git clean).
+    rmSync(join(projectDir, "src"), { recursive: true, force: true });
+    expect(existsSync(dirname(nested))).toBe(false);
+
+    const changed = fh.rewind(0);
+
+    expect(readFileSync(nested, "utf-8")).toBe("original");
+    expect(changed).toContain(nested);
   });
 });

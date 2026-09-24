@@ -55,6 +55,18 @@ export function wrapToLines(text: string, width: number): string[] {
   }).split("\n");
 }
 
+/**
+ * Like {@link wrapToLines}, but breaks at word boundaries where possible and
+ * only splits a word (or space-less text such as Chinese) when it cannot fit.
+ */
+export function wrapWordsToLines(text: string, width: number): string[] {
+  return wrapAnsi(text, Math.max(1, Math.floor(width)), {
+    hard: true,
+    wordWrap: true,
+    trim: true,
+  }).split("\n");
+}
+
 /** Tab stop interval terminals use when advancing past a TAB character. */
 const TAB_SIZE = 8;
 

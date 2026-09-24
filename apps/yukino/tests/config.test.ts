@@ -311,6 +311,7 @@ describe("config", () => {
   // indistinguishable from "set to false", so the latter could never be disabled.
   describe("enable_fork", () => {
     const bare = (): AppConfig => ({
+      default_provider: 0,
       providers: [],
       mcp_servers: [],
       hooks: [],
@@ -432,7 +433,12 @@ describe("config", () => {
         }),
       );
       const user: MCPServerConfig = { name: "shared", command: "user-binary" };
-      const base: AppConfig = { providers: [], mcp_servers: [user], hooks: [] };
+      const base: AppConfig = {
+        default_provider: 0,
+        providers: [],
+        mcp_servers: [user],
+        hooks: [],
+      };
       const merged = withProjectMcpServers(base, dir);
       expect(merged.mcp_servers).toEqual([
         { name: "shared", command: "user-binary" },
@@ -443,7 +449,12 @@ describe("config", () => {
     });
 
     it("returns the config unchanged when there is no .mcp.json", () => {
-      const base: AppConfig = { providers: [], mcp_servers: [], hooks: [] };
+      const base: AppConfig = {
+        default_provider: 0,
+        providers: [],
+        mcp_servers: [],
+        hooks: [],
+      };
       expect(withProjectMcpServers(base, dir)).toBe(base);
     });
 

@@ -64,7 +64,7 @@ describe("file tool boundaries", () => {
       path,
       Array.from(
         { length: 1_000 },
-        (_, i) => `${String(i)} ${"界".repeat(30)}`,
+        (_, i) => `${String(i)} ${"あ".repeat(30)}`,
       ).join("\n"),
     );
 
@@ -239,8 +239,8 @@ describe("file tool boundaries", () => {
 
 describe("shell tool boundaries", () => {
   it("keeps UTF-8 output limits on character boundaries", () => {
-    const prefix = takeUtf8Prefix("界界界", 7);
-    expect(prefix).toBe("界界");
+    const prefix = takeUtf8Prefix("あああ", 7);
+    expect(prefix).toBe("ああ");
     expect(utf8ByteLength(prefix)).toBeLessThanOrEqual(7);
     expect(formatShellOutput("$ ", "printf", prefix, "", true)).toContain(
       "[Output truncated after 10 MB]",
@@ -257,7 +257,7 @@ describe("shell tool boundaries", () => {
 
   it("marks output that crosses the shell byte boundary", async () => {
     const result = await new BashTool().execute(makeContext(), {
-      command: "node -e 'process.stdout.write(\"界\".repeat(4000000))'",
+      command: "node -e 'process.stdout.write(\"あ\".repeat(4000000))'",
       timeout: 10,
     });
     expect(result.isError).toBe(true);

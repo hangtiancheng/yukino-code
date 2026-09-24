@@ -70,7 +70,6 @@ export class MemoryExtractor {
   private inProgress = false;
   private pendingContext: string | null = null;
   private turnsSinceLastExtraction = 0;
-  private lastMemoryMessageIdx = 0;
 
   constructor(client: LLMClient, workDir: string) {
     this.client = client;

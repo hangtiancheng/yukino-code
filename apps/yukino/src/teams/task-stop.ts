@@ -54,7 +54,7 @@ export class TaskStopTool implements Tool {
           teammate: {
             type: "string",
             description:
-              "Name of the teammate to stop, exactly as it appears in the from= field of a team-notification",
+              "Name of the teammate to stop, exactly as it appears in the from= field of a task-notification",
           },
           task_id: {
             type: "string",

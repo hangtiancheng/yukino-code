@@ -620,7 +620,7 @@ describe("selector layout", () => {
             width,
             focused: true,
             current: true,
-            label: "\u001b[31m中文开发\u001b[0m",
+            label: "\u001b[31m日本語開発\u001b[0m",
             description: "openai · local-model",
           }),
         ),
@@ -630,7 +630,7 @@ describe("selector layout", () => {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
       if (width >= 20) {
-        expect(output).toContain(`中文开发 ${ICONS.success}`);
+        expect(output).toContain(`日本語開発 ${ICONS.success}`);
       }
       expect(output.includes("local-model")).toBe(width === 80);
     },
@@ -639,7 +639,7 @@ describe("selector layout", () => {
   it("keeps long headers, subtitles and hints to one line in the non-modal frame", () => {
     const output = staticFrame(
       createElement(SelectorFrame, {
-        title: "中文标题".repeat(10),
+        title: "日本語タイトル".repeat(10),
         subtitle: "A long\nsubtitle".repeat(10),
         hint: "Long hint ".repeat(10),
         width: 20,
@@ -675,10 +675,10 @@ describe("search input boundaries and independent dialog controls", () => {
     }
     expect(updateSelectorQuery("find", "\u001b[<0;1;2M", noKey)).toBe("find");
     expect(updateSelectorQuery("find", "[<0;1;2M", noKey)).toBe("find");
-    expect(updateSelectorQuery("", "12 中文\nsearch", noKey)).toBe(
-      "12 中文 search",
+    expect(updateSelectorQuery("", "12 日本語\n検索", noKey)).toBe(
+      "12 日本語 検索",
     );
-    expect(updateSelectorQuery("a👩‍💻", "", { ...noKey, backspace: true })).toBe(
+    expect(updateSelectorQuery("a😁", "", { ...noKey, backspace: true })).toBe(
       "a",
     );
     expect(

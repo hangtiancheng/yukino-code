@@ -74,13 +74,13 @@ afterEach(() => {
 
 describe("terminal column handling", () => {
   it("measures ANSI, CJK and combining characters without splitting glyphs", () => {
-    const text = colors.red("中文e\u0301");
+    const text = colors.red("日本e\u0301");
     expect(visibleWidth(text)).toBe(5);
     expect(visibleWidth(truncateToWidth(text, 4))).toBeLessThanOrEqual(4);
-    expect(stripVTControlCharacters(truncateToWidth(text, 4))).toBe("中…");
+    expect(stripVTControlCharacters(truncateToWidth(text, 4))).toBe("日…");
     expect(
-      wrapToLines(colors.green("中文中文"), 4).map(stripVTControlCharacters),
-    ).toEqual(["中文", "中文"]);
+      wrapToLines(colors.green("文章文章"), 4).map(stripVTControlCharacters),
+    ).toEqual(["文章", "文章"]);
     expect(truncateToWidth(text, 0)).toBe("");
   });
 
@@ -104,7 +104,7 @@ describe("skill transcript presentation", () => {
       isDirectory: true,
       body: "## Skill details\n\nHidden body.",
     },
-    "Update <docs> & keep &lt; literal\nSecond line 中文",
+    "Update <docs> & keep &lt; literal\nSecond line 日本語",
     { activateSkill: () => undefined },
   );
 
@@ -130,7 +130,7 @@ describe("skill transcript presentation", () => {
             `Ctrl+O to ${expanded ? "collapse" : "expand"}`,
           );
           expect(normalized).toContain("Update <docs> & keep &lt; literal");
-          expect(output).toMatch(/literal\s*\n\s*Second line 中文/u);
+          expect(output).toMatch(/literal\s*\n\s*Second line 日本語/u);
           expect(normalized.includes("Hidden body.")).toBe(expanded);
           expect(output).not.toContain("<skill-body>");
           expect(output).not.toContain("<skill-arguments>");
@@ -207,11 +207,11 @@ describe("pi Markdown presentation", () => {
     "fits long text, code and tables in %i columns",
     (width) => {
       for (const source of [
-        "中文测试".repeat(30),
+        "日本語テスト".repeat(30),
         "```unknown-language\n" + "const value = 123; ".repeat(20) + "\n```",
         "| Long column one | Long column two |\n| --- | --- |\n| " +
           "value".repeat(15) +
-          " | 中文测试中文测试 |",
+          " | 日本語テスト日本語テスト |",
         "[label](https://example.com/" + "long-path/".repeat(15) + ")",
       ]) {
         expect(
@@ -223,6 +223,60 @@ describe("pi Markdown presentation", () => {
     },
   );
 
+  it("wraps wide tables into the terminal instead of dropping to raw Markdown", () => {
+    const source = [
+      "| Column A | Column B | Column C | Column D |",
+      "| --- | --- | --- | --- |",
+      "| a very long cell value that keeps going | another long cell value here | third | fourth |",
+    ].join("\n");
+    const output = stripVTControlCharacters(renderMarkdown(source, 40));
+    expect(output).toContain("┌");
+    expect(output).not.toContain("| --- |");
+    // Columns wrap their cells instead of truncating them.
+    expect(output).not.toContain("…");
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("keeps a wide table inside the message card", () => {
+    const source = [
+      "| Column A | Column B | Column C | Column D |",
+      "| --- | --- | --- | --- |",
+      "| a very long cell value that keeps going | another long cell value here | third | fourth |",
+    ].join("\n");
+    const output = stripVTControlCharacters(
+      renderToString(
+        createElement(CommittedMessage, {
+          message: { role: "assistant", content: source },
+        }),
+        { columns: 40 },
+      ),
+    );
+    expect(output).toContain("┌");
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("keeps wide characters inside the table column they belong to", () => {
+    const source = [
+      "| 名 | 説明 |",
+      "| --- | --- |",
+      "| 値 | これは長い日本語の説明文で、折り返しの検証用 |",
+    ].join("\n");
+    const output = stripVTControlCharacters(renderMarkdown(source, 40));
+    expect(output).toContain("┌");
+    expect(output).not.toContain("…");
+    // Wrapping splits between characters, so no text disappears.
+    expect(output.replace(/[\s│]/gu, "")).toContain(
+      "これは長い日本語の説明文で、折り返しの検証用",
+    );
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+    }
+  });
+
   it("preserves the source numbering and escaped syntax of user messages", () => {
     const text = renderMarkdown("3. first\n8. \\*literal\\*\n", 80, "user");
     const plain = stripVTControlCharacters(text);
@@ -230,7 +284,28 @@ describe("pi Markdown presentation", () => {
     expect(plain).toContain("8. \\*literal\\*");
   });
 
-  it("keeps streamed fences, lists and reference links consistent with committed Markdown", () => {
+  it("leaves scp-style git remotes intact instead of linkifying an email", () => {
+    const output = stripVTControlCharacters(
+      renderMarkdown(
+        "Clone git@github.com:hangtiancheng/yukino-code.git now",
+        80,
+      ),
+    );
+    expect(output).toContain("git@github.com:hangtiancheng/yukino-code.git");
+    expect(output).not.toContain("mailto:");
+  });
+
+  it("keeps email addresses as autolinks without repeating the target", () => {
+    chalk.level = 3;
+    const output = renderMarkdown("Contact foo@example.com now", 80);
+    // The address keeps the href style (underlined), so it stays a link.
+    expect(output).toContain("\u001b[4m");
+    expect(stripVTControlCharacters(output)).toBe(
+      "Contact foo@example.com now",
+    );
+  });
+
+  it("keeps streamed fences, lists, tables and reference links consistent with committed Markdown", () => {
     const cache: MarkdownCache = {
       prefix: "",
       rendered: "",
@@ -242,6 +317,10 @@ describe("pi Markdown presentation", () => {
       "Intro\n\n```ts\nconst first = 1;\n\nconst second = 2;\n```\n\nDone",
       "Intro\n\n1. one\n2. two\n\nNext",
       "A [reference][target]\n\n[target]: https://example.com",
+      "Intro\n\n| Long column one | Long column two |\n| --- | --- |\n| " +
+        "value".repeat(15) +
+        " | 日本語テスト日本語テスト |",
+      "Clone git@github.com:hangtiancheng/yukino-code.git then push",
     ];
     for (const text of sources) {
       expect(renderStreamingMarkdown(text, 40, cache)).toBe(
@@ -621,8 +700,8 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
                   ...footerProps,
                   permissionMode,
                   thinkingLevel: "high",
-                  model: colors.red("模型-".repeat(10)),
-                  workDir: colors.green("/工作区/".repeat(10)),
+                  model: colors.red("機種-".repeat(10)),
+                  workDir: colors.green("/作業ディレクトリ/".repeat(10)),
                 }),
                 { columns },
               ),
@@ -647,7 +726,7 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
               label.replace(/ /g, columns === 1 ? "" : " "),
             );
             if (columns >= 20) {
-              expect(footer).toContain("模型");
+              expect(footer).toContain("機種");
               expect(footer).toContain("high");
               expect(footer).toContain("20.0%/200k");
             }
@@ -655,15 +734,15 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
           for (const expanded of [false, true]) {
             for (const node of [
               createElement(ThinkingBlock, {
-                text: colors.red("中文 reasoning ".repeat(30)),
+                text: colors.red("日本語 reasoning ".repeat(30)),
                 expanded,
               }),
               createElement(ToolBlock, {
                 tool: {
                   toolId: "wide",
                   toolName: "Read",
-                  args: { file_path: colors.red("中文".repeat(20)) },
-                  output: colors.green("中文 output ".repeat(30)),
+                  args: { file_path: colors.red("日本語".repeat(20)) },
+                  output: colors.green("日本語 output ".repeat(30)),
                   isError: true,
                 },
                 expanded,

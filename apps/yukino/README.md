@@ -265,28 +265,26 @@ Starts a Koa HTTP server and WebSocket bridge. The bundled React frontend is ser
 
 Inside the UI, these commands are available:
 
-| Command                 | Description                                                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| /login                  | Configure, save, and activate an LLM provider                                                                             |
-| /status                 | Show current session status (model, tokens, tools, sandbox, memories, skills, MCP)                                        |
-| /permission mode <mode> | Change permission mode (default, acceptEdits, plan, bypassPermissions)                                                    |
-| /memory                 | List stored memories                                                                                                      |
-| /memory clear           | Clear all memories                                                                                                        |
-| /skills                 | List available skills                                                                                                     |
-| /skills reload          | Hot-reload skills from disk                                                                                               |
-| /skill <name> [args]    | Run a skill by name                                                                                                       |
-| /plan                   | Enter plan mode (read-only investigation)                                                                                 |
-| /do                     | Exit plan mode and execute the approved plan                                                                              |
-| /compact                | Force conversation compaction                                                                                             |
-| /clear                  | Reset the session and clear the terminal                                                                                  |
-| /resume [id]            | List or restore a previous session                                                                                        |
-| /rewind                 | Open checkpoint rewind dialog                                                                                             |
-| /sandbox [1/2/3]        | Configure sandbox (1=on+auto, 2=on+manual, 3=off)                                                                         |
-| /worktree               | List git worktrees                                                                                                        |
-| /mcp                    | Show MCP server status                                                                                                    |
-| /mcp reload             | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                |
-| /thinking [level]       | Show or set the thinking level (off, minimal, low, medium, high, xhigh, max); setting persists to `~/.yukino/config.yaml` |
-| /quit                   | Exit the application                                                                                                      |
+| Command              | Description                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| /login               | Configure, save, and activate an LLM provider                                                                             |
+| /status              | Show current session status (model, tokens, tools, sandbox, memories, skills, MCP)                                        |
+| /memory              | List stored memories                                                                                                      |
+| /memory clear        | Clear all memories                                                                                                        |
+| /skills              | List available skills                                                                                                     |
+| /skills reload       | Hot-reload skills from disk                                                                                               |
+| /skill <name> [args] | Run a skill by name                                                                                                       |
+| /plan                | Enter plan mode (read-only investigation)                                                                                 |
+| /compact             | Force conversation compaction                                                                                             |
+| /clear               | Reset the session and clear the terminal                                                                                  |
+| /resume [id]         | List or restore a previous session                                                                                        |
+| /rewind              | Open checkpoint rewind dialog                                                                                             |
+| /sandbox [1/2/3]     | Configure sandbox (1=on+auto, 2=on+manual, 3=off)                                                                         |
+| /worktree            | List git worktrees                                                                                                        |
+| /mcp                 | Show MCP server status                                                                                                    |
+| /mcp reload          | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                |
+| /thinking [level]    | Show or set the thinking level (off, minimal, low, medium, high, xhigh, max); setting persists to `~/.yukino/config.yaml` |
+| /quit                | Exit the application                                                                                                      |
 
 ### Keyboard Shortcuts
 

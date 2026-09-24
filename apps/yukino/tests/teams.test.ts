@@ -252,6 +252,27 @@ describe("teams orchestration", () => {
     expect(list.output).toContain("w1");
   });
 
+  it("SendMessage delivers plain text from a teammate to the lead mailbox", async () => {
+    const mgr = new TeamManager(workDir());
+    mgr.create("t2").addMember("w2");
+
+    // The lead is not a registered member, so the plain-text path must route
+    // to the dedicated lead mailbox instead of throwing "Member 'lead' not found".
+    const send = await new SendMessageTool(mgr, "w2").execute(
+      { workDir: workDir() },
+      { to: "lead", content: "findings: X confirmed" },
+    );
+    expect(send.isError).toBe(false);
+    expect(send.output).toContain("lead");
+
+    // The report reaches the lead as a task notification in from=X: text form.
+    expect(
+      mgr
+        .drainLeads()
+        .some((d) => d.includes("from=w2: findings: X confirmed")),
+    ).toBe(true);
+  });
+
   it("TeamCreate sweeps other teams so at most one exists", async () => {
     const mgr = new TeamManager(workDir());
 

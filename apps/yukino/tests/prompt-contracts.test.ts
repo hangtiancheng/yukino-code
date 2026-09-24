@@ -216,7 +216,7 @@ describe("plan and coordinator contracts", () => {
       "team_name",
       "create the team on demand",
       "SendMessage",
-      "<team-notification>",
+      "<task-notification>",
       "from=",
       "not new user authorization",
       "one writer per shared file",

@@ -411,8 +411,20 @@ function toRestored(m: SessionMessage): RestoredMessage | null {
   };
 }
 
+// Session directories already swept in this process. Expired-session cleanup
+// piggybacks on the first listSessions call per directory, so every entry
+// mode (UI resume picker, ACP, remote server, memory consolidation) gets a
+// sweep without separate startup wiring. The sweep only touches files whose
+// mtime is older than SESSION_EXPIRY_DAYS, so concurrent processes sharing a
+// workDir are safe.
+const sweptSessionDirs = new Set<string>();
+
 export function listSessions(workDir: string): SessionInfo[] {
   const dir = sessionsDir(workDir);
+  if (!sweptSessionDirs.has(dir)) {
+    sweptSessionDirs.add(dir);
+    cleanExpiredSessions(workDir);
+  }
   if (!existsSync(dir)) {
     return [];
   }
@@ -465,9 +477,11 @@ export function listSessions(workDir: string): SessionInfo[] {
 }
 
 /**
- * Cleans up expired sessions: deletes .jsonl files whose last modified time exceeds SESSION_EXPIRY_DAYS.
- * Not currently invoked anywhere; intended to run during listSessions or on
- * startup to prevent the session directory from growing indefinitely.
+ * Cleans up expired sessions: deletes .jsonl files whose last modified time
+ * exceeds SESSION_EXPIRY_DAYS, together with each session's subdirectory
+ * (which holds the tool-results spill files written by spillDir()), to
+ * prevent the session directory from growing indefinitely.
+ * Invoked lazily by listSessions (once per process per sessions directory).
  * Silently skips failures (best-effort).
  */
 export function cleanExpiredSessions(workDir: string): number {
@@ -494,23 +508,12 @@ export function cleanExpiredSessions(workDir: string): number {
       const stat = statSync(filePath);
       if (now - stat.mtimeMs > expiryMs) {
         unlinkSync(filePath);
-        // Clean up the corresponding tool_results directory
+        // Remove the session's subdirectory in one recursive pass: it holds
+        // the tool-results spill files written by spillDir() (note the
+        // hyphenated directory name), so a single rm covers both.
         const id = file.replace(".jsonl", "");
-        const toolResultsDir = join(
-          workDir,
-          ".yukino",
-          "sessions",
-          id,
-          "tool_results",
-        );
         try {
-          rmSync(toolResultsDir, { recursive: true, force: true });
-        } catch {
-          /** noop */
-        }
-        const sessionSubdir = join(workDir, ".yukino", "sessions", id);
-        try {
-          rmSync(sessionSubdir, { recursive: false });
+          rmSync(join(dir, id), { recursive: true, force: true });
         } catch {
           /** noop */
         }

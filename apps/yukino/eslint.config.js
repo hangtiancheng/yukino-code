@@ -65,6 +65,7 @@ export default defineConfig(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      "@typescript-eslint/restrict-template-expressions": "warn",
       "@typescript-eslint/consistent-type-imports": [
         "error",
         { prefer: "type-imports" },

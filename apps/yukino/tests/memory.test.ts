@@ -185,7 +185,7 @@ describe("MemoryManager index truncation", () => {
   });
 
   it("truncates over-long CJK entries by bytes without exceeding the limit", () => {
-    const mgr = new MemoryManager(seed(20, 800, "杭"));
+    const mgr = new MemoryManager(seed(20, 800, "桜"));
     const out = mgr.buildSystemReminder();
     expect(out).toContain("WARNING");
     const body = out

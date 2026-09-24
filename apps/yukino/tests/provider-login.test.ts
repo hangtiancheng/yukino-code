@@ -36,6 +36,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDefaultRegistry } from "@/commands/commands.js";
 import { globalConfigPath, loadConfig } from "@/config/index.js";
 import {
+  persistDefaultProvider,
   persistThinkingLevel,
   ProviderLoginSchema,
   saveProvider,
@@ -274,6 +275,18 @@ describe("provider login", () => {
     const path = globalConfigPath();
     persistThinkingLevel(input.base_url, "max");
     expect(loadConfig(path).providers[0].thinking).toBe("max");
+  });
+
+  it("persists default_provider and defaults it to 0 when absent", () => {
+    saveProvider(input, []);
+    const path = globalConfigPath();
+    expect(loadConfig(path).default_provider).toBe(0);
+    persistDefaultProvider(2);
+    expect(loadConfig(path).default_provider).toBe(2);
+    expect(readFileSync(path, "utf-8")).toContain("default_provider: 2");
+    // Persisting the same index is a no-op (no needless rewrite).
+    persistDefaultProvider(2);
+    expect(loadConfig(path).default_provider).toBe(2);
   });
 
   it("throws when persisting a thinking level for an unknown provider", () => {

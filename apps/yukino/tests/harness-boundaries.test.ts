@@ -174,9 +174,9 @@ describe("harness execution boundaries", () => {
     expect(calls).toBe(1);
 
     expect(events).toContainEqual(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expect.objectContaining({
         type: "error",
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         error: expect.any(ContextTooLongError),
       }),
     );

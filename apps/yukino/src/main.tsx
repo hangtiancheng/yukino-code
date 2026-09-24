@@ -162,6 +162,7 @@ async function main() {
     sandboxConfig: cfg.sandbox,
     enableCoordinatorMode: cfg.enable_coordinator_mode,
     forkDisabled: !forkEnabled(cfg),
+    defaultProvider: cfg.default_provider,
   };
   const application = (
     <App

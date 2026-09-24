@@ -111,7 +111,7 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
 
 const uiDirs = [join(__dirname, "src", "ui") + sep];
 
-// Vite-style `?raw` imports (e.g. "./snippets/macos.swift?raw"): load the file
+// Vite-style `?raw` imports: load the file
 // as a default-exported string, mirroring Vite/Vitest behavior.
 const rawImportPlugin: EsbuildPlugin = {
   name: "raw-import",

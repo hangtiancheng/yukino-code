@@ -48,8 +48,8 @@ import { isRecord } from "@/utils/index.js";
 import { version } from "@/version.js";
 
 const log = createChildLogger({ module: "mcp" });
-// eslint-disable-next-line @typescript-eslint/no-deprecated
 type MCPTransport =
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   StdioClientTransport | StreamableHTTPClientTransport | SSEClientTransport;
 
 export interface MCPTool {

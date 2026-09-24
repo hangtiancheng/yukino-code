@@ -305,6 +305,50 @@ describe("Chat Completions terminal boundaries", () => {
     expect(events).toEqual([{ type: "text_delta", text: "partial" }]);
   });
 
+  it("emits tool_call_complete with empty args when the server sends none", async () => {
+    // Some compat servers return "" (or omit the field entirely) instead of
+    // "{}" for no-argument tool calls; the call must still complete instead
+    // of being silently dropped.
+    mockStream([
+      {
+        type: "chunk",
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_1",
+                  function: { name: "TaskList", arguments: "" },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      {
+        type: "chunk",
+        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+      },
+    ]);
+    const events = await collect(
+      new OpenAICompatClient(config("openai-compat"), "system"),
+    );
+    expect(events).toContainEqual({
+      type: "tool_call_start",
+      toolName: "TaskList",
+      toolId: "call_1",
+    });
+    expect(events).toContainEqual({
+      type: "tool_call_complete",
+      toolName: "TaskList",
+      toolId: "call_1",
+      arguments: {},
+    });
+  });
+
   it("retains a trailing usage-only chunk after the finish reason", async () => {
     mockStream([
       {
@@ -488,4 +532,80 @@ describe("provider rate-limit headers", () => {
       });
     },
   );
+});
+
+describe("anthropic context-too-long classification", () => {
+  function mockErrorResponse(status: number, body: object): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(body), {
+            status,
+            headers: {
+              "content-type": "application/json",
+              "x-should-retry": "false",
+            },
+          }),
+        ),
+      ),
+    );
+  }
+
+  function anthropicError(message: string, type = "invalid_request_error") {
+    return { type: "error", error: { type, message } };
+  }
+
+  it("classifies the Anthropic prompt-too-long 400 as ContextTooLongError", async () => {
+    // Real Anthropic shape: context overflow is a 400 invalid_request_error,
+    // not a 413.
+    mockErrorResponse(
+      400,
+      anthropicError(
+        "messages.0.content.0: prompt is too long: 209807 tokens > 200000 maximum",
+      ),
+    );
+    await expect(
+      collect(new AnthropicClient(config("anthropic"), "system")),
+    ).rejects.toBeInstanceOf(ContextTooLongError);
+  });
+
+  it("classifies Anthropic-compatible gateway wording as ContextTooLongError", async () => {
+    // Observed verbatim from DeepSeek's Anthropic-protocol endpoint
+    // (api.deepseek.com/anthropic): OpenAI-style "maximum context length"
+    // wording inside a 400 invalid_request_error.
+    mockErrorResponse(
+      400,
+      anthropicError(
+        "This model's maximum context length is 1048576 tokens. However, you requested 1300051 tokens (1300035 in the messages, 16 in the completion). Please reduce the length of the messages or completion.",
+      ),
+    );
+    await expect(
+      collect(new AnthropicClient(config("anthropic"), "system")),
+    ).rejects.toBeInstanceOf(ContextTooLongError);
+  });
+
+  it("still classifies 413 as ContextTooLongError", async () => {
+    mockErrorResponse(
+      413,
+      anthropicError("Request body exceeds maximum size", "request_too_large"),
+    );
+    await expect(
+      collect(new AnthropicClient(config("anthropic"), "system")),
+    ).rejects.toBeInstanceOf(ContextTooLongError);
+  });
+
+  it("leaves unrelated 400s as plain LLMError", async () => {
+    mockErrorResponse(
+      400,
+      anthropicError(
+        'messages: roles must alternate between "user" and "assistant"',
+      ),
+    );
+    const err = await collect(
+      new AnthropicClient(config("anthropic"), "system"),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LLMError);
+    expect(err).not.toBeInstanceOf(ContextTooLongError);
+  });
 });

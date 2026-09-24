@@ -71,6 +71,7 @@ beforeEach(() => {
   });
   exitListeners = process.listenerCount("exit");
   vi.spyOn(config, "loadConfig").mockReturnValue({
+    default_provider: 0,
     providers: [
       {
         name: "test",

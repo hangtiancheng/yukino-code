@@ -28,7 +28,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "fs";
-import { join, resolve } from "path";
+import { dirname, join, resolve } from "path";
 
 import { createChildLogger } from "@/logger/index.js";
 
@@ -172,7 +172,7 @@ export class FileHistory {
       const currentStr = currentData?.toString();
       if (backupStr !== currentStr) {
         try {
-          // mkdirSync(dirname(filePath), { recursive: true });
+          mkdirSync(dirname(filePath), { recursive: true });
           writeFileSync(filePath, backupData);
           changed.push(filePath);
         } catch (err) {
