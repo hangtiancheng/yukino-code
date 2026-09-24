@@ -24,6 +24,7 @@ import { LitElement, customElement, state } from "@yukino.js/lit-jsx";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { scrollInfo, springValue } from "motion";
 import { cn } from "@/lib/cn";
+import { LocaleController, t } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { animateIn, animateOut } from "@/lib/motion";
@@ -35,6 +36,8 @@ export class ScrollProgressElement extends LitElement {
     "hidden";
 
   private stopScroll?: () => void;
+
+  locale = new LocaleController(this);
 
   override createRenderRoot() {
     return this;
@@ -96,7 +99,7 @@ export class ScrollProgressElement extends LitElement {
       <>
         <div
           data-progress-bar
-          className="from-brand-500 via-brand-600 to-accent-500 fixed inset-x-0 top-0 z-60 h-0.5 origin-left scale-x-0 bg-linear-to-r"
+          className="fixed inset-x-0 top-0 z-60 h-0.5 origin-left scale-x-0 bg-linear-to-r from-[#4285f4] via-[#9b72cb] to-[#d96570]"
           aria-hidden="true"
         />
         {this.button !== "hidden" ? (
@@ -104,7 +107,7 @@ export class ScrollProgressElement extends LitElement {
             data-back-top
             type="button"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            aria-label="Back to top"
+            aria-label={t("common.backToTop")}
             className={cn(
               "shadow-soft hover:text-brand-600 dark:hover:text-brand-300 border-brand-950/8 fixed right-4 bottom-4 z-50 grid h-11 w-11 place-items-center rounded-full border bg-white/85 text-zinc-700 opacity-0 backdrop-blur transition-colors sm:right-6 sm:bottom-6 dark:border-white/10 dark:bg-white/6 dark:text-zinc-200",
               focusRing,

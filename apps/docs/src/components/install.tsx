@@ -30,6 +30,9 @@ import {
   REPO_URL,
   VERSION,
 } from "@/lib/content";
+import type { InstallMethodId, QuickCommandId } from "@/lib/content";
+import { LocaleController, t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { animateIn, animateOut, EASE } from "@/lib/motion";
@@ -47,17 +50,25 @@ import { GithubIcon } from "./ui/github-icon";
 import { Section, SectionHeader } from "./ui/section";
 import "./ui/command-box";
 
+const QUICK_LABEL_KEY: Record<QuickCommandId, MessageKey> = {
+  tui: "hero.quickTui",
+  print: "hero.quickPrint",
+  remote: "hero.quickRemote",
+};
+
 @customElement("docs-install")
 export class InstallElement extends LitElement {
-  @state() private active: (typeof INSTALL_METHODS)[number]["id"] = "curl";
+  @state() private active: InstallMethodId = "curl";
 
   private swapping = false;
+
+  locale = new LocaleController(this);
 
   override createRenderRoot() {
     return this;
   }
 
-  private async selectMethod(id: (typeof INSTALL_METHODS)[number]["id"]) {
+  private async selectMethod(id: InstallMethodId) {
     if (id === this.active || this.swapping) return;
     this.swapping = true;
     const panel = this.querySelector<HTMLElement>("[data-command-panel]");
@@ -98,14 +109,16 @@ export class InstallElement extends LitElement {
         </div>
 
         <SectionHeader
-          eyebrow="Install"
+          eyebrow={t("install.eyebrow")}
           title={
             <>
-              Up and running in{" "}
-              <span className={gradientText}>one command</span>
+              {t("install.titleA")}{" "}
+              <span className={gradientText}>
+                {t("install.titleHighlight")}
+              </span>
             </>
           }
-          description="Requires Node.js 20 or newer. The installer picks the latest release; npm and pnpm work just as well."
+          description={t("install.description")}
         />
 
         <docs-reveal delay={0.08} className={cn(container, "relative mt-12")}>
@@ -136,14 +149,14 @@ export class InstallElement extends LitElement {
                 );
               })}
               <span className="ml-auto hidden self-center text-xs text-zinc-400 sm:block dark:text-zinc-500">
-                {method.hint}
+                {t(`install.methods.${method.id}.hint`)}
               </span>
             </div>
 
             <div className="mt-5">
               <div
                 data-command-panel
-                className="border-brand-950/10 bg-brand-50/70 flex items-center gap-3 rounded-2xl border p-4 dark:border-white/10 dark:bg-[#0c0f0a]"
+                className="border-brand-950/10 bg-brand-50/70 flex items-center gap-3 rounded-2xl border p-4 dark:border-white/10 dark:bg-[#1e1f20]"
               >
                 <span className="text-brand-600 dark:text-brand-400 hidden font-mono text-sm select-none sm:block">
                   $
@@ -177,7 +190,7 @@ export class InstallElement extends LitElement {
                       )}
                     />
                     <span className={cn("text-xs font-semibold", heading)}>
-                      {item.label}
+                      {t(QUICK_LABEL_KEY[item.id])}
                     </span>
                   </div>
                   <code className="mt-2 block truncate font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -195,7 +208,7 @@ export class InstallElement extends LitElement {
                 className={cn(primaryButton, "w-full sm:w-auto", focusRing)}
               >
                 {unsafeHTML(icon(icons.download, "h-4 w-4"))}
-                Install Yukino
+                {t("install.installCta")}
               </a>
               <a
                 href={DOCS_URL}
@@ -203,7 +216,7 @@ export class InstallElement extends LitElement {
                 rel="noreferrer"
                 className={cn(secondaryButton, "w-full sm:w-auto", focusRing)}
               >
-                Read the docs
+                {t("common.readDocs")}
                 {unsafeHTML(icon(icons.arrowRight, "h-4 w-4"))}
               </a>
               <a
@@ -213,23 +226,23 @@ export class InstallElement extends LitElement {
                 className={cn(secondaryButton, "w-full sm:w-auto", focusRing)}
               >
                 <GithubIcon className="h-4 w-4" />
-                GitHub
-                {unsafeHTML(icon(icons.star, "h-3.5 w-3.5 text-amber-400"))}
+                {t("common.github")}
+                {unsafeHTML(icon(icons.star, "h-3.5 w-3.5 text-g-yellow"))}
               </a>
             </div>
 
             <ul className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-zinc-400 dark:text-zinc-500">
               <li className="inline-flex items-center gap-1.5">
-                {unsafeHTML(icon(icons.check, "h-3.5 w-3.5 text-emerald-500"))}
-                Node.js 20+
+                {unsafeHTML(icon(icons.check, "h-3.5 w-3.5 text-accent-600"))}
+                {t("install.checks.node")}
               </li>
               <li className="inline-flex items-center gap-1.5">
-                {unsafeHTML(icon(icons.check, "h-3.5 w-3.5 text-emerald-500"))}
-                macOS, Linux &amp; Windows
+                {unsafeHTML(icon(icons.check, "h-3.5 w-3.5 text-accent-600"))}
+                {t("install.checks.platforms")}
               </li>
               <li className="inline-flex items-center gap-1.5">
-                {unsafeHTML(icon(icons.check, "h-3.5 w-3.5 text-emerald-500"))}
-                MIT licensed · {VERSION}
+                {unsafeHTML(icon(icons.check, "h-3.5 w-3.5 text-accent-600"))}
+                {t("install.checks.license", { version: VERSION })}
               </li>
             </ul>
           </div>
@@ -251,18 +264,17 @@ export class InstallElement extends LitElement {
                   heading,
                 )}
               >
-                Give Yukino a real task
+                {t("install.ctaTitle")}
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-sm text-zinc-600 sm:text-base dark:text-zinc-400">
-                Point it at your repository, describe what you want, and watch
-                it plan, edit and verify — with you in control of every write.
+                {t("install.ctaBody")}
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <a
                   href="#top"
                   className={cn(primaryButton, "w-full sm:w-auto", focusRing)}
                 >
-                  Get started
+                  {t("common.getStarted")}
                   {unsafeHTML(icon(icons.arrowRight, "h-4 w-4"))}
                 </a>
                 <a
@@ -271,7 +283,7 @@ export class InstallElement extends LitElement {
                   rel="noreferrer"
                   className={cn(secondaryButton, "w-full sm:w-auto", focusRing)}
                 >
-                  View documentation
+                  {t("common.viewDocs")}
                 </a>
               </div>
             </div>

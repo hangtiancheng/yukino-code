@@ -24,55 +24,75 @@ import { LitElement, customElement } from "@yukino.js/lit-jsx";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
 import { agentCards } from "@/lib/content";
+import { LocaleController, t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { setupReveals } from "@/lib/motion";
 import { card, container, heading, line, muted } from "@/lib/styles";
 import { Section, SectionHeader } from "./ui/section";
 
-const TEAM = [
+type TaskId = "lead" | "security" | "perf" | "docs";
+
+const TEAM: Array<{
+  id: TaskId;
+  name: string;
+  model: string;
+  status: "lead" | "done" | "running";
+}> = [
+  { id: "lead", name: "lead", model: "claude-sonnet-4", status: "lead" },
   {
-    name: "lead",
-    model: "claude-sonnet-4",
-    task: "coordinating",
-    status: "lead" as const,
-  },
-  {
+    id: "security",
     name: "security-auditor",
     model: "claude-sonnet-4",
-    task: "Auditing auth flows",
-    status: "done" as const,
+    status: "done",
   },
   {
+    id: "perf",
     name: "perf-auditor",
     model: "gpt-5-codex",
-    task: "Tracing N+1 queries",
-    status: "running" as const,
+    status: "running",
   },
   {
+    id: "docs",
     name: "docs-writer",
     model: "claude-haiku-4",
-    task: "Drafting the changelog",
-    status: "running" as const,
+    status: "running",
   },
 ];
 
-const MESSAGES = [
-  { from: "lead", text: "audit src/payments for idempotency", tone: "to" },
+const MESSAGES: Array<{
+  id: "m1" | "m2" | "m3";
+  from: string;
+  tone: "to" | "from";
+}> = [
+  { id: "m1", from: "lead", tone: "to" },
+  { id: "m2", from: "security-auditor", tone: "from" },
+  { id: "m3", from: "perf-auditor", tone: "from" },
+];
+
+const DELEGATE: Array<{ icon: string; name: string; detailKey: MessageKey }> = [
   {
-    from: "security-auditor",
-    text: "found missing idempotency key → report",
-    tone: "from",
+    icon: icons.gitBranch,
+    name: "fork",
+    detailKey: "agents.delegateFork",
   },
   {
-    from: "perf-auditor",
-    text: "2 N+1 queries in listInvoices()",
-    tone: "from",
+    icon: icons.inbox,
+    name: "background",
+    detailKey: "agents.delegateBackground",
+  },
+  {
+    icon: icons.users,
+    name: "team",
+    detailKey: "agents.delegateTeam",
   },
 ];
 
 @customElement("docs-agents")
 export class AgentsElement extends LitElement {
+  locale = new LocaleController(this);
+
   override createRenderRoot() {
     return this;
   }
@@ -85,13 +105,16 @@ export class AgentsElement extends LitElement {
     return (
       <Section id="agents" className="bg-brand-50/50 dark:bg-white/1.5">
         <SectionHeader
-          eyebrow="Multi-agent"
+          eyebrow={t("agents.eyebrow")}
           title={
             <>
-              One lead, <span className="text-brand-500">a whole team</span>
+              {t("agents.titleA")}{" "}
+              <span className="text-brand-500">
+                {t("agents.titleHighlight")}
+              </span>
             </>
           }
-          description="Fork your own context, fire off background subagents, or coordinate a full team over file mailboxes — with risky work isolated in its own git worktree."
+          description={t("agents.description")}
         />
 
         <div
@@ -124,18 +147,19 @@ export class AgentsElement extends LitElement {
                         {agent.name}
                       </span>
                       <span className="border-brand-950/8 rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide text-zinc-500 uppercase dark:border-white/8 dark:text-zinc-400">
-                        {agent.role}
+                        {t(`agents.cards.${agent.id}.role`)}
                       </span>
                     </div>
                     <p className={cn("mt-1.5 text-sm leading-relaxed", muted)}>
-                      {agent.description}
+                      {t(`agents.cards.${agent.id}.description`)}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {agent.tools.map((tool) => (
-                        <span className="bg-brand-500/10 rounded-md px-2 py-0.5 font-mono text-[10px] text-zinc-500 dark:bg-white/6 dark:text-zinc-400">
-                          {tool}
-                        </span>
-                      ))}
+                      <span className="bg-brand-500/10 rounded-md px-2 py-0.5 font-mono text-[10px] text-zinc-500 dark:bg-white/6 dark:text-zinc-400">
+                        {t(`agents.cards.${agent.id}.tool1`)}
+                      </span>
+                      <span className="bg-brand-500/10 rounded-md px-2 py-0.5 font-mono text-[10px] text-zinc-500 dark:bg-white/6 dark:text-zinc-400">
+                        {t(`agents.cards.${agent.id}.tool2`)}
+                      </span>
                     </div>
                   </div>
                   <span className="hidden self-center text-xs text-zinc-400 sm:block">
@@ -150,16 +174,15 @@ export class AgentsElement extends LitElement {
                 <div className="flex items-center gap-3">
                   {unsafeHTML(icon(icons.workflow, "text-brand-500 h-5 w-5"))}
                   <h3 className={cn("text-sm font-semibold", heading)}>
-                    Custom agents
+                    {t("agents.customTitle")}
                   </h3>
                 </div>
                 <p className={cn("mt-2 text-sm leading-relaxed", muted)}>
-                  Define your own agents as Markdown files with YAML
-                  front-matter in{" "}
+                  {t("agents.customBodyA")}
                   <code className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
                     .yukino/agents/
                   </code>
-                  . Pick the tools, model and permission mode each one gets.
+                  {t("agents.customBodyB")}
                 </p>
               </div>
 
@@ -169,30 +192,11 @@ export class AgentsElement extends LitElement {
                 <div className="flex items-center gap-3">
                   {unsafeHTML(icon(icons.network, "text-brand-500 h-5 w-5"))}
                   <h3 className={cn("text-sm font-semibold", heading)}>
-                    Three ways to delegate
+                    {t("agents.delegateTitle")}
                   </h3>
                 </div>
                 <ul className="mt-3 space-y-2.5">
-                  {[
-                    {
-                      icon: icons.gitBranch,
-                      name: "fork",
-                      detail:
-                        "omit subagent_type — inherits your full conversation",
-                    },
-                    {
-                      icon: icons.inbox,
-                      name: "background",
-                      detail:
-                        "run_in_background=true — results arrive as a task notification",
-                    },
-                    {
-                      icon: icons.users,
-                      name: "team",
-                      detail:
-                        "persistent teammates with mailboxes and a shared task board",
-                    },
-                  ].map((mode) => (
+                  {DELEGATE.map((mode) => (
                     <li className="flex items-start gap-2.5">
                       <span className="mt-0.5 shrink-0">
                         {unsafeHTML(
@@ -206,7 +210,7 @@ export class AgentsElement extends LitElement {
                         <code className="font-mono text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                           {mode.name}
                         </code>{" "}
-                        — {mode.detail}
+                        — {t(mode.detailKey)}
                       </span>
                     </li>
                   ))}
@@ -234,13 +238,13 @@ export class AgentsElement extends LitElement {
                       team: payments-audit
                     </p>
                     <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                      {TEAM.length} members · in-process
+                      {t("agents.team.members", { count: TEAM.length })}
                     </p>
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  live
+                <span className="bg-accent-500/12 text-accent-600 dark:text-accent-400 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium">
+                  <span className="bg-accent-500 h-1.5 w-1.5 rounded-full" />
+                  {t("common.live")}
                 </span>
               </div>
 
@@ -256,15 +260,15 @@ export class AgentsElement extends LitElement {
                       className={cn(
                         "ml-1 h-1.5 w-1.5 shrink-0 rounded-full",
                         member.status === "lead" && "bg-brand-500",
-                        member.status === "done" && "bg-emerald-500",
-                        member.status === "running" && "bg-amber-400",
+                        member.status === "done" && "bg-accent-500",
+                        member.status === "running" && "bg-g-yellow",
                       )}
                     />
                     <span className="w-32 shrink-0 truncate font-mono text-[12.5px] text-zinc-800 dark:text-zinc-200">
                       {member.name}
                     </span>
                     <span className="hidden flex-1 truncate text-[12px] text-zinc-400 sm:block dark:text-zinc-500">
-                      {member.task}
+                      {t(`agents.team.tasks.${member.id}`)}
                     </span>
                     <span className="ml-auto font-mono text-[10.5px] text-zinc-400 dark:text-zinc-600">
                       {member.model}
@@ -274,11 +278,11 @@ export class AgentsElement extends LitElement {
                         ? unsafeHTML(
                             icon(
                               icons.loaderCircle,
-                              "animate-spin-slow h-3.5 w-3.5 text-amber-500",
+                              "animate-spin-slow h-3.5 w-3.5 text-g-yellow",
                             ),
                           )
                         : unsafeHTML(
-                            icon(icons.check, "h-3.5 w-3.5 text-emerald-500"),
+                            icon(icons.check, "h-3.5 w-3.5 text-accent-500"),
                           )}
                     </span>
                   </li>
@@ -288,7 +292,7 @@ export class AgentsElement extends LitElement {
               <div className={cn("border-t px-5 py-4", line)}>
                 <div className="flex items-center gap-2 text-[11px] font-medium tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
                   {unsafeHTML(icon(icons.inbox, "h-3.5 w-3.5"))}
-                  mailbox
+                  {t("agents.team.mailbox")}
                 </div>
                 <div className="mt-3 space-y-2">
                   {MESSAGES.map((message, index) => (
@@ -313,12 +317,14 @@ export class AgentsElement extends LitElement {
                             "mt-0.5 h-3 w-3 shrink-0",
                             message.tone === "to"
                               ? "text-brand-500"
-                              : "rotate-180 text-emerald-500",
+                              : "rotate-180 text-accent-500",
                           ),
                         ),
                       )}
                       <span className="font-semibold">{message.from}:</span>
-                      <span className="min-w-0 flex-1">{message.text}</span>
+                      <span className="min-w-0 flex-1">
+                        {t(`agents.team.messages.${message.id}`)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -331,12 +337,14 @@ export class AgentsElement extends LitElement {
                 )}
               >
                 <span className="inline-flex items-center gap-1.5">
-                  {unsafeHTML(icon(icons.gitBranch, "h-3.5 w-3.5"))}2 worktrees
+                  {unsafeHTML(icon(icons.gitBranch, "h-3.5 w-3.5"))}
+                  {t("agents.team.worktrees")}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  {unsafeHTML(icon(icons.inbox, "h-3.5 w-3.5"))}2 mailboxes
+                  {unsafeHTML(icon(icons.inbox, "h-3.5 w-3.5"))}
+                  {t("agents.team.mailboxes")}
                 </span>
-                <span className="font-mono">Ctrl+T teams</span>
+                <span className="font-mono">{t("agents.team.teamsKey")}</span>
               </div>
             </div>
           </docs-reveal>

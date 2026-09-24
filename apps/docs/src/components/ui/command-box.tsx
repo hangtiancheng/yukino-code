@@ -23,6 +23,7 @@
 import { LitElement, customElement, property, state } from "@yukino.js/lit-jsx";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
+import { LocaleController, t } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { focusRing } from "@/lib/styles";
@@ -30,11 +31,13 @@ import { focusRing } from "@/lib/styles";
 @customElement("docs-copy-button")
 export class CopyButtonElement extends LitElement {
   @property() value = "";
-  @property() label = "Copy";
+  @property() label = "";
   @property() buttonClass?: string;
   @state() private copied = false;
 
   private timer: number | null = null;
+
+  locale = new LocaleController(this);
 
   override createRenderRoot() {
     return this;
@@ -56,8 +59,6 @@ export class CopyButtonElement extends LitElement {
         el.style.opacity = "0";
         document.body.appendChild(el);
         el.select();
-        // Deprecated execCommand() fallback — only reached when the async
-        // Clipboard API is unavailable (handled above).
         document.execCommand("copy");
         document.body.removeChild(el);
       }
@@ -66,9 +67,7 @@ export class CopyButtonElement extends LitElement {
       this.timer = window.setTimeout(() => {
         this.copied = false;
       }, 1900);
-    } catch {
-      /* clipboard unavailable */
-    }
+    } catch {}
   }
 
   override render() {
@@ -76,7 +75,9 @@ export class CopyButtonElement extends LitElement {
       <button
         type="button"
         onClick={() => void this.copy()}
-        aria-label={this.copied ? "Copied" : this.label}
+        aria-label={
+          this.copied ? t("common.copied") : this.label || t("common.copy")
+        }
         className={cn(
           "group hover:bg-brand-500/10 hover:text-brand-950 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white",
           focusRing,
@@ -84,7 +85,7 @@ export class CopyButtonElement extends LitElement {
         )}
       >
         {this.copied
-          ? unsafeHTML(icon(icons.check, "h-4 w-4 text-emerald-500"))
+          ? unsafeHTML(icon(icons.check, "h-4 w-4 text-accent-600"))
           : unsafeHTML(
               icon(
                 icons.copy,

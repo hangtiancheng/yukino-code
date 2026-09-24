@@ -23,7 +23,8 @@
 import { LitElement, customElement, state } from "@yukino.js/lit-jsx";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
-import { faqs } from "@/lib/content";
+import { faqIds } from "@/lib/content";
+import { LocaleController, t } from "@/lib/i18n";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
 import { animateIn, animateOut, EASE } from "@/lib/motion";
@@ -42,6 +43,8 @@ export class FaqElement extends LitElement {
   @state() private openIndex: number | null = 0;
 
   private generation = 0;
+
+  locale = new LocaleController(this);
 
   override createRenderRoot() {
     return this;
@@ -118,7 +121,7 @@ export class FaqElement extends LitElement {
           <div className="lg:sticky lg:top-28 lg:self-start">
             <docs-reveal>
               <span className="border-brand-500/25 bg-brand-50/80 text-brand-700 dark:border-brand-300/15 dark:text-brand-200 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium tracking-wide dark:bg-white/3">
-                FAQ
+                {t("faq.eyebrow")}
               </span>
               <h2
                 className={cn(
@@ -126,9 +129,9 @@ export class FaqElement extends LitElement {
                   heading,
                 )}
               >
-                Questions,
+                {t("faq.titleA")}
                 <br />
-                <span className={gradientText}>answered</span>
+                <span className={gradientText}>{t("faq.titleHighlight")}</span>
               </h2>
               <p
                 className={cn(
@@ -136,18 +139,17 @@ export class FaqElement extends LitElement {
                   muted,
                 )}
               >
-                Still curious? The full documentation lives in the repository
-                and the CLI answers{" "}
+                {t("faq.bodyA")}{" "}
                 <code className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
                   /help
                 </code>{" "}
-                any time.
+                {t("faq.bodyB")}
               </p>
             </docs-reveal>
           </div>
 
           <div className="space-y-3">
-            {faqs.map((faq, index) => {
+            {faqIds.map((id, index) => {
               const isOpen = this.openIndex === index;
               return (
                 <docs-reveal delay={index * 0.05}>
@@ -173,7 +175,7 @@ export class FaqElement extends LitElement {
                       <span
                         className={cn("text-[15px] font-semibold", heading)}
                       >
-                        {faq.question}
+                        {t(`faq.items.${id}.question`)}
                       </span>
                       <span
                         className={cn(
@@ -204,7 +206,7 @@ export class FaqElement extends LitElement {
                             muted,
                           )}
                         >
-                          {faq.answer}
+                          {t(`faq.items.${id}.answer`)}
                         </p>
                       </div>
                     ) : null}

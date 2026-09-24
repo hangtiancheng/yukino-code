@@ -28,11 +28,6 @@ export const EASE = [0.22, 1, 0.36, 1] as const;
 export const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/**
- * Whether the visitor asked the OS to reduce motion. JS-driven animations must
- * consult this (the CSS media query only covers CSS animations): helpers below
- * collapse to duration 0, and looping/typing animations skip entirely.
- */
 export function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -98,12 +93,6 @@ export function flipTo(el: HTMLElement, first: DOMRect) {
 
 const revealed = new WeakSet<Element>();
 
-/**
- * Animates every `[data-reveal]` descendant of `root` once it scrolls into
- * view. Elements carry the Tailwind `opacity-0` class until animated; offsets
- * and timing come from `data-reveal-x/-y/-delay/-duration`. Safe to call
- * repeatedly (e.g. from `updated()`) — already-registered elements are skipped.
- */
 export function setupReveals(root: ParentNode) {
   const elements = root.querySelectorAll<HTMLElement>("[data-reveal]");
   const reduced = prefersReducedMotion();

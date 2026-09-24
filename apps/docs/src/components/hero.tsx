@@ -19,7 +19,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 import { LitElement, customElement, property } from "@yukino.js/lit-jsx";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { animate, stagger } from "motion";
@@ -31,8 +30,11 @@ import {
   VERSION,
   stats,
 } from "@/lib/content";
+import type { QuickCommandId, StatId } from "@/lib/content";
 import { icon } from "@/lib/icon";
 import { icons } from "@/lib/icons";
+import { LocaleController, t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n";
 import { EASE, prefersReducedMotion } from "@/lib/motion";
 import {
   container,
@@ -47,9 +49,24 @@ import {
 import { CommandBar } from "./ui/command-box";
 import { GithubIcon } from "./ui/github-icon";
 
+const QUICK_LABEL_KEY: Record<QuickCommandId, MessageKey> = {
+  tui: "hero.quickTui",
+  print: "hero.quickPrint",
+  remote: "hero.quickRemote",
+};
+
+const STAT_LABEL_KEY: Record<StatId, MessageKey> = {
+  protocols: "hero.statsProtocols",
+  tools: "hero.statsTools",
+  modes: "hero.statsModes",
+  context: "hero.statsContext",
+};
+
 @customElement("docs-hero")
 export class HeroElement extends LitElement {
   @property() docsUrl = "";
+
+  locale = new LocaleController(this);
 
   override createRenderRoot() {
     return this;
@@ -90,8 +107,8 @@ export class HeroElement extends LitElement {
             )}
           />
           <div className="animate-drift bg-brand-500/20 dark:bg-brand-600/25 absolute -top-52 left-1/2 h-136 w-5xl -translate-x-1/2 rounded-full blur-[130px]" />
-          <div className="animate-floaty bg-accent-400/20 dark:bg-accent-500/15 absolute top-32 -right-40 h-104 w-104 rounded-full blur-[120px]" />
-          <div className="animate-floaty bg-brand-400/15 absolute top-64 -left-32 h-88 w-88 rounded-full blur-[120px] [animation-delay:1.5s]" />
+          <div className="animate-floaty bg-accent-400/15 dark:bg-accent-500/10 absolute top-32 -right-40 h-104 w-104 rounded-full blur-[120px]" />
+          <div className="animate-floaty bg-brand-400/15 dark:bg-brand-500/12 absolute top-64 -left-32 h-88 w-88 rounded-full blur-[120px] [animation-delay:1.5s]" />
         </div>
 
         <div className={cn(container, "relative text-center")}>
@@ -106,12 +123,12 @@ export class HeroElement extends LitElement {
               )}
             >
               {unsafeHTML(icon(icons.sparkles, "h-3.5 w-3.5"))}
-              <span className="font-semibold">{VERSION} is out</span>
-              <span className="opacity-80">
-                — ACP, observability &amp; web fetch
+              <span className="font-semibold">
+                {t("hero.badge", { version: VERSION })}
               </span>
+              <span className="opacity-80">{t("hero.badgeNote")}</span>
               <span className="inline-flex items-center gap-1 font-semibold">
-                Read the docs
+                {t("common.readDocs")}
                 {unsafeHTML(
                   icon(
                     icons.arrowRight,
@@ -129,8 +146,9 @@ export class HeroElement extends LitElement {
               heading,
             )}
           >
-            The <span className={gradientText}>coding agent</span>
-            <br className="hidden sm:block" /> that lives in your terminal
+            {t("hero.titleA")}{" "}
+            <span className={gradientText}>{t("hero.titleHighlight")}</span>
+            <br className="hidden sm:block" /> {t("hero.titleB")}
           </h1>
 
           <p
@@ -140,9 +158,7 @@ export class HeroElement extends LitElement {
               muted,
             )}
           >
-            Yukino connects to any LLM, edits files, runs commands and
-            orchestrates multi-agent workflows — all from a single CLI that
-            stays out of your way.
+            {t("hero.subtitle")}
           </p>
 
           <div data-stagger className="mx-auto mt-9 max-w-xl opacity-0">
@@ -157,7 +173,7 @@ export class HeroElement extends LitElement {
               href="#install"
               className={cn(primaryButton, "w-full sm:w-auto", focusRing)}
             >
-              Get started
+              {t("common.getStarted")}
               {unsafeHTML(icon(icons.arrowRight, "h-4 w-4"))}
             </a>
             <a
@@ -167,7 +183,7 @@ export class HeroElement extends LitElement {
               className={cn(secondaryButton, "w-full sm:w-auto", focusRing)}
             >
               <GithubIcon className="h-4 w-4" />
-              Star on GitHub
+              {t("common.starOnGithub")}
               {unsafeHTML(icon(icons.star, "h-3.5 w-3.5 text-amber-400"))}
             </a>
           </div>
@@ -177,20 +193,20 @@ export class HeroElement extends LitElement {
             className="mt-10 flex flex-wrap items-center justify-center gap-2 opacity-0"
           >
             {QUICK_COMMANDS.map((item) => (
-              <li className="border-brand-950/8 flex items-center gap-2 rounded-full border bg-white/60 px-3 py-1.5 font-mono text-[11px] text-zinc-600 backdrop-blur sm:text-xs dark:border-white/8 dark:bg-white/3 dark:text-zinc-400">
+              <li className="flex items-center gap-2 rounded-full border border-[#dadce0] bg-white/60 px-3 py-1.5 font-mono text-[11px] text-[#5f6368] backdrop-blur sm:text-xs dark:border-white/8 dark:bg-white/3 dark:text-[#9aa0a6]">
                 <span
                   className={cn(
                     "h-1.5 w-1.5 rounded-full",
-                    item.tone === "brand" && "bg-brand-500",
-                    item.tone === "accent" && "bg-accent-400",
-                    item.tone === "neutral" && "bg-zinc-400 dark:bg-zinc-600",
+                    item.tone === "brand" && "bg-g-blue",
+                    item.tone === "accent" && "bg-g-green",
+                    item.tone === "neutral" && "bg-g-yellow",
                   )}
                 />
                 <span className="text-zinc-400 dark:text-zinc-500">
                   {item.command}
                 </span>
                 <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                <span>{item.label}</span>
+                <span>{t(QUICK_LABEL_KEY[item.id])}</span>
               </li>
             ))}
           </ul>
@@ -210,7 +226,7 @@ export class HeroElement extends LitElement {
                   {stat.value}
                 </dt>
                 <dd className="text-xs font-medium tracking-[0.14em] text-zinc-400 uppercase dark:text-zinc-500">
-                  {stat.label}
+                  {t(STAT_LABEL_KEY[stat.id])}
                 </dd>
               </div>
             ))}

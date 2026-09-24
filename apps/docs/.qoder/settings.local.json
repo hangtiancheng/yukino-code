@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/hangtiancheng/github/yukino-code3/apps/docs/src -type f | head -50 && echo \"---\" && cat /Users/hangtiancheng/github/yukino-code3/apps/docs/package.json)"
+    ]
+  }
+}
