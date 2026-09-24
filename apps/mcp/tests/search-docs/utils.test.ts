@@ -32,7 +32,7 @@ describe("escapeTagValue", () => {
 
   it("keeps letters, digits, underscore and CJK untouched", () => {
     expect(escapeTagValue("abc_123")).toBe("abc_123");
-    expect(escapeTagValue("知识库")).toBe("知识库");
+    expect(escapeTagValue("知識ベース")).toBe("知識ベース");
   });
 
   it("escapes spaces and punctuation", () => {
