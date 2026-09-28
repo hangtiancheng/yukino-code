@@ -81,13 +81,13 @@ const MAX_TOKENS_CEILING = 64000;
 const MAX_TOKENS_RECOVERIES = 3;
 const MAX_RATE_LIMIT_RETRIES = 3;
 const MAX_RETRY_DELAY_MS = 60000;
-// Tool output exceeding this threshold is spilled to disk rather than truncated
-// outright, to avoid losing critical information.
-// Per-result spill threshold before entering conversation history: once the
-// character count exceeds this value the full content is written to disk and
-// only a preview plus the file path is retained in history. Set to 50000
-// (rather than a smaller value) so the model can see enough content in one
-// pass without needing an extra ReadFile round-trip to view the full result.
+// Per-result spill threshold before entering conversation history: once a
+// tool result's character count exceeds this value the full content is written
+// to disk (rather than truncated outright, to avoid losing critical
+// information) and only a preview plus the file path is retained in history.
+// Set to 50000 (rather than a smaller value) so the model can see enough
+// content in one pass without needing an extra ReadFile round-trip to view the
+// full result.
 const MAX_OUTPUT_CHARS = 50000;
 
 // Fixed prefix of the deferred-tool reminder. Used to detect whether the reminder

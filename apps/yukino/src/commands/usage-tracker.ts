@@ -91,8 +91,7 @@ export class CommandUsageTracker {
         }
       }
     } catch {
-      // log.error({ err }, "commands operation failed");
-      // file doesn't exist yet
+      // The usage file does not exist yet on first run; nothing to load.
     }
   }
 

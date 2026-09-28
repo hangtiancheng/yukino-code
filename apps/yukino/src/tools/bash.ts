@@ -307,7 +307,7 @@ export class BashTool implements Tool {
 
   /**
    * Spawn the command with stdout+stderr writing directly into the output
-   * file (ccb's file-descriptor mode): output never flows through JS, so
+   * file (file-descriptor mode): output never flows through JS, so
    * backgrounding is a bookkeeping switch — no re-spawn, no buffer handover.
    * The returned handle exposes the tool-call promise plus a background()
    * trigger that transitions the running command into a TaskManager task.

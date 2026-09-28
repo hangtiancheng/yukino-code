@@ -54,8 +54,6 @@ function walkDir(base: string, dir: string): Command[] {
   try {
     entries = readdirSync(dir);
   } catch {
-    // log.error({ err }, "commands operation failed");
-
     return [];
   }
   const out: Command[] = [];
@@ -65,8 +63,6 @@ function walkDir(base: string, dir: string): Command[] {
     try {
       st = statSync(full);
     } catch {
-      // log.error({ err }, "commands operation failed");
-
       continue;
     }
     if (st.isDirectory()) {
@@ -99,8 +95,6 @@ function parseCommandFile(base: string, full: string): Command | null {
   try {
     raw = readFileSync(full, "utf-8");
   } catch {
-    // log.error({ err }, "commands operation failed");
-
     return null;
   }
 
@@ -119,8 +113,7 @@ function parseCommandFile(base: string, full: string): Command | null {
         description = data.description ?? "";
         argumentHint = data["argument-hint"] ?? "";
       } catch {
-        // log.error({ err }, "commands operation failed");
-        // ignore frontmatter parse errors; treat whole file as body
+        // Ignore frontmatter parse errors; treat the whole file as the body.
       }
     }
   }

@@ -25,15 +25,15 @@ import {
 } from "@/tool-result/index.js";
 
 // Shared background-execution plumbing for the backgroundable tools (Bash,
-// PowerShell): ccb's file-descriptor output mode, the size watchdog
+// PowerShell): the file-descriptor output mode, the size watchdog
 // constants, result/notification formatting, and the host wiring helpers.
 
 /** Notification body budget: larger outputs stay on disk and only a preview travels in the notification. */
 export const BACKGROUND_NOTIFICATION_CHARS = 30_000;
 /**
- * ccb parity: a backgrounded command may fill up to 5GB before the size
- * watchdog kills it (their incident: a stuck append loop wrote 768GB with no
- * JS in the write path to notice). Foreground keeps the historical 10MB cap.
+ * A backgrounded command may fill up to 5GB before the size watchdog kills it:
+ * with no JS in the write path, a stuck append loop could otherwise grow the
+ * output file without bound. Foreground keeps the historical 10MB cap.
  */
 export const BACKGROUND_MAX_OUTPUT_BYTES = 5 * 1024 * 1024 * 1024;
 export const SIZE_WATCHDOG_INTERVAL_MS = 500;

@@ -56,7 +56,8 @@ import { ICONS, THEME } from "@/ui/styles.js";
 
 const log = createChildLogger({ module: "terminal" });
 
-// Suffix appended to skill-backed command descriptions (see wireSkillsToRegistry).
+// Suffix the command dropdown strips from a skill-backed command description
+// and re-renders in a muted style (detected via endsWith below).
 const SKILL_TAG = "[skill]";
 const SPINNER_FRAMES = [
   "⠋",
@@ -396,11 +397,6 @@ export function InputBox(props: InputBoxProps) {
       return [];
     }
 
-    // if (fileCacheRef.current === null) {
-    //   fileCacheRef.current = scanWorkdirFiles(workDir);
-    // }
-
-    // Prefer using nullish coalescing operator (`??=`) instead of an assignment expression, as it is simpler to read.
     fileCacheRef.current ??= scanWorkdirFiles(workDir);
 
     const files = fileCacheRef.current;

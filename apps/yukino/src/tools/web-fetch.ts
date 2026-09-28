@@ -33,7 +33,6 @@ import type {
 
 import { createChildLogger } from "@/logger/index.js";
 import { asErrorString, strArg } from "@/utils/index.js";
-// import { version } from "@/version.js";
 
 const log = createChildLogger({ module: "tools" });
 
@@ -228,7 +227,6 @@ export class WebFetchTool implements Tool {
         redirect: "follow",
         headers: {
           Accept: "text/markdown, text/html, */*",
-          // "User-Agent": `yukino/${version}`,
         },
       });
     } catch (err) {

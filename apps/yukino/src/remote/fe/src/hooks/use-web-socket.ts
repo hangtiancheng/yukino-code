@@ -41,7 +41,8 @@ const RECONNECT_DELAY_MS = 3_000;
  * reconnection and an application-layer ping keepalive.
  *
  * The connection URL is derived from the current location so the same build
- * works in dev (rsbuild proxy) and when served inline by the remote server.
+ * works whether it is served inline by the remote server or previewed
+ * standalone from fe/dist.
  */
 export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   const { onMessage, onOpen, onClose } = opts;

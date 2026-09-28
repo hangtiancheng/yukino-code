@@ -67,12 +67,10 @@ export interface Command {
 export class CommandRegistry {
   private commands = new Map<string, Command>();
   /**
-   * Registers a command, checking for name and alias conflicts.
-   * The name must not conflict with existing command names or aliases;
-   * aliases must not conflict with existing command names or other aliases.
+   * Registers a command. The name must not conflict with an existing command
+   * name; throws on a conflict.
    */
   register(cmd: Command): void {
-    // Check if the command name conflicts with an existing command name
     if (this.commands.has(cmd.name)) {
       throw new Error(`Command '${cmd.name}' already registered`);
     }

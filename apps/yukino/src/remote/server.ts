@@ -463,24 +463,24 @@ export async function createRemoteAgent(
 
   const contextWindow = getContextWindow(provider);
 
-  // 7. Load instructions and memory, inject into conversation
+  // 6. Load instructions and memory, inject into conversation
   const instructions = loadInstructions(workDir);
   const memoryManager = new MemoryManager(workDir);
   const memReminder = memoryManager.buildSystemReminder();
   conv.injectLongTermMemory(instructions, memReminder);
 
-  // 9. Initialize hooks
+  // 7. Initialize hooks
   const hookErr = validateHooks(hookConfigs ?? []);
   if (hookErr) {
     log.warn({ message: hookErr.message }, "hook validation warning");
   }
   const hookEngine = new HookEngine(hookConfigs ?? []);
 
-  // 10. Load skills
+  // 8. Load skills
   const catalog = new SkillCatalog();
   catalog.load(workDir);
 
-  // 11. SkillHost interface
+  // 9. SkillHost interface
   const activeSkills = new Map<string, string>();
   const skillHost: SkillHost = {
     activateSkill: (name, body) => {
@@ -551,10 +551,10 @@ export async function createRemoteAgent(
     },
   };
 
-  // 12. Register LoadSkill tool
+  // 10. Register LoadSkill tool
   registry.register(new LoadSkillTool(catalog, skillHost, skillForkHost));
 
-  // 13. Register AskUserQuestion tool when the host supports interactive questions
+  // 11. Register AskUserQuestion tool when the host supports interactive questions
   if (askUser) {
     registry.register(new AskUserQuestionTool(askUser));
   }
@@ -583,7 +583,7 @@ export async function createRemoteAgent(
         // Teammates stay purely foreground: see SubagentRunOptions.backgroundTasks.
         { abortSignal, backgroundTasks: false },
       );
-  // 14. Register Team tools
+  // 12. Register Team tools
   const teamManager = new TeamManager(workDir);
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here
@@ -596,7 +596,7 @@ export async function createRemoteAgent(
   registry.register(new TaskStopTool(teamManager, backgroundTaskManager));
   registry.register(new SyntheticOutputTool());
 
-  // 15. Register AgentTool (with both spawn and fork paths)
+  // 13. Register AgentTool (with both spawn and fork paths)
   const agentTool = new AgentTool(
     workDir,
     registry,
@@ -702,7 +702,7 @@ export async function createRemoteAgent(
   agentTool.setTeamManager(teamManager, teamRunAgentFactory, provider.base_url);
   registry.register(agentTool);
 
-  // 16. Load user-defined slash commands
+  // 14. Load user-defined slash commands
   const cmdRegistry = createCommandRegistry();
   for (const cmd of loadUserCommands(workDir)) {
     try {
@@ -712,10 +712,10 @@ export async function createRemoteAgent(
     }
   }
 
-  // 17. Wire skills to slash commands
+  // 15. Wire skills to slash commands
   wireSkillsToCommands(catalog, skillHost, cmdRegistry);
 
-  // 18. Initialize MCP servers
+  // 16. Initialize MCP servers
   let mcpManager: MCPManager | null = null;
 
   if (mcpConfigs && mcpConfigs.length > 0) {
@@ -743,7 +743,7 @@ export async function createRemoteAgent(
     }
   }
 
-  // 19. Construct the handle
+  // 17. Construct the handle
   return new AgentHandleImpl({
     client,
     conv,

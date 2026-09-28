@@ -23,7 +23,7 @@
 export interface SkillMeta {
   name: string;
   description: string;
-  mode?: "inline" | "fork"; // "inline"
+  mode?: "inline" | "fork"; // defaults to "inline"
   model?: string;
   forkContext?: "full" | "recent" | "none";
 }

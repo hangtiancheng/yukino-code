@@ -55,7 +55,6 @@ const StoreDataSchema = z.object({
   tasks: z.array(SerializedTaskSchema).default([]),
 });
 
-// type SerializedTask = z.infer<typeof SerializedTaskSchema>;
 type StoreData = z.infer<typeof StoreDataSchema>;
 
 export interface TaskUpdateFields {

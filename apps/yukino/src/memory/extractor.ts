@@ -134,10 +134,8 @@ export class MemoryExtractor {
         for (const file of files) {
           try {
             const content = readFileSync(join(dir, file), "utf-8");
-            // const nameMatch = /name:\s*(.+)/.exec(content);
             const typeMatch = /type:\s*(.+)/.exec(content);
             const descMatch = /description:\s*(.+)/.exec(content);
-            // const name = nameMatch?.[1]?.trim() ?? file;
             const type = typeMatch?.[1]?.trim() ?? "reference";
             const desc = descMatch?.[1]?.trim() ?? "";
             entries.push(`- [${type}] ${file}: ${desc}`);

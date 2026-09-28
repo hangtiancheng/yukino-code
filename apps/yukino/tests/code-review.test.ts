@@ -94,7 +94,7 @@ describe("CodeReviewManager", () => {
   });
 
   test("should get active reviewers", () => {
-    /** const team = */ manager.createTeam("backend-team", [
+    manager.createTeam("backend-team", [
       {
         name: "backend",
         email: "backend@yukino.dev",
@@ -121,7 +121,7 @@ describe("CodeReviewManager", () => {
   });
 
   test("should deactivate and activate members", () => {
-    /** const team = */ manager.createTeam("mobile-team", [
+    manager.createTeam("mobile-team", [
       {
         name: "frontend",
         email: "frontend@yukino.dev",

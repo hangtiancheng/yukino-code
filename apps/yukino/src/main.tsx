@@ -135,9 +135,6 @@ async function main() {
     });
     try {
       await srv.run();
-      // await new Promise(() => {
-      //   /** noop */
-      // });
     } catch (err) {
       captureTelemetryError(err, "remote");
       console.error(`Remote server error: ${asErrorString(err)}`);

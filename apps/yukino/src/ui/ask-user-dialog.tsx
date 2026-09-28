@@ -295,7 +295,6 @@ function SubmitContent({
 
 export function AskUserDialog({ questions, onComplete }: Props) {
   const hideSubmit = questions.length === 1 && !questions[0].multiSelect;
-  // const totalTabs = questions.length + (hideSubmit ? 0 : 1);
 
   const [state, dispatch] = useReducer(reducer, {
     currentIndex: 0,

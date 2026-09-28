@@ -57,7 +57,9 @@ interface DangerousPattern {
   reason: string;
 }
 
-// Keep it empty array
+// Intentionally empty: no command patterns are currently classified as
+// dangerous, so detectDangerous() below never matches and the Layer-3 deny
+// stays inert until patterns are added.
 const DANGEROUS_PATTERNS: DangerousPattern[] = [];
 
 const SAFE_PREFIXES: (string | RegExp)[] = [

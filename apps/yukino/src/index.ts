@@ -22,7 +22,7 @@
 
 // Library entry: re-exports every terminal-independent module of
 // @yukino.js/yukino, one namespace per source directory
-// (`export * as Group from "./group/index.js"`; each group barrel nests its
+// (`export * as Agent from "./agent/index.js"`; each group barrel nests its
 // submodules the same way), so top-level export names cannot collide across
 // groups. The CLI entry (bin) is dist/main.js; nothing here may import from
 // src/ui or any ui-only dependency (ink, chalk, ...). That is enforced
@@ -39,9 +39,6 @@ export * as Agent from "./agent/index.js";
 
 // === bootstrap ===
 export * as Bootstrap from "./bootstrap/index.js";
-// export * from "./bootstrap/terminal-input.js" // Exclude UI
-// export * from "./bootstrap/terminal-theme.js" // Exclude UI
-// export * from "./bootstrap/ui-selection.js" // Exclude UI
 
 // === code-review ===
 export * as CodeReview from "./code-review/index.js";
@@ -140,4 +137,6 @@ export * as Worktree from "./worktree/index.js";
 export * as PrintMode from "./print-mode.js";
 export * as Recover from "./recover.js";
 export * as Teammate from "./teammate.js";
+
+// === version ===
 export * as Version from "./version.js";

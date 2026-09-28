@@ -114,7 +114,7 @@ function handleCreate(manager: CodeReviewManager, params: string): string {
     },
   ];
 
-  /** const team = */ manager.createTeam(name, members);
+  manager.createTeam(name, members);
   return (
     `Created code review team '${name}' with 3 members:\n` +
     `  - ${members[0].name} (Lead)\n` +

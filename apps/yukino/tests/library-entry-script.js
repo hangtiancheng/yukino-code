@@ -23,7 +23,7 @@
 async function script() {
   const m = await import(process.env.YUKINO_LIB_ENTRY);
   // The barrel exports one namespace per source directory, so symbols are
-  // dot-separated paths (Group[.Sub].Name) resolved through the namespaces.
+  // dot-separated paths (Namespace[.Sub].Symbol) resolved through the namespaces.
   const symbols = [
     "Agent.Agent",
     "Tools.Registry.ToolRegistry",

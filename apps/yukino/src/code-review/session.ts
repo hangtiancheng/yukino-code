@@ -59,7 +59,6 @@ export function asCriticEvaluation(str: string): CriticEvaluation {
     return str;
   } else {
     log.error({ str }, "code-review operation failed");
-    // return "partially-reasonable"; // best-effort
     throw new Error(str);
   }
 }

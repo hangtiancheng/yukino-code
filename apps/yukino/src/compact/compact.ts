@@ -52,10 +52,9 @@ export interface CompactResult {
   boundary?: CompactBoundaryPayload;
 }
 
-// Legacy ratio threshold, kept for reference. The live judgment below uses a
-// token-budget formula: reserve room for the summary output in the next
-// response turn, then leave a safety margin before the window fills.
-// const AUTO_COMPACT_THRESHOLD = 0.8;
+// Auto-compact uses a token-budget formula rather than a fixed usage ratio:
+// reserve room for the summary output in the next response turn, then leave a
+// safety margin before the window fills.
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 const MAX_PTL_RETRIES = 3;

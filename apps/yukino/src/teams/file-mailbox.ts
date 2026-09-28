@@ -42,10 +42,6 @@ const FileMailMessageSchema = z.object({
   from: z.string(),
   text: z.string(),
   timestamp: z.string(),
-  // timestamp: z
-  //   .union([z.string(), z.number()])
-  //   .nullish()
-  //   .transform((v) => (!v ? "" : String(v))),
 
   // Read marker: false on delivery, set to true once the message is read or explicitly marked.
   read: z.boolean().optional(),

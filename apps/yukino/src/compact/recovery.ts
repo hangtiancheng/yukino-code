@@ -55,14 +55,6 @@ function truncateByTokens(s: string, tokenBudget: number): string {
   return s.slice(0, maxChars - suffix.length) + suffix;
 }
 
-// function firstLine(s: string): string {
-//   for (const line of s.split("\n")) {
-//     const trimmed = line.trim();
-//     if (trimmed) return trimmed;
-//   }
-//   return "";
-// }
-
 interface FileReadRecord {
   path: string;
   content: string;

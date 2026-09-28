@@ -104,7 +104,7 @@ export const CUSTOM_AGENT_DISALLOWED_TOOLS = new Set<AllTools>([
 // Asynchronous (background) Agents are restricted to only these tools
 export const ASYNC_AGENT_ALLOWED_TOOLS = new Set<AllTools>([
   "ReadFile",
-  // "WebSearch",
+  "WebFetch",
   "Grep",
   "Glob",
   "Bash",

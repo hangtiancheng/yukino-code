@@ -76,7 +76,9 @@ export interface Sandbox {
 
 /**
  * Creates the requested sandbox backend.
- * native: seatbelt on macOS, bubblewrap on Linux.
+ *   native          seatbelt on macOS, bubblewrap on Linux (the default).
+ *   sandbox-runtime the @anthropic-ai/sandbox-runtime backend.
+ * Returns null on platforms with no native backend.
  */
 export async function createSandbox(
   backend: SandboxBackend = "native",

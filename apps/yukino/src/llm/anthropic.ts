@@ -186,7 +186,7 @@ export function buildAnthropicMessages(
             signature: tb.signature,
           });
         }
-      } // end if (m.thinkingBlocks)
+      }
 
       // Assistant content is model-produced text; flatten defensively.
       const assistantText =
@@ -201,24 +201,23 @@ export function buildAnthropicMessages(
       if (m.toolUses) {
         for (const tu of m.toolUses) {
           blocks.push({
-            type: "tool_use", // tool use **request**
+            type: "tool_use",
             id: tu.toolUseId,
             name: tu.toolName === "ComputerUse" ? "computer" : tu.toolName,
             input: tu.arguments,
           });
         }
-      } // end if (m.toolUses)
+      }
 
       if (blocks.length === 0) {
         blocks.push({ type: "text", text: "" });
       }
       result.push({ role: "assistant", content: blocks });
-    } //! end if (m.role === "assistant")
-    else if (m.toolResults && m.toolResults.length > 0) {
+    } else if (m.toolResults && m.toolResults.length > 0) {
       const blocks: Anthropic.ContentBlockParam[] = [];
       for (const tr of m.toolResults) {
         blocks.push({
-          type: "tool_result", // tool result
+          type: "tool_result",
           tool_use_id: tr.toolUseId,
           is_error: tr.isError,
           content: tr.contentBlocks?.length ? tr.contentBlocks : tr.content,
@@ -229,7 +228,7 @@ export function buildAnthropicMessages(
       }
 
       result.push({ role: "user", content: blocks });
-    } //! end if (m.toolResults && m.toolResults.length > 0)
+    }
     // The first message's role MUST be user
     else {
       // Summary (role: "user")
@@ -256,7 +255,6 @@ export function buildAnthropicMessages(
         (typeof content === "string" ||
           (Array.isArray(content) &&
             content.length > 0 &&
-            // content[0].type !== "tool_result"
             (content[0].type === "text" || content[0].type === "image")))
       ) {
         canMerge = true;
@@ -441,8 +439,7 @@ export class AnthropicClient implements LLMClient {
               inThinking = true;
               thinkingAccumulate = "";
               thinkingSignature = "";
-            } // end if (block.type === "thinking")
-            else if (block.type === "tool_use") {
+            } else if (block.type === "tool_use") {
               currentToolId = block.id;
               currentToolName =
                 block.name === "computer" ? "ComputerUse" : block.name;
@@ -454,7 +451,7 @@ export class AnthropicClient implements LLMClient {
               };
             }
             break;
-          } // end case "content_block_start"
+          }
 
           case "content_block_delta": {
             const delta = event.delta;
@@ -464,28 +461,22 @@ export class AnthropicClient implements LLMClient {
                 type: "thinking_delta",
                 text: delta.thinking,
               };
-            }
-            // end if (delta.type === "thinking_delta")
-            else if (delta.type === "signature_delta") {
+            } else if (delta.type === "signature_delta") {
               thinkingSignature += delta.signature;
-            }
-            // end if (delta.type === "signature_delta")
-            else if (delta.type === "text_delta") {
+            } else if (delta.type === "text_delta") {
               yield {
                 type: "text_delta",
                 text: delta.text,
               };
-            }
-            // end if (delta.type === "text_delta")
-            else if (delta.type === "input_json_delta") {
+            } else if (delta.type === "input_json_delta") {
               jsonAccumulate += delta.partial_json;
               yield {
                 type: "tool_call_delta",
                 text: delta.partial_json,
               };
-            } // end if (delta.type === "input_json_delta")
+            }
             break;
-          } // end case "content_block_delta"
+          }
 
           case "content_block_stop": {
             if (inThinking) {
@@ -495,7 +486,7 @@ export class AnthropicClient implements LLMClient {
                 signature: thinkingSignature,
               };
               inThinking = false;
-            } // end if (inThinking)
+            }
 
             if (currentToolName) {
               let args: Record<string, unknown> = {};
@@ -507,7 +498,7 @@ export class AnthropicClient implements LLMClient {
                   log.error({ err }, "llm operation failed");
                   args = {};
                 }
-              } // end if (jsonAccumulate)
+              }
 
               yield {
                 type: "tool_call_complete",
@@ -520,9 +511,9 @@ export class AnthropicClient implements LLMClient {
               currentToolName = "";
               currentToolId = "";
               jsonAccumulate = "";
-            } // end if (currentToolName)
+            }
             break;
-          } // end case "content_block_stop"
+          }
 
           case "message_delta": {
             if (event.delta.stop_reason) {
@@ -543,7 +534,7 @@ export class AnthropicClient implements LLMClient {
               }
             }
             break;
-          } // end case "message_delta"
+          }
 
           case "message_start": {
             inputTokens = event.message.usage.input_tokens;
@@ -553,7 +544,7 @@ export class AnthropicClient implements LLMClient {
             cacheCreationInputTokens =
               event.message.usage.cache_creation_input_tokens ?? 0;
             break;
-          } // end "message_start"
+          }
         }
       }
 
@@ -575,7 +566,8 @@ export class AnthropicClient implements LLMClient {
 }
 
 /**
- * @param messages
+ * Marks the last user message's tail content block with an ephemeral
+ * cache_control breakpoint so the prompt prefix up to it is cached.
  */
 export function markLastUserTailForCache(
   messages: Anthropic.Messages.MessageParam[],
@@ -611,7 +603,7 @@ export function markLastUserTailForCache(
       }
     }
 
-    // Sets the property of target, equivalent to target[propertyKey] = value when receiver === target.
+    // Reflect.set avoids a type assertion when adding cache_control.
     Reflect.set(last, "cache_control", {
       type: "ephemeral",
     });
@@ -631,7 +623,7 @@ function classifyAnthropicError(err: unknown) {
 
     if (err.status === AnthropicErrorCode.InvalidAPIKey) {
       return new AuthenticationError(`Invalid API key: ${err.message}`);
-    } // end if (err.status === 401)
+    }
 
     if (err.status === AnthropicErrorCode.RateLimitError) {
       const headers: unknown = err.headers;
@@ -653,12 +645,12 @@ function classifyAnthropicError(err: unknown) {
         message,
         retryAfter ? asString(retryAfter) : undefined,
       );
-    } // end if (err.status === 429)
+    }
 
     return new LLMError(
       `Anthropic API error (${asString(err.status)}): ${err.message}`,
     );
-  } // end if (err instanceof Anthropic.APIError)
+  }
 
   return new NetworkError(`Network error: ${asErrorString(err)}`);
 }

@@ -14,11 +14,11 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 - Multi-provider LLM support with Anthropic, OpenAI, and OpenAI-compatible protocols
 - Interactive terminal UI with streaming text, thinking indicators, and tool execution display
-- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, Glob, Grep, ToolSearch, EnterWorktree, ExitWorktree, ExitPlanMode
+- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, and the TaskCreate/TaskGet/TaskList/TaskUpdate todo tools
 - MCP (Model Context Protocol) server integration for extending the tool set with external services
 - Permission system with four modes: default, acceptEdits, plan (read-only), and bypassPermissions
-- Sandbox support via bwrap (Linux) and seatbelt (macOS) for isolated command execution
-- Dangerous command pattern detection with human-in-the-loop approval dialogs
+- Sandbox support for isolated command execution: the native backend (bwrap on Linux, seatbelt on macOS) or the sandbox-runtime backend
+- Human-in-the-loop approval dialogs for file writes and shell commands, driven by permission mode and allow/deny rules
 
 ### Conversation and Memory
 
@@ -29,7 +29,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 ### Skills and Commands
 
-- Skill catalog with three-tier loading: built-in, user-global (~/.agents/skills/), and project-level (.agents/skills/)
+- Skill catalog with two-tier loading: user-global (~/.agents/skills/) and project-level (.agents/skills/), where the project level wins on a name collision
 - Hot-reload support for skills edited on disk
 - Inline and fork execution modes for skills
 - Slash command system with built-in commands and user-defined commands from .yukino/commands/
@@ -45,7 +45,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 ### Hooks
 
 - Event-driven hook engine supporting: session_start, session_end, turn_start, turn_end, pre_send, post_receive, pre_tool_use, post_tool_use, shutdown
-- Hook actions: shell commands, HTTP requests, prompt injection
+- Hook actions: shell commands, HTTP requests, prompt injection, and subagent (`agent`) execution
 - Conditional execution, reject-on-failure, and async options
 
 ### Remote Mode
@@ -116,6 +116,7 @@ hooks:
 
 sandbox:
   enabled: false
+  backend: native # native (bwrap/seatbelt) | sandbox-runtime
   auto_allow: false
   network_enabled: true
 
@@ -268,12 +269,15 @@ Inside the UI, these commands are available:
 | Command              | Description                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | /login               | Configure, save, and activate an LLM provider                                                                             |
+| /provider            | Switch the active provider                                                                                                |
+| /help [command]      | Show available commands, or details for a single command                                                                  |
 | /status              | Show current session status (model, tokens, tools, sandbox, memories, skills, MCP)                                        |
+| /session             | Show session info                                                                                                         |
 | /memory              | List stored memories                                                                                                      |
 | /memory clear        | Clear all memories                                                                                                        |
 | /skills              | List available skills                                                                                                     |
 | /skills reload       | Hot-reload skills from disk                                                                                               |
-| /skill <name> [args] | Run a skill by name                                                                                                       |
+| /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`)                                                                      |
 | /plan                | Enter plan mode (read-only investigation)                                                                                 |
 | /compact             | Force conversation compaction                                                                                             |
 | /clear               | Reset the session and clear the terminal                                                                                  |
@@ -284,6 +288,8 @@ Inside the UI, these commands are available:
 | /mcp                 | Show MCP server status                                                                                                    |
 | /mcp reload          | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                |
 | /thinking [level]    | Show or set the thinking level (off, minimal, low, medium, high, xhigh, max); setting persists to `~/.yukino/config.yaml` |
+| /code-review         | Manage the code review team (create, add, remove, list, status)                                                           |
+| /review [focus]      | Review the uncommitted code changes for bugs and improvements                                                             |
 | /quit                | Exit the application                                                                                                      |
 
 ### Keyboard Shortcuts
@@ -292,7 +298,8 @@ Inside the UI, these commands are available:
 | --------- | ----------------------------------------------------------------------------------- |
 | Ctrl+C    | Clear input or interrupt streaming (first press), exit app (second press within 2s) |
 | Ctrl+O    | Toggle full vs. truncated tool output                                               |
-| Ctrl+T    | Toggle Teams dialog overlay                                                         |
+| Ctrl+T    | Toggle Teams dialog overlay (when not streaming)                                    |
+| Ctrl+B    | Move running foreground Bash/PowerShell tasks to the background                     |
 | Ctrl+V    | Paste a clipboard image (Alt+V on Windows)                                          |
 | Shift+Tab | Cycle permission modes                                                              |
 

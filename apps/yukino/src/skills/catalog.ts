@@ -139,9 +139,6 @@ export class SkillCatalog {
         // A broken symlink or a concurrently removed entry must not hide other skills.
         log.error({ err }, "skills operation failed");
       }
-      // else if (entry.endsWith(".md") && entry !== "SKILL.md") {
-      //   this.loadSkill(fullPath, dir, false);
-      // }
     }
   }
   private loadSkill(filePath: string, sourceDir: string, isDirectory: boolean) {
@@ -240,12 +237,10 @@ export class SkillCatalog {
  * externally sourced skills work without modification.
  */
 function resolveMode(raw: unknown): "inline" | "fork" {
-  // raw.mode
   const mode = strArg(asRecord(raw), "mode");
   if (mode === "inline" || mode === "fork") {
     return mode;
   }
-  // raw.context
   return strArg(asRecord(raw), "context") === "fork" ? "fork" : "inline";
 }
 

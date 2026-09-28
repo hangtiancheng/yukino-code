@@ -263,8 +263,7 @@ export class OpenAIClient implements LLMClient {
             type: "text_delta",
             text: event.delta,
           };
-        } // end if (event.type === "response.output_text.delta")
-        else if (event.type === "response.reasoning_summary_text.delta") {
+        } else if (event.type === "response.reasoning_summary_text.delta") {
           reasoningText += event.delta;
           yield { type: "thinking_delta", text: event.delta };
         } else if (event.type === "response.reasoning_summary_text.done") {
@@ -279,8 +278,7 @@ export class OpenAIClient implements LLMClient {
             type: "tool_call_delta",
             text: event.delta,
           };
-        } // end if (event.type === "response.function_call_arguments.delta")
-        else if (event.type === "response.output_item.added") {
+        } else if (event.type === "response.output_item.added") {
           if (event.item.type === "function_call") {
             currentToolName = event.item.name;
             currentToolId = event.item.call_id;
@@ -301,8 +299,7 @@ export class OpenAIClient implements LLMClient {
             reasoningId = event.item.id ?? "";
             reasoningText = "";
           }
-        } // end if (event.type === "response.output_item.added")
-        else if (event.type === "response.output_item.done") {
+        } else if (event.type === "response.output_item.done") {
           if (event.item.type === "function_call" && currentToolName) {
             let args: Record<string, unknown> = {};
             if (jsonAccumulate) {
@@ -335,8 +332,7 @@ export class OpenAIClient implements LLMClient {
               providerItemId: event.item.id,
             };
           }
-        } // end if (event.type === "response.output_item.done")
-        else if (
+        } else if (
           event.type === "response.completed" ||
           event.type === "response.incomplete"
         ) {
@@ -357,7 +353,7 @@ export class OpenAIClient implements LLMClient {
               0,
               usage.input_tokens - cacheReadInputTokens,
             );
-          } // end if (usage)
+          }
 
           // Parse the actual stop reason from the Responses API.
           // When the response status is "incomplete",
@@ -431,8 +427,6 @@ export class OpenAIClient implements LLMClient {
     return getSupportedThinkingLevels(this.config);
   }
 }
-
-// OpenAI.Responses.ResponseInputContent;
 
 // Official Responses API input item types, narrowed to the variants this
 // converter actually emits (the full ResponseInputItem union is much wider).
@@ -747,8 +741,7 @@ export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
           });
         }
       }
-    } // end if (m.toolUses && m.toolUses.length > 0)
-    else if (m.toolResults && m.toolResults.length > 0) {
+    } else if (m.toolResults && m.toolResults.length > 0) {
       for (const tr of m.toolResults) {
         const computerCall = computerCalls.get(tr.toolUseId);
         if (computerCall) {
@@ -778,8 +771,7 @@ export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
       if (m.content.length > 0) {
         result.push({ role: "user", content: userContentsFor(m.content) });
       }
-    } // end if (m.toolResults && m.toolResults.length > 0)
-    else if (m.role === "assistant") {
+    } else if (m.role === "assistant") {
       result.push({
         role: "assistant",
         content:
@@ -889,7 +881,7 @@ export class OpenAICompatClient implements LLMClient {
         }
       >();
 
-      /** enum: "length" | "tool_calls" */
+      /** Raw Chat Completions finish_reason ("stop", "length", "tool_calls", "content_filter", ...); mapped to Yukino's stop reason below. */
       let finishReason: string | null = null;
       let reasoningAccumulate = "";
 
@@ -913,9 +905,8 @@ export class OpenAICompatClient implements LLMClient {
           chunk.choices[0].delta;
         if (delta.content) {
           yield { type: "text_delta", text: delta.content };
-        } // end if (delta.content)
+        }
 
-        // const reasoningContent = delta.reasoning_content;
         const reasoningContent = strArg(asRecord(delta), "reasoning_content");
         if (reasoningContent) {
           reasoningAccumulate += reasoningContent;
@@ -938,7 +929,7 @@ export class OpenAICompatClient implements LLMClient {
                   toolId: tc.id ?? "",
                 };
               }
-            } // end if (!toolCalls.has(tc.index))
+            }
 
             const existing = toolCalls.get(tc.index);
             if (existing) {
@@ -957,9 +948,9 @@ export class OpenAICompatClient implements LLMClient {
                   text: tc.function.arguments,
                 };
               }
-            } // end if (existing)
+            }
           }
-        } // end if (delta.tool_calls)
+        }
 
         if (chunk.choices[0].finish_reason) {
           finishReason = chunk.choices[0].finish_reason;
@@ -1096,8 +1087,7 @@ export function buildChatCompletionMessages(
           },
         })),
       });
-    } // end if (m.toolUses && m.toolUses.length > 0)
-    else if (m.toolResults && m.toolResults.length > 0) {
+    } else if (m.toolResults && m.toolResults.length > 0) {
       const pendingRichParts: OpenAI.ChatCompletionContentPart[] = [];
       for (const tr of m.toolResults) {
         params.push({
@@ -1121,8 +1111,7 @@ export function buildChatCompletionMessages(
           content: pendingRichParts,
         });
       }
-    } // end if (m.toolResults && m.toolResults.length > 0)
-    else if (m.role === "assistant") {
+    } else if (m.role === "assistant") {
       params.push({
         role: "assistant",
         content: assistantText,
@@ -1132,8 +1121,7 @@ export function buildChatCompletionMessages(
             }
           : {}),
       });
-    } // end if (m.role === "assistant")
-    else if (m.role === "system") {
+    } else if (m.role === "system") {
       params.push({
         role: "system",
         content:

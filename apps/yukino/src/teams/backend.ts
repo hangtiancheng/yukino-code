@@ -57,13 +57,6 @@ export function detectBackendFromEnv(): TeamMode {
   if (process.env.TMUX) {
     return "tmux";
   }
-  // try {
-  //   execSync("which tmux", { stdio: ["pipe", "pipe", "pipe"] });
-  //   return "tmux";
-  // } catch (err) {
-  //   log.error({ err }, "teams operation failed");
-  //   // tmux not found
-  // }
   if (process.env.ITERM_SESSION_ID) {
     return "iterm";
   }

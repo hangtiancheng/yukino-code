@@ -87,11 +87,6 @@ export function asString(value: unknown): string {
     return value;
   }
 
-  // // For exception
-  // if (value instanceof Error) {
-  //   return value.message
-  // }
-
   return String(value);
 }
 
