@@ -48,6 +48,7 @@ import { coordinatorReminder } from "@/prompt/coordinator.js";
 import { buildPlanModeReminder } from "@/prompt/plan-mode.js";
 import {
   saveMessage,
+  sessionLineCount,
   toolUsesToRecords,
   toolResultsToRecords,
 } from "@/session/index.js";
@@ -209,6 +210,7 @@ export class Agent {
     this.onPermissionRequest = config.onPermissionRequest;
     this.activeSkills = config.activeSkills ?? new Map<string, string>();
     this.toolFilter = config.toolFilter;
+    this.steeringQueue = [];
     this.coordinatorActiveFn = config.coordinatorActiveFn;
     this.instructions = config.instructions ?? "";
     this.memoryContent = config.memoryContent ?? "";
@@ -228,6 +230,48 @@ export class Agent {
     );
   }
 
+  /**
+   * Queue a user message for pi-style steering: it is injected into the
+   * conversation at the next turn boundary (after the current assistant
+   * turn's tool results, before the next LLM call) instead of waiting for
+   * the whole run to finish.
+   */
+  steer(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed) {
+      this.steeringQueue.push(trimmed);
+    }
+  }
+
+  /** Take all queued steering messages (called at turn boundaries and on teardown). */
+  drainSteering(): string[] {
+    const drained = this.steeringQueue;
+    this.steeringQueue = [];
+    return drained;
+  }
+
+  /** Remove a queued steering message before delivery (e.g. recalled into the editor). */
+  removeSteering(text: string): boolean {
+    const index = this.steeringQueue.indexOf(text);
+    if (index === -1) {
+      return false;
+    }
+    this.steeringQueue.splice(index, 1);
+    return true;
+  }
+
+  /** Inject drained steering messages as user messages, emitting one event each. */
+  private *deliverSteering(): Generator<AgentEvent, string[], unknown> {
+    const texts = this.drainSteering();
+    for (const text of texts) {
+      this.conversation.addUserMessage(text);
+      this.persistLastMessage();
+      yield { type: "steering_delivered", text };
+    }
+    return texts;
+  }
+
+  private steeringQueue: string[] = [];
   private restoreContext(): void {
     const skills = [
       this.skillSection,
@@ -749,12 +793,27 @@ export class Agent {
             }
 
             yield { type: "turn_complete" };
+
+            // pi-style steering: messages queued mid-run are injected at the
+            // turn boundary, after tool results and before the next LLM call.
+            yield* this.deliverSteering();
           } else {
+            // The model produced no tool calls, so the run would normally end.
+            // Steering queued up to this point keeps it alive instead (pi-style).
+            const steered = yield* this.deliverSteering();
+            if (steered.length > 0) {
+              yield { type: "turn_complete" };
+              continue;
+            }
             looping = false;
             if (this.fileHistory) {
               const summary =
                 fullText.length > 60 ? fullText.slice(0, 60) + "..." : fullText;
-              this.fileHistory.makeSnapshot(this.conversation.len(), summary);
+              this.fileHistory.makeSnapshot(
+                this.conversation.len(),
+                summary,
+                sessionLineCount(this.sessionFilePath),
+              );
             }
             yield { type: "loop_complete", stopReason };
             // Fire-and-forget post-completion hook (e.g. background memory

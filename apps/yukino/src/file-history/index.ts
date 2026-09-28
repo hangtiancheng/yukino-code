@@ -30,6 +30,8 @@ import {
 } from "fs";
 import { dirname, join, resolve } from "path";
 
+import { safeParse, z } from "zod";
+
 import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "file-history" });
@@ -37,22 +39,44 @@ const log = createChildLogger({ module: "file-history" });
 const MAX_SNAPSHOTS = 100;
 const MAX_SUMMARY_TEXT_LENGTH = 60;
 
-export interface Backup {
-  backupPath: string;
-  version: number;
-  time: string;
-}
+export const BackupSchema = z.object({
+  /**
+   * Snapshot-scoped copy of the file content; absent on disk = the path did
+   * not exist at snapshot time.
+   */
+  backupPath: z.string(),
+  time: z.string(),
+});
 
-export interface Snapshot {
-  messageIndex: number;
-  userText: string;
-  backups: Record<string, Backup>;
-  timestamp: string;
-}
+export type Backup = z.infer<typeof BackupSchema>;
 
-function getBackupName(filePath: string, version: number): string {
+export const SnapshotSchema = z.object({
+  messageIndex: z.number(),
+  userText: z.string(),
+  backups: z.record(z.string(), BackupSchema),
+  timestamp: z.string(),
+  /**
+   * Session-log line count at snapshot time. This is the authoritative rewind
+   * coordinate: unlike messageIndex it survives resume and compaction, because
+   * the session file is replayed 1:1 on resume. Undefined for snapshots taken
+   * without a session log.
+   */
+  sessionLineCount: z.number().optional(),
+});
+
+export type Snapshot = z.infer<typeof SnapshotSchema>;
+
+const PersistedStateSchema = z.object({
+  version: z.literal(1),
+  trackedFiles: z.array(z.string()),
+  snapshots: z.array(SnapshotSchema),
+});
+
+type PersistedState = z.infer<typeof PersistedStateSchema>;
+
+function getBackupName(filePath: string, snapshotIndex: number): string {
   const hash = createHash("sha256").update(filePath).digest("hex").slice(0, 16);
-  return `${hash}@v${String(version)}`;
+  return `${hash}@s${String(snapshotIndex)}`;
 }
 
 /** Single source of truth for a session's file-history directory layout. */
@@ -63,66 +87,71 @@ export function fileHistoryDir(baseDir: string, sessionId: string): string {
 export class FileHistory {
   private sessionDir: string;
 
-  /** Tracked file absolute path to version */
-  private trackedFiles = new Map<string, number>();
+  /** Tracked file absolute paths. */
+  private trackedFiles = new Set<string>();
   private snapshots: Snapshot[] = [];
 
   constructor(baseDir: string, sessionID: string) {
     this.sessionDir = fileHistoryDir(baseDir, sessionID);
     mkdirSync(this.sessionDir, { recursive: true });
+    this.load();
   }
 
+  /**
+   * Register a file about to be modified by a tool. Content is captured at
+   * snapshot time (not here), so a failed edit or a re-edit leaves no stale
+   * copies behind.
+   */
   trackEdit(path: string): void {
-    const absPath = resolve(path);
-    const version = this.trackedFiles.get(absPath) ?? 0;
-    const newVersion = version + 1;
-    if (existsSync(absPath)) {
-      try {
-        const content = readFileSync(absPath);
-        const backupName = getBackupName(absPath, newVersion);
-        writeFileSync(join(this.sessionDir, backupName), content);
-      } catch (err) {
-        log.error({ err }, "file-history operation failed");
-        // Skip unreadable file
-      }
-    }
-
-    // If file doesn't exist, we still bump version
-    // -- signals "file didn't exist" on rewind
-    this.trackedFiles.set(absPath, newVersion);
+    this.trackedFiles.add(resolve(path));
+    this.save();
   }
 
-  makeSnapshot(messageIndex: number, userText: string): void {
+  /**
+   * Capture the current content of every tracked file as a checkpoint.
+   *
+   * `sessionLineCount` records the session-log coordinate of this moment so
+   * /rewind can truncate the session file exactly; the agent passes it because
+   * only the agent knows where the log lives.
+   */
+  makeSnapshot(
+    messageIndex: number,
+    userText: string,
+    sessionLineCount?: number,
+  ): void {
     let text = userText;
     if (text.length > MAX_SUMMARY_TEXT_LENGTH) {
       text = text.slice(0, MAX_SUMMARY_TEXT_LENGTH) + "...";
     }
+    const now = new Date().toISOString();
+    const snapshotIndex = this.snapshots.length;
     const backups: Record<string, Backup> = {};
-    for (const [filePath, version] of this.trackedFiles) {
-      const backupName = getBackupName(filePath, version);
-      const backupPath = join(this.sessionDir, backupName);
-
-      // Safety net: if backup doesn't exist yet but file does, create it now.
-      if (!existsSync(backupPath) && existsSync(filePath)) {
-        try {
-          writeFileSync(backupPath, readFileSync(filePath));
-        } catch (err) {
-          log.error({ err }, "file-history operation failed");
-          // Skip...
-        }
+    for (const filePath of this.trackedFiles) {
+      const backupPath = join(
+        this.sessionDir,
+        getBackupName(filePath, snapshotIndex),
+      );
+      if (!existsSync(filePath)) {
+        // Absent at snapshot time: keep the entry with an unwritten backup path;
+        // rewind treats a missing backup file as "delete this file".
+        backups[filePath] = { backupPath, time: now };
+        continue;
       }
-
-      backups[filePath] = {
-        backupPath,
-        version,
-        time: new Date().toISOString(),
-      };
+      try {
+        writeFileSync(backupPath, readFileSync(filePath));
+      } catch (err) {
+        log.error({ err }, "file-history operation failed");
+        // Unreadable: skip the file entirely so a rewind never deletes it.
+        continue;
+      }
+      backups[filePath] = { backupPath, time: now };
     }
     this.snapshots.push({
       messageIndex,
       userText: text,
       backups,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
+      ...(sessionLineCount === undefined ? {} : { sessionLineCount }),
     });
 
     if (this.snapshots.length > MAX_SNAPSHOTS) {
@@ -130,6 +159,7 @@ export class FileHistory {
         this.snapshots.length - MAX_SNAPSHOTS,
       );
     }
+    this.save();
   }
 
   rewind(snapshotIndex: number): string[] {
@@ -143,19 +173,16 @@ export class FileHistory {
       let backupData: Buffer<ArrayBuffer> | null = null;
       try {
         backupData = readFileSync(backup.backupPath);
-      } catch (err) {
-        log.error({ err }, "file-history operation failed");
-
+      } catch {
         // Backup missing -> file didn't exist at snapshot time -> delete it now.
         if (existsSync(filePath)) {
           try {
             unlinkSync(filePath);
-          } catch (err2) {
-            log.error({ err: err2 }, "file-history operation failed");
-            // Skip
+            changed.push(filePath);
+          } catch (err) {
+            log.error({ err }, "file-history operation failed");
           }
         }
-
         continue;
       }
 
@@ -177,8 +204,6 @@ export class FileHistory {
           changed.push(filePath);
         } catch (err) {
           log.error({ err }, "file-history operation failed");
-
-          // Skip
         }
       }
     }
@@ -186,7 +211,7 @@ export class FileHistory {
     // Files first tracked after `target` have no record in target.backups, so the
     // loop above never touches them: they did not exist at that point in time, so
     // rewinding to it must delete them rather than leave them on disk.
-    const createdAfterTarget = [...this.trackedFiles.keys()].filter(
+    const createdAfterTarget = [...this.trackedFiles].filter(
       (p) => !(p in target.backups),
     );
     for (const filePath of createdAfterTarget) {
@@ -203,11 +228,8 @@ export class FileHistory {
 
     // Truncate snapshot history -- can't redo forward
     this.snapshots = this.snapshots.slice(0, snapshotIndex + 1);
-
-    // Reset version counters to snapshot state
-    for (const [filePath, backup] of Object.entries(target.backups)) {
-      this.trackedFiles.set(filePath, backup.version);
-    }
+    this.trackedFiles = new Set(Object.keys(target.backups));
+    this.save();
 
     return changed;
   }
@@ -221,7 +243,52 @@ export class FileHistory {
   }
 
   save(): void {
+    const state: PersistedState = {
+      version: 1,
+      trackedFiles: [...this.trackedFiles],
+      snapshots: this.snapshots,
+    };
+    try {
+      writeFileSync(
+        join(this.sessionDir, "snapshots.json"),
+        JSON.stringify(state, null, 2),
+        "utf-8",
+      );
+    } catch (err) {
+      log.error({ err }, "file-history operation failed");
+    }
+  }
+
+  private load(): void {
     const filePath = join(this.sessionDir, "snapshots.json");
-    writeFileSync(filePath, JSON.stringify(this.snapshots, null, 2), "utf-8");
+    if (!existsSync(filePath)) {
+      return;
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(readFileSync(filePath, "utf-8"));
+    } catch (err) {
+      log.error({ err }, "file-history operation failed");
+      return;
+    }
+    const result = safeParse(PersistedStateSchema, raw);
+    if (!result.success) {
+      log.error({ err: result.error }, "file-history operation failed");
+      return;
+    }
+    const state: PersistedState = result.data;
+    this.snapshots = state.snapshots;
+    if (state.trackedFiles.length > 0) {
+      for (const path of state.trackedFiles) {
+        this.trackedFiles.add(path);
+      }
+    } else if (state.snapshots.length > 0) {
+      // Rebuild tracking from the newest snapshot so post-resume edits of
+      // already-tracked files keep landing in new snapshots.
+      const last = state.snapshots[state.snapshots.length - 1];
+      for (const path of Object.keys(last.backups)) {
+        this.trackedFiles.add(path);
+      }
+    }
   }
 }

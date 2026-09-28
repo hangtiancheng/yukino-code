@@ -34,6 +34,14 @@ import { dirname, join } from "node:path";
 import { describe, it, expect } from "vitest";
 
 import { FileHistory } from "@/file-history/index.js";
+import {
+  getSessionFilePath,
+  loadSession,
+  rebuildFromSession,
+  saveMessage,
+  sessionLineCount,
+  truncateSessionLines,
+} from "@/session/index.js";
 
 function makeTempProject(): { base: string; projectDir: string } {
   const base = mkdtempSync(join(tmpdir(), "yukino-fh-"));
@@ -126,5 +134,97 @@ describe("FileHistory rewind", () => {
 
     expect(readFileSync(nested, "utf-8")).toBe("original");
     expect(changed).toContain(nested);
+  });
+
+  it("captures content at snapshot time, so rewinding to the latest snapshot keeps the latest edit", () => {
+    const { base, projectDir } = makeTempProject();
+    const fh = new FileHistory(base, "session-1");
+
+    const file = join(projectDir, "file.ts");
+    writeFileSync(file, "v1");
+
+    fh.trackEdit(file);
+    writeFileSync(file, "v2");
+    fh.makeSnapshot(0, "after first edit");
+
+    fh.trackEdit(file);
+    writeFileSync(file, "v3");
+    fh.makeSnapshot(1, "after second edit");
+
+    const changed = fh.rewind(1);
+
+    expect(changed).not.toContain(file);
+    expect(readFileSync(file, "utf-8")).toBe("v3");
+  });
+
+  it("persists snapshots and reloads them in a new instance", () => {
+    const { base, projectDir } = makeTempProject();
+    const existing = join(projectDir, "file.ts");
+    writeFileSync(existing, "original");
+
+    const first = new FileHistory(base, "session-1");
+    first.trackEdit(existing);
+    first.makeSnapshot(1, "checkpoint");
+    writeFileSync(existing, "modified");
+
+    const second = new FileHistory(base, "session-1");
+    expect(second.hasSnapshots()).toBe(true);
+    const changed = second.rewind(0);
+
+    expect(changed).toContain(existing);
+    expect(readFileSync(existing, "utf-8")).toBe("original");
+  });
+});
+
+describe("session log line coordinates", () => {
+  it("counts non-empty lines and truncates the log to a snapshot coordinate", () => {
+    const { base } = makeTempProject();
+    saveMessage(base, "s1", {
+      role: "user",
+      content: "a",
+      timestamp: 1,
+    });
+    saveMessage(base, "s1", {
+      role: "assistant",
+      content: "b",
+      timestamp: 2,
+    });
+    saveMessage(base, "s1", {
+      role: "user",
+      content: "c",
+      timestamp: 3,
+    });
+    const filePath = getSessionFilePath(base, "s1");
+
+    expect(sessionLineCount(filePath)).toBe(3);
+
+    truncateSessionLines(filePath, 2);
+
+    expect(sessionLineCount(filePath)).toBe(2);
+    const restored = rebuildFromSession(loadSession(base, "s1"));
+    expect(restored).toHaveLength(2);
+    expect(restored[1]?.content).toBe("b");
+  });
+
+  it("passes the session line count through the snapshot for rewind", () => {
+    const { base } = makeTempProject();
+    saveMessage(base, "s2", {
+      role: "user",
+      content: "hello",
+      timestamp: 1,
+    });
+    saveMessage(base, "s2", {
+      role: "assistant",
+      content: "hi",
+      timestamp: 2,
+    });
+
+    const fh = new FileHistory(base, "s2");
+    const lines = sessionLineCount(getSessionFilePath(base, "s2"));
+    expect(lines).toBeDefined();
+    fh.makeSnapshot(2, "turn complete", lines);
+
+    const [snapshot] = fh.getSnapshots();
+    expect(snapshot?.sessionLineCount).toBe(lines);
   });
 });

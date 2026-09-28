@@ -378,6 +378,8 @@ export function App({
   const teamManagerRef = useRef(new TeamManager(workDir));
   const backgroundTaskManagerRef = useRef(new TaskManager());
   const fileHistoryRef = useRef<FileHistory | null>(null);
+  // The agent instance of the in-flight run, if any. Steering targets it.
+  const agentRef = useRef<Agent | null>(null);
   const fileStateCacheRef = useRef(new FileStateCache());
   const sandboxBackend = sandboxYaml?.backend ?? "native";
   const sandboxRef = useRef<Promise<Sandbox | null> | null>(null);
@@ -425,6 +427,9 @@ export function App({
   >(null);
   const [rewindDialogActive, setRewindDialogActive] = useState(false);
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
+  // Steering messages queued into the in-flight agent, mirrored for display.
+  // Entries are removed when the agent reports them delivered.
+  const [steeringPending, setSteeringPending] = useState<string[]>([]);
   const [resumeSessions, setResumeSessions] = useState<
     sessionMod.SessionInfo[]
   >([]);
@@ -1491,10 +1496,11 @@ export function App({
           recoveryStateRef.current = new RecoveryState();
           // Reload the task list for the resumed session.
           taskListRef.current.useStore(new TaskStore(workDir, arg));
-          // Re-key file history to the resumed session. The previous instance's
-          // snapshots store messageIndex values against the OLD conversation;
-          // /rewind after a resume would truncate the rebuilt history at a
-          // bogus point (possibly mid tool-chain).
+          // Re-key file history to the resumed session. Snapshots persist per
+          // session and are reloaded on construction; /rewind after a resume
+          // truncates the session log at the snapshot's recorded line count and
+          // rebuilds the conversation from it, so stale in-memory message
+          // indexes from the previous process are never trusted.
           fileHistoryRef.current = new FileHistory(workDir, arg);
           // Rebuild the visible transcript. Tool chains are persisted as
           // assistant records with tool_uses and user records that carry only
@@ -1999,65 +2005,86 @@ export function App({
       },
     });
 
+    agentRef.current = agent;
     let exitPlanSucceeded = false;
 
-    for await (const event of agent.run()) {
-      onAgentEvent(event);
-      switch (event.type) {
-        case "tool_use": {
-          if (activeToolIdsRef.current.size === 0) {
-            activeToolBatchStartedAtRef.current = Date.now();
+    try {
+      for await (const event of agent.run()) {
+        onAgentEvent(event);
+        switch (event.type) {
+          case "tool_use": {
+            if (activeToolIdsRef.current.size === 0) {
+              activeToolBatchStartedAtRef.current = Date.now();
+            }
+            activeToolIdsRef.current.add(event.toolId);
+            break;
           }
-          activeToolIdsRef.current.add(event.toolId);
-          break;
+          case "tool_result": {
+            activeToolIdsRef.current.delete(event.toolId);
+            if (
+              activeToolIdsRef.current.size === 0 &&
+              activeToolBatchStartedAtRef.current !== null
+            ) {
+              interactionStatsRef.current.toolTimeMs +=
+                Date.now() - activeToolBatchStartedAtRef.current;
+              activeToolBatchStartedAtRef.current = null;
+            }
+            if (event.isError) {
+              interactionStatsRef.current.failedToolCalls += 1;
+            } else {
+              interactionStatsRef.current.successfulToolCalls += 1;
+            }
+            if (event.toolName === "ExitPlanMode" && !event.isError) {
+              exitPlanSucceeded = true;
+            }
+            const recent = recentToolsRef.current;
+            const dup = recent.indexOf(event.toolName);
+            if (dup >= 0) {
+              recent.splice(dup, 1);
+            }
+            recent.push(event.toolName);
+            if (recent.length > MAX_RECENT_TOOLS) {
+              recent.shift();
+            }
+            break;
+          }
+          case "steering_delivered": {
+            setSteeringPending((prev) => prev.filter((t) => t !== event.text));
+            setMessages((prev) => [
+              ...prev,
+              { role: "user", content: event.text },
+            ]);
+            break;
+          }
+          case "compact": {
+            if (event.boundary) {
+              sessionMod.saveCompactBoundary(
+                workDir,
+                sessionIdRef.current,
+                event.boundary,
+              );
+            }
+            break;
+          }
+          case "loop_complete": {
+            if (permModeRef.current === "plan" && exitPlanSucceeded) {
+              setPlanApprovalActive(true);
+            }
+            break;
+          }
+          case "error": {
+            throw event.error;
+          }
         }
-        case "tool_result": {
-          activeToolIdsRef.current.delete(event.toolId);
-          if (
-            activeToolIdsRef.current.size === 0 &&
-            activeToolBatchStartedAtRef.current !== null
-          ) {
-            interactionStatsRef.current.toolTimeMs +=
-              Date.now() - activeToolBatchStartedAtRef.current;
-            activeToolBatchStartedAtRef.current = null;
-          }
-          if (event.isError) {
-            interactionStatsRef.current.failedToolCalls += 1;
-          } else {
-            interactionStatsRef.current.successfulToolCalls += 1;
-          }
-          if (event.toolName === "ExitPlanMode" && !event.isError) {
-            exitPlanSucceeded = true;
-          }
-          const recent = recentToolsRef.current;
-          const dup = recent.indexOf(event.toolName);
-          if (dup >= 0) {
-            recent.splice(dup, 1);
-          }
-          recent.push(event.toolName);
-          if (recent.length > MAX_RECENT_TOOLS) {
-            recent.shift();
-          }
-          break;
-        }
-        case "compact": {
-          if (event.boundary) {
-            sessionMod.saveCompactBoundary(
-              workDir,
-              sessionIdRef.current,
-              event.boundary,
-            );
-          }
-          break;
-        }
-        case "loop_complete": {
-          if (permModeRef.current === "plan" && exitPlanSucceeded) {
-            setPlanApprovalActive(true);
-          }
-          break;
-        }
-        case "error": {
-          throw event.error;
+      }
+    } finally {
+      agentRef.current = null;
+      // Steering queued too late for in-run delivery becomes follow-up turns.
+      const leftover = agent.drainSteering();
+      if (leftover.length > 0) {
+        setSteeringPending((prev) => prev.filter((t) => !leftover.includes(t)));
+        for (const text of leftover) {
+          followUps.enqueue(text);
         }
       }
     }
@@ -2196,6 +2223,32 @@ export function App({
     [workDir, prePlanMode],
   );
 
+  /**
+   * Rewind the live conversation to a snapshot, persisting the rewind.
+   *
+   * The snapshot's sessionLineCount is the authoritative coordinate: the
+   * session log is truncated to it and the in-memory conversation is rebuilt
+   * from the truncated log. Line coordinates survive resume and compaction,
+   * unlike in-memory message indexes (which are only meaningful within the
+   * process that captured them).
+   */
+  const rewindConversation = (snap: Snapshot): void => {
+    const sessionFilePath = sessionMod.getSessionFilePath(
+      workDir,
+      sessionIdRef.current,
+    );
+    if (snap.sessionLineCount !== undefined && existsSync(sessionFilePath)) {
+      sessionMod.truncateSessionLines(sessionFilePath, snap.sessionLineCount);
+      const rebuilt = sessionMod.rebuildFromSession(
+        sessionMod.loadSession(workDir, sessionIdRef.current),
+      );
+      conversationRef.current.reset();
+      conversationRef.current.appendMessages(rebuilt);
+      return;
+    }
+    conversationRef.current.truncateTo(snap.messageIndex);
+  };
+
   const handleRewindAction = useCallback(
     (action: RewindAction) => {
       setRewindDialogActive(false);
@@ -2208,7 +2261,7 @@ export function App({
         case "code_and_conversation": {
           const changed = fh.rewind(action.snapshotIndex);
           const snap = rewindSnapshots[action.snapshotIndex];
-          conversationRef.current.truncateTo(snap.messageIndex);
+          rewindConversation(snap);
           const fileList =
             changed.length > 0
               ? "\n" + changed.map((f) => "  " + f).join("\n")
@@ -2224,7 +2277,7 @@ export function App({
         }
         case "conversation_only": {
           const snap = rewindSnapshots[action.snapshotIndex];
-          conversationRef.current.truncateTo(snap.messageIndex);
+          rewindConversation(snap);
           setMessages((prev) => [
             ...prev,
             {
@@ -2306,7 +2359,40 @@ export function App({
     },
   });
   const pendingMessages = followUps.messages;
-  const handleSubmit = followUps.enqueue;
+  /**
+   * pi-style message routing: while the agent runs, plain text is steered into
+   * the in-flight run (injected at the next turn boundary); slash commands and
+   * messages sent while a dialog owns the input keep queueing as follow-ups.
+   */
+  const handleSubmit = (text: string): void => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (isStreaming && !trimmed.startsWith("/") && agentRef.current) {
+      agentRef.current.steer(trimmed);
+      setSteeringPending((prev) => [...prev, trimmed]);
+      return;
+    }
+    followUps.enqueue(text);
+  };
+
+  /**
+   * Recall the latest queued message back into the editor: follow-ups first,
+   * then messages steered into the in-flight run.
+   */
+  const recallQueuedMessage = (): string | undefined => {
+    const followUp = followUps.takeLast();
+    if (followUp !== undefined) {
+      return followUp;
+    }
+    const steered = steeringPending.at(-1);
+    if (steered !== undefined && agentRef.current?.removeSteering(steered)) {
+      setSteeringPending((prev) => prev.slice(0, -1));
+      return steered;
+    }
+    return undefined;
+  };
 
   useEffect(() => {
     if (!resume || appState !== "chat" || initialResumeHandledRef.current) {
@@ -2423,7 +2509,7 @@ export function App({
           </Box>
         )}
 
-        <PendingQueue messages={pendingMessages} />
+        <PendingQueue messages={pendingMessages} steering={steeringPending} />
         <Text> </Text>
       </Box>
 
@@ -2566,7 +2652,7 @@ export function App({
           history: promptHistory,
           commands: cmdRegistryRef.current.listCommands(),
           thinkingLevels: availableThinkingLevels,
-          onRecallQueuedMessage: followUps.takeLast,
+          onRecallQueuedMessage: recallQueuedMessage,
           usageTracker: usageTrackerRef.current,
           inputState: error
             ? "error"

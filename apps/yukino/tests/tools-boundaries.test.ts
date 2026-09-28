@@ -196,14 +196,23 @@ describe("file tool boundaries", () => {
     let release: () => void = () => {
       /** noop */
     };
-    const blocker = withFileMutationQueue(
-      path,
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve;
-        }),
-    );
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    // Wait for the blocker's operation to actually start rather than for a
+    // timer: withFileMutationQueue registers only after an async realpath, so
+    // a bare setTimeout(0) can fire before the operation assigned `release`,
+    // making release() a noop and the blocker promise settle never.
+    let blockerStarted: () => void = () => {
+      /** noop */
+    };
+    const started = new Promise<void>((resolve) => {
+      blockerStarted = resolve;
+    });
+    const blocker = withFileMutationQueue(path, () => {
+      blockerStarted();
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    await started;
 
     const controller = new AbortController();
     const pending = new WriteFileTool().execute(

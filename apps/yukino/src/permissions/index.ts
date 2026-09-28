@@ -376,8 +376,8 @@ function globMatch(pattern: string, content: string): boolean {
 
 const RULE_RE = /^(\w+)\((.+)\)$/;
 
-function isNodeJSErrnoException(err: unknown): err is NodeJS.ErrnoException { 
-  return isObject(err) && "code" in err && typeof err.code === 'string'
+function isNodeJSErrnoException(err: unknown): err is NodeJS.ErrnoException {
+  return isObject(err) && "code" in err && typeof err.code === "string";
 }
 
 // Loads a rules file: a top-level YAML list of

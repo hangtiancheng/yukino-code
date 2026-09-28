@@ -45,6 +45,9 @@ export type AgentEvent =
     }
   | { type: "turn_complete" }
   | { type: "loop_complete"; stopReason: string }
+  // A queued steering message was injected into the conversation at a turn
+  // boundary (after tool results, before the next LLM call).
+  | { type: "steering_delivered"; text: string }
   | { type: "usage"; usage: UsageInfo }
   | { type: "error"; error: Error }
   // `boundary` is present when the compaction actually rewrote the transcript;

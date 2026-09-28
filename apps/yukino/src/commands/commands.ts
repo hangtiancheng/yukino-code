@@ -277,19 +277,6 @@ export function createDefaultRegistry(): CommandRegistry {
   });
 
   registry.register({
-    name: "code-review",
-    type: "local",
-    description: "Manage code review team (create, add, remove, list)",
-    handler: (ctx) => {
-      const args = ctx.args.trim();
-      if (!args) {
-        return "Usage: /code-review <command> [args]\nCommands: create, add <name>, remove <name>, list, status";
-      }
-      return `code-review:${args}`;
-    },
-  });
-
-  registry.register({
     name: "review",
     type: "prompt",
     description:

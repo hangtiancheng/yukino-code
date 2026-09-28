@@ -26,6 +26,7 @@ import {
   writeFileSync,
   readdirSync,
   mkdirSync,
+  renameSync,
   statSync,
   existsSync,
   unlinkSync,
@@ -200,6 +201,45 @@ export function saveCompactBoundary(
     timestamp: Math.floor(Date.now() / 1000),
     type: COMPACT_BOUNDARY,
   });
+}
+
+/** Count the non-empty lines of a session log; undefined when it doesn't exist. */
+export function sessionLineCount(filePath: string): number | undefined {
+  if (!filePath || !existsSync(filePath)) {
+    return undefined;
+  }
+  return readFileSync(filePath, "utf-8")
+    .split("\n")
+    .filter((line) => line.trim().length > 0).length;
+}
+
+/**
+ * Truncate a session log to its first `keepLines` non-empty lines.
+ *
+ * /rewind persists a conversation rewind by cutting the log at the line count
+ * captured in the snapshot. Line coordinates survive resume and compaction
+ * (unlike in-memory message indexes), so replaying the truncated log — via
+ * rebuildFromSession — reconstructs exactly the rewound conversation.
+ */
+export function truncateSessionLines(
+  filePath: string,
+  keepLines: number,
+): void {
+  if (!filePath || !existsSync(filePath)) {
+    return;
+  }
+  const kept: string[] = [];
+  for (const line of readFileSync(filePath, "utf-8").split("\n")) {
+    if (kept.length >= keepLines) {
+      break;
+    }
+    if (line.trim().length > 0) {
+      kept.push(line);
+    }
+  }
+  const tmp = filePath + ".rewind-tmp";
+  writeFileSync(tmp, kept.length > 0 ? kept.join("\n") + "\n" : "", "utf-8");
+  renameSync(tmp, filePath);
 }
 
 export function loadSession(
