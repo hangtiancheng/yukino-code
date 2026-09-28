@@ -221,10 +221,6 @@ export function App({
   const [thinkingDialogActive, setThinkingDialogActive] = useState(false);
   const [providerSwitching, setProviderSwitching] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // Live /review progress. Transcript messages render through Ink <Static>,
-  // which never repaints an already-flushed item, so progress must live
-  // outside the message list and only the final report is appended to it.
-  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const output = useAgentOutput(setMessages);
   const {
     streamingText,
@@ -1443,42 +1439,44 @@ export function App({
             ]);
             break;
           }
+          let reviewArgs;
+          try {
+            reviewArgs = parseReviewArgs(parsed.args);
+          } catch (err: unknown) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "system",
+                content: `Review failed: ${asErrorString(err)}`,
+              },
+            ]);
+            break;
+          }
           const controller = new AbortController();
+          const onReviewEvent = output.createEventHandler();
           abortControllerRef.current = controller;
+          output.prepareTurn();
           setIsStreaming(true);
-          setReviewStatus("Review: starting…");
-          const reviewArgs = parseReviewArgs(parsed.args);
           try {
             const result = await runCodeReview(
               {
                 workDir,
-                background: reviewArgs.background,
-                from: reviewArgs.from,
-                to: reviewArgs.to,
-                commit: reviewArgs.commit,
-                excludePatterns: reviewArgs.excludes,
+                ...reviewArgs,
                 abortSignal: controller.signal,
-                onProgress: (p) => {
-                  setReviewStatus(`Review: ${p.message}`);
-                },
+                onToolEvent: onReviewEvent,
               },
               { provider: selectedProviderRef.current },
             );
             const report = formatReviewReport(result);
-            // Append, never edit: Ink <Static> renders each transcript item
-            // exactly once, so editing the old progress message in place
-            // would never reach the screen.
-            setMessages((prev) => [
-              ...prev,
-              { role: "system", content: report },
-            ]);
-            // Make the findings visible to the next conversational turn.
+            onReviewEvent({ type: "stream_text", text: report });
+            onReviewEvent({ type: "turn_complete" });
             if (result.comments.length > 0) {
               conversationRef.current.addSystemReminder(
                 `<code_review_findings>\n${report}\n</code_review_findings>`,
               );
             }
           } catch (err: unknown) {
+            onReviewEvent({ type: "turn_complete" });
             setMessages((prev) => [
               ...prev,
               {
@@ -1490,7 +1488,6 @@ export function App({
             if (abortControllerRef.current === controller) {
               abortControllerRef.current = null;
             }
-            setReviewStatus(null);
             setIsStreaming(false);
           }
           break;
@@ -2578,12 +2575,6 @@ export function App({
           workDir={workDir}
           provider={selectedProvider.name}
         />
-
-        {reviewStatus !== null ? (
-          <Box paddingLeft={1} paddingBottom={1}>
-            <Text color={THEME.dim}>{reviewStatus}</Text>
-          </Box>
-        ) : null}
 
         <ChatView
           messages={[]}

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { CommentCollector, CodeCommentTool } from "./comment-tool.js";
 import { FileReadDiffTool } from "./file-read-diff.js";
 import { filterComments } from "./filter.js";
@@ -32,6 +34,7 @@ import type {
   FileGroup,
   ReviewComment,
   ReviewMode,
+  ReviewToolEvent,
 } from "./types.js";
 
 import { Agent } from "@/agent/index.js";
@@ -76,56 +79,138 @@ export interface ParsedReviewArgs {
   from?: string;
   to?: string;
   commit?: string;
-  excludes: string[];
+  excludePatterns: string[];
   background: string;
+}
+
+function tokenizeReviewArgs(args: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | undefined;
+  let escaped = false;
+  let started = false;
+
+  for (const char of args) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      started = true;
+      continue;
+    }
+    if (char === "\\" && quote !== "'") {
+      escaped = true;
+      started = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      started = true;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (started) {
+        tokens.push(current);
+        current = "";
+        started = false;
+      }
+      continue;
+    }
+    current += char;
+    started = true;
+  }
+
+  if (escaped) {
+    throw new Error("Invalid /review arguments: trailing escape character");
+  }
+  if (quote) {
+    throw new Error("Invalid /review arguments: unterminated quote");
+  }
+  if (started) {
+    tokens.push(current);
+  }
+  return tokens;
 }
 
 /** Parse `/review` args: `--from X --to Y`, `--commit X`, repeatable
  * `--exclude GLOB`; everything else is the focus/background text. */
 export function parseReviewArgs(args: string): ParsedReviewArgs {
-  const tokens = args
-    .trim()
-    .split(/\s+/)
-    .filter((t) => t.length > 0);
+  const tokens = tokenizeReviewArgs(args);
   let from: string | undefined;
   let to: string | undefined;
   let commit: string | undefined;
-  const excludes: string[] = [];
+  const excludePatterns: string[] = [];
   const rest: string[] = [];
-  const flagValue = (i: number): [string | undefined, number] => {
-    const next = tokens[i + 1];
-    if (next === undefined || next.startsWith("--")) {
-      return [undefined, i];
+  const seen = new Set<string>();
+
+  const setSingleValue = (name: string, value: string): void => {
+    if (!value) {
+      throw new Error(`Option "--${name}" requires a value`);
     }
-    return [next, i + 1];
-  };
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    if (t === "--from") {
-      [from, i] = flagValue(i);
-    } else if (t === "--to") {
-      [to, i] = flagValue(i);
-    } else if (t === "--commit") {
-      [commit, i] = flagValue(i);
-    } else if (t === "--exclude") {
-      const [value, next] = flagValue(i);
-      if (value !== undefined) {
-        excludes.push(value);
-      }
-      i = next;
-    } else if (t.startsWith("--from=")) {
-      from = t.slice("--from=".length);
-    } else if (t.startsWith("--to=")) {
-      to = t.slice("--to=".length);
-    } else if (t.startsWith("--commit=")) {
-      commit = t.slice("--commit=".length);
-    } else if (t.startsWith("--exclude=")) {
-      excludes.push(t.slice("--exclude=".length));
+    if (seen.has(name)) {
+      throw new Error(`Option "--${name}" may only be specified once`);
+    }
+    seen.add(name);
+    if (name === "from") {
+      from = value;
+    } else if (name === "to") {
+      to = value;
     } else {
-      rest.push(t);
+      commit = value;
+    }
+  };
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === "--") {
+      rest.push(...tokens.slice(i + 1));
+      break;
+    }
+    if (!token.startsWith("--")) {
+      rest.push(token);
+      continue;
+    }
+
+    const equalsIndex = token.indexOf("=");
+    const name = token.slice(2, equalsIndex === -1 ? undefined : equalsIndex);
+    if (name === "exlcude") {
+      throw new Error('Unknown option "--exlcude"; did you mean "--exclude"?');
+    }
+    if (!new Set(["from", "to", "commit", "exclude"]).has(name)) {
+      throw new Error(`Unknown option "--${name}"`);
+    }
+
+    let value: string;
+    if (equalsIndex === -1) {
+      const next = tokens[i + 1];
+      if (next === undefined || next.startsWith("--")) {
+        throw new Error(`Option "--${name}" requires a value`);
+      }
+      value = next;
+      i++;
+    } else {
+      value = token.slice(equalsIndex + 1);
+      if (!value) {
+        throw new Error(`Option "--${name}" requires a value`);
+      }
+    }
+
+    if (name === "exclude") {
+      excludePatterns.push(value);
+    } else {
+      setSingleValue(name, value);
     }
   }
-  return { from, to, commit, excludes, background: rest.join(" ") };
+
+  validateReviewInput(from, to, commit);
+  return { from, to, commit, excludePatterns, background: rest.join(" ") };
 }
 
 /** Ref combination rules (OCR shared_flags.go): range and commit modes are
@@ -325,6 +410,7 @@ export async function runCodeReview(
         onFiltered: (n) => {
           filteredOut += n;
         },
+        onToolEvent: options.onToolEvent,
       });
       outcome.completed = true;
     } catch (err) {
@@ -398,6 +484,7 @@ interface GroupSubtaskDeps {
   maxOutput: number;
   onPhase: (phase: "plan" | "review" | "filter", message: string) => void;
   onFiltered: (removed: number) => void;
+  onToolEvent?: (event: ReviewToolEvent) => void;
 }
 
 /**
@@ -572,16 +659,55 @@ async function runGroupAgent(
     maxOutput: deps.maxOutput,
   });
 
+  const toolIdPrefix = `review:${randomUUID()}:`;
+  const pendingTools = new Map<
+    string,
+    { toolName: string; startedAt: number }
+  >();
   let madeToolCalls = false;
-  for await (const event of agent.run()) {
-    if (event.type === "tool_use") {
-      madeToolCalls = true;
+  try {
+    for await (const event of agent.run()) {
+      if (event.type === "tool_use") {
+        madeToolCalls = true;
+        pendingTools.set(event.toolId, {
+          toolName: event.toolName,
+          startedAt: Date.now(),
+        });
+        deps.onToolEvent?.({
+          ...event,
+          toolId: toolIdPrefix + event.toolId,
+        });
+      }
+      if (event.type === "tool_result") {
+        pendingTools.delete(event.toolId);
+        deps.onToolEvent?.({
+          ...event,
+          toolId: toolIdPrefix + event.toolId,
+        });
+      }
+      if (event.type === "error") {
+        throw event.error;
+      }
+      if (
+        event.type === "loop_complete" &&
+        event.stopReason === "interrupted"
+      ) {
+        deps.abortSignal?.throwIfAborted();
+      }
     }
-    if (event.type === "error") {
-      throw event.error;
-    }
-    if (event.type === "loop_complete" && event.stopReason === "interrupted") {
-      deps.abortSignal?.throwIfAborted();
+  } finally {
+    const now = Date.now();
+    for (const [toolId, pending] of pendingTools) {
+      deps.onToolEvent?.({
+        type: "tool_result",
+        toolName: pending.toolName,
+        toolId: toolIdPrefix + toolId,
+        output: deps.abortSignal?.aborted
+          ? "Review tool call interrupted."
+          : "Review tool call did not complete.",
+        isError: true,
+        elapsed: (now - pending.startedAt) / 1000,
+      });
     }
   }
   return madeToolCalls;

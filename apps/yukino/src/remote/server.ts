@@ -1458,32 +1458,37 @@ export class RemoteServer {
           this.broadcast({ type: "command_done", data: null });
           break;
         }
-        const reviewArgs = parseReviewArgs(args);
+        let reviewArgs;
+        try {
+          reviewArgs = parseReviewArgs(args);
+        } catch (err) {
+          this.broadcast({
+            type: "error",
+            data: {
+              message: `Review failed: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          });
+          this.broadcast({ type: "command_done", data: null });
+          break;
+        }
         const reviewController = new AbortController();
+        const startTime = Date.now();
         this.reviewController = reviewController;
         this.streaming = true;
         try {
           const result = await runCodeReview(
             {
               workDir: handle.workDir,
-              background: reviewArgs.background,
-              from: reviewArgs.from,
-              to: reviewArgs.to,
-              commit: reviewArgs.commit,
-              excludePatterns: reviewArgs.excludes,
+              ...reviewArgs,
               abortSignal: reviewController.signal,
-              onProgress: (p) => {
-                // Milestone phases only; per-group chatter stays local.
-                if (
-                  p.phase === "selection" ||
-                  p.phase === "grouping" ||
-                  p.phase === "done"
-                ) {
-                  this.broadcast({
-                    type: "system",
-                    data: { message: `Review: ${p.message}` },
-                  });
-                }
+              onToolEvent: (event) => {
+                this.bridgeEvent(
+                  event,
+                  startTime,
+                  handle.workDir,
+                  handle.sessionId,
+                  () => undefined,
+                );
               },
             },
             { provider: handle.provider },
@@ -1494,10 +1499,11 @@ export class RemoteServer {
               `<code_review_findings>\n${report}\n</code_review_findings>`,
             );
           }
-          this.broadcast({ type: "system", data: { message: report } });
+          this.broadcast({ type: "stream_text", data: { text: report } });
+          this.broadcast({ type: "stream_end", data: { text: report } });
         } catch (err) {
           this.broadcast({
-            type: "system",
+            type: "error",
             data: {
               message: `Review failed: ${err instanceof Error ? err.message : String(err)}`,
             },

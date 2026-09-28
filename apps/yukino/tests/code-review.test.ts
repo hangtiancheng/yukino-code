@@ -18,6 +18,7 @@ import {
   buildConfirmedCommentsBlock,
   buildMainTaskMessage,
 } from "@/code-review/format.js";
+import { deriveReviewMode } from "@/code-review/git.js";
 import {
   chunkGroups,
   enforceMaxFilesPerGroup,
@@ -44,6 +45,7 @@ import {
   summarizeSelection,
 } from "@/code-review/selection.js";
 import type { FileDiff, ReviewComment } from "@/code-review/types.js";
+import { parse as parseCommand } from "@/commands/commands.js";
 import type { LLMClient } from "@/llm/client.js";
 
 const MODIFIED_DIFF = `diff --git a/src/app.ts b/src/app.ts
@@ -624,43 +626,96 @@ describe("prompts/relocate helpers", () => {
 });
 
 describe("runner helpers", () => {
-  it("parses review args", () => {
-    expect(parseReviewArgs("")).toEqual({
+  it("maps review args to workspace, range, and commit modes", () => {
+    const workspace = parseReviewArgs("");
+    expect(workspace).toEqual({
       from: undefined,
       to: undefined,
       commit: undefined,
-      excludes: [],
+      excludePatterns: [],
       background: "",
     });
-    expect(parseReviewArgs("--from main --to feature focus on auth")).toEqual({
+    expect(deriveReviewMode(workspace)).toBe("workspace");
+
+    const range = parseReviewArgs(
+      '--from main --to feature focus on "the auth flow"',
+    );
+    expect(range).toEqual({
       from: "main",
       to: "feature",
       commit: undefined,
-      excludes: [],
-      background: "focus on auth",
+      excludePatterns: [],
+      background: "focus on the auth flow",
     });
-    expect(parseReviewArgs("--commit=abc123")).toEqual({
+    expect(deriveReviewMode(range)).toBe("range");
+
+    const commit = parseReviewArgs("--commit=abc123");
+    expect(commit).toEqual({
       from: undefined,
       to: undefined,
       commit: "abc123",
-      excludes: [],
+      excludePatterns: [],
       background: "",
     });
+    expect(deriveReviewMode(commit)).toBe("commit");
   });
 
-  it("parses repeatable --exclude globs", () => {
-    const parsed = parseReviewArgs(
-      "--exclude **/*.pb.go --exclude=**/*.min.js --from main --to dev fix the thing",
+  it("preserves slash-command args and applies repeatable excludes", () => {
+    const command = parseCommand(
+      '/review --exclude **/*.pb.go --exclude="fixtures/generated files/**" --from main --to dev fix the thing',
     );
-    expect(parsed.excludes).toEqual(["**/*.pb.go", "**/*.min.js"]);
+    expect(command).not.toBeNull();
+    if (!command) {
+      throw new Error("expected /review to parse");
+    }
+
+    const parsed = parseReviewArgs(command.args);
+    expect(command.name).toBe("review");
+    expect(parsed.excludePatterns).toEqual([
+      "**/*.pb.go",
+      "fixtures/generated files/**",
+    ]);
     expect(parsed.from).toBe("main");
     expect(parsed.to).toBe("dev");
     expect(parsed.background).toBe("fix the thing");
-    // A bare --exclude must not swallow the next flag as its value.
-    expect(parseReviewArgs("--exclude --from main --to dev").excludes).toEqual(
-      [],
+
+    const decisions = selectFiles(
+      [
+        makeFileDiff("src/app.ts"),
+        makeFileDiff("api/generated.pb.go"),
+        makeFileDiff("fixtures/generated files/output.ts"),
+      ],
+      { excludePatterns: parsed.excludePatterns },
     );
-    expect(parseReviewArgs("--exclude --from main --to dev").from).toBe("main");
+    expect(decisions.map((decision) => decision.reason)).toEqual([
+      "none",
+      "user-rule",
+      "user-rule",
+    ]);
+  });
+
+  it("rejects malformed and unknown review options", () => {
+    expect(() => parseReviewArgs("--exlcude dist/**")).toThrow(
+      'did you mean "--exclude"',
+    );
+    expect(() => parseReviewArgs("--unknown value")).toThrow(
+      'Unknown option "--unknown"',
+    );
+    expect(() => parseReviewArgs("--exclude --from main --to dev")).toThrow(
+      'Option "--exclude" requires a value',
+    );
+    expect(() => parseReviewArgs("--commit=")).toThrow(
+      'Option "--commit" requires a value',
+    );
+    expect(() => parseReviewArgs("--commit one --commit two")).toThrow(
+      'Option "--commit" may only be specified once',
+    );
+    expect(() => parseReviewArgs('--exclude "unterminated')).toThrow(
+      "unterminated quote",
+    );
+    expect(parseReviewArgs("-- --exclude is focus").background).toBe(
+      "--exclude is focus",
+    );
   });
 
   it("validates ref combinations", () => {

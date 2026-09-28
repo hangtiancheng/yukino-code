@@ -1,5 +1,12 @@
+import type { AgentEvent } from "@/agent/events.js";
+
 /** How the review input is resolved from git. */
 export type ReviewMode = "workspace" | "range" | "commit";
+
+export type ReviewToolEvent = Extract<
+  AgentEvent,
+  { type: "tool_use" | "tool_result" }
+>;
 
 export type HunkLineType = "context" | "added" | "deleted";
 
@@ -102,6 +109,7 @@ export interface CodeReviewOptions {
   excludePatterns?: string[];
   abortSignal?: AbortSignal;
   onProgress?: (event: ReviewProgressEvent) => void;
+  onToolEvent?: (event: ReviewToolEvent) => void;
   /** Concurrent per-group subagents. Defaults to 3. */
   maxConcurrency?: number;
   /** Max review rounds per group. Defaults to 2. */
