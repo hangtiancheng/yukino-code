@@ -283,7 +283,7 @@ Inside the UI, these commands are available:
 | /clear               | Reset the session and clear the terminal                                                                                  |
 | /resume [id]         | List or restore a previous session                                                                                        |
 | /rewind              | Open checkpoint rewind dialog                                                                                             |
-| /sandbox [1/2/3]     | Configure sandbox (1=on+auto, 2=on+manual, 3=off)                                                                         |
+| /sandbox [mode]      | Configure sandbox (auto=on+auto, manual=on+manual, off)                                                                   |
 | /worktree            | List git worktrees                                                                                                        |
 | /mcp                 | Show MCP server status                                                                                                    |
 | /mcp reload          | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                |

@@ -140,7 +140,7 @@ export function createDefaultRegistry(): CommandRegistry {
   registry.register({
     name: "login",
     type: "local_ui",
-    description: "Configure, save, and activate an LLM provider",
+    description: "Configure, save, and activate LLM provider",
     handler: () => "login",
   });
 
@@ -304,7 +304,8 @@ export function createDefaultRegistry(): CommandRegistry {
   registry.register({
     name: "sandbox",
     type: "local_ui",
-    description: "Toggle OS sandbox mode for command execution",
+    description:
+      "Toggle OS sandbox mode for command execution (auto, manual, off)",
     handler: () => "sandbox",
   });
 

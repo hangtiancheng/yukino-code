@@ -220,6 +220,10 @@ export function App({
   const [thinkingDialogActive, setThinkingDialogActive] = useState(false);
   const [providerSwitching, setProviderSwitching] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Live /review progress. Transcript messages render through Ink <Static>,
+  // which never repaints an already-flushed item, so progress must live
+  // outside the message list and only the final report is appended to it.
+  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const output = useAgentOutput(setMessages);
   const {
     streamingText,
@@ -1441,22 +1445,8 @@ export function App({
           const controller = new AbortController();
           abortControllerRef.current = controller;
           setIsStreaming(true);
+          setReviewStatus("Review: starting…");
           const reviewArgs = parseReviewArgs(parsed.args);
-          let progressIdx = -1;
-          const updateProgress = (text: string) => {
-            if (progressIdx < 0) {
-              setMessages((prev) => {
-                progressIdx = prev.length;
-                return [...prev, { role: "system", content: text }];
-              });
-            } else {
-              setMessages((prev) =>
-                prev.map((m, i) =>
-                  i === progressIdx ? { ...m, content: text } : m,
-                ),
-              );
-            }
-          };
           try {
             const result = await runCodeReview(
               {
@@ -1468,13 +1458,19 @@ export function App({
                 excludePatterns: reviewArgs.excludes,
                 abortSignal: controller.signal,
                 onProgress: (p) => {
-                  updateProgress(`Review: ${p.message}`);
+                  setReviewStatus(`Review: ${p.message}`);
                 },
               },
               { provider: selectedProviderRef.current },
             );
             const report = formatReviewReport(result);
-            updateProgress(report);
+            // Append, never edit: Ink <Static> renders each transcript item
+            // exactly once, so editing the old progress message in place
+            // would never reach the screen.
+            setMessages((prev) => [
+              ...prev,
+              { role: "system", content: report },
+            ]);
             // Make the findings visible to the next conversational turn.
             if (result.comments.length > 0) {
               conversationRef.current.addSystemReminder(
@@ -1493,6 +1489,7 @@ export function App({
             if (abortControllerRef.current === controller) {
               abortControllerRef.current = null;
             }
+            setReviewStatus(null);
             setIsStreaming(false);
           }
           break;
@@ -1719,7 +1716,7 @@ export function App({
         }
         case "sandbox": {
           const arg = parsed.args.trim();
-          if (arg === "3" || arg === "off") {
+          if (arg === "off") {
             setSandboxEnabled(false);
             setSandboxAutoAllow(false);
             sandboxEnabledRef.current = false;
@@ -1736,8 +1733,8 @@ export function App({
           const sbAvailable = (await sandbox?.available()) ?? false;
           const unavailableReason =
             sandbox?.availabilityError ?? "sandbox backend unavailable";
-          const autoAllow = arg === "1" || arg === "on";
-          const manual = arg === "2" || arg === "manual";
+          const autoAllow = arg === "auto";
+          const manual = arg === "manual";
           if (autoAllow || manual) {
             setSandboxEnabled(true);
             setSandboxAutoAllow(autoAllow);
@@ -1762,9 +1759,9 @@ export function App({
               `Runtime: ${sbAvailable ? "ready" : `blocked (${unavailableReason})`}`,
               "",
               "Usage: /sandbox <mode>",
-              "  1 (on)     — Enable sandbox + auto-allow (recommended)",
-              "  2 (manual) — Enable sandbox + manual permission confirmation",
-              "  3 (off)    — Disable sandbox",
+              "  auto   — Enable sandbox + auto-allow (recommended)",
+              "  manual — Enable sandbox + manual permission confirmation",
+              "  off    — Disable sandbox",
             ];
             setMessages((prev) => [
               ...prev,
@@ -2554,6 +2551,12 @@ export function App({
           workDir={workDir}
           provider={selectedProvider.name}
         />
+
+        {reviewStatus !== null ? (
+          <Box paddingLeft={1} paddingBottom={1}>
+            <Text color={THEME.dim}>{reviewStatus}</Text>
+          </Box>
+        ) : null}
 
         <ChatView
           messages={[]}
