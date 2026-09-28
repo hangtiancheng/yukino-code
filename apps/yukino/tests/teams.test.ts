@@ -92,7 +92,7 @@ describe("teammate progress", () => {
 });
 
 describe("teams orchestration", () => {
-  it("spawnTeammate runs the task and posts its result to the lead mailbox", async () => {
+  it("spawnTeammate runs the task and posts its result to the leader mailbox", async () => {
     const mgr = new TeamManager(workDir());
     const team = mgr.create("squad");
     team.spawnTeammate(
@@ -108,18 +108,18 @@ describe("teams orchestration", () => {
     );
 
     await wait(200);
-    expect(mgr.hasLeadNotifications()).toBe(true);
-    const drained = mgr.drainLeads();
+    expect(mgr.hasLeaderNotifications()).toBe(true);
+    const drained = mgr.drainLeaderMailbox();
     // The teammate sends an [idle] notification with its name after finishing
     expect(
       drained.some((d) => d.includes("scout") && d.includes("[idle]")),
     ).toBe(true);
     // Drained messages are consumed.
-    expect(mgr.hasLeadNotifications()).toBe(false);
-    expect(mgr.drainLeads()).toEqual([]);
+    expect(mgr.hasLeaderNotifications()).toBe(false);
+    expect(mgr.drainLeaderMailbox()).toEqual([]);
   });
 
-  it("a failing teammate reports the error to the lead", async () => {
+  it("a failing teammate reports the error to the leader", async () => {
     const mgr = new TeamManager(workDir());
     mgr
       .create("squad")
@@ -127,7 +127,9 @@ describe("teams orchestration", () => {
         Promise.reject(new Error("kaboom")),
       );
     await wait(200);
-    expect(mgr.drainLeads().some((d) => d.includes("failed"))).toBe(true);
+    expect(mgr.drainLeaderMailbox().some((d) => d.includes("failed"))).toBe(
+      true,
+    );
   });
 
   it("TaskStop aborts an active in-process teammate and waits for it to settle", async () => {
@@ -173,7 +175,9 @@ describe("teams orchestration", () => {
     expect(team.getMember("scout")?.active).toBe(false);
     expect(team.getMember("scout")?.uiState?.status).toBe("stopped");
     expect(
-      mgr.drainLeads().some((message) => message.includes("reason: stopped")),
+      mgr
+        .drainLeaderMailbox()
+        .some((message) => message.includes("reason: stopped")),
     ).toBe(true);
   });
 
@@ -232,7 +236,9 @@ describe("teams orchestration", () => {
     expect(r.isError).toBe(false);
     await wait(200);
     expect(
-      mgr.drainLeads().some((d) => d.includes("w1") && d.includes("[idle]")),
+      mgr
+        .drainLeaderMailbox()
+        .some((d) => d.includes("w1") && d.includes("[idle]")),
     ).toBe(true);
 
     // SendMessage to an existing member lands in that member's mailbox.
@@ -256,23 +262,23 @@ describe("teams orchestration", () => {
     expect(list.output).toContain("w1");
   });
 
-  it("SendMessage delivers plain text from a teammate to the lead mailbox", async () => {
+  it("SendMessage delivers plain text from a teammate to the leader mailbox", async () => {
     const mgr = new TeamManager(workDir());
     mgr.create("t2").addMember("w2");
 
-    // The lead is not a registered member, so the plain-text path must route
-    // to the dedicated lead mailbox instead of throwing "Member 'lead' not found".
+    // The leader is not a registered member, so the plain-text path must route
+    // to the dedicated leader mailbox instead of throwing "Member 'leader' not found".
     const send = await new SendMessageTool(mgr, "w2").execute(
       { workDir: workDir() },
-      { to: "lead", content: "findings: X confirmed" },
+      { to: "leader", content: "findings: X confirmed" },
     );
     expect(send.isError).toBe(false);
-    expect(send.output).toContain("lead");
+    expect(send.output).toContain("leader");
 
-    // The report reaches the lead as a task notification in from=X: text form.
+    // The report reaches the leader as a task notification in from=X: text form.
     expect(
       mgr
-        .drainLeads()
+        .drainLeaderMailbox()
         .some((d) => d.includes("from=w2: findings: X confirmed")),
     ).toBe(true);
   });

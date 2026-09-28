@@ -6,7 +6,7 @@ Yukino is a terminal-based AI coding agent. It provides an interactive UI (termi
 
 Yukino runs as a single CLI binary that connects to configurable LLM providers (Anthropic, OpenAI, or any OpenAI-compatible endpoint). It renders a rich terminal interface using React and Ink, giving you streaming responses, tool execution feedback, permission prompts, and slash commands in a single pane.
 
-Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, and a teammate mode that lets one lead agent coordinate multiple subagents working in parallel.
+Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, and a teammate mode that lets one leader agent coordinate multiple subagents working in parallel.
 
 ## Features
 
@@ -38,7 +38,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 ### Agent Orchestration
 
 - Subagent spawning with built-in agent types: general-purpose, plan (read-only architect), explore (read-only code explorer)
-- Team coordination with file-based mailboxes and lead/member communication
+- Team coordination with file-based mailboxes and leader/member communication
 - Coordinator mode for managing multi-agent workflows
 - Git worktree isolation for parallel agent tasks
 

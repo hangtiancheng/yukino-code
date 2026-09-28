@@ -132,7 +132,7 @@ afterEach(() => {
 async function queue(...messages: string[]): Promise<void> {
   const mailbox = new FileMailbox(args.teamDir, args.memberName);
   for (const message of messages) {
-    await mailbox.send("lead", message);
+    await mailbox.send("leader", message);
   }
 }
 
@@ -155,7 +155,9 @@ describe("teammate entry point", () => {
     expect(requests[1]).toContain("Review the follow-up");
     expect(disconnect).toHaveBeenCalledOnce();
     expect(logger.closeLogger).toHaveBeenCalledOnce();
-    expect(new FileMailbox(args.teamDir, "lead").receiveSync()).toHaveLength(2);
+    expect(new FileMailbox(args.teamDir, "leader").receiveSync()).toHaveLength(
+      2,
+    );
   });
 
   it.each(["initial", "follow-up"])(
@@ -173,9 +175,9 @@ describe("teammate entry point", () => {
       await queue("Follow-up task", "[shutdown] done");
 
       await expect(runTeammate(args)).rejects.toThrow("provider failed");
-      expect(new FileMailbox(args.teamDir, "lead").receiveSync()).toHaveLength(
-        phase === "initial" ? 0 : 1,
-      );
+      expect(
+        new FileMailbox(args.teamDir, "leader").receiveSync(),
+      ).toHaveLength(phase === "initial" ? 0 : 1);
       expect(disconnect).toHaveBeenCalledOnce();
       expect(logger.closeLogger).toHaveBeenCalledOnce();
     },

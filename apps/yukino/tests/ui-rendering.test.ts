@@ -468,7 +468,7 @@ describe("shared live and committed tool cards", () => {
           : "@reviewer | 2 turns | 1.3k tokens",
       );
       expect(output).not.toContain(`2 turns | ${memberStatus}`);
-      expect(output).not.toContain("team lead");
+      expect(output).not.toContain("team leader");
       expect(output).not.toContain("├─");
     },
   );

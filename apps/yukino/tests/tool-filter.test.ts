@@ -75,7 +75,7 @@ describe("main-agent-only tool policy", () => {
     for (const name of ["ComputerUse", "AskUserQuestion", "ExitPlanMode"]) {
       expect(names.has(name)).toBe(false);
     }
-    // A fork is the lead's own extension: coordination (TaskStop) and delegation
+    // A fork is the leader's own extension: coordination (TaskStop) and delegation
     // (Agent, re-tagged as a fork) stay available; only the main-thread-only set
     // is stripped.
     for (const name of ["TaskStop", "Agent", "ReadFile", "Bash"]) {

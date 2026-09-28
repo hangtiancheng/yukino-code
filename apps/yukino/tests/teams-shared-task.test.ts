@@ -87,8 +87,8 @@ describe("NameRegistry", () => {
 describe("SharedTaskStore", () => {
   test("create assigns string ids and pending status", () => {
     const store = new SharedTaskStore(join(tempDir(), "tasks.json"));
-    const t1 = store.create("first", "", "", [], [], "lead");
-    const t2 = store.create("second", "desc", "alice", [], [], "lead");
+    const t1 = store.create("first", "", "", [], [], "leader");
+    const t2 = store.create("second", "desc", "alice", [], [], "leader");
     expect(t1.id).toBe("1");
     expect(t2.id).toBe("2");
     expect(t1.status).toBe("pending");
@@ -125,7 +125,7 @@ describe("SharedTaskStore", () => {
   test("persists across instances and reloads latest", () => {
     const path = join(tempDir(), "tasks.json");
     const s1 = new SharedTaskStore(path);
-    s1.create("persisted", "", "", [], [], "lead");
+    s1.create("persisted", "", "", [], [], "leader");
     const s2 = new SharedTaskStore(path);
     expect(s2.listTasks().length).toBe(1);
     s2.create("from-teammate", "", "", [], [], "bob");
@@ -155,7 +155,7 @@ describe("team task tools", () => {
   });
 
   test("create → list → update → get flow shares one board", async () => {
-    const create = new TeamTaskCreateTool(mgr, "my-team", "lead");
+    const create = new TeamTaskCreateTool(mgr, "my-team", "leader");
     const list = new TeamTaskListTool(mgr, "my-team");
     const update = new TeamTaskUpdateTool(mgr, "my-team");
     const get = new TeamTaskGetTool(mgr, "my-team");

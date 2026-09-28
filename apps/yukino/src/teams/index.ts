@@ -130,12 +130,12 @@ export class Team {
   name: string;
   mode: TeamMode;
   members = new Map<string, Member>();
-  leadMailbox: FileMailbox;
+  leaderMailbox: FileMailbox;
   private mailboxDir: string;
   private workDir: string;
 
   // Team-level metadata for persistence
-  leadAgentId = "";
+  leaderAgentId = "";
   description?: string;
   createdAt = Math.floor(Date.now() / 1000);
 
@@ -148,7 +148,7 @@ export class Team {
     // as membership grows.
     this.mailboxDir = join(teamDir(name), "inboxes");
     mkdirSync(this.mailboxDir, { recursive: true });
-    this.leadMailbox = new FileMailbox(this.mailboxDir, "lead");
+    this.leaderMailbox = new FileMailbox(this.mailboxDir, "leader");
   }
 
   addMember(name: string): Member {
@@ -189,7 +189,7 @@ export class Team {
       name: this.name,
       description: this.description,
       createdAt: this.createdAt,
-      leadAgentId: this.leadAgentId,
+      leaderAgentId: this.leaderAgentId,
       members: [...this.members.values()].map((m) => ({
         agentId: m.agentId ?? m.name,
         name: m.name,
@@ -214,7 +214,7 @@ export class Team {
 
   // Idle polling interval (in milliseconds). Polls the mailbox for new messages after a teammate completes a turn.
   static readonly IDLE_POLL_INTERVAL_MS = 500;
-  // Shutdown prefix: the lead writes a message with this prefix to notify teammates to exit.
+  // Shutdown prefix: the leader writes a message with this prefix to notify teammates to exit.
   static readonly SHUTDOWN_PREFIX = "[shutdown]";
 
   /**
@@ -222,7 +222,7 @@ export class Team {
    *   - in-process: runs the agent main loop in a background task within this process (idle-poll-continue).
    *   - tmux / iterm: assembles the teammate startup command and delegates to the backend to launch
    *     an independent worker process in a new pane / tab, communicating bidirectionally with the
-   *     lead via the shared file-based mailbox.
+   *     leader via the shared file-based mailbox.
    * Falls back to in-process when the external backend is unavailable (tmux not installed,
    * non-iTerm environment, etc.) to avoid crashes.
    */
@@ -249,7 +249,7 @@ export class Team {
   /**
    * tmux / iTerm backend: launches the teammate as an independent process in a new pane / tab.
    * The teammate process connects back to the team via the same mailbox directory pointed to
-   * by `--team-dir`; task assignments from the lead and idle/result notifications from the
+   * by `--team-dir`; task assignments from the leader and idle/result notifications from the
    * worker all land in this directory, keeping both sides in sync.
    */
   private spawnExternal(
@@ -388,14 +388,14 @@ export class Team {
             result.length > 200 ? result.slice(0, 200) + "..." : result;
           if (abortController.signal.aborted || !member.active) {
             uiState.status = "stopped";
-            await this.leadMailbox.send(
+            await this.leaderMailbox.send(
               name,
               `[idle] ${name} (reason: stopped)`,
             );
             break;
           }
           // Plan-mode teammate: a completed turn means it called ExitPlanMode and the plan
-          // has been written to disk. Submit the plan to the Lead for approval; only after
+          // has been written to disk. Submit the plan to the Leader for approval; only after
           // approval is the read-only restriction lifted and execution begins.
           if (member.checker?.mode === "plan") {
             uiState.status = "idle";
@@ -410,9 +410,9 @@ export class Team {
             continue;
           }
 
-          // Send idle notification to the lead
+          // Send idle notification to the leader
           uiState.status = "idle";
-          await this.leadMailbox.send(
+          await this.leaderMailbox.send(
             name,
             `[idle] ${name} (reason: ${idleReason})`,
           );
@@ -421,7 +421,7 @@ export class Team {
           // Poll mailbox for new messages or shutdown
           const pollResult = await this.waitForNextPromptOrShutdown(member);
           if (pollResult.shutdown || !member.active) {
-            // Before exiting, send the Lead an explicit acknowledgment so it knows the pane
+            // Before exiting, send the Leader an explicit acknowledgment so it knows the pane
             // can be reclaimed. The teammate always approves here: it is already in the idle
             // poll loop with no work in progress.
             const req = pollResult.shutdown;
@@ -432,7 +432,7 @@ export class Team {
                 true,
                 "acknowledged, shutting down",
               );
-              await this.leadMailbox.send(member.name, resp.text, resp);
+              await this.leaderMailbox.send(member.name, resp.text, resp);
             }
             break;
           }
@@ -446,12 +446,18 @@ export class Team {
         if (abortController.signal.aborted || !member.active) {
           uiState.status = "stopped";
           uiState.lastMessage = "Stopped";
-          await this.leadMailbox.send(name, `[idle] ${name} (reason: stopped)`);
+          await this.leaderMailbox.send(
+            name,
+            `[idle] ${name} (reason: stopped)`,
+          );
         } else {
           log.error({ err }, "teams operation failed");
           uiState.status = "failed";
           uiState.lastMessage = asErrorString(err);
-          await this.leadMailbox.send(name, `[idle] ${name} (reason: failed)`);
+          await this.leaderMailbox.send(
+            name,
+            `[idle] ${name} (reason: failed)`,
+          );
         }
       } finally {
         member.active = false;
@@ -500,7 +506,7 @@ export class Team {
     }
     return {
       prompt: "",
-      shutdown: shutdownRequest("lead", "member deactivated"),
+      shutdown: shutdownRequest("leader", "member deactivated"),
     };
   }
 
@@ -518,13 +524,13 @@ export class Team {
   }
 
   /**
-   * Sends the teammate's completed plan to the Lead, blocks until approval is received,
+   * Sends the teammate's completed plan to the Leader, blocks until approval is received,
    * and returns the prompt to feed the model on the next turn.
    *
    * The teammate holds read-only permissions at this point, so no matter how long the
    * wait, no damage can occur — hence no timeout is set here. Rather than timing out and
    * autonomously modifying files, it is better to wait indefinitely and let the user
-   * drive progress from the Lead side. Returns null when the teammate has been
+   * drive progress from the Leader side. Returns null when the teammate has been
    * deactivated; the caller should exit the main loop.
    */
   private async runPlanApproval(
@@ -532,7 +538,7 @@ export class Team {
     plan: string,
   ): Promise<string | null> {
     const req = planApprovalRequest(member.name, plan);
-    await this.leadMailbox.send(member.name, req.text, req);
+    await this.leaderMailbox.send(member.name, req.text, req);
 
     while (member.active) {
       await new Promise((r) => setTimeout(r, Team.IDLE_POLL_INTERVAL_MS));
@@ -547,8 +553,8 @@ export class Team {
             member.checker.mode = "default";
           }
           return approved(m)
-            ? "The Lead has approved your plan. Begin execution now."
-            : `The Lead rejected your plan. Feedback: ${m.text}\nPlease revise the plan accordingly and resubmit.`;
+            ? "The Leader has approved your plan. Begin execution now."
+            : `The Leader rejected your plan. Feedback: ${m.text}\nPlease revise the plan accordingly and resubmit.`;
         }
       }
     }
@@ -600,7 +606,7 @@ export class Team {
     }
     if (member.external) {
       try {
-        await member.mailbox.send("lead", `${Team.SHUTDOWN_PREFIX} stop`);
+        await member.mailbox.send("leader", `${Team.SHUTDOWN_PREFIX} stop`);
       } catch {
         // best-effort: proceed to cancel fallback even if the shutdown write fails
       }
@@ -637,10 +643,10 @@ export class TeamManager {
   create(
     name: string,
     mode: TeamMode = detectBackend(),
-    opts: { leadAgentId?: string; description?: string } = {},
+    opts: { leaderAgentId?: string; description?: string } = {},
   ): Team {
     const team = new Team(name, mode, this.workDir);
-    team.leadAgentId = opts.leadAgentId ?? "";
+    team.leaderAgentId = opts.leaderAgentId ?? "";
     team.description = opts.description;
     this.teams.set(name, team);
     // Initialize an empty shared task store when creating a new team
@@ -675,7 +681,7 @@ export class TeamManager {
       isTeamMode(mode) ? mode : "in-process",
       this.workDir,
     );
-    team.leadAgentId = tf.leadAgentId;
+    team.leaderAgentId = tf.leaderAgentId;
     team.description = tf.description;
     team.createdAt = tf.createdAt;
     for (const m of tf.members) {
@@ -749,18 +755,18 @@ export class TeamManager {
     return this.list().flatMap((t) => t.getTeammateStates());
   }
 
-  hasLeadNotifications(): boolean {
-    return this.list().some((team) => team.leadMailbox.unreadCount() > 0);
+  hasLeaderNotifications(): boolean {
+    return this.list().some((team) => team.leaderMailbox.unreadCount() > 0);
   }
 
   /**
-   * Reads all unread messages from the team lead's mailbox and returns them in XML tag format.
+   * Reads all unread messages from the team leader's mailbox and returns them in XML tag format.
    * This allows the model to parse team notifications in a structured manner.
    */
-  drainLeads(): string[] {
+  drainLeaderMailbox(): string[] {
     const out: string[] = [];
     for (const team of this.teams.values()) {
-      const msgs = team.leadMailbox.receiveSync();
+      const msgs = team.leaderMailbox.receiveSync();
       if (msgs.length === 0) {
         continue;
       }

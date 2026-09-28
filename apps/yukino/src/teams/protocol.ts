@@ -28,7 +28,7 @@ import type { FileMailMessage } from "./file-mailbox.js";
  * Beyond plain text, teammates exchange several kinds of structured messages.
  *
  * Each carries a requestId that is echoed verbatim in the response, allowing the
- * Lead to correlate replies with the requests it sent: when shutdown requests are
+ * Leader to correlate replies with the requests it sent: when shutdown requests are
  * dispatched to three teammates simultaneously, the three responses are
  * indistinguishable without an ID.
  */
@@ -123,7 +123,7 @@ export function isShutdownRequest(m: FileMailMessage): boolean {
 
 /**
  * Whether the response constitutes approval. When the field is absent, it is
- * treated as not approved — better to make the Lead wait another round than to
+ * treated as not approved — better to make the Leader wait another round than to
  * interpret silence as consent.
  */
 export function approved(m: FileMailMessage): boolean {

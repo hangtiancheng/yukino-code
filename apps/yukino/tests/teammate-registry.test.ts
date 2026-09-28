@@ -97,7 +97,7 @@ describe("teammate worker tool registry", () => {
       expect(names.has(name)).toBe(true);
     }
 
-    // Spawning agents and managing team lifecycle are Lead-only capabilities
+    // Spawning agents and managing team lifecycle are Leader-only capabilities
     for (const name of ["Agent", "ComputerUse", "TeamCreate", "TeamDelete"]) {
       expect(names.has(name)).toBe(false);
     }
@@ -153,7 +153,7 @@ describe("teammate worker tool registry", () => {
 });
 
 describe("in-process teammate tool filtering", () => {
-  // In-process teammates clone the Lead's registry; two categories must be
+  // In-process teammates clone the Leader's registry; two categories must be
   // excluded during cloning: globally disallowed subagent tools and team
   // membership management tools.
   it("excludes subagent and team management tools", () => {

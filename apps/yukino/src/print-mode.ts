@@ -156,7 +156,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   registry.register(new EditFileTool());
   registry.register(new ToolSearchTool(registry));
 
-  // Team tools are also available in -p mode, allowing the Lead to assemble a team and delegate
+  // Team tools are also available in -p mode, allowing the Leader to assemble a team and delegate
   // tasks within a single non-interactive execution
   const teamManager = new TeamManager(workDir);
   const backgroundTaskManager = new TaskManager();
@@ -271,9 +271,9 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       contextWindow: getContextWindow(provider),
       maxOutput: getMaxOutputTokens(provider),
       instructions: loadInstructions(workDir),
-      // Completion reports are drained each turn as system reminders delivered to the Lead.
+      // Completion reports are drained each turn as system reminders delivered to the Leader.
       notificationFn: () => [
-        ...teamManager.drainLeads(),
+        ...teamManager.drainLeaderMailbox(),
         ...backgroundTaskManager
           .drainNotifications()
           .map(formatAgentTaskNotification),
@@ -383,7 +383,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       console.log(JSON.stringify(resultLine));
     }
   } finally {
-    // Child agents otherwise outlive the single-shot Lead and shared MCP connections.
+    // Child agents otherwise outlive the single-shot Leader and shared MCP connections.
     await backgroundTaskManager.stopAll();
     await teamManager.stopAll();
     if (mcpManager) {

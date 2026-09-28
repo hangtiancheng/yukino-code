@@ -36,7 +36,7 @@ import type { LLMClient } from "@/llm/client.js";
 import { safeJSONParse } from "@/utils/index.js";
 
 /**
- * The external reflection module, ported from OCR's REVIEW_FILTER_TASK. An
+ * The external reflection module. An
  * independent fact-checker pass over freshly produced comments: it may only
  * remove comments the diff *proves* wrong (Ground A / Ground B), with
  * protected-subject and value vetoes. Its default answer is approve.

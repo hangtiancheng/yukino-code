@@ -188,7 +188,7 @@ export async function runCodeReview(
   }
 
   // Step 2: deterministic selection. The per-file ceiling derives from the
-  // provider's declared context window (OCR PromptTokenLimit = 80%), so a
+  // provider's declared context window, so a
   // small-window provider cannot be fed a diff it cannot hold.
   const contextWindow = getContextWindow(deps.provider);
   const maxOutput = getMaxOutputTokens(deps.provider);
@@ -372,7 +372,7 @@ interface GroupSubtaskDeps {
 }
 
 /**
- * Two-phase review of one file group (OCR executeGroupSubtask): an optional
+ * Two-phase review of one file group: an optional
  * plan pass for large changes, then up to maxRounds main-loop rounds with
  * confirmed-findings feedback and a reflection filter after each round.
  */
@@ -390,7 +390,6 @@ async function executeGroupSubtask(
   const agentClient = await createClient({ ...deps.provider }, MAIN_SYSTEM);
 
   // Phase 1: plan — only worth its tokens above the churn thresholds
-  // (OCR PlanRequired: any file >= 50 lines, or >= 2 files totaling >= 100).
   let planResult = "";
   const planRequired =
     maxFile >= PLAN_MODE_LINE_THRESHOLD ||
@@ -441,8 +440,7 @@ async function executeGroupSubtask(
     let newComments = deps.collector.since(baseline);
     if (!madeToolCalls && newComments.length === 0) {
       // The loop ends on a tool-free turn; without a nudge a distracted
-      // first response would silently complete an empty review (OCR nudges
-      // no-tool-call rounds for the same reason).
+      // first response would silently complete an empty review.
       deps.onPhase("review", "No review activity; retrying with a nudge…");
       madeToolCalls = await runGroupAgent(g, deps, {
         message: message + NO_TOOL_USE_NUDGE,

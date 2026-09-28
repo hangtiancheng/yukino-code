@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-// coordinatorPrompt is the orchestration guidance the Lead receives upon entering coordinator mode.
+// coordinatorPrompt is the orchestration guidance the Leader receives upon entering coordinator mode.
 // After the tool set is narrowed, the model still needs to know how to get work done with these
 // few tools — otherwise it will only discover it cannot read files, without realizing it should
 // delegate that to a worker.

@@ -68,7 +68,7 @@ const workDir = () => mkdtempSync(join(tmpdir(), "yukino-coord-"));
 const ctx = { workDir: process.cwd() };
 
 describe("coordinator tool set", () => {
-  it("blocks tools that would flood the Lead's context with code", () => {
+  it("blocks tools that would flood the Leader's context with code", () => {
     for (const name of [
       "ReadFile",
       "WriteFile",
@@ -87,7 +87,7 @@ describe("coordinator tool set", () => {
     }
   });
 
-  it("allows the scheduling tools the Lead actually needs", () => {
+  it("allows the scheduling tools the Leader actually needs", () => {
     for (const name of [
       "Agent",
       "SendMessage",
@@ -99,9 +99,9 @@ describe("coordinator tool set", () => {
   });
 
   // TeamDelete is the only entry point for tearing down a Team and stopping
-  // its members, so the Lead must keep it for cleanup. (Coordinator mode
+  // its members, so the Leader must keep it for cleanup. (Coordinator mode
   // itself is decided by config alone, not by whether a team exists.)
-  it("keeps TeamDelete so the Lead can leave coordinator mode", () => {
+  it("keeps TeamDelete so the Leader can leave coordinator mode", () => {
     expect(isCoordinatorTool("TeamDelete")).toBe(true);
   });
 
@@ -121,7 +121,7 @@ describe("coordinator tool set", () => {
   });
 
   // The scheduling guidance and the tool narrowing must take effect together:
-  // narrowing tools without providing guidance would leave the Lead only
+  // narrowing tools without providing guidance would leave the Leader only
   // discovering they cannot read files, with no idea to dispatch a teammate to read them.
   it("keeps the guidance flag in step with the tool filter", () => {
     const filter = coordinatorToolFilter(true);
@@ -290,8 +290,8 @@ describe("SyntheticOutput", () => {
 });
 
 describe("coordinator prompt", () => {
-  // The reply format described in the guidance must match what drainLeads
-  // actually delivers, otherwise the Lead would look up teammate names against a field that doesn't exist.
+  // The reply format described in the guidance must match what drainLeaderMailbox
+  // actually delivers, otherwise the Leader would look up teammate names against a field that doesn't exist.
   it("matches the notification format the system actually sends", () => {
     const p = coordinatorReminder(1);
     expect(p).toContain("<task-notification");

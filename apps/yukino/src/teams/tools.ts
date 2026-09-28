@@ -87,7 +87,7 @@ export class TeamCreateTool implements Tool {
 
     const description = strArg(args, "description");
     const team = this.mgr.create(requested, undefined, {
-      leadAgentId: "lead",
+      leaderAgentId: "leader",
       description,
     });
     return {
@@ -169,10 +169,10 @@ export class SendMessageTool implements Tool {
   category = "read" as const;
   constructor(
     private mgr: TeamManager,
-    private senderName = "lead",
+    private senderName = "leader",
   ) {}
 
-  // Infer the sender's team: a teammate can look itself up in the roster; the Lead is
+  // Infer the sender's team: a teammate can look itself up in the roster; the Leader is
   // not in the roster, so fall back to the current team (only one is active at a time).
   private senderTeam(): Team | undefined {
     const teams = this.mgr.list();
@@ -293,7 +293,8 @@ export class SendMessageTool implements Tool {
             isError: true,
           };
       }
-      const target = to === "lead" ? t.leadMailbox : t.getMember(to)?.mailbox;
+      const target =
+        to === "leader" ? t.leaderMailbox : t.getMember(to)?.mailbox;
       if (!target) {
         return { output: `Teammate '${to}' not found.`, isError: true };
       }
@@ -316,11 +317,11 @@ export class SendMessageTool implements Tool {
       };
     }
 
-    // The lead is not a registered member (it runs in the parent process and
+    // The leader is not a registered member (it runs in the parent process and
     // only reads its own mailbox), so route plain text to it directly —
     // mirroring the structured-message path above.
-    if (to === "lead") {
-      await t.leadMailbox.send(this.senderName, message);
+    if (to === "leader") {
+      await t.leaderMailbox.send(this.senderName, message);
       return { output: `Message sent to '${to}'.`, isError: false };
     }
 

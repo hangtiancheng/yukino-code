@@ -63,7 +63,7 @@ describe("team config persistence", () => {
   test("can be read back by a fresh TeamManager after writing to disk", () => {
     const mgr = new TeamManager(workDir());
     const team = mgr.create("Refactor Auth", "in-process", {
-      leadAgentId: "lead",
+      leaderAgentId: "leader",
       description: "Refactor the authentication module",
     });
     team.addMember("alice");
@@ -78,7 +78,7 @@ describe("team config persistence", () => {
     const got = fresh.get("Refactor Auth");
 
     expect(got).toBeDefined();
-    expect(got?.leadAgentId).toBe("lead");
+    expect(got?.leaderAgentId).toBe("leader");
     expect(got?.description).toBe("Refactor the authentication module");
 
     const m = got?.getMember("alice");
@@ -90,7 +90,7 @@ describe("team config persistence", () => {
 
   test("slugifies the team directory name", () => {
     const mgr = new TeamManager(workDir());
-    mgr.create("Refactor Auth!", "tmux", { leadAgentId: "lead" });
+    mgr.create("Refactor Auth!", "tmux", { leaderAgentId: "leader" });
 
     const expected = join(teamsBaseDir(), "refactor-auth-", "config.json");
     expect(existsSync(expected)).toBe(true);
@@ -98,7 +98,7 @@ describe("team config persistence", () => {
 
   test("tearing down a team removes the entire team directory", async () => {
     const mgr = new TeamManager(workDir());
-    mgr.create("gone", "in-process", { leadAgentId: "lead" });
+    mgr.create("gone", "in-process", { leaderAgentId: "leader" });
     expect(existsSync(teamDir("gone"))).toBe(true);
 
     await mgr.delete("gone");
@@ -112,7 +112,7 @@ describe("team config persistence", () => {
 
   test("persists a member's active state into the config", async () => {
     const mgr = new TeamManager(workDir());
-    const team = mgr.create("t", "in-process", { leadAgentId: "lead" });
+    const team = mgr.create("t", "in-process", { leaderAgentId: "leader" });
     team.addMember("bob");
     await team.stopMember("bob");
 

@@ -125,8 +125,8 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
 // ShutdownPrefix marks a mailbox message as a request to terminate the teammate.
 const ShutdownPrefix = "[shutdown]";
 
-// LeadName is the conventional mailbox recipient for the coordinator.
-const LeadName = "lead";
+// LeaderName is the conventional mailbox recipient for the coordinator.
+const LeaderName = "leader";
 
 // Module-level child logger for teammate process.
 const log = createChildLogger({ module: "teammate" });
@@ -152,7 +152,7 @@ function createIdleNotification(memberName: string): FileMailMessage {
  *
  * Agent is intentionally excluded — the call tree terminates at the teammate
  * level. TeamCreate and TeamDelete are also excluded; team lifecycle
- * management is the Lead's responsibility.
+ * management is the Leader's responsibility.
  */
 export async function buildTeammateRegistry(opts: {
   workDir: string;
@@ -322,17 +322,17 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
       }
     }
 
-    // Notify the lead that this teammate finished its initial task.
+    // Notify the leader that this teammate finished its initial task.
     const mailbox = new FileMailbox(args.teamDir, args.memberName);
-    const leadMailbox = new FileMailbox(args.teamDir, LeadName);
-    await leadMailbox.send(
+    const leaderMailbox = new FileMailbox(args.teamDir, LeaderName);
+    await leaderMailbox.send(
       args.memberName,
       createIdleNotification(args.memberName).text,
     );
 
     // Poll mailbox for follow-up messages
     for await (const msg of mailbox.poll(2000)) {
-      // Graceful shutdown: stop polling and exit when the lead requests it.
+      // Graceful shutdown: stop polling and exit when the leader requests it.
       if (isShutdownRequest(msg)) {
         console.log(`Shutdown requested, ${args.memberName} exiting.`);
         break;
@@ -349,8 +349,8 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
         }
       }
 
-      // Notify the lead after completing each follow-up task.
-      await leadMailbox.send(
+      // Notify the leader after completing each follow-up task.
+      await leaderMailbox.send(
         args.memberName,
         createIdleNotification(args.memberName).text,
       );

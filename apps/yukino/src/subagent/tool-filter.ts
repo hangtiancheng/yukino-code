@@ -74,7 +74,7 @@ export const MAIN_AGENT_ONLY_TOOLS: ReadonlySet<string> = new Set([
 ] satisfies readonly AllTools[]);
 
 // Global list of tools disallowed for subagents — MAIN_AGENT_ONLY_TOOLS plus
-// delegation-policy restrictions (recursive Agent spawning, lead-only TaskStop).
+// delegation-policy restrictions (recursive Agent spawning, leader-only TaskStop).
 // Forks keep Agent (as a tagged clone) and TaskStop; only MAIN_AGENT_ONLY_TOOLS
 // is stripped from them.
 const SUBAGENT_EXTRA_TOOLS = [
@@ -87,7 +87,7 @@ export const SUBAGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 // Additional tools blocked for teammates beyond the global subagent list.
-// Team creation and dissolution are the Lead's responsibility; teammates
+// Team creation and dissolution are the Leader's responsibility; teammates
 // only execute work and coordinate with peers.
 export const TEAMMATE_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "TeamCreate",

@@ -38,8 +38,7 @@ import type {
 import { isRecord, safeJSONParse, strArg } from "@/utils/index.js";
 
 /**
- * The comment intake, ported from OCR internal/tool (code_comment.go,
- * comment_collector.go). Comments flow through a dedicated tool rather than
+ * The comment intake. Comments flow through a dedicated tool rather than
  * free text: the schema forces path + existing_code anchors, which the
  * deterministic resolver then turns into exact line numbers.
  */
@@ -68,7 +67,7 @@ function normalizeSeverity(raw: unknown): CommentSeverity {
 }
 
 /** Normalize a model-supplied path: backslashes → slashes, collapse `.`/`..`
- * and duplicate separators, strip `./` and leading `/` (OCR filepath.Clean). */
+ * and duplicate separators, strip `./` and leading `/`. */
 export function normalizeCommentPath(p: string): string {
   const trimmed = p.trim();
   if (!trimmed) {
@@ -97,9 +96,7 @@ export interface ParsedComments {
 /**
  * Parse and normalize the CodeComment tool arguments. Tolerates the common
  * schema violations (a single object instead of an array, JSON-string
- * payloads) the way OCR's comment_args_repair does. Unusable entries are
- * dropped individually — one bad comment must not destroy the batch (OCR
- * code_comment.go drops entries missing path or content and keeps the rest).
+ * payloads). Unusable entries are dropped individually — one bad comment must not destroy the batch.
  */
 export function parseComments(
   args: Record<string, unknown>,

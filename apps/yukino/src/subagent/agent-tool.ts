@@ -225,7 +225,7 @@ export class AgentTool implements Tool {
             description:
               "REQUIRED when creating team members. Spawns the agent as a long-running " +
               "teammate under this team (created via TeamCreate). Unlike regular subagents, " +
-              "team members persist after the lead returns and communicate via SendMessage. " +
+              "team members persist after the leader returns and communicate via SendMessage. " +
               "Without team_name the agent runs as a one-shot subagent that blocks and returns inline.",
           },
         },
@@ -278,7 +278,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
     const isolation = strArg(args, "isolation");
 
     // Team-member path: team_name takes precedence over fork/subagent. Runs the agent as a
-    // persistent teammate and notifies the lead via SendMessage / mailbox upon completion.
+    // persistent teammate and notifies the leader via SendMessage / mailbox upon completion.
     if (teamName && this.teamManager && this.teamRunAgentFactory) {
       return await this.runAsTeammate(
         teamName,
@@ -418,14 +418,14 @@ ${prompt}`;
       };
     }
     // If the team does not exist, create one on the fly: in coordinator mode TeamCreate is not
-    // in the allowlist, so requiring the lead to create a team first would block at step one.
+    // in the allowlist, so requiring the leader to create a team first would block at step one.
     // Single-team invariant: creating a team sweeps every other team first,
     // matching TeamCreate semantics.
     let team = this.teamManager.get(teamName);
     if (!team) {
       await this.teamManager.deleteAll();
       team = this.teamManager.create(teamName, undefined, {
-        leadAgentId: "lead",
+        leaderAgentId: "leader",
         description,
       });
     }
@@ -445,7 +445,7 @@ ${prompt}`;
     // inject team-level task tools and a named SendMessage (overriding the
     // inherited personal version so teammates share the same task list).
     // Two categories are excluded during cloning: tools no subagent should
-    // have, and team membership management tools reserved for the Lead.
+    // have, and team membership management tools reserved for the Leader.
     const teammateRegistry = new ToolRegistry();
     teammateRegistry.mcpLoadingMode = this.registry.mcpLoadingMode;
     for (const tool of this.registry.listTools()) {
@@ -475,7 +475,7 @@ ${prompt}`;
 
     // Worktree isolation: the teammate works on its own branch; changes are NOT
     // merged automatically — the worktree path is recorded in member metadata
-    // (setMemberMeta below) for the Lead/user to merge manually.
+    // (setMemberMeta below) for the Leader/user to merge manually.
     let teammatePrompt = prompt;
     let memberWorkDir = this.workDir;
     if (worktreeIsolation) {

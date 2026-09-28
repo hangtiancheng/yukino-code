@@ -33,25 +33,25 @@ describe("FileMailbox", () => {
     const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
     const mbox = new FileMailbox(dir, "alice");
 
-    await mbox.send("lead", "first");
+    await mbox.send("leader", "first");
     expect((await mbox.receive()).map((m) => m.text)).toEqual(["first"]);
     // Nothing new yet.
     expect(await mbox.receive()).toEqual([]);
 
-    await mbox.send("lead", "second");
+    await mbox.send("leader", "second");
     expect((await mbox.receive()).map((m) => m.text)).toEqual(["second"]);
   });
 
   it("persists the read cursor across instances (process restart)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
     const writer = new FileMailbox(dir, "bob");
-    await writer.send("lead", "a");
-    await writer.send("lead", "b");
+    await writer.send("leader", "a");
+    await writer.send("leader", "b");
 
     const reader1 = new FileMailbox(dir, "bob");
     expect((await reader1.receive()).map((m) => m.text)).toEqual(["a", "b"]);
 
-    await writer.send("lead", "c");
+    await writer.send("leader", "c");
 
     // A brand-new instance (simulating a restarted process) must resume after
     // "b", not re-read from the beginning.
@@ -63,8 +63,8 @@ describe("FileMailbox", () => {
   it("markAllRead consumes without returning", async () => {
     const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
     const mbox = new FileMailbox(dir, "carol");
-    await mbox.send("lead", "x");
-    await mbox.send("lead", "y");
+    await mbox.send("leader", "x");
+    await mbox.send("leader", "y");
     mbox.markAllRead();
     expect(mbox.unreadCount()).toBe(0);
     expect(await mbox.receive()).toEqual([]);

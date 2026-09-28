@@ -409,7 +409,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
             : "";
         },
         notificationFn: () => [
-          ...this.teamManager.drainLeads(),
+          ...this.teamManager.drainLeaderMailbox(),
           ...this.backgroundTaskManager
             .drainNotifications()
             .map(formatAgentTaskNotification),

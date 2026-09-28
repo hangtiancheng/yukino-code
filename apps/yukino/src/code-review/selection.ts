@@ -25,7 +25,7 @@ import { minimatch } from "minimatch";
 import type { ExcludeReason, FileDecision, FileDiff } from "./types.js";
 
 /**
- * Deterministic file selection (OCR internal/agent/selection.go). Static
+ * Deterministic file selection. Static
  * credential/noise/extension gates are intentionally not ported: the review
  * input is the developer's own working tree, and anything the user stages or
  * commits is fair game. The gates that remain are the ones correctness
@@ -34,9 +34,10 @@ import type { ExcludeReason, FileDecision, FileDiff } from "./types.js";
  */
 
 /**
- * Rough token estimate. OCR uses tiktoken; chars/4 is the standard
+ * Rough token estimate. chars/4 is the standard
  * order-of-magnitude approximation and only feeds size gates and estimates,
  * never billing.
+ * TODO: How about CJK?
  */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
@@ -44,12 +45,14 @@ export function estimateTokens(text: string): number {
 
 /**
  * Fallback per-file diff size ceiling when the caller does not derive one
- * from the provider context window (80% of OCR's 200K default).
+ * from the provider context window.
  */
 export const FILE_TOKEN_LIMIT = 160_000;
 
-/** Fraction of the context window a single review prompt may occupy (OCR
- * PromptTokenLimit). Feeds both the per-file gate and the group token budget. */
+/**
+ * Fraction of the context window a single review prompt may occupy.
+ * Feeds both the per-file gate and the group token budget.
+ */
 export const PROMPT_TOKEN_RATIO = 0.8;
 
 export interface SelectionOptions {
@@ -86,7 +89,7 @@ function whyExcluded(d: FileDiff, options: SelectionOptions): ExcludeReason {
 }
 
 /**
- * The one deterministic pre-dispatch selection (OCR selectFiles): user
+ * The one deterministic pre-dispatch selection: user
  * excludes, the deletion rule, and the per-file diff-size ceiling. Pure —
  * no git, no LLM.
  */

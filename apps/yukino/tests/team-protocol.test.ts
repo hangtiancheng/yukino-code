@@ -51,20 +51,20 @@ const plain = (from: string, text: string): FileMailMessage => ({
 
 describe("shutdown negotiation", () => {
   test("recognizes a shutdown request", () => {
-    const req = shutdownRequest("lead", "wrap up");
+    const req = shutdownRequest("leader", "wrap up");
     expect(req.type).toBe(MSG_SHUTDOWN_REQUEST);
     expect(req.requestId).toBeTruthy();
     expect(isShutdownRequest(req)).toBe(true);
 
     // Plain-text prefixes must also be recognized, since pane teammates may be older-version processes
-    expect(isShutdownRequest(plain("lead", "[shutdown] stop"))).toBe(true);
+    expect(isShutdownRequest(plain("leader", "[shutdown] stop"))).toBe(true);
     expect(
-      isShutdownRequest(plain("lead", "keep working on the auth module")),
+      isShutdownRequest(plain("leader", "keep working on the auth module")),
     ).toBe(false);
   });
 
   test("the response carries the request id and the stance", () => {
-    const req = shutdownRequest("lead", "wrap up");
+    const req = shutdownRequest("leader", "wrap up");
     const yes = shutdownResponse("alice", req.requestId ?? "", true, "done");
     expect(approved(yes)).toBe(true);
     expect(yes.requestId).toBe(req.requestId);
@@ -93,7 +93,7 @@ describe("plan approval", () => {
     expect(req.text).toContain("Extract the interface");
 
     const rej = planApprovalResponse(
-      "lead",
+      "leader",
       req.requestId ?? "",
       false,
       "don't touch the handler layer",
@@ -106,7 +106,7 @@ describe("plan approval", () => {
 
 describe("serialization", () => {
   test("fields survive a serialization round-trip", () => {
-    const req = shutdownRequest("lead", "wrap up");
+    const req = shutdownRequest("leader", "wrap up");
     const resp = shutdownResponse(
       "alice",
       req.requestId ?? "",
@@ -163,7 +163,7 @@ describe("SendMessage delivers structured messages", () => {
 
   test("delivers an approval response carrying the request id and stance to the teammate's mailbox", async () => {
     const { mgr, team } = setup();
-    const tool = new SendMessageTool(mgr, "lead");
+    const tool = new SendMessageTool(mgr, "leader");
 
     const res = await tool.execute(
       {
@@ -188,7 +188,7 @@ describe("SendMessage delivers structured messages", () => {
 
   test("a shutdown request carries an acknowledgement-capable request id", async () => {
     const { mgr, team } = setup();
-    const tool = new SendMessageTool(mgr, "lead");
+    const tool = new SendMessageTool(mgr, "leader");
 
     await tool.execute(
       {
@@ -208,7 +208,7 @@ describe("SendMessage delivers structured messages", () => {
 
   test("errors and does not deliver when an approval response lacks a request id or stance", async () => {
     const { mgr, team } = setup();
-    const tool = new SendMessageTool(mgr, "lead");
+    const tool = new SendMessageTool(mgr, "leader");
 
     const res = await tool.execute(
       {

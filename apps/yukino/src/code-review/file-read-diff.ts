@@ -31,7 +31,7 @@ import type {
 import { strArg } from "@/utils/index.js";
 
 /**
- * The diff-inspection tool, ported from OCR's file_read_diff. The main prompt
+ * The diff-inspection tool. The main prompt
  * only embeds the current group's diffs; this lets the agent read the diff of
  * any other changed file (including ones selection filtered out) without
  * misreading the workspace copy — critical in range/commit mode where the

@@ -37,7 +37,7 @@ interface TeammateMessageExpose {
   parseTeammateMessage: (raw: string) => TeammateMessageProps | null;
 }
 
-// Regex for the legacy "[team xxx] sender: message" format. drainLeads now
+// Regex for the legacy "[team xxx] sender: message" format. drainLeaderMailbox now
 // emits <task-notification team="..."> XML with "from=<sender>: <text>" lines,
 // so this pattern no longer matches its output.
 const TEAM_MSG_RE = /^\[team\s+\S+\]\s+(\S+):\s+(.*)$/s;
@@ -50,7 +50,7 @@ const SHUTDOWN_RE = /^\[shutdown\]\s*/;
  * Renders a teammate message in the chat view.
  *
  * Currently unused: teammate messages reach the conversation through
- * drainLeads' <task-notification> XML instead of this component.
+ * drainLeaderMailbox' <task-notification> XML instead of this component.
  *
  * - idle / shutdown: silent (return null)
  * - completed: green checkmark + content
@@ -71,8 +71,8 @@ export function TeammateMessage(
    *   "[team alpha] carol: here is my update"              -> { from: "carol", type: "text", ... }
    *
    * Returns null when the string is not a teammate message. Note that
-   * drainLeads no longer produces this format, so this always returns null
-   * for current drainLeads output.
+   * drainLeaderMailbox no longer produces this format, so this always returns null
+   * for current drainLeaderMailbox output.
    */
   const parseTeammateMessage = useCallback(
     (raw: string): TeammateMessageProps | null => {

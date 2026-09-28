@@ -1962,7 +1962,7 @@ export function App({
         coordinatorActive(enableCoordinatorMode ?? false),
       // Surface teammate and background Agent results as reminders.
       notificationFn: () => [
-        ...teamManagerRef.current.drainLeads(),
+        ...teamManagerRef.current.drainLeaderMailbox(),
         ...backgroundTaskManagerRef.current
           .drainNotifications()
           .map(formatAgentTaskNotification),
@@ -2391,7 +2391,7 @@ export function App({
     blocked:
       turnBlocked || followUps.processing || followUps.messages.length > 0,
     hasPending: () =>
-      teamManagerRef.current.hasLeadNotifications() ||
+      teamManagerRef.current.hasLeaderNotifications() ||
       backgroundTaskManagerRef.current.hasNotifications(),
     run: runNotificationTurn,
     onError: (error) => {
@@ -2738,7 +2738,7 @@ export function App({
                   const team = teamManagerRef.current.get(teamName);
                   if (team) {
                     void team.sendMessage(
-                      "lead",
+                      "leader",
                       name,
                       "[shutdown] Please finish and exit",
                     );

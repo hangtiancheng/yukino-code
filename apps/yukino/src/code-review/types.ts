@@ -47,7 +47,7 @@ export interface Hunk {
   lines: HunkLine[];
 }
 
-/** A single changed file, ported from OCR's model.Diff. */
+/** A single changed file. */
 export interface FileDiff {
   oldPath: string;
   newPath: string;
@@ -80,7 +80,7 @@ export type CommentSeverity = "critical" | "high" | "medium" | "low";
 export type ResolutionMethod =
   "hunk" | "file-content" | "cross-file" | "llm" | "unresolved";
 
-/** A review finding, ported from OCR's model.LlmComment. */
+/** A review finding. */
 export interface ReviewComment {
   path: string;
   content: string;

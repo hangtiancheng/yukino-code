@@ -65,7 +65,7 @@ const TeamFileSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   createdAt: z.number(),
-  leadAgentId: z.string(),
+  leaderAgentId: z.string(),
   members: z.array(TeamMemberEntrySchema),
 });
 
@@ -75,7 +75,7 @@ export type TeamFile = z.infer<typeof TeamFileSchema>;
  * Root directory for all team data. Placed under the user's home directory rather than
  * the project directory because pane teammates are independent processes whose working
  * directory may be swapped by a worktree; using the home directory guarantees both the
- * teammate process and the Lead locate the same team configuration.
+ * teammate process and the Leader locate the same team configuration.
  */
 export function teamsBaseDir(): string {
   return join(homedir(), ".yukino", "teams");

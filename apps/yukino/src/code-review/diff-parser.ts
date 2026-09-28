@@ -23,8 +23,7 @@
 import type { FileDiff, Hunk, HunkLine } from "./types.js";
 
 /**
- * Unified-diff parsing, ported from OCR internal/diff (parser.go, hunk.go,
- * quotedpath.go). Deterministic engineering: everything downstream (selection,
+ * Unified-diff parsing. Deterministic engineering: everything downstream (selection,
  * grouping, line resolution) consumes these structures instead of re-reading
  * raw diff text.
  */
