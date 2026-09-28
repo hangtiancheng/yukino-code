@@ -31,9 +31,10 @@ import {
 } from "./tool-filter.js";
 
 import type { ConversationManager } from "@/conversation/index.js";
-import { createChildLogger } from "@/logger/index.js";
+import { createChildLogger, sanitizeNameSegment } from "@/logger/index.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import type { TeamManager, RunAgent } from "@/teams/index.js";
+import { isValidTeammateName, LEADER_NAME } from "@/teams/protocol.js";
 import {
   TeamTaskCreateTool,
   TeamTaskGetTool,
@@ -183,6 +184,11 @@ export class AgentTool implements Tool {
             type: "string",
             description: "Short description of what the agent will do",
           },
+          name: {
+            type: "string",
+            description:
+              "Optional stable teammate name when team_name is set. Use only letters, digits, underscores, and hyphens.",
+          },
           prompt: {
             type: "string",
             description: "The task for the agent to perform",
@@ -275,6 +281,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
     const modelOverride = strArg(args, "model");
     const background = boolArg(args, "run_in_background");
     const teamName = strArg(args, "team_name");
+    const teammateName = strArg(args, "name");
     const isolation = strArg(args, "isolation");
 
     // Team-member path: team_name takes precedence over fork/subagent. Runs the agent as a
@@ -282,6 +289,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
     if (teamName && this.teamManager && this.teamRunAgentFactory) {
       return await this.runAsTeammate(
         teamName,
+        teammateName,
         description,
         prompt,
         args.plan_mode_required === true,
@@ -405,6 +413,7 @@ ${prompt}`;
    */
   private async runAsTeammate(
     teamName: string,
+    requestedName: string,
     description: string,
     prompt: string,
     planModeRequired: boolean,
@@ -417,6 +426,14 @@ ${prompt}`;
         isError: true,
       };
     }
+    if (requestedName && !isValidTeammateName(requestedName)) {
+      return {
+        output:
+          `Error: invalid teammate name '${requestedName}'. ` +
+          "Use only letters, digits, underscores, and hyphens; 'leader' is reserved.",
+        isError: true,
+      };
+    }
     // If the team does not exist, create one on the fly: in coordinator mode TeamCreate is not
     // in the allowlist, so requiring the leader to create a team first would block at step one.
     // Single-team invariant: creating a team sweeps every other team first,
@@ -425,19 +442,27 @@ ${prompt}`;
     if (!team) {
       await this.teamManager.deleteAll();
       team = this.teamManager.create(teamName, undefined, {
-        leaderAgentId: "leader",
+        leaderAgentId: LEADER_NAME,
         description,
       });
     }
 
-    // Derive teammate name from description and deduplicate
-    let memberName = description
-      .replace(/\s+/g, "-")
-      .toLowerCase()
-      .slice(0, 30);
+    if (requestedName && team.getMember(requestedName)) {
+      return {
+        output: `Error: teammate '${requestedName}' already exists in team '${teamName}'.`,
+        isError: true,
+      };
+    }
+
+    let memberName =
+      requestedName ||
+      sanitizeNameSegment(description.replace(/\s+/g, "-").toLowerCase()).slice(
+        0,
+        30,
+      );
     let suffix = 2;
     const base = memberName;
-    while (team.getMember(memberName)) {
+    while (memberName === LEADER_NAME || team.getMember(memberName)) {
       memberName = `${base}-${String(suffix++)}`;
     }
 

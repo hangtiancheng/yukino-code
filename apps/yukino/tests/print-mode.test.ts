@@ -226,7 +226,34 @@ describe("print mode delegation", () => {
     expect(call?.[10]?.abortSignal).toBeInstanceOf(AbortSignal);
   });
 
-  it("passes member cwd and plan checker, and stops teammates before disconnecting MCP", async () => {
+  it("derives a stable teammate name from an unsafe description", async () => {
+    vi.spyOn(backend, "detectBackend").mockReturnValue("in-process");
+    const spawn = vi
+      .spyOn(subagents, "spawnSubagent")
+      .mockResolvedValue("done");
+    turns = [
+      delegate({ team_name: "audit", description: "Audit API/routes" }),
+      [end],
+    ];
+
+    await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
+
+    expect(spawn.mock.calls[0]?.[1]).toContain('You are "audit-api_routes"');
+  });
+
+  it("rejects an invalid explicit teammate name before spawning", async () => {
+    vi.spyOn(backend, "detectBackend").mockReturnValue("in-process");
+    const spawn = vi
+      .spyOn(subagents, "spawnSubagent")
+      .mockResolvedValue("done");
+    turns = [delegate({ team_name: "audit", name: "api/reviewer" }), [end]];
+
+    await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
+
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("passes an explicit teammate name, member cwd, and plan checker", async () => {
     const isolated = join(workDir, "isolated");
     vi.spyOn(backend, "detectBackend").mockReturnValue("in-process");
     vi.spyOn(worktrees, "createAgentWorktree").mockResolvedValue({
@@ -265,6 +292,7 @@ describe("print mode delegation", () => {
     turns = [
       delegate({
         team_name: "audit",
+        name: "core-scout",
         isolation: "worktree",
         plan_mode_required: true,
       }),
@@ -273,6 +301,7 @@ describe("print mode delegation", () => {
     await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
 
     expect(spawn).toHaveBeenCalledOnce();
+    expect(spawn.mock.calls[0]?.[1]).toContain('You are "core-scout"');
     expect(spawn.mock.calls[0]?.[5]).toBe(isolated);
     expect(spawn.mock.calls[0]?.[9]?.mode).toBe("plan");
     expect(spawn.mock.calls[0]?.[10]?.abortSignal?.aborted).toBe(true);

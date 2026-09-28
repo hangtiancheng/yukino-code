@@ -133,6 +133,7 @@ import {
 } from "@/teams/coordinator.js";
 import type { RunAgent } from "@/teams/index.js";
 import { TeamManager } from "@/teams/index.js";
+import { LEADER_RECIPIENT } from "@/teams/protocol.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
@@ -2759,7 +2760,7 @@ export function App({
                   const team = teamManagerRef.current.get(teamName);
                   if (team) {
                     void team.sendMessage(
-                      "leader",
+                      LEADER_RECIPIENT,
                       name,
                       "[shutdown] Please finish and exit",
                     );

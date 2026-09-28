@@ -52,6 +52,7 @@ import { LoadSkillTool } from "./skills/load-skill-tool.js";
 import type { FileMailMessage } from "./teams/file-mailbox.js";
 import { FileMailbox } from "./teams/file-mailbox.js";
 import { TeamManager } from "./teams/index.js";
+import { LEADER_NAME } from "./teams/protocol.js";
 import {
   TeamTaskCreateTool,
   TeamTaskGetTool,
@@ -124,9 +125,6 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
 
 // ShutdownPrefix marks a mailbox message as a request to terminate the teammate.
 const ShutdownPrefix = "[shutdown]";
-
-// LeaderName is the conventional mailbox recipient for the coordinator.
-const LeaderName = "leader";
 
 // Module-level child logger for teammate process.
 const log = createChildLogger({ module: "teammate" });
@@ -324,7 +322,7 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
 
     // Notify the leader that this teammate finished its initial task.
     const mailbox = new FileMailbox(args.teamDir, args.memberName);
-    const leaderMailbox = new FileMailbox(args.teamDir, LeaderName);
+    const leaderMailbox = new FileMailbox(args.teamDir, LEADER_NAME);
     await leaderMailbox.send(
       args.memberName,
       createIdleNotification(args.memberName).text,

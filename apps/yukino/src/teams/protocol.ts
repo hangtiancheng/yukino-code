@@ -37,6 +37,13 @@ export const MSG_SHUTDOWN_REQUEST = "shutdown_request";
 export const MSG_SHUTDOWN_RESPONSE = "shutdown_response";
 export const MSG_PLAN_APPROVAL_REQUEST = "plan_approval_request";
 export const MSG_PLAN_APPROVAL_RESPONSE = "plan_approval_response";
+export const LEADER_NAME = "leader";
+
+const teammateNamePattern = /^[a-zA-Z0-9_-]+$/;
+
+export function isValidTeammateName(name: string): boolean {
+  return name !== LEADER_NAME && teammateNamePattern.test(name);
+}
 
 /** Text prefix for shutdown messages; teammates launched by older versions still recognize this prefix. */
 export const SHUTDOWN_PREFIX = "[shutdown]";

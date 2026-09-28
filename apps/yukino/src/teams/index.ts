@@ -39,6 +39,7 @@ import {
   recordTurnComplete,
 } from "./progress.js";
 import {
+  LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   approved,
@@ -148,7 +149,7 @@ export class Team {
     // as membership grows.
     this.mailboxDir = join(teamDir(name), "inboxes");
     mkdirSync(this.mailboxDir, { recursive: true });
-    this.leaderMailbox = new FileMailbox(this.mailboxDir, "leader");
+    this.leaderMailbox = new FileMailbox(this.mailboxDir, LEADER_NAME);
   }
 
   addMember(name: string): Member {
@@ -506,7 +507,7 @@ export class Team {
     }
     return {
       prompt: "",
-      shutdown: shutdownRequest("leader", "member deactivated"),
+      shutdown: shutdownRequest(LEADER_NAME, "member deactivated"),
     };
   }
 
@@ -606,7 +607,7 @@ export class Team {
     }
     if (member.external) {
       try {
-        await member.mailbox.send("leader", `${Team.SHUTDOWN_PREFIX} stop`);
+        await member.mailbox.send(LEADER_NAME, `${Team.SHUTDOWN_PREFIX} stop`);
       } catch {
         // best-effort: proceed to cancel fallback even if the shutdown write fails
       }

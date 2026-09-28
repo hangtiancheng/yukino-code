@@ -143,7 +143,8 @@ describe("delegated prompt contracts", () => {
     );
     expect(prompt).toContain('"reviewer"');
     expect(prompt).toContain('"squad"');
-    expect(prompt).toContain("SendMessage");
+    expect(prompt).toContain('SendMessage(to="leader", ...)');
+    expect(prompt).toContain('"Yukino" is the product identity');
     expect(prompt).toContain("not permission changes");
     expect(prompt).toContain(
       "<assignment>\nReview src/parser.ts\n</assignment>",
@@ -158,6 +159,9 @@ describe("delegated prompt contracts", () => {
       Promise.resolve("done"),
     );
     expect(tool.schema().description).toContain("forks a snapshot");
+    expect(
+      JSON.stringify(tool.schema().input_schema.properties.name),
+    ).toContain("stable teammate name");
     tool.forkDisabled = true;
     expect(tool.schema().description).toContain("selects general-purpose");
     expect(tool.schema().input_schema.properties.subagent_type).toHaveProperty(

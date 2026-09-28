@@ -265,10 +265,15 @@ describe("teams orchestration", () => {
   it("SendMessage delivers plain text from a teammate to the leader mailbox", async () => {
     const mgr = new TeamManager(workDir());
     mgr.create("t2").addMember("w2");
+    const tool = new SendMessageTool(mgr, "w2");
+
+    expect(JSON.stringify(tool.schema().input_schema.properties.to)).toContain(
+      "'leader'",
+    );
 
     // The leader is not a registered member, so the plain-text path must route
     // to the dedicated leader mailbox instead of throwing "Member 'leader' not found".
-    const send = await new SendMessageTool(mgr, "w2").execute(
+    const send = await tool.execute(
       { workDir: workDir() },
       { to: "leader", content: "findings: X confirmed" },
     );
@@ -281,6 +286,41 @@ describe("teams orchestration", () => {
         .drainLeaderMailbox()
         .some((d) => d.includes("from=w2: findings: X confirmed")),
     ).toBe(true);
+
+    const rejected = await tool.execute(
+      { workDir: workDir() },
+      { to: "Yukino", content: "misaddressed report" },
+    );
+    expect(rejected.isError).toBe(true);
+    expect(mgr.drainLeaderMailbox()).toEqual([]);
+  });
+
+  it("rejects invalid, reserved, and duplicate explicit teammate names", async () => {
+    const mgr = new TeamManager(workDir());
+    const spawn = new SpawnTeammateTool(mgr, () => Promise.resolve("done"));
+
+    for (const name of ["api/reviewer", "leader"]) {
+      const result = await spawn.execute(
+        { workDir: workDir() },
+        { team: "squad", name, task: "inspect" },
+      );
+      expect(result.isError).toBe(true);
+    }
+    expect(mgr.list()).toEqual([]);
+
+    const first = await spawn.execute(
+      { workDir: workDir() },
+      { team: "squad", name: "reviewer", task: "inspect" },
+    );
+    const duplicate = await spawn.execute(
+      { workDir: workDir() },
+      { team: "squad", name: "reviewer", task: "inspect again" },
+    );
+    expect(first.isError).toBe(false);
+    expect(duplicate.isError).toBe(true);
+    expect(duplicate.output).toContain("already exists");
+
+    await mgr.stopAll();
   });
 
   it("TeamCreate sweeps other teams so at most one exists", async () => {

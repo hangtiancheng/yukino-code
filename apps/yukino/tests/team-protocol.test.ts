@@ -206,6 +206,32 @@ describe("SendMessage delivers structured messages", () => {
     expect(msg?.requestId).toBeTruthy();
   });
 
+  test("delivers a structured teammate response to the leader mailbox", async () => {
+    const { mgr, team } = setup();
+    const tool = new SendMessageTool(mgr, "alice");
+
+    const res = await tool.execute(
+      { workDir: process.cwd() },
+      {
+        to: "leader",
+        content: "ready",
+        type: MSG_SHUTDOWN_RESPONSE,
+        request_id: "req-abc",
+        approve: true,
+      },
+    );
+
+    expect(res.isError).toBe(false);
+    const [msg] = team.leaderMailbox.receiveSync();
+    expect(msg).toMatchObject({
+      from: "alice",
+      text: "ready",
+      type: MSG_SHUTDOWN_RESPONSE,
+      requestId: "req-abc",
+      approve: true,
+    });
+  });
+
   test("errors and does not deliver when an approval response lacks a request id or stance", async () => {
     const { mgr, team } = setup();
     const tool = new SendMessageTool(mgr, "leader");

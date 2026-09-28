@@ -21,6 +21,8 @@
  */
 
 import {
+  isValidTeammateName,
+  LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
@@ -87,7 +89,7 @@ export class TeamCreateTool implements Tool {
 
     const description = strArg(args, "description");
     const team = this.mgr.create(requested, undefined, {
-      leaderAgentId: "leader",
+      leaderAgentId: LEADER_NAME,
       description,
     });
     return {
@@ -122,7 +124,8 @@ export class SpawnTeammateTool implements Tool {
           },
           name: {
             type: "string",
-            description: "Teammate name",
+            description:
+              "Teammate name using only letters, digits, underscores, and hyphens. 'leader' is reserved.",
           },
           task: {
             type: "string",
@@ -147,12 +150,26 @@ export class SpawnTeammateTool implements Tool {
         isError: true,
       });
     }
+    if (!isValidTeammateName(name)) {
+      return Promise.resolve({
+        output:
+          `Error: invalid teammate name '${name}'. ` +
+          "Use only letters, digits, underscores, and hyphens; 'leader' is reserved.",
+        isError: true,
+      });
+    }
     // Single-team invariant: creating a team sweeps every other team first,
     // matching TeamCreate semantics.
     let t = this.mgr.get(team);
     if (!t) {
       await this.mgr.deleteAll();
       t = this.mgr.create(team);
+    }
+    if (t.getMember(name)) {
+      return Promise.resolve({
+        output: `Error: teammate '${name}' already exists in team '${team}'.`,
+        isError: true,
+      });
     }
     t.spawnTeammate(name, task, this.runAgent, undefined, this.providerBaseUrl);
     return Promise.resolve({
@@ -165,11 +182,11 @@ export class SpawnTeammateTool implements Tool {
 export class SendMessageTool implements Tool {
   name = "SendMessage";
   description =
-    "Send a message to a teammate's mailbox. Use to='*' to broadcast to all teammates.";
+    "Send a message to a teammate or to the leader mailbox. Use to='leader' for the coordinator and to='*' to broadcast to all teammates.";
   category = "read" as const;
   constructor(
     private mgr: TeamManager,
-    private senderName = "leader",
+    private senderName = LEADER_NAME,
   ) {}
 
   // Infer the sender's team: a teammate can look itself up in the roster; the Leader is
@@ -193,7 +210,8 @@ export class SendMessageTool implements Tool {
         properties: {
           to: {
             type: "string",
-            description: "Teammate name, or '*' to broadcast",
+            description:
+              "Teammate name, 'leader' for the coordinator, or '*' to broadcast",
           },
           content: {
             type: "string",
@@ -294,7 +312,7 @@ export class SendMessageTool implements Tool {
           };
       }
       const target =
-        to === "leader" ? t.leaderMailbox : t.getMember(to)?.mailbox;
+        to === LEADER_NAME ? t.leaderMailbox : t.getMember(to)?.mailbox;
       if (!target) {
         return { output: `Teammate '${to}' not found.`, isError: true };
       }
@@ -320,7 +338,7 @@ export class SendMessageTool implements Tool {
     // The leader is not a registered member (it runs in the parent process and
     // only reads its own mailbox), so route plain text to it directly —
     // mirroring the structured-message path above.
-    if (to === "leader") {
+    if (to === LEADER_NAME) {
       await t.leaderMailbox.send(this.senderName, message);
       return { output: `Message sent to '${to}'.`, isError: false };
     }
