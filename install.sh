@@ -154,6 +154,7 @@ sandbox:
   enabled: false
   auto_allow: false
   network_enabled: true
+memory: true
 enable_coordinator_mode: false
 EOF
 	ok "Wrote default config to $CONFIG_FILE"

@@ -32,6 +32,7 @@ import {
   withProjectMcpServers,
   resolveAPIKey,
   forkEnabled,
+  memoryEnabled,
   type AppConfig,
   type MCPServerConfig,
 } from "@/config/index.js";
@@ -65,7 +66,7 @@ describe("config", () => {
 
     it("uses the 1M default independently of model names", () => {
       const p: ProviderConfig = {
-        model: "claude-sonnet-4-6",
+        model: "deepseek-flash",
         name: "p",
         protocol: "anthropic",
         base_url: "#",
@@ -75,7 +76,7 @@ describe("config", () => {
 
     it("uses the same default for OpenAI models", () => {
       const p: ProviderConfig = {
-        model: "gpt-4o",
+        model: "deepseek-flash",
         name: "p",
         protocol: "openai",
         base_url: "#",
@@ -192,7 +193,7 @@ describe("config", () => {
       model: "m",
     };
 
-    it.each(["gpt-4o", "o3", "claude-haiku", "arbitrary-model"])(
+    it.each(["deepseek-flash", "qwen3.8-flash", "arbitrary-model"])(
       "does not infer capabilities from %s",
       (model) => {
         expect(getSupportedThinkingLevels({ ...base, model })).toEqual(
@@ -325,6 +326,52 @@ describe("config", () => {
     it("disables for real when set to false", () => {
       expect(forkEnabled({ ...bare(), enable_fork: false })).toBe(false);
       expect(forkEnabled({ ...bare(), enable_fork: true })).toBe(true);
+    });
+  });
+
+  // memory is on by default, and an explicit false in the config must turn the
+  // whole auto-memory pipeline off (index injection, recall, extraction,
+  // consolidation). Same shape as enable_fork: "unset" stays distinguishable
+  // from "explicitly false".
+  describe("memory", () => {
+    const bare = (): AppConfig => ({
+      default_provider: 0,
+      providers: [],
+      mcp_servers: [],
+      hooks: [],
+    });
+
+    it("defaults to enabled when unset", () => {
+      expect(memoryEnabled(bare())).toBe(true);
+    });
+
+    it("disables for real when set to false", () => {
+      expect(memoryEnabled({ ...bare(), memory: false })).toBe(false);
+      expect(memoryEnabled({ ...bare(), memory: true })).toBe(true);
+    });
+
+    it("parses memory from config.yaml", () => {
+      const dir = mkdtempSync(join(tmpdir(), "yukino-memory-"));
+      try {
+        const path = join(dir, "config.yaml");
+        writeFileSync(
+          path,
+          [
+            "providers:",
+            "  - name: provider",
+            "    protocol: anthropic",
+            "    base_url: https://provider.example.com",
+            "    model: model",
+            "memory: false",
+            "",
+          ].join("\n"),
+        );
+        const cfg = loadConfig(path);
+        expect(cfg.memory).toBe(false);
+        expect(memoryEnabled(cfg)).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 

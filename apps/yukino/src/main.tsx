@@ -31,6 +31,7 @@ import {
 import {
   forkEnabled,
   loadConfig,
+  memoryEnabled,
   withProjectMcpServers,
 } from "./config/index.js";
 import { initLogger, logger } from "./logger/index.js";
@@ -132,6 +133,7 @@ async function main() {
       addr: remoteAddr,
       enableCoordinatorMode: cfg.enable_coordinator_mode ?? false,
       forkDisabled: !forkEnabled(cfg),
+      memoryEnabled: memoryEnabled(cfg),
     });
     try {
       await srv.run();
@@ -159,6 +161,7 @@ async function main() {
     sandboxConfig: cfg.sandbox,
     enableCoordinatorMode: cfg.enable_coordinator_mode,
     forkDisabled: !forkEnabled(cfg),
+    memoryEnabled: memoryEnabled(cfg),
     defaultProvider: cfg.default_provider,
   };
   const application = (

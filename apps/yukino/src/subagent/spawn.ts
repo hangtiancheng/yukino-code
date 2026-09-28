@@ -33,7 +33,6 @@ import {
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createClient } from "@/llm/client.js";
-import { resolveModelId } from "@/llm/model-resolver.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
@@ -95,9 +94,7 @@ export async function spawnSubagent(
   // Determine the model: call-level override > definition-level model > parent Agent's model
 
   const effectiveModel = modelOverride ?? definition.model;
-  const resolvedModel = effectiveModel
-    ? resolveModelId(effectiveModel)
-    : parentProvider.model;
+  const resolvedModel = effectiveModel ?? parentProvider.model;
   const env = detectEnvironment(workDir);
   env.model = resolvedModel;
   const systemPrompt =

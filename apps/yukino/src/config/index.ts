@@ -130,11 +130,23 @@ const AppConfigSchema = z.looseObject({
    * "explicitly false", and the latter could never be turned back off.
    */
   enable_fork: z.boolean().optional(),
+  /**
+   * Whether auto memory (index injection, recall, extraction, consolidation)
+   * is enabled. Defaults to enabled; `memory: false` turns the whole automatic
+   * memory pipeline off. Left optional so "not set" and "explicitly false"
+   * stay distinguishable, mirroring enable_fork.
+   */
+  memory: z.boolean().optional(),
 });
 
 /** Whether fork is available. Defaults to enabled when not specified in config. */
 export function forkEnabled(cfg: AppConfig): boolean {
   return cfg.enable_fork !== false;
+}
+
+/** Whether auto memory is enabled. Defaults to enabled when not specified in config. */
+export function memoryEnabled(cfg: AppConfig): boolean {
+  return cfg.memory !== false;
 }
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -167,6 +179,7 @@ function loadSingleFile(path: string): AppConfig {
   let sandbox: SandboxYamlConfig | undefined = undefined;
   let enableCoordinatorMode = false;
   let enableFork = true;
+  let memory = true;
 
   if ("default_provider" in raw) {
     const parsed = safeParse(z.number(), raw.default_provider);
@@ -221,6 +234,9 @@ function loadSingleFile(path: string): AppConfig {
   if ("enable_fork" in raw) {
     enableFork = Boolean(raw.enable_fork);
   }
+  if ("memory" in raw) {
+    memory = Boolean(raw.memory);
+  }
   return {
     default_provider: defaultProvider,
     providers,
@@ -230,6 +246,7 @@ function loadSingleFile(path: string): AppConfig {
     sandbox,
     enable_coordinator_mode: enableCoordinatorMode,
     enable_fork: enableFork,
+    memory,
   };
 }
 

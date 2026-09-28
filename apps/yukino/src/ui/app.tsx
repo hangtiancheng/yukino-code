@@ -180,6 +180,8 @@ interface Props {
   sandboxConfig?: SandboxYamlConfig;
   enableCoordinatorMode?: boolean;
   forkDisabled?: boolean;
+  /** Auto memory pipeline switch from config.yaml (`memory:`); defaults to true. */
+  memoryEnabled?: boolean;
   resume?: true | string;
   onExitSummary?: (summary: InteractionSummary) => void;
   defaultProvider?: number;
@@ -196,6 +198,7 @@ export function App({
   sandboxConfig: sandboxYaml,
   enableCoordinatorMode,
   forkDisabled,
+  memoryEnabled = true,
   resume,
   onExitSummary,
   defaultProvider = 0,
@@ -710,9 +713,11 @@ export function App({
 
         // Inject long-term memory
         const instructions = loadInstructions(workDir);
-        const memMgr = new MemoryManager(workDir);
+        // memory: false disables the whole auto-memory pipeline; no manager is
+        // created so nothing scans, rebuilds MEMORY.md, or injects reminders.
+        const memMgr = memoryEnabled ? new MemoryManager(workDir) : null;
         memManagerRef.current = memMgr;
-        const memReminder = memMgr.buildSystemReminder();
+        const memReminder = memMgr?.buildSystemReminder() ?? "";
         conversationRef.current.injectLongTermMemory(instructions, memReminder);
 
         // Load prompt history
@@ -1072,7 +1077,7 @@ export function App({
         setError(`Failed to init LLM client: ${asErrorString(err)}`);
       }
     },
-    [workDir, mcpServers, connectMcpServers],
+    [workDir, mcpServers, connectMcpServers, memoryEnabled],
   );
 
   useEffect(() => {
@@ -1239,7 +1244,11 @@ export function App({
         `Tokens:    ${String(inputTokens)} in / ${String(outputTokens)} out`,
         `Tools:     ${String(registryRef.current.listTools().length)}`,
         `Sandbox:   ${sbStatus}`,
-        `Memories:  ${String(new MemoryManager(workDir).getMemories().length)}`,
+        `Memories:  ${
+          memoryEnabled
+            ? String(new MemoryManager(workDir).getMemories().length)
+            : "disabled (memory: false)"
+        }`,
         `Skills:    ${String(skillCatalogRef.current?.list().length ?? 0)}`,
         `MCP:       ${String(mcpInfo?.servers.length ?? 0)} server(s), ${String(mcpInfo?.toolCount ?? 0)} tool(s)`,
         `Session:   ${sessionIdRef.current}`,
@@ -1252,6 +1261,16 @@ export function App({
       return true;
     }
     if (cmd.name === "memory") {
+      if (!memoryEnabled) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "system",
+            content: "Auto memory is disabled (memory: false in config.yaml).",
+          },
+        ]);
+        return true;
+      }
       const sub = parsed.args.trim().split(/\s+/)[0];
       const mgr = new MemoryManager(workDir);
       if (sub === "clear") {
@@ -1489,7 +1508,9 @@ export function App({
           conv.reset();
           conv.injectLongTermMemory(
             loadInstructions(workDir),
-            new MemoryManager(workDir).buildSystemReminder(),
+            memoryEnabled
+              ? new MemoryManager(workDir).buildSystemReminder()
+              : "",
           );
           const restored = sessionMod.rebuildFromSession(saved);
           conv.appendMessages(
@@ -1969,7 +1990,7 @@ export function App({
       ],
       onLoopComplete: (conv) => {
         const client = clientRef.current;
-        if (!client || memExtractingRef.current) {
+        if (!client || !memoryEnabled || memExtractingRef.current) {
           return;
         }
         if (conv.len() - memCursorRef.current < 2) {

@@ -326,7 +326,7 @@ describe("three-way routing", () => {
     expect(isOfficialAnthropicEndpoint("")).toBe(true);
     expect(isOfficialAnthropicEndpoint("https://api.anthropic.com")).toBe(true);
     expect(
-      isOfficialAnthropicEndpoint("https://api.minimaxi.com/anthropic"),
+      isOfficialAnthropicEndpoint("https://api.deepseek.com/anthropic"),
     ).toBe(false);
   });
 
@@ -344,7 +344,7 @@ describe("three-way routing", () => {
 
   test("third-party endpoint uses McpCall dispatch", () => {
     expect(
-      decideMode("https://api.minimaxi.com/anthropic", 200000, 500000),
+      decideMode("https://api.deepseek.com/anthropic", 200000, 500000),
     ).toBe("dispatch");
   });
 

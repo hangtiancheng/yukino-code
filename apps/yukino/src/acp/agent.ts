@@ -58,6 +58,7 @@ import type { AgentEvent } from "@/agent/events.js";
 import {
   forkEnabled,
   loadConfig,
+  memoryEnabled,
   withProjectMcpServers,
 } from "@/config/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
@@ -123,6 +124,7 @@ async function createRuntime(
     mcpServers: config.mcp_servers,
     enableCoordinatorMode: config.enable_coordinator_mode ?? false,
     forkDisabled: !forkEnabled(config),
+    memoryEnabled: memoryEnabled(config),
     sessionId,
   });
   return {

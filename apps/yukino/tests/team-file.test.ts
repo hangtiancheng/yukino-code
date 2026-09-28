@@ -69,7 +69,7 @@ describe("team config persistence", () => {
     team.addMember("alice");
     team.setMemberMeta("alice", {
       agentType: "worker",
-      model: "claude-sonnet-4-6",
+      model: "deepseek-flash",
       worktreePath: "/tmp/wt/alice",
     });
 
@@ -84,7 +84,7 @@ describe("team config persistence", () => {
     const m = got?.getMember("alice");
     expect(m).toBeDefined();
     expect(m?.agentType).toBe("worker");
-    expect(m?.model).toBe("claude-sonnet-4-6");
+    expect(m?.model).toBe("deepseek-flash");
     expect(m?.worktreePath).toBe("/tmp/wt/alice");
   });
 

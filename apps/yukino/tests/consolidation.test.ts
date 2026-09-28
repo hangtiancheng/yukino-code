@@ -154,8 +154,8 @@ describe("MemoryConsolidator", () => {
     it("merges duplicate memories with real LLM", async () => {
       const apiKey = process.env.YUKINO_TEST_API_KEY;
       const baseURL =
-        process.env.YUKINO_TEST_BASE_URL ?? "https://api.minimaxi.com/v1";
-      const model = process.env.YUKINO_TEST_MODEL ?? "MiniMax-M3";
+        process.env.YUKINO_TEST_BASE_URL ?? "https://api.deepseek.com";
+      const model = process.env.YUKINO_TEST_MODEL ?? "deepseek-flash";
 
       if (!apiKey) {
         console.log("YUKINO_TEST_API_KEY not set, skipping E2E test");

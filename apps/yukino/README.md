@@ -24,7 +24,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 - Session persistence with JSONL-based storage for cross-session resume
 - Automatic context compaction when conversations approach the model's context window
-- Long-term memory extraction and recall across sessions
+- Long-term memory extraction and recall across sessions (disable with `memory: false` in `~/.yukino/config.yaml`)
 - Instructions file support for persistent project-level guidance
 
 ### Skills and Commands
@@ -92,8 +92,8 @@ At least one provider must be configured. Example config.yaml:
 providers:
   - name: anthropic
     protocol: anthropic
-    base_url: https://api.anthropic.com
-    model: claude-sonnet-4-6
+    base_url: https://api.deepseek.com
+    model: deepseek-flash
     # api_key defaults to $ANTHROPIC_API_KEY
     thinking: high # off | minimal | low | medium | high | xhigh | max
 
@@ -102,9 +102,9 @@ permission_mode: default
 mcp_servers:
   - name: database
     command: npx
-    args: ["-y", "@yukino-db/mcp@latest"]
+    args: ["-y", "@yukino.js/mcp@latest"]
     env: # map<string, string>; supports ${VAR}, ${VAR:-default}, and $VAR
-      API_BASE_URL: "https://yukino-db.dev"
+      API_BASE_URL: "https://yukino-js.dev"
       API_KEY: "${DATABASE_API_KEY}"
 
 hooks:
@@ -121,6 +121,10 @@ sandbox:
   network_enabled: true
 
 enable_coordinator_mode: false
+
+# Auto memory: index injection, recall, background extraction, and consolidation.
+# Set to false to disable the whole automatic memory pipeline (default: true).
+memory: true
 ```
 
 Provider fields:

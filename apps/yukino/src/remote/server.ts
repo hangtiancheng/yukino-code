@@ -63,7 +63,6 @@ import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
 import { HookEngine, validate as validateHooks } from "@/hooks/index.js";
 import { createClient, type LLMClient } from "@/llm/client.js";
-import { resolveModelId } from "@/llm/model-resolver.js";
 import { createChildLogger } from "@/logger/index.js";
 import { syncMcpInstructions as announceMcpInstructions } from "@/mcp/instructions.js";
 import { MCPManager } from "@/mcp/manager.js";
@@ -251,6 +250,8 @@ export interface RemoteAgentHandle {
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
   memoryManager: MemoryManager;
+  /** Auto memory switch from config.yaml (`memory:`); gates injection, extraction, and consolidation. */
+  memoryEnabled: boolean;
   contextWindow: number;
   longTermMemoryInstructions: string;
   longTermMemoryMemoryContent: string;
@@ -296,6 +297,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
   memoryManager: MemoryManager;
+  memoryEnabled: boolean;
   contextWindow: number;
   longTermMemoryInstructions: string;
   longTermMemoryMemoryContent: string;
@@ -342,6 +344,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.enableCoordinatorMode = agentHandleImpl.enableCoordinatorMode;
     this.forkDisabled = agentHandleImpl.forkDisabled;
     this.memoryManager = agentHandleImpl.memoryManager;
+    this.memoryEnabled = agentHandleImpl.memoryEnabled;
     this.contextWindow = agentHandleImpl.contextWindow;
     this.longTermMemoryInstructions =
       agentHandleImpl.longTermMemoryInstructions;
@@ -416,6 +419,10 @@ class AgentHandleImpl implements RemoteAgentHandle {
         ],
         onPermissionRequest: callbacks.onPermissionRequest,
         onLoopComplete: (conv) => {
+          // memory: false disables the whole background memory pipeline
+          if (!this.memoryEnabled) {
+            return;
+          }
           // Best-effort memory extraction (fire-and-forget)
           const summary = conv
             .getMessages()
@@ -477,6 +484,8 @@ export interface CreateRemoteAgentOptions {
   mcpServers?: MCPServerConfig[];
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
+  /** Auto memory switch from config.yaml (`memory:`); defaults to true. */
+  memoryEnabled?: boolean;
   askUser?: Asker;
   sessionId?: string;
 }
@@ -495,6 +504,7 @@ export async function createRemoteAgent(
     mcpServers: mcpConfigs,
     enableCoordinatorMode,
     forkDisabled,
+    memoryEnabled = true,
     askUser,
     sessionId = newSessionId(),
   } = opts;
@@ -522,7 +532,10 @@ export async function createRemoteAgent(
   // 6. Load instructions and memory, inject into conversation
   const instructions = loadInstructions(workDir);
   const memoryManager = new MemoryManager(workDir);
-  const memReminder = memoryManager.buildSystemReminder();
+  // memory: false keeps the index out of the conversation; the manager stays
+  // available for explicit /memory inspection but nothing is injected, extracted,
+  // or consolidated automatically.
+  const memReminder = memoryEnabled ? memoryManager.buildSystemReminder() : "";
   conv.injectLongTermMemory(instructions, memReminder);
 
   // 7. Initialize hooks
@@ -689,9 +702,7 @@ export async function createRemoteAgent(
     async (prompt, forkConv, forkRegistry, modelOverride?, context?) => {
       const forkWorkDir = context?.workDir ?? workDir;
       // Fork path: create an isolated agent on the forked conversation
-      const resolvedModel = modelOverride
-        ? resolveModelId(modelOverride)
-        : provider.model;
+      const resolvedModel = modelOverride ?? provider.model;
       const forkEnv = detectEnvironment(forkWorkDir);
       forkEnv.model = resolvedModel;
       const forkSystemPrompt = buildSystemPrompt(forkEnv);
@@ -819,6 +830,7 @@ export async function createRemoteAgent(
     forkDisabled,
     enableCoordinatorMode,
     memoryManager,
+    memoryEnabled,
     contextWindow,
     longTermMemoryInstructions: instructions,
     longTermMemoryMemoryContent: memReminder,
@@ -926,6 +938,8 @@ interface RemoteServerOptions {
   addr: string;
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
+  /** Auto memory switch from config.yaml (`memory:`); defaults to true. */
+  memoryEnabled?: boolean;
 }
 
 export class RemoteServer {
@@ -1141,6 +1155,7 @@ export class RemoteServer {
         askUser: this.createAskUserCallback(),
         enableCoordinatorMode: this.opts.enableCoordinatorMode,
         forkDisabled: this.opts.forkDisabled,
+        memoryEnabled: this.opts.memoryEnabled !== false,
       });
       this.broadcast({
         type: "connected",
@@ -1662,7 +1677,10 @@ export class RemoteServer {
       permissionMode: () => "default",
       tokenCount: () => [0, 0] as const,
       toolCount: () => handle.registry.listTools().length,
-      memoryList: () => handle.memoryManager.getMemories().map((m) => m.name),
+      memoryList: () =>
+        handle.memoryEnabled
+          ? handle.memoryManager.getMemories().map((m) => m.name)
+          : [],
       model: handle.provider.model,
       thinkingLevel: () =>
         handle.client.getThinkingLevel?.() ??
@@ -2049,6 +2067,9 @@ export class RemoteServer {
     if (!handle) {
       return "Memory is not available yet.";
     }
+    if (!handle.memoryEnabled) {
+      return "Auto memory is disabled (memory: false in config.yaml).";
+    }
     const sub = args.trim().split(/\s+/u)[0];
     if (sub === "clear") {
       handle.memoryManager.clear();
@@ -2266,6 +2287,7 @@ export class RemoteServer {
         askUser: this.createAskUserCallback(),
         enableCoordinatorMode: this.opts.enableCoordinatorMode,
         forkDisabled: this.opts.forkDisabled,
+        memoryEnabled: this.opts.memoryEnabled !== false,
       });
     } catch (err) {
       log.warn({ err }, "agent init deferred -- will retry on first message");

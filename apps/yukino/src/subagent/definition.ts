@@ -59,6 +59,6 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       "Find code, trace relevant call paths, and report evidence with file paths and line numbers. Use Glob, Grep, ReadFile, and read-only shell commands. Do not modify files; return missing context or blockers to the parent agent.",
     disallowedTools: ["EditFile", "WriteFile"],
     permissionMode: "plan",
-    model: "haiku",
+    model: "deepseek-flash",
   },
 ];

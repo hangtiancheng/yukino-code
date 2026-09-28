@@ -169,6 +169,7 @@ sandbox:
   enabled: false
   auto_allow: false
   network_enabled: true
+memory: true
 enable_coordinator_mode: false
 '@
 	[System.IO.File]::WriteAllText($ConfigFile, $DefaultConfig, [System.Text.UTF8Encoding]::new($false))

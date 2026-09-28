@@ -65,9 +65,9 @@ const noKey: Key = {
 const validProvider: ProviderConfig = {
   name: "Anthropic",
   protocol: "anthropic",
-  base_url: "https://api.anthropic.com/v1/messages",
+  base_url: "https://api.deepseek.com/anthropic",
   api_key: "sk-secret-value",
-  model: "claude-sonnet-4-6",
+  model: "deepseek-flash",
   thinking: "high",
   context_window: 1_000_000,
   max_output_tokens: 128_000,
