@@ -43,7 +43,7 @@ import {
   type ProviderConfig,
   THINKING_LEVELS,
   type ThinkingLevel,
-} from "./index.js";
+} from "./provider-config.js";
 
 const tokenLimit = (fallback: number, min: number, max: number) =>
   z.preprocess(

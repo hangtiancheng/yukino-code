@@ -33,16 +33,16 @@ import {
 } from "./errors.js";
 import type { StreamEvent } from "./events.js";
 
+import { resolveAPIKey } from "@/config/index.js";
 import {
   clampThinkingLevel,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
   getThinkingLevel,
   type ProviderConfig,
-  resolveAPIKey,
   type ThinkingLevel,
   toReasoningEffort,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import type {
   ConversationManager,
   Message,

@@ -30,7 +30,7 @@ import { act, createElement } from "react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ProviderConfig } from "@/config/index.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
 import type { SessionInfo } from "@/session/index.js";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
 import { PermissionDialog } from "@/ui/permission-dialog.js";

@@ -24,7 +24,10 @@ import type {
   ChatItem,
   ConnectionStatus,
   PermissionResponse,
+  PlanApprovalPayload,
+  ReviewItem,
   ServerMessage,
+  SessionSummary,
   SlashCommand,
   ThinkingItem,
   ToolItem,
@@ -48,12 +51,22 @@ export interface ChatState {
   commands: SlashCommand[];
   usage: UsagePayload | null;
   streaming: boolean;
+  /** Live status snapshot (model / permission mode / thinking level). */
+  model: string;
+  permissionMode: string;
+  thinkingLevel: string;
+  /** Steering messages queued for the in-flight run, not yet delivered. */
+  steering: string[];
+  /** Open plan approval request, if any. */
+  planApproval: PlanApprovalPayload | null;
+  /** Open session picker list, if any. */
+  sessions: SessionSummary[] | null;
+  /** Whether the code review form dialog is open. */
+  codeReviewOpen: boolean;
   /** id of the assistant item currently receiving stream_text, if any. */
   currentAssistantId: string | null;
   /** id of the thinking item currently receiving thinking_text, if any. */
   currentThinkingId: string | null;
-  /** Whether the initial "connected" system line has already been shown. */
-  greeted: boolean;
 }
 
 export const initialState: ChatState = {
@@ -64,16 +77,25 @@ export const initialState: ChatState = {
   commands: [],
   usage: null,
   streaming: false,
+  model: "",
+  permissionMode: "",
+  thinkingLevel: "",
+  steering: [],
+  planApproval: null,
+  sessions: null,
+  codeReviewOpen: false,
   currentAssistantId: null,
   currentThinkingId: null,
-  greeted: false,
 };
 
 type Action =
   | { kind: "message"; message: ServerMessage }
   | { kind: "connection"; status: ConnectionStatus }
   | { kind: "respondPermission"; id: string; response: PermissionResponse }
-  | { kind: "markAskAnswered"; id: string };
+  | { kind: "markAskAnswered"; id: string }
+  | { kind: "closePlanApproval" }
+  | { kind: "closeSessions" }
+  | { kind: "closeCodeReview" };
 
 function finalizeCurrentThinking(state: ChatState): ChatState {
   if (state.currentThinkingId === null) {
@@ -105,36 +127,98 @@ function finalizeAssistant(state: ChatState): ChatState {
   };
 }
 
+/** Marks any open review progress card as finished. */
+function finalizeReviews(state: ChatState): ChatState {
+  if (!state.items.some((it) => it.kind === "review" && !it.done)) {
+    return state;
+  }
+  return {
+    ...state,
+    items: state.items.map((it) =>
+      it.kind === "review" && !it.done ? { ...it, done: true } : it,
+    ),
+  };
+}
+
 function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
   switch (msg.type) {
     case "connected": {
-      // Defensive: the server now defers "connected" until the agent exists,
-      // so session is always non-empty; guard anyway and don't consume the
-      // one-shot greeting for an empty session.
+      // Defensive: the server defers "connected" until the agent exists, so
+      // session is normally non-empty; keep the guard for empty payloads.
       if (!msg.data.session) {
         return { ...state, cwd: msg.data.cwd || state.cwd };
       }
-      if (state.greeted) {
-        return { ...state, session: msg.data.session, cwd: msg.data.cwd };
-      }
-      return {
-        ...state,
-        greeted: true,
-        session: msg.data.session,
-        cwd: msg.data.cwd,
-        items: [
-          ...state.items,
-          {
-            kind: "system",
-            id: nextId("sys"),
-            content: `Session: ${msg.data.session} | CWD: ${msg.data.cwd}`,
-          },
-        ],
-      };
+      return { ...state, session: msg.data.session, cwd: msg.data.cwd };
     }
 
     case "commands":
       return { ...state, commands: msg.data ?? [] };
+
+    case "status":
+      return {
+        ...state,
+        model: msg.data.model,
+        permissionMode: msg.data.permissionMode,
+        thinkingLevel: msg.data.thinkingLevel,
+      };
+
+    case "session_list":
+      return { ...state, sessions: msg.data.sessions };
+
+    case "plan_approval_request":
+      return { ...state, planApproval: msg.data };
+
+    case "code_review_form":
+      return { ...state, codeReviewOpen: true };
+
+    case "code_review_progress": {
+      const open = state.items.findLast(
+        (it): it is ReviewItem => it.kind === "review" && !it.done,
+      );
+      if (open) {
+        return {
+          ...state,
+          items: state.items.map((it) =>
+            it.kind === "review" && it.id === open.id
+              ? {
+                  ...it,
+                  phase: msg.data.phase,
+                  message: msg.data.message,
+                  progress: msg.data.progress ?? null,
+                }
+              : it,
+          ),
+        };
+      }
+      const item: ReviewItem = {
+        kind: "review",
+        id: nextId("rev"),
+        phase: msg.data.phase,
+        message: msg.data.message,
+        progress: msg.data.progress ?? null,
+        done: false,
+      };
+      return { ...state, items: [...state.items, item] };
+    }
+
+    case "steering_queued":
+      return { ...state, steering: [...state.steering, msg.data.text] };
+
+    case "steering_delivered": {
+      const index = state.steering.indexOf(msg.data.text);
+      const steering =
+        index === -1
+          ? state.steering
+          : state.steering.filter((_, i) => i !== index);
+      return {
+        ...state,
+        steering,
+        items: [
+          ...state.items,
+          { kind: "user", id: nextId("usr"), content: msg.data.text },
+        ],
+      };
+    }
 
     case "system":
       return {
@@ -150,6 +234,10 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
         ...state,
         currentAssistantId: null,
         currentThinkingId: null,
+        steering: [],
+        planApproval: null,
+        sessions: null,
+        codeReviewOpen: false,
         items: [
           {
             kind: "system",
@@ -160,7 +248,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       };
 
     case "command_done":
-      return { ...state, streaming: false };
+      return finalizeReviews({ ...state, streaming: false });
 
     case "replay_user":
       return {
@@ -333,6 +421,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "loop_complete": {
       let next = finalizeAssistant(state);
       next = finalizeCurrentThinking(next);
+      next = finalizeReviews(next);
       return {
         ...next,
         streaming: false,
@@ -348,7 +437,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
 
     case "error":
       return {
-        ...state,
+        ...finalizeReviews(state),
         streaming: false,
         items: [
           ...state.items,
@@ -418,6 +507,15 @@ function reducer(state: ChatState, action: Action): ChatState {
         ),
       };
 
+    case "closePlanApproval":
+      return { ...state, planApproval: null };
+
+    case "closeSessions":
+      return { ...state, sessions: null };
+
+    case "closeCodeReview":
+      return { ...state, codeReviewOpen: false };
+
     default:
       return state;
   }
@@ -429,6 +527,9 @@ export interface ChatApi {
   setConnection: (status: ConnectionStatus) => void;
   respondPermission: (id: string, response: PermissionResponse) => void;
   markAskAnswered: (id: string) => void;
+  closePlanApproval: () => void;
+  closeSessions: () => void;
+  closeCodeReview: () => void;
 }
 
 export function useChat(): ChatApi {
@@ -453,11 +554,26 @@ export function useChat(): ChatApi {
     dispatch({ kind: "markAskAnswered", id });
   }, []);
 
+  const closePlanApproval = useCallback(() => {
+    dispatch({ kind: "closePlanApproval" });
+  }, []);
+
+  const closeSessions = useCallback(() => {
+    dispatch({ kind: "closeSessions" });
+  }, []);
+
+  const closeCodeReview = useCallback(() => {
+    dispatch({ kind: "closeCodeReview" });
+  }, []);
+
   return {
     state,
     dispatchMessage,
     setConnection,
     respondPermission,
     markAskAnswered,
+    closePlanApproval,
+    closeSessions,
+    closeCodeReview,
   };
 }

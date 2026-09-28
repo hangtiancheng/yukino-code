@@ -131,10 +131,46 @@ export interface RetryPayload {
   waitMs: number;
 }
 
+/** Live snapshot of model / permission mode / thinking level. */
+export interface StatusPayload {
+  model: string;
+  permissionMode: string;
+  thinkingLevel: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  firstMessage: string;
+  messageCount: number;
+  /** ISO timestamp of the session file's last modification. */
+  modTime: string;
+}
+
+export interface SessionListPayload {
+  sessions: SessionSummary[];
+}
+
+export interface PlanApprovalPayload {
+  planPath: string;
+  planContent: string;
+}
+
+export interface CodeReviewProgressPayload {
+  phase: string;
+  message: string;
+  /** 0..1 overall completion estimate, when known. */
+  progress?: number;
+}
+
+export interface SteeringPayload {
+  text: string;
+}
+
 /** Discriminated union of all server messages. `type` is the discriminant. */
 export type ServerMessage =
   | { type: "connected"; data: ConnectedPayload }
   | { type: "commands"; data: SlashCommand[] }
+  | { type: "status"; data: StatusPayload }
   | { type: "system"; data: SystemPayload }
   | { type: "clear"; data: null }
   | { type: "command_done"; data: null }
@@ -147,6 +183,12 @@ export type ServerMessage =
   | { type: "tool_result"; data: ToolResultPayload }
   | { type: "permission_request"; data: PermissionRequestPayload }
   | { type: "ask_user"; data: AskUserPayload }
+  | { type: "plan_approval_request"; data: PlanApprovalPayload }
+  | { type: "session_list"; data: SessionListPayload }
+  | { type: "code_review_form"; data: null }
+  | { type: "code_review_progress"; data: CodeReviewProgressPayload }
+  | { type: "steering_queued"; data: SteeringPayload }
+  | { type: "steering_delivered"; data: SteeringPayload }
   | { type: "turn_complete"; data: TurnCompletePayload }
   | { type: "loop_complete"; data: LoopCompletePayload }
   | { type: "usage"; data: UsagePayload }
@@ -158,6 +200,8 @@ export type ServerMessage =
 /* ───────────────────────── Client → Server messages ───────────────────────── */
 
 export type PermissionResponse = "allow" | "deny" | "allowAlways";
+
+export type PlanChoice = "yolo" | "manual" | "feedback";
 
 export interface UserMessagePayload {
   content: string;
@@ -173,10 +217,26 @@ export interface AskUserResponsePayload {
   answers: Record<string, string>;
 }
 
+export interface PlanApprovalResponsePayload {
+  choice: PlanChoice;
+  feedback?: string;
+}
+
+/** Transformed code-review form values (mirror of CodeReviewFormOptions). */
+export interface CodeReviewStartPayload {
+  background?: string;
+  from?: string;
+  to?: string;
+  commit?: string;
+  excludePatterns?: string[];
+}
+
 export type ClientMessage =
   | { type: "user_message"; data: UserMessagePayload }
   | { type: "permission_response"; data: PermissionResponsePayload }
   | { type: "ask_user_response"; data: AskUserResponsePayload }
+  | { type: "plan_approval_response"; data: PlanApprovalResponsePayload }
+  | { type: "code_review_start"; data: CodeReviewStartPayload }
   | { type: "cancel"; data: null }
   | { type: "ping"; data: Record<string, never> };
 
@@ -247,6 +307,16 @@ export interface AskUserItem {
   answered: boolean;
 }
 
+export interface ReviewItem {
+  kind: "review";
+  id: string;
+  phase: string;
+  message: string;
+  /** 0..1 overall completion estimate, when known. */
+  progress: number | null;
+  done: boolean;
+}
+
 export interface DoneItem {
   kind: "done";
   id: string;
@@ -262,6 +332,7 @@ export type ChatItem =
   | ToolItem
   | PermissionItem
   | AskUserItem
+  | ReviewItem
   | DoneItem;
 
 /* ───────────────────────── Derived helper types ───────────────────────── */

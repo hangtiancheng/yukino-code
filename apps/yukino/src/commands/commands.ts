@@ -24,7 +24,7 @@ import {
   isValidThinkingLevel,
   THINKING_LEVELS,
   type ThinkingLevel,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 
 export type CommandType = "local" | "local_ui" | "prompt" | "skill_fork";
 

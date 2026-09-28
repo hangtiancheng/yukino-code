@@ -23,13 +23,12 @@
 import { basename, dirname, join } from "node:path";
 
 import { Agent } from "./agent/index.js";
+import { loadConfig, withProjectMcpServers } from "./config/index.js";
+import type { MCPServerConfig } from "./config/index.js";
 import {
   getContextWindow,
   getMaxOutputTokens,
-  loadConfig,
-  withProjectMcpServers,
-} from "./config/index.js";
-import type { MCPServerConfig } from "./config/index.js";
+} from "./config/provider-config.js";
 import { ConversationManager } from "./conversation/index.js";
 import { createClient } from "./llm/client.js";
 import {

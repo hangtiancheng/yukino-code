@@ -28,7 +28,7 @@ import * as git from "@/code-review/git.js";
 import * as grouping from "@/code-review/grouping.js";
 import { runCodeReview } from "@/code-review/runner.js";
 import type { FileDiff, ReviewToolEvent } from "@/code-review/types.js";
-import type { ProviderConfig } from "@/config/index.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
 import * as llm from "@/llm/client.js";
 import { OpenAIClient } from "@/llm/openai.js";
 

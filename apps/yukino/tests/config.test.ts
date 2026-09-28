@@ -27,28 +27,29 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
 
 import {
+  loadConfig,
+  loadProjectMcpServers,
+  withProjectMcpServers,
+  resolveAPIKey,
+  forkEnabled,
+  type AppConfig,
+  type MCPServerConfig,
+} from "@/config/index.js";
+import {
   clampThinkingLevel,
   DEFAULT_MAX_OUTPUT_TOKENS,
-  forkEnabled,
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
   getThinkingLevel,
   isValidThinkingLevel,
-  loadConfig,
-  loadProjectMcpServers,
   ProviderConfigSchema,
-  resolveAPIKey,
   THINKING_LEVELS,
   thinkingBudgetForLevel,
   toReasoningEffort,
-  withProjectMcpServers,
   withProviderDefaults,
-  type AppConfig,
-  type MCPServerConfig,
   type ProviderConfig,
-} from "@/config/index.js";
-
+} from "@/config/provider-config.js";
 describe("config", () => {
   describe("getContextWindow", () => {
     it("returns configured value if set", () => {

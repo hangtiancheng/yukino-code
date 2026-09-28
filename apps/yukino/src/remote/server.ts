@@ -38,6 +38,9 @@ import { restoreRemoteSession } from "./session-state.js";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
+import { countMcpTools } from "@/bootstrap/tool-registry.js";
+import { formatReviewReport } from "@/code-review/report.js";
+import { runCodeReview, validateReviewInput } from "@/code-review/runner.js";
 import {
   parse as parseCommand,
   createDefaultRegistry as createCommandRegistry,
@@ -47,17 +50,14 @@ import {
 import { loadUserCommands } from "@/commands/loader.js";
 import { forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
+import type { HookConfig, MCPServerConfig } from "@/config/index.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
 import {
   DEFAULT_THINKING_LEVEL,
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
-} from "@/config/index.js";
-import type {
-  HookConfig,
-  MCPServerConfig,
-  ProviderConfig,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import { persistThinkingLevel } from "@/config/provider-login.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
@@ -73,9 +73,17 @@ import { MemoryConsolidator } from "@/memory/consolidation.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { MemoryManager } from "@/memory/manager.js";
-import { PermissionChecker, type Decision } from "@/permissions/index.js";
-import { getOrCreatePlanPath } from "@/plan-file/index.js";
+import {
+  PermissionChecker,
+  type Decision,
+  type PermissionMode,
+} from "@/permissions/index.js";
+import { getOrCreatePlanPath, planExists } from "@/plan-file/index.js";
 import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
+import {
+  buildPlanModeExitReminder,
+  buildPlanModeReentryReminder,
+} from "@/prompt/plan-mode.js";
 import {
   newSessionId,
   saveMessage,
@@ -168,6 +176,19 @@ const AskUserResponseSchema = z.object({
   answers: z.record(z.string(), z.string()),
 });
 
+const PlanApprovalResponseSchema = z.object({
+  choice: z.enum(["yolo", "manual", "feedback"]),
+  feedback: z.string().optional(),
+});
+
+const CodeReviewStartSchema = z.object({
+  background: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  commit: z.string().optional(),
+  excludePatterns: z.array(z.string()).optional(),
+});
+
 // -- Static file serving -------------------------------------------------------
 
 const FE_DIST = join(import.meta.dirname, "fe", "dist");
@@ -235,12 +256,23 @@ export interface RemoteAgentHandle {
   longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
   workDir: string;
+  /** Current permission mode; plan mode is enforced through the run() checker. */
+  permissionMode: PermissionMode;
 
   /** Runs the agent loop: adds the user message, creates Agent, and yields events. */
   run(text: string, callbacks: RunCallbacks): AsyncGenerator<AgentEvent>;
 
   /** Aborts the currently running agent loop (if any). */
   abort(): void;
+
+  /**
+   * Queues a steering message for the in-flight agent run. Returns false when
+   * no run is active, so callers can surface a "busy" hint instead.
+   */
+  steer(text: string): boolean;
+
+  /** Takes steering messages queued too late for in-run delivery. */
+  takeSteeringLeftovers(): string[];
 }
 
 // -- Agent handle implementation -----------------------------------------------
@@ -269,6 +301,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
   longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
   workDir: string;
+  permissionMode: PermissionMode = "default";
 
   // Servers whose instructions this conversation has already been told about. The
   // remote handle connects MCP once and never reloads it, so nothing is ever
@@ -277,9 +310,19 @@ class AgentHandleImpl implements RemoteAgentHandle {
   private mcpAnnounced = new Set<string>();
 
   private abortController: AbortController | null = null;
+  /** The agent of the current run, if any; used for mid-run steering. */
+  private currentAgent: Agent | null = null;
 
   constructor(
-    agentHandleImpl: Omit<AgentHandleImpl, "abortController" | "run" | "abort">,
+    agentHandleImpl: Omit<
+      AgentHandleImpl,
+      | "abortController"
+      | "run"
+      | "abort"
+      | "steer"
+      | "takeSteeringLeftovers"
+      | "permissionMode"
+    >,
   ) {
     this.client = agentHandleImpl.client;
     this.conv = agentHandleImpl.conv;
@@ -327,7 +370,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.abortController = new AbortController();
 
     try {
-      const checker = new PermissionChecker(this.workDir, "default");
+      const checker = new PermissionChecker(this.workDir, this.permissionMode);
       const agent = new Agent({
         client: this.client,
         registry: this.registry,
@@ -399,6 +442,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
         },
       });
 
+      this.currentAgent = agent;
       yield* agent.run();
     } finally {
       this.abortController = null;
@@ -409,6 +453,18 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.abortController?.abort();
     void this.backgroundTaskManager.stopAll();
     void this.teamManager.stopAll();
+  }
+
+  steer(text: string): boolean {
+    if (!this.abortController || !this.currentAgent) {
+      return false;
+    }
+    this.currentAgent.steer(text);
+    return true;
+  }
+
+  takeSteeringLeftovers(): string[] {
+    return this.currentAgent?.drainSteering() ?? [];
   }
 }
 
@@ -744,7 +800,7 @@ export async function createRemoteAgent(
   }
 
   // 17. Construct the handle
-  return new AgentHandleImpl({
+  const handle = new AgentHandleImpl({
     client,
     conv,
     registry,
@@ -769,6 +825,17 @@ export async function createRemoteAgent(
     provider,
     workDir,
   });
+
+  // ExitPlanMode gates on the live permission mode and requires a plan file,
+  // mirroring the terminal UI wiring.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  const exitPlan = registry.get("ExitPlanMode") as ExitPlanModeTool | undefined;
+  if (exitPlan) {
+    exitPlan.isPlanMode = () => handle.permissionMode === "plan";
+    exitPlan.planExists = () => planExists(workDir);
+  }
+
+  return handle;
 }
 
 // -- Helper functions for agent initialization ---------------------------------
@@ -873,8 +940,18 @@ export class RemoteServer {
   private agentHandle: RemoteAgentHandle | null = null;
   private streaming = false;
   private compactController: AbortController | null = null;
+  private reviewController: AbortController | null = null;
   private turnCount = 0;
   private readonly eventLogger = new AgentEventLogger(log);
+
+  // Plan-mode state (parity with the terminal UI approval flow).
+  private prePlanMode: PermissionMode = "default";
+  private hasExitedPlanMode = false;
+  private exitPlanSucceeded = false;
+  /** Set by cancelActiveRun so steering leftovers are dropped, not re-run. */
+  private runCanceled = false;
+  /** Whether a plan approval request is awaiting a client response. */
+  private planApprovalPending = false;
 
   // Pending permission/ask-user requests waiting for WS client responses
   private pendingPermissions = new Map<
@@ -945,6 +1022,10 @@ export class RemoteServer {
           type: "connected",
           data: { session: this.agentHandle.sessionId, cwd: cwd() },
         });
+        const status = this.statusPayload();
+        if (status) {
+          this.send(ws, status);
+        }
       }
 
       // Send available slash commands
@@ -984,7 +1065,28 @@ export class RemoteServer {
       case "user_message": {
         const parsed = UserMessageSchema.safeParse(msg.data);
         if (parsed.success) {
-          await this.handleUserMessage(parsed.data.content);
+          if (this.streaming) {
+            this.handleSteeringMessage(parsed.data.content);
+          } else {
+            await this.handleUserMessage(parsed.data.content);
+          }
+        }
+        break;
+      }
+      case "plan_approval_response": {
+        const parsed = PlanApprovalResponseSchema.safeParse(msg.data);
+        if (parsed.success) {
+          await this.handlePlanApprovalResponse(
+            parsed.data.choice,
+            parsed.data.feedback,
+          );
+        }
+        break;
+      }
+      case "code_review_start": {
+        const parsed = CodeReviewStartSchema.safeParse(msg.data);
+        if (parsed.success) {
+          await this.handleCodeReviewStart(parsed.data);
         }
         break;
       }
@@ -1045,6 +1147,7 @@ export class RemoteServer {
         type: "connected",
         data: { session: this.agentHandle.sessionId, cwd: cwd() },
       });
+      this.broadcastStatus();
       return this.agentHandle;
     } catch (err) {
       log.error({ err }, "failed to initialize agent");
@@ -1080,6 +1183,8 @@ export class RemoteServer {
     }
 
     this.streaming = true;
+    this.exitPlanSucceeded = false;
+    this.runCanceled = false;
     const startTime = Date.now();
     const workDir = handle.workDir;
     const sessionId = handle.sessionId;
@@ -1136,6 +1241,38 @@ export class RemoteServer {
     } finally {
       this.streaming = false;
     }
+
+    // Steering queued too late for in-run delivery becomes follow-up turns
+    // (parity with the terminal UI), unless the run was canceled.
+    if (!this.runCanceled) {
+      for (const leftover of handle.takeSteeringLeftovers()) {
+        await this.handleUserMessage(leftover);
+      }
+    }
+  }
+
+  /** Queues a mid-run user message as steering for the active agent run. */
+  private handleSteeringMessage(content: string): void {
+    const text = content.trim();
+    if (!text) {
+      return;
+    }
+    // Slash commands need a full turn; they cannot be steered mid-run.
+    if (text.startsWith("/") && parseCommand(text) !== null) {
+      this.broadcast({
+        type: "system",
+        data: { message: "Commands run after the current turn finishes." },
+      });
+      return;
+    }
+    if (!this.agentHandle?.steer(text)) {
+      this.broadcast({
+        type: "system",
+        data: { message: "The agent is busy; try again shortly." },
+      });
+      return;
+    }
+    this.broadcast({ type: "steering_queued", data: { text } });
   }
 
   /** Bridges an AgentEvent to the corresponding WS message and session persistence. */
@@ -1181,6 +1318,16 @@ export class RemoteServer {
             elapsed: ev.elapsed,
           },
         });
+        if (ev.toolName === "ExitPlanMode" && !ev.isError) {
+          this.exitPlanSucceeded = true;
+        }
+        break;
+
+      case "steering_delivered":
+        this.broadcast({
+          type: "steering_delivered",
+          data: { text: ev.text },
+        });
         break;
 
       case "turn_complete":
@@ -1201,6 +1348,14 @@ export class RemoteServer {
             elapsed,
           },
         });
+        // Plan approval gate (parity with the terminal UI): after a run in
+        // plan mode where ExitPlanMode succeeded, ask the user to approve.
+        if (
+          this.agentHandle?.permissionMode === "plan" &&
+          this.exitPlanSucceeded
+        ) {
+          this.broadcastPlanApprovalRequest();
+        }
         break;
       }
 
@@ -1276,8 +1431,25 @@ export class RemoteServer {
 
     switch (cmd.type) {
       case "local": {
-        const result = cmd.handler(ctx);
-        this.broadcast({ type: "system", data: { message: result } });
+        // /memory and /mcp return placeholder strings that only the terminal
+        // UI resolves; the remote server renders the real status itself.
+        if (name === "memory") {
+          this.broadcast({
+            type: "system",
+            data: { message: this.buildMemoryStatus(args) },
+          });
+        } else if (name === "mcp") {
+          this.broadcast({
+            type: "system",
+            data: { message: this.buildMcpStatus(args) },
+          });
+        } else {
+          const result = cmd.handler(ctx);
+          this.broadcast({ type: "system", data: { message: result } });
+        }
+        if (name === "thinking") {
+          this.broadcastStatus();
+        }
         this.broadcast({ type: "command_done", data: null });
         break;
       }
@@ -1291,6 +1463,7 @@ export class RemoteServer {
         const displayText = args ? `/${name} ${args}` : `/${name}`;
 
         this.streaming = true;
+        this.exitPlanSucceeded = false;
         const workDir = handle.workDir;
         const sessionId = handle.sessionId;
 
@@ -1378,6 +1551,17 @@ export class RemoteServer {
         await this.handlePlan(args);
         break;
 
+      case "login":
+        this.broadcast({
+          type: "system",
+          data: {
+            message:
+              "Provider login is only available in terminal mode. The remote server uses the provider it was started with.",
+          },
+        });
+        this.broadcast({ type: "command_done", data: null });
+        break;
+
       case "resume":
         this.handleResume(args);
         break;
@@ -1450,13 +1634,14 @@ export class RemoteServer {
         break;
 
       case "code-review":
-        this.broadcast({
-          type: "system",
-          data: {
-            message:
-              "/code-review configuration is currently available only in terminal mode.",
-          },
-        });
+        if (args.trim()) {
+          this.broadcast({
+            type: "system",
+            data: { message: "Usage: /code-review" },
+          });
+        } else {
+          this.broadcast({ type: "code_review_form", data: null });
+        }
         this.broadcast({ type: "command_done", data: null });
         break;
 
@@ -1557,16 +1742,36 @@ export class RemoteServer {
     const workDir = handle.workDir;
     const planPath = getOrCreatePlanPath(workDir);
 
+    if (handle.permissionMode !== "plan") {
+      this.prePlanMode = handle.permissionMode;
+      handle.permissionMode = "plan";
+    }
     this.broadcast({
       type: "system",
       data: {
-        message: `Entered Plan mode. Plan file: ${planPath}\nExplore the codebase and design your approach.`,
+        message:
+          `Entered plan mode (read-only). Plan file: ${planPath}\n` +
+          "Investigate and design your approach. The agent will call ExitPlanMode when the plan is ready.",
       },
     });
+    this.broadcastStatus();
+
+    // Re-enter plan mode: if a plan file already exists, rebuild the reminder
+    // (parity with the terminal UI).
+    if (this.hasExitedPlanMode && planExists(workDir)) {
+      const reentryMsg = buildPlanModeReentryReminder(planPath, true);
+      if (reentryMsg) {
+        handle.conv.addSystemReminder(reentryMsg);
+        this.broadcast({ type: "system", data: { message: reentryMsg } });
+      }
+      this.hasExitedPlanMode = false;
+    }
 
     if (args) {
       // With arguments: send to agent loop
       this.streaming = true;
+      this.exitPlanSucceeded = false;
+      this.runCanceled = false;
       saveMessage(workDir, handle.sessionId, {
         role: "user",
         content: `/plan ${args}`,
@@ -1609,6 +1814,281 @@ export class RemoteServer {
     }
   }
 
+  // -- Plan approval ------------------------------------------------------------
+
+  /** Builds the status snapshot message, or null before the agent exists. */
+  private statusPayload(): WsOutbound | null {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return null;
+    }
+    return {
+      type: "status",
+      data: {
+        model: handle.provider.model,
+        permissionMode: handle.permissionMode,
+        thinkingLevel:
+          handle.client.getThinkingLevel?.() ??
+          handle.provider.thinking ??
+          DEFAULT_THINKING_LEVEL,
+      },
+    };
+  }
+
+  /** Broadcasts the current model/mode/thinking snapshot to all clients. */
+  private broadcastStatus(): void {
+    const status = this.statusPayload();
+    if (status) {
+      this.broadcast(status);
+    }
+  }
+
+  /** Sends the plan approval request with the current plan file content. */
+  private broadcastPlanApprovalRequest(): void {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return;
+    }
+    const planPath = getOrCreatePlanPath(handle.workDir);
+    let planContent = "";
+    try {
+      if (existsSync(planPath)) {
+        planContent = readFileSync(planPath, "utf-8");
+      }
+    } catch {
+      /** noop */
+    }
+    this.planApprovalPending = true;
+    this.broadcast({
+      type: "plan_approval_request",
+      data: { planPath, planContent },
+    });
+  }
+
+  /**
+   * Mirrors the terminal UI plan approval: "yolo" auto-approves every edit,
+   * "manual" restores the pre-plan mode, and "feedback" keeps planning.
+   */
+  private async handlePlanApprovalResponse(
+    choice: "yolo" | "manual" | "feedback",
+    feedback?: string,
+  ): Promise<void> {
+    const handle = this.agentHandle;
+    if (!handle || !this.planApprovalPending) {
+      return;
+    }
+    this.planApprovalPending = false;
+
+    if (choice === "feedback") {
+      const text = feedback?.trim() ?? "";
+      if (text) {
+        await this.handleUserMessage(text);
+      }
+      return;
+    }
+
+    const workDir = handle.workDir;
+    const planPath = getOrCreatePlanPath(workDir);
+    let planContent = "";
+    try {
+      if (existsSync(planPath)) {
+        planContent = readFileSync(planPath, "utf-8");
+      }
+    } catch {
+      /** noop */
+    }
+
+    this.hasExitedPlanMode = true;
+    handle.permissionMode =
+      choice === "yolo" ? "bypassPermissions" : this.prePlanMode;
+    handle.conv.addSystemReminder(
+      buildPlanModeExitReminder(planPath, !!planContent),
+    );
+    this.broadcastStatus();
+    this.broadcast({
+      type: "system",
+      data: {
+        message:
+          choice === "yolo"
+            ? "Plan approved. Entered YOLO mode."
+            : "Plan approved. Each edit requires confirmation.",
+      },
+    });
+    if (planContent) {
+      await this.handleUserMessage(`Execute this plan:\n\n${planContent}`);
+    }
+  }
+
+  // -- Code review ----------------------------------------------------------------
+
+  /** Runs a code review configured through the browser form. */
+  private async handleCodeReviewStart(
+    options: z.infer<typeof CodeReviewStartSchema>,
+  ): Promise<void> {
+    if (this.streaming) {
+      this.broadcast({
+        type: "system",
+        data: { message: "A run is already in progress." },
+      });
+      return;
+    }
+    const handle = await this.ensureAgent();
+    if (!handle) {
+      return;
+    }
+
+    const from = options.from?.trim() || undefined;
+    const to = options.to?.trim() || undefined;
+    const commit = options.commit?.trim() || undefined;
+    try {
+      validateReviewInput(from, to, commit);
+      for (const ref of [from, to, commit]) {
+        if (ref && /[\r\n]/u.test(ref)) {
+          throw new Error("Git refs must be a single line");
+        }
+      }
+    } catch (err) {
+      this.broadcast({
+        type: "error",
+        data: { message: err instanceof Error ? err.message : String(err) },
+      });
+      this.broadcast({ type: "command_done", data: null });
+      return;
+    }
+
+    const controller = new AbortController();
+    this.reviewController = controller;
+    this.streaming = true;
+    this.runCanceled = false;
+    const startTime = Date.now();
+    this.broadcast({
+      type: "code_review_progress",
+      data: { phase: "diff", message: "Starting code review…" },
+    });
+
+    try {
+      const result = await runCodeReview(
+        {
+          workDir: handle.workDir,
+          background: options.background?.trim() || undefined,
+          from,
+          to,
+          commit,
+          excludePatterns:
+            options.excludePatterns?.filter((pattern) => pattern.trim()) ?? [],
+          abortSignal: controller.signal,
+          onProgress: (event) => {
+            this.broadcast({
+              type: "code_review_progress",
+              data: {
+                phase: event.phase,
+                message: event.message,
+                progress: event.progress,
+              },
+            });
+          },
+          onToolEvent: (event) => {
+            if (event.type === "tool_use") {
+              this.broadcast({
+                type: "tool_use",
+                data: {
+                  toolId: event.toolId,
+                  toolName: event.toolName,
+                  args: event.args,
+                },
+              });
+            } else {
+              this.broadcast({
+                type: "tool_result",
+                data: {
+                  toolId: event.toolId,
+                  toolName: event.toolName,
+                  output: event.output,
+                  isError: event.isError,
+                  elapsed: event.elapsed,
+                },
+              });
+            }
+          },
+        },
+        { provider: handle.provider },
+      );
+      const report = formatReviewReport(result);
+      this.broadcast({ type: "stream_text", data: { text: report } });
+      this.broadcast({ type: "stream_end", data: { text: report } });
+      if (result.comments.length > 0) {
+        handle.conv.addSystemReminder(
+          `<code_review_findings>\n${report}\n</code_review_findings>`,
+        );
+      }
+      this.broadcast({
+        type: "loop_complete",
+        data: {
+          stopReason: result.aborted ? "aborted" : "end_turn",
+          totalTurns: 0,
+          elapsed: (Date.now() - startTime) / 1000,
+        },
+      });
+    } catch (err) {
+      log.error({ err }, "code review failed");
+      this.broadcast({
+        type: "error",
+        data: { message: err instanceof Error ? err.message : String(err) },
+      });
+      this.broadcast({ type: "command_done", data: null });
+    } finally {
+      this.reviewController = null;
+      this.streaming = false;
+    }
+  }
+
+  // -- Local status commands --------------------------------------------------------
+
+  /** Renders /memory output (parity with the terminal UI). */
+  private buildMemoryStatus(args: string): string {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return "Memory is not available yet.";
+    }
+    const sub = args.trim().split(/\s+/u)[0];
+    if (sub === "clear") {
+      handle.memoryManager.clear();
+      return "All memories cleared.";
+    }
+    const memories = handle.memoryManager.getMemories();
+    if (memories.length === 0) {
+      return "No memories saved yet. They are auto-extracted; /memory clear wipes them.";
+    }
+    return (
+      `Memories (${String(memories.length)}):\n` +
+      memories
+        .map((m) => `  [${m.type}] ${m.name} — ${m.description}`)
+        .join("\n")
+    );
+  }
+
+  /** Renders /mcp status output (parity with the terminal UI). */
+  private buildMcpStatus(args: string): string {
+    if (args.trim().toLowerCase() === "reload") {
+      return "MCP reload is not supported in remote mode. Restart the remote server to reconnect.";
+    }
+    const handle = this.agentHandle;
+    const manager = handle?.mcpManager;
+    if (!manager || !handle) {
+      return "No MCP servers configured.";
+    }
+    const connected = manager.connectedServers();
+    if (connected.length === 0) {
+      return "No MCP servers connected.";
+    }
+    const lines = [
+      `MCP servers (${String(connected.length)}):`,
+      ...connected.map((s) => `  · ${s}`),
+      `Tools: ${String(countMcpTools(handle.registry))} total`,
+    ];
+    return lines.join("\n");
+  }
+
   /** Handles /resume command: resume a previous session. */
   private handleResume(args: string): void {
     if (!this.agentHandle) {
@@ -1619,7 +2099,7 @@ export class RemoteServer {
     const sessions = listSessions(workDir);
 
     if (!args) {
-      // No arguments: list available sessions
+      // No arguments: send the structured session list for the browser picker.
       if (sessions.length === 0) {
         this.broadcast({
           type: "system",
@@ -1629,24 +2109,17 @@ export class RemoteServer {
         return;
       }
 
-      const lines: string[] = [
-        `Available sessions (${String(sessions.length)}):\n`,
-      ];
-      for (let i = 0; i < Math.min(sessions.length, 20); i++) {
-        const sess = sessions[i];
-        let first = sess.firstMessage;
-        if (first.length > 60) {
-          first = first.slice(0, 60) + "...";
-        }
-        lines.push(
-          `  ${String(i + 1)}. [${sess.id}] ${first} (${String(sess.messageCount)} msgs)`,
-        );
-      }
-      if (sessions.length > 20) {
-        lines.push(`  ... and ${String(sessions.length - 20)} more`);
-      }
-      lines.push("\nUsage: /resume <number> or /resume <sess-id>");
-      this.broadcast({ type: "system", data: { message: lines.join("\n") } });
+      this.broadcast({
+        type: "session_list",
+        data: {
+          sessions: sessions.slice(0, 50).map((sess) => ({
+            id: sess.id,
+            firstMessage: sess.firstMessage,
+            messageCount: sess.messageCount,
+            modTime: sess.modTime.toISOString(),
+          })),
+        },
+      });
       this.broadcast({ type: "command_done", data: null });
       return;
     }
@@ -1820,8 +2293,11 @@ export class RemoteServer {
   }
 
   private cancelActiveRun(): void {
+    this.runCanceled = true;
+    this.planApprovalPending = false;
     this.agentHandle?.abort();
     this.compactController?.abort();
+    this.reviewController?.abort();
     // Aborting a provider cannot settle promises owned by the WebSocket UI.
     for (const resolve of this.pendingPermissions.values()) {
       resolve("deny");

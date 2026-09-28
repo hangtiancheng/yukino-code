@@ -51,10 +51,6 @@ export * as Compact from "./compact/index.js";
 
 // === config ===
 export * as Config from "./config/index.js";
-// provider-login value-imports config/index.js at module scope, so nesting
-// it under Config would create an evaluation cycle (TDZ on barrel import);
-// it stays a sibling namespace.
-export * as ProviderLogin from "./config/provider-login.js";
 
 // === conversation ===
 export * as Conversation from "./conversation/index.js";

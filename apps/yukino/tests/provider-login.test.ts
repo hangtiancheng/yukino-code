@@ -34,7 +34,8 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "@/commands/commands.js";
-import { globalConfigPath, loadConfig } from "@/config/index.js";
+import { loadConfig } from "@/config/index.js";
+import { globalConfigPath } from "@/config/provider-config.js";
 import {
   persistDefaultProvider,
   persistThinkingLevel,

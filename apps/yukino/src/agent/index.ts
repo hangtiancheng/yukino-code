@@ -32,7 +32,7 @@ import { RecoveryState } from "@/compact/recovery.js";
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import type { ToolUseBlock, ToolResultBlock } from "@/conversation/index.js";
 import { REJECTED_TOOL_RESULT } from "@/conversation/pairing.js";

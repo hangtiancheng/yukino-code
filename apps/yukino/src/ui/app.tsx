@@ -67,20 +67,19 @@ import { CommandUsageTracker } from "@/commands/usage-tracker.js";
 import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
 import type {
-  ProviderConfig,
   MCPServerConfig,
   HookConfig,
   SandboxYamlConfig,
 } from "@/config/index.js";
+import { loadConfig, withProjectMcpServers } from "@/config/index.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_THINKING_LEVEL,
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
-  loadConfig,
-  withProjectMcpServers,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import {
   persistDefaultProvider,
   persistThinkingLevel,

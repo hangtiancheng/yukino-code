@@ -22,7 +22,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { THINKING_LEVELS } from "@/config/index.js";
+import { THINKING_LEVELS } from "@/config/provider-config.js";
 import {
   activityStatusColor,
   DARK_THEME,

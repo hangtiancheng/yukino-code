@@ -29,7 +29,7 @@ import { act, createElement } from "react";
 import stringWidth from "string-width";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ProviderConfig } from "@/config/index.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
 import { ProviderLogin } from "@/ui/provider-login.js";
 
 vi.mock("ink", async (importOriginal) => ({

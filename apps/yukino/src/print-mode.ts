@@ -29,7 +29,10 @@ import {
   loadConfig,
   withProjectMcpServers,
 } from "./config/index.js";
-import { getContextWindow, getMaxOutputTokens } from "./config/index.js";
+import {
+  getContextWindow,
+  getMaxOutputTokens,
+} from "./config/provider-config.js";
 import { ConversationManager } from "./conversation/index.js";
 import { createClient } from "./llm/client.js";
 import { MCPManager } from "./mcp/manager.js";

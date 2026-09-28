@@ -64,7 +64,7 @@ import {
   getContextWindow,
   getMaxOutputTokens,
   type ProviderConfig,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { createClient, type LLMClient } from "@/llm/client.js";
 import { PermissionChecker } from "@/permissions/index.js";

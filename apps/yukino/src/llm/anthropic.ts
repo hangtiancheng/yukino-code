@@ -33,6 +33,7 @@ import {
 } from "./errors.js";
 import type { StreamEvent } from "./events.js";
 
+import { resolveAPIKey } from "@/config/index.js";
 import {
   clampThinkingLevel,
   getMaxOutputTokens,
@@ -40,12 +41,11 @@ import {
   getThinkingLevel,
   MIN_THINKING_ANSWER_TOKENS,
   type ProviderConfig,
-  resolveAPIKey,
   type ThinkingLevel,
   thinkingBudgetForLevel,
   toAnthropicThinkingEffort,
   toReasoningEffort,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import type { ConversationManager, Message } from "@/conversation/index.js";
 import { ensureToolPairing } from "@/conversation/pairing.js";
 import { createChildLogger } from "@/logger/index.js";

@@ -22,7 +22,7 @@
 
 import { z } from "zod";
 
-import type { ProviderConfig } from "@/config/index.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
 const MAX_MODEL_PAGES = 10;

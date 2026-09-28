@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import type { ThinkingLevel } from "@/config/index.js";
+import type { ThinkingLevel } from "@/config/provider-config.js";
 
 export interface ThemePalette {
   accent: string;

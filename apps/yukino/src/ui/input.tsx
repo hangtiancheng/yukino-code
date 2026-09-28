@@ -47,7 +47,10 @@ import { truncateToWidth, visibleWidth } from "./terminal-text.js";
 
 import type { Command } from "@/commands/commands.js";
 import type { CommandUsageTracker } from "@/commands/usage-tracker.js";
-import { THINKING_LEVELS, type ThinkingLevel } from "@/config/index.js";
+import {
+  THINKING_LEVELS,
+  type ThinkingLevel,
+} from "@/config/provider-config.js";
 import { saveClipboardImage } from "@/images/clipboard.js";
 import { createChildLogger } from "@/logger/index.js";
 import type { PermissionMode } from "@/permissions/index.js";

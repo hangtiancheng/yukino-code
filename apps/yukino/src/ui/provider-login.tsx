@@ -35,7 +35,7 @@ import {
   getThinkingLevel,
   type ProviderConfig,
   type ThinkingLevel,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import { ProviderLoginSchema } from "@/config/provider-login.js";
 import {
   discoverModels,

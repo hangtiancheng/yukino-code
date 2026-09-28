@@ -29,7 +29,7 @@ import {
   getContextWindow,
   getMaxOutputTokens,
   type ProviderConfig,
-} from "@/config/index.js";
+} from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createClient } from "@/llm/client.js";
