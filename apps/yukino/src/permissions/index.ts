@@ -52,7 +52,7 @@ interface Rule {
 }
 
 // Dangerous command patterns: each carries a match reason for HITL (Human-in-the-Loop) display
-interface DangerousPattern {
+export interface DangerousPattern {
   re: RegExp;
   reason: string;
 }
@@ -60,9 +60,9 @@ interface DangerousPattern {
 // Intentionally empty: no command patterns are currently classified as
 // dangerous, so detectDangerous() below never matches and the Layer-3 deny
 // stays inert until patterns are added.
-const DANGEROUS_PATTERNS: DangerousPattern[] = [];
+export const DANGEROUS_PATTERNS: DangerousPattern[] = [];
 
-const SAFE_PREFIXES: (string | RegExp)[] = [
+export const SAFE_PREFIXES: (string | RegExp)[] = [
   "basename",
   "cat",
   "cksum",

@@ -24,6 +24,7 @@ import { createChildLogger } from "@/logger/index.js";
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
 export * as Paths from "./paths.js";
+export * as Slug from "./slug.js";
 export * as Verbs from "./verbs.js";
 
 const log = createChildLogger({ module: "utils" });

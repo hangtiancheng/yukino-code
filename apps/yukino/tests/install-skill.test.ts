@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 
 import { SkillCatalog } from "@/skills/catalog.js";
-import { InstallSkillTool } from "@/skills/install-tool.js";
+import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 
 const SKILL = `---
 name: commit-helper

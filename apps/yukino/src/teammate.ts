@@ -48,7 +48,7 @@ import { buildTeammatePrompt } from "./prompt/delegation.js";
 import { SkillCatalog } from "./skills/catalog.js";
 import { buildSkillSection } from "./skills/catalog.js";
 import type { SkillHost } from "./skills/index.js";
-import { InstallSkillTool } from "./skills/install-tool.js";
+import { InstallSkillTool } from "./skills/install-skill-tool.js";
 import { LoadSkillTool } from "./skills/load-skill-tool.js";
 import type { FileMailMessage } from "./teams/file-mailbox.js";
 import { FileMailbox } from "./teams/file-mailbox.js";
