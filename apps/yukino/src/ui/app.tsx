@@ -55,6 +55,8 @@ import {
   removeMcpTools,
   wireSkillsToRegistry,
 } from "@/bootstrap/tool-registry.js";
+import { formatReviewReport } from "@/code-review/report.js";
+import { parseReviewArgs, runCodeReview } from "@/code-review/runner.js";
 import {
   parse as parseCommand,
   createDefaultRegistry as createCommandRegistry,
@@ -111,7 +113,7 @@ import * as sessionMod from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
 import { runFork as runSkillFork } from "@/skills/executor.js";
 import type { SkillHost, SkillForkHost } from "@/skills/index.js";
-import { InstallSkillTool } from "@/skills/install-tool.js";
+import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/definition.js";
@@ -1428,6 +1430,73 @@ export function App({
               });
           }
           break;
+        case "review": {
+          if (!clientRef.current) {
+            setMessages((prev) => [
+              ...prev,
+              { role: "system", content: "Client not ready." },
+            ]);
+            break;
+          }
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+          setIsStreaming(true);
+          const reviewArgs = parseReviewArgs(parsed.args);
+          let progressIdx = -1;
+          const updateProgress = (text: string) => {
+            if (progressIdx < 0) {
+              setMessages((prev) => {
+                progressIdx = prev.length;
+                return [...prev, { role: "system", content: text }];
+              });
+            } else {
+              setMessages((prev) =>
+                prev.map((m, i) =>
+                  i === progressIdx ? { ...m, content: text } : m,
+                ),
+              );
+            }
+          };
+          try {
+            const result = await runCodeReview(
+              {
+                workDir,
+                background: reviewArgs.background,
+                from: reviewArgs.from,
+                to: reviewArgs.to,
+                commit: reviewArgs.commit,
+                excludePatterns: reviewArgs.excludes,
+                abortSignal: controller.signal,
+                onProgress: (p) => {
+                  updateProgress(`Review: ${p.message}`);
+                },
+              },
+              { provider: selectedProviderRef.current },
+            );
+            const report = formatReviewReport(result);
+            updateProgress(report);
+            // Make the findings visible to the next conversational turn.
+            if (result.comments.length > 0) {
+              conversationRef.current.addSystemReminder(
+                `<code_review_findings>\n${report}\n</code_review_findings>`,
+              );
+            }
+          } catch (err: unknown) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "system",
+                content: `Review failed: ${asErrorString(err)}`,
+              },
+            ]);
+          } finally {
+            if (abortControllerRef.current === controller) {
+              abortControllerRef.current = null;
+            }
+            setIsStreaming(false);
+          }
+          break;
+        }
         case "resume": {
           const arg = parsed.args.trim();
           if (!arg) {

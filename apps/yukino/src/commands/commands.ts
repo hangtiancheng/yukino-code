@@ -278,14 +278,12 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "review",
-    type: "prompt",
+    type: "local_ui",
     description:
-      "Review the uncommitted code changes for bugs and improvements",
-    handler: (ctx) =>
-      "Review the current uncommitted changes. Run `git status` and `git diff` to see them, " +
-      "then report concrete findings (file:line) for correctness bugs, security issues, and obvious " +
-      "simplifications. Be specific and concise." +
-      (ctx.args ? `\n\nFocus on: ${ctx.args}` : ""),
+      "Run a structured AI code review. Default: uncommitted changes. " +
+      "Args: focus text, --from X --to Y (branch range), --commit SHA, " +
+      "--exclude GLOB (repeatable)",
+    handler: () => "review",
   });
 
   registry.register({

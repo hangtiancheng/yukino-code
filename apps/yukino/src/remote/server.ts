@@ -38,6 +38,8 @@ import { restoreRemoteSession } from "./session-state.js";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
+import { formatReviewReport } from "@/code-review/report.js";
+import { parseReviewArgs, runCodeReview } from "@/code-review/runner.js";
 import {
   parse as parseCommand,
   createDefaultRegistry as createCommandRegistry,
@@ -873,6 +875,7 @@ export class RemoteServer {
   private agentHandle: RemoteAgentHandle | null = null;
   private streaming = false;
   private compactController: AbortController | null = null;
+  private reviewController: AbortController | null = null;
   private turnCount = 0;
   private readonly eventLogger = new AgentEventLogger(log);
 
@@ -1449,6 +1452,66 @@ export class RemoteServer {
         this.broadcast({ type: "command_done", data: null });
         break;
 
+      case "review": {
+        const handle = this.agentHandle;
+        if (!handle) {
+          this.broadcast({ type: "command_done", data: null });
+          break;
+        }
+        const reviewArgs = parseReviewArgs(args);
+        const reviewController = new AbortController();
+        this.reviewController = reviewController;
+        this.streaming = true;
+        try {
+          const result = await runCodeReview(
+            {
+              workDir: handle.workDir,
+              background: reviewArgs.background,
+              from: reviewArgs.from,
+              to: reviewArgs.to,
+              commit: reviewArgs.commit,
+              excludePatterns: reviewArgs.excludes,
+              abortSignal: reviewController.signal,
+              onProgress: (p) => {
+                // Milestone phases only; per-group chatter stays local.
+                if (
+                  p.phase === "selection" ||
+                  p.phase === "grouping" ||
+                  p.phase === "done"
+                ) {
+                  this.broadcast({
+                    type: "system",
+                    data: { message: `Review: ${p.message}` },
+                  });
+                }
+              },
+            },
+            { provider: handle.provider },
+          );
+          const report = formatReviewReport(result);
+          if (result.comments.length > 0) {
+            handle.conv.addSystemReminder(
+              `<code_review_findings>\n${report}\n</code_review_findings>`,
+            );
+          }
+          this.broadcast({ type: "system", data: { message: report } });
+        } catch (err) {
+          this.broadcast({
+            type: "system",
+            data: {
+              message: `Review failed: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          });
+        } finally {
+          if (this.reviewController === reviewController) {
+            this.reviewController = null;
+          }
+          this.streaming = false;
+          this.broadcast({ type: "command_done", data: null });
+        }
+        break;
+      }
+
       default:
         this.broadcast({ type: "command_done", data: null });
         break;
@@ -1811,6 +1874,7 @@ export class RemoteServer {
   private cancelActiveRun(): void {
     this.agentHandle?.abort();
     this.compactController?.abort();
+    this.reviewController?.abort();
     // Aborting a provider cannot settle promises owned by the WebSocket UI.
     for (const resolve of this.pendingPermissions.values()) {
       resolve("deny");

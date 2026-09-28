@@ -47,7 +47,7 @@ import {
 } from "@/skills/catalog.js";
 import { runFork, runInline } from "@/skills/executor.js";
 import type { Skill, SkillForkHost } from "@/skills/index.js";
-import { InstallSkillTool } from "@/skills/install-tool.js";
+import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 
 vi.mock("node:os", async (importOriginal) => {
   const actual = await importOriginal<typeof os>();
