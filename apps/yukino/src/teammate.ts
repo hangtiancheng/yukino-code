@@ -248,8 +248,9 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
     }
     const conversation = new ConversationManager();
 
-    // The skill catalog feeds both the system prompt (so the model knows which
-    // skills are available) and the LoadSkill tool (for on-demand activation)
+    // The skill catalog feeds both the Agent's skillSection (injected via the
+    // first system-reminder message so the model knows which skills are
+    // available) and the LoadSkill tool (for on-demand activation)
     const catalog = new SkillCatalog();
     catalog.load(workDir);
     const skillHost: SkillHost = {

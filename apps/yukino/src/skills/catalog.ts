@@ -181,9 +181,9 @@ export class SkillCatalog {
   }
 
   /**
-   * Gets a skill with hot reload support: automatically re-reads the file if it has been modified on disk.
-   * re-reads the body on every call (hot reload),
-   * and retains the cached body if reading fails.
+   * Gets a skill with hot reload support: re-reads the file only when its mtime
+   * shows it has been modified on disk, and retains the cached body if reading
+   * or parsing fails.
    */
   get(name: string): Skill | undefined {
     const entry = this.entries.get(name);

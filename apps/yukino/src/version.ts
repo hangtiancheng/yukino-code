@@ -20,9 +20,9 @@
  * SOFTWARE.
  */
 
-// Read version from package.json at runtime so it stays in sync with releases.
-// In dev (src/): ../package.json resolves correctly.
-// In dist (dist/lib/): tsup injects __YUKINO_VERSION__ at build time.
+// Resolve the package version. dist builds take the __YUKINO_VERSION__ define
+// that tsup injects at build time; in dev (src/) the version is read from
+// ../package.json so it stays in sync with releases.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

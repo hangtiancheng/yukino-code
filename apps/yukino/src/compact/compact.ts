@@ -480,9 +480,9 @@ function serializePrefixText(messages: Message[]): string {
     .join("\n\n");
 }
 
-// Extract the <summary> block from the model's two-phase reply. <analysis> is a
-// scratch area; only <summary> is kept as the final summary. Falls back to the
-// raw text when the model does not follow the format.
+// Extract the <summary> block from the model's reply. If the model emits an
+// unprompted <analysis> block, strip it; falls back to the raw text when the
+// model does not follow the format.
 function formatCompactSummary(raw: string): string {
   const summaryMatch = /<summary>([\s\S]*?)<\/summary>/.exec(raw);
   if (summaryMatch) {

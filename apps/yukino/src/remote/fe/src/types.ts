@@ -109,6 +109,7 @@ export interface TurnCompletePayload {
 }
 
 export interface LoopCompletePayload {
+  stopReason: string;
   totalTurns: number;
   elapsed: number;
 }

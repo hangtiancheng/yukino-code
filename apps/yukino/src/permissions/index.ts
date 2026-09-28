@@ -381,7 +381,7 @@ function isNodeJSErrnoException(err: unknown): err is NodeJS.ErrnoException {
 }
 
 // Loads a rules file: a top-level YAML list of
-// `{ rule: "Tool(pattern)", effect: "allow"|"deny" }`.
+// `{ rule: "Tool(pattern)", effect: "allow"|"deny"|"ask" }`.
 function loadRulesFile(path: string): Rule[] {
   let data: string;
   try {

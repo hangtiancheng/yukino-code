@@ -53,7 +53,6 @@ export class FileStateCache {
 
     let currentModifiedTime: number;
     try {
-      /** mtimeMs: modification time in milliseconds */
       currentModifiedTime = statSync(filePath).mtimeMs;
     } catch (err) {
       log.error({ err }, "file state cache operation failed");

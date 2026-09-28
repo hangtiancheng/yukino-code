@@ -99,7 +99,7 @@ export interface Member {
   uiState?: TeammateUIState;
   /** Optional: Conversation manager for the teammate; when set, the transcript is persisted on exit. */
   conversation?: ConversationManager;
-  /** Optional: pane / session identifier for the teammate under the tmux/iTerm backend, used to locate it on stop. */
+  /** Optional: tmux session name recorded at spawn (diagnostics only); stop goes through the cancel callback and the mailbox shutdown flow. Not set under the iTerm backend. */
   paneId?: string;
   /** Whether this is an external-process teammate (tmux/iTerm); determines whether shutdown is delivered via the mailbox. */
   external?: boolean;
@@ -301,7 +301,7 @@ export class Team {
       cwd: this.workDir,
     };
 
-    // Launch the external process and record cancel/paneId on the member for later stop
+    // Launch the external process and record the cancel handle (used to stop it) and paneId (diagnostics) on the member
     const { cancel, paneId } = spawnTeammateProcess(config);
     member.cancel = cancel;
     member.paneId = paneId;
@@ -395,9 +395,10 @@ export class Team {
             );
             break;
           }
-          // Plan-mode teammate: a completed turn means it called ExitPlanMode and the plan
-          // has been written to disk. Submit the plan to the Leader for approval; only after
-          // approval is the read-only restriction lifted and execution begins.
+          // Plan-mode teammate: teammates have no ExitPlanMode tool — ending the turn is
+          // the submission signal, by which time the plan should have been written to the
+          // plan file. Submit it to the Leader for approval; only after approval is the
+          // read-only restriction lifted and execution begins.
           if (member.checker?.mode === "plan") {
             uiState.status = "idle";
             const next = await this.runPlanApproval(

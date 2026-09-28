@@ -332,8 +332,9 @@ export function App({
   // Current MCP server list. Starts as the prop but /mcp reload replaces it
   // with the freshly read config, so consumers must read this ref, not the prop.
   const mcpServersRef = useRef<MCPServerConfig[]>(mcpServers);
-  // The MCP load mode is decided once per session; a later retry pass must
-  // reapply that decision rather than recompute it.
+  // The MCP load mode is decided once per active client/provider (recomputed on
+  // provider switch or login); a later retry pass must reapply that decision
+  // rather than recompute it.
   const mcpModeDecidedRef = useRef(false);
   const hookEngineRef = useRef<HookEngine | null>(null);
   const skillCatalogRef = useRef<SkillCatalog | null>(null);
@@ -1893,7 +1894,7 @@ export function App({
     );
 
     // modeOverride avoids a stale-closure read of permMode right after a
-    // setPermMode call (e.g. plan approval switching out of plan mode in the same tick).
+    // setPermMode call (e.g. `/plan <args>` entering plan mode in the same tick).
     const checker = new PermissionChecker(workDir, modeOverride ?? permMode);
     checkerRef.current = checker;
 
@@ -2005,7 +2006,8 @@ export function App({
           .map((m) => `[${m.role}]: ${contentToText(m.content)}`)
           .filter((s) => s.length > 12)
           .join("\n");
-        // Lazy-init the Memory Extractor (one per session, reused across turns)
+        // Lazy-init the Memory Extractor (one per logged-in client, reused
+        // across turns and sessions; discarded on re-login)
         memExtractorRef.current ??= new MemoryExtractor(client, workDir);
         memExtractorRef.current
           .extract(summary)

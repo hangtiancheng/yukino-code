@@ -141,7 +141,9 @@ export class FileHistory {
         writeFileSync(backupPath, readFileSync(filePath));
       } catch (err) {
         log.error({ err }, "file-history operation failed");
-        // Unreadable: skip the file entirely so a rewind never deletes it.
+        // Unreadable: no backup entry in this snapshot. The file stays tracked,
+        // so rewind's createdAfterTarget pass treats it as absent at snapshot
+        // time and deletes it when rewinding to this snapshot.
         continue;
       }
       backups[filePath] = { backupPath, time: now };

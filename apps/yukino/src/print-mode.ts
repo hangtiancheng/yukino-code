@@ -126,16 +126,13 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   const startTime = Date.now();
   const workDir = process.cwd();
 
-  // Load configuration
   const cfg = withProjectMcpServers(loadConfig(), workDir);
   const provider = cfg.providers[0];
 
-  // Build system prompt
   const env = detectEnvironment(workDir);
   env.model = provider.model;
   const systemPrompt = buildSystemPrompt(env);
 
-  // Create LLM client
   const client = await createClient(provider, systemPrompt);
 
   const conv = new ConversationManager();
@@ -144,7 +141,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   // Print mode intentionally bypasses permission prompts.
   const checker = new PermissionChecker(workDir, "bypassPermissions");
 
-  // Create tool registry and register core tools
   const registry = new ToolRegistry();
   registry.register(new ReadFileTool());
   registry.register(new BashTool());
@@ -260,7 +256,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       decideAndApply(registry, provider.base_url, getContextWindow(provider));
     }
 
-    // Create Agent
     const agent = new Agent({
       client,
       registry,
@@ -289,7 +284,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     const toolCalls: { tool: string; elapsed: number }[] = [];
     const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
-    // Consume the Agent event stream
     for await (const event of agent.run()) {
       if (args.outputFormat === "stream-json") {
         emitStreamJson(event);
@@ -342,9 +336,10 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     }
 
     // Wait only for background Agent tasks: their results feed the final
-    // answer. Shell/JS tasks can run indefinitely (dev servers, auto-backgrounded
-    // timeouts) and would hang -p mode forever — whatever finished by now is
-    // drained below, and the finally block's stopAll() kills the rest.
+    // answer. Shell tasks (backgrounded Bash/PowerShell commands) can run
+    // indefinitely (dev servers, auto-backgrounded timeouts) and would hang
+    // -p mode forever — whatever finished by now is drained below, and the
+    // finally block's stopAll() kills the rest.
     await backgroundTaskManager.waitAll(
       (task) => (task.kind ?? "agent") === "agent",
     );

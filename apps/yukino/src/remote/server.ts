@@ -225,7 +225,7 @@ function serveStatic(path: string): { body: Buffer; mime: string } | null {
 
 // -- RemoteAgentHandle interface -----------------------------------------------
 
-/** Callbacks injected into each agent run for permission and user-interaction flows. */
+/** Callback injected into each agent run for the permission-request flow. */
 export interface RunCallbacks {
   onPermissionRequest: PermissionRequestHandler;
 }
@@ -369,7 +369,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
       announceMcpInstructions(this.conv, this.mcpAnnounced, this.mcpManager);
     }
 
-    // Create abort controller for this run
     this.abortController = new AbortController();
 
     try {
@@ -532,9 +531,10 @@ export async function createRemoteAgent(
   // 6. Load instructions and memory, inject into conversation
   const instructions = loadInstructions(workDir);
   const memoryManager = new MemoryManager(workDir);
-  // memory: false keeps the index out of the conversation; the manager stays
-  // available for explicit /memory inspection but nothing is injected, extracted,
-  // or consolidated automatically.
+  // memory: false keeps the index out of the conversation and nothing is
+  // injected, extracted, or consolidated automatically; /memory only reports
+  // that auto memory is disabled (the manager object is kept so the handle
+  // shape is uniform).
   const memReminder = memoryEnabled ? memoryManager.buildSystemReminder() : "";
   conv.injectLongTermMemory(instructions, memReminder);
 
@@ -799,7 +799,6 @@ export async function createRemoteAgent(
       }
     }
 
-    // Log errors
     for (const { serverName, error } of result.errors) {
       log.error({ serverName, error }, "MCP server connection error");
     }

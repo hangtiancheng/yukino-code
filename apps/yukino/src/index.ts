@@ -127,9 +127,11 @@ export * as VSCode from "./vscode/index.js";
 // === worktree ===
 export * as Worktree from "./worktree/index.js";
 
-// Process-level headless entry points. They carry no UI, but on failure they
-// may write crash dumps or process.exit() — prefer the composable namespaces
-// above (Agent, Bootstrap.ToolRegistry, ...) in long-lived host processes.
+// Process-level headless entry points. They carry no UI, but they own process
+// lifecycle — recover installs crash logging to .yukino/crash.log and calls
+// process.exit(), and print-mode exits on invalid flags — so prefer the
+// composable namespaces above (Agent, Bootstrap.ToolRegistry, ...) in
+// long-lived host processes.
 export * as PrintMode from "./print-mode.js";
 export * as Recover from "./recover.js";
 export * as Teammate from "./teammate.js";

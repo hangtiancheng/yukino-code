@@ -248,7 +248,9 @@ describe("MemoryConsolidator", () => {
         .split("\n")
         .filter((l) => l.trim().length > 0);
 
-      // Index should have fewer entries (from 3 lines down to 2, since duplicate push memories were merged)
+      // The index must not grow beyond the original 3 lines; whether the
+      // duplicate push memories actually get merged depends on the live LLM,
+      // so no lower bound is asserted here.
       console.log(`  Index lines: ${String(indexLines.length)}`);
       expect(indexLines.length).toBeLessThanOrEqual(3);
 

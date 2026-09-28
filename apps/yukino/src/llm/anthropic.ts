@@ -261,7 +261,6 @@ export function buildAnthropicMessages(
       }
 
       if (canMerge) {
-        // Convert
         if (typeof content === "string") {
           // First assign to prev.content, then assign to content
           content = prev.content =
@@ -566,8 +565,9 @@ export class AnthropicClient implements LLMClient {
 }
 
 /**
- * Marks the last user message's tail content block with an ephemeral
- * cache_control breakpoint so the prompt prefix up to it is cached.
+ * Marks the last non-image content block of the last user message (the true
+ * tail when every block is an image) with an ephemeral cache_control
+ * breakpoint so the prompt prefix up to it is cached.
  */
 export function markLastUserTailForCache(
   messages: Anthropic.Messages.MessageParam[],

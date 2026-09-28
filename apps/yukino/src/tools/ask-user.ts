@@ -172,7 +172,6 @@ export class AskUserQuestionTool implements Tool {
       }
     }
 
-    // Wait for user ask
     const answer = await this.ask(questions);
     const parts = Object.entries(answer).map(([q, a]) => `"${q}" = "${a}"`);
 

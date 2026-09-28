@@ -412,8 +412,10 @@ async function executeGroupSubtask(
     }
   }
 
-  // Per-path baselines for round-delta computation. The collector is
-  // group-local, so the absolute indices the filter removes by are stable.
+  // Findings confirmed in prior rounds, re-injected into the next round's
+  // prompt. Round deltas use a single per-round collector cursor (snapshot
+  // below); the collector is group-local, so the absolute indices the filter
+  // removes by are stable.
   const confirmed: ReviewComment[] = [];
 
   for (let round = 1; round <= deps.maxRounds; round++) {

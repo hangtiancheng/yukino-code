@@ -6,7 +6,7 @@ Yukino is a terminal-based AI coding agent. It provides an interactive UI (termi
 
 Yukino runs as a single CLI binary that connects to configurable LLM providers (Anthropic, OpenAI, or any OpenAI-compatible endpoint). It renders a rich terminal interface using React and Ink, giving you streaming responses, tool execution feedback, permission prompts, and slash commands in a single pane.
 
-Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, and a teammate mode that lets one leader agent coordinate multiple subagents working in parallel.
+Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, an ACP (Agent Client Protocol) mode for editor integration, and team coordination where one leader agent manages multiple teammates (in-process, or as separate processes in tmux/iTerm panes) working in parallel.
 
 ## Features
 
@@ -14,7 +14,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 - Multi-provider LLM support with Anthropic, OpenAI, and OpenAI-compatible protocols
 - Interactive terminal UI with streaming text, thinking indicators, and tool execution display
-- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, and the TaskCreate/TaskGet/TaskList/TaskUpdate todo tools
+- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, the TaskCreate/TaskGet/TaskList/TaskUpdate todo tools, plus the orchestration and interaction tools: Agent, LoadSkill, InstallSkill, AskUserQuestion, SyntheticOutput, TeamCreate, SpawnTeammate, SendMessage, ListTeams, TeamDelete, and TaskStop
 - MCP (Model Context Protocol) server integration for extending the tool set with external services
 - Permission system with four modes: default, acceptEdits, plan (read-only), and bypassPermissions
 - Sandbox support for isolated command execution: the native backend (bwrap on Linux, seatbelt on macOS) or the sandbox-runtime backend
@@ -25,7 +25,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 - Session persistence with JSONL-based storage for cross-session resume
 - Automatic context compaction when conversations approach the model's context window
 - Long-term memory extraction and recall across sessions (disable with `memory: false` in `~/.yukino/config.yaml`)
-- Instructions file support for persistent project-level guidance
+- Instructions files for persistent guidance: user-global `~/.yukino/AGENTS.md`, plus `AGENTS.md` and `.yukino/AGENTS.md` in every directory from the git root down to the working directory, with `@include` expansion
 
 ### Skills and Commands
 
@@ -33,7 +33,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 - Hot-reload support for skills edited on disk
 - Inline and fork execution modes for skills
 - Slash command system with built-in commands and user-defined commands from .yukino/commands/
-- Skill installation from URLs
+- Skill installation from a local path or a raw SKILL.md URL
 
 ### Agent Orchestration
 
@@ -46,7 +46,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 - Event-driven hook engine supporting: session_start, session_end, turn_start, turn_end, pre_send, post_receive, pre_tool_use, post_tool_use, shutdown
 - Hook actions: shell commands, HTTP requests, prompt injection, and subagent (`agent`) execution
-- Conditional execution, reject-on-failure, and async options
+- Conditional execution, one-shot (`once`) hooks, `reject` (blocks a tool call on pre_tool_use), `on_error` handling (ignore, fail, reject), and fire-and-forget `async` execution (`reject` and `async` are mutually exclusive)
 
 ### Remote Mode
 
@@ -129,18 +129,21 @@ memory: true
 
 Provider fields:
 
-| Field             | Required | Description                                                                                                                |
-| ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| name              | yes      | Display name for the provider                                                                                              |
-| protocol          | yes      | One of: anthropic, openai, openai-compat                                                                                   |
-| base_url          | yes      | API base URL                                                                                                               |
-| model             | yes      | Model identifier                                                                                                           |
-| api_key           | no       | API key (falls back to environment variable)                                                                               |
-| thinking          | no       | Thinking level: off, minimal, low, medium, high, xhigh, max (default: `high` for every protocol).                          |
-| context_window    | no       | Context window in tokens (default: 1000000; no model-name inference)                                                       |
-| max_output_tokens | no       | Output cap for the model (default: 128000, never above `context_window`). Set this for models with a smaller output limit. |
+| Field              | Required | Description                                                                                                                |
+| ------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| name               | yes      | Display name for the provider                                                                                              |
+| protocol           | yes      | One of: anthropic, openai, openai-compat                                                                                   |
+| base_url           | yes      | API base URL                                                                                                               |
+| model              | yes      | Model identifier                                                                                                           |
+| api_key            | no       | API key (falls back to environment variable)                                                                               |
+| thinking           | no       | Thinking level: off, minimal, low, medium, high, xhigh, max (default: `high` for every protocol).                          |
+| reasoning          | no       | Explicit capability switch: `false` disables reasoning entirely; omitted leaves the provider default in place.             |
+| thinking_level_map | no       | Per-level overrides mapping a logical level to a provider effort string (or `null` to disable that level).                 |
+| thinking_mode      | no       | Anthropic only: `budget` (default) or `adaptive`; adaptive sends effort-based `output_config` instead of a token budget.   |
+| context_window     | no       | Context window in tokens (default: 1000000; no model-name inference)                                                       |
+| max_output_tokens  | no       | Output cap for the model (default: 128000, never above `context_window`). Set this for models with a smaller output limit. |
 
-The thinking level controls reasoning depth. For `anthropic` it maps to a thinking token budget (minimal 1024, low 2048, medium 8192, high 16384, xhigh 32768, max 65536); for `openai` and `openai-compat` it maps to the provider reasoning effort. The budget shares `max_output_tokens` and always leaves at least 1024 answer tokens, so lower `max_output_tokens` shrinks the thinking budget instead of disabling it (below a 2048-token cap no valid budget remains and thinking falls back to disabled). On `openai`/`openai-compat`, the effort string is passed through verbatim, and only levels supported by the model are accepted (`xhigh`/`max` are model-specific). Use `/thinking <level>` to change it at runtime (the change is applied to the active client and saved to `~/.yukino/config.yaml`), or `/thinking` to show the current level.
+The thinking level controls reasoning depth. For `anthropic` in the default `budget` mode it maps to a thinking token budget (minimal 1024, low 2048, medium 8192, high 16384, xhigh 32768, max 65536); with `thinking_mode: adaptive` it maps to an effort-based `output_config` instead (minimal resolves to low, xhigh to high). For `openai` and `openai-compat` it maps to the provider reasoning effort, passed through verbatim unless `thinking_level_map` remaps it. The budget shares `max_output_tokens` and always leaves at least 1024 answer tokens, so lower `max_output_tokens` shrinks the thinking budget instead of disabling it (below a 2048-token cap no valid budget remains and thinking falls back to disabled). Levels the model does not support are declared through `thinking_level_map` (map to a supported effort, or `null` to disable) and `reasoning: false`; an unsupported request is clamped down to the nearest available level. Use `/thinking <level>` to change it at runtime (the change is applied to the active client and saved to `~/.yukino/config.yaml`), or `/thinking` to show the current level.
 
 API keys are resolved in this order: explicit api_key field, then environment variables (ANTHROPIC_API_KEY for anthropic, OPENAI_API_KEY for openai and openai-compat).
 
@@ -239,11 +242,13 @@ After editing `.mcp.json` or `config.yaml`, use `/mcp reload` in the UI to re-re
 
 ```bash
 yukino
+yukino --resume              # open the session picker at startup
+yukino --resume <session-id> # restore a specific session at startup
 ```
 
-Launches the terminal interface. If multiple providers are configured, a provider selection screen appears first.
+Launches the terminal interface with the provider recorded as `default_provider` in `~/.yukino/config.yaml` (the one last selected via `/provider` or `/login`; the first provider by default). Use `/provider` to switch providers at runtime. When no provider is configured, the login form opens automatically.
 
-Use `/login` to configure and activate a provider from the UI. When no provider is configured, the login form opens automatically. Name, protocol, base URL, API key, and model are required in the form. Use ↑↓ or Tab to move between fields, ←→ to select protocol or cycle the thinking level, Enter to save, and Esc to cancel. Changing the protocol also moves an untouched thinking level to that protocol's default.
+Use `/login` to configure and activate a provider from the UI. Name, protocol, base URL, API key, and model are required in the form. Use ↑↓ or Tab to move between fields, ←→ to select protocol or cycle the thinking level, Enter to save, and Esc to cancel. Changing the protocol also moves an untouched thinking level to that protocol's default.
 
 The form saves to `~/.yukino/config.yaml`, retaining existing providers and other settings. `base_url` is the provider identity: saving a provider whose `base_url` already exists replaces that entry in place instead of adding another one, and names may repeat freely. Context window accepts integers from 1000 to 10000000; max output accepts integers from 1 to 1000000 and must not exceed the context window. Empty optional fields use the defaults above.
 
@@ -254,7 +259,7 @@ yukino -p "explain this codebase"
 yukino -p "fix the failing test" --output-format stream-json
 ```
 
-The -p flag sends a single prompt, runs the agent loop, and prints the result to stdout. Useful for scripting and CI pipelines.
+The -p flag sends a single prompt, runs the agent loop, and prints the result to stdout (`text` by default, or one JSON line per event with `--output-format stream-json`). Print mode intentionally bypasses permission prompts, so only run it on trusted prompts. Useful for scripting and CI pipelines.
 
 ### Remote Mode (Browser UI)
 
@@ -265,6 +270,16 @@ yukino --remote 0.0.0.0:9000      # explicitly expose on all interfaces (no buil
 ```
 
 Starts a Koa HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction.
+
+### ACP Mode (Editor Integration)
+
+```bash
+yukino --acp                 # Agent Client Protocol over stdio (cannot be combined with other flags)
+yukino --acp-ws              # ACP over WebSocket, listens on 127.0.0.1:18889
+yukino --acp-ws host:port    # ACP over WebSocket at a custom loopback address
+```
+
+Implements the Agent Client Protocol (`@agentclientprotocol/sdk`) so ACP-compatible editors can drive Yukino as an external agent. The WebSocket transport only binds loopback addresses.
 
 ### Slash Commands
 
@@ -281,7 +296,7 @@ Inside the UI, these commands are available:
 | /memory clear        | Clear all memories                                                                                                        |
 | /skills              | List available skills                                                                                                     |
 | /skills reload       | Hot-reload skills from disk                                                                                               |
-| /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`)                                                                      |
+| /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`; `/skill reload` routes to `/skills reload`)                          |
 | /plan                | Enter plan mode (read-only investigation)                                                                                 |
 | /compact             | Force conversation compaction                                                                                             |
 | /clear               | Reset the session and clear the terminal                                                                                  |
@@ -314,10 +329,10 @@ Pasting an image saves it as a PNG under `.yukino/file-history/<session-id>/`. I
 
 Besides the `yukino` CLI, the package ships a library entry for embedding Yukino in another host process.
 
-| Entry          | Output                                     | Contents                                                                                                      |
-| -------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| CLI (`yukino`) | `dist/main.js`                             | Fully bundled, minified single file with a shebang; only Node built-ins stay external.                        |
-| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts` | The `src/index.ts` barrel; runtime dependencies stay external and resolve from the consumer's `node_modules`. |
+| Entry          | Output                                     | Contents                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CLI (`yukino`) | `dist/main.js`                             | Fully bundled, minified single file with a shebang; Node built-ins plus modules with native binaries or runtime assets (`sharp`, `@anthropic-ai/sandbox-runtime`, ink's `react-devtools-core` peer) stay external. |
+| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts` | The `src/index.ts` barrel; runtime dependencies stay external and resolve from the consumer's `node_modules`.                                                                                                      |
 
 The library entry is terminal-independent by contract: it must never reach `src/ui/**` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can import it. `pnpm build` enforces that contract:
 
@@ -325,4 +340,4 @@ The library entry is terminal-independent by contract: it must never reach `src/
 - **`react` is banned, `react-dom` never appears** — the barrel does not re-export `src/ui/**`, so `react` is reached exclusively from the terminal layer; `react-dom` is imported only by the standalone browser bundle (`src/remote/fe`, built separately via `pnpm build:fe`), which is not part of the library graph.
 - **Ambiguous export scan** — once the bundle is written, the build runs the TypeScript ambiguous-export check (`TS2308`) over the library graph. A name exported by two `export *` sources is dropped by the bundler without any warning; the scan turns that into a build failure instead of a quietly smaller public API.
 
-In a long-lived host process, prefer the composable modules (`Agent`, `ToolRegistry`, …) over the process-level entry points (`print-mode`, `recover`, `teammate`), which may write crash dumps or call `process.exit()`.
+In a long-lived host process, prefer the composable modules (`Agent`, `ToolRegistry`, …) over the process-level entry points (`print-mode`, `recover`, `teammate`), which own process lifecycle — `recover` installs crash logging to `.yukino/crash.log` and calls `process.exit()`, and `print-mode` exits on invalid flags.

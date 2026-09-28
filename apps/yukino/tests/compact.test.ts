@@ -221,10 +221,11 @@ describe("computeKeepStartIndex (recent-history retention)", () => {
     expect(hasUse && hasResult).toBe(true);
   });
 
-  it("stops at KEEP_MAX_TOKENS upper bound and does not keep everything", () => {
-    // Each message is ~14000 tokens (49000 chars / 3.5). The token-floor (10k)
-    // is satisfied by a single message, but we keep adding until the next would
-    // cross KEEP_MAX_TOKENS (40k). 14k+14k=28k ok, +14k=42k > 40k → stop at 2.
+  it("stops at the token floor and does not keep everything", () => {
+    // Each message is ~14000 tokens (49000 chars / 3.5). The first kept message
+    // already satisfies the token-floor (KEEP_RECENT_TOKENS = 10k), so the scan
+    // stops after keeping exactly 1 and never reaches the KEEP_MAX_TOKENS (40k)
+    // upper-bound check.
     const big = "z".repeat(49000); // ceil(49000/3.5) = 14000 tokens each
     const messages: Message[] = Array.from({ length: 6 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",
