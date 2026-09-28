@@ -49,6 +49,17 @@ describe("TaskManager", () => {
     await tasks.waitAll();
   });
 
+  it("reports completed notifications without consuming them", async () => {
+    const tasks = new TaskManager();
+    const task = tasks.create("agent", ok, noop);
+    expect(tasks.hasNotifications()).toBe(false);
+
+    await task.done;
+    expect(tasks.hasNotifications()).toBe(true);
+    expect(tasks.drainNotifications()).toEqual([task]);
+    expect(tasks.hasNotifications()).toBe(false);
+  });
+
   it("waitAll(filter) only awaits matching tasks", async () => {
     const tasks = new TaskManager();
     let release!: () => void;

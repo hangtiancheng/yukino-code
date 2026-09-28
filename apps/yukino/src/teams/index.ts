@@ -749,6 +749,10 @@ export class TeamManager {
     return this.list().flatMap((t) => t.getTeammateStates());
   }
 
+  hasLeadNotifications(): boolean {
+    return this.list().some((team) => team.leadMailbox.unreadCount() > 0);
+  }
+
   /**
    * Reads all unread messages from the team lead's mailbox and returns them in XML tag format.
    * This allows the model to parse team notifications in a structured manner.

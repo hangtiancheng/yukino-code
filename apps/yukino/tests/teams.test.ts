@@ -108,12 +108,14 @@ describe("teams orchestration", () => {
     );
 
     await wait(200);
+    expect(mgr.hasLeadNotifications()).toBe(true);
     const drained = mgr.drainLeads();
     // The teammate sends an [idle] notification with its name after finishing
     expect(
       drained.some((d) => d.includes("scout") && d.includes("[idle]")),
     ).toBe(true);
     // Drained messages are consumed.
+    expect(mgr.hasLeadNotifications()).toBe(false);
     expect(mgr.drainLeads()).toEqual([]);
   });
 

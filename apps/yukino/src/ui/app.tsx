@@ -158,6 +158,7 @@ import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
 import { activityStatusColor, THEME, thinkingLevelColor } from "@/ui/styles.js";
 import { useFollowUpQueue } from "@/ui/use-follow-up-queue.js";
 import { useIdeInput } from "@/ui/use-ide-input.js";
+import { useNotificationWakeup } from "@/ui/use-notification-wakeup.js";
 import { useTeammateStates } from "@/ui/use-teammate-states.js";
 import {
   asErrorString,
@@ -2172,33 +2173,22 @@ export function App({
     }
   };
 
-  const runUserTurn = async (text: string, modeOverride?: PermissionMode) => {
+  const runAgentTurn = async (
+    prepare?: () => Promise<void>,
+    modeOverride?: PermissionMode,
+  ) => {
     if (!clientRef.current) {
       setError("LLM client not ready yet");
       return;
     }
 
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
     setIsStreaming(true);
     setSubagents([]);
     output.prepareTurn();
     setError(null);
 
     try {
-      const expanded = await expandAtRefsWithImages(text, workDir);
-      conversationRef.current.addUserMessage(expanded);
-      sessionMod.saveMessage(workDir, sessionIdRef.current, {
-        role: "user",
-        content:
-          typeof expanded === "string"
-            ? text
-            : [
-                { type: "text", text },
-                ...expanded.filter((block) => block.type === "image"),
-              ],
-        timestamp: Math.floor(Date.now() / 1000),
-      });
-
+      await prepare?.();
       await runAgentLoopWithStats(modeOverride);
     } catch (err) {
       const msg = asErrorString(err);
@@ -2235,6 +2225,29 @@ export function App({
       output.finishTurn();
       abortControllerRef.current = null;
     }
+  };
+
+  const runUserTurn = async (text: string, modeOverride?: PermissionMode) => {
+    await runAgentTurn(async () => {
+      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      const expanded = await expandAtRefsWithImages(text, workDir);
+      conversationRef.current.addUserMessage(expanded);
+      sessionMod.saveMessage(workDir, sessionIdRef.current, {
+        role: "user",
+        content:
+          typeof expanded === "string"
+            ? text
+            : [
+                { type: "text", text },
+                ...expanded.filter((block) => block.type === "image"),
+              ],
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+    }, modeOverride);
+  };
+
+  const runNotificationTurn = async (): Promise<void> => {
+    await runAgentTurn();
   };
 
   const handlePlanApproval = useCallback(
@@ -2403,28 +2416,42 @@ export function App({
     await runUserTurn(text);
   };
 
+  const turnBlocked =
+    appState !== "chat" ||
+    !clientRef.current ||
+    isStreaming ||
+    isCompacting ||
+    providerSwitching ||
+    loginActive ||
+    providerDialogActive ||
+    thinkingDialogActive ||
+    planApprovalActive ||
+    rewindDialogActive ||
+    resumeDialogActive ||
+    permissionRequest !== null ||
+    askRequest !== null ||
+    teamsDialogOpen;
   const followUps = useFollowUpQueue({
-    blocked:
-      appState !== "chat" ||
-      !clientRef.current ||
-      isStreaming ||
-      isCompacting ||
-      providerSwitching ||
-      loginActive ||
-      providerDialogActive ||
-      thinkingDialogActive ||
-      planApprovalActive ||
-      rewindDialogActive ||
-      resumeDialogActive ||
-      permissionRequest !== null ||
-      askRequest !== null ||
-      teamsDialogOpen,
+    blocked: turnBlocked,
     send: processSubmission,
     onError: (error) => {
       setError(asErrorString(error));
     },
   });
   const pendingMessages = followUps.messages;
+
+  useNotificationWakeup({
+    blocked:
+      turnBlocked || followUps.processing || followUps.messages.length > 0,
+    hasPending: () =>
+      teamManagerRef.current.hasLeadNotifications() ||
+      backgroundTaskManagerRef.current.hasNotifications(),
+    run: runNotificationTurn,
+    onError: (error) => {
+      setError(asErrorString(error));
+    },
+  });
+
   /**
    * pi-style message routing: while the agent runs, plain text is steered into
    * the in-flight run (injected at the next turn boundary); slash commands and

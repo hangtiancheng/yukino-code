@@ -205,6 +205,15 @@ export class TaskManager {
     await Promise.allSettled(tasks.map((task) => task.done));
   }
 
+  hasNotifications(): boolean {
+    return this.list().some(
+      (task) =>
+        task.status !== "running" &&
+        !this.pendingTaskIds.has(task.id) &&
+        !this.notifiedTaskIds.has(task.id),
+    );
+  }
+
   drainNotifications(): AgentTask[] {
     const completed = this.list().filter(
       (task) =>
