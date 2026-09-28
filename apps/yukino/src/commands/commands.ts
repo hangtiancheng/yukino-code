@@ -277,13 +277,10 @@ export function createDefaultRegistry(): CommandRegistry {
   });
 
   registry.register({
-    name: "review",
+    name: "code-review",
     type: "local_ui",
-    description:
-      "Run a structured AI code review. Default: uncommitted changes. " +
-      "Args: focus text, --from X --to Y (branch range), --commit SHA, " +
-      "--exclude GLOB (repeatable)",
-    handler: () => "review",
+    description: "Configure and run a structured AI code review",
+    handler: ({ args }) => (args.trim() ? "code-review-usage" : "code-review"),
   });
 
   registry.register({

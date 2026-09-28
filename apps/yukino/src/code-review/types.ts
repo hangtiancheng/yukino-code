@@ -100,7 +100,7 @@ export interface ReviewProgressEvent {
 
 export interface CodeReviewOptions {
   workDir: string;
-  /** Free-form focus/background text (the `/review <args>` remainder). */
+  /** Free-form focus/background text from the code review form. */
   background?: string;
   from?: string;
   to?: string;

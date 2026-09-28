@@ -31,7 +31,7 @@ export const FILE_TOKEN_LIMIT = 160_000;
 export const PROMPT_TOKEN_RATIO = 0.8;
 
 export interface SelectionOptions {
-  /** User exclude globs (repeatable `--exclude` on `/review`). */
+  /** User exclude globs from the code review form. */
   excludePatterns?: string[];
   fileTokenLimit?: number;
 }

@@ -1,6 +1,7 @@
 export * as CommentTool from "./comment-tool.js";
 export * as DiffParser from "./diff-parser.js";
 export * as Filter from "./filter.js";
+export * as Form from "./form.js";
 export * as Format from "./format.js";
 export * as Grouping from "./grouping.js";
 export * as LlmCall from "./llm-call.js";

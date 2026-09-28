@@ -24,6 +24,7 @@ import { Box, Text, useInput } from "ink";
 import { useReducer } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
+import { TextField } from "./text-field.js";
 
 import type { Question } from "@/tools/ask-user.js";
 import { ICONS, THEME } from "@/ui/styles.js";
@@ -140,11 +141,15 @@ function NavigationBar({
 function QuestionContent({
   question,
   state,
+  onTextChange,
+  onTextSubmit,
+  onTextEscape,
 }: {
   question: Question;
   state: QuestionState;
-  questionIndex: number;
-  totalQuestions: number;
+  onTextChange: (value: string) => void;
+  onTextSubmit: (value: string) => void;
+  onTextEscape: () => void;
 }) {
   const options = question.options;
   const otherIndex = options.length;
@@ -211,13 +216,15 @@ function QuestionContent({
         </Text>
       </Box>
       {state.otherMode && (
-        <Box paddingLeft={maxIdxWidth + 5}>
-          <Text>
-            <Text color={THEME.dim}>{`${ICONS.arrow} `}</Text>
-            <Text color={THEME.text}>{state.textInputValue}</Text>
-            <Text inverse> </Text>
-          </Text>
-        </Box>
+        <TextField
+          isActive
+          indent={maxIdxWidth + 5}
+          prompt={`${ICONS.arrow} `}
+          initialValue={state.textInputValue}
+          onChange={onTextChange}
+          onSubmit={onTextSubmit}
+          onEscape={onTextEscape}
+        />
       )}
     </Box>
   );
@@ -339,33 +346,10 @@ export function AskUserDialog({ questions, onComplete }: Props) {
       return;
     }
 
-    // "Other" free-text input mode
+    // "Other" free-text input mode: the TextField owns every key here
+    // (editing, Enter → onSubmit, Esc → onEscape); ink dispatches input to
+    // all mounted useInput handlers, so the dialog must not act on any of them.
     if (!isSubmitTab && qs?.otherMode) {
-      if (key.return) {
-        commitAnswer(qs.textInputValue.trim() || "(no answer)");
-      } else if (key.backspace || key.delete) {
-        dispatch({
-          type: "update",
-          index: currentIndex,
-          updates: {
-            textInputValue: qs.textInputValue.slice(0, -1),
-          },
-        });
-      } else if (key.escape) {
-        dispatch({
-          type: "update",
-          index: currentIndex,
-          updates: { otherMode: false },
-        });
-      } else if (input && !key.ctrl && !key.meta) {
-        dispatch({
-          type: "update",
-          index: currentIndex,
-          updates: {
-            textInputValue: qs.textInputValue + input,
-          },
-        });
-      }
       return;
     }
 
@@ -489,14 +473,19 @@ export function AskUserDialog({ questions, onComplete }: Props) {
 
   // Dynamic help text
   const helpParts: string[] = [];
-  if (!isSubmitTab) {
-    helpParts.push("Enter to select");
-    helpParts.push("↑/↓ to navigate");
-    if (questions.length > 1) {
-      helpParts.push("Tab/Arrow keys to switch questions");
+  if (!isSubmitTab && qs?.otherMode) {
+    helpParts.push("Enter to confirm");
+    helpParts.push("Esc to return to options");
+  } else {
+    if (!isSubmitTab) {
+      helpParts.push("Enter to select");
+      helpParts.push("↑/↓ to navigate");
+      if (questions.length > 1) {
+        helpParts.push("Tab/Arrow keys to switch questions");
+      }
     }
+    helpParts.push("Esc to cancel");
   }
-  helpParts.push("Esc to cancel");
   const helpText = helpParts.join(" · ");
 
   return (
@@ -518,8 +507,23 @@ export function AskUserDialog({ questions, onComplete }: Props) {
         <QuestionContent
           question={q}
           state={qs}
-          questionIndex={currentIndex}
-          totalQuestions={questions.length}
+          onTextChange={(value) => {
+            dispatch({
+              type: "update",
+              index: currentIndex,
+              updates: { textInputValue: value },
+            });
+          }}
+          onTextSubmit={(value) => {
+            commitAnswer(value.trim() || "(no answer)");
+          }}
+          onTextEscape={() => {
+            dispatch({
+              type: "update",
+              index: currentIndex,
+              updates: { otherMode: false },
+            });
+          }}
         />
       ) : null}
     </SelectorFrame>

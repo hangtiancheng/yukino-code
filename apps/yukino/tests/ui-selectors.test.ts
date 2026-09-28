@@ -754,3 +754,86 @@ describe("search input boundaries and independent dialog controls", () => {
     expect(frame).not.toContain("Search:");
   });
 });
+
+function mountAskOther(onComplete: (answers: Record<string, string>) => void) {
+  mount(
+    createElement(AskUserDialog, {
+      questions: [
+        {
+          header: "Choice",
+          question: "Pick one",
+          options: [{ label: "One", description: "First option" }],
+          multiSelect: false,
+        },
+      ],
+      onComplete,
+    }),
+  );
+  // Move to "Other (type your own)" and enter free-text mode; the TextField
+  // registers its useInput handler last, so send() reaches it from here on.
+  send("2");
+  send("", { return: true });
+}
+
+describe("AskUser free-text field editing", () => {
+  it("moves the caret with arrows, Ctrl+A/E and edits mid-text", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    send("abc");
+    send("", { leftArrow: true });
+    send("X");
+    send("", { leftArrow: true });
+    send("", { backspace: true });
+    send("a", { ctrl: true });
+    send("Z");
+    send("e", { ctrl: true });
+    send("!");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({ "Pick one": "ZaXc!" });
+  });
+
+  it("supports Shift+Enter newlines and vertical caret movement", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    send("line1");
+    send("", { return: true, shift: true });
+    send("line2");
+    send("", { upArrow: true });
+    send("+");
+    send("", { downArrow: true });
+    send("", { leftArrow: true });
+    send("", { delete: true });
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({ "Pick one": "line1+\nline" });
+  });
+
+  it("grows vertically as long text wraps and navigates wrapped rows", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    const rowsBefore = frame.split("\n").length;
+    // 140 chars wrap into three visual rows at the 80-column test width.
+    send("a".repeat(140));
+    expect(frame.split("\n").length).toBeGreaterThanOrEqual(rowsBefore + 2);
+    // Caret sits on the third wrapped row; move up one row and insert.
+    send("", { upArrow: true });
+    send("X");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({
+      "Pick one": "a".repeat(71) + "X" + "a".repeat(69),
+    });
+  });
+
+  it("keeps the draft when Escape returns to the options", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    send("hello");
+    send("", { escape: true });
+    expect(frame).not.toContain("hello");
+    expect(onComplete).not.toHaveBeenCalled();
+    // Cursor still rests on "Other"; Enter re-enters free-text mode with the draft.
+    send("", { return: true });
+    send(" world");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({ "Pick one": "hello world" });
+  });
+});

@@ -55,8 +55,9 @@ import {
   removeMcpTools,
   wireSkillsToRegistry,
 } from "@/bootstrap/tool-registry.js";
+import type { CodeReviewFormOptions } from "@/code-review/form.js";
 import { formatReviewReport } from "@/code-review/report.js";
-import { parseReviewArgs, runCodeReview } from "@/code-review/runner.js";
+import { runCodeReview } from "@/code-review/runner.js";
 import {
   parse as parseCommand,
   createDefaultRegistry as createCommandRegistry,
@@ -218,6 +219,7 @@ export function App({
   );
   const selectedProviderRef = useRef(selectedProvider);
   const [providerDialogActive, setProviderDialogActive] = useState(false);
+  const [codeReviewActive, setCodeReviewActive] = useState(false);
   const [thinkingDialogActive, setThinkingDialogActive] = useState(false);
   const [providerSwitching, setProviderSwitching] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1431,67 +1433,18 @@ export function App({
               });
           }
           break;
-        case "review": {
-          if (!clientRef.current) {
-            setMessages((prev) => [
-              ...prev,
-              { role: "system", content: "Client not ready." },
-            ]);
-            break;
-          }
-          let reviewArgs;
-          try {
-            reviewArgs = parseReviewArgs(parsed.args);
-          } catch (err: unknown) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "system",
-                content: `Review failed: ${asErrorString(err)}`,
-              },
-            ]);
-            break;
-          }
-          const controller = new AbortController();
-          const onReviewEvent = output.createEventHandler();
-          abortControllerRef.current = controller;
-          output.prepareTurn();
-          setIsStreaming(true);
-          try {
-            const result = await runCodeReview(
-              {
-                workDir,
-                ...reviewArgs,
-                abortSignal: controller.signal,
-                onToolEvent: onReviewEvent,
-              },
-              { provider: selectedProviderRef.current },
-            );
-            const report = formatReviewReport(result);
-            onReviewEvent({ type: "stream_text", text: report });
-            onReviewEvent({ type: "turn_complete" });
-            if (result.comments.length > 0) {
-              conversationRef.current.addSystemReminder(
-                `<code_review_findings>\n${report}\n</code_review_findings>`,
-              );
-            }
-          } catch (err: unknown) {
-            onReviewEvent({ type: "turn_complete" });
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "system",
-                content: `Review failed: ${asErrorString(err)}`,
-              },
-            ]);
-          } finally {
-            if (abortControllerRef.current === controller) {
-              abortControllerRef.current = null;
-            }
-            setIsStreaming(false);
-          }
+        case "code-review":
+          setCodeReviewActive(true);
           break;
-        }
+        case "code-review-usage":
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "system",
+              content: "Usage: /code-review",
+            },
+          ]);
+          break;
         case "resume": {
           const arg = parsed.args.trim();
           if (!arg) {
@@ -2420,6 +2373,7 @@ export function App({
     isCompacting ||
     providerSwitching ||
     loginActive ||
+    codeReviewActive ||
     providerDialogActive ||
     thinkingDialogActive ||
     planApprovalActive ||
@@ -2491,6 +2445,59 @@ export function App({
     initialResumeHandledRef.current = true;
     void handleSlashCommand(resume === true ? "/resume" : `/resume ${resume}`);
   }, [appState, resume]);
+
+  const handleCodeReview = (reviewOptions: CodeReviewFormOptions): void => {
+    if (!clientRef.current) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "system", content: "Client not ready." },
+      ]);
+      return;
+    }
+
+    setCodeReviewActive(false);
+    const controller = new AbortController();
+    const onReviewEvent = output.createEventHandler();
+    abortControllerRef.current = controller;
+    output.prepareTurn();
+    setIsStreaming(true);
+
+    void runCodeReview(
+      {
+        workDir,
+        ...reviewOptions,
+        abortSignal: controller.signal,
+        onToolEvent: onReviewEvent,
+      },
+      { provider: selectedProviderRef.current },
+    )
+      .then((result) => {
+        const report = formatReviewReport(result);
+        onReviewEvent({ type: "stream_text", text: report });
+        onReviewEvent({ type: "turn_complete" });
+        if (result.comments.length > 0) {
+          conversationRef.current.addSystemReminder(
+            `<code_review_findings>\n${report}\n</code_review_findings>`,
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        onReviewEvent({ type: "turn_complete" });
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "system",
+            content: `Review failed: ${asErrorString(err)}`,
+          },
+        ]);
+      })
+      .finally(() => {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        setIsStreaming(false);
+      });
+  };
 
   const handleLogin = async (input: ProviderConfig): Promise<void> => {
     const environment = detectEnvironment(workDir);
@@ -2623,6 +2630,16 @@ export function App({
                 onSubmit: handleLogin,
                 onCancel: () => {
                   setLoginActive(false);
+                },
+              }
+            : undefined
+        }
+        codeReview={
+          codeReviewActive
+            ? {
+                onSubmit: handleCodeReview,
+                onCancel: () => {
+                  setCodeReviewActive(false);
                 },
               }
             : undefined

@@ -288,7 +288,7 @@ Inside the UI, these commands are available:
 | /mcp                 | Show MCP server status                                                                                                    |
 | /mcp reload          | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                |
 | /thinking [level]    | Show or set the thinking level (off, minimal, low, medium, high, xhigh, max); setting persists to `~/.yukino/config.yaml` |
-| /review [focus]      | Review the uncommitted code changes for bugs and improvements                                                             |
+| /code-review         | Open the code review form for workspace, branch-range, or commit review                                                   |
 | /quit                | Exit the application                                                                                                      |
 
 ### Keyboard Shortcuts

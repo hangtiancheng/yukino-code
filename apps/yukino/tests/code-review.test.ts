@@ -12,6 +12,7 @@ import {
 } from "@/code-review/diff-parser.js";
 import { FileReadDiffTool } from "@/code-review/file-read-diff.js";
 import { parseFilterResponse } from "@/code-review/filter.js";
+import { CodeReviewFormSchema } from "@/code-review/form.js";
 import {
   buildChangeFilesExceptGroup,
   buildConcatenatedDiffs,
@@ -33,11 +34,7 @@ import {
   resolveFromFileContent,
   resolveFromHunk,
 } from "@/code-review/resolve.js";
-import {
-  finalizeComments,
-  parseReviewArgs,
-  validateReviewInput,
-} from "@/code-review/runner.js";
+import { finalizeComments, validateReviewInput } from "@/code-review/runner.js";
 import {
   effectivePath,
   estimateTokens,
@@ -45,7 +42,10 @@ import {
   summarizeSelection,
 } from "@/code-review/selection.js";
 import type { FileDiff, ReviewComment } from "@/code-review/types.js";
-import { parse as parseCommand } from "@/commands/commands.js";
+import {
+  createDefaultRegistry,
+  parse as parseCommand,
+} from "@/commands/commands.js";
 import type { LLMClient } from "@/llm/client.js";
 
 const MODIFIED_DIFF = `diff --git a/src/app.ts b/src/app.ts
@@ -626,8 +626,14 @@ describe("prompts/relocate helpers", () => {
 });
 
 describe("runner helpers", () => {
-  it("maps review args to workspace, range, and commit modes", () => {
-    const workspace = parseReviewArgs("");
+  it("maps code-review form values to workspace, range, and commit modes", () => {
+    const workspace = CodeReviewFormSchema.parse({
+      focus: "  ",
+      from: "",
+      to: "",
+      commit: "",
+      exclude: "",
+    });
     expect(workspace).toEqual({
       from: undefined,
       to: undefined,
@@ -637,55 +643,58 @@ describe("runner helpers", () => {
     });
     expect(deriveReviewMode(workspace)).toBe("workspace");
 
-    const range = parseReviewArgs(
-      '--from main --to feature focus on "the auth flow"',
-    );
+    const range = CodeReviewFormSchema.parse({
+      focus: " focus on the auth flow ",
+      from: " main ",
+      to: " feature ",
+      commit: "",
+      exclude: "**/*.pb.go; fixtures/generated files/**\n**/*.min.js",
+    });
     expect(range).toEqual({
       from: "main",
       to: "feature",
       commit: undefined,
-      excludePatterns: [],
+      excludePatterns: [
+        "**/*.pb.go",
+        "fixtures/generated files/**",
+        "**/*.min.js",
+      ],
       background: "focus on the auth flow",
     });
     expect(deriveReviewMode(range)).toBe("range");
 
-    const commit = parseReviewArgs("--commit=abc123");
+    const commit = CodeReviewFormSchema.parse({
+      focus: "",
+      from: "",
+      to: "",
+      commit: " abc123 ",
+      exclude: "; dist/**;;",
+    });
     expect(commit).toEqual({
       from: undefined,
       to: undefined,
       commit: "abc123",
-      excludePatterns: [],
+      excludePatterns: ["dist/**"],
       background: "",
     });
     expect(deriveReviewMode(commit)).toBe("commit");
   });
 
-  it("preserves slash-command args and applies repeatable excludes", () => {
-    const command = parseCommand(
-      '/review --exclude **/*.pb.go --exclude="fixtures/generated files/**" --from main --to dev fix the thing',
-    );
-    expect(command).not.toBeNull();
-    if (!command) {
-      throw new Error("expected /review to parse");
-    }
-
-    const parsed = parseReviewArgs(command.args);
-    expect(command.name).toBe("review");
-    expect(parsed.excludePatterns).toEqual([
-      "**/*.pb.go",
-      "fixtures/generated files/**",
-    ]);
-    expect(parsed.from).toBe("main");
-    expect(parsed.to).toBe("dev");
-    expect(parsed.background).toBe("fix the thing");
-
+  it("applies exclude patterns produced by the form", () => {
+    const options = CodeReviewFormSchema.parse({
+      focus: "",
+      from: "",
+      to: "",
+      commit: "",
+      exclude: "**/*.pb.go; fixtures/generated files/**",
+    });
     const decisions = selectFiles(
       [
         makeFileDiff("src/app.ts"),
         makeFileDiff("api/generated.pb.go"),
         makeFileDiff("fixtures/generated files/output.ts"),
       ],
-      { excludePatterns: parsed.excludePatterns },
+      { excludePatterns: options.excludePatterns },
     );
     expect(decisions.map((decision) => decision.reason)).toEqual([
       "none",
@@ -694,28 +703,42 @@ describe("runner helpers", () => {
     ]);
   });
 
-  it("rejects malformed and unknown review options", () => {
-    expect(() => parseReviewArgs("--exlcude dist/**")).toThrow(
-      'did you mean "--exclude"',
-    );
-    expect(() => parseReviewArgs("--unknown value")).toThrow(
-      'Unknown option "--unknown"',
-    );
-    expect(() => parseReviewArgs("--exclude --from main --to dev")).toThrow(
-      'Option "--exclude" requires a value',
-    );
-    expect(() => parseReviewArgs("--commit=")).toThrow(
-      'Option "--commit" requires a value',
-    );
-    expect(() => parseReviewArgs("--commit one --commit two")).toThrow(
-      'Option "--commit" may only be specified once',
-    );
-    expect(() => parseReviewArgs('--exclude "unterminated')).toThrow(
-      "unterminated quote",
-    );
-    expect(parseReviewArgs("-- --exclude is focus").background).toBe(
-      "--exclude is focus",
-    );
+  it("validates conditional refs and mutual exclusion in the form", () => {
+    const missingTo = CodeReviewFormSchema.safeParse({
+      focus: "",
+      from: "main",
+      to: "",
+      commit: "",
+      exclude: "",
+    });
+    const conflicting = CodeReviewFormSchema.safeParse({
+      focus: "",
+      from: "main",
+      to: "feature",
+      commit: "abc123",
+      exclude: "",
+    });
+    expect(missingTo.success).toBe(false);
+    expect(
+      missingTo.success
+        ? []
+        : missingTo.error.issues.map((issue) => issue.path[0]),
+    ).toContain("to");
+    expect(conflicting.success).toBe(false);
+    expect(
+      conflicting.success
+        ? []
+        : conflicting.error.issues.map((issue) => issue.message),
+    ).toContain("Commit cannot be combined with From/To");
+  });
+
+  it("registers only the bare /code-review command", () => {
+    const registry = createDefaultRegistry();
+    expect(
+      registry.find("code-review")?.handler({ workDir: ".", args: "" }),
+    ).toBe("code-review");
+    expect(registry.find("review")).toBeUndefined();
+    expect(parseCommand("/code-review")?.name).toBe("code-review");
   });
 
   it("validates ref combinations", () => {
