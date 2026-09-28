@@ -40,9 +40,6 @@ export * as Agent from "./agent/index.js";
 // === bootstrap ===
 export * as Bootstrap from "./bootstrap/index.js";
 
-// === code-review ===
-export * as CodeReview from "./code-review/index.js";
-
 // === commands ===
 export * as Commands from "./commands/index.js";
 

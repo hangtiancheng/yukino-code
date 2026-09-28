@@ -29,7 +29,7 @@ import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";
-import { isRecord, strArg } from "@/utils/index.js";
+import { isObject, isRecord, strArg } from "@/utils/index.js";
 import { canonicalPath, isPathWithin } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "permissions" });
@@ -376,6 +376,10 @@ function globMatch(pattern: string, content: string): boolean {
 
 const RULE_RE = /^(\w+)\((.+)\)$/;
 
+function isNodeJSErrnoException(err: unknown): err is NodeJS.ErrnoException { 
+  return isObject(err) && "code" in err && typeof err.code === 'string'
+}
+
 // Loads a rules file: a top-level YAML list of
 // `{ rule: "Tool(pattern)", effect: "allow"|"deny" }`.
 function loadRulesFile(path: string): Rule[] {
@@ -383,8 +387,7 @@ function loadRulesFile(path: string): Rule[] {
   try {
     data = readFileSync(path, "utf-8");
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+    if (isNodeJSErrnoException(err) && err.code !== "ENOENT") {
       log.error({ err }, "permissions operation failed");
     }
     return [];

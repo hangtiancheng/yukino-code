@@ -310,13 +310,11 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
           process.stdout.write(event.text);
           break;
         case "tool_result":
-          // eslint-disable-next-line no-console -- teammate stdout output
           console.log(
             `[${event.toolName}] ${event.isError ? "ERROR" : "OK"} (${event.elapsed.toFixed(1)}s)`,
           );
           break;
         case "loop_complete":
-          // eslint-disable-next-line no-console -- teammate stdout output
           console.log("--- Task complete ---");
           break;
         case "error":
@@ -337,12 +335,10 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
     for await (const msg of mailbox.poll(2000)) {
       // Graceful shutdown: stop polling and exit when the lead requests it.
       if (isShutdownRequest(msg)) {
-        // eslint-disable-next-line no-console -- teammate stdout output
         console.log(`Shutdown requested, ${args.memberName} exiting.`);
         break;
       }
 
-      // eslint-disable-next-line no-console -- teammate stdout output
       console.log(`Message from ${msg.from}: ${msg.text}`);
       conversation.addUserMessage(msg.text);
       for await (const event of agent.run()) {
