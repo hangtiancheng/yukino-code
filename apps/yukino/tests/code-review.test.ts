@@ -734,9 +734,11 @@ describe("runner helpers", () => {
 
   it("registers only the bare /code-review command", () => {
     const registry = createDefaultRegistry();
-    expect(
-      registry.find("code-review")?.handler({ workDir: ".", args: "" }),
-    ).toBe("code-review");
+    const command = registry.find("code-review");
+    expect(command?.handler({ workDir: ".", args: "" })).toBe("code-review");
+    expect(command?.handler({ workDir: ".", args: "focus" })).toBe(
+      "code-review-usage",
+    );
     expect(registry.find("review")).toBeUndefined();
     expect(parseCommand("/code-review")?.name).toBe("code-review");
   });
