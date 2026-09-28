@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="./assets/favicon.svg" width="300" alt="Yukino" />
-</p>
-
 <h1 align="center">Yukino</h1>
 
 <p align="center">
