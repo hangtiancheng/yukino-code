@@ -40,12 +40,11 @@ const MAX_SNAPSHOTS = 100;
 const MAX_SUMMARY_TEXT_LENGTH = 60;
 
 export const BackupSchema = z.object({
-  /**
-   * Snapshot-scoped copy of the file content; absent on disk = the path did
-   * not exist at snapshot time.
-   */
+  /** Snapshot-scoped destination for the file content. */
   backupPath: z.string(),
   time: z.string(),
+  /** Capture failed, so rewind must leave the current file untouched. */
+  unavailable: z.literal(true).optional(),
 });
 
 export type Backup = z.infer<typeof BackupSchema>;
@@ -141,9 +140,7 @@ export class FileHistory {
         writeFileSync(backupPath, readFileSync(filePath));
       } catch (err) {
         log.error({ err }, "file-history operation failed");
-        // Unreadable: no backup entry in this snapshot. The file stays tracked,
-        // so rewind's createdAfterTarget pass treats it as absent at snapshot
-        // time and deletes it when rewinding to this snapshot.
+        backups[filePath] = { backupPath, time: now, unavailable: true };
         continue;
       }
       backups[filePath] = { backupPath, time: now };
@@ -172,6 +169,10 @@ export class FileHistory {
     const target = this.snapshots[snapshotIndex];
     const changed: string[] = [];
     for (const [filePath, backup] of Object.entries(target.backups)) {
+      if (backup.unavailable) {
+        continue;
+      }
+
       let backupData: Buffer<ArrayBuffer> | null = null;
       try {
         backupData = readFileSync(backup.backupPath);

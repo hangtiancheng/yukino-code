@@ -20,6 +20,7 @@
  * SOFTWARE.
  */
 
+import { createHash } from "node:crypto";
 import {
   mkdtempSync,
   mkdirSync,
@@ -33,7 +34,7 @@ import { dirname, join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
-import { FileHistory } from "@/file-history/index.js";
+import { FileHistory, fileHistoryDir } from "@/file-history/index.js";
 import {
   getSessionFilePath,
   loadSession,
@@ -90,6 +91,29 @@ describe("FileHistory rewind", () => {
 
     expect(readFileSync(existing, "utf-8")).toBe("original");
     expect(changed).toContain(existing);
+  });
+
+  it("preserves a tracked file when its snapshot backup cannot be written", () => {
+    const { base, projectDir } = makeTempProject();
+    const fh = new FileHistory(base, "session-1");
+    const file = join(projectDir, "file.ts");
+    writeFileSync(file, "original");
+    fh.trackEdit(file);
+
+    const backupName = `${createHash("sha256")
+      .update(file)
+      .digest("hex")
+      .slice(0, 16)}@s0`;
+    mkdirSync(join(fileHistoryDir(base, "session-1"), backupName));
+    fh.makeSnapshot(0, "backup fails");
+    writeFileSync(file, "modified");
+
+    const resumed = new FileHistory(base, "session-1");
+    const changed = resumed.rewind(0);
+
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, "utf-8")).toBe("modified");
+    expect(changed).not.toContain(file);
   });
 
   it("keeps the created file when rewinding to its own snapshot", () => {
