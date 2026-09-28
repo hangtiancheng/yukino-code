@@ -206,6 +206,9 @@ class Renderer {
   }
 
   text(token: Tokens.Text | Tokens.Escape): string {
+    if (token.type === "text" && token.tokens) {
+      return this.getParser().parseInline(token.tokens);
+    }
     return this.config.text(token.text);
   }
 

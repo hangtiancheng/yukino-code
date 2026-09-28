@@ -203,6 +203,27 @@ describe("pi Markdown presentation", () => {
       ).toBe(renderMarkdown(`${fence}ts\n${fence}`, 40));
     },
   );
+
+  it("renders inline formatting inside tight list items", () => {
+    chalk.level = 3;
+    const source = "1. **项目定位**: `version`";
+    const cache: MarkdownCache = {
+      prefix: "",
+      rendered: "",
+      width: 0,
+      theme: "",
+    };
+
+    for (const output of [
+      renderMarkdown(source, 80),
+      renderStreamingMarkdown(source, 80, cache),
+    ]) {
+      expect(stripVTControlCharacters(output)).toBe("1. 项目定位: version");
+      expect(output).toContain("\u001b[1m");
+      expect(output).toContain(chalk.hex(THEME.mdCode)("version"));
+    }
+  });
+
   it.each([20, 40, 80, 120])(
     "fits long text, code and tables in %i columns",
     (width) => {
