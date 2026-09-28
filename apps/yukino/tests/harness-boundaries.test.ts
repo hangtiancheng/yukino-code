@@ -76,9 +76,9 @@ function fixture(overrides: Partial<AgentConfig> = {}) {
   let calls = 0;
   const client: LLMClient = {
     setSystemPrompt: vi.fn(),
-    // eslint-disable-next-line @typescript-eslint/require-await
     async *stream() {
       if (calls++ === 0) {
+        await Promise.resolve();
         yield call;
       }
       yield end;
@@ -173,13 +173,11 @@ describe("harness execution boundaries", () => {
     const events = await collect(config);
     expect(calls).toBe(1);
 
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "error",
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        error: expect.any(ContextTooLongError),
-      }),
-    );
+    expect(
+      events.some(
+        (e) => e.type === "error" && e.error instanceof ContextTooLongError,
+      ),
+    ).toBe(true);
   });
 });
 

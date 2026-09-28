@@ -449,13 +449,11 @@ ${prompt}`;
     const teammateRegistry = new ToolRegistry();
     teammateRegistry.mcpLoadingMode = this.registry.mcpLoadingMode;
     for (const tool of this.registry.listTools()) {
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      if ((SUBAGENT_DISALLOWED_TOOLS as Set<string>).has(tool.name)) {
+      if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) {
         continue;
       }
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      if ((TEAMMATE_DISALLOWED_TOOLS as Set<string>).has(tool.name)) {
+      if (TEAMMATE_DISALLOWED_TOOLS.has(tool.name)) {
         continue;
       }
       teammateRegistry.register(tool);

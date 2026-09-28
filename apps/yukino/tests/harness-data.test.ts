@@ -67,8 +67,8 @@ function mockClient(turns: StreamEvent[][]): LLMClient {
   let turn = 0;
   return {
     setSystemPrompt: vi.fn(),
-    // eslint-disable-next-line @typescript-eslint/require-await
     async *stream() {
+      await Promise.resolve();
       yield* turns[turn++] ?? [end];
     },
   };

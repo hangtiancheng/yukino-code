@@ -112,6 +112,8 @@ describe("discoverModels", () => {
     "uses %s authentication without redirecting credentials",
     async (protocol) => {
       await discoverModels({ ...connection, protocol });
+      const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+      expect(signal).toBeInstanceOf(AbortSignal);
       expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
         "https://provider.example/v1/models",
         {
@@ -128,8 +130,7 @@ describe("discoverModels", () => {
                   Authorization: "Bearer secret-key",
                 },
           redirect: "error",
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          signal: expect.any(AbortSignal),
+          signal,
         },
       );
       expect(vi.getTimerCount()).toBe(0);

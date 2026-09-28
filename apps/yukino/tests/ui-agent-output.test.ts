@@ -31,13 +31,6 @@ import {
   type AgentCardDecoration,
 } from "@/ui/use-agent-output.js";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const isPromise = (obj: unknown): obj is Promise<unknown> =>
-  typeof obj === "object" &&
-  obj !== null &&
-  "then" in obj &&
-  typeof obj.then === "function";
-
 let instance: Instance | undefined;
 let current:
   | { output: ReturnType<typeof useAgentOutput>; messages: ChatMessage[] }
@@ -177,20 +170,18 @@ describe("agent output hook", () => {
       { role: "turn_summary", content: "Reasoning", thinkingDuration: 1.5 },
       { role: "assistant", content: "Checking" },
     ]);
-    expect(state().messages[2]?.toolSummary).toEqual([
-      expect.objectContaining({
-        output: "first",
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        argsSummary: expect.stringContaining("a.ts"),
-        isError: false,
-      }),
-      expect.objectContaining({
-        output: "second",
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        argsSummary: expect.stringContaining("b.ts"),
-        isError: true,
-      }),
-    ]);
+    const toolSummary = state().messages[2]?.toolSummary;
+    expect(toolSummary).toHaveLength(2);
+    expect(toolSummary?.[0]).toMatchObject({
+      output: "first",
+      isError: false,
+    });
+    expect(toolSummary?.[0]?.argsSummary).toContain("a.ts");
+    expect(toolSummary?.[1]).toMatchObject({
+      output: "second",
+      isError: true,
+    });
+    expect(toolSummary?.[1]?.argsSummary).toContain("b.ts");
     expect(state().output.activeTools).toEqual([]);
     expect(state().output.streamingThinking).toBe("");
     send(

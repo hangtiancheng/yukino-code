@@ -40,8 +40,7 @@ const stub = (name: string): Tool => ({
     description: name,
     input_schema: { type: "object", properties: {} },
   }),
-  // eslint-disable-next-line @typescript-eslint/require-await
-  execute: async () => ({ output: "", isError: false }),
+  execute: () => Promise.resolve({ output: "", isError: false }),
 });
 
 function buildRegistry(names: string[]): ToolRegistry {

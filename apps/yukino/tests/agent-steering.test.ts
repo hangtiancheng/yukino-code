@@ -52,7 +52,6 @@ class ScriptedClient implements LLMClient {
   setSystemPrompt(_prompt: string): void {
     /** noop */
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
   async *stream(
     conversationManager: ConversationManager,
   ): AsyncGenerator<StreamEvent> {
@@ -62,6 +61,7 @@ class ScriptedClient implements LLMClient {
     const script = this.scripts[this.calls] ?? [end()];
     this.calls++;
     for (const ev of script) {
+      await Promise.resolve();
       yield ev;
     }
   }
@@ -79,10 +79,9 @@ const echoTool = (onExecute?: () => void): Tool => ({
     description: "echo",
     input_schema: { type: "object", properties: {} },
   }),
-  // eslint-disable-next-line @typescript-eslint/require-await
-  execute: async () => {
+  execute: () => {
     onExecute?.();
-    return { output: "echoed", isError: false };
+    return Promise.resolve({ output: "echoed", isError: false });
   },
 });
 

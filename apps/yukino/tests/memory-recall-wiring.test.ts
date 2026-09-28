@@ -51,10 +51,10 @@ class MockClient implements LLMClient {
   setSystemPrompt() {
     /** noop */
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
   async *stream(): AsyncGenerator<StreamEvent> {
     const script = this.scripts[this.calls++] ?? [end()];
     for (const ev of script) {
+      await Promise.resolve();
       yield ev;
     }
   }
@@ -97,7 +97,6 @@ async function run(scripts: StreamEvent[][], withTool: boolean) {
     memoryRecallPromise: settledRecall(),
     onMemoriesSurfaced: (paths) => surfaced.push(...paths),
   });
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   for await (const _ of agent.run()) {
     // drain
   }

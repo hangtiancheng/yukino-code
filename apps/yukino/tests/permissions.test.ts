@@ -238,16 +238,20 @@ describe("memory background agent sandbox", () => {
     // Intercept the sub-agent run to capture its permission checker without issuing a real LLM request
     const captured: PermissionChecker[] = [];
 
-    const spy = vi.spyOn(Agent.prototype, "run").mockImplementation(
-      // eslint-disable-next-line @typescript-eslint/require-await, require-yield
-      async function* (this: Agent) {
-        const checker: unknown = Reflect.get(this, "checker");
-        if (!(checker instanceof PermissionChecker)) {
-          throw new Error("Agent checker was not a PermissionChecker");
-        }
-        captured.push(checker);
-      },
-    );
+    const spy = vi.spyOn(Agent.prototype, "run").mockImplementation(function (
+      this: Agent,
+    ) {
+      const checker: unknown = Reflect.get(this, "checker");
+      if (!(checker instanceof PermissionChecker)) {
+        throw new Error("Agent checker was not a PermissionChecker");
+      }
+      captured.push(checker);
+      // The intercepted sub-agent run yields no events; an empty async
+      // generator matches Agent.run's AsyncGenerator signature.
+      return (async function* () {
+        /** noop */
+      })();
+    });
 
     try {
       const dir = makeTmpDir();

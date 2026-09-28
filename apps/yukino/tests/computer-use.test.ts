@@ -192,7 +192,6 @@ describe("ComputerUseTool", () => {
       "system",
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     for await (const _event of client.stream(
       conversation,
       registry.getAllSchemas("openai"),
@@ -268,7 +267,6 @@ describe("ComputerUseTool", () => {
       "system",
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     for await (const _event of client.stream(
       conversation,
       registry.getAllSchemas("anthropic"),
@@ -345,7 +343,6 @@ describe("ComputerUseTool", () => {
       "system",
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     for await (const _event of client.stream(
       conversation,
       registry.getAllSchemas("anthropic"),

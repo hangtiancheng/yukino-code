@@ -357,8 +357,8 @@ describe("resolve", () => {
       setSystemPrompt: () => {
         /* noop */
       },
-      // eslint-disable-next-line @typescript-eslint/require-await
       stream: async function* () {
+        await Promise.resolve();
         yield { type: "text_delta", text };
       },
     });

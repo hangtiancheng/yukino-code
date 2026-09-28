@@ -221,8 +221,8 @@ export const logger: Logger = new Proxy(silentFallback, {
     // Reflect.get returns `any`; annotate unknown so typeof narrows correctly.
     const value: unknown = Reflect.get(target, prop, receiver);
     if (typeof value === "function") {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return value.bind(target);
+      const bound: unknown = value.bind(target);
+      return bound;
     }
     return value;
   },
@@ -264,10 +264,8 @@ export function createChildLogger(bindings: { module: string }): Logger {
       // Reflect.get returns `any`; annotate unknown so typeof narrows correctly.
       const value: unknown = Reflect.get(target, prop, receiver);
       if (typeof value === "function") {
-        // Function.bind returns `any` in lib.es5; the bound callable is
-        // type-safe by construction (pino method signatures are preserved).
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-        return value.bind(target);
+        const bound: unknown = value.bind(target);
+        return bound;
       }
       return value;
     },

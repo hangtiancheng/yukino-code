@@ -40,8 +40,8 @@ class MockClient implements LLMClient {
   setMaxOutputTokens?(_maxTokens: number): void {
     /** noop */
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
   async *stream(): AsyncGenerator<StreamEvent> {
+    await Promise.resolve();
     yield { type: "text_delta", text: this.text };
     yield {
       type: "stream_end",

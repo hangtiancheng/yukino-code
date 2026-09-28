@@ -169,8 +169,7 @@ describe("in-process teammate tool filtering", () => {
           properties: {},
         },
       }),
-      // eslint-disable-next-line @typescript-eslint/require-await
-      execute: async () => ({ output: "", isError: false }),
+      execute: () => Promise.resolve({ output: "", isError: false }),
     });
 
     const parent = new ToolRegistry();
@@ -189,12 +188,10 @@ describe("in-process teammate tool filtering", () => {
     // Replicate the cloning logic from runAsTeammate
     const teammate = new ToolRegistry();
     for (const tool of parent.listTools()) {
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      if ((SUBAGENT_DISALLOWED_TOOLS as Set<string>).has(tool.name)) {
+      if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) {
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      if ((TEAMMATE_DISALLOWED_TOOLS as Set<string>).has(tool.name)) {
+      if (TEAMMATE_DISALLOWED_TOOLS.has(tool.name)) {
         continue;
       }
       teammate.register(tool);

@@ -51,8 +51,11 @@ function fakeTerminal() {
     get: (_target, property) => {
       const owner = property in controls ? controls : stream;
       const value: unknown = Reflect.get(owner, property, owner);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return typeof value === "function" ? value.bind(owner) : value;
+      if (typeof value === "function") {
+        const bound: unknown = value.bind(owner);
+        return bound;
+      }
+      return value;
     },
   });
   return { stream, stdin, controls };

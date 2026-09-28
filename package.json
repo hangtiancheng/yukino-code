@@ -20,7 +20,7 @@
   "devDependencies": {
     "concurrently": "^10.0.5",
     "husky": "^9.1.7",
-    "lint-staged": "^17.5.1"
+    "lint-staged": "^17.6.0"
   },
   "lint-staged": {
     "apps/docs/**/*.{json,jsonc,js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue,css,scss,md,mdx}": [

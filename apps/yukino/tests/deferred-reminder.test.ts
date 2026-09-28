@@ -58,10 +58,10 @@ class MockClient implements LLMClient {
   setSystemPrompt() {
     /** noop */
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
   async *stream(): AsyncGenerator<StreamEvent> {
     const script = this.scripts[this.calls++] ?? [end()];
     for (const ev of script) {
+      await Promise.resolve();
       yield ev;
     }
   }
@@ -127,7 +127,6 @@ function count(conv: ConversationManager): number {
 }
 
 async function drain(agent: Agent): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   for await (const _ of agent.run()) {
     // Only side effects on the conversation matter
   }

@@ -67,42 +67,45 @@ type AllTools =
 //                     would hijack it and race parallel siblings (the loser hangs).
 //   ExitPlanMode    — ends the caller's loop and expects the main-thread approval
 //                     dialog, which never fires from a delegated agent.
-export const MAIN_AGENT_ONLY_TOOLS = new Set<AllTools>([
+export const MAIN_AGENT_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "ComputerUse",
   "AskUserQuestion",
   "ExitPlanMode",
-]);
+] satisfies readonly AllTools[]);
 
 // Global list of tools disallowed for subagents — MAIN_AGENT_ONLY_TOOLS plus
 // delegation-policy restrictions (recursive Agent spawning, lead-only TaskStop).
 // Forks keep Agent (as a tagged clone) and TaskStop; only MAIN_AGENT_ONLY_TOOLS
 // is stripped from them.
-export const SUBAGENT_DISALLOWED_TOOLS = new Set<AllTools>([
-  ...MAIN_AGENT_ONLY_TOOLS,
+const SUBAGENT_EXTRA_TOOLS = [
   "Agent", // Prevents recursive spawning of subagents
   "TaskStop",
+] satisfies readonly AllTools[];
+export const SUBAGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
+  ...MAIN_AGENT_ONLY_TOOLS,
+  ...SUBAGENT_EXTRA_TOOLS,
 ]);
 
 // Additional tools blocked for teammates beyond the global subagent list.
 // Team creation and dissolution are the Lead's responsibility; teammates
 // only execute work and coordinate with peers.
-export const TEAMMATE_DISALLOWED_TOOLS = new Set<AllTools>([
+export const TEAMMATE_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "TeamCreate",
   "TeamDelete",
-]);
+] satisfies readonly AllTools[]);
 
 // Additional tools disallowed for custom Agents (loaded from .yukino/agents/);
 // currently a subset of the global list (same except ComputerUse, which Layer 2
 // already strips), but maintained separately for future extensibility
-export const CUSTOM_AGENT_DISALLOWED_TOOLS = new Set<AllTools>([
+export const CUSTOM_AGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "ExitPlanMode",
   "Agent",
   "AskUserQuestion",
   "TaskStop",
-]);
+] satisfies readonly AllTools[]);
 
 // Asynchronous (background) Agents are restricted to only these tools
-export const ASYNC_AGENT_ALLOWED_TOOLS = new Set<AllTools>([
+export const ASYNC_AGENT_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "ReadFile",
   "WebFetch",
   "Grep",
@@ -119,7 +122,7 @@ export const ASYNC_AGENT_ALLOWED_TOOLS = new Set<AllTools>([
   // ToolSearch only reads out schemas; actual invocation relies on McpCall.
   // The two must be allowed together, or the subagent sees tools but cannot call them
   "McpCall",
-]);
+] satisfies readonly AllTools[]);
 
 function isMCPTool(name: string): boolean {
   return name.startsWith("mcp__");
@@ -163,23 +166,17 @@ export function filterToolsForAgent(
     }
 
     // Layer 2: Global disallow — no subagent can use these
-
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    if ((SUBAGENT_DISALLOWED_TOOLS as Set<string>).has(name)) {
+    if (SUBAGENT_DISALLOWED_TOOLS.has(name)) {
       continue;
     }
 
     // Layer 3: Additional restrictions for custom Agents
-
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    if (isCustom && (CUSTOM_AGENT_DISALLOWED_TOOLS as Set<string>).has(name)) {
+    if (isCustom && CUSTOM_AGENT_DISALLOWED_TOOLS.has(name)) {
       continue;
     }
 
     // Layer 4: Whitelist filtering for asynchronous Agents
-
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    if (isAsync && !(ASYNC_AGENT_ALLOWED_TOOLS as Set<string>).has(name)) {
+    if (isAsync && !ASYNC_AGENT_ALLOWED_TOOLS.has(name)) {
       continue;
     }
 
@@ -203,15 +200,13 @@ export function cloneRegistryForFork(registry: ToolRegistry): ToolRegistry {
   const forked = new ToolRegistry();
   forked.mcpLoadingMode = registry.mcpLoadingMode;
   for (const tool of registry.listTools()) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    if ((MAIN_AGENT_ONLY_TOOLS as Set<string>).has(tool.name)) {
+    if (MAIN_AGENT_ONLY_TOOLS.has(tool.name)) {
       continue;
     }
     if (tool.name === "Agent" && "querySource" in tool) {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const clone = Object.create(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        Object.getPrototypeOf(tool),
+        Reflect.getPrototypeOf(tool),
         Object.getOwnPropertyDescriptors(tool),
       ) as AgentTool;
       clone.querySource = FORK_QUERY_SOURCE;

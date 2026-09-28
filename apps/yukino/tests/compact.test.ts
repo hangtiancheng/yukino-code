@@ -47,9 +47,9 @@ function stubClient(summaryBody: string): {
     setSystemPrompt(_prompt: string) {
       /** noop */
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async *stream(conversation): AsyncGenerator<StreamEvent> {
       lastPrompt = contentToText(conversation.getMessages()[0]?.content ?? "");
+      await Promise.resolve();
       yield { type: "text_delta", text: `<summary>${summaryBody}</summary>` };
     },
   };

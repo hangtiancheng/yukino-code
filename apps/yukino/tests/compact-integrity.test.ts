@@ -78,9 +78,9 @@ describe("compaction integrity", () => {
     const conv = history();
     const client: LLMClient = {
       setSystemPrompt: vi.fn(),
-      // eslint-disable-next-line @typescript-eslint/require-await
       async *stream() {
         conv.addUserMessage("A newer task");
+        await Promise.resolve();
         yield { type: "text_delta", text: "<summary>older task</summary>" };
       },
     };
@@ -128,8 +128,8 @@ describe("compaction integrity", () => {
     const before = structuredClone(conv.getMessages());
     const client: LLMClient = {
       setSystemPrompt: vi.fn(),
-      // eslint-disable-next-line @typescript-eslint/require-await
       async *stream() {
+        await Promise.resolve();
         yield { type: "text_delta", text };
       },
     };

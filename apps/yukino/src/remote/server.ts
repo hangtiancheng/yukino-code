@@ -828,8 +828,7 @@ export async function createRemoteAgent(
 
   // ExitPlanMode gates on the live permission mode and requires a plan file,
   // mirroring the terminal UI wiring.
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  const exitPlan = registry.get("ExitPlanMode") as ExitPlanModeTool | undefined;
+  const exitPlan = registry.getInstanceOf("ExitPlanMode", ExitPlanModeTool);
   if (exitPlan) {
     exitPlan.isPlanMode = () => handle.permissionMode === "plan";
     exitPlan.planExists = () => planExists(workDir);

@@ -121,10 +121,11 @@ describe("teams orchestration", () => {
 
   it("a failing teammate reports the error to the lead", async () => {
     const mgr = new TeamManager(workDir());
-    // eslint-disable-next-line @typescript-eslint/require-await
-    mgr.create("squad").spawnTeammate("flaky", "boom", async () => {
-      throw new Error("kaboom");
-    });
+    mgr
+      .create("squad")
+      .spawnTeammate("flaky", "boom", () =>
+        Promise.reject(new Error("kaboom")),
+      );
     await wait(200);
     expect(mgr.drainLeads().some((d) => d.includes("failed"))).toBe(true);
   });
@@ -219,8 +220,9 @@ describe("teams orchestration", () => {
       ).output,
     ).toContain("created");
 
-    // eslint-disable-next-line @typescript-eslint/require-await
-    const spawn = new SpawnTeammateTool(mgr, async (task) => `done:${task}`);
+    const spawn = new SpawnTeammateTool(mgr, (task) =>
+      Promise.resolve(`done:${task}`),
+    );
     const r = await spawn.execute(
       {
         workDir: workDir(),
@@ -283,10 +285,8 @@ describe("teams orchestration", () => {
       { workDir: workDir() },
       { team_name: "old" },
     );
-    const spawn = new SpawnTeammateTool(
-      mgr,
-      // eslint-disable-next-line @typescript-eslint/require-await
-      async (task) => `done:${task}`,
+    const spawn = new SpawnTeammateTool(mgr, (task) =>
+      Promise.resolve(`done:${task}`),
     );
     await spawn.execute(
       { workDir: workDir() },
@@ -324,11 +324,7 @@ describe("teams orchestration", () => {
     ).toBe(true);
     expect(
       (
-        await new SpawnTeammateTool(
-          mgr,
-          // eslint-disable-next-line @typescript-eslint/require-await
-          async () => "x",
-        ).execute(
+        await new SpawnTeammateTool(mgr, () => Promise.resolve("x")).execute(
           {
             workDir: workDir(),
           },

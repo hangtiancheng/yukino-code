@@ -50,10 +50,9 @@ export function Modal({
         return;
       }
       // Don't hijack Escape while typing in a field inside the modal.
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const target = event.target as HTMLElement | null;
+      const target = event.target;
       if (
-        target &&
+        target instanceof HTMLElement &&
         (target.tagName === "TEXTAREA" || target.tagName === "INPUT")
       ) {
         return;

@@ -24,7 +24,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SkillCatalog } from "@/skills/catalog.js";
 import { parseSkillPrompt, runInline } from "@/skills/executor.js";
@@ -116,15 +116,16 @@ describe("LoadSkillTool fork mode", () => {
   function forkFixture(mode: "inline" | "fork") {
     const calls: string[] = [];
     const activated: string[] = [];
-    const catalog: Partial<SkillCatalog> = {
-      get: () => ({
-        meta: { name: "audit-deps", description: "d", mode },
-        body: "Inspect package.json and flag risky pins.",
-        sourceDir: "",
-        isDirectory: false,
-      }),
-      list: () => [{ name: "audit-deps", description: "d" }],
-    };
+    const catalog = new SkillCatalog();
+    vi.spyOn(catalog, "get").mockReturnValue({
+      meta: { name: "audit-deps", description: "d", mode },
+      body: "Inspect package.json and flag risky pins.",
+      sourceDir: "",
+      isDirectory: false,
+    });
+    vi.spyOn(catalog, "list").mockReturnValue([
+      { name: "audit-deps", description: "d" },
+    ]);
 
     const host: SkillHost = { activateSkill: (n) => activated.push(n) };
     const forkHost: SkillForkHost = {
@@ -141,8 +142,7 @@ describe("LoadSkillTool fork mode", () => {
   it("runs a fork skill in a sub-agent and keeps the SOP out of the main context", async () => {
     const { catalog, host, forkHost, calls, activated } = forkFixture("fork");
 
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const tool = new LoadSkillTool(catalog as SkillCatalog, host, forkHost);
+    const tool = new LoadSkillTool(catalog, host, forkHost);
 
     const res = await tool.execute(
       { workDir: process.cwd() },
@@ -159,8 +159,7 @@ describe("LoadSkillTool fork mode", () => {
   it("falls back to inline when no fork host is wired", async () => {
     const { catalog, host } = forkFixture("fork");
 
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const tool = new LoadSkillTool(catalog as SkillCatalog, host);
+    const tool = new LoadSkillTool(catalog, host);
 
     const res = await tool.execute(
       { workDir: process.cwd() },
@@ -174,8 +173,7 @@ describe("LoadSkillTool fork mode", () => {
   it("does not spawn a sub-agent for inline skills", async () => {
     const { catalog, host, forkHost, calls } = forkFixture("inline");
 
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const tool = new LoadSkillTool(catalog as SkillCatalog, host, forkHost);
+    const tool = new LoadSkillTool(catalog, host, forkHost);
 
     const res = await tool.execute(
       { workDir: process.cwd() },

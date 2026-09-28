@@ -50,8 +50,7 @@ function q(overrides: Partial<Question> = {}): Question {
 
 describe("AskUserQuestionTool", () => {
   it("rejects 0 or more than 4 questions", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    const tool = new AskUserQuestionTool(async () => ({}));
+    const tool = new AskUserQuestionTool(() => Promise.resolve({}));
     expect((await tool.execute(toolContext, { questions: [] })).isError).toBe(
       true,
     );
@@ -65,8 +64,7 @@ describe("AskUserQuestionTool", () => {
   });
 
   it("rejects a question with fewer than 2 or more than 4 options", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    const tool = new AskUserQuestionTool(async () => ({}));
+    const tool = new AskUserQuestionTool(() => Promise.resolve({}));
     const tooFew = await tool.execute(
       toolContext,
 
@@ -92,10 +90,9 @@ describe("AskUserQuestionTool", () => {
   });
 
   it("delegates to the asker and formats the answers", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    const tool = new AskUserQuestionTool(async (qs) => ({
-      [qs[0].question]: "A",
-    }));
+    const tool = new AskUserQuestionTool((qs) =>
+      Promise.resolve({ [qs[0].question]: "A" }),
+    );
     const r = await tool.execute(toolContext, { questions: [q()] });
     expect(r.isError).toBe(false);
     expect(r.output).toContain('"Pick one" = "A"');

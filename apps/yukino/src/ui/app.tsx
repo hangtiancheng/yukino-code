@@ -145,8 +145,8 @@ import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
 import { toDisplayPreview } from "@/tool-result/index.js";
 import { AskUserQuestionTool, type Question } from "@/tools/ask-user.js";
-import type { BashTool } from "@/tools/bash.js";
-import type { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
+import { BashTool } from "@/tools/bash.js";
+import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import {
@@ -299,8 +299,7 @@ export function App({
     (() => {
       const reg = createToolRegistry(workDir, taskListRef.current);
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const exitPlan = reg.get("ExitPlanMode") as ExitPlanModeTool | undefined;
+      const exitPlan = reg.getInstanceOf("ExitPlanMode", ExitPlanModeTool);
       if (exitPlan) {
         exitPlan.isPlanMode = () => permModeRef.current === "plan";
         exitPlan.planExists = () => {
@@ -392,8 +391,7 @@ export function App({
   const disposeSandbox = async (): Promise<void> => {
     const pending = sandboxRef.current;
     sandboxRef.current = null;
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const bashTool = registryRef.current.get("Bash") as BashTool | undefined;
+    const bashTool = registryRef.current.getInstanceOf("Bash", BashTool);
     if (bashTool) {
       bashTool.sandbox = null;
       bashTool.sandboxRequired = false;
@@ -1878,8 +1876,7 @@ export function App({
     checkerRef.current = checker;
 
     // Attach the sandbox to the BashTool when sandboxing is enabled.
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const bashTool = registryRef.current.get("Bash") as BashTool | undefined;
+    const bashTool = registryRef.current.getInstanceOf("Bash", BashTool);
     let sandboxReady = false;
     if (bashTool && sandboxEnabledRef.current) {
       const sandbox = await getSandbox();

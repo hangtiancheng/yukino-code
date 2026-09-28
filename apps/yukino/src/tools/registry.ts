@@ -71,6 +71,15 @@ export class ToolRegistry {
     return this.tools.get(name);
   }
 
+  /** Look up a tool and narrow it to a concrete class via instanceof. */
+  getInstanceOf<T extends Tool>(
+    name: string,
+    ctor: abstract new (...args: never[]) => T,
+  ): T | undefined {
+    const tool = this.tools.get(name);
+    return tool instanceof ctor ? tool : undefined;
+  }
+
   listTools(): Tool[] {
     return [...this.tools.values()];
   }
