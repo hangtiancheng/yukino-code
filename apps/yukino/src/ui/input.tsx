@@ -338,25 +338,13 @@ export function InputBox(props: InputBoxProps) {
         add(c);
       }
     }
-    // Tier 2: exact alias
-    for (const c of commands) {
-      if (c.aliases.some((a) => a.toLowerCase() === query)) {
-        add(c);
-      }
-    }
-    // Tier 3: prefix name
+    // Tier 2: prefix name
     for (const c of commands) {
       if (c.name.toLowerCase().startsWith(query)) {
         add(c);
       }
     }
-    // Tier 4: prefix alias
-    for (const c of commands) {
-      if (c.aliases.some((a) => a.toLowerCase().startsWith(query))) {
-        add(c);
-      }
-    }
-    // Tier 5: fuzzy match
+    // Tier 3: fuzzy match
     const fuse = new Fuse(commands, {
       keys: [
         { name: "name", weight: 3 },

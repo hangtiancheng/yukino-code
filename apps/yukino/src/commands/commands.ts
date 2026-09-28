@@ -57,7 +57,6 @@ export interface CommandContext {
 
 export interface Command {
   name: string;
-  aliases: string[];
   type: CommandType;
   description: string;
   handler: (ctx: CommandContext) => string;
@@ -67,9 +66,6 @@ export interface Command {
 
 export class CommandRegistry {
   private commands = new Map<string, Command>();
-  /** Alias to command name */
-  private aliasMap = new Map<string, string>();
-
   /**
    * Registers a command, checking for name and alias conflicts.
    * The name must not conflict with existing command names or aliases;
@@ -80,29 +76,7 @@ export class CommandRegistry {
     if (this.commands.has(cmd.name)) {
       throw new Error(`Command '${cmd.name}' already registered`);
     }
-    // Check if the command name conflicts with an existing alias
-    if (this.aliasMap.has(cmd.name)) {
-      throw new Error(
-        `Command name '${cmd.name}' collides with alias of '${this.aliasMap.get(cmd.name) ?? ""}'`,
-      );
-    }
-    // Check if each alias conflicts with existing command names or aliases
-    for (const alias of cmd.aliases) {
-      if (this.commands.has(alias)) {
-        throw new Error(
-          `Alias '${alias}' for '${cmd.name}' collides with existing command name`,
-        );
-      }
-      if (this.aliasMap.has(alias)) {
-        throw new Error(
-          `Alias '${alias}' for '${cmd.name}' already registered by '${this.aliasMap.get(alias) ?? ""}'`,
-        );
-      }
-    }
     this.commands.set(cmd.name, cmd);
-    for (const alias of cmd.aliases) {
-      this.aliasMap.set(alias, cmd.name);
-    }
   }
 
   /**
@@ -115,27 +89,17 @@ export class CommandRegistry {
     if (this.find(cmd.name)) {
       return true;
     }
-    for (const alias of cmd.aliases) {
-      if (this.find(alias)) {
-        return true;
-      }
-    }
     return false;
   }
 
   find(name: string): Command | undefined {
-    return (
-      this.commands.get(name) ??
-      this.commands.get(this.aliasMap.get(name) ?? "")
-    );
+    return this.commands.get(name);
   }
 
   complete(prefix: string): Command[] {
     const lower = prefix.toLowerCase();
-    return [...this.commands.values()].filter(
-      (cmd) =>
-        cmd.name.toLowerCase().startsWith(lower) ||
-        cmd.aliases.some((a) => a.toLowerCase().startsWith(lower)),
+    return [...this.commands.values()].filter((cmd) =>
+      cmd.name.toLowerCase().startsWith(lower),
     );
   }
 
@@ -177,7 +141,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "login",
-    aliases: [],
     type: "local_ui",
     description: "Configure, save, and activate an LLM provider",
     handler: () => "login",
@@ -185,7 +148,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "help",
-    aliases: ["h", "?"],
     type: "local",
     description: "Show available commands",
     handler: (ctx) => {
@@ -195,20 +157,14 @@ export function createDefaultRegistry(): CommandRegistry {
         if (!cmd) {
           return `Unknown command: ${ctx.args}`;
         }
-        let detail = `/${cmd.name} — ${cmd.description}\n`;
-        if (cmd.aliases.length > 0) {
-          detail += `  Aliases: ${cmd.aliases.join(", ")}\n`;
-        }
-        return detail;
+        return `/${cmd.name} — ${cmd.description}\n`;
       }
       // List all commands; skills are discoverable via /skills instead.
       const cmds = registry.listCommands().filter((c) => !c.isSkill);
       let output = "Available commands:\n\n";
       output += cmds
         .map((c) => {
-          const aliases =
-            c.aliases.length > 0 ? `, /${c.aliases.join(", /")}` : "";
-          return `  /${c.name}${aliases}\n    ${c.description}`;
+          return `  /${c.name}\n    ${c.description}`;
         })
         .join("\n");
       output += "\n\nType /help <command> for details.";
@@ -218,7 +174,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "clear",
-    aliases: [],
     type: "local_ui",
     description: "Clear conversation history",
     handler: () => "clear",
@@ -226,7 +181,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "compact",
-    aliases: ["c"],
     type: "local_ui",
     description: "Force context compaction",
     handler: () => "compact",
@@ -234,7 +188,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "status",
-    aliases: ["s"],
     type: "local",
     description: "Show current status",
     handler: (ctx) => {
@@ -278,7 +231,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "session",
-    aliases: [],
     type: "local",
     description: "Show session info",
     handler: () => "Session is active. Use /resume to list past sessions.",
@@ -286,7 +238,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "plan",
-    aliases: ["p"],
     type: "local_ui",
     description: "Enter plan mode",
     handler: () => "plan",
@@ -294,7 +245,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "resume",
-    aliases: ["r"],
     type: "local_ui",
     description: "Resume a previous session",
     handler: () => "resume",
@@ -302,7 +252,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "quit",
-    aliases: ["exit", "q"],
     type: "local_ui",
     description: "Exit Yukino",
     handler: () => "quit",
@@ -310,7 +259,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "memory",
-    aliases: [],
     type: "local",
     description: "Show memory status",
     handler: () => "memory",
@@ -318,7 +266,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "skills",
-    aliases: [],
     type: "local_ui",
     description: "List available skills",
     handler: () => "skills",
@@ -326,7 +273,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "worktree",
-    aliases: ["wt"],
     type: "local_ui",
     description: "Manage git worktrees",
     handler: () => "worktree",
@@ -334,7 +280,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "code-review",
-    aliases: ["cr"],
     type: "local",
     description: "Manage code review team (create, add, remove, list)",
     handler: (ctx) => {
@@ -348,7 +293,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "review",
-    aliases: [],
     type: "prompt",
     description:
       "Review the uncommitted code changes for bugs and improvements",
@@ -361,7 +305,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "rewind",
-    aliases: [],
     type: "local_ui",
     description: "Rewind conversation to a previous checkpoint",
     handler: () => "rewind",
@@ -369,7 +312,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "mcp",
-    aliases: [],
     type: "local",
     description:
       "Show MCP server status; /mcp reload re-reads the config and reconnects",
@@ -378,7 +320,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "sandbox",
-    aliases: ["sb"],
     type: "local_ui",
     description: "Toggle OS sandbox mode for command execution",
     handler: () => "sandbox",
@@ -386,7 +327,6 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "thinking",
-    aliases: ["think"],
     type: "local",
     description:
       "Show or set the thinking level (off, minimal, low, medium, high, xhigh, max)",

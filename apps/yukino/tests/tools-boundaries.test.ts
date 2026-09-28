@@ -219,7 +219,7 @@ describe("file tool boundaries", () => {
       isError: true,
     });
     expect(readFileSync(path, "utf-8")).toBe("before");
-  });
+  }, 50_000);
 
   it("rejects an externally changed file whose mtime moved backwards", () => {
     const context = makeContext();

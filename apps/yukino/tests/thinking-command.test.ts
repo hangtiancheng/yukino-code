@@ -94,10 +94,6 @@ describe("/thinking command", () => {
     expect(output).toContain("boom");
   });
 
-  it("uses the same control for the /think alias", () => {
-    expect(registry.find("think")).toBe(command);
-  });
-
   it("shows only available choices in usage and errors", () => {
     for (const args of ["", "bogus", "max"]) {
       const setThinkingLevel = vi.fn();
@@ -186,22 +182,20 @@ describe("/thinking command", () => {
     expect(persistThinkingLevel).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "/thinking\tlow",
-    "/thinking\nlow",
-    "/thinking\r\n low",
-    "/think  \t LOW \n",
-  ])("parses whitespace and executes %s", (input) => {
-    const parsed = parse(input);
-    expect(parsed?.args.toLowerCase()).toBe("low");
-    const setThinkingLevel = vi.fn();
-    registry.find(parsed?.name ?? "")?.handler({
-      workDir: "/tmp",
-      args: parsed?.args ?? "",
-      setThinkingLevel,
-    });
-    expect(setThinkingLevel).toHaveBeenCalledWith("low");
-  });
+  it.each(["/thinking\tlow", "/thinking\nlow", "/thinking\r\n low"])(
+    "parses whitespace and executes %s",
+    (input) => {
+      const parsed = parse(input);
+      expect(parsed?.args.toLowerCase()).toBe("low");
+      const setThinkingLevel = vi.fn();
+      registry.find(parsed?.name ?? "")?.handler({
+        workDir: "/tmp",
+        args: parsed?.args ?? "",
+        setThinkingLevel,
+      });
+      expect(setThinkingLevel).toHaveBeenCalledWith("low");
+    },
+  );
 
   it.each([
     "/tmp/file.ts",

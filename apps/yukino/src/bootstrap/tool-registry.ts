@@ -119,9 +119,8 @@ export function wireSkillsToRegistry(
 
     const command: Command = {
       name: meta.name,
-      aliases: [],
       type: skill.meta.mode === "fork" ? "skill_fork" : "prompt",
-      description: `${meta.description} [skill]`,
+      description: `[skill] ${meta.description}`,
       isSkill: true,
       handler:
         skill.meta.mode === "fork"

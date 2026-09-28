@@ -105,14 +105,12 @@ vi.mock("@/images/clipboard.js", () => ({ saveClipboardImage: vi.fn() }));
 const commands: Command[] = [
   {
     name: "help",
-    aliases: ["h"],
     description: "Show all available commands",
     type: "local",
     handler: () => "",
   },
   {
     name: "model",
-    aliases: ["m"],
     description: "Choose the active model [skill]",
     type: "local_ui",
     handler: () => "",
@@ -1283,7 +1281,6 @@ describe("persistent composer drafts and input behavior", () => {
         commands: [
           {
             name: "thinking",
-            aliases: ["think"],
             type: "local",
             description: "Thinking level",
             handler: () => "",

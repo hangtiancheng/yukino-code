@@ -818,7 +818,6 @@ function wireSkillsToCommands(
     try {
       cmdRegistry.register({
         name: meta.name,
-        aliases: [],
         type: isFork ? "skill_fork" : "prompt",
         description: `${meta.description} [skill]`,
         isSkill: true,

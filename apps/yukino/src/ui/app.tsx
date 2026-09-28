@@ -312,7 +312,6 @@ export function App({
       const registry = createCommandRegistry();
       registry.register({
         name: "provider",
-        aliases: [],
         type: "local_ui",
         description: "Switch the active provider",
         handler: () => "provider",

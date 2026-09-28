@@ -40,13 +40,12 @@ describe("user command loader", () => {
     const workDir = cmdDir();
     writeFileSync(
       join(workDir, ".yukino", "commands", "deploy.md"),
-      "---\ndescription: Deploy it\naliases: [d, ship]\n---\nDeploy $ARGUMENTS to production.",
+      "---\ndescription: Deploy it\n---\nDeploy $ARGUMENTS to production.",
     );
 
     const deploy = loadUserCommands(workDir).find((c) => c.name === "deploy");
     expect(deploy).toBeDefined();
     expect(deploy?.description).toBe("Deploy it");
-    expect(deploy?.aliases).toEqual(["d", "ship"]);
     expect(deploy?.type).toBe("prompt");
     expect(deploy?.handler({ workDir, args: "staging" })).toBe(
       "Deploy staging to production.",
@@ -79,7 +78,6 @@ describe("/help listing", () => {
     const registry = createDefaultRegistry();
     registry.register({
       name: "demo-skill",
-      aliases: [],
       type: "prompt",
       description: "Demo skill [skill]",
       isSkill: true,

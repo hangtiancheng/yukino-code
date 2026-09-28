@@ -92,7 +92,6 @@ function commandName(base: string, full: string): string {
 const YamlFrontmatterSchema = z.object({
   description: z.string().optional(),
   "argument-hint": z.string().optional(),
-  aliases: z.array(z.string()).optional(),
 });
 
 function parseCommandFile(base: string, full: string): Command | null {
@@ -107,7 +106,6 @@ function parseCommandFile(base: string, full: string): Command | null {
 
   let description = "";
   let argumentHint = "";
-  let aliases: string[] = [];
   let body = raw;
 
   if (raw.startsWith("---")) {
@@ -120,7 +118,6 @@ function parseCommandFile(base: string, full: string): Command | null {
         const data = parse(YamlFrontmatterSchema, p);
         description = data.description ?? "";
         argumentHint = data["argument-hint"] ?? "";
-        aliases = data.aliases ?? [];
       } catch {
         // log.error({ err }, "commands operation failed");
         // ignore frontmatter parse errors; treat whole file as body
@@ -135,7 +132,6 @@ function parseCommandFile(base: string, full: string): Command | null {
 
   return {
     name,
-    aliases: Array.isArray(aliases) ? aliases : [],
     type: "prompt",
     description:
       description ||
