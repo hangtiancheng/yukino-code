@@ -21,9 +21,9 @@
  */
 
 /**
- * Prompt templates ported from OCR internal/config/template/prompts, adapted
- * to yukino's tool names (CodeComment / ReadFile / Grep / Glob) and loop
- * semantics (a turn without tool calls ends the agent — no task_done tool).
+ * Prompt templates for yukino's tool names (CodeComment / ReadFile / Grep /
+ * Glob) and loop semantics (a turn without tool calls ends the agent — no
+ * task_done tool).
  */
 
 export function renderTemplate(
@@ -289,9 +289,9 @@ export const NO_TOOL_USE_NUDGE =
   "Do not reply with prose alone. Review every file in <review_files>, call `CodeComment` to report each confirmed issue, " +
   "use `FileReadDiff` / `ReadFile` / `Grep` / `Glob` when you need context, and end your turn only after every file has been covered.";
 
-// Ported from OCR internal/agent/util.go: when an optional section has no
-// content, drop its header + placeholder together instead of leaving a
-// dangling "### Review Plan" with nothing under it.
+// When an optional section has no content, drop its header + placeholder
+// together instead of leaving a dangling "### Review Plan" with nothing
+// under it.
 const PLAN_BLOCK_RE =
   /^### [^\n]*Review Plan[^\n]*\n\{\{plan_guidance\}\}\n\n?/m;
 const CONFIRMED_BLOCK_RE =

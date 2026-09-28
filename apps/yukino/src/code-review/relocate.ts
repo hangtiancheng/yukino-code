@@ -32,10 +32,10 @@ import type { FileDiff, ReviewComment } from "./types.js";
 import type { LLMClient } from "@/llm/client.js";
 
 /**
- * LLM re-location, ported from OCR internal/diff/relocation.go. The last
- * positioning resort: when deterministic matching failed, an independent
- * call extracts the verbatim snippet the comment actually targets, then the
- * deterministic resolver runs again on the corrected snippet.
+ * LLM re-location. The last positioning resort: when deterministic matching
+ * failed, an independent call extracts the verbatim snippet the comment
+ * actually targets, then the deterministic resolver runs again on the
+ * corrected snippet.
  */
 
 /** Extract the first fenced code block from a response. */
@@ -72,9 +72,9 @@ export async function relocateWithLlm(
   if (!corrected || corrected === cm.existingCode) {
     return false;
   }
-  // OCR relocation.go restores the original snippet when the corrected one
-  // fails to resolve: existing_code is the evidence the filter judges later,
-  // and an unmatched rewrite would poison that judgment.
+  // Restore the original snippet when the corrected one fails to resolve:
+  // existing_code is the evidence the filter judges later, and an unmatched
+  // rewrite would poison that judgment.
   const original = cm.existingCode;
   cm.existingCode = corrected;
   if (resolveComment(cm, d)) {

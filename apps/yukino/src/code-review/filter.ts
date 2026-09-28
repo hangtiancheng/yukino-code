@@ -41,10 +41,9 @@ import { safeJSONParse } from "@/utils/index.js";
  * remove comments the diff *proves* wrong (Ground A / Ground B), with
  * protected-subject and value vetoes. Its default answer is approve.
  *
- * OCR forces the decision through two mutually exclusive tool calls; here the
- * same contract is expressed as strict JSON, with the analysis field ordered
- * before remove_ids so the model reasons before it commits (the field order
- * is load-bearing — see OCR filterTools comment).
+ * The decision contract is expressed as strict JSON, with the analysis field
+ * ordered before remove_ids so the model reasons before it commits (the
+ * field order is load-bearing).
  */
 
 export function buildFilterCommentsJSON(comments: ReviewComment[]): string {

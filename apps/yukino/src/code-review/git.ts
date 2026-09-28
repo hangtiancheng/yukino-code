@@ -30,9 +30,9 @@ import type { FileDiff, ReviewMode } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
-/** Context lines per hunk, matching OCR's DiffContextLines. */
+/** Context lines per hunk. */
 const DIFF_CONTEXT_LINES = 3;
-/** Untracked files above this size are reported as binary (OCR maxUntrackedFileSize). */
+/** Untracked files above this size are reported as binary. */
 const MAX_UNTRACKED_FILE_SIZE = 10 * 1024 * 1024;
 /** Leading bytes sniffed for NUL to decide binary-ness, matching git's heuristic. */
 const BINARY_SNIFF_WINDOW = 8000;
@@ -114,7 +114,7 @@ async function untrackedFileDiffs(
 ): Promise<string[]> {
   // -z delimits records with NUL: filenames may contain newlines, and
   // whitespace is a legal filename byte — splitting on "\n" or trimming
-  // silently drops files (OCR runs `ls-files -z` for the same reason).
+  // silently drops files.
   const list = await tryGit(
     workDir,
     [
@@ -158,10 +158,9 @@ export interface CollectDiffsOptions {
 }
 
 /**
- * Collect structured per-file diffs for the requested review input. Mirrors
- * OCR's diff.Provider: workspace = tracked changes vs HEAD plus synthesized
- * untracked diffs; range = merge-base(from,to)..to; commit = first-parent
- * show.
+ * Collect structured per-file diffs for the requested review input:
+ * workspace = tracked changes vs HEAD plus synthesized untracked diffs;
+ * range = merge-base(from,to)..to; commit = first-parent show.
  */
 export async function collectDiffs(
   options: CollectDiffsOptions,
@@ -259,7 +258,7 @@ export async function collectDiffs(
   });
 }
 
-/** Derive the review mode from CLI-style flags, matching OCR's precedence. */
+/** Derive the review mode from CLI-style flags: commit wins, then range, else workspace. */
 export function deriveReviewMode(args: {
   from?: string;
   to?: string;

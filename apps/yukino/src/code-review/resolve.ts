@@ -23,9 +23,9 @@
 import type { FileDiff, Hunk, ReviewComment } from "./types.js";
 
 /**
- * Comment positioning, ported from OCR internal/diff/resolver.go. The
- * external positioning module: deterministic matching first, cross-file
- * search second, LLM re-location last (see runner).
+ * Comment positioning. The external positioning module: deterministic
+ * matching first, cross-file search second, LLM re-location last (see
+ * runner).
  */
 
 interface IndexedLine {
@@ -200,11 +200,11 @@ export function resolveComment(cm: ReviewComment, d: FileDiff): boolean {
 
 /**
  * Re-file a comment whose existing_code belongs to a different file than the
- * one it was filed against (OCR RelocateAcrossFiles). ExistingCode is a
- * verbatim excerpt, so finding its true home is plain string matching over
- * the diffs already in memory. Zero hits and multiple hits both decline: the
- * same boilerplate can legitimately appear in several files, and guessing
- * between them would trade one wrong location for another.
+ * one it was filed against. ExistingCode is a verbatim excerpt, so finding
+ * its true home is plain string matching over the diffs already in memory.
+ * Zero hits and multiple hits both decline: the same boilerplate can
+ * legitimately appear in several files, and guessing between them would
+ * trade one wrong location for another.
  */
 export function relocateAcrossFiles(
   cm: ReviewComment,

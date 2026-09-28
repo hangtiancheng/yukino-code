@@ -36,15 +36,15 @@ import type { LLMClient } from "@/llm/client.js";
 import { safeJSONParse } from "@/utils/index.js";
 
 /**
- * Smart file bundling, ported from OCR internal/agent/grouping.go. Related
- * files are grouped into a single review unit; each group runs as a subagent
- * with isolated context — divide-and-conquer that stays stable on large
- * changesets and naturally supports concurrent review.
+ * Smart file bundling. Related files are grouped into a single review unit;
+ * each group runs as a subagent with isolated context — divide-and-conquer
+ * that stays stable on large changesets and naturally supports concurrent
+ * review.
  */
 
-/** Below this file count, grouping adds no value (OCR GROUPING_MIN_FILES). */
+/** Below this file count, grouping adds no value. */
 export const GROUPING_MIN_FILES = 4;
-/** Hard cap per group (OCR maxFilesPerGroup). */
+/** Hard cap per group. */
 export const MAX_FILES_PER_GROUP = 10;
 /**
  * Fallback combined diff token budget per group when the caller does not

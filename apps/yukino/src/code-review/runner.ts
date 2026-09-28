@@ -75,20 +75,19 @@ import { ReadFileTool } from "@/tools/read-file.js";
 import { ToolRegistry } from "@/tools/registry.js";
 
 /**
- * The review orchestrator, ported from OCR internal/agent/agent.go.
- * Deterministic engineering (selection, grouping limits, positioning,
- * filtering) wraps a yukino Agent per file group: each group runs as an
- * isolated subagent with its own conversation, registry, and permission
- * scope, reusing yukino's tool loop and auto-compaction.
+ * The review orchestrator. Deterministic engineering (selection, grouping
+ * limits, positioning, filtering) wraps a yukino Agent per file group: each
+ * group runs as an isolated subagent with its own conversation, registry,
+ * and permission scope, reusing yukino's tool loop and auto-compaction.
  */
 
 const UTIL_SYSTEM_PROMPT =
   "You are a precise assistant. Follow the instructions exactly and output only what is requested.";
 
-/** Plan phase thresholds (OCR PLAN_MODE_LINE_THRESHOLD / GROUP_LINE_THRESHOLD). */
+/** Plan phase thresholds. */
 const PLAN_MODE_LINE_THRESHOLD = 50;
 const PLAN_MODE_GROUP_LINE_THRESHOLD = 100;
-/** Per-group agent turn cap (OCR MAX_TOOL_REQUEST_TIMES, scaled down). */
+/** Per-group agent turn cap. */
 const MAX_AGENT_ITERATIONS = 50;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_MAX_ROUNDS = 2;
@@ -97,8 +96,8 @@ export interface RunCodeReviewDeps {
   provider: ProviderConfig;
 }
 
-/** Ref combination rules (OCR shared_flags.go): range and commit modes are
- * mutually exclusive, a range needs both ends, and no ref may look like a flag. */
+/** Ref combination rules: range and commit modes are mutually exclusive,
+ * a range needs both ends, and no ref may look like a flag. */
 export function validateReviewInput(
   from?: string,
   to?: string,

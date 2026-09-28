@@ -29,11 +29,7 @@ import {
 } from "./prompts.js";
 import type { FileDiff, ReviewComment } from "./types.js";
 
-/**
- * Prompt assembly helpers ported from OCR internal/agent (agent.go
- * buildConcatenatedDiffs / buildChangeFilesExceptGroup, util.go
- * buildConfirmedCommentsBlock).
- */
+/** Prompt assembly helpers. */
 
 /** Escape text used inside a double-quoted XML attribute. */
 function escapeXmlAttr(s: string): string {
@@ -79,7 +75,7 @@ export function buildChangeFilesExceptGroup(
 
 const CONFIRMED_MAX_EXISTING_CODE = 200;
 const CONFIRMED_MAX_CONTENT = 300;
-/** Cap on confirmed findings carried into later rounds (OCR confirmedCap). */
+/** Cap on confirmed findings carried into later rounds. */
 export const CONFIRMED_CAP = 30;
 
 function flattenOneLine(s: string): string {
@@ -132,8 +128,8 @@ export interface MainTaskVars {
 
 /**
  * Build the main-task user message. Empty optional sections are stripped
- * whole (header + placeholder) before substitution, matching OCR's
- * stripEmptyPlanBlock / stripEmptyConfirmedBlock.
+ * whole (header + placeholder) before substitution via stripEmptyPlanBlock /
+ * stripEmptyConfirmedBlock.
  */
 export function buildMainTaskMessage(vars: MainTaskVars): string {
   let content = MAIN_USER;
