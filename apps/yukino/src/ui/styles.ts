@@ -253,5 +253,6 @@ export const ICONS = {
   lastBranch: "└─",
   prompt: ">",
   success: "✓",
+  error: "✗",
   tree: "│",
 } as const;

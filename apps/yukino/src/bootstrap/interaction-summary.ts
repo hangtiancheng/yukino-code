@@ -84,7 +84,7 @@ export function formatInteractionSummary(
     field("Session ID", summary.sessionId),
     field(
       "Tool Calls",
-      `${String(totalToolCalls)} ( ✓ ${String(summary.successfulToolCalls)} x ${String(summary.failedToolCalls)} )`,
+      `${String(totalToolCalls)} ( ✓ ${String(summary.successfulToolCalls)} ✗ ${String(summary.failedToolCalls)} )`,
     ),
     field("Success Rate", `${successRate.toFixed(1)}%`),
     "",

@@ -49,7 +49,7 @@ describe("interaction summary", () => {
 
     expect(output).toContain("Interaction Summary");
     expect(output).toContain(field("Session ID", "session-123"));
-    expect(output).toContain(field("Tool Calls", "4 ( ✓ 3 x 1 )"));
+    expect(output).toContain(field("Tool Calls", "4 ( ✓ 3 ✗ 1 )"));
     expect(output).toContain(field("Success Rate", "75.0%"));
     expect(output).toContain(field("Agent Active", "10s"));
     expect(output).toContain(field("  > API Time", "6s (60.0%)"));
