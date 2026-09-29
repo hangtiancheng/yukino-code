@@ -118,7 +118,7 @@
       },
       "memory": {
         "title": "Memory that compounds",
-        "description": "Memories are extracted in the background, recalled per turn and consolidated periodically, so Yukino remembers how your codebase works."
+        "description": "Memories are extracted in the background and recalled per turn, so Yukino remembers how your codebase works. Consolidation currently runs in remote sessions."
       },
       "sessions": {
         "title": "Sessions & compaction",
@@ -126,7 +126,7 @@
       },
       "skills": {
         "title": "Skills & slash commands",
-        "description": "A skill catalog with hot-reload, inline and fork execution, plus user-defined slash commands from .yukino/commands."
+        "description": "A skill catalog with hot-reload, inline and fork execution, plus user-defined slash commands loaded from two tiers — ~/.yukino/commands and .yukino/commands."
       },
       "multiAgent": {
         "title": "Multi-agent workflows",
@@ -142,7 +142,7 @@
       },
       "codeReview": {
         "title": "Code review in the box",
-        "description": "/review runs a structured review pass and /code-review audits your diff with actionable findings — no extra tooling, no leaving the session."
+        "description": "/code-review audits your diff — workspace changes, a branch range, or a single commit — and returns actionable findings, no extra tooling and no leaving the session."
       },
       "rewind": {
         "title": "Rewind & checkpoints",
@@ -167,6 +167,10 @@
       "acp": {
         "title": "Agent Client Protocol",
         "description": "yukino --acp speaks ACP over stdio, --acp-ws over WebSocket — editors like Zed can open sessions, stream tool calls and answer permission requests natively."
+      },
+      "library": {
+        "title": "Embed it as a library",
+        "description": "Import @yukino.js/yukino to embed the agent, tool registry and conversation in your own host process — a terminal-independent entry for servers, editor extensions and test harnesses."
       }
     }
   },
@@ -225,9 +229,12 @@
     "interruptTitle": "Built to be interrupted",
     "interruptBody": "Ctrl+C clears the prompt or stops a stream. Checkpoints let you rewind a turn, fork a session, or hand the thread to a teammate.",
     "shortcuts": {
+      "ctrlC": "Clear input or stop the stream",
       "ctrlO": "Toggle full tool output",
-      "shiftTab": "Cycle permission modes",
-      "ctrlT": "Open the teams overlay"
+      "ctrlT": "Open the teams overlay",
+      "ctrlB": "Background a running shell",
+      "ctrlV": "Paste a clipboard image (Alt+V on Windows)",
+      "shiftTab": "Cycle permission modes"
     }
   },
   "tools": {
@@ -465,7 +472,7 @@
       },
       "memory": {
         "question": "How does long-term memory work?",
-        "answer": "Yukino extracts memories from finished sessions in the background, stores them as Markdown under .yukino/, and recalls the relevant ones per turn — prefetched in parallel with the model call so nothing slows down. Consolidation periodically merges and prunes them, and /memory lets you inspect or edit everything by hand."
+        "answer": "Yukino extracts memories from finished sessions in the background, stores them as Markdown under .yukino/, and recalls the relevant ones per turn — prefetched in parallel with the model call so nothing slows down. Consolidation merges and prunes them (currently in remote sessions), and /memory lets you inspect or edit everything by hand."
       },
       "telemetry": {
         "question": "Can I send traces to my observability stack?",

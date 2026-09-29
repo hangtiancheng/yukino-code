@@ -29,7 +29,6 @@ import bot from "lucide-static/icons/bot.svg?raw";
 import brainCircuit from "lucide-static/icons/brain-circuit.svg?raw";
 import cable from "lucide-static/icons/cable.svg?raw";
 import check from "lucide-static/icons/check.svg?raw";
-import chevronDown from "lucide-static/icons/chevron-down.svg?raw";
 import command from "lucide-static/icons/command.svg?raw";
 import copy from "lucide-static/icons/copy.svg?raw";
 import download from "lucide-static/icons/download.svg?raw";
@@ -43,7 +42,6 @@ import hardDrive from "lucide-static/icons/hard-drive.svg?raw";
 import history from "lucide-static/icons/history.svg?raw";
 import inbox from "lucide-static/icons/inbox.svg?raw";
 import keyRound from "lucide-static/icons/key-round.svg?raw";
-import languages from "lucide-static/icons/languages.svg?raw";
 import listTree from "lucide-static/icons/list-tree.svg?raw";
 import loaderCircle from "lucide-static/icons/loader-circle.svg?raw";
 import lock from "lucide-static/icons/lock.svg?raw";
@@ -84,7 +82,6 @@ export const icons = {
   brainCircuit,
   cable,
   check,
-  chevronDown,
   command,
   copy,
   download,
@@ -98,7 +95,6 @@ export const icons = {
   history,
   inbox,
   keyRound,
-  languages,
   listTree,
   loaderCircle,
   lock,

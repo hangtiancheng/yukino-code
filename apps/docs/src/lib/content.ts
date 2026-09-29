@@ -128,7 +128,8 @@ export type FeatureId =
   | "hooks"
   | "ide"
   | "observability"
-  | "acp";
+  | "acp"
+  | "library";
 
 export interface Feature {
   id: FeatureId;
@@ -180,6 +181,7 @@ export const features: Feature[] = [
     decor: "obs",
   },
   { id: "acp", icon: icons.handshake, accent: "accent" },
+  { id: "library", icon: icons.blocks, accent: "neutral" },
 ];
 
 export interface ObsBadge {
@@ -296,7 +298,6 @@ export const slashCommands = [
   { cmd: "/memory", desc: "inspect memories" },
   { cmd: "/skills", desc: "browse skills" },
   { cmd: "/worktree", desc: "isolate work" },
-  { cmd: "/review", desc: "structured review" },
   { cmd: "/code-review", desc: "audit the diff" },
   { cmd: "/sandbox", desc: "toggle sandbox" },
   { cmd: "/mcp", desc: "manage MCP servers" },
@@ -320,7 +321,8 @@ export const workflowSteps: WorkflowStep[] = [
   { step: "04", id: "ship", icon: icons.gitBranch },
 ];
 
-export type ShortcutId = "ctrlO" | "shiftTab" | "ctrlT";
+export type ShortcutId =
+  "ctrlC" | "ctrlO" | "ctrlT" | "ctrlB" | "ctrlV" | "shiftTab";
 
 export interface Shortcut {
   id: ShortcutId;
@@ -328,9 +330,12 @@ export interface Shortcut {
 }
 
 export const shortcuts: Shortcut[] = [
+  { id: "ctrlC", term: "Ctrl+C" },
   { id: "ctrlO", term: "Ctrl+O" },
-  { id: "shiftTab", term: "Shift+Tab" },
   { id: "ctrlT", term: "Ctrl+T" },
+  { id: "ctrlB", term: "Ctrl+B" },
+  { id: "ctrlV", term: "Ctrl+V" },
+  { id: "shiftTab", term: "Shift+Tab" },
 ];
 
 export type AgentCardId = "generalPurpose" | "plan" | "explore";
@@ -395,7 +400,7 @@ export const providerList: Protocol[] = [
     icon: icons.sparkle,
     name: "openai-compat",
     base: "http://localhost:11434/v1",
-    env: "MY_GATEWAY_KEY",
+    env: "OPENAI_API_KEY",
   },
 ];
 

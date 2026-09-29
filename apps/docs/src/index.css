@@ -46,10 +46,8 @@ docs-faq {
 @theme {
   --font-sans:
     "Google Sans", "Google Sans Text", Roboto, "Helvetica Neue", Arial,
-    "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  --font-mono:
-    "Roboto Mono", "SF Mono", "Menlo", "Cascadia Code", "PingFang SC",
-    "Noto Sans Mono", monospace;
+    sans-serif;
+  --font-mono: "Roboto Mono", "SF Mono", "Menlo", "Cascadia Code", monospace;
   --color-brand-50: #e8f0fe;
   --color-brand-100: #d2e3fc;
   --color-brand-200: #aecbfa;
@@ -167,13 +165,6 @@ docs-faq {
       stroke-dashoffset: -24;
     }
   }
-}
-
-html[lang="lzh"] {
-  --font-sans:
-    "Noto Serif SC", "Songti SC", "STSong", "SimSun", "PingFang SC", serif;
-  --font-mono:
-    "Noto Serif SC", "Songti SC", "STSong", "SimSun", "PingFang SC", serif;
 }
 
 @media (prefers-reduced-motion: reduce) {

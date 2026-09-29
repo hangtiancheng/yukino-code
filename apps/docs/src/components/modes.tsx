@@ -49,10 +49,7 @@ export function Modes() {
         )}
       >
         {runModes.map((mode, index) => (
-          <docs-reveal
-            delay={(index % 3) * 0.06}
-            className={cn(mode.wide && "lg:col-span-2")}
-          >
+          <docs-reveal delay={(index % 3) * 0.06}>
             <div
               className={cn(
                 "group relative h-full overflow-hidden p-6 sm:p-7",
@@ -90,10 +87,10 @@ export function Modes() {
 
               <code
                 className={cn(
-                  "border-brand-950/8 bg-brand-50/60 mt-3 inline-flex max-w-full items-center gap-1.5 overflow-x-auto rounded-lg border px-2.5 py-1.5 font-mono text-[11px] whitespace-nowrap text-zinc-600 dark:border-white/8 dark:bg-white/3 dark:text-zinc-400",
+                  "border-brand-950/8 bg-brand-50/60 mt-3 inline-block max-w-full rounded-lg border px-2.5 py-1.5 font-mono text-[11px] break-words text-zinc-600 dark:border-white/8 dark:bg-white/3 dark:text-zinc-400",
                 )}
               >
-                <span className="text-brand-500">$</span>
+                <span className="text-brand-500 mr-1.5">$</span>
                 {mode.command}
               </code>
 
