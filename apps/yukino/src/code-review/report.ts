@@ -25,14 +25,14 @@ import type { CodeReviewResult, ReviewComment } from "./types.js";
 /** Markdown report rendering for a finished review. */
 
 const SEVERITY_ICON: Record<string, string> = {
-  critical: "[P0]",
-  high: "[P1]",
-  medium: "[P2]",
-  low: "[P3]",
+  critical: "🔴",
+  high: "🟠",
+  medium: "🟡",
+  low: "🔵",
 };
 
 function formatComment(cm: ReviewComment): string {
-  const icon = SEVERITY_ICON[cm.severity] ?? "⚪";
+  const icon = SEVERITY_ICON[cm.severity] ?? "🟢";
   const location =
     cm.startLine > 0
       ? cm.endLine > cm.startLine
