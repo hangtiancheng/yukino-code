@@ -118,25 +118,26 @@ mcp_servers:
       - "--mcp"
   - name: yukino-mcp # stdio
     command: pnpm
-    args:
-      - "--filter"
-      - "@yukino.js/mcp"
-      - "dev"
+    args: ["--filter", "@yukino.js/mcp", "dev"]
     env:
       API_BASE_URL: "https://yukino-js.dev"
       API_KEY: "${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-http # streamable-http
-    url: "https://localhost:3300/mcp"
+    url: "http://localhost:3300/mcp"
     transport: "http"
     env:
       API_BASE_URL: "https://yukino-js.dev"
       API_KEY: "${YUKINO_MCP_API_KEY}"
+    headers:
+      Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-sse # legacy sse
-    url: "https://localhost:3300/sse"
+    url: "http://localhost:3300/sse"
     transport: "sse"
     env:
       API_BASE_URL: "https://yukino-js.dev"
       API_KEY: "${YUKINO_MCP_API_KEY}"
+    headers:
+      Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
 sandbox:
   enabled: false
   backend: sandbox-runtime
