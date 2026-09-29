@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { readFileSync } from "node:fs";
+import { cpSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -33,6 +33,13 @@ import type { Options } from "tsup";
 type EsbuildPlugin = NonNullable<Options["esbuildPlugins"]>[number];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const remoteFrontendDist = join(__dirname, "src", "remote", "fe", "dist");
+
+const copyRemoteFrontend = (): void => {
+  cpSync(remoteFrontendDist, join(__dirname, "dist", "fe", "dist"), {
+    recursive: true,
+  });
+};
 
 const pkg = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
@@ -280,6 +287,9 @@ const cliConfig: Options = {
   define: { __YUKINO_VERSION__: JSON.stringify(pkg.version) },
   tsconfig: "tsconfig.json",
   esbuildPlugins: [rawImportPlugin, externalizeNodeBuiltinsPlugin],
+  onSuccess: async () => {
+    copyRemoteFrontend();
+  },
 };
 
 // Library entry: keeps dependencies external (consumers resolve them from their

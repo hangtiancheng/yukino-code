@@ -34,6 +34,7 @@ const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const libDir = join(pkgRoot, "dist", "lib");
 const libEntry = join(libDir, "index.js");
 const cliEntry = join(pkgRoot, "dist", "main.js");
+const remoteFrontendDir = join(pkgRoot, "dist", "fe", "dist");
 
 // Module specifiers quoted in import/export statements (including dynamic import).
 const moduleSpecifier = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
@@ -47,6 +48,16 @@ describe("cli entry (dist/main.js)", () => {
     expect(
       readFileSync(cliEntry, "utf-8").startsWith("#!/usr/bin/env node"),
     ).toBe(true);
+  });
+
+  it("includes the remote frontend", () => {
+    for (const file of [
+      "index.html",
+      join("static", "index.css"),
+      join("static", "index.js"),
+    ]) {
+      expect(existsSync(join(remoteFrontendDir, file)), file).toBe(true);
+    }
   });
 });
 

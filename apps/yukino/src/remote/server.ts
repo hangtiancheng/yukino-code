@@ -208,7 +208,10 @@ const CodeReviewStartSchema = z.object({
 
 // -- Static file serving -------------------------------------------------------
 
-const FE_DIST = join(import.meta.dirname, "fe", "dist");
+const FE_DIST = [
+  join(import.meta.dirname, "fe", "dist"),
+  join(import.meta.dirname, "..", "fe", "dist"),
+].find((directory) => existsSync(directory));
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -223,6 +226,9 @@ const MIME_TYPES: Record<string, string> = {
 
 /** Serves a static file from fe/dist/. Returns null if not found. */
 function serveStatic(path: string): { body: Buffer; mime: string } | null {
+  if (!FE_DIST) {
+    return null;
+  }
   // Normalize and prevent path traversal
   const cleanPath = normalize(path).replace(/^(\.\.[/\\])+/, "");
   const fullPath = join(FE_DIST, cleanPath);
