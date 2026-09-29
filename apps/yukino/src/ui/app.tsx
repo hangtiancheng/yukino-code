@@ -185,7 +185,7 @@ interface Props {
   sandboxConfig?: SandboxYamlConfig;
   enableCoordinatorMode?: boolean;
   forkDisabled?: boolean;
-  /** Auto memory pipeline switch from config.yaml (`memory:`); defaults to true. */
+  /** Auto memory pipeline switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   resume?: true | string;
   onExitSummary?: (summary: InteractionSummary) => void;
@@ -764,8 +764,9 @@ export function App({
         fileHistoryRef.current = new FileHistory(workDir, sessionIdRef.current);
 
         const instructions = loadInstructions(workDir);
-        // memory: false disables the whole auto-memory pipeline; no manager is
-        // created so nothing scans, rebuilds MEMORY.md, or injects reminders.
+        // enable_memory: false disables the whole auto-memory pipeline; no
+        // manager is created so nothing scans, rebuilds MEMORY.md, or injects
+        // reminders.
         const memMgr = memoryEnabled ? new MemoryManager(workDir) : null;
         memManagerRef.current = memMgr;
         const memReminder = memMgr?.buildSystemReminder() ?? "";
@@ -1475,7 +1476,7 @@ export function App({
         `Memories:  ${
           memoryEnabled
             ? String(memManagerRef.current?.getMemories().length ?? 0)
-            : "disabled (memory: false)"
+            : "disabled (enable_memory: false)"
         }`,
         `Skills:    ${String(skillCatalogRef.current?.list().length ?? 0)}`,
         `MCP:       ${String(mcpInfo?.servers.length ?? 0)} server(s), ${String(mcpInfo?.toolCount ?? 0)} tool(s)`,
@@ -1494,7 +1495,8 @@ export function App({
           ...prev,
           {
             role: "system",
-            content: "Auto memory is disabled (memory: false in config.yaml).",
+            content:
+              "Auto memory is disabled (enable_memory: false in config.yaml).",
           },
         ]);
         return true;

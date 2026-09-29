@@ -274,7 +274,7 @@ export interface RemoteAgentHandle {
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
   memoryManager: MemoryManager;
-  /** Auto memory switch from config.yaml (`memory:`); gates injection, extraction, and consolidation. */
+  /** Auto memory switch from config.yaml (`enable_memory:`); gates injection, extraction, and consolidation. */
   memoryEnabled: boolean;
   contextWindow: number;
   longTermMemoryInstructions: string;
@@ -467,7 +467,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
         ],
         onPermissionRequest: callbacks.onPermissionRequest,
         onLoopComplete: (conv) => {
-          // memory: false disables the whole background memory pipeline
+          // enable_memory: false disables the whole background memory pipeline
           if (!this.memoryEnabled) {
             return;
           }
@@ -547,7 +547,7 @@ export interface CreateRemoteAgentOptions {
   mcpServers?: MCPServerConfig[];
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
-  /** Auto memory switch from config.yaml (`memory:`); defaults to true. */
+  /** Auto memory switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   askUser?: Asker;
   sessionId?: string;
@@ -601,10 +601,10 @@ export async function createRemoteAgent(
   // 6. Load instructions and memory, inject into conversation
   const instructions = loadInstructions(workDir);
   const memoryManager = new MemoryManager(workDir);
-  // memory: false keeps the index out of the conversation and nothing is
-  // injected, extracted, or consolidated automatically; /memory only reports
-  // that auto memory is disabled (the manager object is kept so the handle
-  // shape is uniform).
+  // enable_memory: false keeps the index out of the conversation and nothing
+  // is injected, extracted, or consolidated automatically; /memory only
+  // reports that auto memory is disabled (the manager object is kept so the
+  // handle shape is uniform).
   const memReminder = memoryEnabled ? memoryManager.buildSystemReminder() : "";
   conv.injectLongTermMemory(instructions, memReminder);
 
@@ -982,7 +982,7 @@ interface RemoteServerOptions {
   addr: string;
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
-  /** Auto memory switch from config.yaml (`memory:`); defaults to true. */
+  /** Auto memory switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   /** Agent constructor used for eager and lazy initialization. */
   agentFactory?: typeof createRemoteAgent;
@@ -2201,7 +2201,7 @@ export class RemoteServer {
       return "Memory is not available yet.";
     }
     if (!handle.memoryEnabled) {
-      return "Auto memory is disabled (memory: false in config.yaml).";
+      return "Auto memory is disabled (enable_memory: false in config.yaml).";
     }
     const sub = args.trim().split(/\s+/u)[0];
     if (sub === "clear") {

@@ -124,8 +124,9 @@ providers:
     context_window: 1000000
     max_output_tokens: 128000
 default_provider: 0
-memory: false
+enable_memory: false
 enable_coordinator_mode: false
+enable_fork: true
 mcp_servers:
   - name: codegraph
     command: codegraph
@@ -141,17 +142,11 @@ mcp_servers:
   - name: yukino-mcp-http # streamable-http
     url: "http://localhost:3300/mcp"
     transport: "http"
-    env:
-      API_BASE_URL: "https://yukino-js.dev"
-      API_KEY: "${YUKINO_MCP_API_KEY}"
     headers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-sse # legacy sse
     url: "http://localhost:3300/sse"
     transport: "sse"
-    env:
-      API_BASE_URL: "https://yukino-js.dev"
-      API_KEY: "${YUKINO_MCP_API_KEY}"
     headers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
 sandbox:
@@ -162,6 +157,7 @@ sandbox:
 hooks:
   - id: pre-tool-use
     event: pre_tool_use
+    condition: 'tool =~ "^(Edit|Write)File$" || tool == "Bash"'
     action:
       type: command
       command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"

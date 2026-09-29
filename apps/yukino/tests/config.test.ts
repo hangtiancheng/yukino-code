@@ -352,11 +352,11 @@ describe("config", () => {
     });
 
     it("disables for real when set to false", () => {
-      expect(memoryEnabled({ ...bare(), memory: false })).toBe(false);
-      expect(memoryEnabled({ ...bare(), memory: true })).toBe(true);
+      expect(memoryEnabled({ ...bare(), enable_memory: false })).toBe(false);
+      expect(memoryEnabled({ ...bare(), enable_memory: true })).toBe(true);
     });
 
-    it("parses memory from config.yaml", () => {
+    it("parses enable_memory from config.yaml", () => {
       const dir = mkdtempSync(join(tmpdir(), "yukino-memory-"));
       try {
         const path = join(dir, "config.yaml");
@@ -368,12 +368,12 @@ describe("config", () => {
             "    protocol: anthropic",
             "    base_url: https://provider.example.com",
             "    model: model",
-            "memory: false",
+            "enable_memory: false",
             "",
           ].join("\n"),
         );
         const cfg = loadConfig(path);
-        expect(cfg.memory).toBe(false);
+        expect(cfg.enable_memory).toBe(false);
         expect(memoryEnabled(cfg)).toBe(false);
       } finally {
         rmSync(dir, { recursive: true, force: true });

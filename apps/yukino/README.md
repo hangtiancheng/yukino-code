@@ -24,7 +24,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 - Session persistence with JSONL-based storage for cross-session resume
 - Automatic context compaction when conversations approach the model's context window
-- Long-term memory extraction and recall across sessions (disable with `memory: false` in `~/.yukino/config.yaml`)
+- Long-term memory extraction and recall across sessions (disable with `enable_memory: false` in `~/.yukino/config.yaml`)
 - Instructions files for persistent guidance: user-global `~/.yukino/AGENTS.md`, plus `AGENTS.md` and `.yukino/AGENTS.md` in every directory from the git root down to the working directory, with `@include` expansion
 
 ### Skills and Commands
@@ -108,8 +108,9 @@ providers:
     context_window: 1000000
     max_output_tokens: 128000
 default_provider: 0
-memory: false
+enable_memory: false
 enable_coordinator_mode: false
+enable_fork: true
 mcp_servers:
   - name: codegraph
     command: codegraph
@@ -125,17 +126,11 @@ mcp_servers:
   - name: yukino-mcp-http # streamable-http
     url: "http://localhost:3300/mcp"
     transport: "http"
-    env:
-      API_BASE_URL: "https://yukino-js.dev"
-      API_KEY: "${YUKINO_MCP_API_KEY}"
     headers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-sse # legacy sse
     url: "http://localhost:3300/sse"
     transport: "sse"
-    env:
-      API_BASE_URL: "https://yukino-js.dev"
-      API_KEY: "${YUKINO_MCP_API_KEY}"
     headers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
 sandbox:
@@ -146,6 +141,7 @@ sandbox:
 hooks:
   - id: pre-tool-use
     event: pre_tool_use
+    condition: 'tool =~ "^(Edit|Write)File$" || tool == "Bash"'
     action:
       type: command
       command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
@@ -174,6 +170,18 @@ Provider fields:
 The thinking level controls reasoning depth. For `anthropic` in the default `budget` mode it maps to a thinking token budget (minimal 1024, low 2048, medium 8192, high 16384, xhigh 32768, max 65536); with `thinking_mode: adaptive` it maps to an effort-based `output_config` instead (minimal resolves to low, xhigh to high). For `openai` and `openai-compat`, off through high map to the matching provider reasoning effort; xhigh and max collapse to high unless `thinking_level_map` explicitly maps them to a provider-supported value. The budget shares `max_output_tokens` and always leaves at least 1024 answer tokens, so lower `max_output_tokens` shrinks the thinking budget instead of disabling it (below a 2048-token cap no valid budget remains and thinking falls back to disabled). Levels the model does not support are declared through `thinking_level_map` (map to a supported effort, or `null` to disable) and `reasoning: false`; an unsupported request is clamped down to the nearest available level. Use `/thinking <level>` to change it at runtime (the change is applied to the active client and saved to `~/.yukino/config.yaml`), or bare `/thinking` to open a picker of the levels the active provider supports.
 
 API keys are resolved in this order: explicit api_key field, then environment variables (ANTHROPIC_API_KEY for anthropic, OPENAI_API_KEY for openai and openai-compat).
+
+Hook conditions (`condition`; omitted means the hook always fires):
+
+| Form             | Example                      | Meaning                                                                                                  |
+| ---------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `key == "value"` | `tool == "EditFile"`         | Exact match                                                                                              |
+| `key != "value"` | `tool != "Bash"`             | Not equal                                                                                                |
+| `key =~ "regex"` | `file_path =~ "\.ts$"`       | JavaScript regex test                                                                                    |
+| `key =* "glob"`  | `file_path =* "src/**/*.ts"` | Full-string glob: `*` stays within one path segment, `**` crosses `/`, `?` is a single non-`/` character |
+| Bare tool name   | `EditFile`                   | Shorthand for `tool == "EditFile"`                                                                       |
+
+Conditions combine with `&&` (AND, binds tighter), `||` (OR), and a leading `!` negation; operators inside double quotes are literal text. `key` is `tool`, `event`, `file_path`, `message`, or any tool argument name (such as `command` or `path`). Values must be double-quoted, and anything unrecognized — including unbalanced quotes — evaluates to false, so the hook is skipped.
 
 ### Telemetry
 
