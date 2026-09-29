@@ -83,6 +83,10 @@ describe("remote execution boundaries", () => {
       host: "127.0.0.1",
       port: 9000,
     });
+    expect(parseRemoteAddress("9000")).toEqual({
+      host: "127.0.0.1",
+      port: 9000,
+    });
     expect(parseRemoteAddress("0.0.0.0:9000")).toEqual({
       host: "0.0.0.0",
       port: 9000,

@@ -271,7 +271,7 @@ The -p flag sends a single prompt, runs the agent loop, and prints the result to
 
 ```bash
 yukino --remote                  # listens on 127.0.0.1:18888
-yukino --remote :9000            # custom loopback port
+yukino --remote 9000             # custom loopback port (":9000" also works)
 yukino --remote 0.0.0.0:9000      # explicitly expose on all interfaces (no built-in authentication)
 ```
 
@@ -282,7 +282,7 @@ Starts a Koa HTTP server and WebSocket bridge. The bundled React frontend is ser
 ```bash
 yukino --acp                 # Agent Client Protocol over stdio (cannot be combined with other flags)
 yukino --acp-ws              # ACP over WebSocket, listens on 127.0.0.1:18889
-yukino --acp-ws host:port    # ACP over WebSocket at a custom loopback address
+yukino --acp-ws 9000         # ACP over WebSocket at a custom port (host:port also works)
 ```
 
 Implements the Agent Client Protocol (`@agentclientprotocol/sdk`) so ACP-compatible editors can drive Yukino as an external agent. The WebSocket transport only binds loopback addresses.

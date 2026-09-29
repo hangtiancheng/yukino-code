@@ -25,14 +25,25 @@ export function parseRemoteAddress(address: string): {
   port: number;
 } {
   const value = address.trim();
-  const match = /^(?:\[([^\]]+)\]|([^:]*))(?::(\d+))?$/.exec(value);
-  if (!match) {
-    throw new Error("Invalid remote address; use host:port or [IPv6]:port");
+  let host: string;
+  let portText: string | undefined;
+  if (/^\d+$/.test(value)) {
+    // A bare number is a port, never a hostname: "9000" behaves like ":9000".
+    host = "";
+    portText = value;
+  } else {
+    const match = /^(?:\[([^\]]+)\]|([^:]*))(?::(\d+))?$/.exec(value);
+    if (!match) {
+      throw new Error(
+        "Invalid remote address; use port, host:port or [IPv6]:port",
+      );
+    }
+    host = match[1] ?? match[2] ?? "";
+    portText = match[3];
   }
-  const host = match[1] || match[2] || "127.0.0.1";
-  const port = Number(match[3] ?? "18888");
+  const port = Number(portText ?? "18888");
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("Remote port must be an integer between 1 and 65535");
   }
-  return { host, port };
+  return { host: host || "127.0.0.1", port };
 }

@@ -53,7 +53,9 @@ export function parseAcpMode(args: string[]): AcpMode | null {
   const address = args[websocketIndex + 1];
   const consumed = address && !address.startsWith("-") ? 2 : 1;
   if (args.length !== consumed) {
-    throw new Error("--acp-ws accepts only an optional host:port address.");
+    throw new Error(
+      "--acp-ws accepts only an optional port or host:port address.",
+    );
   }
   return {
     transport: "websocket",

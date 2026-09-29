@@ -80,11 +80,11 @@ async function main() {
     return;
   }
 
-  // Parse --remote and its optional listen address (defaults to ":18888").
+  // Parse --remote and its optional listen address (defaults to port 18888).
   let remoteAddr = "";
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--remote") {
-      remoteAddr = ":18888";
+      remoteAddr = "18888";
       if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
         remoteAddr = args[i + 1];
         i++;
