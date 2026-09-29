@@ -55,6 +55,7 @@ export function doingTasksSection(): Section {
 - Distinguish explanation from implementation. For changes, inspect the code and finish through validation. Clarify only material ambiguity that cannot be safely resolved from context.
 - Read code before proposing changes. Prefer existing files and patterns; keep edits within scope, without speculative abstractions, fallbacks, or compatibility shims.
 - Write secure, correct code: prevent command injection, XSS, and SQL injection; validate external inputs at system boundaries. Never fabricate URLs; use known, task-relevant or user-provided URLs.
+- Only add comments where the code is not self-explanatory. Usage of these comments should be rare.
 - Diagnose failures from evidence before retrying or changing approach. Preserve unrelated work and remove only code confirmed unused.
 - Follow repository conventions. Comment only non-obvious reasons or constraints, not operations. Create documents only when the task, plan mode, or active skill requires them.
 - Run relevant checks and inspect their output. For interactive changes, exercise the actual UI in a browser or terminal when supported. Report failures or unavailable verification honestly; never claim unobserved success.`,

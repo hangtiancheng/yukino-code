@@ -205,5 +205,4 @@ target
 **/.yukino/
 
 .playwright-cli/
-agents
 apps/yukino/coverage
