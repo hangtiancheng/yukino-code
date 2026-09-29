@@ -685,9 +685,15 @@ async function doCompact(
   // Build the boundary payload the session owner will persist. The kept tail
   // must be persisted together with its tool blocks so that the full call
   // chain is available when the session is restored; messages with neither
-  // text nor tool blocks are dropped. The summary here is the bare summary
-  // (no recovery attachment): recovery context is rebuilt fresh per process, so
-  // baking it into the persisted boundary would be stale on the next resume.
+  // text nor tool blocks are dropped. The summary here excludes the recovery
+  // attachment (rebuilt fresh per process, it would be stale on the next
+  // resume) but keeps the transcript hint: the session file outlives the
+  // process, so a resumed session must still know the full transcript is
+  // readable.
+  let persistedSummary = summary;
+  if (sessionFilePath) {
+    persistedSummary += `\n\nIf you need specific details from before compaction (code snippets, error messages, etc.), use ReadFile to read the full session transcript: ${sessionFilePath}`;
+  }
   const keep = toKeep
     .filter(
       (m) =>
@@ -712,6 +718,6 @@ async function doCompact(
   return {
     compacted: true,
     message: `Compacted ${String(toSummarize.length)} messages into summary (${String(summary.length)} chars), kept ${String(toKeep.length)} recent messages verbatim`,
-    boundary: { summary, keep },
+    boundary: { summary: persistedSummary, keep },
   };
 }

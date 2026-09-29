@@ -47,11 +47,11 @@ import {
   shutdownTelemetry,
 } from "./telemetry/index.js";
 import { App } from "./ui/app.js";
+import { parseResumeArgument } from "./ui/resume-argument.js";
 import { setThemeMode } from "./ui/styles.js";
 import { installSyncOutput } from "./ui/sync-output.js";
 import { TerminalInput } from "./ui/terminal-input.js";
 import { detectTerminalTheme } from "./ui/terminal-theme.js";
-import { parseResumeArgument } from "./ui/ui-selection.js";
 import { asErrorString } from "./utils/index.js";
 
 async function main() {
@@ -123,7 +123,6 @@ async function main() {
 
   if (args.includes("--remote") && remoteAddr) {
     setTelemetryMode("remote");
-    installRemoteTelemetrySignalHandlers();
     const { RemoteServer } = await import("./remote/server.js");
     initLogger({ sessionId: newSessionId(), mode: "remote", stdout: true });
     const srv = new RemoteServer({
@@ -135,7 +134,19 @@ async function main() {
       forkDisabled: !forkEnabled(cfg),
       memoryEnabled: memoryEnabled(cfg),
     });
+    // Graceful shutdown on Ctrl+C/SIGTERM: stop the server (closes WS/HTTP,
+    // kills detached background shells and teammates, disconnects MCP
+    // children) and persist the real exit code before telemetry flushes.
+    installRemoteTelemetrySignalHandlers(async (exitCode) => {
+      try {
+        await srv.stop();
+      } catch {
+        // best-effort — exiting regardless
+      }
+      recordExit(exitCode);
+    });
     try {
+      // Resolves only once the server has stopped (see RemoteServer.stop).
       await srv.run();
     } catch (err) {
       captureTelemetryError(err, "remote");

@@ -294,12 +294,18 @@ export class Agent {
   async *run(): AsyncGenerator<AgentEvent> {
     const telemetry = startAgentTelemetry(this.sessionId, this.client);
     this.restoreContext();
-    // The filter is the sole authority — no exception branches.
+    // The filter is the sole authority — no exception branches. Deriving the
+    // name list through the same visibility rules as the schemas keeps the
+    // compaction recovery attachment from advertising tools this run cannot
+    // call (coordinator narrowing, deferred MCP tools, hidden search/dispatch).
     const toolSchemas = this.registry.getAllSchemas(
       this.client.protocol ?? "anthropic",
       this.toolFilter,
     );
-    const toolSchemaNames = this.registry.listTools().map((t) => t.name);
+    const toolSchemaNames = this.registry.listVisibleToolNames(
+      this.client.protocol ?? "anthropic",
+      this.toolFilter,
+    );
 
     let maxTokensEscalated = false;
     let outputRecoveries = 0;
@@ -620,7 +626,7 @@ export class Agent {
               this.client.setMaxOutputTokens?.(ceiling);
               this.maxOutput = ceiling;
               maxTokensEscalated = true;
-              if (fullText) {
+              if (fullText || thinkingBlocks.length > 0) {
                 this.conversation.addAssistantFull(
                   fullText,
                   thinkingBlocks,
@@ -639,6 +645,10 @@ export class Agent {
                   "Output token limit hit. Resume directly from where you stopped. Do not apologize or repeat previous content. Pick up mid-thought if needed.",
                 );
               }
+              // Nothing produced at all: replay as-is — a thinking-only turn
+              // is persisted above, and with truly zero output there is
+              // nothing to resume from (an extra user prompt would also break
+              // role alternation).
               yield {
                 type: "retry",
                 reason: "max_tokens escalation",
@@ -647,19 +657,28 @@ export class Agent {
               continue;
             } else if (outputRecoveries < MAX_TOKENS_RECOVERIES) {
               outputRecoveries++;
-              this.conversation.addAssistantFull(fullText, thinkingBlocks, []);
-              this.persistLastMessage();
-              if (lastUsage) {
-                this.conversation.recordUsageAnchor(
-                  lastUsage.inputTokens,
-                  lastUsage.outputTokens,
-                  lastUsage.cacheReadInputTokens,
-                  lastUsage.cacheCreationInputTokens,
+              if (fullText || thinkingBlocks.length > 0) {
+                this.conversation.addAssistantFull(
+                  fullText,
+                  thinkingBlocks,
+                  [],
+                );
+                this.persistLastMessage();
+                if (lastUsage) {
+                  this.conversation.recordUsageAnchor(
+                    lastUsage.inputTokens,
+                    lastUsage.outputTokens,
+                    lastUsage.cacheReadInputTokens,
+                    lastUsage.cacheCreationInputTokens,
+                  );
+                }
+                this.conversation.addUserMessage(
+                  "Output token limit hit. Resume directly from where you stopped. Break remaining work into smaller pieces.",
                 );
               }
-              this.conversation.addUserMessage(
-                "Output token limit hit. Resume directly from where you stopped. Break remaining work into smaller pieces.",
-              );
+              // Zero output: persisting an empty assistant turn (or stacking a
+              // second user message) would corrupt the history; replay as-is
+              // and let the recovery counter bound the retries.
               yield {
                 type: "retry",
                 reason: `max_tokens recovery ${String(outputRecoveries)}/${String(MAX_TOKENS_RECOVERIES)}`,

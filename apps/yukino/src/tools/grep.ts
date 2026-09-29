@@ -42,6 +42,10 @@ import { asErrorString, strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "tools" });
 
 const MAX_RESULTS = 500;
+// Files above this size are skipped rather than buffered whole: reading a
+// multi-GB file into memory would spike it and block the loop, and the 500-
+// match cap means huge files rarely contribute anything the model needs.
+const MAX_GREP_FILE_BYTES = 25 * 1024 * 1024;
 
 // JS regexes keep \w/\b/\d ASCII-only even in u-mode, unlike ripgrep whose
 // defaults are Unicode-aware. Rewrite them to property-escape equivalents
@@ -183,6 +187,7 @@ export class GrepTool implements Tool {
         relative(ctx.workDir, fullPath).split(sep).join("/"),
       );
     const results: string[] = [];
+    let skippedLargeFiles = 0;
 
     const walk = async (dir: string): Promise<void> => {
       if (results.length >= MAX_RESULTS) {
@@ -234,6 +239,11 @@ export class GrepTool implements Tool {
 
     const searchFile = async (filePath: string): Promise<void> => {
       try {
+        const fileStat = await stat(filePath);
+        if (fileStat.size > MAX_GREP_FILE_BYTES) {
+          skippedLargeFiles++;
+          return;
+        }
         const buf = await readFile(filePath);
         // NUL byte in the first 8KB → binary (ripgrep's heuristic); scanning
         // it as UTF-8 would only produce replacement-char garbage matches.
@@ -270,12 +280,21 @@ export class GrepTool implements Tool {
     }
 
     if (results.length === 0) {
-      return { output: "No matches found.", isError: false };
+      return {
+        output:
+          skippedLargeFiles > 0
+            ? `No matches found (${String(skippedLargeFiles)} file(s) over 25MB were skipped).`
+            : "No matches found.",
+        isError: false,
+      };
     }
 
     let output = results.join("\n");
     if (results.length >= MAX_RESULTS) {
       output += `\n\n(results truncated at ${String(MAX_RESULTS)} matches)`;
+    }
+    if (skippedLargeFiles > 0) {
+      output += `\n(${String(skippedLargeFiles)} file(s) over 25MB were skipped)`;
     }
     return { output, isError: false };
   }

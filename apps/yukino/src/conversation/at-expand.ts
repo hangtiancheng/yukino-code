@@ -30,7 +30,7 @@ import {
 } from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
 
-const log = createChildLogger({ module: "terminal" });
+const log = createChildLogger({ module: "at-expand" });
 const MAX_INLINE_BYTES = 100_000;
 // Files larger than this are never read, even for a narrow line range.
 const MAX_RANGE_FILE_BYTES = 10_000_000;
@@ -112,7 +112,7 @@ export function expandAtRefs(text: string, workDir: string): string {
         appendix += `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`;
       }
     } catch (err) {
-      log.error({ err }, "UI operation failed");
+      log.error({ err }, "@-mention expansion failed");
       // not a readable file → leave the @token as literal text
     }
   }
@@ -167,7 +167,7 @@ export async function expandAtRefsWithImages(
           });
           appendix += `\n\n<image type="base64" media_type="${attachment.mediaType}" path="${refPath}" />`;
         } catch (err) {
-          log.error({ err: err }, "UI operation failed");
+          log.error({ err: err }, "@-mention expansion failed");
         }
       } else if (lineStart !== undefined && lineEnd !== undefined) {
         if (st.size <= MAX_RANGE_FILE_BYTES) {
@@ -184,7 +184,7 @@ export async function expandAtRefsWithImages(
         appendix += `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`;
       }
     } catch (err) {
-      log.error({ err }, "UI operation failed");
+      log.error({ err }, "@-mention expansion failed");
       // not a readable file → leave the @token as literal text
     }
   }

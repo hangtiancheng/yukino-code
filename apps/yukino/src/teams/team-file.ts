@@ -54,21 +54,25 @@ export const TeamMemberEntrySchema = z.object({
 export type TeamMemberEntry = z.infer<typeof TeamMemberEntrySchema>;
 
 /**
- * On-disk representation of team configuration, stored at <teamsBaseDir>/<slug>/config.json.
+ * On-disk team configuration, stored at <teamsBaseDir>/<slug>/config.json.
  *
  * The in-memory Member carries a mailbox, cancel callback, and conversation — none of
  * which can be serialized — so what gets persisted is this pure-metadata structure,
  * with both sides correlated by member name.
  *
  * This file serves Leader-side cross-restart continuity: TeamManager.get() rebuilds a
- * metadata-only Team from it on demand. Pane teammates do not read it — they receive
- * the team name, member name, and mailbox directory via command-line flags at spawn.
+ * metadata-only Team from it on demand. Pane teammates read it for leader liveness
+ * (leaderPid): a teammate whose leader has been gone for a sustained period exits
+ * instead of polling forever. Teammates receive the team name, member name, and
+ * mailbox directory via command-line flags at spawn.
  */
 const TeamFileSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   createdAt: z.number(),
   leaderAgentId: z.string(),
+  /** PID of the process currently acting as leader; written by leader-side TeamManager.get()/create(). */
+  leaderPid: z.number().optional(),
   members: z.array(TeamMemberEntrySchema),
 });
 

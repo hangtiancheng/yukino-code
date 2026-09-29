@@ -161,7 +161,7 @@ describe("teammate entry point", () => {
   });
 
   it.each(["initial", "follow-up"])(
-    "propagates %s errors without reporting task completion",
+    "propagates %s errors, reports the failure to the leader, and never reports completion",
     async (phase) => {
       const run = vi.spyOn(Agent.prototype, "run");
       if (phase === "follow-up") {
@@ -175,9 +175,20 @@ describe("teammate entry point", () => {
       await queue("Follow-up task", "[shutdown] done");
 
       await expect(runTeammate(args)).rejects.toThrow("provider failed");
+      // The leader is told the teammate failed ([idle] … failed: …) instead
+      // of its UI status staying "running" forever; an initial failure sends
+      // just the failure notice, a follow-up failure also carries the
+      // initial task's idle notice.
+      const leaderMail = new FileMailbox(args.teamDir, "leader").receiveSync();
+      expect(leaderMail).toHaveLength(phase === "initial" ? 1 : 2);
       expect(
-        new FileMailbox(args.teamDir, "leader").receiveSync(),
-      ).toHaveLength(phase === "initial" ? 0 : 1);
+        leaderMail.some((m) => m.text.includes("failed: provider failed")),
+      ).toBe(true);
+      expect(
+        leaderMail.some((m) =>
+          m.text.includes("has completed their task and is waiting"),
+        ),
+      ).toBe(phase === "follow-up");
       expect(disconnect).toHaveBeenCalledOnce();
       expect(logger.closeLogger).toHaveBeenCalledOnce();
     },

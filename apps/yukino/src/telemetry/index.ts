@@ -170,7 +170,15 @@ export async function shutdownTelemetry(): Promise<void> {
   return shutdown;
 }
 
-export function installRemoteTelemetrySignalHandlers(): void {
+/**
+ * Installs SIGINT/SIGTERM handlers for the remote server. When `onShutdown` is
+ * provided it runs first (server teardown: background tasks, teammates, MCP
+ * children) and receives the exit code so it can persist the real one; the
+ * telemetry flush and process exit follow once it settles.
+ */
+export function installRemoteTelemetrySignalHandlers(
+  onShutdown?: (exitCode: number) => void | Promise<void>,
+): void {
   if (remoteSignalHandlersInstalled) {
     return;
   }
@@ -179,9 +187,13 @@ export function installRemoteTelemetrySignalHandlers(): void {
   const install = (signal: NodeJS.Signals, exitCode: number): void => {
     const handler = (): void => {
       process.off(signal, handler);
-      void shutdownTelemetry().finally(() => {
-        process.exit(exitCode);
-      });
+      void Promise.resolve(onShutdown?.(exitCode))
+        .catch(() => undefined)
+        .finally(() => {
+          void shutdownTelemetry().finally(() => {
+            process.exit(exitCode);
+          });
+        });
     };
     process.once(signal, handler);
   };

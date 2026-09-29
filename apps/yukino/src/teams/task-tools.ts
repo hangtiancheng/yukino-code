@@ -90,12 +90,6 @@ export class TeamTaskCreateTool implements Tool {
       });
     }
     const store = this.mgr.getTaskStore(this.teamName);
-    if (!store) {
-      return Promise.resolve({
-        output: `Task store not found for team '${this.teamName}'`,
-        isError: true,
-      });
-    }
     const task = store.create(
       title,
       strArg(args, "description"),
@@ -147,12 +141,6 @@ export class TeamTaskGetTool implements Tool {
       });
     }
     const store = this.mgr.getTaskStore(this.teamName);
-    if (!store) {
-      return Promise.resolve({
-        output: `Task store not found for team '${this.teamName}'`,
-        isError: true,
-      });
-    }
     const task = store.get(taskId);
     if (!task) {
       return Promise.resolve({
@@ -208,12 +196,6 @@ export class TeamTaskListTool implements Tool {
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     const store = this.mgr.getTaskStore(this.teamName);
-    if (!store) {
-      return Promise.resolve({
-        output: `Task store not found for team '${this.teamName}'`,
-        isError: true,
-      });
-    }
     const status = strArg(args, "status") || undefined;
     const assignee = strArg(args, "assignee") || undefined;
     const tasks = store.listTasks(status, assignee);
@@ -307,12 +289,6 @@ export class TeamTaskUpdateTool implements Tool {
       });
     }
     const store = this.mgr.getTaskStore(this.teamName);
-    if (!store) {
-      return Promise.resolve({
-        output: `Task store not found for team '${this.teamName}'`,
-        isError: true,
-      });
-    }
 
     const changes: string[] = [];
     const fields: {

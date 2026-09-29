@@ -415,6 +415,10 @@ export class AnthropicClient implements LLMClient {
     let thinkingAccumulate = "";
     let thinkingSignature = "";
     let inThinking = false;
+    // Terminal-event guard: a stream cut between message_start and
+    // message_stop (gateway dropping the SSE) must not be committed as a
+    // complete end_turn turn with near-zero usage.
+    let sawMessageStop = false;
 
     try {
       const betas = [...(sendToolSearchBeta ? [NATIVE_TOOL_USE_BETA] : [])];
@@ -516,20 +520,28 @@ export class AnthropicClient implements LLMClient {
             if (event.delta.stop_reason) {
               stopReason = event.delta.stop_reason;
             }
-            if (event.usage.output_tokens) {
-              outputTokens = event.usage.output_tokens;
-
-              if (event.usage.input_tokens) {
-                inputTokens = event.usage.input_tokens;
-              }
-              if (event.usage.cache_read_input_tokens) {
-                cacheReadInputTokens = event.usage.cache_read_input_tokens;
-              }
-              if (event.usage.cache_creation_input_tokens) {
-                cacheCreationInputTokens =
-                  event.usage.cache_creation_input_tokens;
-              }
+            // Apply each usage field independently: a delta whose
+            // output_tokens is 0 but which carries input/cache fields must
+            // still update those. SDK types allow null for the optional
+            // fields, hence the typeof guards.
+            const deltaUsage = event.usage;
+            if (typeof deltaUsage.output_tokens === "number") {
+              outputTokens = deltaUsage.output_tokens;
             }
+            if (typeof deltaUsage.input_tokens === "number") {
+              inputTokens = deltaUsage.input_tokens;
+            }
+            if (typeof deltaUsage.cache_read_input_tokens === "number") {
+              cacheReadInputTokens = deltaUsage.cache_read_input_tokens;
+            }
+            if (typeof deltaUsage.cache_creation_input_tokens === "number") {
+              cacheCreationInputTokens = deltaUsage.cache_creation_input_tokens;
+            }
+            break;
+          }
+
+          case "message_stop": {
+            sawMessageStop = true;
             break;
           }
 
@@ -543,6 +555,15 @@ export class AnthropicClient implements LLMClient {
             break;
           }
         }
+      }
+
+      // Without message_stop the response is truncated, not complete: yield
+      // no stream_end — a NetworkError lets the run's recovery paths retry
+      // instead of persisting a half response as a finished turn.
+      if (!sawMessageStop) {
+        throw new NetworkError(
+          "Anthropic stream ended without message_stop; response was truncated",
+        );
       }
 
       yield {

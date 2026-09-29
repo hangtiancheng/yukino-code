@@ -22,6 +22,10 @@
 
 import { asErrorString } from "@/utils/index.js";
 
+// Finished tasks kept in memory (with their outputs) before the oldest are
+// evicted; see TaskManager.pruneCompleted.
+const MAX_RETAINED_FINISHED_TASKS = 200;
+
 export type AgentTaskStatus = "running" | "completed" | "failed" | "cancelled";
 
 /**
@@ -186,13 +190,23 @@ export class TaskManager {
   }
 
   async stopAll(): Promise<void> {
-    const running = this.list().filter((task) =>
-      this.pendingTaskIds.has(task.id),
-    );
-    for (const task of running) {
-      this.stop(task.id);
+    // Loop instead of a one-shot snapshot: tasks can be created while earlier
+    // ones settle (e.g. a runner spawning follow-ups); each pass stops and
+    // awaits whatever is still pending until nothing new appears.
+    const stopped = new Set<string>();
+    while (true) {
+      const running = this.list().filter(
+        (task) => this.pendingTaskIds.has(task.id) && !stopped.has(task.id),
+      );
+      if (running.length === 0) {
+        break;
+      }
+      for (const task of running) {
+        stopped.add(task.id);
+        this.stop(task.id);
+      }
+      await Promise.allSettled(running.map((task) => task.done));
     }
-    await Promise.allSettled(running.map((task) => task.done));
   }
 
   /**
@@ -224,7 +238,26 @@ export class TaskManager {
     for (const task of completed) {
       this.notifiedTaskIds.add(task.id);
     }
+    this.pruneCompleted();
     return completed;
+  }
+
+  /**
+   * Evicts the oldest finished tasks beyond the retention cap. Without this,
+   * a long session accumulates every task (with its full output) in memory
+   * forever; running tasks are never dropped.
+   */
+  private pruneCompleted(): void {
+    const finished = this.list().filter((task) => task.status !== "running");
+    let excess = finished.length - MAX_RETAINED_FINISHED_TASKS;
+    for (const task of finished) {
+      if (excess <= 0) {
+        break;
+      }
+      this.tasks.delete(task.id);
+      this.notifiedTaskIds.delete(task.id);
+      excess--;
+    }
   }
 
   clear(): void {

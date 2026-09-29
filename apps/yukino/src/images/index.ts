@@ -59,6 +59,8 @@ interface ImageAttachment {
 // Hard limit is 5MB on the base64-encoded payload. base64 inflates by 4/3, so the raw-byte target that always fits is 5MB * 3/4 = 3.75MB.
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_IMAGE_BYTES_PASSTHROUGH = (MAX_IMAGE_BYTES * 3) / 4;
+// On-disk admission cap for loadImageAttachment (pre-read memory bound).
+const MAX_IMAGE_INPUT_BYTES = 50 * 1024 * 1024;
 
 export const MAX_DIMENSION_PX = 2000;
 
@@ -142,6 +144,13 @@ export async function loadImageAttachment(
   const st = statSync(absPath);
   if (!st.isFile()) {
     throw new Error(`Not a file: ${absPath}`);
+  }
+  // Pre-read admission: readFileSync is the memory spike, and no real image
+  // is anywhere near this size — anything bigger is corrupt or mislabeled.
+  if (st.size > MAX_IMAGE_INPUT_BYTES) {
+    throw new ImageTooLargeError(
+      `Image file is ${formatMB(st.size)} on disk; files over ${formatMB(MAX_IMAGE_INPUT_BYTES)} are not read. Please provide a smaller image.`,
+    );
   }
   const buf = readFileSync(absPath);
 
@@ -253,6 +262,6 @@ async function compressWithSharp(
   }
 
   throw new ImageTooLargeError(
-    `Unable to compress image (${formatMB(buf.length)} raw) under the ${formatMB(MAX_IMAGE_BYTES)} API limit. Please provide a smaller image.`,
+    `Unable to compress image (${formatMB(buf.length)} raw) under the ${formatMB(MAX_IMAGE_BYTES)} base64 API limit (raw bytes must be ≤${formatMB(MAX_IMAGE_BYTES_PASSTHROUGH)}). Please provide a smaller image.`,
   );
 }

@@ -41,8 +41,6 @@ export interface CommandContext {
   toolCount?: () => number;
   /** Returns the list of memories */
   memoryList?: () => string[];
-  /** Clears all memories */
-  memoryClear?: () => void;
   /** Current model name */
   model?: string;
   /** Returns the current effective thinking level */
@@ -75,18 +73,6 @@ export class CommandRegistry {
       throw new Error(`Command '${cmd.name}' already registered`);
     }
     this.commands.set(cmd.name, cmd);
-  }
-
-  /**
-   * Checks if a command would conflict with already registered commands.
-   * `register` throws on a conflict; use this to pre-filter candidate
-   * commands when a throw is not desired.
-   */
-  hasConflict(cmd: Command): boolean {
-    if (this.find(cmd.name)) {
-      return true;
-    }
-    return false;
   }
 
   find(name: string): Command | undefined {

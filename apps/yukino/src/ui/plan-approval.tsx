@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, usePaste } from "ink";
 import { useState } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
@@ -56,7 +56,11 @@ export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
       } else if (feedbackText) {
         onSelect("feedback", feedbackText);
       }
+      // Empty feedback + Enter is a no-op; the placeholder text and the hint
+      // below explain what the field expects.
     } else if (key.escape) {
+      // Escape defaults to the middle ground: approve the plan, but keep
+      // confirming every edit. It does not cancel the approval.
       onSelect("manual");
     } else if (key.tab && key.shift && cursor === 2 && feedbackText) {
       onSelect("feedback", feedbackText);
@@ -67,9 +71,16 @@ export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
     }
   });
 
+  // Pasted text (bracketed paste) arrives as one chunk, not per-key input.
+  usePaste((text) => {
+    if (cursor === 2) {
+      setFeedbackText((current) => current + text);
+    }
+  });
+
   return (
     <SelectorFrame
-      hint="↑↓ navigate · Enter select · Escape cancel"
+      hint="↑↓ navigate · Enter select · Shift+Tab submit feedback · Esc approve with manual confirmation"
       subtitle="Yukino has written a plan and is ready to execute."
       title="Plan complete"
     >

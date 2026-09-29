@@ -26,6 +26,7 @@ import { RecoveryState } from "@/compact/recovery.js";
 import { FileHistory } from "@/file-history/index.js";
 import { rebuildFromSession } from "@/session/index.js";
 import type { SessionMessage } from "@/session/index.js";
+import { TaskStore } from "@/todo/store.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 
 type SessionState = Pick<
@@ -38,6 +39,7 @@ type SessionState = Pick<
   | "recoveryState"
   | "activeSkills"
   | "toolFilter"
+  | "taskList"
 >;
 
 export function restoreRemoteSession(
@@ -55,5 +57,6 @@ export function restoreRemoteSession(
   state.recoveryState = new RecoveryState();
   state.activeSkills.clear();
   state.toolFilter = null;
+  state.taskList.useStore(new TaskStore(state.workDir, sessionId));
   return replay;
 }

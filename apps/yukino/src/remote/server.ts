@@ -90,6 +90,7 @@ import {
   listSessions,
   loadSession,
   getSessionFilePath,
+  touchSession,
 } from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
@@ -148,6 +149,24 @@ import { WriteFileTool } from "@/tools/write-file.js";
 import { contentToText, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "remote" });
+
+// Monotonic request-id counter: Date.now() alone collides when two requests
+// land in the same millisecond (e.g. concurrent subagents), which would
+// overwrite the first request's resolver and hang its run forever.
+let requestCounter = 0;
+function nextRequestId(prefix: string): string {
+  requestCounter += 1;
+  return `${prefix}_${Date.now().toString(36)}_${String(requestCounter)}`;
+}
+
+// Permission/ask requests with no client response settle after this long, so
+// a closed browser tab cannot pin the streaming slot (and the run) forever.
+const PENDING_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const PENDING_REQUEST_TIMEOUT_MINUTES = 10;
+// WS heartbeat: ping interval and the no-pong threshold that terminates a
+// half-open connection.
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const HEARTBEAT_STALE_MS = 75_000;
 
 // -- WS inbound/outbound types and Zod schemas --------------------------------
 
@@ -259,6 +278,8 @@ export interface RemoteAgentHandle {
   workDir: string;
   /** Current permission mode; plan mode is enforced through the run() checker. */
   permissionMode: PermissionMode;
+  /** Shared task board; /clear and /resume swap its store to the target session. */
+  taskList: TaskList;
 
   /** Runs the agent loop: adds the user message, creates Agent, and yields events. */
   run(text: string, callbacks: RunCallbacks): AsyncGenerator<AgentEvent>;
@@ -274,6 +295,15 @@ export interface RemoteAgentHandle {
 
   /** Takes steering messages queued too late for in-run delivery. */
   takeSteeringLeftovers(): string[];
+
+  /**
+   * Resets the conversation for /clear. The manager is reset in place —
+   * AgentTool captured it for its fork path, so swapping the instance would
+   * strand the fork on the discarded history — and every piece of
+   * session-scoped state (session id, file history, task board, recovery
+   * state, MCP announcements) rotates with it.
+   */
+  clearConversation(): void;
 }
 
 // -- Agent handle implementation -----------------------------------------------
@@ -304,12 +334,18 @@ class AgentHandleImpl implements RemoteAgentHandle {
   provider: ProviderConfig;
   workDir: string;
   permissionMode: PermissionMode = "default";
+  /** Shared task board; /clear and /resume swap its store to the target session. */
+  taskList: TaskList;
 
   // Servers whose instructions this conversation has already been told about. The
   // remote handle connects MCP once and never reloads it, so nothing is ever
   // retracted here; the record keeps later runs from repeating the guidance, and
   // history decides whether it has to be replayed (compaction, session restore).
   private mcpAnnounced = new Set<string>();
+
+  // One consolidator per handle: a fresh instance per loop would reset the
+  // lastScanAt throttle, hammering the lock on every loop_complete.
+  private memoryConsolidator: MemoryConsolidator | null = null;
 
   private abortController: AbortController | null = null;
   /** The agent of the current run, if any; used for mid-run steering. */
@@ -323,6 +359,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
       | "abort"
       | "steer"
       | "takeSteeringLeftovers"
+      | "clearConversation"
       | "permissionMode"
     >,
   ) {
@@ -352,6 +389,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
       agentHandleImpl.longTermMemoryMemoryContent;
     this.provider = agentHandleImpl.provider;
     this.workDir = agentHandleImpl.workDir;
+    this.taskList = agentHandleImpl.taskList;
     this.abortController = null;
   }
 
@@ -437,15 +475,18 @@ class AgentHandleImpl implements RemoteAgentHandle {
             });
 
           // Background memory consolidation (fire-and-forget)
-          new MemoryConsolidator(this.client, this.workDir, {
-            appendSystem: (msg) => {
-              conv.addSystemReminder(msg);
+          this.memoryConsolidator ??= new MemoryConsolidator(
+            this.client,
+            this.workDir,
+            {
+              appendSystem: (msg) => {
+                this.conv.addSystemReminder(msg);
+              },
             },
-          })
-            .maybeRun()
-            .catch(() => {
-              /* non-fatal */
-            });
+          );
+          this.memoryConsolidator.maybeRun().catch(() => {
+            /* non-fatal */
+          });
         },
       });
 
@@ -472,6 +513,18 @@ class AgentHandleImpl implements RemoteAgentHandle {
 
   takeSteeringLeftovers(): string[] {
     return this.currentAgent?.drainSteering() ?? [];
+  }
+
+  clearConversation(): void {
+    // Reset in place: AgentTool holds this manager for its fork path, so
+    // replacing the instance would leave forks inheriting cleared history.
+    this.conv.reset();
+    this.activeSkills.clear();
+    this.sessionId = newSessionId();
+    this.fileHistory = new FileHistory(this.workDir, this.sessionId);
+    this.taskList.useStore(new TaskStore(this.workDir, this.sessionId));
+    this.recoveryState = new RecoveryState();
+    this.mcpAnnounced.clear();
   }
 }
 
@@ -515,7 +568,7 @@ export async function createRemoteAgent(
   const fileStateCache = new FileStateCache();
 
   // 2. Build tool registry with all built-in tools
-  const registry = buildToolRegistry(workDir, sessionId);
+  const { registry, taskList } = buildToolRegistry(workDir, sessionId);
 
   // 3. Build system prompt
   const env = detectEnvironment(workDir);
@@ -658,6 +711,9 @@ export async function createRemoteAgent(
       );
   // 12. Register team tools (plus SyntheticOutput)
   const teamManager = new TeamManager(workDir);
+  // Re-adopt any team left on disk (e.g. from a previous server run) so live
+  // external teammates' notifications are drained and the UI sees them.
+  teamManager.restoreFromDisk();
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here
   // (Bash/PowerShell) so run_in_background and timeout auto-background deliver
@@ -809,7 +865,12 @@ export async function createRemoteAgent(
 
     // Only decide the load mode after all tools are registered: it compares total schema size against the context window
     if (result.tools.length > 0) {
-      decideAndApply(registry, provider.base_url, getContextWindow(provider));
+      decideAndApply(
+        registry,
+        provider.base_url,
+        provider.protocol,
+        getContextWindow(provider),
+      );
     }
   }
 
@@ -839,6 +900,7 @@ export async function createRemoteAgent(
     longTermMemoryMemoryContent: memReminder,
     provider,
     workDir,
+    taskList,
   });
 
   // ExitPlanMode gates on the live permission mode and requires a plan file,
@@ -855,7 +917,10 @@ export async function createRemoteAgent(
 // -- Helper functions for agent initialization ---------------------------------
 
 /** Creates the tool registry and registers all 17 built-in tools. */
-function buildToolRegistry(workDir: string, sessionId: string): ToolRegistry {
+function buildToolRegistry(
+  workDir: string,
+  sessionId: string,
+): { registry: ToolRegistry; taskList: TaskList } {
   const store = new TaskStore(workDir, sessionId);
   const taskList = new TaskList(store);
 
@@ -877,7 +942,7 @@ function buildToolRegistry(workDir: string, sessionId: string): ToolRegistry {
   registry.register(new TaskGetTool(taskList));
   registry.register(new TaskListTool(taskList));
   registry.register(new TaskUpdateTool(taskList));
-  return registry;
+  return { registry, taskList };
 }
 
 /** Registers loaded skills as slash commands (inline mode -> prompt type, fork mode -> skill_fork). */
@@ -958,6 +1023,11 @@ export class RemoteServer {
   private reviewController: AbortController | null = null;
   private turnCount = 0;
   private readonly eventLogger = new AgentEventLogger(log);
+  /** Resolves run() once stop() has completed; run() blocks on it. */
+  private stoppedResolve: (() => void) | null = null;
+  /** Last pong timestamp per client; drives the heartbeat sweep. */
+  private lastPongAt = new Map<WebSocket, number>();
+  private heartbeatTimer: NodeJS.Timeout | null = null;
 
   // Plan-mode state (parity with the terminal UI approval flow).
   private prePlanMode: PermissionMode = "default";
@@ -1026,6 +1096,7 @@ export class RemoteServer {
   private setupWebSocket(): void {
     this.wss.on("connection", (ws: WebSocket) => {
       this.clients.add(ws);
+      this.lastPongAt.set(ws, Date.now());
 
       // Send initial connected message to the newly connected client only.
       // Deferred until the agent exists so the session id is never empty;
@@ -1056,21 +1127,54 @@ export class RemoteServer {
           log.warn("received malformed WS message");
           return;
         }
-        void this.handleWsMessage(parsed.data);
+        void this.handleWsMessage(ws, parsed.data);
+      });
+
+      ws.on("pong", () => {
+        this.lastPongAt.set(ws, Date.now());
       });
 
       ws.on("close", () => {
         this.clients.delete(ws);
+        this.lastPongAt.delete(ws);
       });
 
       ws.on("error", () => {
         this.clients.delete(ws);
+        this.lastPongAt.delete(ws);
       });
     });
   }
 
+  /**
+   * Ping/sweep loop for half-open connections: a browser tab killed without a
+   * close frame stays in the clients set forever without this, receiving
+   * broadcasts into a dead socket.
+   */
+  private startHeartbeat(): void {
+    this.heartbeatTimer = setInterval(() => {
+      const now = Date.now();
+      for (const ws of [...this.clients]) {
+        const last = this.lastPongAt.get(ws) ?? now;
+        if (now - last > HEARTBEAT_STALE_MS) {
+          ws.terminate();
+          this.clients.delete(ws);
+          this.lastPongAt.delete(ws);
+          continue;
+        }
+        try {
+          ws.ping();
+        } catch {
+          // Dead socket: the sweep will remove it.
+        }
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref();
+  }
+
   /** Handles incoming WebSocket messages from the Web UI. */
   private async handleWsMessage(
+    ws: WebSocket,
     msg: z.infer<typeof WsInboundSchema>,
   ): Promise<void> {
     switch (msg.type) {
@@ -1082,6 +1186,8 @@ export class RemoteServer {
           } else {
             await this.handleUserMessage(parsed.data.content);
           }
+        } else {
+          log.warn("dropping malformed user_message");
         }
         break;
       }
@@ -1129,7 +1235,8 @@ export class RemoteServer {
         break;
       }
       case "ping": {
-        this.broadcast({ type: "pong", data: null });
+        // Reply to the sender only: pong is a keepalive, not a broadcast.
+        this.send(ws, { type: "pong", data: null });
         break;
       }
       default:
@@ -1180,69 +1287,60 @@ export class RemoteServer {
     if (!text || this.streaming) {
       return;
     }
-
-    const handle = await this.ensureAgent();
-    if (!handle) {
-      return;
-    }
-
-    this.broadcast({ type: "replay_user", data: { content: text } });
-
-    // Slash command handling. Path-like inputs (e.g. /path/to/somewhere) are
-    // not commands and fall through as normal user messages.
-    if (text.startsWith("/") && parseCommand(text) !== null) {
-      await this.handleSlashCommand(text);
-      return;
-    }
-
+    // Claim the streaming slot synchronously, BEFORE any await: ensureAgent()
+    // performs real I/O on cold start, and a second message arriving during
+    // that await would otherwise pass the guard and run two agents on the
+    // same conversation concurrently.
     this.streaming = true;
     this.exitPlanSucceeded = false;
     this.runCanceled = false;
-    const startTime = Date.now();
-    const workDir = handle.workDir;
-    const sessionId = handle.sessionId;
-
-    saveMessage(workDir, sessionId, {
-      role: "user",
-      content: text,
-      timestamp: Math.floor(Date.now() / 1000),
-    });
-
+    // totalTurns in loop_complete describes THIS run, not the process.
+    this.turnCount = 0;
+    let handle: RemoteAgentHandle | null = null;
     try {
-      const callbacks: RunCallbacks = {
-        onPermissionRequest: async (
-          toolName: string,
-          args: Record<string, unknown>,
-          decision: Decision,
-        ): Promise<"allow" | "deny" | "allowAlways"> => {
-          const id = `perm_${Date.now().toString(36)}`;
-          const desc = formatPermissionDesc(toolName, args, decision);
-          this.broadcast({
-            type: "permission_request",
-            data: { id, toolName, description: desc },
-          });
-          return new Promise((resolve) => {
-            this.pendingPermissions.set(id, resolve);
-          });
-        },
-      };
+      handle = await this.ensureAgent();
+      if (!handle) {
+        return;
+      }
 
-      let streamBuf = "";
-      for await (const ev of handle.run(text, callbacks)) {
-        // Flush accumulated stream text BEFORE tool_result/turn_complete/loop_complete
-        if (
-          ev.type === "tool_result" ||
-          ev.type === "turn_complete" ||
-          ev.type === "loop_complete"
-        ) {
-          if (streamBuf) {
-            this.broadcast({ type: "stream_end", data: { text: streamBuf } });
-            streamBuf = "";
-          }
-        }
-        this.bridgeEvent(ev, startTime, workDir, sessionId, (t) => {
-          streamBuf += t;
+      this.broadcast({ type: "replay_user", data: { content: text } });
+
+      if (text.startsWith("/") && parseCommand(text) !== null) {
+        // Slash commands (including prompt-type skills and /plan turns) run
+        // through their own handler; leftover replay below covers them too.
+        await this.handleSlashCommand(text);
+      } else {
+        const startTime = Date.now();
+        const workDir = handle.workDir;
+        const sessionId = handle.sessionId;
+
+        saveMessage(workDir, sessionId, {
+          role: "user",
+          content: text,
+          timestamp: Math.floor(Date.now() / 1000),
         });
+
+        const callbacks: RunCallbacks = {
+          onPermissionRequest: this.createPermissionCallback(),
+        };
+
+        let streamBuf = "";
+        for await (const ev of handle.run(text, callbacks)) {
+          // Flush accumulated stream text BEFORE tool_result/turn_complete/loop_complete
+          if (
+            ev.type === "tool_result" ||
+            ev.type === "turn_complete" ||
+            ev.type === "loop_complete"
+          ) {
+            if (streamBuf) {
+              this.broadcast({ type: "stream_end", data: { text: streamBuf } });
+              streamBuf = "";
+            }
+          }
+          this.bridgeEvent(ev, startTime, workDir, sessionId, (t) => {
+            streamBuf += t;
+          });
+        }
       }
     } catch (err) {
       log.error({ err }, "agent stream error");
@@ -1254,11 +1352,20 @@ export class RemoteServer {
       this.streaming = false;
     }
 
+    if (!handle) {
+      return;
+    }
     // Steering queued too late for in-run delivery becomes follow-up turns
-    // (parity with the terminal UI), unless the run was canceled.
+    // (parity with the terminal UI), unless the run was canceled. A new run
+    // may have started between the reset above and this replay; steer the
+    // leftover into it instead of silently dropping the message.
     if (!this.runCanceled) {
       for (const leftover of handle.takeSteeringLeftovers()) {
-        await this.handleUserMessage(leftover);
+        if (this.streaming) {
+          this.handleSteeringMessage(leftover);
+        } else {
+          await this.handleUserMessage(leftover);
+        }
       }
     }
   }
@@ -1269,11 +1376,15 @@ export class RemoteServer {
     if (!text) {
       return;
     }
-    // Slash commands need a full turn; they cannot be steered mid-run.
+    // Slash commands need a full turn; they cannot be steered mid-run, and
+    // they are not queued either — the client is told to resend afterwards.
     if (text.startsWith("/") && parseCommand(text) !== null) {
       this.broadcast({
         type: "system",
-        data: { message: "Commands run after the current turn finishes." },
+        data: {
+          message:
+            "Commands cannot run mid-turn. Wait for the turn to finish, then resend.",
+        },
       });
       return;
     }
@@ -1528,7 +1639,8 @@ export class RemoteServer {
         this.broadcast({
           type: "system",
           data: {
-            message: "Fork-mode skills are not yet supported in remote mode.",
+            message:
+              "Fork-mode skill commands are not available in remote mode. The agent can still run such skills — mention the skill in your message and it will activate them via the LoadSkill tool.",
           },
         });
         this.broadcast({ type: "command_done", data: null });
@@ -1548,9 +1660,15 @@ export class RemoteServer {
 
     switch (name) {
       case "clear":
-        this.agentHandle.conv = new ConversationManager();
-        this.agentHandle.activeSkills.clear();
+        // Reset in place (AgentTool captured the conversation manager) and
+        // rotate the session so /resume and the JSONL no longer see the
+        // pre-clear history.
+        this.agentHandle.clearConversation();
         this.agentHandle.toolFilter = null;
+        this.broadcast({
+          type: "connected",
+          data: { session: this.agentHandle.sessionId, cwd: cwd() },
+        });
         this.broadcast({ type: "clear", data: null });
         this.broadcast({ type: "command_done", data: null });
         break;
@@ -2162,6 +2280,7 @@ export class RemoteServer {
     }
 
     const replay = restoreRemoteSession(handle, targetId, saved);
+    touchSession(workDir, targetId);
 
     // Clear UI and replay messages
     this.broadcast({ type: "clear", data: null });
@@ -2198,10 +2317,25 @@ export class RemoteServer {
   /** Creates the askUser callback closure for createRemoteAgent. */
   private createAskUserCallback(): Asker {
     return async (questions: Question[]): Promise<Record<string, string>> => {
-      const id = `ask_${Date.now().toString(36)}`;
+      const id = nextRequestId("ask");
       this.broadcast({ type: "ask_user", data: { id, questions } });
       return new Promise((resolve) => {
-        this.pendingAsks.set(id, resolve);
+        const timer = setTimeout(() => {
+          if (this.pendingAsks.delete(id)) {
+            this.broadcast({
+              type: "system",
+              data: {
+                message: `Question timed out after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes with no answer; continuing with empty answers.`,
+              },
+            });
+            resolve({});
+          }
+        }, PENDING_REQUEST_TIMEOUT_MS);
+        timer.unref();
+        this.pendingAsks.set(id, (answers) => {
+          clearTimeout(timer);
+          resolve(answers);
+        });
       });
     };
   }
@@ -2213,14 +2347,29 @@ export class RemoteServer {
       args: Record<string, unknown>,
       decision: Decision,
     ): Promise<"allow" | "deny" | "allowAlways"> => {
-      const id = `perm_${Date.now().toString(36)}`;
+      const id = nextRequestId("perm");
       const desc = formatPermissionDesc(toolName, args, decision);
       this.broadcast({
         type: "permission_request",
         data: { id, toolName, description: desc },
       });
       return new Promise((resolve) => {
-        this.pendingPermissions.set(id, resolve);
+        const timer = setTimeout(() => {
+          if (this.pendingPermissions.delete(id)) {
+            this.broadcast({
+              type: "system",
+              data: {
+                message: `Permission request timed out after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes with no response; denying automatically.`,
+              },
+            });
+            resolve("deny");
+          }
+        }, PENDING_REQUEST_TIMEOUT_MS);
+        timer.unref();
+        this.pendingPermissions.set(id, (response) => {
+          clearTimeout(timer);
+          resolve(response);
+        });
       });
     };
   }
@@ -2270,8 +2419,10 @@ export class RemoteServer {
   }
 
   /**
-   * Starts the Koa HTTP + WebSocket server.
-   * Initializes the agent handle eagerly; falls back to lazy init on first message.
+   * Starts the Koa HTTP + WebSocket server and blocks until stop() is called.
+   * Initializing the agent handle happens eagerly; failures fall back to lazy
+   * init on first message. Blocking here (instead of resolving once listening)
+   * keeps the caller's exit bookkeeping after the server is actually down.
    */
   async run(): Promise<void> {
     const { host, port } = parseRemoteAddress(this.opts.addr);
@@ -2291,23 +2442,69 @@ export class RemoteServer {
       this.agentHandle = null;
     }
 
-    return new Promise((resolve, reject) => {
+    const stopped = new Promise<void>((resolve) => {
+      this.stoppedResolve = resolve;
+    });
+    await new Promise<void>((resolve, reject) => {
       this.server.on("error", reject);
       this.server.listen(port, host, () => {
+        this.startHeartbeat();
         resolve();
       });
     });
+    await stopped;
   }
 
-  /** Stops the server and cleans up all connections. */
-  stop(): void {
+  /**
+   * Stops the server and cleans up every child resource: closes WS/HTTP,
+   * cancels the active run, and — unlike the fire-and-forget abort() — awaits
+   * the background-task and team stopAlls plus the MCP disconnects, so
+   * detached shells, teammates, and stdio server children do not outlive the
+   * process.
+   */
+  async stop(): Promise<void> {
     this.cancelActiveRun();
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     for (const ws of this.clients) {
       ws.close();
     }
     this.clients.clear();
-    this.wss.close();
-    this.server.close();
+    await new Promise<void>((resolve) => {
+      this.wss.close(() => {
+        resolve();
+      });
+    });
+    await new Promise<void>((resolve) => {
+      this.server.close(() => {
+        resolve();
+      });
+    });
+    if (this.agentHandle) {
+      try {
+        await this.agentHandle.backgroundTaskManager.stopAll();
+      } catch {
+        // best-effort
+      }
+      try {
+        await this.agentHandle.teamManager.stopAll();
+      } catch {
+        // best-effort
+      }
+      const mcp = this.agentHandle.mcpManager;
+      if (mcp) {
+        try {
+          await mcp.disconnectAll();
+        } catch {
+          // best-effort
+        }
+      }
+    }
+    const resolveStopped = this.stoppedResolve;
+    this.stoppedResolve = null;
+    resolveStopped?.();
   }
 
   private cancelActiveRun(): void {

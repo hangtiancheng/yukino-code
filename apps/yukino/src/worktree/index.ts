@@ -83,7 +83,9 @@ async function pathExists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
+    // ENOENT is the normal "no" answer here; error-level logs would flood on
+    // every healthy probe.
+    log.debug({ err }, "worktree path probe failed");
     return false;
   }
 }
@@ -121,7 +123,8 @@ async function getCommonDir(gitDir: string): Promise<string> {
     const raw = (await readFile(commonDir, "utf-8")).trim();
     return isAbsolute(raw) ? raw : join(gitDir, raw);
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
+    // The main repo has no commondir — expected, not a failure.
+    log.debug({ err }, "worktree commondir probe failed");
     return "";
   }
 }
@@ -192,7 +195,9 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
     }
     return "";
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
+    // Loose ref missing is normal (packed refs); the packed-refs fallback
+    // below is the real lookup for healthy worktrees.
+    log.debug({ err }, "loose ref probe failed");
     // Loose file does not exist, try packed-refs
   }
 
@@ -215,8 +220,8 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
       }
     }
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
-    // packed-refs does not exist
+    // No packed-refs file is normal for repos with only loose refs.
+    log.debug({ err }, "packed-refs probe failed");
   }
 
   return "";
@@ -250,7 +255,9 @@ export async function readWorktreeHeadSha(
   try {
     raw = (await readFile(join(worktreePath, ".git"), "utf-8")).trim();
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
+    // Candidates that are not worktrees fail here — that is the probe's
+    // "no" answer, not an error.
+    log.debug({ err }, "worktree .git probe failed");
     return "";
   }
   if (!raw.startsWith("gitdir:")) {
@@ -518,14 +525,29 @@ async function copyAgentsSettings(
 }
 
 /**
- * Set core.hooksPath in the worktree so git hooks from the main repo are
- * shared. Prioritizes .husky/ over .git/hooks/.
+ * Point core.hooksPath at the main repo's hooks so git hooks are shared with
+ * the worktree. Prioritizes .husky/ over .git/hooks/.
+ *
+ * core.hooksPath lives in the shared config (extensions.worktreeConfig is
+ * off), so a write from any worktree applies to the main repo and every other
+ * worktree at once. To avoid silently rewriting a user-configured value, the
+ * write only happens when nothing is set yet.
  */
 async function configureHooksPath(
   repoRoot: string,
   worktreePath: string,
 ): Promise<void> {
   try {
+    const existing = await execFileAsync(
+      "git",
+      ["config", "--get", "core.hooksPath"],
+      { cwd: worktreePath },
+    )
+      .then((r) => r.stdout.trim())
+      .catch(() => "");
+    if (existing) {
+      return;
+    }
     const candidates = [
       join(repoRoot, ".husky"),
       join(repoRoot, ".git", "hooks"),
@@ -539,7 +561,8 @@ async function configureHooksPath(
           break;
         }
       } catch (err) {
-        log.error({ err }, "worktree operation failed");
+        // .husky is commonly absent — expected, try the next candidate.
+        log.debug({ err }, "hooks path candidate probe failed");
         // candidate doesn't exist, try next
       }
     }

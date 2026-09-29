@@ -265,7 +265,7 @@ export class TaskUpdateTool implements Tool {
       this.list.addBlockedBy(taskId, addBlockedBy);
     }
 
-    return { output: `Updated task #${taskId} status`, isError: false };
+    return { output: `Updated task #${taskId}`, isError: false };
   }
 }
 

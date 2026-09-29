@@ -30,9 +30,10 @@ import {
   statSync,
   existsSync,
   unlinkSync,
+  utimesSync,
   rmSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import z, { parse, safeParse } from "zod";
 
@@ -237,7 +238,7 @@ export function truncateSessionLines(
       kept.push(line);
     }
   }
-  const tmp = filePath + ".rewind-tmp";
+  const tmp = `${filePath}.${String(process.pid)}.rewind-tmp`;
   writeFileSync(tmp, kept.length > 0 ? kept.join("\n") + "\n" : "", "utf-8");
   renameSync(tmp, filePath);
 }
@@ -279,6 +280,24 @@ export function loadSession(
     }
   }
   return out;
+}
+
+/**
+ * Marks a session as recently active by refreshing its mtime. Called right
+ * after a resume: cleanExpiredSessions judges liveness by mtime, and a
+ * resumed-but-not-yet-written session still carries its old timestamp —
+ * without the touch, a concurrent process could sweep it out from under the
+ * user. The touch also moves the session up in the recency-ordered list,
+ * which matches how "recently resumed" should sort.
+ */
+export function touchSession(workDir: string, sessionId: string): void {
+  const filePath = join(sessionsDir(workDir), `${sessionId}.jsonl`);
+  try {
+    const now = new Date();
+    utimesSync(filePath, now, now);
+  } catch {
+    // best-effort — the session may not exist (yet)
+  }
 }
 
 // A message ready to replay on resume. Boundary records expand into the summary
@@ -554,6 +573,17 @@ export function cleanExpiredSessions(workDir: string): number {
         const id = file.replace(".jsonl", "");
         try {
           rmSync(join(dir, id), { recursive: true, force: true });
+        } catch {
+          /** noop */
+        }
+        // The session's file-history directory (backup snapshots, clipboard
+        // images) lives outside sessions/; sweep it with the same expiry so
+        // old sessions do not leave orphaned directories behind.
+        try {
+          rmSync(join(dirname(dir), "file-history", id), {
+            recursive: true,
+            force: true,
+          });
         } catch {
           /** noop */
         }

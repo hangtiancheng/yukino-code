@@ -39,6 +39,7 @@ const pkg = JSON.parse(
 ) as {
   version: string;
   dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
 };
 
 // UI-only dependencies: reached exclusively from the terminal layer
@@ -302,9 +303,13 @@ const libConfig: Options = {
   // Runtime dependencies stay external, except the ui-only ones: those
   // must reach banUIOnlyPlugin, so a reachable ui-only package fails
   // the build instead of being silently kept as an external import.
-  external: [...Object.keys(pkg.dependencies ?? {})].filter(
-    (dep) => !uiOnlySet.has(dep),
-  ),
+  // optionalDependencies (the telemetry stack) are external too: they are
+  // loaded lazily behind a guarded dynamic import and degrade to a noop
+  // runtime when absent — bundling them would defeat their optionality.
+  external: [
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.optionalDependencies ?? {}),
+  ].filter((dep) => !uiOnlySet.has(dep)),
   noExternal: [uiOnlyPattern],
   esbuildPlugins: [
     rawImportPlugin,

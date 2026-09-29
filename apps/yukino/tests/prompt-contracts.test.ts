@@ -308,7 +308,6 @@ describe("skill prompt contracts", () => {
     },
     sourceDir: "/skills/<demo>&",
     body: "Run the existing script; do not change it.",
-    isDirectory: true,
   };
 
   it("escapes metadata, keeps the catalog body-free, and emits nothing for no skills", () => {

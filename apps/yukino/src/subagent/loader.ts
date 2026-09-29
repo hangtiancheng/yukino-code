@@ -30,6 +30,7 @@ import z, { parse } from "zod";
 import { BUILTIN_AGENTS, type AgentDefinition } from "./definition.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import type { PermissionMode } from "@/permissions/index.js";
 
 const log = createChildLogger({ module: "subagent" });
 
@@ -79,6 +80,15 @@ function loadDir(dir: string, definitions: AgentDefinition[]): void {
   }
 }
 
+// Frontmatter permission_mode: validated against the real permission modes
+// so a typo fails the definition loudly instead of being silently ignored.
+const PermissionModeSchema = z.enum([
+  "default",
+  "acceptEdits",
+  "plan",
+  "bypassPermissions",
+] as const satisfies readonly PermissionMode[]);
+
 const YamlFrontmatterSchema = z.looseObject({
   name: z.string(),
   description: z.string().optional(),
@@ -87,6 +97,7 @@ const YamlFrontmatterSchema = z.looseObject({
   system_prompt: z.string().optional(),
   max_turns: z.number().optional(),
   model: z.string().optional(),
+  permission_mode: PermissionModeSchema.optional(),
   background: z.boolean().optional(),
   isolation: z.literal("worktree").optional(),
 });
@@ -115,6 +126,7 @@ function parseAgentDefinition(content: string): AgentDefinition | null {
       systemPromptOverride: parsed.system_prompt,
       maxTurns: parsed.max_turns,
       model: parsed.model,
+      permissionMode: parsed.permission_mode,
       background: parsed.background,
       isolation: parsed.isolation,
       initialPrompt: body,

@@ -43,6 +43,12 @@ export function Modal({
   maxWidth = "max-w-lg",
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  // Latest callback in a ref: the keydown effect then runs once on mount.
+  // With onEscape in the deps, every inline arrow (new identity per render)
+  // would re-run the effect and refocus the panel — stealing focus from the
+  // textarea after each keystroke.
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -57,14 +63,14 @@ export function Modal({
       ) {
         return;
       }
-      onEscape?.();
+      onEscapeRef.current?.();
     };
     window.addEventListener("keydown", onKeyDown);
     panelRef.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [onEscape]);
+  }, []);
 
   return (
     <div

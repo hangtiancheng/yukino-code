@@ -21,7 +21,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
 import { generateSlug } from "@/utils/slug";
@@ -32,8 +32,10 @@ let currentPlanPath: string | null = null;
 
 function isPlanUnderWorkDir(planPath: string, workDir: string): boolean {
   const plansDir = resolve(workDir, ".yukino", "plans");
-  const resolved = resolve(planPath);
-  return resolved.startsWith(plansDir + "/");
+  // relative() is separator-agnostic: on Windows resolve() produces "\"
+  // paths, so a hardcoded "/" join would never match.
+  const rel = relative(plansDir, resolve(planPath));
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
 export function getOrCreatePlanPath(workDir: string): string {

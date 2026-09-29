@@ -42,7 +42,13 @@ import {
 
 const appRoot = join(import.meta.dirname, "..");
 const srcRoot = join(appRoot, "src");
-const dependencyNames = Object.keys(pkg.dependencies);
+// Full install-manifest set: optionalDependencies are part of the graph by
+// default (only their install failures are tolerated), so import-site
+// derivation must see them too.
+const dependencyNames = [
+  ...Object.keys(pkg.dependencies),
+  ...Object.keys(pkg.optionalDependencies ?? {}),
+].sort();
 
 /**
  * Recompute the ui-only set from the sources: a dependency is ui-only

@@ -21,7 +21,7 @@
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 import type { ToolResultBlock } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
@@ -99,10 +99,11 @@ export function buildPersistedOutputPreview(
   preview: string,
   spillPath: string,
 ): string {
-  const sizeKB = Math.floor(totalChars / 1024);
+  // Sizes are character counts, not bytes (multi-byte content is smaller in
+  // bytes than this reads); "KB" claims would be inaccurate for CJK text.
   let msg = `<persisted-output>\n`;
-  msg += `Output too large (${String(sizeKB)}KB). Full content saved to:\n${spillPath}\n\n`;
-  msg += `Preview (first 2KB):\n${preview}`;
+  msg += `Output too large (${String(totalChars)} characters). Full content saved to:\n${spillPath}\n\n`;
+  msg += `Preview (first ${String(TOOL_RESULT_PREVIEW_CHARS)} characters):\n${preview}`;
   if (totalChars > TOOL_RESULT_PREVIEW_CHARS) {
     msg += "\n...";
   }
@@ -141,7 +142,12 @@ export function isSpillReadback(
   if (typeof raw !== "string" || !raw) {
     return false;
   }
-  return resolve(raw).startsWith(resolve(spillDir(workDir, sessionId)));
+  // Resolve against workDir like ReadFileTool does — under remote/teammate
+  // process.cwd() differs — and match on a path-segment boundary so a
+  // sibling directory like "<spillDir>-extra" never counts as the spill dir.
+  const target = resolve(workDir, raw);
+  const spill = resolve(spillDir(workDir, sessionId));
+  return target === spill || target.startsWith(spill + sep);
 }
 /**
  * applyBudget runs the aggregate budget before a turn's tool results enter

@@ -33,7 +33,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
 
 import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
 import {
@@ -43,6 +43,21 @@ import {
 } from "@/worktree/index.js";
 
 const temporaryDirectories: string[] = [];
+
+// Hide the machine's global git config: configureHooksPath only writes
+// core.hooksPath when no effective value exists, and a developer machine
+// with core.hooksPath in ~/.gitconfig would change what these tests observe.
+const originalGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL;
+beforeAll(() => {
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+});
+afterAll(() => {
+  if (originalGitConfigGlobal === undefined) {
+    delete process.env.GIT_CONFIG_GLOBAL;
+  } else {
+    process.env.GIT_CONFIG_GLOBAL = originalGitConfigGlobal;
+  }
+});
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -68,7 +83,6 @@ function initRepo(name = "repo"): string {
   git(repo, "init", "-q", "-b", "main");
   git(repo, "config", "user.name", "Worktree Test");
   git(repo, "config", "user.email", "worktree@example.invalid");
-  git(repo, "config", "core.hooksPath", join(parent, "disabled-hooks"));
   writeFileSync(join(repo, "tracked.txt"), "initial\n");
   writeFileSync(join(repo, ".gitignore"), ".yukino/\n");
   git(repo, "add", "tracked.txt", ".gitignore");
@@ -116,6 +130,16 @@ describe("worktree creation safety", () => {
     expect(existsSync(worktree.path)).toBe(false);
     expect(existsSync(join(repo, "injected-dollar"))).toBe(false);
     expect(existsSync(join(repo, "injected-backtick"))).toBe(false);
+  });
+
+  it("leaves a user-configured core.hooksPath untouched", async () => {
+    const repo = initRepo();
+    const custom = join(repo, "custom-hooks");
+    git(repo, "config", "core.hooksPath", custom);
+    await createAgentWorktree("hooks-preserved", repo);
+    // core.hooksPath is shared config: a worktree must never silently
+    // rewrite a value the user set themselves.
+    expect(git(repo, "config", "core.hooksPath")).toBe(custom);
   });
 
   it("rejects an existing ordinary directory and preserves its contents", async () => {

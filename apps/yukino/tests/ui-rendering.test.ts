@@ -101,7 +101,6 @@ describe("skill transcript presentation", () => {
     {
       meta: { name: "demo", description: "Local skill" },
       sourceDir: "/project/skills/demo",
-      isDirectory: true,
       body: "## Skill details\n\nHidden body.",
     },
     "Update <docs> & keep &lt; literal\nSecond line 日本語",

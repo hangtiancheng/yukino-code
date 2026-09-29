@@ -28,6 +28,7 @@ import type { MCPServerConfig } from "./config/index.js";
 import {
   getContextWindow,
   getMaxOutputTokens,
+  type ProviderConfig,
 } from "./config/provider-config.js";
 import { ConversationManager } from "./conversation/index.js";
 import { createClient } from "./llm/client.js";
@@ -52,13 +53,14 @@ import { LoadSkillTool } from "./skills/load-skill-tool.js";
 import type { FileMailMessage } from "./teams/file-mailbox.js";
 import { FileMailbox } from "./teams/file-mailbox.js";
 import { TeamManager } from "./teams/index.js";
-import { LEADER_NAME } from "./teams/protocol.js";
+import { LEADER_NAME, isShutdownRequest } from "./teams/protocol.js";
 import {
   TeamTaskCreateTool,
   TeamTaskGetTool,
   TeamTaskListTool,
   TeamTaskUpdateTool,
 } from "./teams/task-tools.js";
+import { readTeamFile } from "./teams/team-file.js";
 import { SendMessageTool } from "./teams/tools.js";
 import { BashTool } from "./tools/bash.js";
 import { EditFileTool } from "./tools/edit-file.js";
@@ -124,14 +126,29 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
   return { teamDir, teamName, memberName, initialTask, providerBaseUrl };
 }
 
-// ShutdownPrefix marks a mailbox message as a request to terminate the teammate.
-const ShutdownPrefix = "[shutdown]";
+// Exit after the leader has been dead for this long (checked every poll):
+// a crashed/killed leader never writes a shutdown notice, and the grace
+// window covers a normal restart, which re-claims leaderPid in config.json.
+const LEADER_LOST_EXIT_MS = 60_000;
 
 // Module-level child logger for teammate process.
 const log = createChildLogger({ module: "teammate" });
 
-function isShutdownRequest(msg: FileMailMessage): boolean {
-  return msg.text.trimStart().startsWith(ShutdownPrefix);
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err instanceof Error && "code" in err && err.code === "EPERM";
+  }
+}
+
+/**
+ * Reads the leader pid recorded in the team's config.json. Returns 0 when the
+ * team predates leaderPid tracking — liveness checks are skipped in that case.
+ */
+function readLeaderPid(teamName: string): number {
+  return readTeamFile(teamName)?.leaderPid ?? 0;
 }
 
 function createIdleNotification(memberName: string): FileMailMessage {
@@ -164,6 +181,8 @@ export async function buildTeammateRegistry(opts: {
   mcpManager?: MCPManager;
   /** Used to decide the MCP loading mode: total schema volume is weighed against the context window. */
   baseUrl?: string;
+  /** Provider protocol; native deferred loading is Anthropic-only. */
+  protocol?: ProviderConfig["protocol"];
   contextWindow?: number;
 }): Promise<ToolRegistry> {
   const registry = new ToolRegistry();
@@ -185,7 +204,16 @@ export async function buildTeammateRegistry(opts: {
   registry.register(new LoadSkillTool(opts.catalog, opts.skillHost));
   registry.register(new InstallSkillTool(opts.workDir, opts.catalog));
 
-  const teamManager = new TeamManager(opts.workDir);
+  const teamManager = new TeamManager(opts.workDir, {
+    // This process is a teammate, not the leader: leave the recorded
+    // leaderPid in config.json alone so other teammates (and this one) can
+    // keep using it for liveness checks.
+    claimLeadership: false,
+  });
+  // The teammate runs in its own process with no in-memory teams; load this
+  // team from config.json so SendMessage can resolve the roster and mailboxes.
+  // Without this, senderTeam() sees an empty list and every send fails.
+  teamManager.get(opts.teamName);
   registry.register(new SendMessageTool(teamManager, opts.memberName));
   registry.register(
     new TeamTaskCreateTool(teamManager, opts.teamName, opts.memberName),
@@ -210,7 +238,12 @@ export async function buildTeammateRegistry(opts: {
       }
       // Decide the loading mode only after all tools have been registered
       if (result.tools.length > 0 && opts.contextWindow) {
-        decideAndApply(registry, opts.baseUrl ?? "", opts.contextWindow);
+        decideAndApply(
+          registry,
+          opts.baseUrl ?? "",
+          opts.protocol ?? "anthropic",
+          opts.contextWindow,
+        );
       }
     } catch (err) {
       // MCP connectivity failures should not crash the teammate process
@@ -281,6 +314,7 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
       mcpServers: cfg.mcp_servers,
       mcpManager,
       baseUrl: provider.base_url,
+      protocol: provider.protocol,
       contextWindow: getContextWindow(provider),
     });
 
@@ -303,6 +337,21 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
       buildTeammatePrompt(args.teamName, args.memberName, args.initialTask),
     );
 
+    const mailbox = new FileMailbox(args.teamDir, args.memberName);
+    const leaderMailbox = new FileMailbox(args.teamDir, LEADER_NAME);
+    const notifyIdle = (): Promise<void> =>
+      leaderMailbox.send(
+        args.memberName,
+        createIdleNotification(args.memberName).text,
+      );
+    // The leader's UI keeps showing "running" unless a notification arrives,
+    // so a failure must be reported before this process exits.
+    const notifyFailed = (err: unknown): Promise<void> =>
+      leaderMailbox.send(
+        args.memberName,
+        `[idle] ${args.memberName} failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+
     for await (const event of agent.run()) {
       switch (event.type) {
         case "stream_text":
@@ -318,42 +367,64 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
           break;
         case "error":
           log.error({ err: event.error }, "agent error");
+          await notifyFailed(event.error);
           throw event.error;
       }
     }
 
     // Notify the leader that this teammate finished its initial task.
-    const mailbox = new FileMailbox(args.teamDir, args.memberName);
-    const leaderMailbox = new FileMailbox(args.teamDir, LEADER_NAME);
-    await leaderMailbox.send(
-      args.memberName,
-      createIdleNotification(args.memberName).text,
-    );
+    await notifyIdle();
 
-    // Poll mailbox for follow-up messages
-    for await (const msg of mailbox.poll(2000)) {
-      // Graceful shutdown: stop polling and exit when the leader requests it.
-      if (isShutdownRequest(msg)) {
-        console.log(`Shutdown requested, ${args.memberName} exiting.`);
-        break;
-      }
+    // Poll the mailbox for follow-up messages. A hand-rolled loop instead of
+    // mailbox.poll so the leader-liveness check below runs every interval even
+    // when no messages arrive.
+    let leaderDeadSince = 0;
+    polling: while (true) {
+      const batch = await mailbox.receive();
+      for (const [i, msg] of batch.entries()) {
+        // Graceful shutdown: stop polling and exit when the leader requests it.
+        if (isShutdownRequest(msg)) {
+          console.log(`Shutdown requested, ${args.memberName} exiting.`);
+          break polling;
+        }
 
-      console.log(`Message from ${msg.from}: ${msg.text}`);
-      conversation.addUserMessage(msg.text);
-      for await (const event of agent.run()) {
-        if (event.type === "stream_text") {
-          process.stdout.write(event.text);
-        } else if (event.type === "error") {
-          log.error({ err: event.error }, "agent error");
-          throw event.error;
+        console.log(`Message from ${msg.from}: ${msg.text}`);
+        conversation.addUserMessage(msg.text);
+        for await (const event of agent.run()) {
+          if (event.type === "stream_text") {
+            process.stdout.write(event.text);
+          } else if (event.type === "error") {
+            log.error({ err: event.error }, "agent error");
+            await notifyFailed(event.error);
+            throw event.error;
+          }
+        }
+        // Notify the leader that this task finished, but only when nothing
+        // else is pending: a queued follow-up would make the idle claim
+        // stale. Shutdown notices are control messages, not tasks, and new
+        // mail that arrived during the run keeps the claim honest too.
+        const moreTasks = batch.slice(i + 1).some((m) => !isShutdownRequest(m));
+        if (!moreTasks && mailbox.unreadCount() === 0) {
+          await notifyIdle();
         }
       }
 
-      // Notify the leader after completing each follow-up task.
-      await leaderMailbox.send(
-        args.memberName,
-        createIdleNotification(args.memberName).text,
-      );
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // Leader liveness: a dead leader never sends a shutdown notice, and the
+      // iTerm backend has no kill handle, so the teammate must notice itself.
+      const leaderPid = readLeaderPid(args.teamName);
+      if (leaderPid > 0 && !isPidAlive(leaderPid)) {
+        if (leaderDeadSince === 0) {
+          leaderDeadSince = Date.now();
+        }
+        if (Date.now() - leaderDeadSince > LEADER_LOST_EXIT_MS) {
+          console.log("Leader process is gone; exiting.");
+          break polling;
+        }
+      } else {
+        leaderDeadSince = 0;
+      }
     }
   } finally {
     if (mcpManager) {

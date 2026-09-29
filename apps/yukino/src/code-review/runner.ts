@@ -326,7 +326,11 @@ export async function runCodeReview(
           if (!g) {
             return;
           }
-          abortSignal?.throwIfAborted();
+          // Exit the loop instead of throwing: a rejected worker would fail
+          // Promise.all and discard the findings already collected.
+          if (abortSignal?.aborted) {
+            return;
+          }
           await executeGroup(g);
         }
       })(),
@@ -458,10 +462,17 @@ async function executeGroupSubtask(
         "filter",
         `Fact-checking ${String(newComments.length)} finding(s)…`,
       );
-      const removeIdx = await filterComments(g.diffs, newComments, {
-        client: deps.utilClient,
-        abortSignal,
-      });
+      const removeIdx = await filterComments(
+        // Evidence must cover the comments, not just the group: a comment
+        // relocated to a file outside this group is judged against its own
+        // diff instead of being declared evidence-free.
+        evidenceForComments(g.diffs, newComments, deps.diffByPath),
+        newComments,
+        {
+          client: deps.utilClient,
+          abortSignal,
+        },
+      );
       if (removeIdx.size > 0) {
         deps.collector.removeAt([...removeIdx].map((i) => baseline + i));
         deps.onFiltered(removeIdx.size);
@@ -478,6 +489,37 @@ async function executeGroupSubtask(
       break;
     }
   }
+}
+
+/**
+ * Filter evidence: the group's diffs plus the diffs backing any comment that
+ * points outside the group (relocation can move a finding to another file).
+ * The filter judges comments against the diff of the file they name, so an
+ * out-of-group comment without its own diff in the evidence reads as
+ * evidence-free and survives only via the default-approve fallback.
+ */
+function evidenceForComments(
+  groupDiffs: FileDiff[],
+  comments: ReviewComment[],
+  diffByPath: Map<string, FileDiff>,
+): FileDiff[] {
+  const covered = new Set<string>();
+  for (const d of groupDiffs) {
+    covered.add(d.oldPath);
+    covered.add(d.newPath);
+  }
+  const out = [...groupDiffs];
+  for (const cm of comments) {
+    if (covered.has(cm.path)) {
+      continue;
+    }
+    const d = diffByPath.get(cm.path);
+    if (d && !out.includes(d)) {
+      out.push(d);
+      covered.add(cm.path);
+    }
+  }
+  return out;
 }
 
 interface RunGroupAgentOptions {
@@ -501,7 +543,6 @@ async function runGroupAgent(
     new CodeCommentTool({
       collector: deps.collector,
       groupDiffs: g.diffs,
-      allDiffs: deps.allDiffs,
       groupLabel: g.label,
       resolve: async (comments) => {
         for (const cm of comments) {

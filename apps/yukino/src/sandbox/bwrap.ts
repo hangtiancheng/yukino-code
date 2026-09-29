@@ -51,6 +51,9 @@ export class BwrapSandbox implements Sandbox {
     config: SandboxConfig,
   ): { executable: string; args: string[] } {
     const args = ["--unshare-user", "--unshare-pid"];
+    // If yukino dies without running its kill path (SIGKILL, crash), the
+    // sandboxed process group must not outlive the session as an orphan.
+    args.push("--die-with-parent");
 
     // Mount the root filesystem as read-only
     args.push("--ro-bind", "/", "/");

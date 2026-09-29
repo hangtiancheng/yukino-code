@@ -29,8 +29,11 @@ export interface DiffResult {
    * Line-numbered diff with unified-style prefixes: " " for unchanged context,
    * "-" for removals, "+" for additions. Each line is prefix, space, 1-based
    * line number right-aligned in 4 columns, two spaces, then the content.
-   * Context and removed lines carry old-file numbers; added lines carry
-   * new-file numbers. A trailing notice marks truncation at MAX_DIFF_LINES.
+   * Removed lines carry old-file numbers; added lines and context lines carry
+   * new-file numbers — the model locates follow-up edits in the NEW file, so
+   * context numbered off the old file would be off by (additions − removals)
+   * whenever the edit changes the line count. A trailing notice marks
+   * truncation at MAX_DIFF_LINES.
    */
   text: string;
   additions: number;
@@ -101,9 +104,12 @@ export function buildDiff(oldContent: string, newContent: string): DiffResult {
     newLineNo++;
   }
   for (const l of contextAfter) {
-    push(" ", oldLineNo, l);
-    oldLineNo++;
+    // Trailing context exists in both files; number it by its new-file
+    // position (newLineNo already accounts for the edit's size change) so
+    // the model can locate these lines in the current file.
+    push(" ", newLineNo, l);
     newLineNo++;
+    oldLineNo++;
   }
 
   if (truncated) {

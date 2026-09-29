@@ -30,7 +30,9 @@ import { strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "hooks" });
 
 /** Async command execution for hooks — non-blocking, 30s timeout, so the
- *  event loop isn't frozen during hook commands. */
+ *  event loop isn't frozen during hook commands. The shell is the platform
+ *  default (sh on POSIX, ComSpec/cmd on Windows) — hardcoding bash would
+ *  ENOENT every hook on Windows hosts without bash on PATH. */
 function execHookAsync(
   command: string,
   opts: { env: NodeJS.ProcessEnv; cwd?: string; signal?: AbortSignal },
@@ -39,7 +41,6 @@ function execHookAsync(
     exec(
       command,
       {
-        shell: "bash",
         encoding: "utf-8",
         timeout: 30000,
         env: opts.env,
@@ -134,13 +135,19 @@ export class HookEngine {
         continue;
       }
 
-      if (hook.once) {
-        const key =
-          hook.id === undefined ? `index:${String(index)}` : `id:${hook.id}`;
-        if (this.firedOnce.has(key)) {
+      // Once-slot key, computed once: claimed before execution and released
+      // again when a sync execution fails — a once-hook that errored has not
+      // "fired", and the next matching event should retry it.
+      const onceKey = hook.once
+        ? hook.id === undefined
+          ? `index:${String(index)}`
+          : `id:${hook.id}`
+        : null;
+      if (onceKey !== null) {
+        if (this.firedOnce.has(onceKey)) {
           continue;
         }
-        this.firedOnce.add(key);
+        this.firedOnce.add(onceKey);
       }
 
       // Async hook: execute in the background without blocking the main flow
@@ -150,7 +157,14 @@ export class HookEngine {
             this.recordNotification(r.output);
           })
           .catch((err: unknown) => {
-            this.recordNotification(`Async hook error: ${asErrorString(err)}`);
+            log.error({ err }, "hooks operation failed");
+            // Same on_error semantics as the sync path: "ignore" stays
+            // silent beyond the log; anything else surfaces the error.
+            if ((hook.on_error ?? "ignore") !== "ignore") {
+              this.recordNotification(
+                `Async hook error: ${asErrorString(err)}`,
+              );
+            }
           });
         continue;
       }
@@ -164,6 +178,9 @@ export class HookEngine {
         }
       } catch (err) {
         log.error({ err }, "hooks operation failed");
+        if (onceKey !== null) {
+          this.firedOnce.delete(onceKey);
+        }
         const onError = hook.on_error ?? "ignore";
         if (onError === "fail") {
           const msg = `Hook error: ${asErrorString(err)}`;
@@ -463,6 +480,12 @@ export function validate(hooks: HookConfig[]): Error | null {
               `${label}: action.prompt (or action.command) must be non-empty for type "agent"`,
             );
           }
+          // No host registers an agent runner today; accepting the config
+          // would only defer the failure to runtime, where the default
+          // on_error:"ignore" swallows it. Reject it here instead.
+          errors.push(
+            `${label}: action.type "agent" is not supported yet — use "command" or "prompt" instead`,
+          );
           break;
       }
     }

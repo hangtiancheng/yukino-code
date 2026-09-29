@@ -176,7 +176,7 @@ export const FILTER_USER = `### Task
 
 Below are the diffs of one or more related files, and a set of review comments about them. Identify only the comments that these diffs **prove** to be wrong.
 
-Every comment carries a \`path\`. The \`<file>\` element with that same path is the comment's subject; the other files are context. They can supply the evidence a cross-file comment rests on, but they never stand in for the subject file — code present somewhere in the group is not present in the file the comment was filed against.
+Every comment carries a \`path\`. The \`<file>\` element whose \`path\` — or, for a renamed file, whose \`old_path\` — equals it is the comment's subject; the other files are context. They can supply the evidence a cross-file comment rests on, but they never stand in for the subject file — code present somewhere in the group is not present in the file the comment was filed against.
 
 Your default answer is to approve everything. On most reviews that is the correct answer.
 

@@ -359,17 +359,25 @@ export function AskUserDialog({ questions, onComplete }: Props) {
       return;
     }
 
-    // Question navigation (←/→, Tab)
+    // Question navigation (←/→, Tab). In hideSubmit mode there is exactly one
+    // question and no submit step: advancing would push currentIndex past the
+    // only question and blank the panel, so all navigation is disabled.
     if (key.leftArrow && !isSubmitTab) {
-      dispatch({ type: "prev" });
+      if (!hideSubmit) {
+        dispatch({ type: "prev" });
+      }
       return;
     }
     if (key.rightArrow && !isSubmitTab) {
-      dispatch({ type: "next" });
+      if (!hideSubmit) {
+        dispatch({ type: "next" });
+      }
       return;
     }
     if (key.tab) {
-      dispatch({ type: key.shift ? "prev" : "next" });
+      if (!hideSubmit) {
+        dispatch({ type: key.shift ? "prev" : "next" });
+      }
       return;
     }
 
@@ -406,14 +414,43 @@ export function AskUserDialog({ questions, onComplete }: Props) {
     }
     const optCount = q.options.length + 1; // +1 for Other
 
-    // Numeric key shortcuts
+    // Numeric key shortcuts carry full selection semantics (the common CLI
+    // convention), not just cursor moves: single-select questions answer
+    // immediately, multi-select questions toggle the option.
     const num = parseInt(input, 10);
-    if (num >= 1 && num <= optCount) {
-      dispatch({
-        type: "update",
-        index: currentIndex,
-        updates: { cursor: num - 1 },
-      });
+    if (Number.isInteger(num) && num >= 1 && num <= optCount) {
+      if (num === q.options.length + 1) {
+        // "Other" row: entering text is a separate mode, so this stays a
+        // cursor move.
+        dispatch({
+          type: "update",
+          index: currentIndex,
+          updates: { cursor: num - 1 },
+        });
+        return;
+      }
+      const label = q.options[num - 1]?.label;
+      if (label === undefined) {
+        return;
+      }
+      if (q.multiSelect) {
+        const current = Array.isArray(qs.selectedValue)
+          ? [...qs.selectedValue]
+          : [];
+        const idx = current.indexOf(label);
+        if (idx >= 0) {
+          current.splice(idx, 1);
+        } else {
+          current.push(label);
+        }
+        dispatch({
+          type: "update",
+          index: currentIndex,
+          updates: { cursor: num - 1, selectedValue: current },
+        });
+      } else {
+        commitAnswer(label);
+      }
       return;
     }
 
@@ -480,8 +517,9 @@ export function AskUserDialog({ questions, onComplete }: Props) {
     if (!isSubmitTab) {
       helpParts.push("Enter to select");
       helpParts.push("↑/↓ to navigate");
+      helpParts.push("number keys answer directly");
       if (questions.length > 1) {
-        helpParts.push("Tab/Arrow keys to switch questions");
+        helpParts.push("←/→ or Tab to switch questions");
       }
     }
     helpParts.push("Esc to cancel");

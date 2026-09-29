@@ -69,6 +69,13 @@ const PersistedStateSchema = z.object({
   version: z.literal(1),
   trackedFiles: z.array(z.string()),
   snapshots: z.array(SnapshotSchema),
+  /**
+   * Monotonic counter for backup file names. Pruning shrinks the snapshots
+   * array to a fixed length, so array positions would be reused as name
+   * suffixes and overwrite still-live backups; the counter never repeats.
+   * Absent in pre-evolution files — derived on load for those.
+   */
+  nextSnapshotSeq: z.number().optional(),
 });
 
 type PersistedState = z.infer<typeof PersistedStateSchema>;
@@ -89,6 +96,8 @@ export class FileHistory {
   /** Tracked file absolute paths. */
   private trackedFiles = new Set<string>();
   private snapshots: Snapshot[] = [];
+  /** Monotonic backup-name counter; array positions recycle, this must not. */
+  private nextSnapshotSeq = 0;
 
   constructor(baseDir: string, sessionID: string) {
     this.sessionDir = fileHistoryDir(baseDir, sessionID);
@@ -123,7 +132,8 @@ export class FileHistory {
       text = text.slice(0, MAX_SUMMARY_TEXT_LENGTH) + "...";
     }
     const now = new Date().toISOString();
-    const snapshotIndex = this.snapshots.length;
+    const snapshotIndex = this.nextSnapshotSeq;
+    this.nextSnapshotSeq++;
     const backups: Record<string, Backup> = {};
     for (const filePath of this.trackedFiles) {
       const backupPath = join(
@@ -154,9 +164,16 @@ export class FileHistory {
     });
 
     if (this.snapshots.length > MAX_SNAPSHOTS) {
+      const pruned = this.snapshots.slice(
+        0,
+        this.snapshots.length - MAX_SNAPSHOTS,
+      );
       this.snapshots = this.snapshots.slice(
         this.snapshots.length - MAX_SNAPSHOTS,
       );
+      // Pruned snapshots can no longer be rewound to: delete their backups so
+      // the directory does not grow without bound.
+      this.deleteBackups(pruned);
     }
     this.save();
   }
@@ -231,12 +248,28 @@ export class FileHistory {
       this.trackedFiles.delete(filePath);
     }
 
-    // Truncate snapshot history -- can't redo forward
+    // Truncate snapshot history -- can't redo forward. The removed snapshots
+    // can no longer be reached: delete their backups from disk too.
+    const removed = this.snapshots.slice(snapshotIndex + 1);
+    this.deleteBackups(removed);
     this.snapshots = this.snapshots.slice(0, snapshotIndex + 1);
     this.trackedFiles = new Set(Object.keys(target.backups));
     this.save();
 
     return changed;
+  }
+
+  /** Best-effort removal of the backup files owned by the given snapshots. */
+  private deleteBackups(snapshots: Snapshot[]): void {
+    for (const snapshot of snapshots) {
+      for (const backup of Object.values(snapshot.backups)) {
+        try {
+          unlinkSync(backup.backupPath);
+        } catch {
+          // already gone — pruning must not fail on it
+        }
+      }
+    }
   }
 
   getSnapshots(): Snapshot[] {
@@ -252,6 +285,7 @@ export class FileHistory {
       version: 1,
       trackedFiles: [...this.trackedFiles],
       snapshots: this.snapshots,
+      nextSnapshotSeq: this.nextSnapshotSeq,
     };
     try {
       writeFileSync(
@@ -283,6 +317,7 @@ export class FileHistory {
     }
     const state: PersistedState = result.data;
     this.snapshots = state.snapshots;
+    this.nextSnapshotSeq = state.nextSnapshotSeq ?? state.snapshots.length;
     if (state.trackedFiles.length > 0) {
       for (const path of state.trackedFiles) {
         this.trackedFiles.add(path);

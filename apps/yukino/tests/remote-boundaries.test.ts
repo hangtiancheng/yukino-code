@@ -33,6 +33,8 @@ import { parseRemoteAddress } from "@/remote/address.js";
 import { RemoteServer } from "@/remote/server.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
 import type { SessionMessage } from "@/session/index.js";
+import { TaskList } from "@/todo/index.js";
+import { TaskStore } from "@/todo/store.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 
 function deferred<T>() {
@@ -86,6 +88,7 @@ describe("remote execution boundaries", () => {
         recoveryState: new RecoveryState(),
         activeSkills: new Map([["old", "old instructions"]]),
         toolFilter: () => false,
+        taskList: new TaskList(new TaskStore(workDir, "old")),
       };
       const forkSnapshot = () => conv.fork();
       state.fileStateCache.record("old-file", 1);
@@ -163,7 +166,7 @@ describe("remote execution boundaries", () => {
       "pendingAsks",
       new Map([["question", question.resolve]]),
     );
-    server.stop();
+    await server.stop();
     expect(abort).toHaveBeenCalledOnce();
     await expect(permission.promise).resolves.toBe("deny");
     await expect(question.promise).resolves.toEqual({});

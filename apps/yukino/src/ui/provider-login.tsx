@@ -553,7 +553,7 @@ export function ProviderLogin({
 
   return (
     <SelectorFrame
-      hint="↑↓/Tab field · ←→ choose · Enter submit · Esc cancel"
+      hint="↑↓/Tab field · ←→ choose in protocol/thinking/model-list fields · Enter submit · Esc cancel"
       subtitle={
         submitting
           ? "Saving provider…"
@@ -614,7 +614,7 @@ export function ProviderLogin({
         <Text color={THEME.dim}>Model: type/paste any ID; Ctrl+U clears.</Text>
         {discovery.models.length > 0 ? (
           <Text color={THEME.dim}>
-            Home/End or Ctrl+B/F move the model cursor.
+            In the model list: Home/End or Ctrl+B/F move the model cursor.
           </Text>
         ) : null}
       </Box>

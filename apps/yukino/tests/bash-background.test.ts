@@ -295,15 +295,20 @@ describe("bash background execution", () => {
     });
     const taskId = taskIdFrom(result.output);
 
-    // The actual output-file path (not just the session dir) is writable under
-    // a deny-default profile, and the file exists before prepare (bwrap --bind).
+    // The output-file DIRECTORY (stable per session) is what gets granted:
+    // allow-writing the random per-command file name would re-key the sandbox
+    // config and force sandbox-runtime to re-initialize on every command.
+    // The directory is created before prepare, so a bind-based sandbox can
+    // mount it.
     expect(seen.config).not.toBeNull();
     const granted = seen.config?.allowWrite ?? [];
-    const outputPath = granted.find((p) =>
-      /shell-[0-9a-f]{16}\.output$/.test(p),
+    const outputDir = granted.find((p) => /[\\/]tool-results$/.test(p));
+    expect(outputDir).toBeDefined();
+    expect(existsSync(outputDir ?? "")).toBe(true);
+    const outputFiles = readdirSync(outputDir ?? "").filter((f) =>
+      /shell-[0-9a-f]{16}\.output$/.test(f),
     );
-    expect(outputPath).toBeDefined();
-    expect(existsSync(outputPath ?? "")).toBe(true);
+    expect(outputFiles.length).toBeGreaterThan(0);
 
     const task = tasks.get(taskId);
     await task?.done;

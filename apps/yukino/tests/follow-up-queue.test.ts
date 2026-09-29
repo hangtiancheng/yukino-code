@@ -167,7 +167,9 @@ describe("follow-up scheduling", () => {
       await Promise.resolve();
     });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(queue().messages).toEqual(["second"]);
+    // The failed message is re-queued at the front instead of silently
+    // dropped: a transient submit error must not lose user input.
+    expect(queue().messages).toEqual(["first", "second"]);
     expect(queue().paused).toBe(true);
     expect(onError).toHaveBeenCalledOnce();
     await act(async () => {
@@ -175,6 +177,9 @@ describe("follow-up scheduling", () => {
       await Promise.resolve();
     });
     expect(send.mock.calls.map(([message]) => message)).toEqual([
+      // The first entry is the failed attempt; the requeued "first" is
+      // retried only after the pause lifts.
+      "first",
       "first",
       "second",
       "new request",

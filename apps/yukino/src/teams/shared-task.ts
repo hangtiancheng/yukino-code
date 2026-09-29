@@ -20,10 +20,18 @@
  * SOFTWARE.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  mkdirSync,
+  existsSync,
+} from "node:fs";
 import { dirname } from "node:path";
 
 import z, { parse } from "zod";
+
+import { withFileSyncLock } from "./file-lock.js";
 
 /** A task on the team's shared task board, with dependency relations (blocks / blockedBy) and ownership (assignee). */
 export interface SharedTask {
@@ -67,10 +75,8 @@ export interface TaskUpdateFields {
 
 /**
  * Shared task store: persisted as a JSON file (tasks.json), readable and writable by all members of the same team.
- * get()/listTasks() and update() reload the file first so cross-process teammates see the latest data.
- * create() is the exception: it assigns IDs from the in-memory counter and rewrites the whole file
- * without reloading, and the class uses no file locking — concurrent creates from different processes
- * can therefore collide on IDs or lose tasks.
+ * Every mutation runs under an exclusive file lock (see file-lock.ts) and reloads from disk inside
+ * the lock, so cross-process teammates cannot collide on IDs or overwrite each other's changes.
  */
 export class SharedTaskStore {
   private path: string;
@@ -120,7 +126,11 @@ export class SharedTaskStore {
         created_by: t.createdBy,
       })),
     };
-    writeFileSync(this.path, JSON.stringify(data, null, 2), "utf-8");
+    // Write-then-rename so a concurrent reader (or a crash) never sees a
+    // truncated JSON file.
+    const tmpPath = `${this.path}.${String(process.pid)}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+    renameSync(tmpPath, this.path);
   }
 
   /** Creates a shared task and returns the newly created entry. */
@@ -132,19 +142,25 @@ export class SharedTaskStore {
     blockedBy: string[] = [],
     createdBy = "",
   ): SharedTask {
-    const task: SharedTask = {
-      id: String(this.nextId++),
-      title,
-      description,
-      status: "pending",
-      assignee,
-      blocks: [...blocks],
-      blockedBy: [...blockedBy],
-      createdBy,
-    };
-    this.tasks.push(task);
-    this.save();
-    return task;
+    return withFileSyncLock(this.path, () => {
+      // Reload inside the lock: the in-memory counter is stale whenever
+      // another process created tasks since our last read, and reusing it
+      // would collide IDs and let this save overwrite the other's tasks.
+      this.load();
+      const task: SharedTask = {
+        id: String(this.nextId++),
+        title,
+        description,
+        status: "pending",
+        assignee,
+        blocks: [...blocks],
+        blockedBy: [...blockedBy],
+        createdBy,
+      };
+      this.tasks.push(task);
+      this.save();
+      return task;
+    });
   }
 
   /** Retrieves a task by id; reloads from disk first to get the latest state. Returns undefined if not found. */
@@ -172,38 +188,42 @@ export class SharedTaskStore {
    * Returns undefined if the task does not exist.
    */
   update(id: string, fields: TaskUpdateFields): SharedTask | undefined {
-    this.load();
-    const task = this.tasks.find((t) => t.id === id);
-    if (!task) {
-      return undefined;
-    }
-    if (fields.status !== undefined) {
-      task.status = fields.status;
-    }
-    if (fields.assignee !== undefined) {
-      task.assignee = fields.assignee;
-    }
-    if (fields.description !== undefined) {
-      task.description = fields.description;
-    }
-    for (const b of fields.addBlocks ?? []) {
-      if (!task.blocks.includes(b)) {
-        task.blocks.push(b);
+    return withFileSyncLock(this.path, () => {
+      this.load();
+      const task = this.tasks.find((t) => t.id === id);
+      if (!task) {
+        return undefined;
       }
-    }
-    for (const b of fields.addBlockedBy ?? []) {
-      if (!task.blockedBy.includes(b)) {
-        task.blockedBy.push(b);
+      if (fields.status !== undefined) {
+        task.status = fields.status;
       }
-    }
-    this.save();
-    return task;
+      if (fields.assignee !== undefined) {
+        task.assignee = fields.assignee;
+      }
+      if (fields.description !== undefined) {
+        task.description = fields.description;
+      }
+      for (const b of fields.addBlocks ?? []) {
+        if (!task.blocks.includes(b)) {
+          task.blocks.push(b);
+        }
+      }
+      for (const b of fields.addBlockedBy ?? []) {
+        if (!task.blockedBy.includes(b)) {
+          task.blockedBy.push(b);
+        }
+      }
+      this.save();
+      return task;
+    });
   }
 
   /** Clears the task store and persists the empty state; used for initialization when creating a new team. */
   initEmpty(): void {
-    this.tasks = [];
-    this.nextId = 1;
-    this.save();
+    withFileSyncLock(this.path, () => {
+      this.tasks = [];
+      this.nextId = 1;
+      this.save();
+    });
   }
 }

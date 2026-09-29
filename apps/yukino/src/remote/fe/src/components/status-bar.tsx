@@ -20,6 +20,8 @@
  * SOFTWARE.
  */
 
+import { formatTokens } from "@fe/lib/format";
+
 interface StatusBarProps {
   connection: "connecting" | "connected" | "reconnecting";
   usage: { inputTokens: number; outputTokens: number } | null;
@@ -63,7 +65,7 @@ export function StatusBar({
   thinkingLevel,
 }: StatusBarProps) {
   const usageText = usage
-    ? `In: ${formatTokensLocal(usage.inputTokens)} | Out: ${formatTokensLocal(usage.outputTokens)}`
+    ? `In: ${formatTokens(usage.inputTokens)} | Out: ${formatTokens(usage.outputTokens)}`
     : "";
   const modeBadge = MODE_BADGE[permissionMode];
 
@@ -124,14 +126,4 @@ export function StatusBar({
       </div>
     </header>
   );
-}
-
-function formatTokensLocal(n: number): string {
-  if (n > 1_000_000) {
-    return `${(n / 1_000_000).toFixed(1)}M`;
-  }
-  if (n > 1000) {
-    return `${(n / 1000).toFixed(1)}K`;
-  }
-  return String(n);
 }

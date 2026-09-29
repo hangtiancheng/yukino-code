@@ -227,7 +227,7 @@ describe("tool result budget wiring", () => {
     expect(existsSync(join(spillDirOf(workDir), "t_rb.txt"))).toBe(false);
   });
 
-  it("records the bounded ReadFile result instead of rereading the entire file", async () => {
+  it("records the ReadFile tool result in the recovery snapshot", async () => {
     const workDir = mkdtempSync(join(tmpdir(), "yukino-wire-"));
     const filePath = join(workDir, "large.txt");
     writeFileSync(filePath, "disk-content".repeat(20_000), "utf-8");

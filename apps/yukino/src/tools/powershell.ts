@@ -52,6 +52,7 @@ import {
   type ToolSchema,
 } from "./types.js";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import { TaskFailure, type TaskManager } from "@/subagent/task-manager.js";
 import {
   asErrorString,
@@ -310,9 +311,12 @@ export class PowerShellTool implements Tool {
         child.exitCode !== null || child.signalCode !== null;
 
       // Kill the child's whole process tree; fall back to the direct child
-      // when the group is already gone or the tree kill fails.
+      // when the group is already gone or the tree kill fails. The
+      // alreadyExited() guard prevents pid reuse: once the child is reaped its
+      // pid may belong to an unrelated process, and taskkill/kill by stale pid
+      // could take down someone else's process.
       const killTree = (signal: NodeJS.Signals) => {
-        if (typeof child.pid !== "number") {
+        if (typeof child.pid !== "number" || alreadyExited()) {
           return;
         }
         if (process.platform === "win32") {
@@ -494,6 +498,13 @@ export class PowerShellTool implements Tool {
           },
           { originToolCallId: ctx.toolCallId, idPrefix: "ps", kind: "shell" },
         );
+        // Crash-path orphan prevention: process.exit() (terminal gone,
+        // uncaught exception) never reaches the task manager's stop, so the
+        // recover.ts sweep kills this detached tree synchronously instead.
+        const unregisterCleanup = registerExitCleanup(() => {
+          killTree("SIGKILL");
+        });
+        void task.done.finally(unregisterCleanup);
         resolve({
           output: backgroundMessage(reason, task.id, timeout),
           isError: false,

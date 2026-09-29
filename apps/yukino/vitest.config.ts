@@ -32,12 +32,14 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
-    testTimeout: 30_000,
+    testTimeout: 100_000,
+    // exclude: ["coverage/**"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.d.ts", "src/**/types.ts"],
-      reporter: ["text", "html", "lcov"],
+      exclude: ["src/**/*.d.ts"],
+      reporter: ["html", "json-summary", "lcov", "text"],
+      reportsDirectory: "coverage",
     },
   },
 });

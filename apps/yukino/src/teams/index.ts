@@ -42,6 +42,7 @@ import {
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
+  SHUTDOWN_PREFIX,
   approved,
   isShutdownRequest,
   planApprovalRequest,
@@ -57,9 +58,7 @@ import {
   writeTeamFile,
   type TeamFile,
 } from "./team-file.js";
-import { saveTranscript } from "./transcript.js";
 
-import type { ConversationManager } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
 import type { PermissionChecker } from "@/permissions/index.js";
 import { getOrCreatePlanPath } from "@/plan-file/index.js";
@@ -71,6 +70,7 @@ import { randomVerb } from "@/utils/verbs.js";
 // Submodule namespaces for library consumers (Teams.<Sub>.*).
 export * as Backend from "./backend.js";
 export * as Coordinator from "./coordinator.js";
+export * as FileLock from "./file-lock.js";
 export * as FileMailbox from "./file-mailbox.js";
 export * as Progress from "./progress.js";
 export * as Protocol from "./protocol.js";
@@ -80,7 +80,6 @@ export * as TaskStop from "./task-stop.js";
 export * as TaskTools from "./task-tools.js";
 export * as TeamFile from "./team-file.js";
 export * as Tools from "./tools.js";
-export * as Transcript from "./transcript.js";
 
 const log = createChildLogger({ module: "teams" });
 export type TeamMode = "in-process" | "tmux" | "iterm";
@@ -98,8 +97,6 @@ export interface Member {
   done?: Promise<void>;
   mailbox: FileMailbox;
   uiState?: TeammateUIState;
-  /** Optional: Conversation manager for the teammate; when set, the transcript is persisted on exit. */
-  conversation?: ConversationManager;
   /** Optional: tmux session name recorded at spawn (diagnostics only); stop goes through the cancel callback and the mailbox shutdown flow. Not set under the iTerm backend. */
   paneId?: string;
   /** Whether this is an external-process teammate (tmux/iTerm); stopOne writes the mailbox shutdown notice only for external members. */
@@ -140,6 +137,12 @@ export class Team {
   leaderAgentId = "";
   description?: string;
   createdAt = Math.floor(Date.now() / 1000);
+  /**
+   * PID of the leader process. Written to config.json so external teammates
+   * can detect a dead leader (they exit instead of polling forever); a
+   * restarted leader re-claims it when the team is restored from disk.
+   */
+  leaderPid = 0;
 
   constructor(name: string, mode: TeamMode, workDir: string) {
     this.name = name;
@@ -192,6 +195,7 @@ export class Team {
       description: this.description,
       createdAt: this.createdAt,
       leaderAgentId: this.leaderAgentId,
+      ...(this.leaderPid > 0 ? { leaderPid: this.leaderPid } : {}),
       members: [...this.members.values()].map((m) => ({
         agentId: m.agentId ?? m.name,
         name: m.name,
@@ -216,8 +220,12 @@ export class Team {
 
   // Idle polling interval (in milliseconds). Polls the mailbox for new messages after a teammate completes a turn.
   static readonly IDLE_POLL_INTERVAL_MS = 500;
-  // Shutdown prefix: the leader writes a message with this prefix to notify teammates to exit.
-  static readonly SHUTDOWN_PREFIX = "[shutdown]";
+  // Grace period after the shutdown notice before force-killing an external
+  // teammate: one mailbox poll interval (~2 s) plus exit time.
+  static readonly STOP_GRACE_MS = 2_500;
+  // Shutdown prefix (single source: protocol.ts); the leader writes a
+  // message with this prefix to notify teammates to exit.
+  static readonly SHUTDOWN_PREFIX = SHUTDOWN_PREFIX;
 
   /**
    * Spawns a teammate, dispatching by team backend mode.
@@ -262,6 +270,10 @@ export class Team {
   ): void {
     const member = this.addMember(name);
     member.active = true;
+    // Persist the activation: the on-disk isActive otherwise stays false
+    // until some later persist, and a restart would restore the member as
+    // inactive even though the process is running.
+    this.persist();
 
     // Register the name so SendMessage can deliver by name
     getNameRegistry().register(name, name);
@@ -322,6 +334,8 @@ export class Team {
   ): void {
     const member = this.addMember(name);
     member.active = true;
+    // Persist the activation (see spawnExternal for the rationale).
+    this.persist();
     member.checker = checker;
     const abortController = new AbortController();
     member.cancel = () => {
@@ -461,15 +475,6 @@ export class Team {
         if (uiState.status === "running") {
           uiState.status = "idle";
         }
-        // Persist conversation transcript on teammate exit for debugging
-        if (member.conversation) {
-          try {
-            saveTranscript(this.workDir, this.name, name, member.conversation);
-          } catch (err) {
-            log.error({ err }, "teams operation failed");
-            // Best-effort: persistence failure should not block normal exit
-          }
-        }
       }
     })();
     member.done = done;
@@ -538,26 +543,35 @@ export class Team {
     const req = planApprovalRequest(member.name, plan);
     await this.leaderMailbox.send(member.name, req.text, req);
 
-    while (member.active) {
+    // Messages that arrive while we wait for the approval response are held
+    // here and requeued once the wait ends — receiveSync consumes them, and
+    // dropping a shutdown notice or a new task would lose it forever.
+    const held: FileMailMessage[] = [];
+    let response: FileMailMessage | undefined;
+    while (member.active && response === undefined) {
       await new Promise((r) => setTimeout(r, Team.IDLE_POLL_INTERVAL_MS));
       for (const m of member.mailbox.receiveSync()) {
-        // Only accept the approval response matching this request; other messages are
-        // consumed by receiveSync here and dropped — they are not re-queued
         if (
           m.type === MSG_PLAN_APPROVAL_RESPONSE &&
           m.requestId === req.requestId
         ) {
-          // On approval, switch back to normal permissions so the teammate can modify files; on rejection, stay in plan mode to revise
-          if (approved(m) && member.checker) {
-            member.checker.mode = "default";
-          }
-          return approved(m)
-            ? "The Leader has approved your plan. Begin execution now."
-            : `The Leader rejected your plan. Feedback: ${m.text}\nPlease revise the plan accordingly and resubmit.`;
+          response = m;
+        } else {
+          held.push(m);
         }
       }
     }
-    return null;
+    member.mailbox.requeue(held);
+    if (!response) {
+      return null;
+    }
+    // On approval, switch back to normal permissions so the teammate can modify files; on rejection, stay in plan mode to revise
+    if (approved(response) && member.checker) {
+      member.checker.mode = "default";
+    }
+    return approved(response)
+      ? "The Leader has approved your plan. Begin execution now."
+      : `The Leader rejected your plan. Feedback: ${response.text}\nPlease revise the plan accordingly and resubmit.`;
   }
 
   getMember(name: string): Member | undefined {
@@ -569,7 +583,13 @@ export class Team {
     if (!member) {
       throw new Error(`Member '${to}' not found in team '${this.name}'`);
     }
-    if (member.active && member.uiState) {
+    // A shutdown notice means the recipient is on its way out; showing it as
+    // "running" would misrepresent the state the UI settles on moments later.
+    if (
+      member.active &&
+      member.uiState &&
+      !content.startsWith(Team.SHUTDOWN_PREFIX)
+    ) {
       member.uiState.status = "running";
     }
     await member.mailbox.send(from, content);
@@ -590,12 +610,11 @@ export class Team {
   }
 
   /**
-   * Stops a single teammate: marks it inactive and updates UI state.
-   * For external teammates (tmux/iTerm) a shutdown notice is written to the
-   * mailbox first, but cancel runs immediately after with no grace period:
-   * under tmux the pane is killed before the teammate (which polls its mailbox
-   * only every ~2 s) can observe the message, so the mailbox notice is the
-   * effective shutdown path only under iTerm, whose cancel is a no-op.
+   * Stops a single teammate: marks it inactive, updates UI state, and
+   * unregisters the name so SendMessage can no longer resolve it.
+   * External teammates get a grace window after the shutdown notice — they
+   * poll their mailbox every ~2 s, so waiting one poll interval lets the
+   * common (idle) case exit gracefully before the pane is force-killed.
    * In-process teammates are stopped via cancel (abort) alone; `done` is then
    * awaited so the loop has fully exited (external members have no promise).
    */
@@ -607,9 +626,13 @@ export class Team {
     ) {
       member.uiState.status = "stopped";
     }
+    // Unregister now, not just on delete: a stopped member's mailbox is never
+    // read again, so leaving the name resolvable makes sends vanish silently.
+    getNameRegistry().unregister(member.name);
     if (member.external) {
       try {
         await member.mailbox.send(LEADER_NAME, `${Team.SHUTDOWN_PREFIX} stop`);
+        await new Promise((r) => setTimeout(r, Team.STOP_GRACE_MS));
       } catch {
         // best-effort: cancel below runs whether or not this write succeeds; a
         // failed write only deprives the iTerm path of its shutdown signal
@@ -630,14 +653,25 @@ export class Team {
   }
 }
 
+export interface TeamManagerOptions {
+  /**
+   * Whether this manager acts as the team leader: leaders claim leaderPid on
+   * create/restore (persisted for teammate liveness checks), while teammate
+   * processes must leave it untouched. Defaults to true.
+   */
+  claimLeadership?: boolean;
+}
+
 export class TeamManager {
   private teams = new Map<string, Team>();
   private workDir: string;
+  private claimLeadership: boolean;
   // One shared task store per team, persisted at <team-dir>/tasks.json
   private taskStores = new Map<string, SharedTaskStore>();
 
-  constructor(workDir: string) {
+  constructor(workDir: string, opts: TeamManagerOptions = {}) {
     this.workDir = workDir;
+    this.claimLeadership = opts.claimLeadership ?? true;
   }
 
   private teamDir(name: string): string {
@@ -652,6 +686,9 @@ export class TeamManager {
     const team = new Team(name, mode, this.workDir);
     team.leaderAgentId = opts.leaderAgentId ?? "";
     team.description = opts.description;
+    if (this.claimLeadership) {
+      team.leaderPid = process.pid;
+    }
     this.teams.set(name, team);
     const store = new SharedTaskStore(join(this.teamDir(name), "tasks.json"));
     store.initEmpty();
@@ -665,7 +702,9 @@ export class TeamManager {
    *
    * A Team reconstructed from disk carries only metadata — members have no running
    * agents. This is sufficient for SendMessage to deliver by name and for UI display;
-   * to actually run a member again, it must be re-spawned.
+   * to actually run a member again, it must be re-spawned. A leader-side manager
+   * claims leadership by writing its own pid to config.json (teammate processes
+   * pass claimLeadership:false and leave the recorded pid alone).
    */
   get(name: string): Team | undefined {
     const cached = this.teams.get(name);
@@ -687,6 +726,7 @@ export class TeamManager {
     team.leaderAgentId = tf.leaderAgentId;
     team.description = tf.description;
     team.createdAt = tf.createdAt;
+    team.leaderPid = tf.leaderPid ?? 0;
     for (const m of tf.members) {
       const member = team.addMember(m.name);
       member.agentId = m.agentId;
@@ -696,8 +736,23 @@ export class TeamManager {
       member.joinedAt = m.joinedAt;
       member.active = m.isActive === true;
     }
+    if (this.claimLeadership && team.leaderPid !== process.pid) {
+      team.leaderPid = process.pid;
+      team.persist();
+    }
     this.teams.set(name, team);
     return team;
+  }
+
+  /**
+   * Loads every team found on disk into the manager. Called on leader startup
+   * so teams (and their leader mailboxes) survive a leader restart: external
+   * teammates keep running, and their notifications are drained again.
+   */
+  restoreFromDisk(): void {
+    for (const name of listTeamNames()) {
+      this.get(name);
+    }
   }
 
   /** Retrieves the team's shared task store; loads from disk (tasks.json) when not cached in memory (e.g. in a teammate process). */

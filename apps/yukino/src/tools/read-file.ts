@@ -42,6 +42,8 @@ import { intArg, strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "tools" });
 const DEFAULT_LIMIT = 2000;
 const MAX_READ_BYTES = 50 * 1024;
+// Whole-file read admission cap (memory bound; see the stat.size check).
+const MAX_READ_FILE_BYTES = 10 * 1024 * 1024;
 
 export class ReadFileTool implements Tool {
   // Use a hardcoded string instead of ReadFileTool.name.replace("Tool", "")
@@ -124,6 +126,16 @@ export class ReadFileTool implements Tool {
 
     if (isImagePath(filePath)) {
       return this.readImage(ctx, filePath, stat.mtimeMs, stat.size);
+    }
+
+    // Admission check before buffering: the read below loads the whole file
+    // into a string, so a multi-hundred-MB file would spike memory and stall
+    // the loop long before the 50KB output cap could matter.
+    if (stat.size > MAX_READ_FILE_BYTES) {
+      return Promise.resolve({
+        output: `Error: ${filePath} is ${String(stat.size)} bytes, over the ${String(MAX_READ_FILE_BYTES)}-byte read limit. Use Grep with a pattern, or Bash with head/tail/sed, to inspect parts of it.`,
+        isError: true,
+      });
     }
 
     const offset = intArg(args, "offset", 0);

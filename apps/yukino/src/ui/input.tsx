@@ -57,11 +57,14 @@ import type { PermissionMode } from "@/permissions/index.js";
 import { SKIP_DIRS } from "@/tools/types.js";
 import { ICONS, THEME } from "@/ui/styles.js";
 
-const log = createChildLogger({ module: "terminal" });
+const log = createChildLogger({ module: "input" });
 
 // Suffix the command dropdown strips from a skill-backed command description
 // and re-renders in a muted style (detected via endsWith below).
 const SKILL_TAG = "[skill]";
+// @-mention cache lifetime: covers edits made outside the app (user editor,
+// git) that produce no fileFactsVersion bump.
+const FILE_CACHE_TTL_MS = 30_000;
 const SPINNER_FRAMES = [
   "⠋",
   "⠙",
@@ -85,7 +88,7 @@ function scanWorkdirFiles(root: string, max = 2000): string[] {
     try {
       names = readdirSync(dir);
     } catch (err) {
-      log.error({ err }, "terminal operation failed");
+      log.error({ err }, "workdir scan failed");
       return;
     }
     for (const name of names) {
@@ -101,7 +104,7 @@ function scanWorkdirFiles(root: string, max = 2000): string[] {
       try {
         isDir = statSync(full).isDirectory();
       } catch (err) {
-        log.error({ err }, "terminal operation failed");
+        log.error({ err }, "workdir scan failed");
         continue;
       }
       if (isDir) {
@@ -145,6 +148,10 @@ interface InputBoxProps {
   onModeChange?: (mode: PermissionMode) => void;
   workDir?: string;
   sessionId?: string;
+  /** Bumped by the parent when workspace file facts change (file writes, agent
+   *  run end); the @-mention cache rebuilds when it moves. A short TTL covers
+   *  external edits (user editor, git) that produce no bump. */
+  fileFactsVersion?: number;
   /** Receives an insert-at-cursor function so the parent can inject text
    *  (e.g. IDE at-mentions) into the input programmatically. */
   insertTextRef?: { current: ((text: string) => void) | null };
@@ -173,6 +180,7 @@ export function InputBox(props: InputBoxProps) {
     onModeChange,
     workDir = ".",
     sessionId = "default",
+    fileFactsVersion = 0,
     insertTextRef,
     clearRef,
     draftRef,
@@ -385,7 +393,11 @@ export function InputBox(props: InputBoxProps) {
 
   // @-file-mention autocomplete: active when the text before the caret ends with an
   // @<partial> token (and we're not typing a slash command).
-  const fileCacheRef = useRef<string[] | null>(null);
+  const fileCacheRef = useRef<{
+    key: string;
+    files: string[];
+    scannedAt: number;
+  } | null>(null);
 
   const atQuery = useMemo(() => {
     if (lines[0].startsWith("/")) {
@@ -401,9 +413,21 @@ export function InputBox(props: InputBoxProps) {
       return [];
     }
 
-    fileCacheRef.current ??= scanWorkdirFiles(workDir);
+    const key = `${workDir}::${String(fileFactsVersion)}`;
+    let cache = fileCacheRef.current;
+    if (
+      cache?.key !== key ||
+      Date.now() - cache.scannedAt >= FILE_CACHE_TTL_MS
+    ) {
+      cache = {
+        key,
+        files: scanWorkdirFiles(workDir),
+        scannedAt: Date.now(),
+      };
+      fileCacheRef.current = cache;
+    }
 
-    const files = fileCacheRef.current;
+    const files = cache.files;
     const q = atQuery.toLowerCase();
     if (!q) {
       return files.slice(0, 8);
@@ -413,7 +437,7 @@ export function InputBox(props: InputBoxProps) {
       (f) => !f.toLowerCase().startsWith(q) && f.toLowerCase().includes(q),
     );
     return [...pre, ...sub].slice(0, 8);
-  }, [atQuery, workDir]);
+  }, [atQuery, workDir, fileFactsVersion]);
 
   const showAtDropdown =
     !disabled &&

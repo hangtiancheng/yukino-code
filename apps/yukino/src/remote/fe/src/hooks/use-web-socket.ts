@@ -21,7 +21,8 @@
  */
 
 import type { ClientMessage, ServerMessage } from "@fe/types";
-import { useEffect, useRef } from "react";
+import { isServerMessage } from "@fe/types";
+import { useCallback, useEffect, useRef } from "react";
 
 interface UseWebSocketOptions {
   onMessage: (message: ServerMessage) => void;
@@ -97,13 +98,23 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
       };
 
       ws.onmessage = (evt: MessageEvent) => {
+        const raw: unknown = evt.data;
+        if (typeof raw !== "string") {
+          console.warn("[ws] dropping non-text frame");
+          return;
+        }
+        let parsed: unknown;
         try {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-argument
-          const parsed = JSON.parse(evt.data) as ServerMessage;
-          onMessageRef.current(parsed);
+          parsed = JSON.parse(raw);
         } catch (err) {
           console.error("[ws] failed to parse message", err);
+          return;
         }
+        if (!isServerMessage(parsed)) {
+          console.warn("[ws] dropping malformed server message", parsed);
+          return;
+        }
+        onMessageRef.current(parsed);
       };
     };
 
@@ -128,12 +139,14 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
     };
   }, []);
 
-  const send = (message: ClientMessage): void => {
+  // Stable identity: app.tsx memoizes its callbacks on [send], so a fresh
+  // function per render would defeat every one of them.
+  const send = useCallback((message: ClientMessage): void => {
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
     }
-  };
+  }, []);
 
   return { send };
 }

@@ -217,6 +217,12 @@ function loadSingleFile(path: string): AppConfig {
     const parsed = safeParse(z.array(HookConfigSchema), raw.hooks);
     if (parsed.success) {
       hooks = parsed.data;
+    } else {
+      // Match providers/mcp_servers: a malformed hooks entry is a config
+      // error to surface, not something to silently drop to [].
+      throw new ConfigError(
+        `Invalid hooks configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
+      );
     }
   }
   if ("sandbox" in raw) {

@@ -196,9 +196,16 @@ describe("config", () => {
     it.each(["deepseek-flash", "qwen3.8-flash", "arbitrary-model"])(
       "does not infer capabilities from %s",
       (model) => {
-        expect(getSupportedThinkingLevels({ ...base, model })).toEqual(
-          THINKING_LEVELS,
-        );
+        // Model names never influence the level set: every model gets the
+        // openai-protocol baseline (xhigh/max need an explicit
+        // thinking_level_map there, since they have no native effort).
+        expect(getSupportedThinkingLevels({ ...base, model })).toEqual([
+          "off",
+          "minimal",
+          "low",
+          "medium",
+          "high",
+        ]);
         expect(getThinkingLevel({ ...base, model })).toBe("high");
       },
     );
@@ -258,7 +265,6 @@ describe("config", () => {
       expect(getSupportedThinkingLevels(provider)).toEqual([
         "off",
         "medium",
-        "xhigh",
         "max",
       ]);
       expect(clampThinkingLevel(provider, "low")).toBe("off");

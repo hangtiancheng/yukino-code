@@ -547,7 +547,6 @@ describe("skill frontmatter and instructions", () => {
       meta: { name: "demo", description: "" },
       body: "Do $ARGUMENTS and $ARGUMENTS",
       sourceDir: "",
-      isDirectory: false,
     };
     const activateSkill = vi.fn();
     const host: SkillForkHost = {

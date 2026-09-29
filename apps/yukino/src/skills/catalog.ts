@@ -133,7 +133,7 @@ export class SkillCatalog {
           this.dirModTimes.set(fullPath, stat.mtimeMs);
           const skillFile = join(fullPath, "SKILL.md");
           if (existsSync(skillFile)) {
-            this.loadSkill(skillFile, fullPath, true);
+            this.loadSkill(skillFile, fullPath);
           }
         }
       } catch (err) {
@@ -142,7 +142,7 @@ export class SkillCatalog {
       }
     }
   }
-  private loadSkill(filePath: string, sourceDir: string, isDirectory: boolean) {
+  private loadSkill(filePath: string, sourceDir: string) {
     try {
       const raw = readFileSync(filePath, "utf-8");
       const parsed = parseSkillFile(raw);
@@ -154,7 +154,6 @@ export class SkillCatalog {
         meta: parsed.meta,
         body: parsed.body,
         sourceDir,
-        isDirectory,
       };
 
       let mtimeMs = 0;
@@ -205,7 +204,6 @@ export class SkillCatalog {
               meta: parsed.meta,
               body: parsed.body,
               sourceDir: entry.skill.sourceDir,
-              isDirectory: entry.skill.isDirectory,
             };
             entry.loadedMtimeMs = currentMtime;
           }

@@ -875,6 +875,8 @@ export class OpenAICompatClient implements LLMClient {
           id: string;
           name: string;
           args: string;
+          /** Whether tool_call_start has been emitted for this call. */
+          started: boolean;
         }
       >();
 
@@ -912,39 +914,43 @@ export class OpenAICompatClient implements LLMClient {
 
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {
-            if (!toolCalls.has(tc.index)) {
-              toolCalls.set(tc.index, {
+            let entry = toolCalls.get(tc.index);
+            if (!entry) {
+              entry = {
                 id: tc.id ?? "",
                 name: tc.function?.name ?? "",
                 args: "",
-              });
-
-              if (tc.id) {
-                yield {
-                  type: "tool_call_start",
-                  toolName: tc.function?.name ?? "",
-                  toolId: tc.id ?? "",
-                };
-              }
+                started: false,
+              };
+              toolCalls.set(tc.index, entry);
             }
 
-            const existing = toolCalls.get(tc.index);
-            if (existing) {
-              if (tc.id) {
-                existing.id = tc.id;
-              }
+            if (tc.id) {
+              entry.id = tc.id;
+            }
+            if (tc.function?.name) {
+              entry.name = tc.function.name;
+            }
 
-              if (tc.function?.name) {
-                existing.name = tc.function.name;
-              }
+            // Emit start as soon as both id and name are known: compat
+            // gateways sometimes deliver the id only in a later delta, and
+            // consumers must never see deltas/complete for a call that never
+            // "started".
+            if (!entry.started && entry.id && entry.name) {
+              entry.started = true;
+              yield {
+                type: "tool_call_start",
+                toolName: entry.name,
+                toolId: entry.id,
+              };
+            }
 
-              if (tc.function?.arguments) {
-                existing.args += tc.function.arguments;
-                yield {
-                  type: "tool_call_delta",
-                  text: tc.function.arguments,
-                };
-              }
+            if (tc.function?.arguments) {
+              entry.args += tc.function.arguments;
+              yield {
+                type: "tool_call_delta",
+                text: tc.function.arguments,
+              };
             }
           }
         }

@@ -437,15 +437,22 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "usage":
       return { ...state, usage: msg.data };
 
-    case "error":
+    case "error": {
+      // Mirror loop_complete: the run is over, so close the streaming
+      // assistant/thinking/review items instead of leaving the cursor
+      // blinking and currentAssistantId appending future text into them.
+      let next = finalizeAssistant(state);
+      next = finalizeCurrentThinking(next);
+      next = finalizeReviews(next);
       return {
-        ...finalizeReviews(state),
+        ...next,
         streaming: false,
         items: [
-          ...state.items,
+          ...next.items,
           { kind: "error", id: nextId("err"), content: msg.data.message },
         ],
       };
+    }
 
     case "compact":
       return {

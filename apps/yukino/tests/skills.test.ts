@@ -43,7 +43,6 @@ function skill(body: string): Skill {
     meta: { name: "demo", description: "d" },
     body,
     sourceDir: "",
-    isDirectory: false,
   };
 }
 
@@ -121,7 +120,6 @@ describe("LoadSkillTool fork mode", () => {
       meta: { name: "audit-deps", description: "d", mode },
       body: "Inspect package.json and flag risky pins.",
       sourceDir: "",
-      isDirectory: false,
     });
     vi.spyOn(catalog, "list").mockReturnValue([
       { name: "audit-deps", description: "d" },

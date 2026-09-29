@@ -43,10 +43,15 @@ function escapeXmlAttr(s: string): string {
 /** Render group diffs as per-file XML elements. */
 export function buildConcatenatedDiffs(diffs: FileDiff[]): string {
   return diffs
-    .map(
-      (d) =>
-        `<file path="${escapeXmlAttr(d.newPath)}">\n${d.diffText}\n</file>`,
-    )
+    .map((d) => {
+      // Renames: the comment may cite either side of the rename, so both
+      // paths must be discoverable on the element.
+      const renameAttr =
+        d.oldPath !== d.newPath
+          ? ` old_path="${escapeXmlAttr(d.oldPath)}"`
+          : "";
+      return `<file path="${escapeXmlAttr(d.newPath)}"${renameAttr}>\n${d.diffText}\n</file>`;
+    })
     .join("\n\n");
 }
 

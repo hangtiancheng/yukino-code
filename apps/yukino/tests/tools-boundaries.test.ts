@@ -23,6 +23,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   statSync,
   symlinkSync,
@@ -54,6 +55,29 @@ function makeContext(): ToolContext {
     workDir: mkdtempSync(join(tmpdir(), "yukino-tools-")),
     fileStateCache: new FileStateCache(),
   };
+}
+
+/** All shell output files currently on disk under a tool workDir. */
+function shellOutputFiles(root: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (/shell-[0-9a-f]+\.output$/.test(entry.name)) {
+        out.push(full);
+      }
+    }
+  };
+  walk(root);
+  return out;
 }
 
 describe("file tool boundaries", () => {
@@ -280,9 +304,21 @@ describe("shell tool boundaries", () => {
       { ...context, abortSignal: controller.signal },
       { command: "printf before; sleep 10" },
     );
-    setTimeout(() => {
-      controller.abort();
-    }, 50);
+    // Abort only after "before" is confirmed on disk: a fixed delay races
+    // against process startup under load (parallel test workers, watch-mode
+    // runs), and a SIGTERM landing before printf executes produced empty
+    // captured output — a flake, not a product bug.
+    const deadline = Date.now() + 4_000;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 10));
+      const captured = shellOutputFiles(context.workDir).some((f) =>
+        readFileSync(f, "utf-8").includes("before"),
+      );
+      if (captured || Date.now() > deadline) {
+        break;
+      }
+    }
+    controller.abort();
     const result = await pending;
     expect(result.isError).toBe(true);
     expect(result.output).toContain("before");

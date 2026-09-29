@@ -23,16 +23,15 @@
 import {
   readFileSync,
   writeFileSync,
+  renameSync,
   mkdirSync,
   existsSync,
-  unlinkSync,
-  statSync,
-  openSync,
-  closeSync,
 } from "node:fs";
 import { join } from "node:path";
 
-import z, { safeParse } from "zod";
+import z from "zod";
+
+import { withFileSyncLock } from "./file-lock.js";
 
 import { createChildLogger } from "@/logger/index.js";
 
@@ -57,102 +56,15 @@ const FileMailMessageSchema = z.object({
 export type FileMailMessage = z.infer<typeof FileMailMessageSchema>;
 
 // ---------------------------------------------------------------------------
-// File-based lock
-//
-// Uses exclusive-create (wx flag) on a .lock file.  Retries with exponential
-// back-off and jitter until the LOCK_ACQUIRE_TIMEOUT_MS deadline.  Stale locks
-// (older than LOCK_STALE_MS) are automatically removed so a crashed process
-// cannot block others forever.
+// Locking: every read-modify-write goes through withFileSyncLock (see
+// file-lock.ts) — exclusive-create lock file with token-protected release,
+// dead-holder-only preemption, and write-then-rename persistence below.
 // ---------------------------------------------------------------------------
 
-// Total timeout for acquiring the file lock. Throws on expiry so the caller can
-// handle the failure — silently dropping messages is not acceptable.
-const LOCK_ACQUIRE_TIMEOUT_MS = 5_000;
-const LOCK_STALE_MS = 10_000; // Locks older than 10 s are considered abandoned (holder crashed) and may be preempted
-const LOCK_MIN_BACKOFF_MS = 5;
-// Backoff cap to prevent unbounded retry delays under high concurrency.
-const LOCK_MAX_BACKOFF_MS = 80;
-
-const ErrnoExceptionSchema = z.looseObject({
-  errno: z.number().optional(),
-  code: z.string().optional(),
-  path: z.string().optional(),
-  syscall: z.string().optional(),
-});
-
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function acquireLock(lockFile: string): void {
-  // Exponential backoff with jitter to avoid multiple processes waking at the same instant and colliding repeatedly
-  const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
-  let backoff = LOCK_MIN_BACKOFF_MS;
-
-  while (true) {
-    try {
-      // O_CREAT | O_EXCL | O_WRONLY — fails if the file already exists.
-      const fd = openSync(lockFile, "wx");
-      closeSync(fd);
-      return; // lock acquired
-    } catch (err: unknown) {
-      log.error({ err }, "teams operation failed");
-      const { data, success } = safeParse(ErrnoExceptionSchema, err);
-      let code = "";
-      if (success && data.code) {
-        code = data.code;
-      }
-      if (code !== "EEXIST") {
-        throw err; // unexpected filesystem error
-      }
-      // Lock is held by another process — check whether it is stale enough to take over
-
-      try {
-        const info = statSync(lockFile);
-        if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
-          try {
-            unlinkSync(lockFile);
-            continue;
-          } catch (err) {
-            log.error({ err }, "teams operation failed");
-            // another process may have removed it already
-          }
-        }
-      } catch (err2) {
-        log.error({ err: err2 }, "teams operation failed");
-        // stat failed — file may have been removed between our open and stat
-      }
-
-      if (Date.now() >= deadline) {
-        throw new Error(
-          `mailbox lock ${lockFile}: timed out after ${String(LOCK_ACQUIRE_TIMEOUT_MS)}ms, message not written`,
-        );
-      }
-      sleepSync(backoff + Math.floor(Math.random() * backoff));
-      backoff = Math.min(backoff * 2, LOCK_MAX_BACKOFF_MS);
-    }
-  }
-}
-
-function releaseLock(lockFile: string): void {
-  try {
-    unlinkSync(lockFile);
-  } catch (err) {
-    log.error({ err }, "teams operation failed");
-    // best-effort — file may already be gone
-  }
-}
-
-/** Execute `fn` while holding an exclusive .lock file for `filePath`. */
-function withLock<T>(filePath: string, fn: () => T): T {
-  const lockFile = filePath + ".lock";
-  acquireLock(lockFile);
-  try {
-    return fn();
-  } finally {
-    releaseLock(lockFile);
-  }
-}
+// Read messages retained in the mailbox file; older read messages are pruned
+// on write so long-lived teams do not grow the file without bound. Unread
+// messages are never dropped.
+const MAX_READ_MESSAGES = 500;
 
 // ---------------------------------------------------------------------------
 
@@ -189,7 +101,35 @@ export class FileMailbox {
   }
 
   private writeAll(messages: FileMailMessage[]): void {
-    writeFileSync(this.filePath, JSON.stringify(messages, null, 2), "utf-8");
+    // Write-then-rename so a crash mid-write never leaves a truncated JSON
+    // file behind (a reader would see an empty mailbox and lose history).
+    const tmpPath = `${this.filePath}.${String(process.pid)}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(messages, null, 2), "utf-8");
+    renameSync(tmpPath, this.filePath);
+  }
+
+  /**
+   * Caps the number of read messages retained on disk. Unread messages are
+   * never dropped; read messages are removed oldest-first (array order is
+   * append order) so long-lived teams do not grow the file without bound.
+   */
+  private pruneRead(messages: FileMailMessage[]): FileMailMessage[] {
+    const readCount = messages.reduce((n, m) => (m.read ? n + 1 : n), 0);
+    if (readCount <= MAX_READ_MESSAGES) {
+      return messages;
+    }
+    let excess = readCount - MAX_READ_MESSAGES;
+    const dropped = new Set<FileMailMessage>();
+    for (const m of messages) {
+      if (excess === 0) {
+        break;
+      }
+      if (m.read) {
+        dropped.add(m);
+        excess--;
+      }
+    }
+    return messages.filter((m) => !dropped.has(m));
   }
 
   /**
@@ -208,24 +148,24 @@ export class FileMailbox {
       timestamp: new Date().toISOString(),
     };
     msg.read = false;
-    withLock(this.filePath, () => {
+    withFileSyncLock(this.filePath, () => {
       const messages = this.readAll();
       messages.push(msg);
-      this.writeAll(messages);
+      this.writeAll(this.pruneRead(messages));
     });
     return Promise.resolve();
   }
 
   // Reads unread messages and marks them as read in place (read-modify-write on the full array).
   receiveSync(): FileMailMessage[] {
-    return withLock(this.filePath, () => {
+    return withFileSyncLock(this.filePath, () => {
       const messages = this.readAll();
       const unread = messages.filter((m) => !m.read);
       if (unread.length > 0) {
         for (const m of messages) {
           m.read = true;
         }
-        this.writeAll(messages);
+        this.writeAll(this.pruneRead(messages));
       }
       return unread;
     });
@@ -235,14 +175,35 @@ export class FileMailbox {
     return Promise.resolve(this.receiveSync());
   }
 
+  /**
+   * Restores messages previously consumed by receiveSync as unread, appended
+   * at the end of the mailbox. Used by consumers that wait for one specific
+   * message and must not discard the others that arrived meanwhile.
+   */
+  requeue(messages: FileMailMessage[]): void {
+    if (messages.length === 0) {
+      return;
+    }
+    withFileSyncLock(this.filePath, () => {
+      const all = this.readAll();
+      for (const m of messages) {
+        all.push({ ...m, read: false });
+      }
+      this.writeAll(this.pruneRead(all));
+    });
+  }
+
   // Counts unread messages without consuming them.
   unreadCount(): number {
-    return this.readAll().filter((m) => !m.read).length;
+    return withFileSyncLock(
+      this.filePath,
+      () => this.readAll().filter((m) => !m.read).length,
+    );
   }
 
   // Marks all messages in the mailbox as read without returning their content.
   markAllRead(): void {
-    withLock(this.filePath, () => {
+    withFileSyncLock(this.filePath, () => {
       const messages = this.readAll();
       let changed = false;
       for (const m of messages) {
@@ -252,7 +213,7 @@ export class FileMailbox {
         }
       }
       if (changed) {
-        this.writeAll(messages);
+        this.writeAll(this.pruneRead(messages));
       }
     });
   }

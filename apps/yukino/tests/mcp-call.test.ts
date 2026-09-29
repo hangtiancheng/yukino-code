@@ -331,20 +331,37 @@ describe("three-way routing", () => {
   });
 
   test("small schema size loads everything eagerly", () => {
-    expect(decideMode("https://proxy.example.com", 200000, 1000)).toBe("eager");
+    expect(
+      decideMode("https://proxy.example.com", "anthropic", 200000, 1000),
+    ).toBe("eager");
   });
 
   test("no MCP tools at all also loads eagerly", () => {
-    expect(decideMode("https://proxy.example.com", 200000, 0)).toBe("eager");
+    expect(
+      decideMode("https://proxy.example.com", "anthropic", 200000, 0),
+    ).toBe("eager");
   });
 
-  test("official endpoint uses native deferred loading", () => {
-    expect(decideMode("", 200000, 500000)).toBe("native");
+  test("official endpoint with the anthropic protocol uses native deferred loading", () => {
+    expect(decideMode("", "anthropic", 200000, 500000)).toBe("native");
+  });
+
+  test("openai-protocol providers never use native mode even on official-looking endpoints", () => {
+    // Empty base_url under the openai protocol is the OpenAI SDK default
+    // (api.openai.com), not an Anthropic endpoint; native mode would hide
+    // every deferred MCP tool (tool_reference is dropped, McpCall hidden).
+    expect(decideMode("", "openai", 200000, 500000)).toBe("dispatch");
+    expect(decideMode("", "openai-compat", 200000, 500000)).toBe("dispatch");
   });
 
   test("third-party endpoint uses McpCall dispatch", () => {
     expect(
-      decideMode("https://api.deepseek.com/anthropic", 200000, 500000),
+      decideMode(
+        "https://api.deepseek.com/anthropic",
+        "anthropic",
+        200000,
+        500000,
+      ),
     ).toBe("dispatch");
   });
 

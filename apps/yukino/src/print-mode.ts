@@ -94,24 +94,29 @@ export function parsePrintFlags(args: string[]): PrintArgs | null {
   }
 
   const prompt = args[idx + 1];
-  if (!prompt) {
-    console.error("Error: -p requires a prompt argument");
+  if (!prompt || prompt.startsWith("-")) {
+    // A following flag here means `-p` came without its prompt (e.g.
+    // `yukino -p --output-format stream-json "prompt"`): swallowing the flag
+    // as the prompt would silently drop the real one.
+    console.error(
+      "Error: -p requires a prompt argument immediately after it (quote multi-word prompts)",
+    );
     process.exit(1);
   }
 
   // Parse --output-format (defaults to "text")
   let outputFormat: OutputFormat = "text";
   const fmtIdx = args.indexOf("--output-format");
-  if (fmtIdx !== -1 && args[fmtIdx + 1]) {
+  if (fmtIdx !== -1) {
     const fmt = args[fmtIdx + 1];
-    if (fmt === "stream-json") {
-      outputFormat = "stream-json";
-    } else if (fmt !== "text") {
+    if (fmt !== "text" && fmt !== "stream-json") {
+      // Also catches a missing value at the end of the argument list.
       console.error(
-        `Error: unknown output format '${fmt}', expected 'text' or 'stream-json'`,
+        `Error: --output-format requires 'text' or 'stream-json' (got '${fmt ?? "nothing"}')`,
       );
       process.exit(1);
     }
+    outputFormat = fmt;
   }
 
   return { prompt, outputFormat };
@@ -157,6 +162,9 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
 
   // Team tools are also available in -p mode, allowing the Leader to assemble
   // a team and delegate tasks within a single non-interactive execution.
+  // Teams are NOT restored from disk here: the finally block stopAll()s every
+  // team at exit, which would kill external teammates left running by an
+  // interactive session.
   const teamManager = new TeamManager(workDir);
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here
@@ -256,7 +264,12 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         process.stderr.write(`MCP warning: ${e.serverName}: ${e.error}
 `);
       }
-      decideAndApply(registry, provider.base_url, getContextWindow(provider));
+      decideAndApply(
+        registry,
+        provider.base_url,
+        provider.protocol,
+        getContextWindow(provider),
+      );
     }
 
     const agent = new Agent({

@@ -25,10 +25,7 @@ import { randomBytes } from "node:crypto";
 import type { AgentDefinition } from "./definition.js";
 import { loadAgentDefinitions } from "./loader.js";
 import { TaskManager } from "./task-manager.js";
-import {
-  SUBAGENT_DISALLOWED_TOOLS,
-  TEAMMATE_DISALLOWED_TOOLS,
-} from "./tool-filter.js";
+import { cloneRegistryForTeammate } from "./tool-filter.js";
 
 import type { ConversationManager } from "@/conversation/index.js";
 import { createChildLogger, sanitizeNameSegment } from "@/logger/index.js";
@@ -42,7 +39,7 @@ import {
   TeamTaskUpdateTool,
 } from "@/teams/task-tools.js";
 import { SendMessageTool } from "@/teams/tools.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import type { ToolRegistry } from "@/tools/registry.js";
 import type {
   Tool,
   ToolResult,
@@ -470,20 +467,7 @@ ${prompt}`;
     // Build a teammate-scoped tool registry: clone the parent registry, then
     // inject team-level task tools and a named SendMessage (overriding the
     // inherited leader-named version so the teammate sends under its own name).
-    // Two categories are excluded during cloning: tools no subagent should
-    // have, and team membership management tools reserved for the Leader.
-    const teammateRegistry = new ToolRegistry();
-    teammateRegistry.mcpLoadingMode = this.registry.mcpLoadingMode;
-    for (const tool of this.registry.listTools()) {
-      if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-
-      if (TEAMMATE_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-      teammateRegistry.register(tool);
-    }
+    const teammateRegistry = cloneRegistryForTeammate(this.registry);
     teammateRegistry.register(
       new SendMessageTool(this.teamManager, memberName),
     );

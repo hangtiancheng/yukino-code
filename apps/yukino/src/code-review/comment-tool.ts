@@ -218,12 +218,12 @@ export interface CodeCommentToolDeps {
   collector: CommentCollector;
   /** Diffs of the group this tool instance serves (default-path source). */
   groupDiffs: FileDiff[];
-  /** All retained diffs, for cross-file relocation. */
-  allDiffs: () => FileDiff[];
   /**
    * Positioning pipeline applied to each parsed comment before collection:
    * hunk match → file content → cross-file → LLM re-location. Injected by
-   * the runner so the tool stays free of LLM dependencies.
+   * the runner so the tool stays free of LLM dependencies. The runner's
+   * resolve closure owns the cross-file pool; the tool itself never reads
+   * all diffs directly.
    */
   resolve: (comments: ReviewComment[]) => Promise<void>;
   groupLabel: string;

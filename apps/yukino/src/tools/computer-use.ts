@@ -21,6 +21,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,6 +44,7 @@ import type {
   ToolSchema,
 } from "./types.js";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import { maybeResizeAndDownsampleImage } from "@/images/index.js";
 import { asErrorString } from "@/utils/index.js";
 
@@ -851,13 +853,13 @@ export class ComputerUseTool implements Tool {
         result = await this.runSingle(ctx, openaiActionToFlat(item));
       } catch (err) {
         return {
-          output: `Error at actions[${String(index)}] (${item.type}): ${asErrorString(err)}`,
+          output: `Error at actions[${String(index)}] (${item.type}): ${asErrorString(err)} Actions already executed before the failure (${String(executed.length)}): ${executed.join(", ") || "none"}.`,
           isError: true,
         };
       }
       if (result.isError) {
         return {
-          output: `Error at actions[${String(index)}] (${item.type}): ${result.output}`,
+          output: `Error at actions[${String(index)}] (${item.type}): ${result.output} Actions already executed before the failure (${String(executed.length)}): ${executed.join(", ") || "none"}.`,
           contentBlocks: result.contentBlocks,
           isError: true,
         };
@@ -967,6 +969,16 @@ export class ComputerUseTool implements Tool {
 
   private async compileMacHelper(signal?: AbortSignal): Promise<string> {
     const directory = await mkdtemp(join(tmpdir(), "yukino-computer-helper-"));
+    // The binary is compiled once and held for the process lifetime; without
+    // a cleanup hook every session that used ComputerUse would leave its
+    // helper directory behind.
+    registerExitCleanup(() => {
+      try {
+        rmSync(directory, { recursive: true, force: true });
+      } catch {
+        // best-effort
+      }
+    });
     const sourcePath = join(directory, "main.swift");
     const executablePath = join(directory, "computer-helper");
     try {

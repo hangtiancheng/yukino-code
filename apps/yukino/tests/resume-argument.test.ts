@@ -20,31 +20,18 @@
  * SOFTWARE.
  */
 
-export interface SkillMeta {
-  name: string;
-  description: string;
-  mode?: "inline" | "fork"; // defaults to "inline"
-  model?: string;
-  forkContext?: "full" | "recent" | "none";
-}
+import { describe, expect, it } from "vitest";
 
-export interface Skill {
-  meta: SkillMeta;
-  body: string;
-  sourceDir: string;
-}
+import { parseResumeArgument } from "@/ui/resume-argument.js";
 
-export interface SkillHost {
-  activateSkill(name: string, body: string): void;
-}
-
-export interface SkillForkHost extends SkillHost {
-  runSubagent(prompt: string): Promise<string>;
-  snapshotParentMessages(count: number): string;
-}
-
-// Submodule namespaces for library consumers (Skills.<Sub>.*).
-export * as Catalog from "./catalog.js";
-export * as Executor from "./executor.js";
-export * as InstallSkillTool from "./install-skill-tool.js";
-export * as LoadSkillTool from "./load-skill-tool.js";
+describe("UI selection", () => {
+  it("parses interactive and direct resume requests", () => {
+    expect(parseResumeArgument([])).toBeUndefined();
+    expect(parseResumeArgument(["--resume"])).toBe(true);
+    expect(parseResumeArgument(["--resume", "session-123"])).toBe(
+      "session-123",
+    );
+    expect(parseResumeArgument(["--resume=session-456"])).toBe("session-456");
+    expect(parseResumeArgument(["--resume"])).toBe(true);
+  });
+});

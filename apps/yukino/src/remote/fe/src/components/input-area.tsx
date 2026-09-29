@@ -129,7 +129,12 @@ export function InputArea({
       return;
     }
     if (streaming && looksLikeCommand(text)) {
-      flashHint("Commands run after the current turn finishes.");
+      // Matches the server behavior: slash commands cannot be steered into a
+      // running turn, and they are not queued either — the user must resend
+      // once the turn finishes.
+      flashHint(
+        "Commands cannot run mid-turn. Wait for the turn to finish, then resend.",
+      );
       return;
     }
     onSend(text);

@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 
 import type { Sandbox, SandboxConfig } from "./index.js";
 
@@ -50,6 +50,23 @@ export class SeatbeltSandbox implements Sandbox {
 }
 
 /**
+ * Expands a configured path to every form the kernel may report for it.
+ * seatbelt matches canonical paths, so symlinked spellings (e.g. "/tmp" for
+ * "/private/tmp", "/var/folders/..." for "/private/var/folders/...") never
+ * hit a rule written against the symlink. Emitting both forms keeps rules
+ * effective however the caller spelled the path.
+ */
+function pathVariants(path: string): string[] {
+  const variants = new Set<string>([path]);
+  try {
+    variants.add(realpathSync(path));
+  } catch {
+    // Path may not exist yet; the original form is still emitted.
+  }
+  return [...variants];
+}
+
+/**
  * Dynamically builds a seatbelt profile string.
  * Strategy: deny by default, then allow execution and reads, grant writes per path,
  * deny writes per path, and finally configure network access.
@@ -70,15 +87,21 @@ function buildProfile(config: SandboxConfig): string {
 
   // Grant write access for allowed paths
   for (const path of config.allowWrite) {
-    lines.push(`(allow file-write* (subpath "${path}"))`);
+    for (const variant of pathVariants(path)) {
+      lines.push(`(allow file-write* (subpath "${variant}"))`);
+    }
   }
 
   // Deny write access for denied paths; seatbelt evaluates later rules with higher priority.
   // Use 'literal' for exact file matching, 'subpath' for directory prefix matching.
   for (const path of config.denyWrite) {
-    const matcher =
-      existsSync(path) && statSync(path).isDirectory() ? "subpath" : "literal";
-    lines.push(`(deny file-write* (${matcher} "${path}"))`);
+    for (const variant of pathVariants(path)) {
+      const matcher =
+        existsSync(variant) && statSync(variant).isDirectory()
+          ? "subpath"
+          : "literal";
+      lines.push(`(deny file-write* (${matcher} "${variant}"))`);
+    }
   }
 
   // Network access control

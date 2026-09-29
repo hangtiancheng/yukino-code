@@ -43,6 +43,7 @@
 
 import { MCP_TOOL_PREFIX } from "./tool-wrapper.js";
 
+import type { ProviderConfig } from "@/config/provider-config.js";
 import { isMcpToolLike } from "@/tools/mcp-call.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type { McpLoadingMode } from "@/tools/types.js";
@@ -65,7 +66,8 @@ const ENV_OVERRIDE = "YUKINO_MCP_LOADING";
 /**
  * An empty baseUrl means the SDK default address, i.e. the official one.
  * Base-url-only by construction: the provider protocol is not consulted, so a
- * non-Anthropic provider with an empty base_url also counts as official.
+ * non-Anthropic provider with an empty base_url also counts as official —
+ * decideMode combines this with the protocol before choosing native mode.
  */
 export function isOfficialAnthropicEndpoint(baseUrl: string): boolean {
   if (!baseUrl) {
@@ -84,6 +86,7 @@ export function estimateSchemaTokens(schemaChars: number): number {
 
 export function decideMode(
   baseUrl: string,
+  protocol: ProviderConfig["protocol"],
   contextWindow: number,
   mcpSchemaChars: number,
   thresholdPercent = DEFAULT_EAGER_THRESHOLD_PERCENT,
@@ -107,7 +110,14 @@ export function decideMode(
     return "eager";
   }
 
-  return isOfficialAnthropicEndpoint(baseUrl) ? "native" : "dispatch";
+  // Native deferred loading (defer_loading / tool_reference) is an Anthropic
+  // protocol feature: OpenAI-protocol clients drop tool_reference and hide
+  // McpCall, so under those protocols a native decision makes every deferred
+  // MCP tool unreachable. Only the Anthropic protocol on an official endpoint
+  // qualifies.
+  const canNative =
+    protocol === "anthropic" && isOfficialAnthropicEndpoint(baseUrl);
+  return canNative ? "native" : "dispatch";
 }
 
 /** Character count of the serialized MCP tool schemas, for comparing against the threshold. */
@@ -155,9 +165,15 @@ export function applyMode(registry: ToolRegistry, mode: McpLoadingMode): void {
 export function decideAndApply(
   registry: ToolRegistry,
   baseUrl: string,
+  protocol: ProviderConfig["protocol"],
   contextWindow: number,
 ): McpLoadingMode {
-  const mode = decideMode(baseUrl, contextWindow, measureSchemaChars(registry));
+  const mode = decideMode(
+    baseUrl,
+    protocol,
+    contextWindow,
+    measureSchemaChars(registry),
+  );
   applyMode(registry, mode);
   return mode;
 }

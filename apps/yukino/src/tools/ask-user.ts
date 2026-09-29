@@ -64,7 +64,7 @@ export class AskUserQuestionTool implements Tool {
   name = "AskUserQuestion";
 
   description = `
-  Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 1 to 4 options; an "Other" option for custom input is added automatically.
+  Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 2 to 4 options; an "Other" option for custom input is added automatically.
   Set multiSelect=true when the user may choose multiple options, or false for one mutually exclusive choice. Ask only for missing information that changes the task; do not re-request authorization already given.
   `;
 

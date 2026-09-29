@@ -198,6 +198,58 @@ export type ServerMessage =
   | { type: "retry"; data: RetryPayload }
   | { type: "pong"; data: null };
 
+/**
+ * Runtime discriminants of {@link ServerMessage}. The WebSocket boundary
+ * validates incoming frames against this list before they reach the reducer;
+ * TypeScript checks excess entries against the union, so adding a union
+ * member without updating this array is caught by the missing-guard below
+ * only at runtime — keep the two in sync when adding message types.
+ */
+export const SERVER_MESSAGE_TYPES = [
+  "connected",
+  "commands",
+  "status",
+  "system",
+  "clear",
+  "command_done",
+  "replay_user",
+  "replay_assistant",
+  "stream_text",
+  "stream_end",
+  "thinking_text",
+  "tool_use",
+  "tool_result",
+  "permission_request",
+  "ask_user",
+  "plan_approval_request",
+  "session_list",
+  "code_review_form",
+  "code_review_progress",
+  "steering_queued",
+  "steering_delivered",
+  "turn_complete",
+  "loop_complete",
+  "usage",
+  "error",
+  "compact",
+  "retry",
+  "pong",
+] as const satisfies readonly ServerMessage["type"][];
+
+/** Structural guard for WebSocket frames before they reach the reducer. */
+export function isServerMessage(value: unknown): value is ServerMessage {
+  if (typeof value !== "object" || value === null || !("type" in value)) {
+    return false;
+  }
+  const discriminator: unknown = value.type;
+  return (
+    typeof discriminator === "string" &&
+    SERVER_MESSAGE_TYPE_SET.has(discriminator)
+  );
+}
+
+const SERVER_MESSAGE_TYPE_SET = new Set<string>(SERVER_MESSAGE_TYPES);
+
 /* ───────────────────────── Client → Server messages ───────────────────────── */
 
 export type PermissionResponse = "allow" | "deny" | "allowAlways";

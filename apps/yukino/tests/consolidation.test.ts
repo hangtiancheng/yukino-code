@@ -139,109 +139,110 @@ describe("MemoryConsolidator", () => {
   });
 
   describe("E2E consolidation", () => {
-    it("merges duplicate memories with real LLM", async () => {
-      const apiKey = process.env.YUKINO_TEST_API_KEY;
-      const baseURL =
-        process.env.YUKINO_TEST_BASE_URL ?? "https://api.deepseek.com";
-      const model = process.env.YUKINO_TEST_MODEL ?? "deepseek-flash";
+    // skipIf (not an early return): without the key the test must show up as
+    // skipped, not silently report a pass it never ran.
+    it.skipIf(!process.env.YUKINO_TEST_API_KEY)(
+      "merges duplicate memories with real LLM",
+      async () => {
+        const apiKey = process.env.YUKINO_TEST_API_KEY;
+        const baseURL =
+          process.env.YUKINO_TEST_BASE_URL ?? "https://api.deepseek.com";
+        const model = process.env.YUKINO_TEST_MODEL ?? "deepseek-flash";
 
-      if (!apiKey) {
-        console.log("YUKINO_TEST_API_KEY not set, skipping E2E test");
-        return;
-      }
+        const dir = makeTempDir();
+        const memDir = join(dir, ".yukino", "memory");
+        mkdirSync(memDir, { recursive: true });
 
-      const dir = makeTempDir();
-      const memDir = join(dir, ".yukino", "memory");
-      mkdirSync(memDir, { recursive: true });
+        // Write two duplicate memories
+        writeMemory(
+          memDir,
+          "feedback_no_push.md",
+          "feedback",
+          "no-push",
+          "Don't push without asking",
+          "The user does not want code pushed automatically",
+        );
 
-      // Write two duplicate memories
-      writeMemory(
-        memDir,
-        "feedback_no_push.md",
-        "feedback",
-        "no-push",
-        "Don't push without asking",
-        "The user does not want code pushed automatically",
-      );
+        writeMemory(
+          memDir,
+          "feedback_auto_push.md",
+          "feedback",
+          "auto-push",
+          "Don't auto push code",
+          "The user dislikes auto-push and prefers to be asked first",
+        );
 
-      writeMemory(
-        memDir,
-        "feedback_auto_push.md",
-        "feedback",
-        "auto-push",
-        "Don't auto push code",
-        "The user dislikes auto-push and prefers to be asked first",
-      );
+        // Write a normal memory
+        writeMemory(
+          memDir,
+          "user_role.md",
+          "user",
+          "user-role",
+          "User is a backend engineer",
+          "The user is a backend engineer who primarily works with Go and Java",
+        );
 
-      // Write a normal memory
-      writeMemory(
-        memDir,
-        "user_role.md",
-        "user",
-        "user-role",
-        "User is a backend engineer",
-        "The user is a backend engineer who primarily works with Go and Java",
-      );
-
-      writeFileSync(
-        join(memDir, "MEMORY.md"),
-        `- [No push](feedback_no_push.md) — Do not auto push
+        writeFileSync(
+          join(memDir, "MEMORY.md"),
+          `- [No push](feedback_no_push.md) — Do not auto push
 - [Auto push](feedback_auto_push.md) — Do not auto push code
 - [User role](user_role.md) — Backend engineer
 `,
-      );
+        );
 
-      console.log("Before consolidation:");
-      console.log("  Files:", readdirSync(memDir));
-      console.log(
-        "  MEMORY.md:",
-        readFileSync(join(memDir, "MEMORY.md"), "utf-8"),
-      );
+        console.log("Before consolidation:");
+        console.log("  Files:", readdirSync(memDir));
+        console.log(
+          "  MEMORY.md:",
+          readFileSync(join(memDir, "MEMORY.md"), "utf-8"),
+        );
 
-      const { OpenAICompatClient } = await import("../src/llm/openai.js");
-      const client = new OpenAICompatClient(
-        {
-          name: "test",
-          protocol: "openai-compat",
-          base_url: baseURL,
-          api_key: apiKey,
-          model: model,
-          context_window: 200000,
-        },
-        "",
-      );
+        const { OpenAICompatClient } = await import("../src/llm/openai.js");
+        const client = new OpenAICompatClient(
+          {
+            name: "test",
+            protocol: "openai-compat",
+            base_url: baseURL,
+            api_key: apiKey,
+            model: model,
+            context_window: 200000,
+          },
+          "",
+        );
 
-      let notified = "";
-      const consolidator = new MemoryConsolidator(client, dir, {
-        appendSystem: (msg) => {
-          notified = msg;
-        },
-      });
+        let notified = "";
+        const consolidator = new MemoryConsolidator(client, dir, {
+          appendSystem: (msg) => {
+            notified = msg;
+          },
+        });
 
-      // Call run directly, wait synchronously for consolidation to complete
-      await consolidator.run(memDir, [], 0);
+        // Call run directly, wait synchronously for consolidation to complete
+        await consolidator.run(memDir, [], 0);
 
-      console.log("\nAfter consolidation:");
-      console.log("  Files:", readdirSync(memDir));
-      console.log(
-        "  MEMORY.md:",
-        readFileSync(join(memDir, "MEMORY.md"), "utf-8"),
-      );
+        console.log("\nAfter consolidation:");
+        console.log("  Files:", readdirSync(memDir));
+        console.log(
+          "  MEMORY.md:",
+          readFileSync(join(memDir, "MEMORY.md"), "utf-8"),
+        );
 
-      const indexContent = readFileSync(join(memDir, "MEMORY.md"), "utf-8");
-      const indexLines = indexContent
-        .split("\n")
-        .filter((l) => l.trim().length > 0);
+        const indexContent = readFileSync(join(memDir, "MEMORY.md"), "utf-8");
+        const indexLines = indexContent
+          .split("\n")
+          .filter((l) => l.trim().length > 0);
 
-      // The index must not grow beyond the original 3 lines; whether the
-      // duplicate push memories actually get merged depends on the live LLM,
-      // so no lower bound is asserted here.
-      console.log(`  Index lines: ${String(indexLines.length)}`);
-      expect(indexLines.length).toBeLessThanOrEqual(3);
+        // The index must not grow beyond the original 3 lines; whether the
+        // duplicate push memories actually get merged depends on the live LLM,
+        // so no lower bound is asserted here.
+        console.log(`  Index lines: ${String(indexLines.length)}`);
+        expect(indexLines.length).toBeLessThanOrEqual(3);
 
-      if (notified) {
-        console.log(`  Notification: ${notified}`);
-      }
-    }, 120000);
+        if (notified) {
+          console.log(`  Notification: ${notified}`);
+        }
+      },
+      120000,
+    );
   });
 });

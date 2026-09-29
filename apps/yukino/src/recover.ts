@@ -25,6 +25,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { runExitCleanups } from "./bootstrap/exit-cleanup.js";
 import { closeLogger, logger } from "./logger/index.js";
 import { captureTelemetryError, shutdownTelemetry } from "./telemetry/index.js";
 
@@ -80,9 +81,10 @@ function exitForTerminalGone(context: string, error: unknown): never {
     record(`terminal closed [${context}] ${detail}`);
   }
   // No terminal is left to render into or read from: exit immediately, before
-  // the next frame fails the same way. process.exit skips child-resource
-  // cleanup, so spawned children (background shells, MCP subprocesses) are
-  // left running as orphans.
+  // the next frame fails the same way. process.exit() skips async child
+  // teardown, so sweep the sync cleanup registry first — detached background
+  // shells must not outlive the session as orphans.
+  runExitCleanups();
   process.exit(0);
 }
 
@@ -144,6 +146,9 @@ export function recover(): void {
     // Once a handler is registered the runtime no longer prints the error itself; log it explicitly
     logger.fatal({ err }, "uncaught exception");
     captureTelemetryError(err, "uncaught exception");
+    // Sync sweep before the async telemetry flush: the process is going down,
+    // and detached children must not survive it as orphans.
+    runExitCleanups();
     void shutdownTelemetry().finally(() => {
       process.exit(1);
     });
@@ -157,13 +162,17 @@ export function recover(): void {
     recordError("unhandled rejection", reason);
     logger.fatal({ err: reason }, "unhandled rejection");
     captureTelemetryError(reason, "unhandled rejection");
+    runExitCleanups();
     void shutdownTelemetry().finally(() => {
       process.exit(1);
     });
   });
 
-  // Flush logs and record the exit marker.
+  // Flush logs and record the exit marker. The cleanup sweep is a last
+  // resort: graceful paths stop children themselves, and every kill is
+  // guarded, so a repeated sweep is a no-op.
   process.on("exit", (code) => {
+    runExitCleanups();
     closeLogger();
     recordExit(code);
   });

@@ -22,6 +22,7 @@
 
 import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
+import { dirname } from "node:path";
 
 import {
   BASH_BACKGROUND_DESCRIPTION,
@@ -52,6 +53,7 @@ import {
   type ToolSchema,
 } from "./types.js";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import { isSafeCommand } from "@/permissions/index.js";
 import type {
   PreparedSandboxCommand,
@@ -252,9 +254,16 @@ export class BashTool implements Tool {
           command,
           {
             ...this.sandboxConfig,
-            // The child writes its output file directly; grant write access to
-            // that path even under a strict allowWrite config.
-            allowWrite: [...this.sandboxConfig.allowWrite, outputFile.path],
+            // The child writes its output file directly; grant write access
+            // to the output DIRECTORY (stable per session) rather than the
+            // per-command file (random name): a changing allowWrite entry
+            // re-keys the sandbox config and forces sandbox-runtime to
+            // re-initialize for every command, letting concurrent commands
+            // reset each other's sandbox state.
+            allowWrite: [
+              ...this.sandboxConfig.allowWrite,
+              dirname(outputFile.path),
+            ],
           },
           {
             cwd: ctx.workDir,
@@ -373,8 +382,12 @@ export class BashTool implements Tool {
 
       // Kill the child's whole process group; fall back to the direct child
       // when the group is already gone (or group kill is unsupported).
+      // `exited` guards against pid reuse: once the child is reaped its pid
+      // may belong to an unrelated process, and killing by stale pid (or
+      // stale negative-pid group) could take down someone else's process.
+      let exited = false;
       const killTree = (signal: NodeJS.Signals) => {
-        if (typeof child.pid !== "number") {
+        if (typeof child.pid !== "number" || exited) {
           return;
         }
         try {
@@ -568,6 +581,13 @@ export class BashTool implements Tool {
           },
           { originToolCallId: ctx.toolCallId, idPrefix: "bash", kind: "shell" },
         );
+        // Crash-path orphan prevention: process.exit() (terminal gone,
+        // uncaught exception) never reaches the task manager's stop, so the
+        // recover.ts sweep kills this detached group synchronously instead.
+        const unregisterCleanup = registerExitCleanup(() => {
+          killTree("SIGKILL");
+        });
+        void task.done.finally(unregisterCleanup);
         resolve({
           output: backgroundMessage(reason, task.id, timeout),
           isError: false,
@@ -593,6 +613,7 @@ export class BashTool implements Tool {
 
       // Spawn-level failure (e.g. bash not found): no close event guaranteed.
       child.on("error", (error) => {
+        exited = true;
         stopTimers();
         const exit: ShellExit = {
           code: null,
@@ -610,6 +631,7 @@ export class BashTool implements Tool {
       // the shell itself exits; grandchildren that inherit the output fd (e.g.
       // `cmd &`) no longer hold the result hostage.
       child.on("close", (code, signal) => {
+        exited = true;
         stopTimers();
         const exit: ShellExit = { code, signal, aborted, timedOut, sizeKilled };
         doneResolve?.(exit);

@@ -34,6 +34,7 @@ import type {
   Parser,
 } from "marked";
 import * as emoji from "node-emoji";
+import stringWidth from "string-width";
 import supportsHyperlinks from "supports-hyperlinks";
 
 import { fitTableToWidth } from "./table-layout.js";
@@ -557,7 +558,10 @@ export function markedTerminal(
 // === Helper Functions ===
 
 function textLength(str: string): number {
-  return str.replace(ANSI_REGEXP, "").length;
+  // Column count, not UTF-16 length: CJK characters occupy two columns and
+  // some emoji even more, so wrapping arithmetic must agree with what the
+  // terminal actually renders.
+  return stringWidth(str.replace(ANSI_REGEXP, ""));
 }
 
 function fixHardReturn(text: string, reflow: boolean): string {
@@ -596,12 +600,13 @@ function reflowText(text: string, width: number, gfm: boolean): string {
 
       for (const word of words) {
         const addSpace = column !== 0 && !lastWasEscapeChar;
+        const wordWidth = stringWidth(word);
 
-        if (column + word.length + (addSpace ? 1 : 0) > width) {
-          if (word.length <= width) {
+        if (column + wordWidth + (addSpace ? 1 : 0) > width) {
+          if (wordWidth <= width) {
             reflowed.push(currentLine);
             currentLine = word;
-            column = word.length;
+            column = wordWidth;
           } else {
             const available = width - column - (addSpace ? 1 : 0);
             const head = word.substring(0, available);
@@ -636,7 +641,7 @@ function reflowText(text: string, width: number, gfm: boolean): string {
             column++;
           }
           currentLine += word;
-          column += word.length;
+          column += wordWidth;
         }
 
         lastWasEscapeChar = false;
@@ -781,7 +786,9 @@ function insertEmojis(text: string): string {
 
 function hr(inputHrStr: string, length: number | false): string {
   const cols = length || process.stdout.columns || 80;
-  return new Array(cols).join(inputHrStr);
+  // Array(cols + 1): join inserts cols separators between the elements, so
+  // an off-by-one here used to render one column fewer than requested.
+  return new Array(cols + 1).join(inputHrStr);
 }
 
 function undoColon(str: string): string {

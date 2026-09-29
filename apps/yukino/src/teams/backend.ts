@@ -106,6 +106,20 @@ export function spawnTeammate(config: SpawnConfig): {
         stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env, ...config.env },
       });
+      // Spawn failures (ENOENT) surface as an 'error' event; without a
+      // listener they crash the leader as an uncaughtException.
+      child.on("error", (err) => {
+        log.error({ err }, "teammate spawn failed");
+      });
+      // Drain the pipes: an unconsumed stdout/stderr blocks the child once
+      // its buffer fills (~64KB), freezing the teammate mid-task. Output goes
+      // to the leader's terminal like the tmux/iTerm panes show theirs.
+      child.stdout?.on("data", (chunk: Buffer) => {
+        process.stdout.write(chunk);
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        process.stderr.write(chunk);
+      });
       return {
         cancel: () => child.kill("SIGTERM"),
       };

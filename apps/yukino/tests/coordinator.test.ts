@@ -100,8 +100,9 @@ describe("coordinator tool set", () => {
 
   // TeamDelete is the only entry point for tearing down a Team and stopping
   // its members, so the Leader must keep it for cleanup. (Coordinator mode
-  // itself is decided by config alone, not by whether a team exists.)
-  it("keeps TeamDelete so the Leader can leave coordinator mode", () => {
+  // itself is decided by config alone and lasts the whole session; TeamDelete
+  // only performs teardown.)
+  it("keeps TeamDelete for team teardown", () => {
     expect(isCoordinatorTool("TeamDelete")).toBe(true);
   });
 
@@ -135,9 +136,8 @@ describe("coordinator tool set", () => {
   });
 
   // In coordinator mode TeamCreate is not on the whitelist; the Agent tool creates the team itself
-  it("does not need TeamCreate, but keeps TeamDelete for teardown", () => {
+  it("does not need TeamCreate", () => {
     expect(isCoordinatorTool("TeamCreate")).toBe(false);
-    expect(isCoordinatorTool("TeamDelete")).toBe(true);
   });
 });
 

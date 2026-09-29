@@ -242,7 +242,7 @@ describe("ProviderLogin", () => {
     });
   });
 
-  it("navigates with Tab and changes protocol and thinking with arrows", async () => {
+  it("navigates with Tab, changes protocol with arrows, and skips thinking levels without a native effort", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     mount(validProvider, onSubmit);
 
@@ -258,12 +258,14 @@ describe("ProviderLogin", () => {
       await Promise.resolve();
     });
 
-    // The protocol switch leaves thinking at its default (high); the right
-    // arrow then advances high -> xhigh.
+    // The protocol switch leaves thinking at its default (high). Under the
+    // openai protocol xhigh/max have no native reasoning effort and are not
+    // offered without an explicit thinking_level_map, so the arrow wraps
+    // high -> off instead of advancing to xhigh.
     expect(onSubmit).toHaveBeenCalledWith({
       ...validProvider,
       protocol: "openai",
-      thinking: "xhigh",
+      thinking: "off",
     });
   });
 

@@ -120,23 +120,11 @@ export class ToolRegistry {
 
     const schemas: ProviderToolSchema[] = [];
     for (const tool of this.tools.values()) {
-      if (filter && !filter(tool.name)) {
-        continue;
-      }
-      // Only expose search and dispatch in modes where they're useful. In eager
-      // mode there are no deferred tools to search and no need to dispatch; sending
-      // both would only waste tokens and might tempt the model into a detour.
-      if (
-        (tool.name === "ToolSearch" && !this.exposeToolSearch) ||
-        (tool.name === "McpCall" && !this.exposeMcpCall)
-      ) {
+      if (!this.isToolVisible(tool, native, filter)) {
         continue;
       }
       const deferred =
         Boolean(tool.deferred) && !this.discovered.has(tool.name);
-      if (deferred && !native) {
-        continue;
-      }
       const s = tool.schema();
       if (resolvedProtocol === "openai") {
         schemas.push({
@@ -165,6 +153,55 @@ export class ToolRegistry {
       }
     }
     return schemas;
+  }
+
+  /**
+   * Shared visibility predicate for getAllSchemas and listVisibleToolNames:
+   * the caller's filter, the search/dispatch exposure rules, and deferred
+   * hiding must agree everywhere tools are advertised.
+   */
+  private isToolVisible(
+    tool: Tool,
+    native: boolean,
+    filter?: (name: string) => boolean,
+  ): boolean {
+    if (filter && !filter(tool.name)) {
+      return false;
+    }
+    // Only expose search and dispatch in modes where they're useful. In eager
+    // mode there are no deferred tools to search and no need to dispatch; sending
+    // both would only waste tokens and might tempt the model into a detour.
+    if (
+      (tool.name === "ToolSearch" && !this.exposeToolSearch) ||
+      (tool.name === "McpCall" && !this.exposeMcpCall)
+    ) {
+      return false;
+    }
+    const deferred = Boolean(tool.deferred) && !this.discovered.has(tool.name);
+    return !deferred || native;
+  }
+
+  /**
+   * Names of the tools getAllSchemas would emit for the same protocol and
+   * filter — identical visibility rules, so anything that advertises
+   * "available tools" (e.g. the compaction recovery attachment) matches what
+   * the run can actually call.
+   */
+  listVisibleToolNames(
+    protocol?: ToolProtocol,
+    filter?: (name: string) => boolean,
+  ): string[] {
+    const resolvedProtocol = protocol ?? "anthropic";
+    const isOpenAI =
+      resolvedProtocol === "openai" || resolvedProtocol === "openai-compat";
+    const native = this.mcpLoadingMode === "native" && !isOpenAI;
+    const names: string[] = [];
+    for (const tool of this.tools.values()) {
+      if (this.isToolVisible(tool, native, filter)) {
+        names.push(tool.name);
+      }
+    }
+    return names;
   }
 
   /**

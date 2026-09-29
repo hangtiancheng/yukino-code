@@ -21,6 +21,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 import { Box, Text, useApp } from "ink";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -270,6 +271,9 @@ export function App({
   } | null>(null);
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [footerRows, setFooterRows] = useState(2);
+  // Bumped when workspace file facts change (file-write tool results, agent run
+  // end); the @-mention completion cache in InputBox keys on it.
+  const [fileFactsVersion, setFileFactsVersion] = useState(0);
 
   const workDir = process.cwd();
   const historyDir = `${workDir}/.yukino`;
@@ -383,6 +387,11 @@ export function App({
     activateSkill: (name, body) => activeSkillsRef.current.set(name, body),
   });
   const teamManagerRef = useRef(new TeamManager(workDir));
+  useEffect(() => {
+    // Re-adopt any team left on disk (e.g. from a previous session) so live
+    // external teammates' notifications are drained and the UI shows them.
+    teamManagerRef.current.restoreFromDisk();
+  }, []);
   const backgroundTaskManagerRef = useRef(new TaskManager());
   const fileHistoryRef = useRef<FileHistory | null>(null);
   // The agent instance of the in-flight run, if any. Steering targets it.
@@ -436,6 +445,10 @@ export function App({
   // Steering messages queued into the in-flight agent, mirrored for display.
   // Entries are removed when the agent reports them delivered.
   const [steeringPending, setSteeringPending] = useState<string[]>([]);
+  // Steering texts already written to prompt history at steer time. Consumed
+  // when the text enters the conversation (delivered in-run or re-fed as a
+  // follow-up), so the follow-up path records each user prompt exactly once.
+  const steeringHistoryRecordedRef = useRef<string[]>([]);
   const [resumeSessions, setResumeSessions] = useState<
     sessionMod.SessionInfo[]
   >([]);
@@ -490,16 +503,37 @@ export function App({
   );
 
   const requestExit = useCallback(() => {
-    interruptAll();
-    const activeToolTime = activeToolBatchStartedAtRef.current
-      ? Date.now() - activeToolBatchStartedAtRef.current
-      : 0;
-    onExitSummary?.({
-      ...interactionStatsRef.current,
-      sessionId: sessionIdRef.current,
-      toolTimeMs: interactionStatsRef.current.toolTimeMs + activeToolTime,
-    });
-    exit();
+    void (async () => {
+      interruptAll();
+      // Join the fire-and-forget stopAlls and disconnect MCP before the app
+      // unmounts (parity with print-mode/ACP): on Windows the shell kills go
+      // through async taskkill, and stdio MCP children need an explicit close.
+      try {
+        await Promise.all([
+          backgroundTaskManagerRef.current.stopAll(),
+          teamManagerRef.current.stopAll(),
+        ]);
+      } catch {
+        // best-effort — exit regardless
+      }
+      const mcp = mcpManagerRef.current;
+      if (mcp) {
+        try {
+          await mcp.disconnectAll();
+        } catch {
+          // best-effort — stdio children usually exit on stdin EOF anyway
+        }
+      }
+      const activeToolTime = activeToolBatchStartedAtRef.current
+        ? Date.now() - activeToolBatchStartedAtRef.current
+        : 0;
+      onExitSummary?.({
+        ...interactionStatsRef.current,
+        sessionId: sessionIdRef.current,
+        toolTimeMs: interactionStatsRef.current.toolTimeMs + activeToolTime,
+      });
+      exit();
+    })();
   }, [exit, interruptAll, onExitSummary]);
 
   // Foreground-only work gate for Ctrl+C/Esc: while only background work is
@@ -584,6 +618,7 @@ export function App({
           decideAndApply(
             registryRef.current,
             provider.base_url,
+            provider.protocol,
             getContextWindow(provider),
           );
           mcpModeDecidedRef.current = true;
@@ -1073,7 +1108,14 @@ export function App({
         setError(`Failed to init LLM client: ${asErrorString(err)}`);
       }
     },
-    [workDir, mcpServers, connectMcpServers, memoryEnabled],
+    [
+      workDir,
+      mcpServers,
+      connectMcpServers,
+      memoryEnabled,
+      hooks,
+      forkDisabled,
+    ],
   );
 
   useEffect(() => {
@@ -1131,6 +1173,7 @@ export function App({
         decideAndApply(
           registryRef.current,
           provider.base_url,
+          provider.protocol,
           contextWindowRef.current,
         );
         setMessages((current) => [
@@ -1147,6 +1190,78 @@ export function App({
         setProviderSwitching(false);
       }
     })();
+  };
+
+  /**
+   * Maps restored/rebuilt conversation records onto visible transcript
+   * messages. Tool chains are persisted as assistant records with tool_uses
+   * and user records carrying only tool_results (empty text); mapping those
+   * verbatim emits blank user-message boxes, so they fold into turn_summary
+   * messages instead, mirroring how live turns are committed. Anything with
+   * no visible text is skipped. Shared by /resume and /rewind so both leave
+   * the transcript in sync with the rebuilt conversation.
+   */
+  const transcriptFromRestored = (
+    restored: readonly {
+      role: "user" | "assistant" | "system";
+      content: string | Record<string, unknown>[];
+      toolUses?: readonly {
+        toolUseId: string;
+        toolName: string;
+        arguments?: Record<string, unknown> | null;
+      }[];
+      toolResults?: readonly {
+        toolUseId: string;
+        content: string;
+        isError: boolean;
+      }[];
+    }[],
+  ): ChatMessage[] => {
+    const pendingUses = new Map<
+      string,
+      { toolName: string; argsSummary: string }
+    >();
+    const out: ChatMessage[] = [];
+    for (const m of restored) {
+      for (const tu of m.toolUses ?? []) {
+        pendingUses.set(tu.toolUseId, {
+          toolName: tu.toolName,
+          argsSummary: formatToolArgs(tu.arguments ?? {}),
+        });
+      }
+      if (m.toolResults?.length) {
+        const toolSummary: ToolSummaryItem[] = m.toolResults.map((tr) => {
+          const use = pendingUses.get(tr.toolUseId);
+          pendingUses.delete(tr.toolUseId);
+          const toolName = use?.toolName ?? "tool";
+          // Restored Agent cards get the same status semantics as live
+          // ones: the interruption marker means the run was stopped, so
+          // it must not render as a green success card.
+          const agentStatus =
+            toolName === "Agent" && !tr.isError
+              ? tr.content.includes(SUBAGENT_INTERRUPTED_MARKER)
+                ? "stopped"
+                : "completed"
+              : undefined;
+          return {
+            toolName,
+            argsSummary: use?.argsSummary ?? "",
+            output: toDisplayPreview(tr.content),
+            isError: tr.isError,
+            // No timing data in the session log; 0 hides the suffix.
+            elapsed: 0,
+            ...(agentStatus ? { status: agentStatus } : {}),
+          };
+        });
+        out.push({ role: "turn_summary", content: "", toolSummary });
+        continue;
+      }
+      const text = contentToText(m.content);
+      if (text.trim()) {
+        out.push({ role: m.role, content: text });
+      }
+    }
+    return out;
   };
 
   const handleSlashCommand = async (text: string): Promise<boolean> => {
@@ -1242,7 +1357,7 @@ export function App({
         `Sandbox:   ${sbStatus}`,
         `Memories:  ${
           memoryEnabled
-            ? String(new MemoryManager(workDir).getMemories().length)
+            ? String(memManagerRef.current?.getMemories().length ?? 0)
             : "disabled (memory: false)"
         }`,
         `Skills:    ${String(skillCatalogRef.current?.list().length ?? 0)}`,
@@ -1520,6 +1635,9 @@ export function App({
           );
           announcedSkillsRef.current.clear();
           sessionIdRef.current = arg;
+          // Mark the session active: expiry sweeping is mtime-based, and a
+          // resumed-but-not-yet-written session still carries its old stamp.
+          sessionMod.touchSession(workDir, arg);
           setResumeDialogActive(false);
           setResumeSessions([]);
           recentToolsRef.current = [];
@@ -1532,60 +1650,8 @@ export function App({
           // rebuilds the conversation from it, so stale in-memory message
           // indexes from the previous process are never trusted.
           fileHistoryRef.current = new FileHistory(workDir, arg);
-          // Rebuild the visible transcript. Tool chains are persisted as
-          // assistant records with tool_uses and user records that carry only
-          // tool_results (empty text). Mapping those verbatim emits empty
-          // role:"user" messages that render as blank user-message boxes.
-          // Fold them into turn_summary messages instead, mirroring how live
-          // turns are committed, and skip anything with no visible text.
-          const pendingUses = new Map<
-            string,
-            { toolName: string; argsSummary: string }
-          >();
-          const resumedMessages: ChatMessage[] = [];
-          for (const m of restored) {
-            for (const tu of m.toolUses ?? []) {
-              pendingUses.set(tu.toolUseId, {
-                toolName: tu.toolName,
-                argsSummary: formatToolArgs(tu.arguments ?? {}),
-              });
-            }
-            if (m.toolResults?.length) {
-              const toolSummary: ToolSummaryItem[] = m.toolResults.map((tr) => {
-                const use = pendingUses.get(tr.toolUseId);
-                pendingUses.delete(tr.toolUseId);
-                const toolName = use?.toolName ?? "tool";
-                // Restored Agent cards get the same status semantics as live
-                // ones: the interruption marker means the run was stopped, so
-                // it must not render as a green success card.
-                const agentStatus =
-                  toolName === "Agent" && !tr.isError
-                    ? tr.content.includes(SUBAGENT_INTERRUPTED_MARKER)
-                      ? "stopped"
-                      : "completed"
-                    : undefined;
-                return {
-                  toolName,
-                  argsSummary: use?.argsSummary ?? "",
-                  output: toDisplayPreview(tr.content),
-                  isError: tr.isError,
-                  // No timing data in the session log; 0 hides the suffix.
-                  elapsed: 0,
-                  ...(agentStatus ? { status: agentStatus } : {}),
-                };
-              });
-              resumedMessages.push({
-                role: "turn_summary",
-                content: "",
-                toolSummary,
-              });
-              continue;
-            }
-            const text = contentToText(m.content);
-            if (text.trim()) {
-              resumedMessages.push({ role: m.role, content: text });
-            }
-          }
+          // Rebuild the visible transcript from the restored records.
+          const resumedMessages = transcriptFromRestored(restored);
           resumedMessages.push({
             role: "system",
             content: `⟲ Resumed session ${arg} (${String(restored.length)} messages).`,
@@ -1898,7 +1964,10 @@ export function App({
       bashTool.sandbox = sandbox;
       bashTool.sandboxRequired = true;
       bashTool.sandboxConfig = {
-        allowWrite: [workDir, "/tmp"],
+        // tmpdir is required: mktemp, compilers, git, and python tempfile all
+        // default to it. seatbelt.ts canonicalizes symlinked spellings
+        // ("/tmp" -> "/private/tmp", "/var/..." -> "/private/var/...").
+        allowWrite: [workDir, "/tmp", tmpdir()],
         denyWrite: [],
         networkEnabled: sandboxNetworkEnabled,
       };
@@ -2064,6 +2133,13 @@ export function App({
             if (event.toolName === "ExitPlanMode" && !event.isError) {
               exitPlanSucceeded = true;
             }
+            // @-mention completion must see files the agent just wrote.
+            if (
+              event.toolName === "WriteFile" ||
+              event.toolName === "EditFile"
+            ) {
+              setFileFactsVersion((v) => v + 1);
+            }
             const recent = recentToolsRef.current;
             const dup = recent.indexOf(event.toolName);
             if (dup >= 0) {
@@ -2076,7 +2152,16 @@ export function App({
             break;
           }
           case "steering_delivered": {
-            setSteeringPending((prev) => prev.filter((t) => t !== event.text));
+            // Remove exactly one occurrence: the same text may be queued twice.
+            setSteeringPending((prev) => {
+              const idx = prev.indexOf(event.text);
+              return idx === -1 ? prev : prev.filter((_, i) => i !== idx);
+            });
+            const recorded = steeringHistoryRecordedRef.current;
+            const recordedIdx = recorded.indexOf(event.text);
+            if (recordedIdx !== -1) {
+              recorded.splice(recordedIdx, 1);
+            }
             setMessages((prev) => [
               ...prev,
               { role: "user", content: event.text },
@@ -2106,12 +2191,38 @@ export function App({
       }
     } finally {
       agentRef.current = null;
-      // Steering queued too late for in-run delivery becomes follow-up turns.
+      // The run may have created/renamed files through any tool (Bash, git,
+      // subagents); refresh the @-mention cache once it ends.
+      setFileFactsVersion((v) => v + 1);
+      // Steering queued too late for in-run delivery becomes follow-up turns —
+      // unless the user interrupted the run: "stop" means the queued messages
+      // must not fire immediately (parity with the remote server's cancel
+      // guard). They are removed from the pending list instead.
       const leftover = agent.drainSteering();
       if (leftover.length > 0) {
-        setSteeringPending((prev) => prev.filter((t) => !leftover.includes(t)));
-        for (const text of leftover) {
-          followUps.enqueue(text);
+        // Remove one pending entry per leftover item, not every text match.
+        setSteeringPending((prev) => {
+          const next = [...prev];
+          for (const text of leftover) {
+            const idx = next.indexOf(text);
+            if (idx !== -1) {
+              next.splice(idx, 1);
+            }
+          }
+          return next;
+        });
+        if (controller.signal.aborted) {
+          const recorded = steeringHistoryRecordedRef.current;
+          for (const text of leftover) {
+            const idx = recorded.indexOf(text);
+            if (idx !== -1) {
+              recorded.splice(idx, 1);
+            }
+          }
+        } else {
+          for (const text of leftover) {
+            followUps.enqueue(text);
+          }
         }
       }
     }
@@ -2270,8 +2381,12 @@ export function App({
    * unlike in-memory message indexes (which are only meaningful within the
    * process that captured them). Snapshots with no recorded sessionLineCount
    * — or whose session file is gone — fall back to truncating by messageIndex.
+   *
+   * Returns the visible transcript for the rewound state: the caller must
+   * rebuild the displayed messages too, or the UI would keep showing
+   * messages the conversation no longer holds.
    */
-  const rewindConversation = (snap: Snapshot): void => {
+  const rewindConversation = (snap: Snapshot): ChatMessage[] => {
     const sessionFilePath = sessionMod.getSessionFilePath(
       workDir,
       sessionIdRef.current,
@@ -2283,9 +2398,12 @@ export function App({
       );
       conversationRef.current.reset();
       conversationRef.current.appendMessages(rebuilt);
-      return;
+      return transcriptFromRestored(rebuilt);
     }
     conversationRef.current.truncateTo(snap.messageIndex);
+    return transcriptFromRestored(
+      conversationRef.current.getMessages().filter((m) => m.role !== "system"),
+    );
   };
 
   const handleRewindAction = useCallback(
@@ -2300,13 +2418,13 @@ export function App({
         case "code_and_conversation": {
           const changed = fh.rewind(action.snapshotIndex);
           const snap = rewindSnapshots[action.snapshotIndex];
-          rewindConversation(snap);
+          const transcript = rewindConversation(snap);
           const fileList =
             changed.length > 0
               ? "\n" + changed.map((f) => "  " + f).join("\n")
               : "";
-          setMessages((prev) => [
-            ...prev,
+          setMessages([
+            ...transcript,
             {
               role: "system",
               content: `⟲ Rewound to checkpoint. Restored ${String(changed.length)} file(s) and conversation.${fileList}`,
@@ -2316,9 +2434,9 @@ export function App({
         }
         case "conversation_only": {
           const snap = rewindSnapshots[action.snapshotIndex];
-          rewindConversation(snap);
-          setMessages((prev) => [
-            ...prev,
+          const transcript = rewindConversation(snap);
+          setMessages([
+            ...transcript,
             {
               role: "system",
               content: `⟲ Rewound conversation. Files unchanged.`,
@@ -2369,7 +2487,15 @@ export function App({
 
   const processSubmission = async (text: string) => {
     refreshSkillsIfNeeded();
-    setPromptHistory(historyMod.append(historyDir, text));
+    // Steering leftovers were recorded when they were steered; consume the
+    // marker instead of appending again so each user prompt lands once.
+    const recorded = steeringHistoryRecordedRef.current;
+    const recordedIdx = recorded.indexOf(text);
+    if (recordedIdx !== -1) {
+      recorded.splice(recordedIdx, 1);
+    } else {
+      setPromptHistory(historyMod.append(historyDir, text));
+    }
     if (text.startsWith("/") && (await handleSlashCommand(text))) {
       return;
     }
@@ -2426,6 +2552,8 @@ export function App({
     if (isStreaming && !trimmed.startsWith("/") && agentRef.current) {
       agentRef.current.steer(trimmed);
       setSteeringPending((prev) => [...prev, trimmed]);
+      setPromptHistory(historyMod.append(historyDir, trimmed));
+      steeringHistoryRecordedRef.current.push(trimmed);
       return;
     }
     followUps.enqueue(text);
@@ -2527,6 +2655,7 @@ export function App({
       decideAndApply(
         registryRef.current,
         saved.provider.base_url,
+        saved.provider.protocol,
         contextWindowRef.current,
       );
       memExtractorRef.current = null;
@@ -2798,6 +2927,7 @@ export function App({
           },
           workDir,
           sessionId: sessionIdRef.current,
+          fileFactsVersion,
           insertTextRef: insertInputTextRef,
           clearRef: clearInputRef,
           onEscape: () => {

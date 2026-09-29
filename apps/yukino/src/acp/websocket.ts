@@ -109,27 +109,50 @@ export async function startAcpWebSocketServer(
         return;
       }
       closed = true;
-      await acpServer.close();
-      await new Promise<void>((resolve, reject) => {
-        webSocketServer.close((error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
-        });
-      });
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
-        });
-      });
+      // Close every server even when an earlier one rejects: bailing out at
+      // the first failure (or guarding retries away with `closed`) would
+      // leave the remaining listeners holding their ports. The first error
+      // is rethrown once everything has been attempted.
+      let firstError: Error | undefined;
+      const record = (err: unknown): void => {
+        firstError =
+          firstError ?? (err instanceof Error ? err : new Error(String(err)));
+      };
+      try {
+        await acpServer.close();
+      } catch (err) {
+        record(err);
+      }
+      try {
+        await closeWithCallback(webSocketServer);
+      } catch (err) {
+        record(err);
+      }
+      try {
+        await closeWithCallback(httpServer);
+      } catch (err) {
+        record(err);
+      }
+      if (firstError !== undefined) {
+        throw firstError;
+      }
     },
   };
+}
+
+/** Resolves when the server is closed; rejects with the close callback's error. */
+function closeWithCallback(server: {
+  close(callback: (error?: Error | null) => void): unknown;
+}): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 export async function runAcpWebSocket(address?: string): Promise<void> {

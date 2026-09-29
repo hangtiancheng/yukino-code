@@ -313,9 +313,6 @@ export class PathSandbox {
   addRoot(root: string): void {
     this.allowedRoots.push(resolve(root));
   }
-  addDenyWrite(path: string): void {
-    this.denyWritePaths.push(resolve(path));
-  }
 
   /**
    * Check whether a path is in the deny-write list.
@@ -675,8 +672,14 @@ export class PermissionChecker {
     // Only Bash is wrapped by the configured OS sandbox; other command tools
     // (e.g. PowerShell) never inherit this auto-allow.
     if (this.sandboxEnabled && this.sandboxAutoAllow && toolName === "Bash") {
+      // Split on every chaining separator — single & (backgrounding still
+      // runs the next command), newlines, and the compound operators — so an
+      // anchored deny/ask rule cannot be dodged by hiding a subcommand in a
+      // segment the splitter kept whole. (isSafeCommand already rejects raw
+      // & / newline / ; / | commands upstream; this keeps the layers
+      // consistent regardless.)
       const subcommands = strArg(args, "command")
-        .split(/\s*(?:&&|\|\||[;|])\s*/)
+        .split(/\s*(?:&&|\|\||&|[;|\n\r])\s*/)
         .map((s) => s.trim())
         .filter(Boolean);
       let hasAsk = false;

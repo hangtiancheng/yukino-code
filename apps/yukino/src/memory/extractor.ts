@@ -121,8 +121,13 @@ export class MemoryExtractor {
         for (const file of files) {
           try {
             const content = readFileSync(join(dir, file), "utf-8");
-            const typeMatch = /type:\s*(.+)/.exec(content);
-            const descMatch = /description:\s*(.+)/.exec(content);
+            // Line-anchored with optional indent: matches both top-level
+            // `type:` (fallback writer) and nested `  type:` (prompt format),
+            // without matching words like "prototype:" inside body text.
+            const typeMatch = /^\s*type:\s*"?([^"\n]+?)"?\s*$/m.exec(content);
+            const descMatch = /^\s*description:\s*"?([^"\n]+?)"?\s*$/m.exec(
+              content,
+            );
             const type = typeMatch?.[1]?.trim() ?? "reference";
             const desc = descMatch?.[1]?.trim() ?? "";
             entries.push(`- [${type}] ${file}: ${desc}`);
@@ -299,6 +304,14 @@ export class MemoryExtractor {
       const bodyMatch = /^MEMORY_BODY:\s?(.*)$/i.exec(line);
 
       if (nameMatch) {
+        if (mem.name) {
+          // Malformed block carrying a second record: reset the accumulated
+          // fields instead of merging them across the two records.
+          mem.type = "";
+          mem.description = "";
+          mem.body = "";
+          bodyLines.length = 0;
+        }
         mem.name = nameMatch[1].trim();
         inBody = false;
       } else if (typeMatch) {
@@ -308,6 +321,11 @@ export class MemoryExtractor {
         mem.description = descMatch[1].trim();
         inBody = false;
       } else if (bodyMatch) {
+        if (mem.body !== "" || bodyLines.length > 0) {
+          // A second MEMORY_BODY starts a new body: the previous body's
+          // continuation lines belong to it, not to this one.
+          bodyLines.length = 0;
+        }
         mem.body = bodyMatch[1];
         inBody = true;
       } else if (inBody) {

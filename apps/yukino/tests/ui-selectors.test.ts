@@ -43,10 +43,13 @@ import { SessionSelector } from "@/ui/session-selector.js";
 import { ICONS, setThemeMode, THEME } from "@/ui/styles.js";
 import { visibleWidth } from "@/ui/terminal-text.js";
 
-// Keep Ink's real layout and React hooks; invoke only the captured input callback.
+// Keep Ink's real layout and React hooks; invoke only the captured input
+// callback. usePaste must be mocked too: the real hook enables raw mode,
+// which throws on the non-TTY test stdin.
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),
   useInput: vi.fn(),
+  usePaste: vi.fn(),
 }));
 
 const noKey: Key = {

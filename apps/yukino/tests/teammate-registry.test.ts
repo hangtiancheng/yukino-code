@@ -27,10 +27,7 @@ import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { SkillCatalog } from "@/skills/catalog.js";
-import {
-  SUBAGENT_DISALLOWED_TOOLS,
-  TEAMMATE_DISALLOWED_TOOLS,
-} from "@/subagent/tool-filter.js";
+import { cloneRegistryForTeammate } from "@/subagent/tool-filter.js";
 import { buildTeammateRegistry, parseTeammateFlags } from "@/teammate.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";
@@ -155,9 +152,9 @@ describe("teammate worker tool registry", () => {
 });
 
 describe("in-process teammate tool filtering", () => {
-  // In-process teammates clone the Leader's registry; two categories must be
-  // excluded during cloning: globally disallowed subagent tools and team
-  // membership management tools.
+  // In-process teammates clone the Leader's registry through the production
+  // cloneRegistryForTeammate: globally disallowed subagent tools and
+  // Leader-only team membership management tools must be stripped.
   it("excludes subagent and team management tools", () => {
     const stub = (name: string): Tool => ({
       name,
@@ -187,17 +184,7 @@ describe("in-process teammate tool filtering", () => {
       parent.register(stub(n));
     }
 
-    // Replicate the cloning logic from runAsTeammate
-    const teammate = new ToolRegistry();
-    for (const tool of parent.listTools()) {
-      if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-      if (TEAMMATE_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-      teammate.register(tool);
-    }
+    const teammate = cloneRegistryForTeammate(parent);
     const names = new Set(teammate.listTools().map((t) => t.name));
 
     for (const n of ["Agent", "ComputerUse", "TeamCreate", "TeamDelete"]) {

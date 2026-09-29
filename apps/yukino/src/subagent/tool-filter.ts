@@ -94,18 +94,6 @@ export const TEAMMATE_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "TeamDelete",
 ] satisfies readonly AllTools[]);
 
-// Reserved list for additional restrictions on custom Agents (loaded from
-// .yukino/agents/), applied by filterToolsForAgent's Layer 3 — but no caller
-// currently passes isCustom=true, so the layer is inert. It is also a subset of
-// the global list (same except ComputerUse, which Layer 2 already strips), so
-// enabling it would change nothing today; maintained for future extensibility.
-export const CUSTOM_AGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
-  "ExitPlanMode",
-  "Agent",
-  "AskUserQuestion",
-  "TaskStop",
-] satisfies readonly AllTools[]);
-
 // Asynchronous (background) Agents are restricted to only these tools
 export const ASYNC_AGENT_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "ReadFile",
@@ -132,20 +120,18 @@ function isMCPTool(name: string): boolean {
 
 /**
  * Multi-layer tool filtering, applied in order:
- * 1. MCP tools (mcp__*) — exempt from layers 2-4, but still subject to
- *    definition-level disallowedTools/tools (layers 5-6)
+ * 1. MCP tools (mcp__*) — exempt from layers 2-3, but still subject to
+ *    definition-level disallowedTools/tools (layers 4-5)
  * 2. SUBAGENT_DISALLOWED_TOOLS — Globally disallowed (prevents recursion)
- * 3. CUSTOM_AGENT_DISALLOWED_TOOLS — Additional restrictions for custom Agents
- * 4. ASYNC_AGENT_ALLOWED_TOOLS — Whitelist for background Agents
- * 5. Definition-level disallowedTools — Blacklist
- * 6. Definition-level tools — Whitelist intersection ("*" disables this layer)
+ * 3. ASYNC_AGENT_ALLOWED_TOOLS — Whitelist for background Agents
+ * 4. Definition-level disallowedTools — Blacklist
+ * 5. Definition-level tools — Whitelist intersection ("*" disables this layer)
  */
 export function filterToolsForAgent(
   registry: ToolRegistry,
   allowedTools: string[] | undefined,
   disallowedTools: string[] | undefined,
   isAsync: boolean,
-  isCustom = false,
 ): ToolRegistry {
   const disallowed = new Set(disallowedTools ?? []);
   const allowed = new Set(allowedTools ?? []);
@@ -159,7 +145,7 @@ export function filterToolsForAgent(
   for (const tool of registry.listTools()) {
     const name = tool.name;
 
-    // Layer 1: MCP tools skip layers 2-4; definition-level lists still apply
+    // Layer 1: MCP tools skip layers 2-3; definition-level lists still apply
     if (isMCPTool(name)) {
       if (!disallowed.has(name) && (!hasWhitelist || allowed.has(name))) {
         filtered.register(tool);
@@ -172,22 +158,17 @@ export function filterToolsForAgent(
       continue;
     }
 
-    // Layer 3: Additional restrictions for custom Agents
-    if (isCustom && CUSTOM_AGENT_DISALLOWED_TOOLS.has(name)) {
-      continue;
-    }
-
-    // Layer 4: Whitelist filtering for asynchronous Agents
+    // Layer 3: Whitelist filtering for asynchronous Agents
     if (isAsync && !ASYNC_AGENT_ALLOWED_TOOLS.has(name)) {
       continue;
     }
 
-    // Layer 5: Definition-level blacklist
+    // Layer 4: Definition-level blacklist
     if (disallowed.has(name)) {
       continue;
     }
 
-    // Layer 6: Definition-level whitelist intersection
+    // Layer 5: Definition-level whitelist intersection
     if (hasWhitelist && !allowed.has(name)) {
       continue;
     }
@@ -198,6 +179,27 @@ export function filterToolsForAgent(
   return filtered;
 }
 export const FORK_QUERY_SOURCE = "agent:builtin:fork";
+
+/**
+ * Clone the Leader's registry for an in-process teammate: globally disallowed
+ * subagent tools and Leader-only team management tools are stripped. Team-level
+ * task tools and the teammate-named SendMessage are added by the caller.
+ */
+export function cloneRegistryForTeammate(registry: ToolRegistry): ToolRegistry {
+  const teammate = new ToolRegistry();
+  teammate.mcpLoadingMode = registry.mcpLoadingMode;
+  for (const tool of registry.listTools()) {
+    if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) {
+      continue;
+    }
+    if (TEAMMATE_DISALLOWED_TOOLS.has(tool.name)) {
+      continue;
+    }
+    teammate.register(tool);
+  }
+  return teammate;
+}
+
 export function cloneRegistryForFork(registry: ToolRegistry): ToolRegistry {
   const forked = new ToolRegistry();
   forked.mcpLoadingMode = registry.mcpLoadingMode;

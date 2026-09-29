@@ -28,6 +28,9 @@ import {
   mkdirSync,
   unlinkSync,
   utimesSync,
+  openSync,
+  closeSync,
+  writeSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, basename } from "node:path";
@@ -54,7 +57,9 @@ const DEFAULT_MIN_HOURS = 24;
 const DEFAULT_MIN_SESSIONS = 5;
 const SCAN_THROTTLE_MS = 10 * 60 * 1000;
 const LOCK_FILE = ".consolidate-lock";
-const HOLDER_STALE_MS = 60 * 60 * 1000;
+// A lock whose content is unreadable but was written very recently may belong
+// to a holder that has not finished writing its pid — never preempt those.
+const UNREADABLE_GRACE_MS = 5_000;
 const MAX_ENTRYPOINT_LINES = 200;
 
 /**
@@ -198,12 +203,13 @@ function readLastConsolidatedAt(memDir: string): number {
 }
 
 /**
- * Acquires the consolidation lock. An existing lock is respected only while
- * it is fresher than HOLDER_STALE_MS and its recorded holder PID is still
- * running; locks that are stale, whose holder died, or whose PID is missing
- * or unreadable are taken over. Returns the lock's previous mtime on success
- * (0 when no lock existed or its mtime could not be read), or null when the
- * lock is held or the read-back check fails. The mtime doubles as the
+ * Acquires the consolidation lock. An existing lock is respected while its
+ * recorded holder PID is still running — a live holder is never preempted,
+ * however long the pass takes. Locks whose holder died (or whose content is
+ * unreadable and older than UNREADABLE_GRACE_MS) are removed and replaced via
+ * exclusive-create, which is atomic and therefore race-free. Returns the
+ * lock's previous mtime on success (0 when no lock existed or its mtime could
+ * not be read), or null when the lock is held. The mtime doubles as the
  * last-consolidation timestamp (see readLastConsolidatedAt), which is why
  * callers can undo a failed pass by restoring it via rollbackLock.
  */
@@ -223,23 +229,34 @@ function tryAcquireLock(memDir: string): number | null {
     } catch (err) {
       log.error({ err }, "failed to read consolidation lock file");
     }
-  }
-
-  if (mtimeMs !== undefined && Date.now() - mtimeMs < HOLDER_STALE_MS) {
-    if (holderPid !== undefined && isProcessRunning(holderPid)) {
+    if (holderPid !== undefined) {
+      if (isProcessRunning(holderPid)) {
+        return null;
+      }
+    } else if (
+      mtimeMs !== undefined &&
+      Date.now() - mtimeMs < UNREADABLE_GRACE_MS
+    ) {
+      // Unreadable but freshly written — the holder may be mid-write.
+      return null;
+    }
+    try {
+      unlinkSync(path);
+    } catch (err) {
+      log.error({ err }, "failed to remove stale consolidation lock");
       return null;
     }
   }
 
   mkdirSync(memDir, { recursive: true });
-  writeFileSync(path, String(process.pid));
-
+  // O_EXCL: the create either succeeds or loses to another process — unlike a
+  // plain write + read-back, two processes can never both hold the lock.
   try {
-    const verify = readFileSync(path, "utf-8").trim();
-    if (parseInt(verify, 10) !== process.pid) {
-      return null;
-    }
-  } catch {
+    const fd = openSync(path, "wx");
+    writeSync(fd, String(process.pid));
+    closeSync(fd);
+  } catch (err) {
+    log.warn({ err }, "consolidation lock create failed");
     return null;
   }
 
@@ -249,6 +266,12 @@ function tryAcquireLock(memDir: string): number | null {
 function rollbackLock(memDir: string, priorMtime: number): void {
   const path = lockPath(memDir);
   try {
+    // Roll back only while the lock still belongs to this process: after a
+    // takeover by another pass the file is theirs and must not be touched.
+    const raw = readFileSync(path, "utf-8").trim();
+    if (parseInt(raw, 10) !== process.pid) {
+      return;
+    }
     if (priorMtime === 0) {
       unlinkSync(path);
       return;
