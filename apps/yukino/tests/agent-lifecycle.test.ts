@@ -184,7 +184,7 @@ describe("agent lifecycle and retry boundaries", () => {
     const engine = new HookEngine([
       {
         event: "post_tool_use",
-        condition: 'file_path =* "src/**/*.ts"',
+        condition: 'filePath.endsWith(".ts")',
         action: { type: "prompt", prompt: "CHECK_TYPES" },
       },
     ]);

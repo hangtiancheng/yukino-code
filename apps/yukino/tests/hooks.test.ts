@@ -38,7 +38,7 @@ describe("hook execution boundaries", () => {
   it("consumes each anonymous once hook only after its condition matches", async () => {
     const hooks: HookConfig[] = ["first", "second"].map((prompt) => ({
       event: "pre_tool_use",
-      condition: 'tool == "WriteFile"',
+      condition: 'tool === "WriteFile"',
       once: true,
       action: { type: "prompt", prompt },
     }));
@@ -51,11 +51,11 @@ describe("hook execution boundaries", () => {
     expect(engine.drainNotifications()).toEqual([]);
   });
 
-  it("honors prompt rejection and the documented bare tool condition", async () => {
+  it("honors prompt rejection for a matching tool condition", async () => {
     const engine = new HookEngine([
       {
         event: "pre_tool_use",
-        condition: "Bash",
+        condition: 'tool === "Bash"',
         reject: true,
         action: { type: "prompt", prompt: "blocked" },
       },
@@ -71,16 +71,21 @@ describe("hook execution boundaries", () => {
   });
 
   it.each([
-    ['file_path =* "src/**/*.ts"', "src/file.ts", true],
-    ['file_path =* "src/**/*.ts"', "src/a/b/file.ts", true],
-    ['file_path =* "src/**/*.ts"', "src/fileXts", false],
-    ['file_path =* "src/*.ts"', "src/a/file.ts", false],
-    ['file_path == "a && b"', "a && b", true],
+    ["/\\.ts$/.test(filePath)", "src/file.ts", true],
+    ["/\\.ts$/.test(filePath)", "src/fileXts", false],
     [
-      'tool == "ReadFile" || tool == "WriteFile" && file_path == "x"',
+      'filePath.startsWith("src/") && filePath.endsWith(".ts")',
+      "src/a/b/file.ts",
+      true,
+    ],
+    ['filePath === "a && b"', "a && b", true],
+    [
+      'tool === "ReadFile" || (tool === "WriteFile" && filePath === "x")',
       "y",
       true,
     ],
+    ['args.file_path === "x"', "x", true],
+    ["undefinedVariable === true", "x", false],
   ])(
     "matches condition %s against %s",
     async (condition, filePath, matched) => {
@@ -163,6 +168,20 @@ describe("hook execution boundaries", () => {
     ]);
 
     expect(error?.message).toContain('action.type "agent" is not supported');
+  });
+
+  it("rejects conditions that are not valid JavaScript expressions", () => {
+    const error = validate([
+      {
+        event: "pre_send",
+        condition: "tool ===",
+        action: { type: "prompt", prompt: "x" },
+      },
+    ]);
+
+    expect(error?.message).toContain(
+      "condition is not a valid JavaScript expression",
+    );
   });
 
   it("applies on_error to agent hook failures and stops the rejected chain", async () => {

@@ -141,7 +141,7 @@ sandbox:
 hooks:
   - id: pre-tool-use
     event: pre_tool_use
-    condition: 'tool =~ "^(Edit|Write)File$" || tool == "Bash"'
+    condition: 'event.endsWith("tool_use") || tool.toLowerCase().includes("file") || /bash/i.test(tool)'
     action:
       type: command
       command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
@@ -173,15 +173,19 @@ API keys are resolved in this order: explicit api_key field, then environment va
 
 Hook conditions (`condition`; omitted means the hook always fires):
 
-| Form             | Example                      | Meaning                                                                                                  |
-| ---------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `key == "value"` | `tool == "EditFile"`         | Exact match                                                                                              |
-| `key != "value"` | `tool != "Bash"`             | Not equal                                                                                                |
-| `key =~ "regex"` | `file_path =~ "\.ts$"`       | JavaScript regex test                                                                                    |
-| `key =* "glob"`  | `file_path =* "src/**/*.ts"` | Full-string glob: `*` stays within one path segment, `**` crosses `/`, `?` is a single non-`/` character |
-| Bare tool name   | `EditFile`                   | Shorthand for `tool == "EditFile"`                                                                       |
+A condition is a JavaScript expression evaluated against the hook context; a truthy result fires the hook. These variables are in scope:
 
-Conditions combine with `&&` (AND, binds tighter), `||` (OR), and a leading `!` negation; operators inside double quotes are literal text. `key` is `tool`, `event`, `file_path`, `message`, or any tool argument name (such as `command` or `path`). Values must be double-quoted, and anything unrecognized — including unbalanced quotes — evaluates to false, so the hook is skipped.
+| Variable   | Type   | Value                                                     |
+| ---------- | ------ | --------------------------------------------------------- |
+| `event`    | string | Event name, e.g. `pre_tool_use`                           |
+| `tool`     | string | Tool name (`""` for non-tool events)                      |
+| `filePath` | string | The tool's `file_path`/`path` argument (`""` when absent) |
+| `message`  | string | Event message (`""` when absent)                          |
+| `args`     | object | The tool's arguments, e.g. `args.command`                 |
+
+Examples: `tool === "EditFile"`, `["EditFile", "WriteFile", "Bash"].includes(tool)`, `/\.ts$/.test(filePath)`, `event.endsWith("tool_use") && !tool.startsWith("Read")`.
+
+Expressions with syntax errors are rejected at startup by hook validation; expressions that throw at runtime (misspelled method names, undefined variables) are logged and treated as false, so the hook is skipped.
 
 ### Telemetry
 

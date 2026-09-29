@@ -319,107 +319,48 @@ export class HookEngine {
   }
 }
 
-function evaluateCondition(condition: string, ctx: HookContext): boolean {
-  // Keep operators inside quoted values intact, and give && precedence over ||.
-  const groups: string[][] = [[]];
-  let start = 0;
-  let quoted = false;
-  for (let i = 0; i < condition.length; i++) {
-    if (condition[i] === '"') {
-      quoted = !quoted;
-    }
-    const operator = condition.slice(i, i + 2);
-    if (!quoted && (operator === "&&" || operator === "||")) {
-      groups[groups.length - 1].push(condition.slice(start, i));
-      if (operator === "||") {
-        groups.push([]);
-      }
-      start = i + 2;
-      i++;
-    }
-  }
-  groups[groups.length - 1].push(condition.slice(start));
-  return (
-    !quoted &&
-    groups.some((group) =>
-      group.every((part) => evaluateSingleCondition(part, ctx)),
-    )
+type ConditionFn = (
+  event: string,
+  tool: string,
+  filePath: string,
+  message: string,
+  args: Record<string, unknown>,
+) => unknown;
+
+/**
+ * Compiles a condition into a JavaScript expression evaluated against the
+ * hook context. The config file already grants arbitrary shell execution
+ * through command actions, so evaluating expressions from the same source
+ * adds no new privilege.
+ */
+export function compileCondition(condition: string): ConditionFn {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const fn = new Function(
+    "event",
+    "tool",
+    "filePath",
+    "message",
+    "args",
+    `"use strict"; return (${condition});`,
   );
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return fn as ConditionFn;
 }
 
-function evaluateSingleCondition(expr: string, ctx: HookContext): boolean {
-  const trimmed = expr.trim();
-  if (trimmed.startsWith("!")) {
-    return !evaluateSingleCondition(trimmed.slice(1), ctx);
-  }
-
-  const eqMatch = /^(\w+)\s*==\s*"([^"]*)"$/.exec(trimmed);
-  if (eqMatch) {
-    const value = getContextValue(eqMatch[1], ctx);
-    return value === eqMatch[2];
-  }
-
-  const neqMatch = /^(\w+)\s*!=\s*"([^"]*)"$/.exec(trimmed);
-  if (neqMatch) {
-    const value = getContextValue(neqMatch[1], ctx);
-    return value !== neqMatch[2];
-  }
-
-  const regexMatch = /^(\w+)\s*=~\s*"([^"]*)"$/.exec(trimmed);
-  if (regexMatch) {
-    const value = getContextValue(regexMatch[1], ctx);
-    try {
-      return new RegExp(regexMatch[2]).test(value);
-    } catch (err) {
-      log.error({ err }, "hooks operation failed");
-      return false;
-    }
-  }
-
-  const globMatch = /^(\w+)\s*=\*\s*"([^"]*)"$/.exec(trimmed);
-  if (globMatch) {
-    const value = getContextValue(globMatch[1], ctx);
-    const pattern = globMatch[2]
-      .split(/(\*\*\/|\*\*|\*|\?)/)
-      .map((part) => {
-        switch (part) {
-          case "**/":
-            return "(?:.*/)?";
-          case "**":
-            return ".*";
-          case "*":
-            return "[^/]*";
-          case "?":
-            return "[^/]";
-          default:
-            return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        }
-      })
-      .join("");
-    try {
-      return new RegExp(`^${pattern}$`).test(value);
-    } catch (err) {
-      log.error({ err }, "hooks operation failed");
-      return false;
-    }
-  }
-
-  // A bare tool name is the shorthand used by the example configuration.
-  return /^\w+$/.test(trimmed) && trimmed === ctx.toolName;
-}
-
-function getContextValue(key: string, ctx: HookContext): string {
-  switch (key) {
-    case "tool":
-      return ctx.toolName ?? "";
-    case "event":
-      return ctx.event;
-    case "file_path":
-      return ctx.filePath ?? "";
-    case "message":
-      return ctx.message ?? "";
-    default:
-      return strArg(ctx.args ?? {}, key, "");
+function evaluateCondition(condition: string, ctx: HookContext): boolean {
+  try {
+    return Boolean(
+      compileCondition(condition)(
+        ctx.event,
+        ctx.toolName ?? "",
+        ctx.filePath ?? "",
+        ctx.message ?? "",
+        ctx.args ?? {},
+      ),
+    );
+  } catch (err) {
+    log.error({ err, condition }, "hook condition evaluation failed");
+    return false;
   }
 }
 
@@ -449,6 +390,16 @@ export function validate(hooks: HookConfig[]): Error | null {
       errors.push(`${label}: event is required`);
     } else if (!validEvents.has(h.event)) {
       errors.push(`${label}: invalid event '${h.event}'`);
+    }
+
+    if (h.condition) {
+      try {
+        compileCondition(h.condition);
+      } catch {
+        errors.push(
+          `${label}: condition is not a valid JavaScript expression: '${h.condition}'`,
+        );
+      }
     }
 
     if (!h.action.type) {
