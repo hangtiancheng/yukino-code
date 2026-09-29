@@ -174,13 +174,14 @@ export function saveProvider(
 }
 
 /**
- * Persist a provider's thinking level to the global config. `base_url` is the
- * provider identity, so every entry for that endpoint is updated. Throws when
- * the endpoint is absent so callers can surface a clear error.
+ * Persist a single field of every provider entry matching `base_url`. The
+ * endpoint is the provider identity, so all entries for it change together.
+ * Throws when the endpoint is absent so callers can surface a clear error.
  */
-export function persistThinkingLevel(
+function persistProviderField(
   baseUrl: string,
-  level: ThinkingLevel,
+  field: "thinking" | "model",
+  value: string,
 ): void {
   const path = globalConfigPath();
   const config = readConfigRaw(path);
@@ -193,15 +194,28 @@ export function persistThinkingLevel(
       `Provider with base URL "${baseUrl}" not found in ${path}.`,
     );
   }
-  const changed = targets.filter((entry) => entry.thinking !== level);
+  const changed = targets.filter((entry) => entry[field] !== value);
   // Avoid rewriting (and reformatting) the file when nothing changes.
   if (changed.length === 0) {
     return;
   }
   for (const entry of changed) {
-    entry.thinking = level;
+    entry[field] = value;
   }
   writeConfigAtomic(path, { ...config, providers });
+}
+
+/** Persist a provider's thinking level to the global config. */
+export function persistThinkingLevel(
+  baseUrl: string,
+  level: ThinkingLevel,
+): void {
+  persistProviderField(baseUrl, "thinking", level);
+}
+
+/** Persist the active model of a provider without touching any other field. */
+export function persistModel(baseUrl: string, model: string): void {
+  persistProviderField(baseUrl, "model", model);
 }
 
 /**

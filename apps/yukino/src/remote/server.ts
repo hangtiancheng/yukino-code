@@ -1682,6 +1682,17 @@ export class RemoteServer {
         this.broadcast({ type: "command_done", data: null });
         break;
 
+      case "model":
+        this.broadcast({
+          type: "system",
+          data: {
+            message:
+              "Model selection is only available in terminal mode. The remote server keeps the model it was started with.",
+          },
+        });
+        this.broadcast({ type: "command_done", data: null });
+        break;
+
       case "resume":
         this.handleResume(args);
         break;

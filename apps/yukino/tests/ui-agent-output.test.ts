@@ -490,8 +490,8 @@ describe("agent output hook", () => {
         usage: {
           inputTokens: 10,
           outputTokens: 4,
-          cacheReadInputTokens: 0,
-          cacheCreationInputTokens: 0,
+          cacheReadInputTokens: 100,
+          cacheCreationInputTokens: 50,
         },
       },
       {
@@ -499,7 +499,7 @@ describe("agent output hook", () => {
         usage: {
           inputTokens: 20,
           outputTokens: 6,
-          cacheReadInputTokens: 0,
+          cacheReadInputTokens: 200,
           cacheCreationInputTokens: 0,
         },
       },
@@ -512,11 +512,23 @@ describe("agent output hook", () => {
     ]);
     expect(state().output.inputTokens).toBe(30);
     expect(state().output.outputTokens).toBe(10);
+    expect(state().output.usageTotalsRef.current).toEqual({
+      cacheCreationTokens: 50,
+      cacheReadTokens: 300,
+      inputTokens: 30,
+      outputTokens: 10,
+    });
     act(() => {
       state().output.resetUsage();
     });
     expect(state().output.inputTokens).toBe(0);
     expect(state().output.outputTokens).toBe(0);
+    expect(state().output.usageTotalsRef.current).toEqual({
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
   });
 
   it("retains partial text for abort/error handling and cancels late flushes", () => {

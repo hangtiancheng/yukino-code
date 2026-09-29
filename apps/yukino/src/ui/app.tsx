@@ -34,6 +34,7 @@ import {
   createInterruptHandlers,
   isForegroundBusy,
 } from "./interrupt-scope.js";
+import type { ModelPickerState } from "./model-select.js";
 import { PendingQueue } from "./pending-queue.js";
 import type { PlanChoice } from "./plan-approval.js";
 import { ProviderLogin } from "./provider-login.js";
@@ -83,6 +84,7 @@ import {
 } from "@/config/provider-config.js";
 import {
   persistDefaultProvider,
+  persistModel,
   persistThinkingLevel,
   saveProvider,
 } from "@/config/provider-login.js";
@@ -94,6 +96,7 @@ import * as historyMod from "@/history/index.js";
 import { HookEngine, validate as validateHooks } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createClient } from "@/llm/client.js";
+import { discoverModels } from "@/llm/model-discovery.js";
 import { createChildLogger } from "@/logger/index.js";
 import { syncMcpInstructions as announceMcpInstructions } from "@/mcp/instructions.js";
 import { MCPManager, type ConnectResult } from "@/mcp/manager.js";
@@ -222,7 +225,13 @@ export function App({
       },
   );
   const selectedProviderRef = useRef(selectedProvider);
+  const modelDialogControllerRef = useRef<AbortController | null>(null);
   const [providerDialogActive, setProviderDialogActive] = useState(false);
+  const [modelDialogActive, setModelDialogActive] = useState(false);
+  const [modelDialogState, setModelDialogState] = useState<ModelPickerState>({
+    status: "loading",
+    models: [],
+  });
   const [codeReviewActive, setCodeReviewActive] = useState(false);
   const [thinkingDialogActive, setThinkingDialogActive] = useState(false);
   const [providerSwitching, setProviderSwitching] = useState(false);
@@ -529,6 +538,7 @@ export function App({
         : 0;
       onExitSummary?.({
         ...interactionStatsRef.current,
+        ...output.usageTotalsRef.current,
         sessionId: sessionIdRef.current,
         toolTimeMs: interactionStatsRef.current.toolTimeMs + activeToolTime,
       });
@@ -1191,6 +1201,113 @@ export function App({
   };
 
   /**
+   * Switches the active model of the current provider — the only field /model
+   * touches. The client is rebuilt so the change takes effect immediately, and
+   * the endpoint's config entry is updated in place.
+   */
+  const applyModel = async (modelId: string): Promise<boolean> => {
+    const provider = selectedProviderRef.current;
+    const nextModel = modelId.trim();
+    if (!nextModel || !clientRef.current) {
+      return false;
+    }
+    if (nextModel === provider.model) {
+      setMessages((current) => [
+        ...current,
+        { role: "system", content: `Model already set to ${nextModel}.` },
+      ]);
+      return true;
+    }
+    const updated = { ...provider, model: nextModel };
+    setProviderSwitching(true);
+    try {
+      const environment = detectEnvironment(workDir);
+      environment.model = updated.model;
+      const client = await createClient(
+        updated,
+        buildSystemPrompt(environment),
+      );
+      clientRef.current = client;
+      selectedProviderRef.current = updated;
+      setSelectedProvider(updated);
+      setProviders((current) =>
+        current.map((entry) =>
+          entry.base_url === updated.base_url ? updated : entry,
+        ),
+      );
+      contextWindowRef.current = getContextWindow(updated);
+      maxOutputRef.current = getMaxOutputTokens(updated);
+      decideAndApply(
+        registryRef.current,
+        updated.base_url,
+        updated.protocol,
+        contextWindowRef.current,
+      );
+      // Capability metadata follows the model; drop derived state.
+      memExtractorRef.current = null;
+    } catch (err) {
+      setError(`Failed to switch model: ${asErrorString(err)}`);
+      return false;
+    } finally {
+      setProviderSwitching(false);
+    }
+    // A save failure must not undo the runtime switch.
+    let saved = true;
+    try {
+      persistModel(updated.base_url, updated.model);
+    } catch (err) {
+      saved = false;
+      setError(`Model switched but saving failed: ${asErrorString(err)}`);
+    }
+    setMessages((current) => [
+      ...current,
+      {
+        role: "system",
+        content: `Model set to ${updated.model}${saved ? " and saved" : " for this session"}.`,
+      },
+    ]);
+    return true;
+  };
+
+  const closeModelPicker = (): void => {
+    modelDialogControllerRef.current?.abort();
+    modelDialogControllerRef.current = null;
+    setModelDialogActive(false);
+  };
+
+  /** Lists the models the current provider advertises for the /model picker. */
+  const openModelPicker = (): void => {
+    modelDialogControllerRef.current?.abort();
+    const controller = new AbortController();
+    modelDialogControllerRef.current = controller;
+    const provider = selectedProviderRef.current;
+    setModelDialogState({ status: "loading", models: [] });
+    setModelDialogActive(true);
+    void discoverModels(
+      {
+        protocol: provider.protocol,
+        base_url: provider.base_url,
+        api_key: provider.api_key,
+      },
+      controller.signal,
+    )
+      .then((models) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setModelDialogState({
+          status: models.length > 0 ? "ready" : "empty",
+          models,
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setModelDialogState({ status: "error", models: [] });
+        }
+      });
+  };
+
+  /**
    * Maps restored/rebuilt conversation records onto visible transcript
    * messages. Tool chains are persisted as assistant records with tool_uses
    * and user records carrying only tool_results (empty text); mapping those
@@ -1407,6 +1524,19 @@ export function App({
       switch (action) {
         case "login": {
           setLoginActive(true);
+          break;
+        }
+        case "model": {
+          if (parsed.args.trim()) {
+            await applyModel(parsed.args);
+          } else if (clientRef.current) {
+            openModelPicker();
+          } else {
+            setMessages((current) => [
+              ...current,
+              { role: "system", content: "Client not ready." },
+            ]);
+          }
           break;
         }
         case "provider": {
@@ -2533,6 +2663,7 @@ export function App({
     loginActive ||
     codeReviewActive ||
     providerDialogActive ||
+    modelDialogActive ||
     thinkingDialogActive ||
     planApprovalActive ||
     rewindDialogActive ||
@@ -2815,6 +2946,20 @@ export function App({
                   setProviderDialogActive(false);
                 },
                 onSelect: handleProviderSelect,
+              }
+            : undefined
+        }
+        model={
+          modelDialogActive
+            ? {
+                currentModel: selectedProvider.model,
+                reservedRows: footerRows,
+                state: modelDialogState,
+                onCancel: closeModelPicker,
+                onSelect: (model) => {
+                  closeModelPicker();
+                  void applyModel(model.id);
+                },
               }
             : undefined
         }

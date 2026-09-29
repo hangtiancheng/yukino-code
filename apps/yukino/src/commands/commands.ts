@@ -130,6 +130,13 @@ export function createDefaultRegistry(): CommandRegistry {
   });
 
   registry.register({
+    name: "model",
+    type: "local_ui",
+    description: "Switch the model of the current provider",
+    handler: () => "model",
+  });
+
+  registry.register({
     name: "help",
     type: "local",
     description: "Show available commands",

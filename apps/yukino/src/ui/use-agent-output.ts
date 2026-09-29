@@ -58,6 +58,15 @@ export function useAgentOutput(
   >([]);
   const [inputTokens, setInputTokens] = useState(0);
   const [outputTokens, setOutputTokens] = useState(0);
+  // Session-wide totals, kept in a ref because the exit-summary callback reads
+  // them after many renders. `inputTokens` above excludes the cached prefix, so
+  // the four counters sum to the real-token baseline.
+  const usageTotalsRef = useRef({
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+  });
   const streamingTextRef = useRef("");
   const streamThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -91,6 +100,12 @@ export function useAgentOutput(
     setInputTokens(0);
     setOutputTokens(0);
     setPersistentAgentTools([]);
+    usageTotalsRef.current = {
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    };
   };
 
   const createEventHandler = (
@@ -255,8 +270,13 @@ export function useAgentOutput(
           break;
         }
         case "usage": {
-          setInputTokens((tokens) => tokens + event.usage.inputTokens);
-          setOutputTokens((tokens) => tokens + event.usage.outputTokens);
+          const totals = usageTotalsRef.current;
+          totals.inputTokens += event.usage.inputTokens;
+          totals.outputTokens += event.usage.outputTokens;
+          totals.cacheReadTokens += event.usage.cacheReadInputTokens;
+          totals.cacheCreationTokens += event.usage.cacheCreationInputTokens;
+          setInputTokens(totals.inputTokens);
+          setOutputTokens(totals.outputTokens);
           break;
         }
         case "compact": {
@@ -324,6 +344,7 @@ export function useAgentOutput(
     persistentAgentTools,
     inputTokens,
     outputTokens,
+    usageTotalsRef,
     resetUsage,
     prepareTurn,
     finishTurn,

@@ -26,6 +26,7 @@ import { AskUserDialog } from "./ask-user-dialog.js";
 import { CodeReviewDialog } from "./code-review-dialog.js";
 import type { InputDraft } from "./input-draft.js";
 import { InputBox } from "./input.js";
+import { ModelSelect } from "./model-select.js";
 import { PermissionDialog } from "./permission-dialog.js";
 import { PlanApprovalDialog } from "./plan-approval.js";
 import { ProviderLogin } from "./provider-login.js";
@@ -39,6 +40,7 @@ interface Props {
   login?: ComponentProps<typeof ProviderLogin>;
   codeReview?: ComponentProps<typeof CodeReviewDialog>;
   provider?: ComponentProps<typeof ProviderSelect>;
+  model?: ComponentProps<typeof ModelSelect>;
   thinking?: ComponentProps<typeof ThinkingSelect>;
   planApproval?: ComponentProps<typeof PlanApprovalDialog>;
   rewind?: ComponentProps<typeof RewindDialog>;
@@ -53,6 +55,7 @@ export function InteractionDock({
   login,
   codeReview,
   provider,
+  model,
   thinking,
   planApproval,
   rewind,
@@ -71,6 +74,9 @@ export function InteractionDock({
   }
   if (provider) {
     return <ProviderSelect {...provider} />;
+  }
+  if (model) {
+    return <ModelSelect {...model} />;
   }
   if (planApproval) {
     return <PlanApprovalDialog {...planApproval} />;
