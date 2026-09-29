@@ -138,7 +138,7 @@ sandbox:
   auto_allow: false
   network_enabled: true
 hooks:
-  - id: pre-edit
+  - id: pre-tool-use
     event: pre_tool_use
     action:
       type: command

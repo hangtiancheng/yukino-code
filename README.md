@@ -106,10 +106,11 @@ mcp_servers:
       - "--mcp"
 sandbox:
   enabled: false
+  backend: sandbox-runtime
   auto_allow: false
   network_enabled: true
 hooks:
-  - id: pre-edit
+  - id: pre-tool-use
     event: pre_tool_use
     action:
       type: command
@@ -126,10 +127,10 @@ See the [full configuration reference](./apps/yukino/README.md#configuration) fo
 
 This is a pnpm monorepo (workspace `apps/*`):
 
-| Package                                    | Description                                                      |
-| ------------------------------------------ | ---------------------------------------------------------------- |
-| [`@yukino.js/yukino`](./apps/yukino)       | The terminal AI coding agent (Node.js)                           |
-| [`@yukino.js/mcp`](./apps/mcp)             | Official Yukino MCP tools collection — semantic doc search (RAG) |
+| Package                              | Description                                                      |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| [`@yukino.js/yukino`](./apps/yukino) | The terminal AI coding agent (Node.js)                           |
+| [`@yukino.js/mcp`](./apps/mcp)       | Official Yukino MCP tools collection — semantic doc search (RAG) |
 
 ## Development
 
