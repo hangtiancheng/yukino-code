@@ -176,7 +176,7 @@ hooks:
     # Optional JavaScript expression; a truthy result fires the hook. Variables in scope:
     # event, tool, filePath, message, args. Expressions that fail to compile or throw are
     # logged and treated as false, so the hook is skipped.
-    condition: 'event.endsWith("tool_use") || tool.toLowerCase().includes("file") || /bash/i.test(tool)'
+    condition: 'event.endsWith("tool_use") && (tool.toLowerCase().includes("file") || /bash/i.test(tool))'
     action:
       # Action type. Enum: command (shell command) | prompt (inject static text) | http
       # (HTTP request) | agent (reserved; rejected by validation today).
