@@ -170,18 +170,21 @@ describe("hook execution boundaries", () => {
     expect(error?.message).toContain('action.type "agent" is not supported');
   });
 
-  it("rejects conditions that are not valid JavaScript expressions", () => {
-    const error = validate([
+  it("accepts a broken condition at validation and skips it silently at runtime", async () => {
+    const hooks: HookConfig[] = [
       {
-        event: "pre_send",
+        event: "pre_tool_use",
         condition: "tool ===",
-        action: { type: "prompt", prompt: "x" },
+        reject: true,
+        action: { type: "prompt", prompt: "never" },
       },
-    ]);
+    ];
 
-    expect(error?.message).toContain(
-      "condition is not a valid JavaScript expression",
-    );
+    expect(validate(hooks)).toBeNull();
+    expect(await new HookEngine(hooks).firePreToolHooks("Bash", {})).toEqual({
+      rejected: false,
+      reason: "",
+    });
   });
 
   it("applies on_error to agent hook failures and stops the rejected chain", async () => {

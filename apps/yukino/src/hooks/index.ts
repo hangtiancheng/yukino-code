@@ -333,7 +333,7 @@ type ConditionFn = (
  * through command actions, so evaluating expressions from the same source
  * adds no new privilege.
  */
-export function compileCondition(condition: string): ConditionFn {
+function compileCondition(condition: string): ConditionFn {
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const fn = new Function(
     "event",
@@ -390,16 +390,6 @@ export function validate(hooks: HookConfig[]): Error | null {
       errors.push(`${label}: event is required`);
     } else if (!validEvents.has(h.event)) {
       errors.push(`${label}: invalid event '${h.event}'`);
-    }
-
-    if (h.condition) {
-      try {
-        compileCondition(h.condition);
-      } catch {
-        errors.push(
-          `${label}: condition is not a valid JavaScript expression: '${h.condition}'`,
-        );
-      }
     }
 
     if (!h.action.type) {

@@ -185,7 +185,7 @@ A condition is a JavaScript expression evaluated against the hook context; a tru
 
 Examples: `tool === "EditFile"`, `["EditFile", "WriteFile", "Bash"].includes(tool)`, `/\.ts$/.test(filePath)`, `event.endsWith("tool_use") && !tool.startsWith("Read")`.
 
-Expressions with syntax errors are rejected at startup by hook validation; expressions that throw at runtime (misspelled method names, undefined variables) are logged and treated as false, so the hook is skipped.
+Expressions that fail to compile or throw at runtime (syntax errors, misspelled method names, undefined variables) are logged and treated as false, so the hook is skipped.
 
 ### Telemetry
 
