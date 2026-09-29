@@ -58,7 +58,7 @@ const HOLDER_STALE_MS = 60 * 60 * 1000;
 const MAX_ENTRYPOINT_LINES = 200;
 
 /**
- * MemoryConsolidator implements background memory consolidation (autoDream).
+ * MemoryConsolidator implements background memory consolidation.
  * Once both the time gate (>=24h) and session gate (>=5 sessions) are satisfied,
  * it automatically forks a subagent to consolidate memories: merge duplicates,
  * remove stale entries, resolve contradictions, and maintain the index.

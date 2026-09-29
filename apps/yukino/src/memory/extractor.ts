@@ -57,9 +57,8 @@ interface ParsedTextMemory {
 
 /**
  * MemoryExtractor implements the background memory-extraction subagent.
- * - Uses a child agent + tools (ReadFile/WriteFile/EditFile) instead of bare LLM calls
+ * - Uses a child agent + tools (ReadFile/WriteFile/EditFile/Glob/Grep) instead of bare LLM calls
  * - Sends existing memory manifest to the LLM before extraction for deduplication
- * - turnsSinceLastExtraction throttling
  * - inProgress + pendingContext merge strategy
  * - When the child agent makes no tool calls, falls back to parsing streamed
  *   text blocks (MEMORY_NAME/...) and writing them to disk
@@ -69,7 +68,6 @@ export class MemoryExtractor {
   private workDir: string;
   private inProgress = false;
   private pendingContext: string | null = null;
-  private turnsSinceLastExtraction = 0;
 
   constructor(client: LLMClient, workDir: string) {
     this.client = client;
@@ -81,22 +79,10 @@ export class MemoryExtractor {
       this.pendingContext = conversationSummary;
       return [];
     }
-    return this.runExtraction(conversationSummary, false);
+    return this.runExtraction(conversationSummary);
   }
 
-  private async runExtraction(
-    conversationSummary: string,
-    isTrailingRun: boolean,
-  ): Promise<string[]> {
-    // Throttle: at least 1 round apart (trailing runs skip throttling)
-    if (!isTrailingRun) {
-      this.turnsSinceLastExtraction++;
-      if (this.turnsSinceLastExtraction < 1) {
-        return [];
-      }
-    }
-    this.turnsSinceLastExtraction = 0;
-
+  private async runExtraction(conversationSummary: string): Promise<string[]> {
     this.inProgress = true;
     let result: string[] = [];
 
@@ -107,7 +93,7 @@ export class MemoryExtractor {
       const pending = this.pendingContext;
       this.pendingContext = null;
       if (pending !== null) {
-        const trailingResult = await this.runExtraction(pending, true);
+        const trailingResult = await this.runExtraction(pending);
         result = [...result, ...trailingResult];
       }
     }

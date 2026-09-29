@@ -284,7 +284,6 @@ export class Team {
       mode: this.mode,
       command: "node",
       args: [
-        "run",
         entry,
         "--teammate",
         "--team-dir",
@@ -296,7 +295,6 @@ export class Team {
         "--task",
         task,
         ...(providerBaseUrl ? ["--provider-base-url", providerBaseUrl] : []),
-        "--input-type=module",
       ],
       cwd: this.workDir,
     };
@@ -483,7 +481,8 @@ export class Team {
 
   /**
    * Blocks until there is a new message in the teammate's mailbox.
-   * Returns the concatenated prompt or a shutdown flag.
+   * Returns the concatenated prompt, or the shutdown message itself in the
+   * shutdown field.
    */
 
   private async waitForNextPromptOrShutdown(
@@ -545,7 +544,8 @@ export class Team {
     while (member.active) {
       await new Promise((r) => setTimeout(r, Team.IDLE_POLL_INTERVAL_MS));
       for (const m of member.mailbox.receiveSync()) {
-        // Only accept the approval response matching this request; other messages are deferred to the next turn
+        // Only accept the approval response matching this request; other messages are
+        // consumed by receiveSync here and dropped — they are not re-queued
         if (
           m.type === MSG_PLAN_APPROVAL_RESPONSE &&
           m.requestId === req.requestId

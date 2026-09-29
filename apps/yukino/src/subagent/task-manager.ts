@@ -45,7 +45,7 @@ export interface AgentTask {
 
 interface CreateTaskOptions {
   originToolCallId?: string;
-  /** ID prefix; defaults to "agent" (background subagents). Bash background tasks use "bash". */
+  /** ID prefix; defaults to "agent" (background subagents). Bash background tasks use "bash"; PowerShell background tasks use "ps". */
   idPrefix?: string;
   /** Task category; defaults to "agent". */
   kind?: TaskKind;

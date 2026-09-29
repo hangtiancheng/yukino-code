@@ -270,8 +270,9 @@ async function readWindowsClipboard(tempPath: string): Promise<Buffer> {
 
 /**
  * Read an image from the system clipboard and save it as a PNG under
- * `${workDir}/.yukino/file-history/${sessionId}/`. Returns the absolute file
- * path, ready to be referenced in a prompt and read back via ReadFile.
+ * `${workDir}/.yukino/file-history/${sessionId}/`. On success, `value` is the
+ * absolute file path, ready to be referenced in a prompt and read back via
+ * ReadFile; on failure, `reason` explains why.
  */
 export async function saveClipboardImage(
   workDir: string,

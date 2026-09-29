@@ -49,12 +49,12 @@ import { asErrorString, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "skills" });
 
-// Installs a skill from a local file path or an https URL into
+// Installs a skill from a local file path or an http(s) URL into
 // .agents/skills/<name>/SKILL.md, then reloads the catalog.
 export class InstallSkillTool implements Tool {
   name = "InstallSkill";
   description =
-    "Install a skill from a local file path or an https URL into .agents/skills.";
+    "Install a skill from a local file path or an http(s) URL into .agents/skills.";
   category = "write" as const;
 
   constructor(

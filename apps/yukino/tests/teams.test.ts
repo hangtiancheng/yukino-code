@@ -24,8 +24,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as teamBackend from "@/teams/backend.js";
 import { TeamManager } from "@/teams/index.js";
 import {
   createProgress,
@@ -42,6 +43,18 @@ import {
   ListTeamsTool,
 } from "@/teams/tools.js";
 
+const spawnTeammateMock = vi.hoisted(() =>
+  vi.fn((_config: teamBackend.SpawnConfig) => ({
+    cancel: vi.fn(),
+    paneId: "test-pane",
+  })),
+);
+
+vi.mock("@/teams/backend.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof teamBackend>()),
+  spawnTeammate: spawnTeammateMock,
+}));
+
 // The teams directory lives at <home>/.yukino/teams, so the tests redirect the
 // entire home directory to a temp dir to avoid leaving residue in the real
 // ~/.yukino/teams. os.homedir() reads USERPROFILE on Windows and HOME on other
@@ -49,6 +62,7 @@ import {
 let realHome: string | undefined;
 let realUserProfile: string | undefined;
 beforeEach(() => {
+  spawnTeammateMock.mockClear();
   realHome = process.env.HOME;
   realUserProfile = process.env.USERPROFILE;
   const tmp = mkdtempSync(join(tmpdir(), "yukino-home-"));
@@ -92,6 +106,25 @@ describe("teammate progress", () => {
 });
 
 describe("teams orchestration", () => {
+  it("passes node a script entrypoint for external teammates", async () => {
+    const mgr = new TeamManager(workDir());
+    const team = mgr.create("external-squad", "tmux");
+    const entry = process.argv[1] ?? "src/main.tsx";
+
+    team.spawnTeammate("external-scout", "find X", () =>
+      Promise.resolve("unused"),
+    );
+
+    expect(spawnTeammateMock).toHaveBeenCalledOnce();
+    const config = spawnTeammateMock.mock.calls[0]?.[0];
+    expect(config?.command).toBe("node");
+    expect(config?.args[0]).toBe(entry);
+    expect(config?.args).not.toContain("run");
+    expect(config?.args).not.toContain("--input-type=module");
+
+    await mgr.deleteAll();
+  });
+
   it("spawnTeammate runs the task and posts its result to the leader mailbox", async () => {
     const mgr = new TeamManager(workDir());
     const team = mgr.create("squad");

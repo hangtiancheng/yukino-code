@@ -119,20 +119,7 @@ describe("extra allowed roots", () => {
   });
 });
 
-describe("protected paths under bypass", () => {
-  const protectedRelatives: string[] = [];
-
-  it("denies writing protected paths even in bypass mode", () => {
-    const dir = makeTmpDir();
-    const checker = new PermissionChecker(dir, "bypassPermissions");
-    for (const rel of protectedRelatives) {
-      const result = checker.check("WriteFile", "write", {
-        file_path: join(dir, rel),
-      });
-      expect(result.effect).toBe("deny");
-    }
-  });
-
+describe("bypassPermissions mode", () => {
   it("leaves ordinary files alone", () => {
     const dir = makeTmpDir();
     const checker = new PermissionChecker(dir, "bypassPermissions");

@@ -889,7 +889,7 @@ export class Agent {
   ): Promise<AgentEvent[]> {
     const events: AgentEvent[] = [];
 
-    // Partition by adjacency: consecutive read-only tools form one parallel batch; write/command tools each get their own batch
+    // Partition by adjacency: consecutive concurrency-safe calls form one parallel batch; unsafe calls each get their own batch
     const batches = this.partitionToolCalls(toolUses);
 
     for (const batch of batches) {

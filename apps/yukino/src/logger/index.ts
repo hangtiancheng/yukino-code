@@ -330,9 +330,11 @@ async function cleanExpiredLogs(workDir: string): Promise<number> {
 }
 
 // Custom error serializer for pino.
-// The default pino err serializer does not recurse into Error.cause chains
-// and does not handle non-Error values. This module fills those gaps:
-// recursive cause (max 5 levels), preserves extra fields, tolerates non-Error.
+// The default pino err serializer flattens Error.cause chains into the
+// message/stack pair and passes non-Error values through unchanged. This
+// module instead keeps causes as structured, recursively serialized fields
+// (max 5 levels), preserves extra fields the same way, and normalizes
+// non-Error values to { message, value }.
 
 /** Serialized error shape: always has type/message/stack, optional cause + extras. */
 interface SerializedError {

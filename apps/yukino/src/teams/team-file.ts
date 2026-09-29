@@ -33,9 +33,10 @@ import { dirname, join } from "node:path";
 import z from "zod";
 
 /**
- * Metadata for a single team member. isActive uses an optional field to preserve
- * three-state semantics: absent means just registered and not yet started,
- * true means actively running, false means idle.
+ * Metadata for a single team member. isActive is optional only for backward
+ * compatibility with older files; current snapshots always write it — true
+ * while the teammate loop runs (working or idle-polling), false when stopped,
+ * completed, or registered but not yet spawned.
  */
 export const TeamMemberEntrySchema = z.object({
   agentId: z.string(),

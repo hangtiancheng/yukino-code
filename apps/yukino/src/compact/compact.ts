@@ -69,8 +69,9 @@ const CHARS_PER_TOKEN = 3.5;
 //     tail reaches at least this many tokens (one of two "good enough" stops).
 //   MIN_KEEP_MESSAGES — floor: keep at least this many recent messages even if
 //     they are short (the other "good enough" stop).
-//   KEEP_MAX_TOKENS — upper bound: never let the kept tail exceed this; stop
-//     walking back once adding the next message would cross it.
+//   KEEP_MAX_TOKENS — upper bound: stop walking back once adding the next
+//     message would cross it. The most recent message is always kept, even
+//     when it alone exceeds the cap, so the tail can still overshoot.
 const KEEP_RECENT_TOKENS = 10000;
 const MIN_KEEP_MESSAGES = 5;
 const KEEP_MAX_TOKENS = 40000;

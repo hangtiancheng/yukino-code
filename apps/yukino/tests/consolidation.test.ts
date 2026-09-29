@@ -84,18 +84,6 @@ function createNoNetworkClient(): LLMClient {
 }
 
 describe("MemoryConsolidator", () => {
-  describe("Lock mechanism", () => {
-    it("acquires lock on first attempt", () => {
-      const dir = makeTempDir();
-      const memDir = join(dir, ".yukino", "memory");
-      mkdirSync(memDir, { recursive: true });
-
-      // Placeholder: the internal lock functions are not exported and this
-      // test body currently asserts nothing. Lock behavior is exercised
-      // indirectly by the maybeRun gate tests below.
-    });
-  });
-
   describe("Gate logic", () => {
     it("skips when memory dir does not exist", async () => {
       const dir = makeTempDir();
@@ -145,7 +133,7 @@ describe("MemoryConsolidator", () => {
       createSessions(dir, 2);
 
       const consolidator = new MemoryConsolidator(createNoNetworkClient(), dir);
-      // Should not throw even with null client (gates should block before LLM call)
+      // Should not throw: the session gate blocks before any LLM call, so the stub client is never used
       await consolidator.maybeRun();
     });
   });

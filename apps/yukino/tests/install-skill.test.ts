@@ -36,6 +36,13 @@ description: Helps write commits
 Write a conventional-commit message for the staged changes.`;
 
 describe("InstallSkillTool", () => {
+  it("advertises HTTP and HTTPS URL support", () => {
+    const tool = new InstallSkillTool(".", new SkillCatalog());
+
+    expect(tool.description).toContain("http(s) URL");
+    expect(tool.schema().description).toBe(tool.description);
+  });
+
   it("installs a skill from a local path and loads it into the catalog", async () => {
     const workDir = mkdtempSync(join(tmpdir(), "yukino-inst-"));
     const srcPath = join(workDir, "src-skill.md");

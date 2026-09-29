@@ -560,7 +560,9 @@ export async function createRemoteAgent(
   // Fork-mode host: Skills declaring mode: fork run in an isolated sub-agent;
   // the SOP body only appears in the sub-agent's conversation — the main conversation receives the final result
   const skillForkHost: SkillForkHost = {
-    // TODO: determine whether bind is needed
+    // SkillHost declares activateSkill as a method, so @typescript-eslint/unbound-method
+    // requires an explicit bind when it is detached. The runtime implementation above is
+    // an arrow function closing over `activeSkills`, so the bind itself is a no-op.
     activateSkill: skillHost.activateSkill.bind(skillHost),
     snapshotParentMessages: (count: number) => {
       const msgs = conv?.getMessages() ?? [];

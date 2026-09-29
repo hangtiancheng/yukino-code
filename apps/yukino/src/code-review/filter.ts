@@ -97,8 +97,8 @@ export interface FilterOptions {
 
 /**
  * Run the filter over one group's candidate comments. Returns the indices
- * (into the candidates array) that must be removed. Never throws: a failed
- * filter call approves everything.
+ * (into the candidates array) that must be removed. Throws only when the
+ * abort signal fired; any other failed call approves everything.
  */
 export async function filterComments(
   groupDiffs: FileDiff[],

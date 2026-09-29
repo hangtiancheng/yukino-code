@@ -171,9 +171,9 @@ export function parseComments(
 }
 
 /**
- * Collects comments across concurrent group subagents. Insertion order per
- * path is load-bearing: the review filter removes by index, and rounds
- * compute deltas from snapshot offsets.
+ * Collects comments produced by one group subagent (the runner creates one
+ * collector per group). Insertion order is load-bearing: the review filter
+ * removes by index, and rounds compute deltas from snapshot offsets.
  */
 export class CommentCollector {
   private comments: ReviewComment[] = [];
@@ -233,7 +233,7 @@ export const CODE_COMMENT_SUCCESS =
 
 /**
  * The review agent's only output channel. Category is "read" — it mutates no
- * file; it feeds the shared collector.
+ * file; it feeds the group-local collector.
  */
 export class CodeCommentTool implements Tool {
   name = "CodeComment";

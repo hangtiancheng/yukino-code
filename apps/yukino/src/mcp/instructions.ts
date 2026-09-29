@@ -37,7 +37,7 @@
  * out again.
  */
 
-/** Heading every announcement carries; also the marker history is scanned for. */
+/** Heading of announcements that add servers; also the marker history is scanned for. Removal-only deltas do not carry it. */
 export const MCP_INSTRUCTIONS_MARKER = "# MCP Server Instructions";
 
 export interface McpInstruction {

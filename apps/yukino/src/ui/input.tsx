@@ -129,8 +129,9 @@ interface InputBoxProps {
   /** Atomically pop the latest queued message, only when Up starts on a clean draft. */
   onRecallQueuedMessage?: () => string | undefined;
   disabled?: boolean;
-  /** Blocks Enter-to-send while still allowing typing/editing (e.g. while
-   *  the agent is streaming or the conversation is being compacted). */
+  /** Blocks Enter-to-send while still allowing typing/editing. No production
+   *  caller sets this: while the agent streams, plain text is steered into the
+   *  in-flight run instead (handleSubmit in app.tsx). */
   submitDisabled?: boolean;
   history?: string[];
   commands?: Command[];
