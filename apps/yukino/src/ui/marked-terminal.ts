@@ -340,14 +340,11 @@ class Renderer {
   }
 
   table(token: Tokens.Table): string {
-    const rows = [
-      token.header.map((cell) => this.getParser().parseInline(cell.tokens)),
-      ...token.rows.map((row) =>
-        row.map((cell) =>
-          this.transform(this.getParser().parseInline(cell.tokens)),
-        ),
+    const rows = [token.header, ...token.rows].map((row) =>
+      row.map((cell) =>
+        this.transform(this.getParser().parseInline(cell.tokens)),
       ),
-    ];
+    );
 
     // cli-table3 sizes its columns to the unwrapped cells, so a table with wide
     // cells overflows the terminal. Wrap the cells into the configured width
@@ -385,7 +382,10 @@ class Renderer {
 
   codespan(token: Tokens.Codespan): string {
     const text = fixHardReturn(token.text, this.config.reflowText);
-    return this.config.codespan(text.replace(/:/g, COLON_REPLACER));
+    const protectedText = this.config.emoji
+      ? text.replace(/:/g, COLON_REPLACER)
+      : text;
+    return this.config.codespan(protectedText);
   }
 
   br(_token: Tokens.Br): string {

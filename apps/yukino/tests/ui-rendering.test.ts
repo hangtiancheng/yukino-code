@@ -280,6 +280,26 @@ describe("pi Markdown presentation", () => {
     }
   });
 
+  it("restores colons in inline code within table headers", () => {
+    const source = [
+      "| `TODO: How about this?` |",
+      "| --- |",
+      "| `DONE: Fixed` |",
+    ].join("\n");
+    const output = stripVTControlCharacters(renderMarkdown(source, 80));
+    expect(output).toContain("TODO: How about this?");
+    expect(output).toContain("DONE: Fixed");
+    expect(output).not.toContain("#COLON|");
+  });
+
+  it("does not create colon placeholders when emoji expansion is disabled", () => {
+    const source =
+      "- `code-review/selection.ts` 悬空的 `TODO: How about CJK?`。";
+    const output = stripVTControlCharacters(renderMarkdown(source, 80));
+    expect(output).toContain("TODO: How about CJK?");
+    expect(output).not.toContain("#COLON|");
+  });
+
   it("keeps wide characters inside the table column they belong to", () => {
     const source = [
       "| 名 | 説明 |",
