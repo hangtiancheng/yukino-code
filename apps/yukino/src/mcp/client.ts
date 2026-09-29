@@ -134,7 +134,7 @@ function asDict(
 
 // MCP image content uses {type:"image", data, mimeType}; providers use
 // {type:"image", source:{type:"base64", media_type, data}}. Unsupported mime
-// types stay in the text fallback as before.
+// types degrade to a text placeholder.
 const MCP_IMAGE_MEDIA_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -231,7 +231,6 @@ export class MCPClient {
   async connect(): Promise<void> {
     const config = expandMcpServerConfigEnvironment(this.config);
     if (config.command) {
-      // stdio transport
       const env: NodeJS.ProcessEnv = { ...process.env };
       if (config.env) {
         for (const [k, v] of Object.entries(config.env)) {
@@ -246,8 +245,6 @@ export class MCPClient {
         stderr: "ignore",
       });
     } else if (config.url) {
-      // http / sse transport
-
       const url = new URL(config.url);
       const headers = config.headers ?? {};
 

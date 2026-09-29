@@ -55,9 +55,9 @@ interface TextFieldProps {
 /**
  * A compact free-text field for dialogs, sharing the composer's editing core:
  * grapheme-aware ←/→, ↑/↓ across hard-wrapped visual rows, Ctrl+A/E,
- * Delete/Backspace at the caret, Shift+Enter newlines and paste insertion.
- * The field grows vertically as the text wraps (same layout engine as
- * InputBox: layoutInputRows + locateInputCursor).
+ * Delete/Backspace at the caret, Shift+Enter/Ctrl+J newlines and paste
+ * insertion. The field grows vertically as the text wraps (same layout engine
+ * as InputBox: layoutInputRows + locateInputCursor).
  */
 export function TextField({
   initialValue = "",
@@ -145,7 +145,7 @@ export function TextField({
         return;
       }
 
-      // Tab belongs to the surrounding dialog (question navigation).
+      // Tab belongs to the surrounding dialog (question/field navigation).
       if (key.tab) {
         return;
       }

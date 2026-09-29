@@ -66,7 +66,6 @@ export class BwrapSandbox implements Sandbox {
       args.push("--ro-bind", path, path);
     }
 
-    // Network isolation
     if (!config.networkEnabled) {
       args.push("--unshare-net");
     }
@@ -74,7 +73,7 @@ export class BwrapSandbox implements Sandbox {
     // Mount /proc, required by many commands
     args.push("--proc", "/proc");
 
-    // Append the command to execute
+    // "--" ends option parsing; the command runs via bash inside the sandbox
     args.push("--", "bash", "-c", command);
 
     return { executable: "bwrap", args };

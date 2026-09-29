@@ -46,13 +46,15 @@ export interface WorktreeResult {
   gitRoot: string;
 }
 
-// Pure filesystem-based git HEAD reading
-// The following functions retrieve the branch and SHA by directly reading files
-// under the .git directory, without spawning a git subprocess.
+// Pure filesystem-based git HEAD reading: the functions below retrieve the
+// branch and SHA by directly reading files under the .git directory, without
+// spawning a git subprocess — saving the ~15ms process-spawn overhead per call.
 
-// This saves ~15ms of process startup overhead in large repositories (with millions of objects)
-
-/** Allowed character set of ref names - prevents path traversal and shell injection */
+/**
+ * Allowed character set of ref names — excludes whitespace and shell
+ * metacharacters. Path traversal is ruled out together with the ".." and
+ * leading-slash checks in isSafeRefName.
+ */
 const SAFE_REF_RE = /^[a-zA-Z0-9/._+@-]+$/;
 
 /** Full SHA-1 (40 hex) or SHA-256 (64 hex) */
@@ -153,7 +155,7 @@ async function readGitHead(gitDir: string): Promise<GitHead | null> {
       return { branch: name };
     }
 
-    // Non-standard symref (e.g., bisect) -- resolve to SHA
+    // HEAD is a symref to a ref outside refs/heads/ — resolve it to a SHA
     if (!isSafeRefName(ref)) {
       return null;
     }
@@ -174,7 +176,6 @@ async function readGitHead(gitDir: string): Promise<GitHead | null> {
  * Resolves a ref within a single git directory (checks loose files first, then packed-refs)
  */
 async function resolveRefInDir(dir: string, ref: string): Promise<string> {
-  // Check loose ref file first
   try {
     const content = (await readFile(join(dir, ref), "utf-8")).trim();
     if (content.startsWith("ref:")) {
@@ -193,7 +194,6 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
     // Loose file does not exist, try packed-refs
   }
 
-  // Check packed-refs
   try {
     const packed = await readFile(join(dir, "packed-refs"), "utf-8");
     for (const line of packed.split("\n")) {
@@ -305,8 +305,9 @@ export async function createAgentWorktree(
   const worktreeDir = join(root, ".yukino", "worktrees", slug);
   const branch = `worktree-${slug}`;
 
-  // Validate the existing root before restoration: git otherwise searches parent
-  // directories and could report the main repository's HEAD as an isolated worktree.
+  // Validate that an existing directory is really a worktree root before reusing
+  // it: git otherwise searches parent directories and would report the main
+  // repository's HEAD as this worktree's commit.
   if (await pathExists(worktreeDir)) {
     const { stdout: topLevel } = await execFileAsync(
       "git",
@@ -454,6 +455,7 @@ async function performPostCreationSetup(
  * Node's cp rejects that with EINVAL.
  */
 const SHARED_YUKINO_ENTRIES = ["permissions.yaml", "agents", "memory"];
+/** Same allowlist approach for the repo's .agents/ directory. */
 const SHARED_AGENTS_ENTRIES = ["AGENTS.md", "skills"];
 
 /** Copy shared .yukino/ settings from the main repo to the worktree. */

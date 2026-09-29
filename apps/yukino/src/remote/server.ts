@@ -949,7 +949,6 @@ export class RemoteServer {
   private clients = new Set<WebSocket>();
   private opts: RemoteServerOptions;
 
-  // Agent handle
   private agentHandle: RemoteAgentHandle | null = null;
   private streaming = false;
   private compactController: AbortController | null = null;
@@ -989,7 +988,6 @@ export class RemoteServer {
 
   /** Configures Koa middleware: static file serving + health check. */
   private setupRoutes(): void {
-    // Health check
     this.app.use(async (ctx, next) => {
       if (ctx.path === "/health") {
         ctx.body = { status: "ok", remote: true, clients: this.clients.size };
@@ -1138,7 +1136,7 @@ export class RemoteServer {
 
   /**
    * Returns the agent handle, initializing it on first use. On success the
-   * real session id is broadcast so clients can show the greeting line.
+   * real session id is broadcast so clients can show the welcome card.
    */
   private async ensureAgent(): Promise<RemoteAgentHandle | null> {
     if (this.agentHandle) {
@@ -2273,7 +2271,6 @@ export class RemoteServer {
    */
   async run(): Promise<void> {
     const { host, port } = parseRemoteAddress(this.opts.addr);
-    // Attempt eager agent initialization
     try {
       this.agentHandle = await createRemoteAgent({
         provider: this.opts.providers[0],

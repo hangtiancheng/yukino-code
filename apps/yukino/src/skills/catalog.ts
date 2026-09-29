@@ -35,8 +35,8 @@ import { asRecord, strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "skills" });
 
 /**
- * Internal skill storage with source file path and load timestamp for hot reloading
- *
+ * Internal skill storage with the source file path and the file mtime
+ * recorded at load time, both used for hot reloading.
  */
 interface CatalogEntry {
   skill: Skill;
@@ -156,13 +156,11 @@ export class SkillCatalog {
         isDirectory,
       };
 
-      // Record file modification time for subsequent hot reload detection
       let mtimeMs = 0;
       try {
         mtimeMs = statSync(filePath).mtimeMs;
       } catch (err) {
         log.error({ err }, "skills operation failed");
-        // Fail gracefully if timestamp cannot be retrieved
       }
 
       this.entries.set(skill.meta.name, {
@@ -172,7 +170,6 @@ export class SkillCatalog {
       });
     } catch (err) {
       log.error({ err }, "skills operation failed");
-      // Skip invalid skill
     }
   }
 
@@ -191,12 +188,10 @@ export class SkillCatalog {
       return undefined;
     }
 
-    // Attempt hot reload: check if the file has been modified
     if (entry.filePath && entry.loadedMtimeMs > 0) {
       try {
         const currentMtime = statSync(entry.filePath).mtimeMs;
         if (currentMtime !== entry.loadedMtimeMs) {
-          // File has been modified, re-read it
           const raw = readFileSync(entry.filePath, "utf-8");
           const parsed = parseSkillFile(raw);
           if (parsed) {

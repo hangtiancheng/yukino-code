@@ -41,7 +41,7 @@ type AllTools =
   | "ListTeams"
   | "TeamDelete"
   | "SyntheticOutput"
-  // === team run agent ===
+  // === end team run agent ===
   | "AskUserQuestion"
   | "Bash"
   | "PowerShell"
@@ -96,7 +96,7 @@ export const TEAMMATE_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
 
 // Additional tools disallowed for custom Agents (loaded from .yukino/agents/);
 // currently a subset of the global list (same except ComputerUse, which Layer 2
-// already strips), but maintained separately for future extensibility
+// already strips), but maintained separately for future extensibility.
 export const CUSTOM_AGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "ExitPlanMode",
   "Agent",

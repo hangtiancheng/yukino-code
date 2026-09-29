@@ -64,8 +64,9 @@ export function argsPreview(args: ToolArgs): string {
   return "";
 }
 
-/** Parse a `<think ...>...</think ...>` envelope embedded in streamed text.
- *  Returns the separated thinking and body fragments. */
+/** Parse a leading `<think>...</think>` envelope in streamed text.
+ *  Returns the thinking content and the remaining body separately; text
+ *  without the envelope is returned entirely as body. */
 export function splitThinking(text: string): {
   thinking: string;
   body: string;

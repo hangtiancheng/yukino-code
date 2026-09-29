@@ -36,10 +36,10 @@ import type { LLMClient } from "@/llm/client.js";
 import { safeJSONParse } from "@/utils/index.js";
 
 /**
- * The external reflection module. An
- * independent fact-checker pass over freshly produced comments: it may only
- * remove comments the diff *proves* wrong (Ground A / Ground B), with
- * protected-subject and value vetoes. Its default answer is approve.
+ * The external reflection module. An independent fact-checker pass over
+ * freshly produced comments: it may only remove comments the diff *proves*
+ * wrong (Ground A / Ground B), with protected-subject and value vetoes. Its
+ * default answer is approve.
  *
  * The decision contract is expressed as strict JSON, with the analysis field
  * ordered before remove_ids so the model reasons before it commits (the

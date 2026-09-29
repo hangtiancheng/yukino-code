@@ -143,7 +143,8 @@ export function Footer(props: FooterProps) {
     : rightWidth - visibleWidth(mode) - 3;
   const modelWidth = Math.max(0, identityWidth - visibleWidth(thinkingSuffix));
   const fullIdentity = provider ? `${provider}/${model}` : model;
-  // Keep the model and complete thinking level before provider names or shortcuts.
+  // Space priority: keep the model name and the complete thinking level; drop
+  // the provider prefix first, and show the Shift+Tab hint only if everything fits.
   const identity =
     visibleWidth(fullIdentity) <= modelWidth
       ? fullIdentity

@@ -409,7 +409,8 @@ ${prompt}`;
 
   /**
    * Team-member mode: Spawns a persistent teammate in the specified team.
-   * Delegates to Team.spawnTeammate() to start the idle-poll main loop.
+   * Delegates to Team.spawnTeammate(), which dispatches by team backend mode
+   * (in-process idle-poll loop, or an external pane/tab process).
    */
   private async runAsTeammate(
     teamName: string,

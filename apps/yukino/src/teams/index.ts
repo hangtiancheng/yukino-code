@@ -475,9 +475,10 @@ export class Team {
   }
 
   /**
-   * Blocks until there is a new message in the teammate's mailbox.
+   * Polls the teammate's mailbox until a new message arrives.
    * Returns the concatenated prompt, or the shutdown message itself in the
-   * shutdown field.
+   * shutdown field. If the member is deactivated while waiting, a synthetic
+   * shutdown message from the leader is returned instead.
    */
 
   private async waitForNextPromptOrShutdown(

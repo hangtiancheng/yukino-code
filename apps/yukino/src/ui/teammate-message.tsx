@@ -50,11 +50,11 @@ const SHUTDOWN_RE = /^\[shutdown\]\s*/;
  * Renders a teammate message in the chat view.
  *
  * Currently unused: teammate messages reach the conversation through
- * drainLeaderMailbox' <task-notification> XML instead of this component.
+ * drainLeaderMailbox's <task-notification> XML instead of this component.
  *
  * - idle / shutdown: silent (return null)
- * - completed: green checkmark + content
- * - text (default): cyan @name with content summary
+ * - completed: success-colored checkmark + content
+ * - text (default): accent-colored @name with content summary
  */
 export function TeammateMessage(
   props: PropsWithRef<TeammateMessageProps, TeammateMessageExpose>,
@@ -131,7 +131,6 @@ export function TeammateMessage(
     );
   }
 
-  // type === "text" (default)
   const lines = content.split("\n");
   const summary = lines[0] ?? "";
   const rest = lines.slice(1).join("\n").trimStart();

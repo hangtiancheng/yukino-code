@@ -31,11 +31,11 @@ import type {
 import { strArg } from "@/utils/index.js";
 
 /**
- * The diff-inspection tool. The main prompt
- * only embeds the current group's diffs; this lets the agent read the diff of
- * any other retained file (including deletions, which never enter the review
- * set) without misreading the workspace copy — critical in range/commit mode
- * where the on-disk file can differ from the reviewed ref.
+ * The diff-inspection tool. The main prompt only embeds the current group's
+ * diffs; this lets the agent read the diff of any other retained file
+ * (including deletions, which never enter the review set) without misreading
+ * the workspace copy — critical in range/commit mode where the on-disk file
+ * can differ from the reviewed ref.
  */
 export class FileReadDiffTool implements Tool {
   name = "FileReadDiff";

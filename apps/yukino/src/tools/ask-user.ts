@@ -54,7 +54,7 @@ export type Asker = (
   Record<string /** question text */, string /** user chosen answer */>
 >;
 
-// Structured multiple-choices question tool
+// Structured single/multiple-choice question tool
 // The actual prompting is delegated to an injected asker (the UI dialog),
 // the same pattern as onPermissionRequest
 export class AskUserQuestionTool implements Tool {

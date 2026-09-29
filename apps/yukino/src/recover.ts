@@ -52,9 +52,10 @@ export function recordError(context: string, error: unknown): void {
 }
 
 // A terminal that goes away (window closed, VS Code main process dying, ssh
-// dropped, pty torn down) makes every later stdio write fail with EIO — or
-// EPIPE once the reader is gone. That is the session's terminal disappearing,
-// not a yukino fault, so it must not be logged as a crash.
+// dropped, pty torn down) makes every later stdio write fail: EIO from the
+// dead pty, EPIPE once the reader is gone, or ERR_STREAM_DESTROYED after Node
+// has already torn the stream down. That is the session's terminal
+// disappearing, not a yukino fault, so it must not be logged as a crash.
 const TERMINAL_GONE_CODES = new Set(["EIO", "EPIPE", "ERR_STREAM_DESTROYED"]);
 
 /** True when `err` is a write failure caused by the terminal or its reader vanishing. */
@@ -110,9 +111,10 @@ export function recordExit(code: number | string): void {
  * crash + exit → crashed; start + exit only → clean shutdown; start only → killed externally.
  *
  * A terminal that disappears under a live session (window closed, VS Code main
- * process dying, ssh dropped) fails every later write with EIO/EPIPE. Those are
- * recorded as a single `terminal closed` line and exit 0, so they read as a
- * clean shutdown rather than a crash; see `isTerminalGone`.
+ * process dying, ssh dropped) fails every later write with one of the
+ * TERMINAL_GONE_CODES. Those are recorded as a single `terminal closed` line
+ * and exit 0, so they read as a clean shutdown rather than a crash; see
+ * `isTerminalGone`.
  */
 export function recover(): void {
   record(`start pid=${String(process.pid)}`);

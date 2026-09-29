@@ -60,7 +60,7 @@ export class ContextTooLongError extends LLMError {
 /**
  * Detects provider "context too long" failures across protocols by message.
  * Anthropic returns 400 invalid_request_error with "prompt is too long:
- * N tokens > M maximum"; OpenAI (and Anthropic-compatible gateways such as
+ * N tokens > M maximum"; OpenAI (and OpenAI-compatible gateways such as
  * DeepSeek) use the context_length_exceeded code or "maximum context length
  * is N tokens" wording.
  */

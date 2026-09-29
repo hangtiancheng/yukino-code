@@ -50,7 +50,7 @@ interface ImageAttachment {
   mediaType: ImageMediaType;
   /** Raw base64 payload without a data: URL prefix. */
   data: string;
-  /** Original file path, used for UI labels and session provenance. */
+  /** Absolute path of the source image file. */
   sourcePath?: string | undefined;
   /** Decoded byte length of `data`. */
   byteLength: number;
@@ -173,9 +173,10 @@ function formatMB(bytes: number): string {
 
 // Resize/compress an image buffer so its base64 encoding fits the API limit:
 //   1. <=3.75MB raw passes through untouched (sharp never invoked).
-//   2. Otherwise: cap dimensions at 2000px, keep PNG when possible
-//      (compressionLevel 8), then walk the JPEG quality ladder 80/60/40/20,
-//      then halve dimensions and retry (max twice).
+//   2. Otherwise: cap dimensions at 2000px; PNG/GIF sources try PNG first
+//      (compressionLevel 8, palette quantization), then every source walks the
+//      JPEG quality ladder 80/60/40/20; halve dimensions and retry the whole
+//      ladder at most twice.
 // GIF/WebP are re-encoded to PNG/JPEG only when they need compression, which
 // also normalizes animated GIFs to their first frame.
 export async function maybeResizeAndDownsampleImage(

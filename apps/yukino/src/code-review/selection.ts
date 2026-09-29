@@ -25,12 +25,12 @@ import { minimatch } from "minimatch";
 import type { ExcludeReason, FileDecision, FileDiff } from "./types.js";
 
 /**
- * Deterministic file selection. Static
- * credential/noise/extension gates are intentionally not ported: the review
- * input is the developer's own working tree, and anything the user stages or
- * commits is fair game. The gates that remain are the ones correctness
- * depends on: binary detection, explicit user excludes, the deletion rule,
- * and the per-file size ceiling.
+ * Deterministic file selection. Static credential/noise/extension gates are
+ * intentionally not ported: the review input comes from the developer's own
+ * repository — anything the user writes, stages, or commits is fair game.
+ * The gates that remain are the ones correctness depends on: binary
+ * detection, explicit user excludes, the deletion rule, and the per-file
+ * size ceiling.
  */
 
 /**
@@ -123,7 +123,7 @@ export function selectFiles(
 }
 
 export interface SelectionSummary {
-  /** Decisions that enter the reviewed set. */
+  /** Diffs that enter the reviewed set. */
   selected: FileDiff[];
   /** Selected plus deletions — the working set the prompts show. */
   retained: FileDiff[];

@@ -469,11 +469,12 @@ export function App({
   );
 
   // Interrupt scope: a single Ctrl+C / Esc routes to interruptForeground,
-  // which only stops the in-flight agent loop (its signal is shared by
-  // synchronous tool calls and run_in_background=false subagents). Background
-  // tasks, background subagents and teammates own separate abort controllers
-  // and keep running; only the TUI-exit path (double Ctrl+C, /quit) tears
-  // them down through interruptAll().
+  // which only stops foreground execution — the in-flight agent loop (its
+  // signal is shared by synchronous tool calls and run_in_background=false
+  // subagents), /compact, or a code review. Background tasks, background
+  // subagents and teammates own separate abort controllers and keep running;
+  // only the TUI-exit path (double Ctrl+C, /quit) tears them down through
+  // interruptAll().
   const { interruptForeground, interruptAll } = useMemo(
     () =>
       createInterruptHandlers({

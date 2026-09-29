@@ -40,7 +40,7 @@ import { isRecord, safeJSONParse, strArg } from "@/utils/index.js";
 /**
  * The comment intake. Comments flow through a dedicated tool rather than
  * free text: the schema forces path + existing_code anchors, which the
- * deterministic resolver then turns into exact line numbers.
+ * positioning pipeline then turns into exact line numbers.
  */
 
 const CATEGORIES: CommentCategory[] = [
@@ -96,7 +96,8 @@ export interface ParsedComments {
 /**
  * Parse and normalize the CodeComment tool arguments. Tolerates the common
  * schema violations (a single object instead of an array, JSON-string
- * payloads). Unusable entries are dropped individually — one bad comment must not destroy the batch.
+ * payloads). Unusable entries are dropped individually — one bad comment
+ * must not destroy the batch.
  */
 export function parseComments(
   args: Record<string, unknown>,

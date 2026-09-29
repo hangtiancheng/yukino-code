@@ -80,7 +80,7 @@ async function main() {
     return;
   }
 
-  // Parse --remote mode flags.
+  // Parse --remote and its optional listen address (defaults to ":18888").
   let remoteAddr = "";
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--remote") {

@@ -110,8 +110,10 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
   );
 }
 
-/** Builds the answer string for a question draft.
- *  Multi-select joins labels with ", "; "Other" text is appended when active. */
+/** Builds the answer string for a question draft. Multi-select joins the
+ *  selected labels with ", " and appends the trimmed "Other" text when
+ *  non-empty; single-select returns the raw "Other" text when that option is
+ *  active, otherwise the sole selected label ("" when none). */
 function buildAnswer(question: Question, draft: QuestionDraft): string {
   const parts = [...draft.selected];
   if (draft.useOther && draft.other.trim() !== "") {

@@ -151,8 +151,9 @@ enum AnthropicErrorCode {
 }
 
 // User message content → Anthropic blocks. String content becomes a single
-// text block; block arrays are normalized and already use the provider shape
-// (text/image/document). tool_reference and unsupported blocks are rejected.
+// text block; block arrays are normalized to the provider shape
+// (text/image/document/search_result). tool_reference and unsupported blocks
+// are rejected.
 function userBlocksFor(
   content: Message["content"],
 ): Anthropic.ContentBlockParam[] {
@@ -229,15 +230,14 @@ export function buildAnthropicMessages(
       }
 
       result.push({ role: "user", content: blocks });
-    }
-    // The first message's role MUST be user
-    else {
-      // Merge consecutive user text messages to maintain alternation.
-      // After compaction the summary (user) may be followed by kept user messages with no intervening assistant turn. The Anthropic API requires strict user/assistant alternation,
-      // so we merge them into a single user entry with multiple text blocks.
-      // Only merge when the previous entry is a plain user message (string, or
-      // first block text/image), never into a tool_result user entry.
-
+    } else {
+      // Merge consecutive user text messages to maintain the strict
+      // user/assistant alternation the Anthropic API requires: after compaction
+      // the summary (user) may be followed by kept user messages with no
+      // intervening assistant turn, so they become a single user entry with
+      // multiple text blocks. Only merge when the previous entry is a plain
+      // user message (string, or first block text/image), never into a
+      // tool_result user entry.
       if (result.length === 0) {
         result.push({
           role: "user",
@@ -261,7 +261,6 @@ export function buildAnthropicMessages(
 
       if (canMerge) {
         if (typeof content === "string") {
-          // First assign to prev.content, then assign to content
           content = prev.content =
             content.trim().length > 0
               ? [
@@ -290,7 +289,8 @@ export class AnthropicClient implements LLMClient {
 
   private client: Anthropic;
   private model: string;
-  /** Effective logical level for budget or explicitly configured adaptive mode. */
+  /** Effective logical thinking level (clamped to what the provider supports);
+   *  translated to a token budget or an adaptive effort per request. */
   private thinkingLevel: ThinkingLevel;
   private systemPrompt: string;
   private maxOutputTokens: number;
@@ -368,7 +368,7 @@ export class AnthropicClient implements LLMClient {
           type: "text",
           text: this.systemPrompt,
           cache_control: {
-            type: "ephemeral", // Prompt cache
+            type: "ephemeral",
           },
         },
       ],

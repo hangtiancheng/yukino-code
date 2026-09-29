@@ -31,7 +31,8 @@
  * sans stack; machine output (tools, paths, statuses, code) uses the mono
  * stack via explicit font-mono utilities. The split is informational — it
  * tells readers apart from the agent's raw output at a glance.
- * No custom CSS classes are defined — only theme tokens + keyframes.
+ * No custom CSS classes are defined — only theme tokens, keyframes, and
+ * global element rules.
  */
 @theme {
   --color-bg: #f7f9fb;
@@ -83,7 +84,7 @@
   }
 }
 
-/* Thin scrollbar for the message stream. */
+/* Thin scrollbar styling applied to every scrollable element. */
 * {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;

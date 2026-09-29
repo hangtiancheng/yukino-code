@@ -114,8 +114,9 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
   }
 
   // The team name resolves the shared task board. When the flag is absent,
-  // derive it from the mailbox directory path: the mailbox dir is
-  // <team>/inboxes, so the team name is one level up.
+  // derive it from the mailbox directory path: the mailbox dir is normally
+  // <team>/inboxes, so the team name is one level up; for any other layout,
+  // fall back to the directory's own leaf name.
   if (!teamName) {
     const leaf = basename(teamDir);
     teamName = leaf === "inboxes" ? basename(dirname(teamDir)) : leaf;
@@ -161,7 +162,7 @@ export async function buildTeammateRegistry(opts: {
   mcpServers?: MCPServerConfig[];
   /** The running teammate retains this manager and disconnects it on exit. */
   mcpManager?: MCPManager;
-  /** Used to decide the MCP loading mode: total schema volume is weighed against the context window */
+  /** Used to decide the MCP loading mode: total schema volume is weighed against the context window. */
   baseUrl?: string;
   contextWindow?: number;
 }): Promise<ToolRegistry> {

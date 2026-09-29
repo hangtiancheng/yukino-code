@@ -47,7 +47,8 @@ export interface FittedTable {
  * and its char-level fallback counts UTF-16 units, not columns.
  *
  * Returns undefined when not even one content column per column fits; the
- * caller then falls back to raw text.
+ * table then renders with cli-table3's defaults, and the Markdown renderer
+ * drops it to raw text when it still overflows.
  */
 export function fitTableToWidth(
   rows: string[][],

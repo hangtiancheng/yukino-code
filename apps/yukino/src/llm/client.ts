@@ -55,7 +55,8 @@ export interface ThinkingLevelControl {
   getSupportedThinkingLevels?(): readonly ThinkingLevel[];
 }
 
-// Use dynamic import for lazy loading
+// Dynamic imports keep provider SDKs lazy: only the module for the configured
+// protocol is loaded at runtime.
 export async function createClient(
   config: ProviderConfig,
   systemPrompt: string,

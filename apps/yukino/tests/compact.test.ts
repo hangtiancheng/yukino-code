@@ -264,7 +264,9 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     );
 
     // forceCompact returns the structured boundary the session owner persists:
-    // the bare summary plus the verbatim kept tail inlined as role+text.
+    // the bare summary plus the verbatim kept tail as role+content records
+    // (tool_use/tool_result blocks are persisted alongside when present;
+    // this fixture's tail is plain text).
     expect(boundary).toBeDefined();
     expect(boundary?.summary).toBe("THE SUMMARY BODY");
     const keepJoined = boundary?.keep

@@ -41,8 +41,8 @@ const RECONNECT_DELAY_MS = 3_000;
  * reconnection and an application-layer ping keepalive.
  *
  * The connection URL is derived from the current location so the same build
- * works whether it is served inline by the remote server or previewed
- * standalone from fe/dist.
+ * works from any host that serves it; it always dials the same origin at a
+ * fixed /ws path.
  */
 export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   const { onMessage, onOpen, onClose } = opts;
@@ -122,7 +122,6 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
           ws.close();
         } catch (err) {
           console.error(err);
-          // ignore
         }
         wsRef.current = null;
       }

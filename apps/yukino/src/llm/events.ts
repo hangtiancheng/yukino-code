@@ -23,11 +23,13 @@
 export interface UsageInfo {
   inputTokens: number;
   outputTokens: number;
-  // Cache token counts from the API usage block. Anthropic reports these directly;
-  // OpenAI/compat usually report 0 (or only cache_read — via input_tokens_details.cached_tokens
-  // on the Responses API, prompt_tokens_details.cached_tokens on Chat Completions).
-  // They anchor the compact judgement's
-  // real-token baseline (input + cache_read + cache_creation + output).
+  // Cache token counts from the API usage block. Anthropic reports both fields
+  // directly; OpenAI/compat has no cache-creation concept (always 0) and
+  // reports cache reads via input_tokens_details.cached_tokens (Responses API)
+  // or prompt_tokens_details.cached_tokens (Chat Completions). inputTokens
+  // excludes the cached prefix on every protocol, so the four fields sum to
+  // the real-token baseline (input + cache_read + cache_creation + output)
+  // that anchors the compact judgement.
   cacheReadInputTokens: number;
   cacheCreationInputTokens: number;
 }

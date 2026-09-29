@@ -55,9 +55,10 @@ const MEMORY_INDEX_NAME = "MEMORY.md";
 /**
  * Truncates index content to fit within the byte limit.
  *
- * Preferably cuts at the last newline before the limit so that only complete entries are retained.
+ * Preferably cuts at the last newline before the limit so that only complete entries are retained;
+ * a newline at offset 0 is unusable because cutting there would yield an empty result.
  * In UTF-8, ASCII bytes never appear inside multi-byte sequences, so scanning for a newline at the
- * byte level is safe. When no newline exists in the entire segment, we hard-cut at the byte limit
+ * byte level is safe. When no usable newline exists, we hard-cut at the byte limit
  * and then back up to a character boundary; otherwise a multi-byte character split in half would
  * decode to a replacement character.
  */
@@ -513,8 +514,9 @@ function formatMemoryManifest(memories: MemoryHeader[]): string {
 }
 
 /**
- * Extracts a {...} JSON object from raw text — the span from the first `{`
- * to the last `}` — tolerating markdown fences or prose around it.
+ * Extracts a {...} JSON object from raw text, tolerating markdown fences or
+ * prose around it. Text that already starts with `{` is returned as-is;
+ * otherwise the span from the first `{` to the last `}` is extracted.
  */
 function extractJSONObject(raw: string): string {
   const trimmed = raw.trim();
@@ -551,13 +553,11 @@ interface ParsedFrontmatter {
 }
 
 /**
- * Parse frontmatter
- * ---
- * name: yukino-lit-jsx
- * description: The description of yukino-lit-jsx
- * ---
- * Parses frontmatter and extracts name/description/type.
- * The type field is read from the top level first; the nested metadata.type form is also accepted.
+ * Parses YAML frontmatter delimited by `---` lines and extracts
+ * name/description/type. The type field is read from the top level first;
+ * the nested metadata.type form is also accepted. Content without a leading
+ * `---` is returned as body only; a leading `---` without a closing
+ * delimiter throws.
  */
 function parseFrontmatter(content: string): ParsedFrontmatter {
   if (!content.startsWith("---")) {

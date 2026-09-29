@@ -126,8 +126,9 @@ export interface AgentConfig {
   activeSkills?: Map<string, string>;
   toolFilter?: (name: string) => boolean;
   // coordinatorActiveFn reports whether coordinator mode is currently active.
-  // Checked each turn alongside toolFilter so that dispatch guidance appears
-  // while tools are narrowed and disappears once the Team is torn down.
+  // Checked each turn so the dispatch guidance keeps appearing while the tool
+  // set is narrowed. Like the tool filter it is config-driven and stays in
+  // effect for the whole session — it does not end when a team is torn down.
   coordinatorActiveFn?: () => boolean;
   // Project instructions and memory content, need re-injection after compaction
   instructions?: string;

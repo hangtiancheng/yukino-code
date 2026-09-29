@@ -275,8 +275,9 @@ export function createChildLogger(bindings: { module: string }): Logger {
   });
 }
 
-// Expired log cleanup. Mirrors session/index.ts cleanExpiredSessions:
-// same directory iteration, 30-day mtime check, silent unlink failure.
+// Expired log cleanup. Mirrors session/index.ts cleanExpiredSessions: same
+// directory iteration and 30-day mtime check; unlike the session sweep, which
+// logs failures, cleanup errors here stay silent.
 // Scans <workDir>/.yukino/logs/ and ~/.yukino/teams/<team>/logs/.
 // All fs operations are async to avoid blocking the event loop.
 

@@ -32,7 +32,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 - Skill catalog with two-tier loading: user-global (~/.agents/skills/) and project-level (.agents/skills/), where the project level wins on a name collision
 - Hot-reload support for skills edited on disk
 - Inline and fork execution modes for skills
-- Slash command system with built-in commands and user-defined commands from .yukino/commands/
+- Slash command system with built-in commands and user-defined commands from two tiers: user-global (~/.yukino/commands/) and project-level (.yukino/commands/), where the project level wins on a name collision
 - Skill installation from a local path or a raw SKILL.md URL
 
 ### Agent Orchestration
@@ -122,7 +122,8 @@ sandbox:
 
 enable_coordinator_mode: false
 
-# Auto memory: index injection, recall, background extraction, and consolidation.
+# Auto memory: index injection, recall, background extraction, and consolidation
+# (consolidation currently runs only in remote mode).
 # Set to false to disable the whole automatic memory pipeline (default: true).
 memory: true
 ```

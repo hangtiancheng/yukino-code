@@ -21,9 +21,10 @@
  */
 
 // Discovery of the Claude Code VSCode extension's embedded MCP server.
-// The extension writes `~/.claude/ide/<port>.lock` on activation and injects
-// CLAUDE_CODE_SSE_PORT into its integrated terminals; any CLI can use those
-// to find and authenticate against the extension's WebSocket MCP server.
+// The extension writes `$CLAUDE_CONFIG_DIR/ide/<port>.lock` (default
+// `~/.claude/ide/`) on activation and injects CLAUDE_CODE_SSE_PORT into its
+// integrated terminals; any CLI can use those to find and authenticate
+// against the extension's WebSocket MCP server.
 
 import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";

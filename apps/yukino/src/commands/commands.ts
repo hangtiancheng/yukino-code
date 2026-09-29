@@ -79,9 +79,8 @@ export class CommandRegistry {
 
   /**
    * Checks if a command would conflict with already registered commands.
-   * Dynamic loaders (e.g., for user-defined commands) should call this method
-   * before `register` to filter out conflicting entries, as `register` throws
-   * an exception on conflict.
+   * `register` throws on a conflict; use this to pre-filter candidate
+   * commands when a throw is not desired.
    */
   hasConflict(cmd: Command): boolean {
     if (this.find(cmd.name)) {

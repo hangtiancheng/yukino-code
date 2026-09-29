@@ -138,7 +138,6 @@ export class MemoryExtractor {
     return entries.length > 0 ? entries.join("\n") : "";
   }
 
-  /** Build the extraction prompt */
   private buildExtractionPrompt(conversationSummary: string): string {
     const manifest = this.scanExistingMemories();
     const projectMemDir = join(this.workDir, ".yukino", "memory");
@@ -174,7 +173,6 @@ export class MemoryExtractor {
     ].join("\n");
   }
 
-  /** Core extraction logic: child agent + tools */
   private async doExtract(conversationSummary: string): Promise<string[]> {
     const extractionPrompt = this.buildExtractionPrompt(conversationSummary);
 

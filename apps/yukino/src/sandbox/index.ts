@@ -57,7 +57,8 @@ export interface PreparedSandboxCommand {
 }
 
 /**
- * Unified sandbox interface with platform-specific implementations for macOS and Linux.
+ * Unified sandbox interface: seatbelt (macOS) and bubblewrap (Linux) for the
+ * native backend, plus the cross-platform @anthropic-ai/sandbox-runtime.
  */
 export interface Sandbox {
   readonly implementation: SandboxImplementation;
@@ -78,7 +79,8 @@ export interface Sandbox {
  * Creates the requested sandbox backend.
  *   native          seatbelt on macOS, bubblewrap on Linux (the default).
  *   sandbox-runtime the @anthropic-ai/sandbox-runtime backend.
- * Returns null on platforms with no native backend.
+ * The native backend returns null on platforms other than macOS and Linux;
+ * sandbox-runtime is instantiated everywhere and reports support via available().
  */
 export async function createSandbox(
   backend: SandboxBackend = "native",

@@ -58,7 +58,7 @@ export const COMPACT_BOUNDARY = "compact_boundary";
 const SESSION_EXPIRY_DAYS = 30;
 
 // Tool block fields on disk always use snake_case; the in-memory conversation layer still uses camelCase.
-// The conversion between the two is consolidated in boundary functions in this file (toolUsesToRecords / toRestored, etc.).
+// The conversion between the two is consolidated in conversion functions in this file (toolUsesToRecords / toRestored, etc.).
 
 /** Persisted form of a tool invocation. Stores a provider-agnostic internal representation rather than
  *  any vendor-specific wire format, so sessions can be restored even after switching providers. */
@@ -343,9 +343,9 @@ function recordsToCamelResults(
 
 // Rebuild the conversation to replay on resume, honoring compaction boundaries.
 //
-//   - If the session contains at least one compact_boundary, take the LAST one
-//     and rebuild: [summary as a user message] + its inlined keep tail +
-//     every ordinary message appended AFTER that boundary. The original
+//   - If the session contains at least one compact_boundary, take the last
+//     VALID one and rebuild: [summary as a user message] + its inlined keep
+//     tail + every ordinary message appended AFTER that boundary. The original
 //     messages before the boundary stay in the file but are NOT replayed —
 //     that's the whole point of compaction surviving a resume.
 //   - If there is no boundary (old sessions, or never compacted), replay every

@@ -40,13 +40,11 @@ const log = createChildLogger({ module: "subagent" });
 export function loadAgentDefinitions(workDir: string): AgentDefinition[] {
   const definitions = [...BUILTIN_AGENTS];
 
-  // User-level directory: ~/.yukino/agents/
   const home = homedir();
   if (home) {
     loadDir(join(home, ".yukino", "agents"), definitions);
   }
 
-  // Project-level directory: <workDir>/.yukino/agents/
   const dirs = [join(workDir, ".yukino", "agents")];
   for (const dir of dirs) {
     loadDir(dir, definitions);

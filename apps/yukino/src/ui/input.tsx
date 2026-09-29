@@ -563,9 +563,10 @@ export function InputBox(props: InputBoxProps) {
     const hasReturn = key.return || hasLineBreak;
     const cleanInput = input.replace(/[\r\n]/g, "");
 
-    // A chunk containing line breaks plus other content is a paste, not an Enter
-    // press (Enter arrives as a lone "\r", "\n", or "\r\n"). Insert it as multi-line text
-    // at the cursor instead of submitting.
+    // A chunk containing line breaks plus other content — or a single chunk
+    // longer than 1000 characters — is a paste, not an Enter press (Enter
+    // arrives as a lone "\r", "\n", or "\r\n"). Insert it as text at the
+    // cursor instead of submitting.
     const isLoneEnter = input === "\r" || input === "\n" || input === "\r\n";
     if (
       (hasLineBreak && !isLoneEnter) ||

@@ -50,7 +50,7 @@ export type StoredTask = z.infer<typeof StoredTaskSchema>;
 export class TaskStore {
   private filePath: string;
 
-  // Session-scoped store: .yukino/tasks/<listId>.json.
+  // Session-scoped store persisted at <workDir>/.yukino/tasks/<listId>.json.
   constructor(workDir: string, listId: string) {
     this.filePath = join(workDir, ".yukino", "tasks", `${listId}.json`);
   }

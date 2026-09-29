@@ -330,7 +330,8 @@ export function AskUserDialog({ questions, onComplete }: Props) {
     });
     if (advance) {
       if (hideSubmit) {
-        // Single-question mode: submit directly
+        // hideSubmit mode (exactly one single-select question): there is no
+        // Submit step, so committing the answer completes the dialog here.
         const answers: Record<string, string> = {};
         answers[questions[0].question] = answer;
         onComplete(answers);

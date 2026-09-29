@@ -272,7 +272,7 @@ describe("bash background execution", () => {
 
   it("grants the sandbox write access to the output file and annotates background output", async () => {
     const { bash, tasks } = makeTool();
-    // Object holder: a bare `let captured` would be narrowed to `null` by TS
+    // Object holder: a bare `let seen` would be narrowed to `null` by TS
     // because the assignment happens inside the prepare() closure.
     const seen: { config: SandboxConfig | null } = { config: null };
     const sandbox: Sandbox = {

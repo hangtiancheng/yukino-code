@@ -130,10 +130,12 @@ const AppConfigSchema = z.looseObject({
    */
   enable_fork: z.boolean().optional(),
   /**
-   * Whether auto memory (index injection, recall, extraction, consolidation)
-   * is enabled. Defaults to enabled; `memory: false` turns the whole automatic
-   * memory pipeline off. Left optional so "not set" and "explicitly false"
-   * stay distinguishable, mirroring enable_fork.
+   * Whether auto memory is enabled: gates index injection, recall, and
+   * background extraction in the hosts that run them (interactive UI, remote,
+   * ACP), and consolidation, which currently runs only in remote mode.
+   * Defaults to enabled; `memory: false` turns the whole automatic memory
+   * pipeline off. Left optional so "not set" and "explicitly false" stay
+   * distinguishable, mirroring enable_fork.
    */
   memory: z.boolean().optional(),
 });

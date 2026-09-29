@@ -23,7 +23,7 @@
 const BSU = "\x1b[?2026h"; // Begin Synchronized Update
 const ESU = "\x1b[?2026l"; // End Synchronized Update
 
-/** Terminal programs whose emulator implements synchronized output. */
+/** TERM_PROGRAM values whose terminal emulator implements synchronized output. */
 const SYNC_OUTPUT_TERM_PROGRAMS = new Set([
   "alacritty",
   "contour",
@@ -40,7 +40,7 @@ const SYNC_OUTPUT_TERM_PROGRAMS = new Set([
  * Detection reads environment variables instead of sending a DECRQM query
  * (`CSI ? 2026 $ p`), which several terminals do not implement. Terminals that
  * are not recognized count as unsupported: emitting the sequences at a
- * terminal that ignores them can leave garbage on screen.
+ * terminal that mishandles them can leave garbage on screen.
  */
 function isSyncOutputSupported(): boolean {
   const env = process.env;
@@ -69,8 +69,9 @@ function isSyncOutputSupported(): boolean {
  * Uses queueMicrotask to batch all writes within the same synchronous frame
  * into a single BSU/ESU-wrapped write.
  *
- * Ink's onRender is synchronous: multiple stdout.write calls within it occur
- * in the same microtask and are naturally coalesced into a single BSU...ESU envelope.
+ * Ink's onRender is synchronous: all stdout.write calls of one render occur
+ * in the same synchronous frame, so the queued microtask flush wraps them in
+ * a single BSU...ESU envelope.
  */
 export function installSyncOutput(): void {
   if (!isSyncOutputSupported()) {

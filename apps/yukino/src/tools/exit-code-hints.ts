@@ -226,6 +226,7 @@ const EXIT_CODE_HINTS = new Map<string, Map<number, string>>([
       [28, "operation timed out"],
     ]),
   ],
+  // jq is a local JSON processor, not a network tool; codes per its manual
   [
     "jq",
     new Map([

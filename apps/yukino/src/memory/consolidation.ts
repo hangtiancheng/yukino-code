@@ -59,7 +59,8 @@ const MAX_ENTRYPOINT_LINES = 200;
 
 /**
  * MemoryConsolidator implements background memory consolidation.
- * Once both the time gate (>=24h) and session gate (>=5 sessions) are satisfied,
+ * Once both the time gate (by default >=24h since the last pass) and the
+ * session gate (by default >=5 sessions modified since then) are satisfied,
  * it automatically forks a subagent to consolidate memories: merge duplicates,
  * remove stale entries, resolve contradictions, and maintain the index.
  */
@@ -97,33 +98,30 @@ export class MemoryConsolidator {
       return Promise.resolve();
     }
 
-    // Time gate
     const lastAt = readLastConsolidatedAt(memDir);
     const hoursSince = (Date.now() - lastAt) / 3_600_000;
     if (hoursSince < this.minHours) {
       return Promise.resolve();
     }
 
-    // Scan throttle
     const now = Date.now();
     if (now - this.lastScanAt < SCAN_THROTTLE_MS) {
       return Promise.resolve();
     }
     this.lastScanAt = now;
 
-    // Session gate
     const sessionIDs = listSessionsSince(this.workDir, lastAt);
     if (sessionIDs.length < this.minSessions) {
       return Promise.resolve();
     }
 
-    // Acquire lock
     const priorMtime = tryAcquireLock(memDir);
     if (priorMtime === null) {
       return Promise.resolve();
     }
 
-    // Run in the background without blocking
+    // Fire-and-forget: on failure the lock's prior mtime is restored so the
+    // time gate admits a retry instead of waiting out a full interval.
     this.run(memDir, sessionIDs, priorMtime).catch(() => {
       rollbackLock(memDir, priorMtime);
     });
@@ -200,7 +198,13 @@ function readLastConsolidatedAt(memDir: string): number {
 }
 
 /**
- * Acquires the consolidation lock. Returns the previous mtime on success, null on failure.
+ * Acquires the consolidation lock. An existing lock is respected only while
+ * it is fresher than HOLDER_STALE_MS and its holder PID is still running;
+ * stale locks are taken over. Returns the lock's previous mtime on success
+ * (0 when no lock existed), or null when the lock is held or the read-back
+ * check fails. The mtime doubles as the last-consolidation timestamp (see
+ * readLastConsolidatedAt), which is why callers can undo a failed pass by
+ * restoring it via rollbackLock.
  */
 function tryAcquireLock(memDir: string): number | null {
   const path = lockPath(memDir);
@@ -229,7 +233,6 @@ function tryAcquireLock(memDir: string): number | null {
   mkdirSync(memDir, { recursive: true });
   writeFileSync(path, String(process.pid));
 
-  // Read-back verification
   try {
     const verify = readFileSync(path, "utf-8").trim();
     if (parseInt(verify, 10) !== process.pid) {

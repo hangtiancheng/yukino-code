@@ -185,7 +185,8 @@ export function applyBudget(
     }
     const content = r.content;
     if (content.length <= TOOL_RESULT_PREVIEW_CHARS) {
-      // A result shorter than the preview gains no space from spilling
+      // A result no longer than the preview gains no space from spilling —
+      // the wrapper text would only enlarge it
       continue;
     }
     let spillPath: string;

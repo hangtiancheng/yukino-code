@@ -109,7 +109,9 @@ export async function spawnSubagent(
       ? await createClient(provider, systemPrompt)
       : parentClient;
 
-  // Build the subagent tool registry through multi-layer filtering
+  // Build the subagent tool registry. Fork runs (options.conversation set)
+  // reuse the caller's already-filtered registry (cloneRegistryForFork);
+  // definition runs apply multi-layer filtering here.
   const registry = options.conversation
     ? parentRegistry
     : filterToolsForAgent(

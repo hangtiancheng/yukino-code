@@ -271,7 +271,7 @@ describe("memory background agent sandbox", () => {
       });
       expect(allowed.reason).not.toContain("outside allowed directories");
 
-      // Other directories outside the project are unaffected and still blocked by the sandbox
+      // Paths outside the memory roots are unaffected and still denied by the override's scoping
       const unrelated = join(homedir(), "unrelated-dir", "x.txt");
       const blocked = checker.check("WriteFile", "write", {
         file_path: unrelated,

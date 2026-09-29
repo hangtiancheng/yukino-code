@@ -224,7 +224,10 @@ export function thinkingLevelColor(level: ThinkingLevel): string {
 export type ActivityStatus =
   "idle" | "working" | "retry" | "compacting" | "error";
 
-/** Map an agent lifecycle state to the color used by the composer status border. */
+/**
+ * Map an agent lifecycle state to a composer status-border color; the composer
+ * colors idle/working with the active thinking level instead.
+ */
 export function activityStatusColor(status: ActivityStatus): string {
   switch (status) {
     case "working":

@@ -22,7 +22,7 @@
 
 import type { CodeReviewResult, ReviewComment } from "./types.js";
 
-/** Terminal report rendering for a finished review. */
+/** Markdown report rendering for a finished review. */
 
 const SEVERITY_ICON: Record<string, string> = {
   critical: "[P0]",

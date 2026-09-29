@@ -346,8 +346,9 @@ export class BashTool implements Tool {
           cwd: ctx.workDir,
           detached: true,
           env: prepared.env,
-          // stdout and stderr share one O_APPEND fd: each write lands on disk
-          // atomically and the streams interleave chronologically.
+          // stdout and stderr share one output fd, opened O_APPEND on POSIX so
+          // each write lands atomically and the streams interleave
+          // chronologically (see openOutputFd for the Windows fallback).
           stdio: ["ignore", outputFile.fd, outputFile.fd],
         });
       } catch (error) {

@@ -59,8 +59,8 @@ export type FileMailMessage = z.infer<typeof FileMailMessageSchema>;
 // ---------------------------------------------------------------------------
 // File-based lock
 //
-// Uses exclusive-create (wx flag) on a .lock file.  Retries with a small
-// random back-off until the LOCK_ACQUIRE_TIMEOUT_MS deadline.  Stale locks
+// Uses exclusive-create (wx flag) on a .lock file.  Retries with exponential
+// back-off and jitter until the LOCK_ACQUIRE_TIMEOUT_MS deadline.  Stale locks
 // (older than LOCK_STALE_MS) are automatically removed so a crashed process
 // cannot block others forever.
 // ---------------------------------------------------------------------------
@@ -193,8 +193,9 @@ export class FileMailbox {
   }
 
   /**
-   * Delivers a message. When `structured` is provided the entire message object is
-   * persisted as-is, preserving the type / requestId / approve fields of structured messages.
+   * Delivers a message. When `structured` is provided that message object is persisted
+   * (with `read` forced to false), preserving the type / requestId / approve fields of
+   * structured messages.
    */
   async send(
     from: string,

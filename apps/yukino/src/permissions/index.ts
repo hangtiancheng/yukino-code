@@ -560,8 +560,8 @@ export function isSafeCommand(command: string): boolean {
         trimmed.startsWith(prefix + "\t")
       );
     }
-    // `g`/`y` regexes keep match state in lastIndex, which would leak between
-    // commands and let a later unsafe command pass, so restart the match.
+    // Defensive reset: a `g`/`y` regex would carry match state in lastIndex
+    // between calls, so every command must start matching from position 0.
     prefix.lastIndex = 0;
     return prefix.test(trimmed);
   });
@@ -618,6 +618,9 @@ export class PermissionChecker {
     const content = extractContent(toolName, args);
 
     // Use one rule snapshot for this call, including all compound-command checks.
+    // Only deny/ask short-circuit here: an explicit allow deliberately falls
+    // through so the dangerous-command, deny-write and per-subcommand checks
+    // below can still take precedence, and is returned at Layer 5 if none fires.
     let snapshot: Rule[] | null = null;
     const rules = (): Rule[] => (snapshot ??= this.ruleEngine.snapshot());
     const explicitEffect = evaluateRules(rules(), toolName, content);
@@ -771,8 +774,8 @@ export class PermissionChecker {
 
   /**
    * Generate a human-readable description of the tool action for display in HITL confirmation dialogs.
-   * Prioritizes extracting fields defined in CONTENT_FIELDS (e.g., command, file_path);
-   * falls back to a key:value summary of parameters if no match is found.
+   * Prefers the per-tool match content from extractContent (e.g., command, file_path,
+   * or McpCall's server__tool); falls back to a key:value summary of parameters when there is none.
    */
   describeToolAction(toolName: string, args: Record<string, unknown>): string {
     const content = extractContent(toolName, args);

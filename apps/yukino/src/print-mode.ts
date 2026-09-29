@@ -155,8 +155,8 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   registry.register(new EditFileTool());
   registry.register(new ToolSearchTool(registry));
 
-  // Team tools are also available in -p mode, allowing the Leader to assemble a team and delegate
-  // tasks within a single non-interactive execution
+  // Team tools are also available in -p mode, allowing the Leader to assemble
+  // a team and delegate tasks within a single non-interactive execution.
   const teamManager = new TeamManager(workDir);
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here

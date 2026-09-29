@@ -25,12 +25,12 @@ import type { PermissionAction } from "./permission-dialog.js";
 
 /**
  * Whether a single Ctrl+C / Esc has anything to interrupt. Only foreground
- * execution counts: the streaming agent loop, compaction, and synchronous
- * (run_in_background=false) subagents — tracked progress entries without a
- * taskId. Background shell tasks, background subagents (whose progress entry
- * carries the background task id) and teammates are deliberately excluded:
- * they survive a single interrupt; interruptAll stops them only when the TUI
- * exits (double Ctrl+C, /quit).
+ * execution counts: the streaming run (agent loop or code review),
+ * compaction, and synchronous (run_in_background=false) subagents — tracked
+ * progress entries without a taskId. Background shell tasks, background
+ * subagents (whose progress entry carries the background task id) and
+ * teammates are deliberately excluded: they survive a single interrupt;
+ * interruptAll stops them only when the TUI exits (double Ctrl+C, /quit).
  */
 export function isForegroundBusy(
   isStreaming: boolean,
@@ -45,7 +45,11 @@ export function isForegroundBusy(
 }
 
 export interface InterruptDeps {
-  /** Controller of the in-flight agent loop; its signal also feeds synchronous tool calls and sync subagents. */
+  /**
+   * Controller of the in-flight foreground run (agent loop, /compact, or code
+   * review); during an agent loop its signal also feeds synchronous tool calls
+   * and sync subagents.
+   */
   abortControllerRef: { current: AbortController | null };
   permissionResolveRef: {
     current: ((decision: PermissionAction) => void) | null;
@@ -63,10 +67,11 @@ export interface InterruptDeps {
 
 export interface InterruptHandlers {
   /**
-   * Stop only the foreground execution: abort the in-flight agent loop (which
-   * carries synchronous tool calls and run_in_background=false subagents with
-   * it) and dismiss pending permission/ask prompts. Background tasks,
-   * background subagents and teammates own separate abort controllers and are
+   * Stop only the foreground execution: abort the in-flight foreground run —
+   * the agent loop (whose signal carries synchronous tool calls and
+   * run_in_background=false subagents with it), /compact, or a code review —
+   * and dismiss pending permission/ask prompts. Background tasks, background
+   * subagents and teammates own separate abort controllers and are
    * deliberately left running — a single Ctrl+C or Esc must not kill them.
    */
   interruptForeground: () => void;

@@ -96,7 +96,7 @@ export interface ReviewComment {
   groupLabel?: string;
 }
 
-/** A semantically related cluster of files reviewed by one subagent. */
+/** A cluster of files reviewed together by one subagent. */
 export interface FileGroup {
   label: string;
   diffs: FileDiff[];

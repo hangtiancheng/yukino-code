@@ -26,8 +26,11 @@ const MAX_DIFF_LINES = 200;
 
 export interface DiffResult {
   /**
-   * Unified diff format text: "  lineNum  content" for unchanged lines,
-   * "- lineNum  content" for removals, "+ lineNum  content" for additions
+   * Line-numbered diff with unified-style prefixes: " " for unchanged context,
+   * "-" for removals, "+" for additions. Each line is prefix, space, 1-based
+   * line number right-aligned in 4 columns, two spaces, then the content.
+   * Context and removed lines carry old-file numbers; added lines carry
+   * new-file numbers. A trailing notice marks truncation at MAX_DIFF_LINES.
    */
   text: string;
   additions: number;

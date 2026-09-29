@@ -187,8 +187,8 @@ export async function runCodeReview(
   }
 
   // Step 2: deterministic selection. The per-file ceiling derives from the
-  // provider's declared context window, so a
-  // small-window provider cannot be fed a diff it cannot hold.
+  // provider's declared context window, so a small-window provider cannot be
+  // fed a diff it cannot hold.
   const contextWindow = getContextWindow(deps.provider);
   const maxOutput = getMaxOutputTokens(deps.provider);
   const fileTokenLimit = Math.floor(contextWindow * PROMPT_TOKEN_RATIO);
@@ -313,9 +313,9 @@ export async function runCodeReview(
     outcomes.push(outcome);
   };
 
-  // Worker pool: bounded concurrency keeps provider rate limits and the
-  // terminal output readable; the abort signal is checked before each new
-  // group is started.
+  // Worker pool: bounded concurrency stays within provider rate limits and
+  // keeps terminal output readable; the abort signal is checked before each
+  // new group is started.
   const queue = [...groups];
   const workers: Promise<void>[] = [];
   for (let i = 0; i < Math.min(maxConcurrency, queue.length); i++) {

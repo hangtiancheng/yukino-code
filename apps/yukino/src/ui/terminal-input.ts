@@ -38,8 +38,9 @@ export class TerminalInput extends Transform {
 
   constructor(private readonly source: NodeJS.ReadStream) {
     super();
-    // Keep the real TTY's raw-mode/ref controls, with reads and events supplied
-    // by the filtered stream. Ink's public stdin option requires a TTY stream.
+    // Keep the real TTY's raw-mode and ref controls, with reads and events
+    // supplied by the filtered stream. Ink's public stdin option requires a TTY
+    // stream.
     this.stdin = new Proxy(source, {
       get: (target, property) => {
         const owner = property in this ? this : target;

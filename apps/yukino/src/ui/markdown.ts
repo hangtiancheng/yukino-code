@@ -37,12 +37,13 @@ type MarkdownKind = "assistant" | "user" | "thinking";
 /**
  * An scp-style remote, as in `git clone git@github.com:owner/repo.git`.
  *
- * GFM autolinks the `user@host` part as an email address, and the terminal
- * renderer then prints the mailto target next to it, turning the remote into
- * `git@github.com (mailto:git@github.com):owner/repo.git`. Claiming the pattern
- * before marked's inline url rule sees it keeps such remotes verbatim; the
- * colon has to be followed by a non-space character, so ordinary addresses
- * such as "foo@example.com: see the docs" still autolink.
+ * GFM's inline url rule autolinks the `user@host` part as an email address,
+ * splitting the remote into a mailto link token (styled as a link, and a
+ * clickable OSC-8 hyperlink where the terminal supports it) and a dangling
+ * `:owner/repo.git` text tail. Claiming the pattern before that rule sees it
+ * keeps such remotes verbatim as plain text; the colon has to be followed by
+ * a non-space character, so ordinary addresses such as
+ * "foo@example.com: see the docs" still autolink.
  */
 const SCP_STYLE_REMOTE =
   /^[A-Za-z0-9._+-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+:(?=\S)/u;

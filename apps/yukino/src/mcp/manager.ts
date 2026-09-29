@@ -125,7 +125,7 @@ export class MCPManager {
 
   /**
    * Applies a freshly loaded config without disturbing unchanged connections.
-   * A same-named server whose transport settings changed is restarted.
+   * A same-named server whose config changed is restarted.
    */
   async reconcile(configs: MCPServerConfig[]): Promise<ReconcileResult> {
     return this.runExclusive(async () => {
