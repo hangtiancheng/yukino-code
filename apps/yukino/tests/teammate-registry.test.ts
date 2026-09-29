@@ -138,7 +138,8 @@ describe("teammate worker tool registry", () => {
   });
 
   // Legacy invocations without --team-name fall back to deriving the team
-  // name from the mailbox directory basename.
+  // name from the --team-dir path: its basename, or the parent directory's
+  // name when the path ends in "inboxes" (the production mailbox layout).
   it("derives team name from directory when --team-name is absent", () => {
     const args = parseTeammateFlags([
       "--teammate",

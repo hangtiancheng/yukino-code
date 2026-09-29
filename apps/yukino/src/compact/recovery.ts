@@ -21,9 +21,12 @@
  */
 
 // Recovery budgets for the attachment block appended to the summary
-// message. Compact wipes the working conversation; without these
-// snapshots the model would forget which files it just read and which
-// skill SOPs it was operating under.
+// message. Compaction collapses the working conversation into a summary;
+// without these snapshots the model would forget which files it just read.
+// Skill recovery does not flow through this class today: recordSkillInvocation
+// has no callers, so the "Active skills" section below is never populated.
+// Active skill SOPs are re-injected after compaction by Agent.restoreContext →
+// ConversationManager.injectLongTermMemory (agent/index.ts) instead.
 const RECOVERY_FILE_LIMIT = 5;
 const RECOVERY_TOKENS_PER_FILE = 5_000;
 const RECOVERY_SKILLS_BUDGET = 25_000;
@@ -87,6 +90,9 @@ export class RecoveryState {
     }
   }
 
+  // Currently uncalled — skill SOPs reach the post-compaction context via
+  // restoreContext → injectLongTermMemory, not through this attachment (see
+  // the file header).
   recordSkillInvocation(name: string, body: string): void {
     this.skills.set(name, { name, body, timestamp: Date.now() });
   }

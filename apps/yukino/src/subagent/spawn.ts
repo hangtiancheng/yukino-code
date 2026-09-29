@@ -72,7 +72,8 @@ export interface SubagentRunOptions {
    * turn, so the turn-end stopAll() would immediately kill anything the
    * teammate backgrounded, and the drain disappears before any notification
    * could be delivered. Teammates stay purely foreground (matching the
-   * subprocess teammate path); subagents they spawn themselves are unaffected.
+   * subprocess teammate path); neither path exposes the Agent tool, so a
+   * teammate never has subagents of its own.
    */
   backgroundTasks?: boolean;
 }

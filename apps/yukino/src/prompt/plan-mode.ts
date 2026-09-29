@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-// Plan Mode full reminder: displayed on the first iteration and every reminderInterval iterations
+// Full Plan Mode reminder text; buildPlanModeReminder decides when it is shown.
 const planModeFullReminder = `# Plan mode
 Read-only except the declared plan file. You MUST NOT make any edits elsewhere, run mutating tools, change configs, or commit. Do not begin implementation before the runtime approval gate allows it.
 
@@ -35,7 +35,7 @@ Write only the recommended approach in the plan file, starting with Context. Inc
 ## Approval
 When the plan is ready, call ExitPlanMode for approval. End with AskUserQuestion only for needed clarification, or ExitPlanMode for the handoff. Never request approval through prose or AskUserQuestion; wait for the runtime to exit plan mode.`;
 
-// Plan Mode sparse reminder: only key rules are displayed during intermediate iterations
+// Sparse Plan Mode reminder text used on intermediate iterations.
 const planModeSparseReminder = `Plan mode still active. Read-only except plan file (%PLAN_PATH%). Keep Context, Approach, files, and Verification current. Use AskUserQuestion for clarification; call ExitPlanMode for approval, never prose or AskUserQuestion. Do not implement before the runtime approval gate allows it.`;
 
 // Prompt for exiting Plan Mode
@@ -59,7 +59,6 @@ export function buildPlanModeReminder(
   planExist: boolean,
   iteration: number,
 ): string {
-  // Construct the plan file info section
   let planFileInfo = `Plan file: ${planPath}`;
   if (planExist) {
     planFileInfo += `\nA plan file already exists at ${planPath}. You can read it and make incremental edits using the EditFile tool.`;
@@ -67,14 +66,12 @@ export function buildPlanModeReminder(
     planFileInfo += `\nNo plan file exists yet. You should create your plan at ${planPath} using the WriteFile tool.`;
   }
 
-  // Send the full reminder on the first iteration and every `reminderInterval` iterations thereafter:
-  // resending it every iteration is too token-expensive, but sending it only once causes gradual drift;
-  // periodic repetition strikes a balance between the two
+  // Resending the full reminder every iteration is too token-expensive, but
+  // sending it only once causes gradual drift; periodic repetition balances the two.
   if ((iteration - 1) % reminderInterval === 0) {
     return planModeFullReminder.replace("%PLAN_FILE_INFO%", () => planFileInfo);
   }
 
-  // Use the sparse reminder for intermediate iterations
   return planModeSparseReminder.replace("%PLAN_PATH%", () => planPath);
 }
 

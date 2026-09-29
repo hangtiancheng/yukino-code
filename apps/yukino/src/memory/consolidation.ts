@@ -199,12 +199,13 @@ function readLastConsolidatedAt(memDir: string): number {
 
 /**
  * Acquires the consolidation lock. An existing lock is respected only while
- * it is fresher than HOLDER_STALE_MS and its holder PID is still running;
- * stale locks are taken over. Returns the lock's previous mtime on success
- * (0 when no lock existed), or null when the lock is held or the read-back
- * check fails. The mtime doubles as the last-consolidation timestamp (see
- * readLastConsolidatedAt), which is why callers can undo a failed pass by
- * restoring it via rollbackLock.
+ * it is fresher than HOLDER_STALE_MS and its recorded holder PID is still
+ * running; locks that are stale, whose holder died, or whose PID is missing
+ * or unreadable are taken over. Returns the lock's previous mtime on success
+ * (0 when no lock existed or its mtime could not be read), or null when the
+ * lock is held or the read-back check fails. The mtime doubles as the
+ * last-consolidation timestamp (see readLastConsolidatedAt), which is why
+ * callers can undo a failed pass by restoring it via rollbackLock.
  */
 function tryAcquireLock(memDir: string): number | null {
   const path = lockPath(memDir);

@@ -69,6 +69,11 @@ export function detectBackendFromEnv(): TeamMode {
  * tasks like `--task find the bug`) are parsed as a single token by the shell.
  * Arguments consisting solely of alphanumerics and a small set of safe symbols
  * are left unquoted for readability.
+ *
+ * Caveat: the single-quote protection only holds when the result reaches a
+ * shell verbatim. The tmux branch below embeds the assembled command inside
+ * outer double quotes, where single quotes are literal characters and `$`,
+ * backticks, `"` and `\` remain shell-active.
  */
 function shellQuote(arg: string): string {
   if (/^[A-Za-z0-9_/.:=-]+$/.test(arg)) {
@@ -77,7 +82,7 @@ function shellQuote(arg: string): string {
   return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
-/** Joins the command and its arguments into a single shell-executable string, applying safe escaping to each token. */
+/** Joins the command and its arguments into a single shell string, quoting each token via shellQuote (see its caveat re: outer quoting layers). */
 function buildShellCommand(config: SpawnConfig): string {
   return [config.command, ...config.args].map(shellQuote).join(" ");
 }
@@ -118,7 +123,10 @@ export function spawnTeammate(config: SpawnConfig): {
       } catch (err) {
         log.error({ err }, "teams operation failed");
 
-        // Create a new detached session to host the teammate window when the target session does not exist
+        // The session name is freshly generated per spawn, so the `new-window`
+        // above normally fails (no such session exists yet) and creating a new
+        // detached session to host the teammate window is the usual path, not a
+        // rare fallback.
 
         execSync(
           `tmux new-session -d -s "${sessionName}" -n teammate "${cmd}"`,

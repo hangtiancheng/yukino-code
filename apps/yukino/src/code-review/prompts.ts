@@ -281,9 +281,10 @@ Rules:
 **Review comment:**
 {{comment}}`;
 
-/** Repeated verbatim after a round where the model called no tools and
- * reported nothing — the loop ends on a tool-free turn, so without this a
- * distracted first response would silently complete an empty review. */
+/** Appended verbatim to the round's message, which is re-sent to a fresh
+ * agent run when the previous one called no tools and reported nothing —
+ * the loop ends on a tool-free turn, so without this a distracted first
+ * response would silently complete an empty review. */
 export const NO_TOOL_USE_NUDGE =
   "\n\nIMPORTANT: Your previous response did not call any tools and reported no findings. " +
   "Do not reply with prose alone. Review every file in <review_files>, call `CodeComment` to report each confirmed issue, " +

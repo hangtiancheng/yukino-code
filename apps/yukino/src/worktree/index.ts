@@ -46,9 +46,10 @@ export interface WorktreeResult {
   gitRoot: string;
 }
 
-// Pure filesystem-based git HEAD reading: the functions below retrieve the
-// branch and SHA by directly reading files under the .git directory, without
-// spawning a git subprocess — saving the ~15ms process-spawn overhead per call.
+// Pure filesystem-based git HEAD reading: the helpers in this section retrieve
+// the branch and SHA by directly reading files under the .git directory,
+// without spawning a git subprocess — saving the ~15ms process-spawn overhead
+// per call.
 
 /**
  * Allowed character set of ref names — excludes whitespace and shell
@@ -131,8 +132,9 @@ interface GitHead {
 }
 
 /**
- * Parse the <gitDir>/HEAD file to get the current branch or detached SHA
- * Returns null if the file does not exist or has an invalid format
+ * Parse the <gitDir>/HEAD file to get the current branch or detached SHA.
+ * Returns null if the file does not exist, has an invalid format, references
+ * an unsafe ref name, or the symref cannot be resolved to a SHA.
  */
 
 async function readGitHead(gitDir: string): Promise<GitHead | null> {

@@ -574,9 +574,10 @@ export function App({
       });
       if (result.tools.length > 0) {
         if (mcpModeDecidedRef.current) {
-          // The mode is fixed for the session — re-deciding it now could flip
-          // tools[] mid-flight and break the cache prefix. Reapply the standing
-          // mode so the tools this pass added inherit its defer flag.
+          // The mode is decided once per client/provider (recomputed on
+          // provider switch or login) — re-deciding it on a retry pass could
+          // flip tools[] mid-flight and break the cache prefix. Reapply the
+          // standing mode so the tools this pass added inherit its defer flag.
           applyMode(registryRef.current, registryRef.current.mcpLoadingMode);
         } else {
           // Only decide the load mode after all tools are registered: it compares total schema size against the context window
@@ -2267,7 +2268,8 @@ export function App({
    * session log is truncated to it and the in-memory conversation is rebuilt
    * from the truncated log. Line coordinates survive resume and compaction,
    * unlike in-memory message indexes (which are only meaningful within the
-   * process that captured them).
+   * process that captured them). Snapshots with no recorded sessionLineCount
+   * — or whose session file is gone — fall back to truncating by messageIndex.
    */
   const rewindConversation = (snap: Snapshot): void => {
     const sessionFilePath = sessionMod.getSessionFilePath(

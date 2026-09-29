@@ -284,7 +284,7 @@ function projectInstructionDirs(workDir: string): string[] {
   return dirs;
 }
 
-/** Traverses upward to find the .git directory and determine the git repository root */
+/** Traverses upward to find the .git entry (a directory, or a file in linked worktrees) and determine the git repository root */
 function findGitRoot(start: string): string {
   let cur = start;
   while (true) {

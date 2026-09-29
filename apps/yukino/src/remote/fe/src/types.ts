@@ -223,7 +223,8 @@ export interface PlanApprovalResponsePayload {
   feedback?: string;
 }
 
-/** Transformed code-review form values (mirror of CodeReviewFormOptions). */
+/** Transformed code-review form values; shape matches the server's
+ *  CodeReviewStartSchema (server.ts), where every field is optional. */
 export interface CodeReviewStartPayload {
   background?: string;
   from?: string;

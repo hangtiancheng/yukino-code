@@ -48,7 +48,10 @@ interface InitLoggerOptions {
   sessionId: string;
   /** Execution mode. */
   mode: LoggerMode;
-  /** Working directory; defaults .yukino/logs/ root. */
+  /**
+   * Working directory; defaults to process.cwd(). Logs go to
+   * <workDir>/.yukino/logs/ unless logDir is set.
+   */
   workDir?: string;
   /** Override log directory (teammates use ~/.yukino/teams/<team>/logs/). */
   logDir?: string;

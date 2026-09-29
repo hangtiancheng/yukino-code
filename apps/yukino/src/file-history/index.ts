@@ -212,8 +212,10 @@ export class FileHistory {
     }
 
     // Files first tracked after `target` have no record in target.backups, so the
-    // loop above never touches them: they did not exist at that point in time, so
-    // rewinding to it must delete them rather than leave them on disk.
+    // loop above never touches them: rewind treats "absent from the snapshot" as
+    // "not present at that point" and deletes them from disk. This also removes a
+    // file that already existed before `target` but was first edited after it —
+    // its pre-tracking content was never captured, so nothing can restore it.
     const createdAfterTarget = [...this.trackedFiles].filter(
       (p) => !(p in target.backups),
     );

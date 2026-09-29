@@ -46,7 +46,7 @@ const log = createChildLogger({ module: "memory" });
 /**
  * Caps for memory index content (MEMORY.md and the injected reminder):
  * 200 lines or 25KB, whichever is hit first. The line cap also bounds the
- * scanned headers per directory.
+ * headers retained per directory (newest first, see scanMemoryHeaders).
  */
 const MAX_ENTRYPOINT_LINES = 200;
 const MAX_ENTRYPOINT_BYTES = 25_000;

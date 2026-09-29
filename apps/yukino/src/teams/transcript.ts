@@ -88,7 +88,9 @@ function serializeConversation(
 }
 
 /**
- * Returns the storage directory for team transcripts.
+ * Returns the storage directory for team transcripts. Unlike the home-dir team
+ * data (team-file.ts), this project-local path embeds the raw, unsanitized team
+ * name.
  */
 function transcriptDir(workDir: string, teamName: string): string {
   return join(workDir, ".yukino", "teams", teamName, "transcripts");

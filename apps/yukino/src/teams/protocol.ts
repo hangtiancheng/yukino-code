@@ -27,10 +27,11 @@ import type { FileMailMessage } from "./file-mailbox.js";
 /**
  * Beyond plain text, teammates exchange several kinds of structured messages.
  *
- * Each carries a requestId that is echoed verbatim in the response, allowing the
- * Leader to correlate replies with the requests it sent: when shutdown requests are
- * dispatched to three teammates simultaneously, the three responses are
- * indistinguishable without an ID.
+ * Each request carries a requestId that is echoed verbatim in the response,
+ * allowing the requesting side — the Leader for shutdown flows, a teammate for
+ * plan approval — to correlate replies with the requests it sent: when shutdown
+ * requests are dispatched to three teammates simultaneously, the three
+ * responses are indistinguishable without an ID.
  */
 export const MSG_TEXT = "text";
 export const MSG_SHUTDOWN_REQUEST = "shutdown_request";
@@ -74,7 +75,11 @@ function typed(
   };
 }
 
-/** Shutdown request. The text carries the reason so the teammate can decide whether to agree. */
+/**
+ * Shutdown request. The text carries the reason so the recipient can decide
+ * whether to agree (via the approve field of shutdownResponse); current
+ * teammate implementations always accept.
+ */
 export function shutdownRequest(from: string, reason = ""): FileMailMessage {
   const why = reason || "team is wrapping up";
   return typed(
@@ -130,8 +135,9 @@ export function isShutdownRequest(m: FileMailMessage): boolean {
 
 /**
  * Whether the response constitutes approval. When the field is absent, it is
- * treated as not approved — better to make the Leader wait another round than to
- * interpret silence as consent.
+ * treated as not approved — silence is never interpreted as consent; the
+ * requester follows the rejection path instead (for plan approval, the
+ * teammate revises and resubmits).
  */
 export function approved(m: FileMailMessage): boolean {
   return m.approve === true;

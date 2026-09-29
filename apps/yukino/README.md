@@ -86,7 +86,7 @@ Yukino reads a single global YAML configuration file:
 
 - ~/.yukino/config.yaml
 
-At least one provider must be configured. Example config.yaml:
+Print, remote, and ACP modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. Example config.yaml:
 
 ```yaml
 providers:
@@ -144,7 +144,7 @@ Provider fields:
 | context_window     | no       | Context window in tokens (default: 1000000; no model-name inference)                                                       |
 | max_output_tokens  | no       | Output cap for the model (default: 128000, never above `context_window`). Set this for models with a smaller output limit. |
 
-The thinking level controls reasoning depth. For `anthropic` in the default `budget` mode it maps to a thinking token budget (minimal 1024, low 2048, medium 8192, high 16384, xhigh 32768, max 65536); with `thinking_mode: adaptive` it maps to an effort-based `output_config` instead (minimal resolves to low, xhigh to high). For `openai` and `openai-compat` it maps to the provider reasoning effort, passed through verbatim unless `thinking_level_map` remaps it. The budget shares `max_output_tokens` and always leaves at least 1024 answer tokens, so lower `max_output_tokens` shrinks the thinking budget instead of disabling it (below a 2048-token cap no valid budget remains and thinking falls back to disabled). Levels the model does not support are declared through `thinking_level_map` (map to a supported effort, or `null` to disable) and `reasoning: false`; an unsupported request is clamped down to the nearest available level. Use `/thinking <level>` to change it at runtime (the change is applied to the active client and saved to `~/.yukino/config.yaml`), or `/thinking` to show the current level.
+The thinking level controls reasoning depth. For `anthropic` in the default `budget` mode it maps to a thinking token budget (minimal 1024, low 2048, medium 8192, high 16384, xhigh 32768, max 65536); with `thinking_mode: adaptive` it maps to an effort-based `output_config` instead (minimal resolves to low, xhigh to high). For `openai` and `openai-compat` it maps to the provider reasoning effort, passed through verbatim unless `thinking_level_map` remaps it. The budget shares `max_output_tokens` and always leaves at least 1024 answer tokens, so lower `max_output_tokens` shrinks the thinking budget instead of disabling it (below a 2048-token cap no valid budget remains and thinking falls back to disabled). Levels the model does not support are declared through `thinking_level_map` (map to a supported effort, or `null` to disable) and `reasoning: false`; an unsupported request is clamped down to the nearest available level. Use `/thinking <level>` to change it at runtime (the change is applied to the active client and saved to `~/.yukino/config.yaml`), or bare `/thinking` to open a picker of the levels the active provider supports.
 
 API keys are resolved in this order: explicit api_key field, then environment variables (ANTHROPIC_API_KEY for anthropic, OPENAI_API_KEY for openai and openai-compat).
 
@@ -286,30 +286,30 @@ Implements the Agent Client Protocol (`@agentclientprotocol/sdk`) so ACP-compati
 
 Inside the UI, these commands are available:
 
-| Command              | Description                                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| /login               | Configure, save, and activate an LLM provider                                                                             |
-| /provider            | Switch the active provider                                                                                                |
-| /help [command]      | Show available commands, or details for a single command                                                                  |
-| /status              | Show current session status (model, tokens, tools, sandbox, memories, skills, MCP)                                        |
-| /session             | Show session info                                                                                                         |
-| /memory              | List stored memories                                                                                                      |
-| /memory clear        | Clear all memories                                                                                                        |
-| /skills              | List available skills                                                                                                     |
-| /skills reload       | Hot-reload skills from disk                                                                                               |
-| /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`; `/skill reload` routes to `/skills reload`)                          |
-| /plan                | Enter plan mode (read-only investigation)                                                                                 |
-| /compact             | Force conversation compaction                                                                                             |
-| /clear               | Reset the session and clear the terminal                                                                                  |
-| /resume [id]         | List or restore a previous session                                                                                        |
-| /rewind              | Open checkpoint rewind dialog                                                                                             |
-| /sandbox [mode]      | Configure sandbox (auto=on+auto, manual=on+manual, off)                                                                   |
-| /worktree            | List git worktrees                                                                                                        |
-| /mcp                 | Show MCP server status                                                                                                    |
-| /mcp reload          | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                |
-| /thinking [level]    | Show or set the thinking level (off, minimal, low, medium, high, xhigh, max); setting persists to `~/.yukino/config.yaml` |
-| /code-review         | Open the code review form for workspace, branch-range, or commit review                                                   |
-| /quit                | Exit the application                                                                                                      |
+| Command              | Description                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| /login               | Configure, save, and activate an LLM provider                                                                                                                                               |
+| /provider            | Switch the active provider                                                                                                                                                                  |
+| /help [command]      | Show available commands, or details for a single command                                                                                                                                    |
+| /status              | Show current session status (model, tokens, tools, sandbox, memories, skills, MCP)                                                                                                          |
+| /session             | Confirm the session is active; use /resume to list past sessions                                                                                                                            |
+| /memory              | List stored memories                                                                                                                                                                        |
+| /memory clear        | Clear all memories                                                                                                                                                                          |
+| /skills              | List available skills                                                                                                                                                                       |
+| /skills reload       | Hot-reload skills from disk                                                                                                                                                                 |
+| /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`; `/skill reload` routes to `/skills reload`)                                                                                            |
+| /plan                | Enter plan mode (read-only investigation)                                                                                                                                                   |
+| /compact             | Force conversation compaction                                                                                                                                                               |
+| /clear               | Reset the session and clear the terminal                                                                                                                                                    |
+| /resume [id]         | List or restore a previous session                                                                                                                                                          |
+| /rewind              | Open checkpoint rewind dialog                                                                                                                                                               |
+| /sandbox [mode]      | Configure sandbox (auto=on+auto, manual=on+manual, off)                                                                                                                                     |
+| /worktree            | List git worktrees                                                                                                                                                                          |
+| /mcp                 | Show MCP server status                                                                                                                                                                      |
+| /mcp reload          | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                                                                                  |
+| /thinking [level]    | Without an argument, open a picker of the supported thinking levels; with one, set the level (off, minimal, low, medium, high, xhigh, max). The setting persists to `~/.yukino/config.yaml` |
+| /code-review         | Open the code review form for workspace, branch-range, or commit review                                                                                                                     |
+| /quit                | Exit the application                                                                                                                                                                        |
 
 ### Keyboard Shortcuts
 

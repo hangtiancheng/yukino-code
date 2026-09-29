@@ -141,8 +141,8 @@ export interface AgentConfig {
   memoryRecallPromise?: Promise<RecallResult>;
   /**
    * Called when recall results are actually injected into the conversation.
-   * Receives the memory paths surfaced this turn. Since the Agent is recreated
-   * each turn, the caller maintains the injected set across turns.
+   * Receives the memory paths surfaced this turn. Since a new Agent is created
+   * for every run, the caller maintains the injected set across runs.
    */
   onMemoriesSurfaced?: (paths: string[]) => void;
   onPermissionRequest?: PermissionRequestHandler;
@@ -220,7 +220,7 @@ export class Agent {
     this.skillDeltaFn = config.skillDeltaFn;
     this.memoryRecallPromise = config.memoryRecallPromise;
     this.onMemoriesSurfaced = config.onMemoriesSurfaced;
-    // Stash the prefetch result and set the flag as soon as it resolves, so the main loop can poll without awaiting
+    // Stash the prefetch result and set the flag as soon as it settles (resolves or rejects), so the main loop can poll without awaiting
     void this.memoryRecallPromise?.then(
       (r) => {
         this.memoryRecallValue = r;
@@ -234,9 +234,10 @@ export class Agent {
 
   /**
    * Queue a user message for pi-style steering: it is injected into the
-   * conversation at the next turn boundary (after the current assistant
-   * turn's tool results, before the next LLM call) instead of waiting for
-   * the whole run to finish.
+   * conversation at the next turn boundary — after the current assistant
+   * turn's tool results (or right after the turn when there were none),
+   * before the next LLM call — instead of waiting for the whole run to
+   * finish.
    */
   steer(text: string): void {
     const trimmed = text.trim();
@@ -422,7 +423,7 @@ export class Agent {
             this.conversation.addSystemReminder(note);
           }
 
-          // Layer 1: auto-compact when the window fills up
+          // Auto-compact when the window fills up.
           // Tool results are already budget-processed at the time they enter
           // history, so message sizes in the transcript are final — estimate
           // tokens directly from them.

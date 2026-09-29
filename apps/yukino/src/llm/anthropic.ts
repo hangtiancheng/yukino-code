@@ -231,13 +231,14 @@ export function buildAnthropicMessages(
 
       result.push({ role: "user", content: blocks });
     } else {
-      // Merge consecutive user text messages to maintain the strict
-      // user/assistant alternation the Anthropic API requires: after compaction
-      // the summary (user) may be followed by kept user messages with no
-      // intervening assistant turn, so they become a single user entry with
-      // multiple text blocks. Only merge when the previous entry is a plain
-      // user message (string, or first block text/image), never into a
-      // tool_result user entry.
+      // Collapse consecutive plain user messages into a single entry: after
+      // compaction the summary (user) may be followed by kept user messages
+      // with no intervening assistant turn, so they become one user entry
+      // with multiple text blocks. Only merge when the previous entry is a
+      // plain user message (string, or first block text/image), never into a
+      // tool_result user entry — a user message right after tool results
+      // (e.g. a reminder) still starts a new entry, so the output can
+      // contain consecutive user entries.
       if (result.length === 0) {
         result.push({
           role: "user",

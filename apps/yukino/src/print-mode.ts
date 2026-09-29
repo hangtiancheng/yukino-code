@@ -297,7 +297,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         }
       }
 
-      // Collect statistics
+      // Collect statistics; error and interrupted events also set the exit code.
       switch (event.type) {
         case "stream_text":
           resultText += event.text;

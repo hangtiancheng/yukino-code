@@ -43,8 +43,8 @@ import {
   saveProvider,
 } from "@/config/provider-login.js";
 
-// Redirect $HOME to a temp dir so saveProvider/persistThinkingLevel write to an
-// isolated global config instead of the real ~/.yukino/config.yaml.
+// Point os.homedir() at a temp dir so saveProvider/persistThinkingLevel write
+// to an isolated global config instead of the real ~/.yukino/config.yaml.
 const homeRef = vi.hoisted(() => ({ current: "" }));
 vi.mock("node:os", async (importOriginal) => {
   const actual = await importOriginal<typeof nodeOs>();

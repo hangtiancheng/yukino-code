@@ -155,8 +155,9 @@ export class GrepTool implements Tool {
     try {
       regex = new RegExp(toUnicodePattern(pattern), "iu");
     } catch {
-      // Accepted compiling (e.g. "interface{" — invalid in u-mode), with the
-      // old ASCII \w/\b/\d semantics.
+      // Fallback for patterns u-mode rejects (e.g. "interface{" — a lone "{"
+      // is an error in u-mode): compile without u, keeping the old ASCII
+      // \w/\b/\d semantics.
       try {
         regex = new RegExp(pattern, "i");
       } catch (err) {

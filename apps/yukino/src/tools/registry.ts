@@ -110,11 +110,12 @@ export class ToolRegistry {
     const resolvedProtocol = protocol ?? "anthropic";
     const isOpenAI =
       resolvedProtocol === "openai" || resolvedProtocol === "openai-compat";
-    // The official endpoint uses native deferral: tools stay in tools[] but are
-    // flagged with defer_loading, and the server decides whether to show them to
-    // the model. This keeps the tools array byte-identical even when new tools are
-    // discovered. Other endpoints can only hide deferred tools entirely and fall
-    // back on McpCall.
+    // Native deferral (strategy picks it for official endpoints): tools stay
+    // in tools[] flagged with defer_loading, and the server decides whether to
+    // show them to the model. This keeps the tools array byte-identical even
+    // when new tools are discovered. defer_loading/tool_reference is not part
+    // of the OpenAI protocols, so !isOpenAI forces the alternative path — hide
+    // deferred tools entirely and fall back on McpCall.
     const native = this.mcpLoadingMode === "native" && !isOpenAI;
 
     const schemas: ProviderToolSchema[] = [];

@@ -388,7 +388,9 @@ class AgentHandleImpl implements RemoteAgentHandle {
         recoveryState: this.recoveryState,
         activeSkills: this.activeSkills,
         toolFilter: (name: string) => {
-          // Skill filtering and coordinator narrowing must both pass; either one blocking is sufficient to deny
+          // Coordinator narrowing must pass, and any handle-level tool filter must
+          // pass as well; either one blocking is sufficient to deny. The handle's
+          // filter is currently never set (always null), but keep the gate here.
           if (!coordinatorToolFilter(this.enableCoordinatorMode)(name)) {
             return false;
           }
@@ -507,7 +509,8 @@ export async function createRemoteAgent(
     sessionId = newSessionId(),
   } = opts;
 
-  // 1. Create session and file history
+  // 1. Create the per-session file history and file-state cache
+  // (the session id itself is chosen above; the session file is written lazily)
   const fileHistory = new FileHistory(workDir, sessionId);
   const fileStateCache = new FileStateCache();
 
@@ -653,7 +656,7 @@ export async function createRemoteAgent(
         // Teammates stay purely foreground: see SubagentRunOptions.backgroundTasks.
         { abortSignal, backgroundTasks: false },
       );
-  // 12. Register Team tools
+  // 12. Register team tools (plus SyntheticOutput)
   const teamManager = new TeamManager(workDir);
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here
@@ -1439,8 +1442,9 @@ export class RemoteServer {
 
     switch (cmd.type) {
       case "local": {
-        // /memory and /mcp return placeholder strings that only the terminal
-        // UI resolves; the remote server renders the real status itself.
+        // The /memory and /mcp handlers return placeholder tokens; both the
+        // terminal UI and the remote server intercept these command names and
+        // render the real status themselves (the remote version is below).
         if (name === "memory") {
           this.broadcast({
             type: "system",
@@ -2053,7 +2057,7 @@ export class RemoteServer {
     }
   }
 
-  // -- Local status commands --------------------------------------------------------
+  // -- Local status commands and session resume --------------------------------------
 
   /** Renders /memory output (parity with the terminal UI). */
   private buildMemoryStatus(args: string): string {

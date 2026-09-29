@@ -67,7 +67,10 @@ export interface TaskUpdateFields {
 
 /**
  * Shared task store: persisted as a JSON file (tasks.json), readable and writable by all members of the same team.
- * Reloads the file before every read operation to ensure cross-process teammates see the latest data.
+ * get()/listTasks() and update() reload the file first so cross-process teammates see the latest data.
+ * create() is the exception: it assigns IDs from the in-memory counter and rewrites the whole file
+ * without reloading, and the class uses no file locking — concurrent creates from different processes
+ * can therefore collide on IDs or lose tasks.
  */
 export class SharedTaskStore {
   private path: string;

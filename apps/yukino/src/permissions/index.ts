@@ -492,8 +492,9 @@ export class RuleEngine {
 
   // Return the merged snapshot of both rules files. Reuses the previous
   // parse result when files are unchanged; re-reads only on change, so edits
-  // take effect on the next evaluation without redundant parsing. One snapshot
-  // is taken per tool call and shared across sub-command checks.
+  // take effect on the next evaluation without redundant parsing. Every call
+  // still stats both files; callers that evaluate repeatedly within one
+  // decision (e.g. compound-command checks) memoize and share one snapshot.
   snapshot(): Rule[] {
     return [this.userPath, this.projectPath].flatMap((p) => this.rulesFor(p));
   }
@@ -617,10 +618,13 @@ export class PermissionChecker {
   ): Decision {
     const content = extractContent(toolName, args);
 
-    // Use one rule snapshot for this call, including all compound-command checks.
-    // Only deny/ask short-circuit here: an explicit allow deliberately falls
-    // through so the dangerous-command, deny-write and per-subcommand checks
-    // below can still take precedence, and is returned at Layer 5 if none fires.
+    // Layer 1: explicit rules, evaluated first so a deny/ask also gates the
+    // Layer-0 plan-file write exception. The snapshot is taken lazily and shared
+    // with the Layer-3.5 sub-command checks and Layer 5 (the Layer-4 override
+    // re-evaluates through the engine cache). Only deny/ask short-circuit here:
+    // an explicit allow deliberately falls through so the dangerous-command,
+    // deny-write and per-subcommand checks below can still take precedence, and
+    // is returned at Layer 5 if none fires.
     let snapshot: Rule[] | null = null;
     const rules = (): Rule[] => (snapshot ??= this.ruleEngine.snapshot());
     const explicitEffect = evaluateRules(rules(), toolName, content);
@@ -697,7 +701,7 @@ export class PermissionChecker {
       };
     }
 
-    // Layer 4: path sandbox (file tools only).
+    // Layer 4: path sandbox (read/write tools that pass a file_path/path arg).
     const filePath = strArg(args, "file_path", strArg(args, "path", ""));
     if ((category === "read" || category === "write") && filePath) {
       // denyWrite check takes priority: sensitive paths always deny writes
@@ -735,9 +739,10 @@ export class PermissionChecker {
     };
   }
 
-  // Allow an extra directory outside the project root. When a background agent
-  // needs read/write access to user-level data (e.g., user-level memory dir),
-  // the caller declares it explicitly; the sandbox baseline stays at the project root.
+  // Allow an extra directory outside the sandbox baseline (project root +
+  // os.tmpdir()) for read/write. Hosts opt in explicitly per checker; no
+  // production caller exists today (only tests) — the memory subsystem
+  // enforces its own dedicated checker instead.
   allowExtraRoot(path: string): void {
     this.sandbox.addRoot(path);
   }

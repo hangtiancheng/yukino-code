@@ -165,8 +165,10 @@ export class ReadFileTool implements Tool {
         outputBytes += lineBytes;
       }
 
-      // Register the file as "read" in the state cache so subsequent
-      // EditFile / WriteFile calls are allowed.
+      // Re-stat and compare against the pre-read stat: if the file changed
+      // mid-read, refuse to register it so later edits work from fresh
+      // content. Otherwise register the file as "read" in the state cache so
+      // subsequent EditFile / WriteFile calls are allowed.
       const afterRead = statSync(filePath);
       if (afterRead.mtimeMs !== stat.mtimeMs || afterRead.size !== stat.size) {
         return Promise.resolve({

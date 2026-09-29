@@ -44,7 +44,7 @@ export const AgentProgressSchema = z.object({
   tokenCount: z.number(),
   activeTools: z.array(ActiveToolSchema),
   lastActivity: ToolActivitySchema.optional(),
-  recentActivities: z.array(ToolActivitySchema), // circular buffer, max 5
+  recentActivities: z.array(ToolActivitySchema), // capped history, max 5 entries
 });
 export type AgentProgress = z.infer<typeof AgentProgressSchema>;
 
@@ -162,7 +162,6 @@ export function summarizeActivities(activities: ToolActivity[]): string {
   if (!activities.length) {
     return "";
   }
-  // If last activity has a description, use it
   return activities[activities.length - 1].activityDescription;
 }
 

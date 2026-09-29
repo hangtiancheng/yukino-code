@@ -74,8 +74,9 @@ function collectAtRefs(text: string): string[] {
 }
 
 // Expand @path references in a user message by inlining the referenced files'
-// contents (resolved relative to workDir). Tokens that don't resolve to a small
-// readable file are left untouched.
+// contents (resolved relative to workDir), or just the selected line range when
+// the ref carries an #L suffix. Tokens that don't resolve to a small readable
+// file are left untouched.
 export function expandAtRefs(text: string, workDir: string): string {
   const refs = collectAtRefs(text);
   if (refs.length === 0) {
@@ -118,7 +119,7 @@ export function expandAtRefs(text: string, workDir: string): string {
   return appendix ? text + appendix : text;
 }
 
-// Like expandAtRefs, but @references to image files (png/jpg/gif/webp) are
+// Like expandAtRefs, but @references to image files (png/jpg/jpeg/gif/webp) are
 // loaded as inline image content blocks instead of being inlined as (garbled)
 // utf-8 text. The appendix gets an <image> placeholder so the model
 // can pair each block with its @token. Image load failures are logged and

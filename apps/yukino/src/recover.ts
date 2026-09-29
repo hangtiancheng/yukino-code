@@ -79,8 +79,10 @@ function exitForTerminalGone(context: string, error: unknown): never {
     const detail = error instanceof Error ? error.message : String(error);
     record(`terminal closed [${context}] ${detail}`);
   }
-  // No terminal is left to render into or read from, so there is nothing to
-  // unwind: shut down before the next frame fails the same way.
+  // No terminal is left to render into or read from: exit immediately, before
+  // the next frame fails the same way. process.exit skips child-resource
+  // cleanup, so spawned children (background shells, MCP subprocesses) are
+  // left running as orphans.
   process.exit(0);
 }
 

@@ -86,7 +86,8 @@ const log = createChildLogger({ module: "teams" });
 export type TeamMode = "in-process" | "tmux" | "iterm";
 
 // Callback that receives agent events during execution. The team layer uses
-// this to update TeammateUIState without depending on the agent/LLM layer.
+// this to update TeammateUIState while staying decoupled from the agent
+// runtime (the event type is a type-only import from the subagent layer).
 export type AgentEventCallback = (event: SubagentProgressEvent) => void;
 
 export interface Member {
@@ -101,7 +102,7 @@ export interface Member {
   conversation?: ConversationManager;
   /** Optional: tmux session name recorded at spawn (diagnostics only); stop goes through the cancel callback and the mailbox shutdown flow. Not set under the iTerm backend. */
   paneId?: string;
-  /** Whether this is an external-process teammate (tmux/iTerm); determines whether shutdown is delivered via the mailbox. */
+  /** Whether this is an external-process teammate (tmux/iTerm); stopOne writes the mailbox shutdown notice only for external members. */
   external?: boolean;
 
   /** Optional: permission checker for the teammate. Plan mode uses it to determine the current state; permissions are elevated in place once approval is granted. */
@@ -120,7 +121,7 @@ export interface Member {
 // Runs a teammate's task and returns its final output. Injected so the team
 // layer stays decoupled from the LLM/agent layer (and is unit-testable).
 // The optional onEvent callback lets the team layer observe agent events
-// (tool_use, usage) without coupling to the Agent/LLM types directly.
+// (tool_use, tool_result, usage, turn_complete).
 export type RunAgent = (
   task: string,
   onEvent?: AgentEventCallback,
@@ -590,9 +591,13 @@ export class Team {
 
   /**
    * Stops a single teammate: marks it inactive and updates UI state.
-   * For external teammates (tmux/iTerm), a shutdown notification is written to their mailbox
-   * first to allow graceful exit, followed by cancel as a force-kill fallback;
-   * in-process teammates only need cancel.
+   * For external teammates (tmux/iTerm) a shutdown notice is written to the
+   * mailbox first, but cancel runs immediately after with no grace period:
+   * under tmux the pane is killed before the teammate (which polls its mailbox
+   * only every ~2 s) can observe the message, so the mailbox notice is the
+   * effective shutdown path only under iTerm, whose cancel is a no-op.
+   * In-process teammates are stopped via cancel (abort) alone; `done` is then
+   * awaited so the loop has fully exited (external members have no promise).
    */
   private async stopOne(member: Member): Promise<void> {
     member.active = false;
@@ -606,7 +611,8 @@ export class Team {
       try {
         await member.mailbox.send(LEADER_NAME, `${Team.SHUTDOWN_PREFIX} stop`);
       } catch {
-        // best-effort: proceed to cancel fallback even if the shutdown write fails
+        // best-effort: cancel below runs whether or not this write succeeds; a
+        // failed write only deprives the iTerm path of its shutdown signal
       }
     }
     member.cancel?.();
@@ -727,8 +733,9 @@ export class TeamManager {
       this.teams.delete(name);
     }
     this.taskStores.delete(name);
-    // The team directory contains config.json, tasks.json, and mailboxes. When the team
-    // is deleted, remove everything to prevent a future same-named team from picking up stale data.
+    // The team directory contains config.json, tasks.json, mailboxes (inboxes/),
+    // and teammate logs (logs/). When the team is deleted, remove everything to
+    // prevent a future same-named team from picking up stale data.
     rmSync(teamDir(name), { recursive: true, force: true });
   }
 

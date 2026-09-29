@@ -359,7 +359,7 @@ export interface BackgroundableTool {
   backgroundForegroundTasks(): number;
 }
 
-/** Tools that support background execution, in Ctrl+B priority order. */
+/** Tools that support background execution; Ctrl+B handling iterates this list. */
 export const BACKGROUNDABLE_TOOL_NAMES = ["Bash", "PowerShell"] as const;
 
 function asBackgroundable(tool: unknown): BackgroundableTool | null {
@@ -394,9 +394,9 @@ export function attachBackgroundTaskManager(
 
 /**
  * Whether any backgroundable tool has a running foreground task. Gates the
- * Ctrl+B handler: the keypress must stay inert when nothing is running, so
- * other components that also bind Ctrl+B (e.g. the provider-login form's
- * cursor-back) don't double-fire.
+ * Ctrl+B handler: the keypress stays inert when nothing is backgroundable.
+ * (The handler separately yields to the provider-login form while it is open —
+ * that form also binds Ctrl+B, for cursor-back.)
  */
 export function hasAnyForegroundTasks(registry: ToolRegistry): boolean {
   for (const name of BACKGROUNDABLE_TOOL_NAMES) {

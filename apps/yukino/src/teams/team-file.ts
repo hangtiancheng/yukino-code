@@ -34,9 +34,11 @@ import z from "zod";
 
 /**
  * Metadata for a single team member. isActive is optional only for backward
- * compatibility with older files; current snapshots always write it — true
- * while the teammate loop runs (working or idle-polling), false when stopped,
- * completed, or registered but not yet spawned.
+ * compatibility with older files; current snapshots always write it, capturing
+ * the in-memory `active` flag at snapshot time — true while the teammate loop
+ * runs (working or idle-polling), false when stopped, completed, or registered
+ * but not yet spawned. Since becoming active does not itself trigger a
+ * persist, the on-disk value can lag behind runtime.
  */
 export const TeamMemberEntrySchema = z.object({
   agentId: z.string(),
@@ -58,9 +60,9 @@ export type TeamMemberEntry = z.infer<typeof TeamMemberEntrySchema>;
  * which can be serialized — so what gets persisted is this pure-metadata structure,
  * with both sides correlated by member name.
  *
- * This file addresses cross-process and cross-restart continuity: pane teammates are
- * independent processes that need to know which team they belong to and who their
- * peers are after startup; users restarting Yukino must be able to resume prior teams.
+ * This file serves Leader-side cross-restart continuity: TeamManager.get() rebuilds a
+ * metadata-only Team from it on demand. Pane teammates do not read it — they receive
+ * the team name, member name, and mailbox directory via command-line flags at spawn.
  */
 const TeamFileSchema = z.object({
   name: z.string(),
@@ -75,8 +77,9 @@ export type TeamFile = z.infer<typeof TeamFileSchema>;
 /**
  * Root directory for all team data. Placed under the user's home directory rather than
  * the project directory because pane teammates are independent processes whose working
- * directory may be swapped by a worktree; using the home directory guarantees both the
- * teammate process and the Leader locate the same team configuration.
+ * directory may be swapped by a worktree; a home-anchored path keeps team data reachable
+ * for the Leader regardless of the current project or worktree (teammates receive the
+ * absolute mailbox path via flags).
  */
 export function teamsBaseDir(): string {
   return join(homedir(), ".yukino", "teams");
@@ -116,8 +119,9 @@ export function teamConfigPath(name: string): string {
 }
 
 /**
- * Reads team configuration. Returns null when the file does not exist, allowing the
- * caller to treat it as "team not found" rather than propagating an exception.
+ * Reads team configuration. Returns null when the file does not exist or fails to
+ * parse/validate, allowing the caller to treat it as "team not found" rather than
+ * propagating an exception.
  */
 export function readTeamFile(name: string): TeamFile | null {
   const path = teamConfigPath(name);

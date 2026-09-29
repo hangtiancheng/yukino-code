@@ -29,7 +29,10 @@ export * as Verbs from "./verbs.js";
 
 const log = createChildLogger({ module: "utils" });
 
-/** Convert message or legacy-session blocks to a base64-free text fallback. */
+/**
+ * Convert message content blocks to a plain-text fallback; non-text blocks
+ * become placeholders (no base64 payloads).
+ */
 export function contentToText(
   content: string | Record<string, unknown>[],
 ): string {

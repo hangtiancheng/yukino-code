@@ -21,8 +21,9 @@
  */
 
 /**
- * Decides how MCP tools enter the context. Three modes, chosen once at session start
- * right after MCP connects:
+ * Decides how MCP tools enter the context. Three modes, chosen right after MCP
+ * connects (once per session; the interactive UI additionally re-decides when the
+ * active provider changes):
  *
  *   eager    Total schema size is under one tenth of the context window, so load
  *            everything into tools[] with no deferral. The context saved is not worth
@@ -61,7 +62,11 @@ export const NATIVE_TOOL_USE_BETA = "advanced-tool-use-2025-11-20";
 const OFFICIAL_HOSTS = new Set(["api.anthropic.com"]);
 const ENV_OVERRIDE = "YUKINO_MCP_LOADING";
 
-/** An empty baseUrl means the SDK default address, i.e. the official one. */
+/**
+ * An empty baseUrl means the SDK default address, i.e. the official one.
+ * Base-url-only by construction: the provider protocol is not consulted, so a
+ * non-Anthropic provider with an empty base_url also counts as official.
+ */
 export function isOfficialAnthropicEndpoint(baseUrl: string): boolean {
   if (!baseUrl) {
     return true;
@@ -139,13 +144,14 @@ export function applyMode(registry: ToolRegistry, mode: McpLoadingMode): void {
   }
 
   // Search and dispatch exposure is decided per mode. Under eager every tool is already in
-  // tools[], so there is nothing to search and no need for a dispatch entry point. These two
-  // flags are computed once here and fixed for the whole session, so tools[] never fluctuates.
+  // tools[], so there is nothing to search and no need for a dispatch entry point. The flags
+  // change only when applyMode runs again — a later MCP pass reapplies the standing mode, a
+  // provider switch may re-decide it — never per turn, so tools[] stays stable.
   registry.exposeToolSearch = !eager;
   registry.exposeMcpCall = mode === "dispatch";
 }
 
-/** Entry point called once after MCP connects. */
+/** Entry point called after MCP connects; the interactive UI also re-invokes it on a provider switch. */
 export function decideAndApply(
   registry: ToolRegistry,
   baseUrl: string,

@@ -170,7 +170,7 @@ export class ConversationManager {
     }
     // The skill listing is project-scoped; putting it in the system prompt would give
     // each project its own copy and break cross-project caching, so it lives in this
-    // message alongside instructions and memories
+    // message alongside instructions and memories.
     if (skills) {
       sections.push("# Available Skills\n" + skills);
     }

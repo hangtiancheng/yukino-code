@@ -41,7 +41,13 @@ async function canonicalPath(filePath: string): Promise<string> {
   }
 }
 
-/** Serialize mutations targeting the same resolved path. */
+/**
+ * Serialize mutations targeting the same resolved path.
+ *
+ * The queue key comes from an async canonicalPath lookup, so two concurrent
+ * callers may be enqueued in an order that differs from their call order:
+ * per-path mutual exclusion is guaranteed, FIFO ordering is not.
+ */
 export async function withFileMutationQueue<T>(
   filePath: string,
   operation: () => Promise<T>,

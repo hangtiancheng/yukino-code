@@ -21,7 +21,7 @@
  */
 
 /**
- * Memory freshness calculation and expiration reminders. Appends a prompt text
+ * Memory freshness calculation and staleness reminders. Appends a prompt text
  * to memories at least 2 days old, instructing the model that the memory may be
  * stale and should be verified before use.
  */

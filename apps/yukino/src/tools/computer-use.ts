@@ -832,8 +832,10 @@ export class ComputerUseTool implements Tool {
 
   /**
    * Execute an OpenAI-style ordered action batch. Per the OpenAI computer
-   * output contract, the result always carries the screenshot taken after the
-   * batch ran, and status / safety checks are echoed so the model can continue.
+   * output contract, the result always carries a screenshot — the batch's last
+   * screenshot action if it included one, otherwise a follow-up capture taken
+   * after the loop — and status / safety checks are echoed so the model can
+   * continue.
    */
   private async executeBatch(
     ctx: ToolContext,

@@ -71,8 +71,9 @@ export class SkillCatalog {
   }
 
   /**
-   * Check whether a skill directory mtime has changed (a skill was added or deleted).
-   * Edits to existing skill files are handled by lazy re-reading in get().
+   * Check whether a watched directory mtime has changed (a skill directory or
+   * an entry inside one was added or removed). Content edits to existing files
+   * do not change directory mtimes; they are handled by lazy re-reading in get().
    */
   needsReload(): boolean {
     for (const [dir, recorded] of this.dirModTimes) {

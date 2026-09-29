@@ -408,7 +408,7 @@ export function rebuildFromSession(saved: SessionMessage[]): RestoredMessage[] {
       const m = saved[i];
       if (m.type === COMPACT_BOUNDARY) {
         continue;
-      } // defensive; the backward scan above already located the last boundary
+      } // required: boundary records trailing the last VALID one are damaged/empty-summary records the backward scan passed over
       const restored = toRestored(m);
       if (restored) {
         out.push(restored);
@@ -455,8 +455,8 @@ function toRestored(m: SessionMessage): RestoredMessage | null {
 // piggybacks on the first listSessions call per directory, so every entry
 // mode (UI resume picker, ACP, remote server, memory consolidation) gets a
 // sweep without separate startup wiring. The sweep only touches files whose
-// mtime is older than SESSION_EXPIRY_DAYS, so concurrent processes sharing a
-// workDir are safe.
+// mtime is older than SESSION_EXPIRY_DAYS; a session actively used by a
+// concurrent process keeps its mtime fresh via appends and is left alone.
 const sweptSessionDirs = new Set<string>();
 
 export function listSessions(workDir: string): SessionInfo[] {

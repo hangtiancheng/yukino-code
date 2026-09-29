@@ -94,9 +94,11 @@ export const TEAMMATE_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "TeamDelete",
 ] satisfies readonly AllTools[]);
 
-// Additional tools disallowed for custom Agents (loaded from .yukino/agents/);
-// currently a subset of the global list (same except ComputerUse, which Layer 2
-// already strips), but maintained separately for future extensibility.
+// Reserved list for additional restrictions on custom Agents (loaded from
+// .yukino/agents/), applied by filterToolsForAgent's Layer 3 — but no caller
+// currently passes isCustom=true, so the layer is inert. It is also a subset of
+// the global list (same except ComputerUse, which Layer 2 already strips), so
+// enabling it would change nothing today; maintained for future extensibility.
 export const CUSTOM_AGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "ExitPlanMode",
   "Agent",

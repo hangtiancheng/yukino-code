@@ -200,8 +200,9 @@ function toolResultBlocksChars(blocks: ToolResultContentBlock[]): {
   return { textChars, richChars };
 }
 
-// Rough character-based token estimate over an explicit message slice. Used both
-// for the cold-start whole-transcript fallback and the post-anchor increment.
+// Rough character-based token estimate over an explicit message slice. Used for
+// the cold-start whole-transcript fallback, the post-anchor increment, and
+// per-message accounting elsewhere (keep-walk, PTL head truncation).
 export function estimateMessages(messages: Message[]): number {
   let totalChars = 0;
   for (const msg of messages) {
@@ -481,9 +482,9 @@ function serializePrefixText(messages: Message[]): string {
     .join("\n\n");
 }
 
-// Extract the <summary> block from the model's reply. If the model emits an
-// unprompted <analysis> block, strip it; falls back to the raw text when the
-// model does not follow the format.
+// Extract the <summary> block from the model's reply. When no <summary> tag is
+// present, strip any unprompted <analysis> block and fall back to the remaining
+// raw text.
 function formatCompactSummary(raw: string): string {
   const summaryMatch = /<summary>([\s\S]*?)<\/summary>/.exec(raw);
   if (summaryMatch) {
@@ -608,8 +609,7 @@ async function doCompact(
   abortSignal?.throwIfAborted();
   // Tool results in the transcript were already budget-processed to their final
   // form at insertion time; the conversation's own messages represent the actual
-  // payload, so estimate tokens and determine the retention boundary directly
-  // from them.
+  // payload, so the retention boundary is determined directly from them.
   const estimationMessages = conv.getMessages();
 
   // Decide how much recent history to keep verbatim. Only messages[:keepStart]

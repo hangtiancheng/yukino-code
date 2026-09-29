@@ -84,7 +84,8 @@ async function readLockfile(
     const content = await readFile(join(dir, filename), "utf-8");
     const parsed = LockfileSchema.parse(JSON.parse(content));
     if (parsed.transport !== "ws") {
-      // Legacy SSE lockfiles are not supported; modern extensions use ws.
+      // Only `transport: "ws"` is supported; legacy SSE lockfiles and entries
+      // without a transport field are both rejected.
       return null;
     }
     return {

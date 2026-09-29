@@ -34,7 +34,8 @@ import type {
 import { asErrorString, strArg } from "@/utils/index.js";
 
 // On-demand skill activation: returns the full SOP body so it enters the
-// conversation as a regular message (progressive disclosure).
+// conversation as a regular message (progressive disclosure). Fork-mode
+// skills instead delegate to a subagent and return only its result.
 export class LoadSkillTool implements Tool {
   name = "LoadSkill";
   description =

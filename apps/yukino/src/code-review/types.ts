@@ -51,7 +51,7 @@ export interface Hunk {
 export interface FileDiff {
   oldPath: string;
   newPath: string;
-  /** Raw unified diff text for this file. */
+  /** Unified diff text for this file (`index` header lines are dropped). */
   diffText: string;
   hunks: Hunk[];
   /** New-side file content, used as the fallback line-resolution source. */
