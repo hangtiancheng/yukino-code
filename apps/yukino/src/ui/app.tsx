@@ -1232,7 +1232,9 @@ export function App({
       setSelectedProvider(updated);
       setProviders((current) =>
         current.map((entry) =>
-          entry.base_url === updated.base_url ? updated : entry,
+          entry.base_url === updated.base_url
+            ? { ...entry, model: updated.model }
+            : entry,
         ),
       );
       contextWindowRef.current = getContextWindow(updated);

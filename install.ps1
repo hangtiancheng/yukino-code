@@ -121,56 +121,47 @@ else {
 	New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null
 	$DefaultConfig = @'
 permission_mode: bypassPermissions
-default_provider: 0
 providers:
-  - name: anthropic
+  - name: ds-anthropic
     protocol: anthropic
     base_url: https://api.deepseek.com/anthropic
-    model: "deepseek-flash"
-    api_key: "<your-api-key>"
+    model: deepseek-flash
+    api_key: sk-xyz
     thinking: high
     context_window: 1000000
     max_output_tokens: 128000
-  - name: openai-compat
+  - name: ds-openai
     protocol: openai-compat
     base_url: https://api.deepseek.com
-    model: "deepseek-flash"
-    api_key: "<your-api-key>"
+    model: deepseek-flash
+    api_key: sk-xyz
     thinking: high
     context_window: 1000000
     max_output_tokens: 128000
+default_provider: 0
+memory: false
+enable_coordinator_mode: false
 mcp_servers:
-  - name: "yukino-mcp-stdio"
-    command: "pnpm"
-    args: ["--filter", "@yukino.js/mcp", "dev"]
-    env:
-      GITHUB_TOKEN: "${GITHUB_TOKEN}"
-  - name: "yukino-mcp-http"
-    url: "http://127.0.0.1:3300/mcp"
-    transport: "http"
-    headers: { Authorization: "Bearer <your-token>" }
-  - name: "yukino-mcp-sse"
-    url: "http://127.0.0.1:3300/sse"
-    transport: "sse"
-hooks:
-  - id: lint-on-edit
-    # enum: session_start | session_end | turn_start | turn_end | pre_send | post_receive | pre_tool_use | post_tool_use | shutdown
-    event: post_tool_use
-    condition: 'tool == "EditFile"'
-    action:
-      # enum: command | prompt | http | agent
-      type: command
-      command: pnpm exec eslint --fix "$YUKINO_FILE_PATH"
-    reject: false # Only effective on pre_tool_use
-    once: false
-    async: false
-    on_error: ignore
+  - name: codegraph
+    command: codegraph
+    args:
+      - serve
+      - "--mcp"
 sandbox:
   enabled: false
+  backend: sandbox-runtime
   auto_allow: false
   network_enabled: true
-memory: true
-enable_coordinator_mode: false
+hooks:
+  - id: pre-edit
+    event: pre_tool_use
+    action:
+      type: command
+      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
+    reject: false
+    once: true
+    async: false
+    on_error: ignore
 '@
 	[System.IO.File]::WriteAllText($ConfigFile, $DefaultConfig, [System.Text.UTF8Encoding]::new($false))
 	Write-Ok "Wrote default config to $ConfigFile"

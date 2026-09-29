@@ -1,5 +1,5 @@
 import Fuse from "fuse.js";
-import { Text, useInput } from "ink";
+import { Box, Text, useInput } from "ink";
 import { useMemo, useState } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
@@ -8,7 +8,7 @@ import { updateSelectorQuery } from "./selector-search.js";
 import { TextField } from "./text-field.js";
 
 import type { DiscoveredModel } from "@/llm/model-discovery.js";
-import { THEME } from "@/ui/styles.js";
+import { ICONS, THEME } from "@/ui/styles.js";
 
 export interface ModelPickerState {
   status: "loading" | "ready" | "empty" | "error";
@@ -119,25 +119,18 @@ export function ModelSelect({
     }
   });
 
-  if (customMode || forcedTextEntry) {
+  if (forcedTextEntry) {
     return (
       <SelectorFrame
         compact
-        hint={
-          customMode
-            ? "Enter set model · Esc back to list"
-            : "Enter set model · Esc cancel"
-        }
-        subtitle={
-          customMode
-            ? `Current model: ${currentModel}`
-            : `${STATUS_MESSAGES[state.status === "error" ? "error" : "empty"]} — type a model id`
-        }
+        hint="Enter set model · Esc cancel"
+        subtitle={`${STATUS_MESSAGES[state.status === "error" ? "error" : "empty"]} — type a model id`}
         title="Select model"
       >
         <TextField
           isActive
           initialValue={customText}
+          multiline={false}
           prompt="Model id: "
           onChange={setCustomText}
           onSubmit={(value) => {
@@ -146,14 +139,7 @@ export function ModelSelect({
               onSelect({ id });
             }
           }}
-          onEscape={() => {
-            if (customMode) {
-              setCustomMode(false);
-              setFocusedId(OTHER);
-            } else {
-              onCancel();
-            }
-          }}
+          onEscape={onCancel}
         />
         <Text color={THEME.dim}>
           Any id is accepted, even one the provider does not list.
@@ -179,7 +165,11 @@ export function ModelSelect({
     <SelectorList
       cursor={cursor}
       emptyText="No models available"
-      hint="↑↓ navigate · Enter select · Esc cancel · Ctrl+U clear"
+      hint={
+        customMode
+          ? "Type model id · Enter select · Esc cancel"
+          : "↑↓ navigate · Enter select · Esc cancel"
+      }
       itemCount={entries.length}
       itemHeight={1}
       query={query}
@@ -188,33 +178,49 @@ export function ModelSelect({
       reservedRows={reservedRows}
     >
       {(start, count, width) =>
-        entries
-          .slice(start, start + count)
-          .map((entry, index) =>
-            entry.kind === "other" ? (
-              <SelectorListRow
-                key={OTHER}
-                current={false}
-                focused={start + index === cursor}
-                label={OTHER_LABEL}
-                width={width}
+        entries.slice(start, start + count).map((entry, index) =>
+          entry.kind === "other" && customMode ? (
+            <Box key={OTHER} backgroundColor={THEME.selectedBg} width="100%">
+              <TextField
+                isActive
+                indent={1}
+                initialValue={customText}
+                multiline={false}
+                prompt={`${ICONS.arrow} Model id: `}
+                onChange={setCustomText}
+                onSubmit={(value) => {
+                  const id = value.trim();
+                  if (id) {
+                    onSelect({ id });
+                  }
+                }}
+                onEscape={onCancel}
               />
-            ) : (
-              <SelectorListRow
-                key={entry.model.id}
-                current={entry.model.id === currentModel}
-                detail={
-                  entry.model.display_name &&
-                  entry.model.display_name !== entry.model.id
-                    ? entry.model.display_name
-                    : undefined
-                }
-                focused={start + index === cursor}
-                label={entry.model.id}
-                width={width}
-              />
-            ),
-          )
+            </Box>
+          ) : entry.kind === "other" ? (
+            <SelectorListRow
+              key={OTHER}
+              current={false}
+              focused={start + index === cursor}
+              label={OTHER_LABEL}
+              width={width}
+            />
+          ) : (
+            <SelectorListRow
+              key={entry.model.id}
+              current={entry.model.id === currentModel}
+              detail={
+                entry.model.display_name &&
+                entry.model.display_name !== entry.model.id
+                  ? entry.model.display_name
+                  : undefined
+              }
+              focused={start + index === cursor}
+              label={entry.model.id}
+              width={width}
+            />
+          ),
+        )
       }
     </SelectorList>
   );

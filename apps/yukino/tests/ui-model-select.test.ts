@@ -223,6 +223,7 @@ describe("ModelSelect", () => {
     expect(frame).toContain(`${ICONS.arrow} fast-model ${ICONS.success}`);
     expect(frame).toContain("1/3");
     expect(frame).toContain("Search: type to filter");
+    expect(frame).not.toContain("Ctrl+U clear");
   });
 
   it("cancels on Escape", () => {
@@ -285,7 +286,7 @@ describe("ModelSelect", () => {
     expect(frame).not.toContain("Fetching models…");
   });
 
-  it("appends an Other row that opens the free-text field", () => {
+  it("turns the Other row into an inline free-text field", () => {
     const onSelect = vi.fn();
     mount(
       createElement(ModelSelect, {
@@ -299,6 +300,11 @@ describe("ModelSelect", () => {
     send("", { upArrow: true });
     expect(frame).toContain(`${ICONS.arrow} ${OTHER_LABEL}`);
     send("", { return: true });
+
+    expect(frame).toContain("Search: type to filter");
+    expect(frame).toContain("model-a");
+    expect(frame).toContain(`${ICONS.arrow} Model id:`);
+    expect(frame).not.toContain("Current model:");
 
     sendText("claude-opus-4-5");
     sendText("", { return: true });
@@ -323,7 +329,7 @@ describe("ModelSelect", () => {
     expect(onSelect).toHaveBeenCalledWith({ id: "zzzq-unlisted" });
   });
 
-  it("returns to the list from the free-text field on Escape", () => {
+  it("cancels the picker from the free-text field on Escape", () => {
     const onCancel = vi.fn();
     const onSelect = vi.fn();
     mount(
@@ -338,14 +344,12 @@ describe("ModelSelect", () => {
     send("", { upArrow: true });
     send("", { return: true });
     expect(frame).toContain("Model id:");
-    expect(frame).toContain("Esc back to list");
+    expect(frame).toContain("Esc cancel");
+    expect(frame).toContain("model-a");
 
     sendText("", { escape: true });
-    expect(onCancel).not.toHaveBeenCalled();
-    expect(frame).toContain(`${ICONS.arrow} ${OTHER_LABEL}`);
-
-    send("", { escape: true });
     expect(onCancel).toHaveBeenCalledOnce();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it.each(["empty", "error"] as const)(

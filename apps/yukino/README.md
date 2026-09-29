@@ -89,43 +89,48 @@ Yukino reads a single global YAML configuration file:
 Print, remote, and ACP modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. Example config.yaml:
 
 ```yaml
+permission_mode: bypassPermissions
 providers:
-  - name: anthropic
+  - name: ds-anthropic
     protocol: anthropic
+    base_url: https://api.deepseek.com/anthropic
+    model: deepseek-flash
+    api_key: sk-xyz
+    thinking: high
+    context_window: 1000000
+    max_output_tokens: 128000
+  - name: ds-openai
+    protocol: openai-compat
     base_url: https://api.deepseek.com
     model: deepseek-flash
-    # api_key defaults to $ANTHROPIC_API_KEY
-    thinking: high # off | minimal | low | medium | high | xhigh | max
-
-permission_mode: default
-
+    api_key: sk-xyz
+    thinking: high
+    context_window: 1000000
+    max_output_tokens: 128000
+default_provider: 0
+memory: false
+enable_coordinator_mode: false
 mcp_servers:
-  - name: yukino-mcp
-    command: npx
-    args: ["-y", "@yukino.js/mcp@latest"]
-    env: # map<string, string>; supports ${VAR}, ${VAR:-default}, and $VAR
-      API_BASE_URL: "https://yukino-js.dev"
-      API_KEY: "${YUKINO_MCP_API_KEY}"
-
-hooks:
-  - event: pre_tool_use
-    condition: "Bash"
-    action:
-      type: command
-      command: "echo tool about to run"
-
+  - name: codegraph
+    command: codegraph
+    args:
+      - serve
+      - "--mcp"
 sandbox:
   enabled: false
-  backend: native # native (bwrap/seatbelt) | sandbox-runtime
+  backend: sandbox-runtime
   auto_allow: false
   network_enabled: true
-
-enable_coordinator_mode: false
-
-# Auto memory: index injection, recall, background extraction, and consolidation
-# (consolidation currently runs only in remote mode).
-# Set to false to disable the whole automatic memory pipeline (default: true).
-memory: true
+hooks:
+  - id: pre-edit
+    event: pre_tool_use
+    action:
+      type: command
+      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
+    reject: false
+    once: true
+    async: false
+    on_error: ignore
 ```
 
 Provider fields:

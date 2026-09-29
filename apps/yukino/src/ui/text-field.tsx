@@ -41,6 +41,8 @@ interface TextFieldProps {
   isActive?: boolean;
   /** Columns consumed to the left of the text (dialog indentation). */
   indent?: number;
+  /** Whether line breaks can be inserted. */
+  multiline?: boolean;
   /** Prefix rendered before the first visual row, e.g. "→ ". */
   prompt?: string;
   /** Called with the joined draft after every edit so the parent can persist
@@ -63,6 +65,7 @@ export function TextField({
   initialValue = "",
   isActive = true,
   indent = 0,
+  multiline = true,
   prompt = "",
   onChange,
   onSubmit,
@@ -158,12 +161,17 @@ export function TextField({
       // Enter press (Enter arrives as a lone "\r", "\n", or "\r\n").
       const isLoneEnter = input === "\r" || input === "\n" || input === "\r\n";
       if (hasLineBreak && !isLoneEnter) {
-        insertText(input.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
+        const pasted = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        insertText(multiline ? pasted : pasted.replace(/\n/g, ""));
         return;
       }
 
       // Shift+Enter or Ctrl+J → newline
-      if (hasReturn && (key.shift || (key.ctrl && input === "\n"))) {
+      if (
+        multiline &&
+        hasReturn &&
+        (key.shift || (key.ctrl && input === "\n"))
+      ) {
         const line = lines[cursorLine] ?? "";
         setLines((prev) => {
           const updated = [...prev];

@@ -77,12 +77,47 @@ yukino --remote                     # browser chat UI on http://localhost:18888
 Yukino reads a single global YAML config file: `~/.yukino/config.yaml`. At least one provider is required:
 
 ```yaml
+permission_mode: bypassPermissions
 providers:
-  - name: anthropic
+  - name: ds-anthropic
     protocol: anthropic
-    base_url: https://api.anthropic.com
-    model: claude-sonnet-4
-    # api_key defaults to $ANTHROPIC_API_KEY
+    base_url: https://api.deepseek.com/anthropic
+    model: deepseek-flash
+    api_key: sk-xyz
+    thinking: high
+    context_window: 1000000
+    max_output_tokens: 128000
+  - name: ds-openai
+    protocol: openai-compat
+    base_url: https://api.deepseek.com
+    model: deepseek-flash
+    api_key: sk-xyz
+    thinking: high
+    context_window: 1000000
+    max_output_tokens: 128000
+default_provider: 0
+memory: false
+enable_coordinator_mode: false
+mcp_servers:
+  - name: codegraph
+    command: codegraph
+    args:
+      - serve
+      - "--mcp"
+sandbox:
+  enabled: false
+  auto_allow: false
+  network_enabled: true
+hooks:
+  - id: pre-edit
+    event: pre_tool_use
+    action:
+      type: command
+      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
+    reject: false
+    once: true
+    async: false
+    on_error: ignore
 ```
 
 See the [full configuration reference](./apps/yukino/README.md#configuration) for MCP servers, hooks, sandboxing and all provider fields.
