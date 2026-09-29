@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
@@ -127,6 +127,13 @@ describe("Agent loop", () => {
     expect(last?.content).toBe("hello");
   });
 
+  it("does not add an empty assistant message for an empty end turn", async () => {
+    const { conversation } = await runAgent(new MockClient([[end()]]));
+
+    expect(conversation.getMessages()).toHaveLength(1);
+    expect(conversation.getMessages()[0]?.role).toBe("user");
+  });
+
   it("executes a tool turn then completes", async () => {
     const client = new MockClient([
       [
@@ -150,6 +157,45 @@ describe("Agent loop", () => {
     expect(tr?.type === "tool_result" && tr.isError).toBe(false);
     expect(events.some((e) => e.type === "turn_complete")).toBe(true);
     expect(events.some((e) => e.type === "loop_complete")).toBe(true);
+  });
+
+  it("pairs malformed no-arg tool calls with an error without invoking them", async () => {
+    const execute = vi.fn(() =>
+      Promise.resolve({ output: "should not run", isError: false }),
+    );
+    const noArgTool: Tool = {
+      ...echoTool,
+      name: "NoArgs",
+      execute,
+    };
+    const client = new MockClient([
+      [
+        {
+          type: "tool_call_complete",
+          toolId: "bad-json",
+          toolName: "NoArgs",
+          arguments: {},
+          parseError: "Invalid tool arguments JSON: unexpected end of input",
+        },
+        end("tool_use"),
+      ],
+      [{ type: "text_delta", text: "recovered" }, end()],
+    ]);
+
+    const { events } = await runAgent(client, { tool: noArgTool });
+    const result = events.find(
+      (event) => event.type === "tool_result" && event.toolId === "bad-json",
+    );
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      type: "tool_result",
+      toolId: "bad-json",
+      isError: true,
+    });
+    expect(result?.type === "tool_result" ? result.output : "").toContain(
+      "tool was not executed",
+    );
   });
 
   it("escalates output ceiling and retries on max_tokens", async () => {

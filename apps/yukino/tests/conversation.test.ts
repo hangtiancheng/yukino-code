@@ -191,6 +191,23 @@ describe("ConversationManager", () => {
       expect(strArg(asRecord(content[0]), "tool_use_id")).toBe("tu-1");
     });
 
+    it("merges reminders after tool results into the same user turn", () => {
+      const mgr = new ConversationManager();
+      mgr.addToolResultMessage("tu-1", "output", false);
+      mgr.addUserMessage("Check the updated memory before continuing.");
+
+      const result = buildAnthropicMessages(mgr.getMessages());
+
+      expect(result).toHaveLength(1);
+      expect(result[0]?.role).toBe("user");
+      const content = result[0]?.content;
+      expect(
+        Array.isArray(content)
+          ? content.map((block) => asRecord(block).type)
+          : [],
+      ).toEqual(["tool_result", "text"]);
+    });
+
     it("preserves signed thinking blocks at the head of the assistant message", () => {
       const mgr = new ConversationManager();
       mgr.addAssistantFull(

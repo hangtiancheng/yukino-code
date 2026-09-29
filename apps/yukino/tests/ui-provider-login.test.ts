@@ -31,6 +31,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
 import { ProviderLogin } from "@/ui/provider-login.js";
+import { cursorWindow, visibleWidth } from "@/ui/terminal-text.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),
@@ -195,6 +196,58 @@ function mockModels(...ids: string[]): void {
 }
 
 describe("ProviderLogin", () => {
+  it.each([1, 2, 3, 4])(
+    "keeps a directly rendered truncated cursor within %s columns",
+    (width) => {
+      const window = cursorWindow("abcdefgh", 4, width);
+      const rendered =
+        (window.leadingEllipsis ? "…" : "") +
+        window.before +
+        window.current +
+        window.after +
+        (window.trailingEllipsis ? "…" : "");
+      expect(visibleWidth(rendered)).toBeLessThanOrEqual(width);
+      if (width === 3) {
+        expect(rendered).toBe("…e…");
+      }
+    },
+  );
+
+  it("keeps a middle cursor with both ellipses inside a narrow rendered field", () => {
+    const columns = 24;
+    vi.mocked(useWindowSize).mockReturnValue({ columns, rows: 24 });
+    Object.defineProperty(process.stdout, "columns", {
+      configurable: true,
+      value: columns,
+    });
+    mount({ ...validProvider, name: "abcdefghijklmnopqrstuvwxyz" });
+    for (let index = 0; index < 12; index += 1) {
+      send("", { rightArrow: true });
+    }
+
+    expect(terminalOutput()).toMatch(/…[a-z]*…/u);
+    const lines = outputChunks.flatMap((chunk) =>
+      stripVTControlCharacters(chunk).split("\n"),
+    );
+    expect(lines.filter((line) => stringWidth(line) > columns)).toEqual([]);
+  });
+
+  it("shows cursor-key guidance for every editable field", () => {
+    mount();
+    const editableIndexes = new Set([0, 2, 3, 4, 6, 7]);
+    for (let index = 0; index < 8; index += 1) {
+      if (editableIndexes.has(index)) {
+        expect(terminalOutput()).toContain(
+          "Editable fields: Home/End or Ctrl+B/F move the cursor.",
+        );
+      }
+      if (index < 7) {
+        outputChunks = [];
+        send("", { tab: true });
+      }
+    }
+  });
+
   it.each([32, 48])(
     "renders defaults and masks the API key at %s columns",
     (columns) => {
@@ -217,6 +270,7 @@ describe("ProviderLogin", () => {
         rendered.split("\n").every((line) => stringWidth(line) <= columns),
       ).toBe(true);
       expect(rendered).toContain("type/paste any ID");
+      expect(rendered).toContain("Editable fields");
       expect(rendered).toContain("Provider login");
       expect(rendered).toContain("1000000");
       expect(rendered).toContain("128000");

@@ -44,9 +44,8 @@ import {
 
 const temporaryDirectories: string[] = [];
 
-// Hide the machine's global git config: configureHooksPath only writes
-// core.hooksPath when no effective value exists, and a developer machine
-// with core.hooksPath in ~/.gitconfig would change what these tests observe.
+// Hide the machine's global git config so hook-path assertions observe only
+// repository and worktree configuration created by each test.
 const originalGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL;
 beforeAll(() => {
   process.env.GIT_CONFIG_GLOBAL = "/dev/null";
@@ -71,6 +70,14 @@ function git(repo: string, ...args: string[]): string {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
+}
+
+function optionalGit(repo: string, ...args: string[]): string {
+  try {
+    return git(repo, ...args);
+  } catch {
+    return "";
+  }
 }
 
 function initRepo(name = "repo"): string {
@@ -117,9 +124,10 @@ describe("worktree creation safety", () => {
     expect(readFileSync(join(worktree.path, "tracked.txt"), "utf-8")).toBe(
       "initial\n",
     );
-    expect(git(worktree.path, "config", "core.hooksPath")).toBe(
-      join(repo, ".git", "hooks"),
-    );
+    expect(
+      optionalGit(worktree.path, "config", "--get", "core.hooksPath"),
+    ).toBe("");
+    expect(optionalGit(repo, "config", "--get", "core.hooksPath")).toBe("");
     expect(await hasWorktreeChanges(worktree.path, worktree.headCommit)).toBe(
       false,
     );
@@ -137,9 +145,33 @@ describe("worktree creation safety", () => {
     const custom = join(repo, "custom-hooks");
     git(repo, "config", "core.hooksPath", custom);
     await createAgentWorktree("hooks-preserved", repo);
-    // core.hooksPath is shared config: a worktree must never silently
-    // rewrite a value the user set themselves.
     expect(git(repo, "config", "core.hooksPath")).toBe(custom);
+  });
+
+  it("configures Husky only in the new worktree", async () => {
+    const repo = initRepo();
+    const huskyPath = join(repo, ".husky");
+    mkdirSync(huskyPath);
+
+    const worktree = await createAgentWorktree("husky", repo);
+
+    expect(
+      git(worktree.path, "config", "--worktree", "--get", "core.hooksPath"),
+    ).toBe(huskyPath);
+    expect(optionalGit(repo, "config", "--get", "core.hooksPath")).toBe("");
+    expect(
+      optionalGit(
+        repo,
+        "config",
+        "--file",
+        join(repo, ".git", "config"),
+        "--get",
+        "core.hooksPath",
+      ),
+    ).toBe("");
+    expect(git(repo, "config", "--get", "extensions.worktreeConfig")).toBe(
+      "true",
+    );
   });
 
   it("rejects an existing ordinary directory and preserves its contents", async () => {

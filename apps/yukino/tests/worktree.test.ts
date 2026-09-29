@@ -53,7 +53,9 @@ describe("createAgentWorktree .yukino settings propagation", () => {
   it("copies shared settings into the worktree", async () => {
     const repo = initRepo();
     mkdirSync(join(repo, ".agents", "skills", "demo"), { recursive: true });
+    mkdirSync(join(repo, ".yukino", "commands"), { recursive: true });
     mkdirSync(join(repo, ".yukino", "memory"), { recursive: true });
+    writeFileSync(join(repo, ".yukino", "commands", "deploy.md"), "deploy\n");
     writeFileSync(join(repo, ".yukino", "memory", "notes.md"), "note\n");
     writeFileSync(join(repo, ".yukino", "permissions.yaml"), "rules: []\n");
     writeFileSync(
@@ -68,6 +70,9 @@ describe("createAgentWorktree .yukino settings propagation", () => {
       true,
     );
     expect(existsSync(join(wt.path, ".yukino", "permissions.yaml"))).toBe(true);
+    expect(existsSync(join(wt.path, ".yukino", "commands", "deploy.md"))).toBe(
+      true,
+    );
     expect(
       existsSync(join(wt.path, ".agents", "skills", "demo", "SKILL.md")),
     ).toBe(true);

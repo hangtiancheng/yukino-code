@@ -39,7 +39,7 @@ export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 
 const QuestionSchema = z.object({
   question: z.string(),
-  header: z.string(),
+  header: z.string().max(12),
   options: z.array(QuestionOptionSchema),
   multiSelect: z.boolean(),
 });
@@ -90,6 +90,7 @@ export class AskUserQuestionTool implements Tool {
               header: {
                 type: "string" as const,
                 description: "Short label/category (<=12 chars)",
+                maxLength: 12,
               },
               options: {
                 type: "array" as const,

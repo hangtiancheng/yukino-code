@@ -21,10 +21,9 @@
  */
 
 import { Text } from "ink";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { THEME } from "@/ui/styles.js";
-import { randomVerb } from "@/utils/verbs.js";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 
@@ -47,7 +46,6 @@ function formatTokens(value: number): string {
 function Spinner({ label, inputTokens = 0, outputTokens = 0 }: SpinnerProps) {
   const [frame, setFrame] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const verbRef = useRef(label ?? randomVerb());
 
   useEffect(() => {
     const startedAt = Date.now();
@@ -74,7 +72,7 @@ function Spinner({ label, inputTokens = 0, outputTokens = 0 }: SpinnerProps) {
     <Text>
       <Text color={THEME.accent}>{FRAMES[frame] ?? FRAMES[0]}</Text>{" "}
       <Text color={THEME.muted}>
-        {verbRef.current}
+        {label ?? "Working"}
         {details.length > 0 ? ` (${details.join(" · ")})` : ""}
       </Text>
     </Text>

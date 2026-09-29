@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 
 import type { Sandbox, SandboxConfig } from "./index.js";
 
@@ -92,15 +92,12 @@ function buildProfile(config: SandboxConfig): string {
     }
   }
 
-  // Deny write access for denied paths; seatbelt evaluates later rules with higher priority.
-  // Use 'literal' for exact file matching, 'subpath' for directory prefix matching.
+  // Deny both the exact path and every descendant. Emitting both forms avoids
+  // a build-time existence check whose result can become stale before launch.
   for (const path of config.denyWrite) {
     for (const variant of pathVariants(path)) {
-      const matcher =
-        existsSync(variant) && statSync(variant).isDirectory()
-          ? "subpath"
-          : "literal";
-      lines.push(`(deny file-write* (${matcher} "${variant}"))`);
+      lines.push(`(deny file-write* (literal "${variant}"))`);
+      lines.push(`(deny file-write* (subpath "${variant}"))`);
     }
   }
 

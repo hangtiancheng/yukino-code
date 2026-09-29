@@ -39,7 +39,7 @@ export interface SkillHost {
 }
 
 export interface SkillForkHost extends SkillHost {
-  runSubagent(prompt: string): Promise<string>;
+  runSubagent(prompt: string, abortSignal?: AbortSignal): Promise<string>;
   snapshotParentMessages(count: number): string;
 }
 

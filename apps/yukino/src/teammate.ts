@@ -147,8 +147,8 @@ function isPidAlive(pid: number): boolean {
  * Reads the leader pid recorded in the team's config.json. Returns 0 when the
  * team predates leaderPid tracking — liveness checks are skipped in that case.
  */
-function readLeaderPid(teamName: string): number {
-  return readTeamFile(teamName)?.leaderPid ?? 0;
+function readLeaderPid(workDir: string, teamName: string): number {
+  return readTeamFile(workDir, teamName)?.leaderPid ?? 0;
 }
 
 function createIdleNotification(memberName: string): FileMailMessage {
@@ -413,7 +413,9 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
 
       // Leader liveness: a dead leader never sends a shutdown notice, and the
       // iTerm backend has no kill handle, so the teammate must notice itself.
-      const leaderPid = readLeaderPid(args.teamName);
+      // Resolve config in the same project namespace used by this teammate's
+      // TeamManager rather than reading a same-named team from another project.
+      const leaderPid = readLeaderPid(workDir, args.teamName);
       if (leaderPid > 0 && !isPidAlive(leaderPid)) {
         if (leaderDeadSince === 0) {
           leaderDeadSince = Date.now();

@@ -26,6 +26,33 @@ import z, { parse, safeParse } from "zod";
 import type { Message } from "@/conversation/index.js";
 import { buildChatCompletionMessages, buildOpenAIInput } from "@/llm/openai.js";
 
+describe("OpenAI Responses reasoning replay", () => {
+  it("includes only native rs_ reasoning IDs", () => {
+    const items = buildOpenAIInput([
+      {
+        role: "assistant",
+        content: "answer",
+        thinkingBlocks: [
+          { thinking: "native", signature: "rs_123" },
+          { thinking: "foreign", signature: "anthropic-signature" },
+          { thinking: "compat", signature: "" },
+        ],
+      },
+    ]);
+    const reasoning = items.filter(
+      (item) => "type" in item && item.type === "reasoning",
+    );
+
+    expect(reasoning).toEqual([
+      {
+        type: "reasoning",
+        id: "rs_123",
+        summary: [{ type: "summary_text", text: "native" }],
+      },
+    ]);
+  });
+});
+
 describe("openai-compat chat message building", () => {
   it("attaches reasoning_content to the assistant message alongside tool_calls", () => {
     const messages = buildChatCompletionMessages([

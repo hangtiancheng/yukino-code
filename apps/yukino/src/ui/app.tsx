@@ -134,7 +134,7 @@ import {
 } from "@/teams/coordinator.js";
 import type { RunAgent } from "@/teams/index.js";
 import { TeamManager } from "@/teams/index.js";
-import { LEADER_NAME } from "@/teams/protocol.js";
+import { LEADER_NAME, SHUTDOWN_PREFIX } from "@/teams/protocol.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
@@ -484,8 +484,8 @@ export function App({
   // Interrupt scope: a single Ctrl+C / Esc routes to interruptForeground,
   // which only stops foreground execution — the in-flight agent loop (its
   // signal is shared by synchronous tool calls and run_in_background=false
-  // subagents), /compact, or a code review. Background tasks, background
-  // subagents and teammates own separate abort controllers and keep running;
+  // subagents), a forked slash skill, /compact, or a code review. Background
+  // tasks, background subagents and teammates own separate abort controllers and keep running;
   // only the TUI-exit path (double Ctrl+C, /quit) tears them down through
   // interruptAll().
   const { interruptForeground, interruptAll } = useMemo(
@@ -737,6 +737,11 @@ export function App({
   const initClient = useCallback(
     async (provider: ProviderConfig) => {
       try {
+        const hookErr = validateHooks(hooks);
+        if (hookErr) {
+          throw hookErr;
+        }
+
         const env = detectEnvironment(workDir);
         env.model = provider.model;
         const systemPrompt = buildSystemPrompt(env);
@@ -758,13 +763,6 @@ export function App({
 
         setPromptHistory(historyMod.load(historyDir));
 
-        const hookErr = validateHooks(hooks);
-        if (hookErr) {
-          setMessages((prev) => [
-            ...prev,
-            { role: "system", content: `Hook warning: ${hookErr.message}` },
-          ]);
-        }
         hookEngineRef.current = new HookEngine(hooks);
 
         const catalog = new SkillCatalog();
@@ -1105,7 +1103,7 @@ export function App({
           void connectMcpServers(mgr, provider);
         }
       } catch (err) {
-        setError(`Failed to init LLM client: ${asErrorString(err)}`);
+        setError(`Failed to initialize agent: ${asErrorString(err)}`);
       }
     },
     [
@@ -1516,15 +1514,20 @@ export function App({
         case "compact":
           if (clientRef.current) {
             const controller = new AbortController();
+            const client = clientRef.current;
+            const protocol = client.protocol ?? "anthropic";
+            const toolFilter = buildComposedToolFilter(
+              coordinatorToolFilter(enableCoordinatorMode ?? false),
+              toolFilterRef.current,
+            );
             abortControllerRef.current = controller;
             setIsCompacting(true);
             await forceCompact(
               conversationRef.current,
-              clientRef.current,
+              client,
               recoveryStateRef.current,
-              registryRef.current.listTools().map((t) => t.name),
-
-              registryRef.current.getAllSchemas(),
+              registryRef.current.listVisibleToolNames(protocol, toolFilter),
+              registryRef.current.getAllSchemas(protocol, toolFilter),
               sessionMod.getSessionFilePath(workDir, sessionIdRef.current),
               controller.signal,
               parsed.args,
@@ -1898,10 +1901,15 @@ export function App({
           content: `Running skill "${parsed.name}" in fork mode…`,
         },
       ]);
-      // Build a SkillForkHost backed by the live refs.
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setIsStreaming(true);
+      // Build a SkillForkHost backed by the live refs. The optional signal lets
+      // the skill executor forward cancellation while the fallback keeps this
+      // slash invocation on the TUI's foreground controller.
       const forkHost: SkillForkHost = {
         ...skillHostRef.current,
-        runSubagent: (prompt: string) =>
+        runSubagent: (prompt: string, signal?: AbortSignal) =>
           spawnSubagent(
             {
               name: skill.meta.name,
@@ -1911,8 +1919,13 @@ export function App({
             prompt,
             client,
             registryRef.current,
-            selectedProvider,
+            selectedProviderRef.current,
             workDir,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { abortSignal: signal ?? controller.signal },
           ),
         snapshotParentMessages: (count) => {
           const msgs = conversationRef.current.getMessages();
@@ -1922,22 +1935,31 @@ export function App({
             .join("\n");
         },
       };
-      await runSkillFork(skill, parsed.args, forkHost)
-        .then((result) => {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: result },
-          ]);
-        })
-        .catch((err: unknown) => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: `Skill fork error: ${asErrorString(err)}`,
-            },
-          ]);
-        });
+      try {
+        const result = await runSkillFork(
+          skill,
+          parsed.args,
+          forkHost,
+          controller.signal,
+        );
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: result },
+        ]);
+      } catch (err: unknown) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "system",
+            content: `Skill fork error: ${asErrorString(err)}`,
+          },
+        ]);
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        setIsStreaming(false);
+      }
       return true;
     }
 
@@ -2883,7 +2905,7 @@ export function App({
                     void team.sendMessage(
                       LEADER_NAME,
                       name,
-                      "[shutdown] Please finish and exit",
+                      `${SHUTDOWN_PREFIX} Please finish and exit`,
                     );
                   }
                 },

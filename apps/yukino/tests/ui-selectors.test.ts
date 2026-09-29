@@ -23,7 +23,7 @@
 import { stripVTControlCharacters } from "node:util";
 
 import chalk, { Chalk } from "chalk";
-import { Box, Text, render, renderToString, useInput } from "ink";
+import { Box, Text, render, renderToString, useInput, usePaste } from "ink";
 import type { Instance, Key } from "ink";
 import type * as Ink from "ink";
 import { act, createElement } from "react";
@@ -115,6 +115,16 @@ function send(input = "", key: Partial<Key> = {}) {
   }
   act(() => {
     handler(input, { ...noKey, ...key });
+  });
+}
+
+function paste(text: string) {
+  const handler = vi.mocked(usePaste).mock.calls.at(-1)?.[0];
+  if (!handler) {
+    throw new Error("Selector paste handler is not mounted");
+  }
+  act(() => {
+    handler(text);
   });
 }
 
@@ -716,6 +726,26 @@ describe("search input boundaries and independent dialog controls", () => {
     send("", { escape: true });
     expect(onSelect).toHaveBeenLastCalledWith("manual");
     expect(frame).not.toContain("Search:");
+  });
+
+  it("validates empty plan feedback and clears the error through the paste callback", () => {
+    const onSelect = vi.fn();
+    mount(createElement(PlanApprovalDialog, { onSelect }));
+    send("", { downArrow: true });
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(frame).toContain("Feedback is required.");
+
+    send("x");
+    expect(frame).not.toContain("Feedback is required.");
+    send("", { backspace: true });
+    send("", { return: true });
+    expect(frame).toContain("Feedback is required.");
+    paste("Use the cache API");
+    expect(frame).not.toContain("Feedback is required.");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith("feedback", "Use the cache API");
   });
 
   it("preserves AskUser numeric shortcuts, free text and tab navigation", () => {

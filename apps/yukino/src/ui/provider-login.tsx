@@ -25,7 +25,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
-import { truncateToWidth } from "./terminal-text.js";
+import { cursorWindow, truncateToWidth } from "./terminal-text.js";
 
 import {
   DEFAULT_CONTEXT_WINDOW,
@@ -180,36 +180,14 @@ function cursorValue(
   cursor: number,
   maxWidth: number,
 ): ReactNode {
-  const position = Math.min(cursor, value.length);
-  if (value.length + 1 <= maxWidth) {
-    return (
-      <>
-        {value.slice(0, position)}
-        <Text inverse>{value[position] ?? " "}</Text>
-        {value.slice(position + 1)}
-      </>
-    );
-  }
-
-  const contentWidth = Math.max(1, maxWidth - 1);
-  const start = Math.max(
-    0,
-    Math.min(
-      position - Math.floor(contentWidth / 2),
-      value.length - contentWidth,
-    ),
-  );
-  const end = Math.min(value.length, start + contentWidth);
-  const before = value.slice(start, position);
-  const current = value[position] ?? " ";
-  const after = value.slice(position + 1, end);
+  const window = cursorWindow(value, cursor, maxWidth);
   return (
     <>
-      {start > 0 ? "…" : null}
-      {before}
-      <Text inverse>{current}</Text>
-      {after}
-      {end < value.length ? "…" : null}
+      {window.leadingEllipsis ? "…" : null}
+      {window.before}
+      <Text inverse>{window.current}</Text>
+      {window.after}
+      {window.trailingEllipsis ? "…" : null}
     </>
   );
 }
@@ -612,11 +590,9 @@ export function ProviderLogin({
         })}
         <Text color={THEME.muted}>{discoveryHelp[discovery.status]}</Text>
         <Text color={THEME.dim}>Model: type/paste any ID; Ctrl+U clears.</Text>
-        {discovery.models.length > 0 ? (
-          <Text color={THEME.dim}>
-            In the model list: Home/End or Ctrl+B/F move the model cursor.
-          </Text>
-        ) : null}
+        <Text color={THEME.dim}>
+          Editable fields: Home/End or Ctrl+B/F move the cursor.
+        </Text>
       </Box>
     </SelectorFrame>
   );

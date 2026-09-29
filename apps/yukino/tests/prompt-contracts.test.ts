@@ -547,11 +547,7 @@ describe("memory prompt contracts", () => {
 
   it("retains phased consolidation, index bounds, evidence and memory-only writes", async () => {
     const client = new RecordingClient();
-    await new MemoryConsolidator(client, workDir).run(
-      memDir,
-      ["session-one"],
-      0,
-    );
+    await new MemoryConsolidator(client, workDir).run(memDir, ["session-one"]);
     expect(client.setSystemPrompt).not.toHaveBeenCalled();
     expect(client.requests[0]?.tools).toEqual([
       "EditFile",

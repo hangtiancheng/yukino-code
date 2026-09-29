@@ -35,7 +35,7 @@ import * as clients from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { OpenAIClient } from "@/llm/openai.js";
 import { MCPManager } from "@/mcp/manager.js";
-import { runPrintMode } from "@/print-mode.js";
+import { parsePrintFlags, runPrintMode } from "@/print-mode.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import * as subagents from "@/subagent/spawn.js";
 import * as backend from "@/teams/backend.js";
@@ -139,6 +139,41 @@ async function* events(...items: AgentEvent[]): AsyncGenerator<AgentEvent> {
   await Promise.resolve();
   yield* items;
 }
+
+describe("print mode argument parsing", () => {
+  it.each([
+    ["has no following argument", ["-p"]],
+    [
+      "is immediately followed by another flag",
+      ["-p", "--output-format", "stream-json", "actual prompt"],
+    ],
+  ])("rejects -p when it %s", (_label, args) => {
+    const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
+      throw new Error(`exit ${String(code)}`);
+    });
+
+    expect(() => parsePrintFlags(args)).toThrow("exit 1");
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("requires a prompt argument immediately"),
+    );
+  });
+
+  it.each([
+    ["is missing", ["-p", "prompt", "--output-format"]],
+    ["is invalid", ["-p", "prompt", "--output-format", "json"]],
+  ])("rejects --output-format when its value %s", (_label, args) => {
+    const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
+      throw new Error(`exit ${String(code)}`);
+    });
+
+    expect(() => parsePrintFlags(args)).toThrow("exit 1");
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("requires 'text' or 'stream-json'"),
+    );
+  });
+});
 
 describe("print mode delegation", () => {
   it("forks the live conversation by default and injects project instructions", async () => {

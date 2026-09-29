@@ -97,7 +97,11 @@ export function decideMode(
     override === "native" ||
     override === "dispatch"
   ) {
-    return override;
+    // Native deferred loading is part of the Anthropic wire protocol. Even an
+    // explicit override must not hide every deferred tool from other clients.
+    return override === "native" && protocol !== "anthropic"
+      ? "dispatch"
+      : override;
   }
 
   // No MCP tools, any mode would behave the same, and eager is the simplest

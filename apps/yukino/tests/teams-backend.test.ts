@@ -20,12 +20,32 @@
  * SOFTWARE.
  */
 
-import { describe, test, expect, afterEach } from "vitest";
+import type * as childProcess from "node:child_process";
 
-import { detectBackend, detectBackendFromEnv } from "@/teams/backend.js";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+import {
+  detectBackend,
+  detectBackendFromEnv,
+  restoreTeammateCancel,
+  spawnTeammate,
+} from "@/teams/backend.js";
+
+const execSyncMock = vi.hoisted(() =>
+  vi.fn((_command: string, _options?: unknown) => ""),
+);
+
+vi.mock("node:child_process", async (importOriginal) => ({
+  ...(await importOriginal<typeof childProcess>()),
+  execSync: execSyncMock,
+}));
 
 const origTmux = process.env.TMUX;
 const origIterm = process.env.ITERM_SESSION_ID;
+
+beforeEach(() => {
+  execSyncMock.mockClear();
+});
 
 afterEach(() => {
   if (origTmux === undefined) {
@@ -72,5 +92,32 @@ describe("detectBackend Windows guardrail", () => {
     } else {
       expect(got).toBe("tmux");
     }
+  });
+});
+
+describe("tmux teammate backend", () => {
+  test("creates a fresh detached session directly", () => {
+    const spawned = spawnTeammate({
+      mode: "tmux",
+      command: "node",
+      args: ["worker.js"],
+      cwd: "/tmp",
+    });
+
+    expect(execSyncMock).toHaveBeenCalledOnce();
+    expect(execSyncMock.mock.calls[0]?.[0]).toContain("tmux new-session -d");
+    expect(execSyncMock.mock.calls[0]?.[0]).not.toContain("new-window");
+    expect(spawned.paneId).toMatch(/^yukino-/);
+  });
+
+  test("reconstructs cancellation from the persisted session name", () => {
+    const cancel = restoreTeammateCancel("tmux", "yukino-restored");
+    cancel?.();
+
+    expect(execSyncMock).toHaveBeenCalledWith(
+      'tmux kill-session -t "yukino-restored"',
+      expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
+    );
+    expect(restoreTeammateCancel("iterm")).toBeUndefined();
   });
 });

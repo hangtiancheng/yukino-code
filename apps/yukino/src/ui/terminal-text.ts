@@ -47,6 +47,85 @@ export function truncateToWidth(
   );
 }
 
+export interface CursorWindow {
+  before: string;
+  current: string;
+  after: string;
+  leadingEllipsis: boolean;
+  trailingEllipsis: boolean;
+}
+
+/** Builds a cursor-centered field view that never exceeds the given columns. */
+export function cursorWindow(
+  value: string,
+  cursor: number,
+  maxWidth: number,
+): CursorWindow {
+  const columns = Math.max(1, Math.floor(maxWidth));
+  const position = Math.max(0, Math.min(cursor, value.length));
+  const current = value[position] ?? " ";
+  const currentValue =
+    visibleWidth(current) > columns || visibleWidth(current) === 0
+      ? " "
+      : current;
+  const currentWidth = visibleWidth(currentValue);
+  const left = value.slice(0, position);
+  const right = value.slice(position + (position < value.length ? 1 : 0));
+  const fullWidth =
+    visibleWidth(value) + (position === value.length ? currentWidth : 0);
+
+  if (fullWidth <= columns) {
+    return {
+      before: left,
+      current: currentValue,
+      after: right,
+      leadingEllipsis: false,
+      trailingEllipsis: false,
+    };
+  }
+
+  let leadingEllipsis = left.length > 0;
+  let trailingEllipsis = right.length > 0;
+  while (
+    currentWidth + Number(leadingEllipsis) + Number(trailingEllipsis) >
+    columns
+  ) {
+    if (trailingEllipsis) {
+      trailingEllipsis = false;
+    } else {
+      leadingEllipsis = false;
+    }
+  }
+
+  const surroundingWidth = Math.max(
+    0,
+    columns - currentWidth - Number(leadingEllipsis) - Number(trailingEllipsis),
+  );
+  let leftWidth = Math.floor(surroundingWidth / 2);
+  let rightWidth = surroundingWidth - leftWidth;
+  const availableLeftWidth = visibleWidth(left);
+  const availableRightWidth = visibleWidth(right);
+  if (availableLeftWidth < leftWidth) {
+    rightWidth += leftWidth - availableLeftWidth;
+    leftWidth = availableLeftWidth;
+  } else if (availableRightWidth < rightWidth) {
+    leftWidth += rightWidth - availableRightWidth;
+    rightWidth = availableRightWidth;
+  }
+
+  return {
+    before: sliceAnsi(
+      left,
+      Math.max(0, availableLeftWidth - leftWidth),
+      availableLeftWidth,
+    ),
+    current: currentValue,
+    after: sliceAnsi(right, 0, rightWidth),
+    leadingEllipsis,
+    trailingEllipsis,
+  };
+}
+
 export function wrapToLines(text: string, width: number): string[] {
   return wrapAnsi(text, Math.max(1, Math.floor(width)), {
     hard: true,

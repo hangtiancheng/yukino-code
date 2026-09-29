@@ -87,14 +87,12 @@ export class LoadSkillTool implements Tool {
       };
     }
 
-    // Fork mode: the SOP body does not enter the main conversation; it is delegated to an
-    // isolated subagent for execution, and only the final result is returned. This ensures
-    // that model-initiated skill loading and user-invoked slash commands follow the same mode
-    // semantics — the declared isolation intent takes effect on both paths.
+    // Fork mode keeps the SOP body out of the main conversation: an isolated
+    // subagent executes it and only its final result is returned.
     if (skill.meta.mode === "fork" && this.forkHost) {
       try {
         return {
-          output: await runFork(skill, "", this.forkHost),
+          output: await runFork(skill, "", this.forkHost, ctx.abortSignal),
           isError: false,
         };
       } catch (err) {

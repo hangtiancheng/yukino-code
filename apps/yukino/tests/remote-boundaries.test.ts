@@ -20,31 +20,57 @@
  * SOFTWARE.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
 import { RecoveryState } from "@/compact/recovery.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
 import { parseRemoteAddress } from "@/remote/address.js";
-import { RemoteServer } from "@/remote/server.js";
+import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
 import type { SessionMessage } from "@/session/index.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
+import { ToolRegistry } from "@/tools/registry.js";
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {
     /** noop */
   };
-  const promise = new Promise<T>((complete) => {
+  let reject: (reason?: unknown) => void = () => {
+    /** noop */
+  };
+  const promise = new Promise<T>((complete, fail) => {
     resolve = complete;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
+}
+
+function invokePrivate(
+  target: object,
+  methodName: string,
+  args: unknown[] = [],
+): unknown {
+  const method: unknown = Reflect.get(target, methodName);
+  if (typeof method !== "function") {
+    throw new Error(`Missing method: ${methodName}`);
+  }
+  const result: unknown = Reflect.apply(method, target, args);
+  return result;
+}
+
+function requirePromise(value: unknown): Promise<unknown> {
+  if (!(value instanceof Promise)) {
+    throw new Error("Expected private method to return a promise");
+  }
+  return value;
 }
 
 describe("remote execution boundaries", () => {
@@ -73,6 +99,139 @@ describe("remote execution boundaries", () => {
       expect(() => parseRemoteAddress(address)).toThrow();
     },
   );
+
+  it("shares one cold agent initialization across concurrent callers", async () => {
+    const initialization = deferred<never>();
+    const agentFactory = vi.fn(() => initialization.promise);
+    const server = new RemoteServer({
+      providers: [],
+      addr: ":18888",
+      enableCoordinatorMode: false,
+      forkDisabled: true,
+      agentFactory,
+    });
+
+    const first = requirePromise(invokePrivate(server, "ensureAgent"));
+    const second = requirePromise(invokePrivate(server, "ensureAgent"));
+    expect(agentFactory).toHaveBeenCalledOnce();
+
+    initialization.reject(new Error("expected test failure"));
+    await expect(Promise.all([first, second])).resolves.toEqual([null, null]);
+    expect(Reflect.get(server, "agentInitPromise")).toBeNull();
+  });
+
+  it("validates reviews before initialization and claims streaming during cold start", async () => {
+    const initialization = deferred<never>();
+    const agentFactory = vi.fn(() => initialization.promise);
+    const server = new RemoteServer({
+      providers: [],
+      addr: ":18888",
+      enableCoordinatorMode: false,
+      forkDisabled: true,
+      agentFactory,
+    });
+
+    const invalid = requirePromise(
+      invokePrivate(server, "handleCodeReviewStart", [{ from: "main" }]),
+    );
+    expect(agentFactory).not.toHaveBeenCalled();
+    expect(Reflect.get(server, "streaming")).toBe(false);
+    await invalid;
+
+    const first = requirePromise(
+      invokePrivate(server, "handleCodeReviewStart", [{}]),
+    );
+    expect(Reflect.get(server, "streaming")).toBe(true);
+    const second = requirePromise(
+      invokePrivate(server, "handleCodeReviewStart", [{}]),
+    );
+    expect(agentFactory).toHaveBeenCalledOnce();
+    await second;
+
+    initialization.reject(new Error("expected test failure"));
+    await first;
+    expect(Reflect.get(server, "streaming")).toBe(false);
+  });
+
+  it("uses run-equivalent tool visibility for manual compaction", async () => {
+    const registry = new ToolRegistry();
+    const visibleNames = vi.spyOn(registry, "listVisibleToolNames");
+    const visibleSchemas = vi.spyOn(registry, "getAllSchemas");
+    const server = new RemoteServer({
+      providers: [],
+      addr: ":18888",
+      enableCoordinatorMode: true,
+      forkDisabled: true,
+    });
+    Reflect.set(server, "agentHandle", {
+      client: { protocol: "openai-compat" },
+      conv: new ConversationManager(),
+      recoveryState: new RecoveryState(),
+      registry,
+      workDir: process.cwd(),
+      sessionId: "compact-test",
+      enableCoordinatorMode: true,
+      toolFilter: (name: string) => name !== "Agent",
+    });
+
+    await requirePromise(invokePrivate(server, "handleCompact"));
+
+    expect(visibleNames).toHaveBeenCalledOnce();
+    expect(visibleSchemas).toHaveBeenCalledOnce();
+    const namesCall = visibleNames.mock.calls[0];
+    const schemasCall = visibleSchemas.mock.calls[0];
+    expect(namesCall?.[0]).toBe("openai-compat");
+    expect(schemasCall?.[0]).toBe("openai-compat");
+    expect(namesCall?.[1]).toBe(schemasCall?.[1]);
+    const filter = namesCall?.[1];
+    expect(filter?.("SendMessage")).toBe(true);
+    expect(filter?.("Agent")).toBe(false);
+    expect(filter?.("Bash")).toBe(false);
+  });
+
+  it("cancels a remote fork skill through the active run signal", async () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-remote-skill-"));
+    const skillDir = join(workDir, ".agents", "skills", "remote-fork");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, "SKILL.md"),
+      "---\nname: remote-fork\ndescription: test\ncontext: fork\n---\n\nDo work.",
+    );
+    const provider: ProviderConfig = {
+      name: "test",
+      protocol: "openai",
+      base_url: "https://example.invalid",
+      api_key: "test",
+      model: "test",
+    };
+
+    try {
+      const handle = await createRemoteAgent({
+        provider,
+        workDir,
+        enableCoordinatorMode: false,
+        forkDisabled: false,
+        memoryEnabled: false,
+      });
+      const loadSkill = handle.registry.get("LoadSkill");
+      expect(loadSkill).toBeDefined();
+      if (!loadSkill) {
+        return;
+      }
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await loadSkill.execute(
+        { workDir, abortSignal: controller.signal },
+        { name: "remote-fork" },
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("fork execution failed");
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
 
   it("restores tool results and image attachments without replacing the fork's conversation", () => {
     const workDir = mkdtempSync(join(tmpdir(), "yukino-remote-"));

@@ -463,7 +463,12 @@ async function performPostCreationSetup(
  * copying the whole directory targets a subdirectory of its own source and
  * Node's cp rejects that with EINVAL.
  */
-const SHARED_YUKINO_ENTRIES = ["permissions.yaml", "agents", "memory"];
+const SHARED_YUKINO_ENTRIES = [
+  "permissions.yaml",
+  "agents",
+  "commands",
+  "memory",
+];
 /** Same allowlist approach for the repo's .agents/ directory. */
 const SHARED_AGENTS_ENTRIES = ["AGENTS.md", "skills"];
 
@@ -525,13 +530,9 @@ async function copyAgentsSettings(
 }
 
 /**
- * Point core.hooksPath at the main repo's hooks so git hooks are shared with
- * the worktree. Prioritizes .husky/ over .git/hooks/.
- *
- * core.hooksPath lives in the shared config (extensions.worktreeConfig is
- * off), so a write from any worktree applies to the main repo and every other
- * worktree at once. To avoid silently rewriting a user-configured value, the
- * write only happens when nothing is set yet.
+ * Gives a worktree its own absolute Husky hooks path without changing the
+ * shared core.hooksPath. Git's default common .git/hooks directory needs no
+ * configuration. Existing user configuration always takes precedence.
  */
 async function configureHooksPath(
   repoRoot: string,
@@ -543,36 +544,34 @@ async function configureHooksPath(
       ["config", "--get", "core.hooksPath"],
       { cwd: worktreePath },
     )
-      .then((r) => r.stdout.trim())
+      .then((result) => result.stdout.trim())
       .catch(() => "");
     if (existing) {
       return;
     }
-    const candidates = [
-      join(repoRoot, ".husky"),
-      join(repoRoot, ".git", "hooks"),
-    ];
-    let hooksPath: string | undefined;
-    for (const c of candidates) {
-      try {
-        const info = await stat(c);
-        if (info.isDirectory()) {
-          hooksPath = c;
-          break;
-        }
-      } catch (err) {
-        // .husky is commonly absent — expected, try the next candidate.
-        log.debug({ err }, "hooks path candidate probe failed");
-        // candidate doesn't exist, try next
+
+    const hooksPath = join(repoRoot, ".husky");
+    try {
+      const info = await stat(hooksPath);
+      if (!info.isDirectory()) {
+        return;
       }
-    }
-    if (!hooksPath) {
+    } catch (err) {
+      // No Husky directory means Git's shared default hooks remain in effect.
+      log.debug({ err }, "husky hooks path probe failed");
       return;
     }
 
-    await execFileAsync("git", ["config", "core.hooksPath", hooksPath], {
-      cwd: worktreePath,
-    });
+    await execFileAsync(
+      "git",
+      ["config", "extensions.worktreeConfig", "true"],
+      { cwd: worktreePath },
+    );
+    await execFileAsync(
+      "git",
+      ["config", "--worktree", "core.hooksPath", hooksPath],
+      { cwd: worktreePath },
+    );
   } catch (err) {
     log.error({ err }, "failed to configure hooks path in worktree");
   }

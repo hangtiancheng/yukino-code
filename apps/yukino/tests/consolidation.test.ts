@@ -21,6 +21,7 @@
  */
 
 import {
+  existsSync,
   mkdtempSync,
   writeFileSync,
   readFileSync,
@@ -31,7 +32,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 import type { LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
@@ -136,6 +137,77 @@ describe("MemoryConsolidator", () => {
       // Should not throw: the session gate blocks before any LLM call, so the stub client is never used
       await consolidator.maybeRun();
     });
+
+    it("allows only one active pass in the same process", async () => {
+      const dir = makeTempDir();
+      const memDir = join(dir, ".yukino", "memory");
+      mkdirSync(memDir, { recursive: true });
+      createSessions(dir, 1);
+      let finishRun: (() => void) | undefined;
+      const running = new Promise<void>((resolve) => {
+        finishRun = resolve;
+      });
+
+      const first = new MemoryConsolidator(createNoNetworkClient(), dir, {
+        minHours: 0,
+        minSessions: 1,
+      });
+      const second = new MemoryConsolidator(createNoNetworkClient(), dir, {
+        minHours: 0,
+        minSessions: 1,
+      });
+      const firstRun = vi.spyOn(first, "run").mockReturnValue(running);
+      const secondRun = vi.spyOn(second, "run").mockResolvedValue();
+
+      await first.maybeRun();
+      await second.maybeRun();
+      expect(firstRun).toHaveBeenCalledOnce();
+      expect(secondRun).not.toHaveBeenCalled();
+
+      finishRun?.();
+      await vi.waitFor(() => {
+        expect(existsSync(join(memDir, ".consolidate-running.lock"))).toBe(
+          false,
+        );
+      });
+    });
+
+    it("releases a successful lock so a later pass in the same process can acquire it", async () => {
+      const dir = makeTempDir();
+      const memDir = join(dir, ".yukino", "memory");
+      mkdirSync(memDir, { recursive: true });
+      createSessions(dir, 1);
+
+      const first = new MemoryConsolidator(createNoNetworkClient(), dir, {
+        minHours: 0,
+        minSessions: 1,
+      });
+      const firstRun = vi.spyOn(first, "run").mockResolvedValue();
+      await first.maybeRun();
+
+      const lockFile = join(memDir, ".consolidate-lock");
+      await vi.waitFor(() => {
+        expect(firstRun).toHaveBeenCalledOnce();
+        expect(readFileSync(lockFile, "utf-8")).toBe("");
+        expect(existsSync(join(memDir, ".consolidate-running.lock"))).toBe(
+          false,
+        );
+      });
+      const earlier = new Date(Date.now() - 10_000);
+      utimesSync(lockFile, earlier, earlier);
+
+      const second = new MemoryConsolidator(createNoNetworkClient(), dir, {
+        minHours: 0,
+        minSessions: 1,
+      });
+      const secondRun = vi.spyOn(second, "run").mockResolvedValue();
+      await second.maybeRun();
+
+      await vi.waitFor(() => {
+        expect(secondRun).toHaveBeenCalledOnce();
+        expect(readFileSync(lockFile, "utf-8")).toBe("");
+      });
+    });
   });
 
   describe("E2E consolidation", () => {
@@ -218,7 +290,7 @@ describe("MemoryConsolidator", () => {
         });
 
         // Call run directly, wait synchronously for consolidation to complete
-        await consolidator.run(memDir, [], 0);
+        await consolidator.run(memDir, []);
 
         console.log("\nAfter consolidation:");
         console.log("  Files:", readdirSync(memDir));

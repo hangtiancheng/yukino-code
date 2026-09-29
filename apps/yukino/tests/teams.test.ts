@@ -35,7 +35,8 @@ import {
   recordToolStart,
   recordTurnComplete,
 } from "@/teams/progress.js";
-import { listTeamNames } from "@/teams/team-file.js";
+import { getNameRegistry } from "@/teams/registry.js";
+import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
 import {
   TeamCreateTool,
   SpawnTeammateTool,
@@ -107,7 +108,8 @@ describe("teammate progress", () => {
 
 describe("teams orchestration", () => {
   it("passes node a script entrypoint for external teammates", async () => {
-    const mgr = new TeamManager(workDir());
+    const project = workDir();
+    const mgr = new TeamManager(project);
     const team = mgr.create("external-squad", "tmux");
     const entry = process.argv[1] ?? "src/main.tsx";
 
@@ -121,8 +123,59 @@ describe("teams orchestration", () => {
     expect(config?.args[0]).toBe(entry);
     expect(config?.args).not.toContain("run");
     expect(config?.args).not.toContain("--input-type=module");
+    expect(readTeamFile(project, "external-squad")?.members[0]?.paneId).toBe(
+      "test-pane",
+    );
 
     await mgr.deleteAll();
+  });
+
+  it("persists terminal failure notifications from external teammates", async () => {
+    const project = workDir();
+    const mgr = new TeamManager(project);
+    const team = mgr.create("external-failure", "tmux");
+    team.spawnTeammate("external-scout", "find X", () =>
+      Promise.resolve("unused"),
+    );
+
+    await team.leaderMailbox.send(
+      "external-scout",
+      "[idle] external-scout failed: boom",
+    );
+    mgr.drainLeaderMailbox();
+
+    expect(team.getMember("external-scout")?.active).toBe(false);
+    expect(team.getMember("external-scout")?.uiState?.status).toBe("failed");
+    expect(getNameRegistry().resolve("external-scout")).toBeUndefined();
+    expect(
+      readTeamFile(project, "external-failure")?.members[0]?.isActive,
+    ).toBe(false);
+  });
+
+  it("gives an external teammate the shutdown grace period before cancellation", async () => {
+    vi.useFakeTimers();
+    try {
+      const mgr = new TeamManager(workDir());
+      const team = mgr.create("graceful-stop", "tmux");
+      team.spawnTeammate("external-scout", "find X", () =>
+        Promise.resolve("unused"),
+      );
+      const cancel = team.getMember("external-scout")?.cancel;
+      expect(cancel).toBeTypeOf("function");
+
+      const stopping = team.stopMember("external-scout");
+      await Promise.resolve();
+      expect(cancel).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(2_499);
+      expect(cancel).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await stopping;
+
+      expect(cancel).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("spawnTeammate runs the task and posts its result to the leader mailbox", async () => {
@@ -357,7 +410,8 @@ describe("teams orchestration", () => {
   });
 
   it("TeamCreate sweeps other teams so at most one exists", async () => {
-    const mgr = new TeamManager(workDir());
+    const project = workDir();
+    const mgr = new TeamManager(project);
 
     // A live team with a spawned teammate.
     await new TeamCreateTool(mgr).execute(
@@ -374,8 +428,8 @@ describe("teams orchestration", () => {
     await wait(200);
 
     // A disk-only leftover from a previous session, unknown to this manager.
-    new TeamManager(workDir()).create("stale");
-    expect(listTeamNames().sort()).toEqual(["old", "stale"]);
+    new TeamManager(project).create("stale");
+    expect(listTeamNames(project).sort()).toEqual(["old", "stale"]);
 
     const result = await new TeamCreateTool(mgr).execute(
       { workDir: workDir() },
@@ -386,7 +440,7 @@ describe("teams orchestration", () => {
     expect(result.output).toContain("fresh");
     // Exactly one team remains — in memory and on disk.
     expect(mgr.list().map((team) => team.name)).toEqual(["fresh"]);
-    expect(listTeamNames()).toEqual(["fresh"]);
+    expect(listTeamNames(project)).toEqual(["fresh"]);
   });
 
   it("validates required args", async () => {

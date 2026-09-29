@@ -27,12 +27,15 @@ import { join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
+import type { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { MemoryManager } from "@/memory/manager.js";
 
 class MockClient implements LLMClient {
+  lastPrompt = "";
+
   constructor(private text: string) {}
   setSystemPrompt(_prompt: string): void {
     /** noop */
@@ -40,7 +43,11 @@ class MockClient implements LLMClient {
   setMaxOutputTokens?(_maxTokens: number): void {
     /** noop */
   }
-  async *stream(): AsyncGenerator<StreamEvent> {
+  async *stream(
+    conversation: ConversationManager,
+  ): AsyncGenerator<StreamEvent> {
+    const prompt = conversation.getMessages()[0]?.content;
+    this.lastPrompt = typeof prompt === "string" ? prompt : "";
     await Promise.resolve();
     yield { type: "text_delta", text: this.text };
     yield {
@@ -110,6 +117,125 @@ describe("MemoryExtractor", () => {
           entry.path === join(workDir, ".yukino", "memory", "yaml-safe.md"),
       );
     expect(memory?.description).toBe(description);
+  });
+
+  it("only reads complete type and description lines into the manifest", async () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+    const memoryDir = join(workDir, ".yukino", "memory");
+    mkdirSync(memoryDir, { recursive: true });
+    writeFileSync(
+      join(memoryDir, "misleading.md"),
+      [
+        "---",
+        "name: misleading",
+        "metadata: {}",
+        "---",
+        "",
+        "Implementation prototype: feedback",
+        "Narrative description: body impostor",
+      ].join("\n"),
+      "utf-8",
+    );
+    writeFileSync(
+      join(memoryDir, "valid.md"),
+      [
+        "---",
+        "name: valid",
+        'description: "real description"',
+        "metadata:",
+        '  type: "project"',
+        "---",
+        "body",
+      ].join("\n"),
+      "utf-8",
+    );
+    const client = new MockClient("NONE");
+
+    await new MemoryExtractor(client, workDir).extract("conversation");
+
+    expect(client.lastPrompt).toContain("- [reference] misleading.md:");
+    expect(client.lastPrompt).not.toContain("[feedback] misleading.md");
+    expect(client.lastPrompt).not.toContain("body impostor");
+    expect(client.lastPrompt).toContain(
+      "- [project] valid.md: real description",
+    );
+  });
+
+  it("resets accumulated fields when MEMORY_NAME repeats", async () => {
+    const response = [
+      "MEMORY_NAME: stale",
+      "MEMORY_TYPE: project",
+      "MEMORY_DESC: stale description",
+      "MEMORY_BODY: stale body",
+      "stale continuation",
+      "MEMORY_NAME: final",
+      "MEMORY_BODY: fresh body",
+    ].join("\n");
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+
+    const saved = await new MemoryExtractor(
+      new MockClient(response),
+      workDir,
+    ).extract("conversation");
+
+    expect(saved).toEqual(["final"]);
+    expect(existsSync(join(workDir, ".yukino", "memory", "stale.md"))).toBe(
+      false,
+    );
+    const file = readFileSync(
+      join(workDir, ".yukino", "memory", "final.md"),
+      "utf-8",
+    );
+    expect(file).toContain('type: "reference"');
+    expect(file).toContain('description: ""');
+    expect(file).toContain("fresh body");
+    expect(file).not.toContain("stale description");
+    expect(file).not.toContain("stale body");
+    expect(file).not.toContain("stale continuation");
+
+    const bodyLeakDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+    const bodyLeakResponse = [
+      "MEMORY_NAME: stale-body",
+      "MEMORY_TYPE: project",
+      "MEMORY_BODY: must not leak",
+      "nor may this continuation",
+      "MEMORY_NAME: bodyless-final",
+      "MEMORY_TYPE: project",
+      "MEMORY_DESC: final description",
+    ].join("\n");
+    const bodyLeakSaved = await new MemoryExtractor(
+      new MockClient(bodyLeakResponse),
+      bodyLeakDir,
+    ).extract("conversation");
+
+    expect(bodyLeakSaved).toEqual([]);
+    expect(
+      existsSync(join(bodyLeakDir, ".yukino", "memory", "bodyless-final.md")),
+    ).toBe(false);
+  });
+
+  it("replaces prior continuation content when MEMORY_BODY repeats", async () => {
+    const response = [
+      "MEMORY_NAME: replaced-body",
+      "MEMORY_TYPE: project",
+      "MEMORY_BODY: obsolete body",
+      "obsolete continuation",
+      "MEMORY_BODY: replacement body",
+      "replacement continuation",
+    ].join("\n");
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+
+    await new MemoryExtractor(new MockClient(response), workDir).extract(
+      "conversation",
+    );
+
+    const file = readFileSync(
+      join(workDir, ".yukino", "memory", "replaced-body.md"),
+      "utf-8",
+    );
+    expect(file).toContain("replacement body\nreplacement continuation");
+    expect(file).not.toContain("obsolete body");
+    expect(file).not.toContain("obsolete continuation");
   });
 
   it("returns nothing when the model says NONE", async () => {

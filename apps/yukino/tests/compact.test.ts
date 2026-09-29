@@ -303,6 +303,34 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     expect(msg).toContain("kept");
   });
 
+  it("persists the session transcript hint in the compact boundary", async () => {
+    const conversation = new ConversationManager();
+    for (let i = 0; i < 20; i++) {
+      conversation.addUserMessage(
+        `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
+      );
+      conversation.addAssistantMessage(`old-reply-${String(i)}`);
+    }
+    conversation.addUserMessage("recent question");
+    conversation.addAssistantMessage("recent answer");
+
+    const sessionPath = "/tmp/yukino-session-transcript.jsonl";
+    const { client } = stubClient("PERSISTED SUMMARY");
+    const { boundary } = await forceCompact(
+      conversation,
+      client,
+      null,
+      [],
+      [],
+      sessionPath,
+    );
+
+    expect(boundary?.summary).toContain("PERSISTED SUMMARY");
+    expect(boundary?.summary).toContain(
+      `use ReadFile to read the full session transcript: ${sessionPath}`,
+    );
+  });
+
   it("does not split a tool_use/tool_result pair across the compaction boundary", async () => {
     const conversation = new ConversationManager();
     for (let i = 0; i < 20; i++) {

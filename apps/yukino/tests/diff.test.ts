@@ -53,6 +53,36 @@ describe("buildDiff", () => {
     expect(text).toContain("-    2  b");
   });
 
+  it("numbers trailing context from the new file after unequal edits", () => {
+    const oldContent = [
+      "before",
+      "remove-one",
+      "remove-two",
+      "tail-one",
+      "tail-two",
+    ].join("\n");
+    const newContent = [
+      "before",
+      "add-one",
+      "add-two",
+      "add-three",
+      "tail-one",
+      "tail-two",
+    ].join("\n");
+
+    const { text, additions, removals } = buildDiff(oldContent, newContent);
+    const lines = text.split("\n");
+
+    expect(additions).toBe(3);
+    expect(removals).toBe(2);
+    expect(lines.find((line) => line.endsWith("  tail-one"))?.trim()).toBe(
+      "5  tail-one",
+    );
+    expect(lines.find((line) => line.endsWith("  tail-two"))?.trim()).toBe(
+      "6  tail-two",
+    );
+  });
+
   it("trims unchanged prefix/suffix so unrelated lines don't show up as changed", () => {
     const oldLines = Array.from({ length: 20 }, (_, i) => `line${String(i)}`);
     const newLines = [...oldLines];

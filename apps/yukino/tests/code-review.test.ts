@@ -587,6 +587,19 @@ describe("format", () => {
     expect(xml).toContain('<file path="weird&quot;&lt;&gt;&amp;.ts">');
   });
 
+  it("includes an escaped old_path attribute for renamed diffs", () => {
+    const xml = buildConcatenatedDiffs([
+      makeFileDiff('src/after"<>&.ts', {
+        oldPath: 'src/before"<>&.ts',
+        isRenamed: true,
+      }),
+    ]);
+
+    expect(xml).toContain(
+      '<file path="src/after&quot;&lt;&gt;&amp;.ts" old_path="src/before&quot;&lt;&gt;&amp;.ts">',
+    );
+  });
+
   it("excludes group members and binaries from the change-files list", async () => {
     const diffs = await parseDiffText(
       [MODIFIED_DIFF, NEW_FILE_DIFF, BINARY_DIFF].join("\n"),

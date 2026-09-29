@@ -89,22 +89,22 @@ export function replaceToolResultContent(
 }
 
 /**
- * The `<persisted-output>` wrapper text. buildSpillPreview derives the inputs
- * from an in-memory string; tool-level producers (e.g. a backgrounded Bash
- * command's live output file) build the same wrapper from a stat + partial
- * read without ever loading the full content into JS.
+ * The `<persisted-output>` wrapper text. buildSpillPreview reports in-memory
+ * strings in characters; file-backed producers report stat and preview sizes
+ * in bytes without ever loading the full content into JS.
  */
 export function buildPersistedOutputPreview(
-  totalChars: number,
+  totalSize: number,
   preview: string,
   spillPath: string,
+  sizeUnit: "characters" | "bytes" = "characters",
 ): string {
-  // Sizes are character counts, not bytes (multi-byte content is smaller in
-  // bytes than this reads); "KB" claims would be inaccurate for CJK text.
+  const previewSize =
+    sizeUnit === "bytes" ? Buffer.byteLength(preview, "utf-8") : preview.length;
   let msg = `<persisted-output>\n`;
-  msg += `Output too large (${String(totalChars)} characters). Full content saved to:\n${spillPath}\n\n`;
-  msg += `Preview (first ${String(TOOL_RESULT_PREVIEW_CHARS)} characters):\n${preview}`;
-  if (totalChars > TOOL_RESULT_PREVIEW_CHARS) {
+  msg += `Output too large (${String(totalSize)} ${sizeUnit}). Full content saved to:\n${spillPath}\n\n`;
+  msg += `Preview (first ${String(previewSize)} ${sizeUnit}):\n${preview}`;
+  if (totalSize > previewSize) {
     msg += "\n...";
   }
   msg += "\n</persisted-output>";

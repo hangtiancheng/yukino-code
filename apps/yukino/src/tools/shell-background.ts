@@ -51,7 +51,8 @@ import {
 // constants, result/notification formatting, and the host wiring helpers.
 
 /** Notification body budget: larger outputs stay on disk and only a preview travels in the notification. */
-export const BACKGROUND_NOTIFICATION_CHARS = 30_000;
+export const BACKGROUND_NOTIFICATION_BYTES = 30_000;
+const BACKGROUND_PREVIEW_BYTES = TOOL_RESULT_PREVIEW_CHARS;
 /**
  * A backgrounded command may fill up to 5GB before the size watchdog kills it:
  * with no JS in the write path, a stuck append loop could otherwise grow the
@@ -302,8 +303,8 @@ export function formatFinalResult(
  * Build the notification body for a finished background command from the
  * output file. Small outputs are inlined and the file is deleted; large
  * outputs keep the file on disk and the notification carries its path with a
- * 2000-char preview, so the full text stays readable via ReadFile without ever
- * loading it into JS here. `annotate` is the sandbox's stderr annotator
+ * byte-bounded preview, so the full text stays readable via ReadFile without
+ * ever loading it into JS here. `annotate` is the sandbox's stderr annotator
  * (sandbox-runtime violation notes); the foreground path applies it in
  * settleExit, and background notifications must report identically.
  */
@@ -323,7 +324,7 @@ export function buildBackgroundBody(
   }
 
   let result: ToolResult;
-  if (size <= BACKGROUND_NOTIFICATION_CHARS) {
+  if (size <= BACKGROUND_NOTIFICATION_BYTES) {
     const read = readOutputFile(outputPath, MAX_SHELL_OUTPUT_BYTES);
     const merged = annotate ? annotate(read.text) : read.text;
     result = formatFinalResult(
@@ -337,9 +338,17 @@ export function buildBackgroundBody(
     unlinkQuiet(outputPath);
   } else {
     const header = formatFinalResult(prompt, command, exit, "", false, timeout);
-    const preview = readOutputFile(outputPath, TOOL_RESULT_PREVIEW_CHARS).text;
+    const rawPreview = readOutputFile(
+      outputPath,
+      BACKGROUND_PREVIEW_BYTES,
+    ).text;
+    const annotatedPreview = annotate ? annotate(rawPreview) : rawPreview;
+    const preview = sliceUtf8Safe(
+      Buffer.from(annotatedPreview, "utf-8"),
+      BACKGROUND_PREVIEW_BYTES,
+    ).toString("utf-8");
     result = {
-      output: `${header.output}\n${buildPersistedOutputPreview(size, annotate ? annotate(preview) : preview, outputPath)}`,
+      output: `${header.output}\n${buildPersistedOutputPreview(size, preview, outputPath, "bytes")}`,
       isError: header.isError,
     };
   }

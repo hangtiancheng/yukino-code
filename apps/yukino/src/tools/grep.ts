@@ -20,8 +20,8 @@
  * SOFTWARE.
  */
 
-import type { Stats } from "node:fs";
-import { lstat, readdir, readFile, stat } from "node:fs/promises";
+import type { Dir, Stats } from "node:fs";
+import { lstat, open, opendir, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
 import { Minimatch } from "minimatch";
@@ -42,10 +42,18 @@ import { asErrorString, strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "tools" });
 
 const MAX_RESULTS = 500;
+const BINARY_SNIFF_BYTES = 8 * 1024;
+const DEFAULT_MAX_TRAVERSED_ENTRIES = 10_000;
+const DEFAULT_MAX_TRAVERSAL_DEPTH = 25;
 // Files above this size are skipped rather than buffered whole: reading a
 // multi-GB file into memory would spike it and block the loop, and the 500-
 // match cap means huge files rarely contribute anything the model needs.
 const MAX_GREP_FILE_BYTES = 25 * 1024 * 1024;
+
+export interface GrepTraversalLimits {
+  maxEntries: number;
+  maxDepth: number;
+}
 
 // JS regexes keep \w/\b/\d ASCII-only even in u-mode, unlike ripgrep whose
 // defaults are Unicode-aware. Rewrite them to property-escape equivalents
@@ -108,6 +116,13 @@ export class GrepTool implements Tool {
   description = GREP_DESCRIPTION;
 
   category: ToolCategory = "read";
+
+  constructor(
+    private readonly traversalLimits: GrepTraversalLimits = {
+      maxEntries: DEFAULT_MAX_TRAVERSED_ENTRIES,
+      maxDepth: DEFAULT_MAX_TRAVERSAL_DEPTH,
+    },
+  ) {}
 
   schema(): ToolSchema {
     const inputSchema = {
@@ -188,75 +203,48 @@ export class GrepTool implements Tool {
       );
     const results: string[] = [];
     let skippedLargeFiles = 0;
+    let traversedEntries = 0;
+    let entryLimitReached = false;
+    let depthLimitReached = false;
 
-    const walk = async (dir: string): Promise<void> => {
-      if (results.length >= MAX_RESULTS) {
-        return;
-      }
-
-      let entries: string[];
+    const searchFile = async (
+      filePath: string,
+      knownStat?: Stats,
+    ): Promise<void> => {
       try {
-        entries = await readdir(dir);
-      } catch (err) {
-        log.error({ err }, "tool operation failed");
-        return;
-      }
-
-      for (const entry of entries) {
-        if (results.length >= MAX_RESULTS) {
-          return;
-        }
-        if (SKIP_DIRS.has(entry)) {
-          continue;
-        }
-        const fullPath = join(dir, entry);
-        let fileStat: Stats;
-        try {
-          fileStat = await lstat(fullPath);
-          if (fileStat.isSymbolicLink()) {
-            // Follow file symlinks (old behavior), but never descend into
-            // symlinked directories — that is what makes cycles harmless.
-            fileStat = await stat(fullPath);
-            if (!fileStat.isFile()) {
-              continue;
-            }
-          }
-        } catch (err) {
-          log.error({ err }, "tool operation failed");
-          continue;
-        }
-
-        if (fileStat.isDirectory()) {
-          await walk(fullPath);
-        } else if (fileStat.isFile()) {
-          if (!matchesInclude(fullPath)) {
-            continue;
-          }
-          await searchFile(fullPath);
-        }
-      }
-    };
-
-    const searchFile = async (filePath: string): Promise<void> => {
-      try {
-        const fileStat = await stat(filePath);
+        const fileStat = knownStat ?? (await stat(filePath));
         if (fileStat.size > MAX_GREP_FILE_BYTES) {
           skippedLargeFiles++;
           return;
         }
-        const buf = await readFile(filePath);
-        // NUL byte in the first 8KB → binary (ripgrep's heuristic); scanning
-        // it as UTF-8 would only produce replacement-char garbage matches.
-        if (buf.subarray(0, 8192).includes(0)) {
-          return;
-        }
-        const lines = buf.toString("utf-8").split("\n");
-        const rel = relative(ctx.workDir, filePath);
 
-        for (let i = 0; i < lines.length && results.length < MAX_RESULTS; i++) {
-          if (regex.test(lines[i])) {
-            results.push(`${rel}:${String(i + 1)}:${lines[i]}`);
+        const file = await open(filePath, "r");
+        try {
+          // Sniff before buffering the full file. A NUL byte in the first 8 KiB
+          // marks it as binary (ripgrep's heuristic), avoiding a needless large
+          // allocation for binary files that are still under the 25 MiB gate.
+          const sniffLength = Math.min(fileStat.size, BINARY_SNIFF_BYTES);
+          const sniff = Buffer.alloc(sniffLength);
+          const { bytesRead } = await file.read(sniff, 0, sniffLength, 0);
+          if (sniff.subarray(0, bytesRead).includes(0)) {
+            return;
           }
+
+          const buf = await file.readFile();
+          const lines = buf.toString("utf-8").split("\n");
+          const rel = relative(ctx.workDir, filePath);
+
+          for (
+            let i = 0;
+            i < lines.length && results.length < MAX_RESULTS;
+            i++
+          ) {
+            if (regex.test(lines[i])) {
+              results.push(`${rel}:${String(i + 1)}:${lines[i]}`);
+            }
+          }
+        } finally {
+          await file.close();
         }
       } catch (err) {
         log.error({ err }, "tool operation failed");
@@ -264,12 +252,70 @@ export class GrepTool implements Tool {
       }
     };
 
+    const walk = async (dir: string, depth: number): Promise<void> => {
+      if (results.length >= MAX_RESULTS || entryLimitReached) {
+        return;
+      }
+
+      let entries: Dir;
+      try {
+        entries = await opendir(dir);
+      } catch (err) {
+        log.error({ err }, "tool operation failed");
+        return;
+      }
+
+      try {
+        for await (const entry of entries) {
+          if (results.length >= MAX_RESULTS || entryLimitReached) {
+            return;
+          }
+          if (traversedEntries >= this.traversalLimits.maxEntries) {
+            entryLimitReached = true;
+            return;
+          }
+          traversedEntries++;
+          if (SKIP_DIRS.has(entry.name)) {
+            continue;
+          }
+          const fullPath = join(dir, entry.name);
+          let fileStat: Stats;
+          try {
+            fileStat = await lstat(fullPath);
+            if (fileStat.isSymbolicLink()) {
+              // Follow file symlinks (old behavior), but never descend into
+              // symlinked directories — that is what makes cycles harmless.
+              fileStat = await stat(fullPath);
+              if (!fileStat.isFile()) {
+                continue;
+              }
+            }
+          } catch (err) {
+            log.error({ err }, "tool operation failed");
+            continue;
+          }
+
+          if (fileStat.isDirectory()) {
+            if (depth >= this.traversalLimits.maxDepth) {
+              depthLimitReached = true;
+              continue;
+            }
+            await walk(fullPath, depth + 1);
+          } else if (fileStat.isFile() && matchesInclude(fullPath)) {
+            await searchFile(fullPath, fileStat);
+          }
+        }
+      } catch (err) {
+        log.error({ err }, "tool operation failed");
+      }
+    };
+
     try {
       const pathStat = await stat(searchPath);
       if (pathStat.isFile()) {
-        await searchFile(searchPath);
+        await searchFile(searchPath, pathStat);
       } else {
-        await walk(searchPath);
+        await walk(searchPath, 0);
       }
     } catch (err) {
       log.error({ err }, "tool operation failed");
@@ -279,22 +325,29 @@ export class GrepTool implements Tool {
       };
     }
 
-    if (results.length === 0) {
-      return {
-        output:
-          skippedLargeFiles > 0
-            ? `No matches found (${String(skippedLargeFiles)} file(s) over 25MB were skipped).`
-            : "No matches found.",
-        isError: false,
-      };
-    }
-
-    let output = results.join("\n");
+    const notices: string[] = [];
     if (results.length >= MAX_RESULTS) {
-      output += `\n\n(results truncated at ${String(MAX_RESULTS)} matches)`;
+      notices.push(`results truncated at ${String(MAX_RESULTS)} matches`);
+    }
+    if (entryLimitReached) {
+      notices.push(
+        `search truncated after visiting ${String(this.traversalLimits.maxEntries)} entries`,
+      );
+    }
+    if (depthLimitReached) {
+      notices.push(
+        `search truncated: directories deeper than ${String(this.traversalLimits.maxDepth)} levels were skipped`,
+      );
     }
     if (skippedLargeFiles > 0) {
-      output += `\n(${String(skippedLargeFiles)} file(s) over 25MB were skipped)`;
+      notices.push(
+        `${String(skippedLargeFiles)} file(s) over 25MB were skipped`,
+      );
+    }
+
+    let output = results.length > 0 ? results.join("\n") : "No matches found.";
+    if (notices.length > 0) {
+      output += `\n\n${notices.map((notice) => `(${notice})`).join("\n")}`;
     }
     return { output, isError: false };
   }

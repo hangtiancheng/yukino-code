@@ -65,10 +65,23 @@ export const SnapshotSchema = z.object({
 
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 
+const FileBaselineSchema = z.discriminatedUnion("state", [
+  z.object({
+    state: z.literal("existing"),
+    backupPath: z.string(),
+  }),
+  z.object({ state: z.literal("absent") }),
+  z.object({ state: z.literal("unavailable") }),
+]);
+
+type FileBaseline = z.infer<typeof FileBaselineSchema>;
+
 const PersistedStateSchema = z.object({
   version: z.literal(1),
   trackedFiles: z.array(z.string()),
   snapshots: z.array(SnapshotSchema),
+  /** First-track file states used when rewinding before a file was tracked. */
+  baselines: z.record(z.string(), FileBaselineSchema).optional(),
   /**
    * Monotonic counter for backup file names. Pruning shrinks the snapshots
    * array to a fixed length, so array positions would be reused as name
@@ -80,9 +93,16 @@ const PersistedStateSchema = z.object({
 
 type PersistedState = z.infer<typeof PersistedStateSchema>;
 
+function filePathHash(filePath: string): string {
+  return createHash("sha256").update(filePath).digest("hex").slice(0, 16);
+}
+
 function getBackupName(filePath: string, snapshotIndex: number): string {
-  const hash = createHash("sha256").update(filePath).digest("hex").slice(0, 16);
-  return `${hash}@s${String(snapshotIndex)}`;
+  return `${filePathHash(filePath)}@s${String(snapshotIndex)}`;
+}
+
+function getBaselineBackupName(filePath: string): string {
+  return `${filePathHash(filePath)}@baseline`;
 }
 
 /** Single source of truth for a session's file-history directory layout. */
@@ -95,6 +115,8 @@ export class FileHistory {
 
   /** Tracked file absolute paths. */
   private trackedFiles = new Set<string>();
+  /** File state immediately before the first edit in this history branch. */
+  private baselines = new Map<string, FileBaseline>();
   private snapshots: Snapshot[] = [];
   /** Monotonic backup-name counter; array positions recycle, this must not. */
   private nextSnapshotSeq = 0;
@@ -106,13 +128,42 @@ export class FileHistory {
   }
 
   /**
-   * Register a file about to be modified by a tool. Content is captured at
-   * snapshot time (not here), so a failed edit or a re-edit leaves no stale
-   * copies behind.
+   * Registers a file immediately before its first edit. Its original content,
+   * absence, or an unavailable read is captured once so rewind can safely cross
+   * the point where tracking began.
    */
   trackEdit(path: string): void {
-    this.trackedFiles.add(resolve(path));
+    const filePath = resolve(path);
+    if (!this.trackedFiles.has(filePath)) {
+      this.baselines.set(filePath, this.captureBaseline(filePath));
+      this.trackedFiles.add(filePath);
+    }
     this.save();
+  }
+
+  private captureBaseline(filePath: string): FileBaseline {
+    let content: Buffer<ArrayBuffer>;
+    try {
+      content = readFileSync(filePath);
+    } catch (err: unknown) {
+      const parsed = z
+        .looseObject({ code: z.string().optional() })
+        .safeParse(err);
+      if (parsed.success && parsed.data.code === "ENOENT") {
+        return { state: "absent" };
+      }
+      log.error({ err }, "file-history baseline capture failed");
+      return { state: "unavailable" };
+    }
+
+    const backupPath = join(this.sessionDir, getBaselineBackupName(filePath));
+    try {
+      writeFileSync(backupPath, content);
+      return { state: "existing", backupPath };
+    } catch (err) {
+      log.error({ err }, "file-history baseline capture failed");
+      return { state: "unavailable" };
+    }
   }
 
   /**
@@ -228,24 +279,62 @@ export class FileHistory {
       }
     }
 
-    // Files first tracked after `target` have no record in target.backups, so the
-    // loop above never touches them: rewind treats "absent from the snapshot" as
-    // "not present at that point" and deletes them from disk. This also removes a
-    // file that already existed before `target` but was first edited after it —
-    // its pre-tracking content was never captured, so nothing can restore it.
-    const createdAfterTarget = [...this.trackedFiles].filter(
-      (p) => !(p in target.backups),
+    // Files first tracked after `target` have no snapshot entry. Restore their
+    // first-track baseline: pre-existing files regain their original content,
+    // truly new files are removed, and unavailable baselines are left untouched.
+    const trackedAfterTarget = [...this.trackedFiles].filter(
+      (path) => !(path in target.backups),
     );
-    for (const filePath of createdAfterTarget) {
-      if (existsSync(filePath)) {
+    const unresolvedBaselines = new Set<string>();
+    for (const filePath of trackedAfterTarget) {
+      const baseline = this.baselines.get(filePath);
+      let resolved = false;
+      if (baseline?.state === "existing") {
         try {
-          unlinkSync(filePath);
-          changed.push(filePath);
-        } catch {
-          // skip
+          const baselineData = readFileSync(baseline.backupPath);
+          let currentData: Buffer<ArrayBuffer> | null = null;
+          try {
+            currentData = readFileSync(filePath);
+          } catch {
+            // Missing current content is restored below.
+          }
+          if (!currentData || !baselineData.equals(currentData)) {
+            mkdirSync(dirname(filePath), { recursive: true });
+            writeFileSync(filePath, baselineData);
+            changed.push(filePath);
+          }
+          resolved = true;
+        } catch (err) {
+          log.error({ err }, "file-history baseline restore failed");
+        }
+        if (resolved) {
+          try {
+            unlinkSync(baseline.backupPath);
+          } catch {
+            // Restoration no longer depends on the backup; cleanup is best-effort.
+          }
+        }
+      } else if (baseline?.state === "absent") {
+        if (!existsSync(filePath)) {
+          resolved = true;
+        } else {
+          try {
+            unlinkSync(filePath);
+            changed.push(filePath);
+            resolved = true;
+          } catch (err) {
+            log.error({ err }, "file-history baseline delete failed");
+          }
         }
       }
-      this.trackedFiles.delete(filePath);
+
+      if (resolved) {
+        this.baselines.delete(filePath);
+      } else {
+        // Keep both the first-track state and tracking membership so a later
+        // rewind can retry after the transient restore/delete failure clears.
+        unresolvedBaselines.add(filePath);
+      }
     }
 
     // Truncate snapshot history -- can't redo forward. The removed snapshots
@@ -253,7 +342,10 @@ export class FileHistory {
     const removed = this.snapshots.slice(snapshotIndex + 1);
     this.deleteBackups(removed);
     this.snapshots = this.snapshots.slice(0, snapshotIndex + 1);
-    this.trackedFiles = new Set(Object.keys(target.backups));
+    this.trackedFiles = new Set([
+      ...Object.keys(target.backups),
+      ...unresolvedBaselines,
+    ]);
     this.save();
 
     return changed;
@@ -285,6 +377,7 @@ export class FileHistory {
       version: 1,
       trackedFiles: [...this.trackedFiles],
       snapshots: this.snapshots,
+      baselines: Object.fromEntries(this.baselines),
       nextSnapshotSeq: this.nextSnapshotSeq,
     };
     try {
@@ -318,6 +411,9 @@ export class FileHistory {
     const state: PersistedState = result.data;
     this.snapshots = state.snapshots;
     this.nextSnapshotSeq = state.nextSnapshotSeq ?? state.snapshots.length;
+    for (const [path, baseline] of Object.entries(state.baselines ?? {})) {
+      this.baselines.set(path, baseline);
+    }
     if (state.trackedFiles.length > 0) {
       for (const path of state.trackedFiles) {
         this.trackedFiles.add(path);
@@ -328,6 +424,13 @@ export class FileHistory {
       const last = state.snapshots[state.snapshots.length - 1];
       for (const path of Object.keys(last.backups)) {
         this.trackedFiles.add(path);
+      }
+    }
+    // Legacy histories lack baselines. Treat those as unavailable rather than
+    // guessing that a file first tracked after a target snapshot was new.
+    for (const path of this.trackedFiles) {
+      if (!this.baselines.has(path)) {
+        this.baselines.set(path, { state: "unavailable" });
       }
     }
   }

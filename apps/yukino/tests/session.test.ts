@@ -20,6 +20,7 @@
  * SOFTWARE.
  */
 
+import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -549,6 +550,76 @@ describe("cleanExpiredSessions", () => {
   it("returns 0 when the sessions directory does not exist", () => {
     const workDir = mkdtempSync(join(tmpdir(), "yukino-sess-"));
     expect(cleanExpiredSessions(workDir)).toBe(0);
+  });
+
+  it("keeps an expired session that was just loaded for resume", () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-sess-"));
+    const sessionId = "resumed-session";
+    const filePath = join(workDir, ".yukino", "sessions", `${sessionId}.jsonl`);
+    saveMessage(workDir, sessionId, {
+      role: "user",
+      content: "resume me",
+      timestamp: t0,
+    });
+    const aged = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    utimesSync(filePath, aged, aged);
+
+    expect(loadSession(workDir, sessionId)).toHaveLength(1);
+    expect(cleanExpiredSessions(workDir)).toBe(0);
+    expect(existsSync(filePath)).toBe(true);
+  });
+
+  it("rechecks expiry after waiting for a concurrent resume", async () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-sess-"));
+    const sessionId = "concurrently-resumed";
+    const filePath = join(workDir, ".yukino", "sessions", `${sessionId}.jsonl`);
+    const lockPath = `${filePath}.lock`;
+    saveMessage(workDir, sessionId, {
+      role: "user",
+      content: "resume me concurrently",
+      timestamp: t0,
+    });
+    const aged = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    utimesSync(filePath, aged, aged);
+
+    const script = [
+      'const fs = require("node:fs");',
+      `const filePath = ${JSON.stringify(filePath)};`,
+      `const lockPath = ${JSON.stringify(lockPath)};`,
+      "fs.mkdirSync(lockPath);",
+      "const ticket = `${lockPath}/ticket-0000000000000001-${process.pid}-resume`;",
+      'fs.writeFileSync(ticket, String(process.pid), { flag: "wx" });',
+      'process.stdout.write("ready\\n");',
+      "setTimeout(() => {",
+      "  const now = new Date();",
+      "  fs.utimesSync(filePath, now, now);",
+      "  fs.unlinkSync(ticket);",
+      "  try { fs.rmdirSync(lockPath); } catch {}",
+      "}, 100);",
+    ].join("\n");
+    const child = spawn(process.execPath, ["-e", script], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const closed = new Promise<void>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`resume helper exited ${String(code)}`));
+        }
+      });
+    });
+    await new Promise<void>((resolveReady, rejectReady) => {
+      child.once("error", rejectReady);
+      child.stdout.once("data", () => {
+        resolveReady();
+      });
+    });
+
+    expect(cleanExpiredSessions(workDir)).toBe(0);
+    await closed;
+    expect(existsSync(filePath)).toBe(true);
   });
 
   it("sweeps expired sessions lazily on the first listSessions call", () => {

@@ -66,6 +66,26 @@ describe("sandbox auto-allow respects deny/ask rules", () => {
     expect(result.effect).toBe("deny");
   });
 
+  it.each([
+    ["a single ampersand", " & "],
+    ["a carriage return", "\r"],
+    ["a line feed", "\n"],
+  ])("splits on %s before applying deny and ask rules", (_label, separator) => {
+    const denied = makeChecker(makeTmpDir(), [
+      { rule: "Bash(rm -rf /)", effect: "deny" },
+    ]).check("Bash", "command", {
+      command: `echo ok${separator}rm -rf /`,
+    });
+    const asked = makeChecker(makeTmpDir(), [
+      { rule: "Bash(git push origin main)", effect: "ask" },
+    ]).check("Bash", "command", {
+      command: `echo ok${separator}git push origin main`,
+    });
+
+    expect(denied.effect).toBe("deny");
+    expect(asked.effect).toBe("ask");
+  });
+
   it("allows safe command with sandbox", () => {
     const dir = makeTmpDir();
     const checker = makeChecker(dir, [
@@ -254,7 +274,7 @@ describe("memory background agent sandbox", () => {
         },
       };
       const consolidator = new MemoryConsolidator(fakeClient, dir);
-      await consolidator.run(memDir, [], 0);
+      await consolidator.run(memDir, []);
 
       expect(captured.length).toBe(1);
       const checker = captured[0];

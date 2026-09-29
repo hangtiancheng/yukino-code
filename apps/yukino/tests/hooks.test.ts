@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { HookConfig } from "@/config/index.js";
-import { HookEngine } from "@/hooks/index.js";
+import { HookEngine, validate } from "@/hooks/index.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -116,6 +116,24 @@ describe("hook execution boundaries", () => {
     }
   });
 
+  it.skipIf(process.platform === "win32")(
+    "uses Bash for command hooks on POSIX",
+    async () => {
+      const engine = new HookEngine([
+        {
+          event: "pre_send",
+          action: {
+            type: "command",
+            command: '[[ -n "$BASH_VERSION" ]] && printf bash',
+          },
+        },
+      ]);
+
+      const results = await engine.fire("pre_send", { event: "pre_send" });
+      expect(results[0]).toMatchObject({ output: "bash", success: true });
+    },
+  );
+
   it("sends no body for GET and applies on_error to non-success HTTP status", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -134,6 +152,17 @@ describe("hook execution boundaries", () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
     expect(fetchMock.mock.calls[0]?.[1]?.body).toBeUndefined();
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("rejects agent hooks during production configuration validation", () => {
+    const error = validate([
+      {
+        event: "pre_send",
+        action: { type: "agent", prompt: "inspect" },
+      },
+    ]);
+
+    expect(error?.message).toContain('action.type "agent" is not supported');
   });
 
   it("applies on_error to agent hook failures and stops the rejected chain", async () => {
@@ -183,5 +212,33 @@ describe("hook execution boundaries", () => {
     await vi.waitFor(() => {
       expect(engine.drainNotifications()).toEqual(["finished"]);
     });
+  });
+
+  it("releases a once slot when an async hook fails", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error("first failed"))
+      .mockResolvedValueOnce(new Response("retried"));
+    vi.stubGlobal("fetch", fetchMock);
+    const engine = new HookEngine([
+      {
+        event: "pre_send",
+        once: true,
+        async: true,
+        on_error: "fail",
+        action: { type: "http", url: "https://hooks.invalid" },
+      },
+    ]);
+
+    await engine.fire("pre_send", { event: "pre_send" });
+    await vi.waitFor(() => {
+      expect(engine.drainNotifications()[0]).toContain("first failed");
+    });
+
+    await engine.fire("pre_send", { event: "pre_send" });
+    await vi.waitFor(() => {
+      expect(engine.drainNotifications()).toEqual(["retried"]);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

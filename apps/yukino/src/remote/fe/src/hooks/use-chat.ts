@@ -140,6 +140,10 @@ function finalizeReviews(state: ChatState): ChatState {
   };
 }
 
+function assertNever(value: never): never {
+  throw new Error(`Unhandled reducer value: ${JSON.stringify(value)}`);
+}
+
 function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
   switch (msg.type) {
     case "connected": {
@@ -484,7 +488,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       return state;
 
     default:
-      return state;
+      return assertNever(msg);
   }
 }
 
@@ -526,7 +530,7 @@ function reducer(state: ChatState, action: Action): ChatState {
       return { ...state, codeReviewOpen: false };
 
     default:
-      return state;
+      return assertNever(action);
   }
 }
 

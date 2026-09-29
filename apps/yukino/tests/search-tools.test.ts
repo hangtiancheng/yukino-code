@@ -238,6 +238,40 @@ describe("GrepTool unicode", () => {
   });
 });
 
+describe("GrepTool traversal limits", () => {
+  it("reports when the file traversal limit truncates a search", async () => {
+    const grep = new GrepTool({ maxEntries: 1, maxDepth: 25 });
+    const result = await grep.execute(ctx, { pattern: "never-present" });
+
+    expect(result.isError).toBe(false);
+    expect(result.output).toContain(
+      "search truncated after visiting 1 entries",
+    );
+  });
+
+  it("reports and skips directories beyond the depth limit", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "yukino-grep-depth-"));
+    try {
+      mkdirSync(join(dir, "one", "two"), { recursive: true });
+      writeFileSync(join(dir, "one", "two", "deep.txt"), "DEEP_NEEDLE\n");
+      const grep = new GrepTool({ maxEntries: 100, maxDepth: 1 });
+      const result = await grep.execute(
+        { workDir: dir },
+        {
+          pattern: "DEEP_NEEDLE",
+        },
+      );
+
+      expect(result.output).not.toContain("deep.txt");
+      expect(result.output).toContain(
+        "search truncated: directories deeper than 1 levels were skipped",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("GlobTool", () => {
   const glob = new GlobTool();
 

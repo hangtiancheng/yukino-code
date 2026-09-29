@@ -20,6 +20,8 @@
  * SOFTWARE.
  */
 
+import { z } from "zod";
+
 /**
  * Strict type definitions for the Yukino Remote web client.
  *
@@ -89,7 +91,7 @@ export interface PermissionRequestPayload {
 
 export interface QuestionOption {
   label: string;
-  description: string;
+  description?: string;
 }
 
 export interface Question {
@@ -167,88 +169,165 @@ export interface SteeringPayload {
   text: string;
 }
 
-/** Discriminated union of all server messages. `type` is the discriminant. */
-export type ServerMessage =
-  | { type: "connected"; data: ConnectedPayload }
-  | { type: "commands"; data: SlashCommand[] }
-  | { type: "status"; data: StatusPayload }
-  | { type: "system"; data: SystemPayload }
-  | { type: "clear"; data: null }
-  | { type: "command_done"; data: null }
-  | { type: "replay_user"; data: ReplayUserPayload }
-  | { type: "replay_assistant"; data: ReplayAssistantPayload }
-  | { type: "stream_text"; data: StreamTextPayload }
-  | { type: "stream_end"; data: StreamEndPayload }
-  | { type: "thinking_text"; data: ThinkingTextPayload }
-  | { type: "tool_use"; data: ToolUsePayload }
-  | { type: "tool_result"; data: ToolResultPayload }
-  | { type: "permission_request"; data: PermissionRequestPayload }
-  | { type: "ask_user"; data: AskUserPayload }
-  | { type: "plan_approval_request"; data: PlanApprovalPayload }
-  | { type: "session_list"; data: SessionListPayload }
-  | { type: "code_review_form"; data: null }
-  | { type: "code_review_progress"; data: CodeReviewProgressPayload }
-  | { type: "steering_queued"; data: SteeringPayload }
-  | { type: "steering_delivered"; data: SteeringPayload }
-  | { type: "turn_complete"; data: TurnCompletePayload }
-  | { type: "loop_complete"; data: LoopCompletePayload }
-  | { type: "usage"; data: UsagePayload }
-  | { type: "error"; data: ErrorPayload }
-  | { type: "compact"; data: CompactPayload }
-  | { type: "retry"; data: RetryPayload }
-  | { type: "pong"; data: null };
+const slashCommandSchema = z.strictObject({
+  name: z.string(),
+  description: z.string(),
+});
+const questionSchema = z.strictObject({
+  question: z.string(),
+  header: z.string(),
+  options: z.array(
+    z.strictObject({ label: z.string(), description: z.string().optional() }),
+  ),
+  multiSelect: z.boolean(),
+});
+const sessionSummarySchema = z.strictObject({
+  id: z.string(),
+  firstMessage: z.string(),
+  messageCount: z.number(),
+  modTime: z.string(),
+});
+const toolArgsSchema = z.record(z.string(), z.unknown()).nullable();
 
-/**
- * Runtime discriminants of {@link ServerMessage}. The WebSocket boundary
- * validates incoming frames against this list before they reach the reducer;
- * TypeScript checks excess entries against the union, so adding a union
- * member without updating this array is caught by the missing-guard below
- * only at runtime — keep the two in sync when adding message types.
- */
-export const SERVER_MESSAGE_TYPES = [
-  "connected",
-  "commands",
-  "status",
-  "system",
-  "clear",
-  "command_done",
-  "replay_user",
-  "replay_assistant",
-  "stream_text",
-  "stream_end",
-  "thinking_text",
-  "tool_use",
-  "tool_result",
-  "permission_request",
-  "ask_user",
-  "plan_approval_request",
-  "session_list",
-  "code_review_form",
-  "code_review_progress",
-  "steering_queued",
-  "steering_delivered",
-  "turn_complete",
-  "loop_complete",
-  "usage",
-  "error",
-  "compact",
-  "retry",
-  "pong",
-] as const satisfies readonly ServerMessage["type"][];
+/** Complete runtime schema for frames crossing the WebSocket boundary. */
+export const ServerMessageSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("connected"),
+    data: z.strictObject({ session: z.string(), cwd: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("commands"),
+    data: z.array(slashCommandSchema),
+  }),
+  z.strictObject({
+    type: z.literal("status"),
+    data: z.strictObject({
+      model: z.string(),
+      permissionMode: z.string(),
+      thinkingLevel: z.string(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("system"),
+    data: z.strictObject({ message: z.string() }),
+  }),
+  z.strictObject({ type: z.literal("clear"), data: z.null() }),
+  z.strictObject({ type: z.literal("command_done"), data: z.null() }),
+  z.strictObject({
+    type: z.literal("replay_user"),
+    data: z.strictObject({ content: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("replay_assistant"),
+    data: z.strictObject({ content: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("stream_text"),
+    data: z.strictObject({ text: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("stream_end"),
+    data: z.strictObject({ text: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("thinking_text"),
+    data: z.strictObject({ text: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("tool_use"),
+    data: z.strictObject({
+      toolId: z.string(),
+      toolName: z.string(),
+      args: toolArgsSchema,
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("tool_result"),
+    data: z.strictObject({
+      toolId: z.string(),
+      toolName: z.string(),
+      output: z.string(),
+      isError: z.boolean(),
+      elapsed: z.number(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("permission_request"),
+    data: z.strictObject({
+      id: z.string(),
+      toolName: z.string(),
+      description: z.string(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("ask_user"),
+    data: z.strictObject({
+      id: z.string(),
+      questions: z.array(questionSchema),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("plan_approval_request"),
+    data: z.strictObject({ planPath: z.string(), planContent: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("session_list"),
+    data: z.strictObject({ sessions: z.array(sessionSummarySchema) }),
+  }),
+  z.strictObject({ type: z.literal("code_review_form"), data: z.null() }),
+  z.strictObject({
+    type: z.literal("code_review_progress"),
+    data: z.strictObject({
+      phase: z.string(),
+      message: z.string(),
+      progress: z.number().optional(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("steering_queued"),
+    data: z.strictObject({ text: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("steering_delivered"),
+    data: z.strictObject({ text: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("turn_complete"),
+    data: z.strictObject({ turn: z.number() }),
+  }),
+  z.strictObject({
+    type: z.literal("loop_complete"),
+    data: z.strictObject({
+      stopReason: z.string(),
+      totalTurns: z.number(),
+      elapsed: z.number(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("usage"),
+    data: z.strictObject({ inputTokens: z.number(), outputTokens: z.number() }),
+  }),
+  z.strictObject({
+    type: z.literal("error"),
+    data: z.strictObject({ message: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("compact"),
+    data: z.strictObject({ message: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("retry"),
+    data: z.strictObject({ reason: z.string(), waitMs: z.number() }),
+  }),
+  z.strictObject({ type: z.literal("pong"), data: z.null() }),
+]);
 
-/** Structural guard for WebSocket frames before they reach the reducer. */
+export type ServerMessage = z.infer<typeof ServerMessageSchema>;
+
+/** Validates a complete WebSocket frame before it reaches the reducer. */
 export function isServerMessage(value: unknown): value is ServerMessage {
-  if (typeof value !== "object" || value === null || !("type" in value)) {
-    return false;
-  }
-  const discriminator: unknown = value.type;
-  return (
-    typeof discriminator === "string" &&
-    SERVER_MESSAGE_TYPE_SET.has(discriminator)
-  );
+  return ServerMessageSchema.safeParse(value).success;
 }
-
-const SERVER_MESSAGE_TYPE_SET = new Set<string>(SERVER_MESSAGE_TYPES);
 
 /* ───────────────────────── Client → Server messages ───────────────────────── */
 

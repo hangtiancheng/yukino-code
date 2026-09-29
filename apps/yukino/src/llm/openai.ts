@@ -31,7 +31,7 @@ import {
   NetworkError,
   RateLimitError,
 } from "./errors.js";
-import type { StreamEvent } from "./events.js";
+import { parseToolArguments, type StreamEvent } from "./events.js";
 
 import { resolveAPIKey } from "@/config/index.js";
 import {
@@ -255,6 +255,8 @@ export class OpenAIClient implements LLMClient {
       let jsonAccumulate = "";
       let reasoningId = "";
       let reasoningText = "";
+      let reasoningPartText = "";
+      const startedComputerCalls = new Set<string>();
       let sawTerminalResponse = false;
 
       for await (const event of stream) {
@@ -265,14 +267,20 @@ export class OpenAIClient implements LLMClient {
           };
         } else if (event.type === "response.reasoning_summary_text.delta") {
           reasoningText += event.delta;
+          reasoningPartText += event.delta;
           yield { type: "thinking_delta", text: event.delta };
         } else if (event.type === "response.reasoning_summary_text.done") {
-          yield {
-            type: "thinking_complete",
-            thinking: reasoningText,
-            signature: reasoningId,
-          };
+          if (!reasoningPartText) {
+            reasoningText += event.text;
+            yield { type: "thinking_delta", text: event.text };
+          }
+          reasoningPartText = "";
         } else if (event.type === "response.function_call_arguments.delta") {
+          if (!currentToolId || !currentToolName) {
+            throw new NetworkError(
+              "Responses tool arguments arrived before a valid tool call",
+            );
+          }
           jsonAccumulate += event.delta;
           yield {
             type: "tool_call_delta",
@@ -280,6 +288,11 @@ export class OpenAIClient implements LLMClient {
           };
         } else if (event.type === "response.output_item.added") {
           if (event.item.type === "function_call") {
+            if (!event.item.call_id || !event.item.name) {
+              throw new NetworkError(
+                "Responses tool call started without a valid id or name",
+              );
+            }
             currentToolName = event.item.name;
             currentToolId = event.item.call_id;
             jsonAccumulate = "";
@@ -290,6 +303,12 @@ export class OpenAIClient implements LLMClient {
               toolId: currentToolId,
             };
           } else if (event.item.type === "computer_call") {
+            if (!event.item.call_id || !event.item.id) {
+              throw new NetworkError(
+                "Responses computer call started without a valid id",
+              );
+            }
+            startedComputerCalls.add(event.item.call_id);
             yield {
               type: "tool_call_start",
               toolName: "ComputerUse",
@@ -298,31 +317,50 @@ export class OpenAIClient implements LLMClient {
           } else if (event.item.type === "reasoning") {
             reasoningId = event.item.id ?? "";
             reasoningText = "";
+            reasoningPartText = "";
           }
         } else if (event.type === "response.output_item.done") {
-          if (event.item.type === "function_call" && currentToolName) {
-            let args: Record<string, unknown> = {};
-            if (jsonAccumulate) {
-              try {
-                const parsed: unknown = JSON.parse(jsonAccumulate);
-                args = isRecord(parsed) ? asRecord(parsed) : {};
-              } catch (err) {
-                log.error({ err }, "llm operation failed");
-                args = {};
-              }
+          if (event.item.type === "reasoning") {
+            if (reasoningText) {
+              yield {
+                type: "thinking_complete",
+                thinking: reasoningText,
+                signature: reasoningId,
+              };
             }
-
+            reasoningId = "";
+            reasoningText = "";
+            reasoningPartText = "";
+          } else if (event.item.type === "function_call") {
+            if (!currentToolId || !currentToolName) {
+              throw new NetworkError(
+                "Responses tool call completed without a valid start event",
+              );
+            }
+            const parsed = parseToolArguments(
+              jsonAccumulate.trim() ? jsonAccumulate : event.item.arguments,
+            );
             yield {
               type: "tool_call_complete",
               toolId: currentToolId,
               toolName: currentToolName,
-              arguments: args,
+              arguments: parsed.arguments,
+              ...(parsed.parseError ? { parseError: parsed.parseError } : {}),
             };
 
             currentToolName = "";
             currentToolId = "";
             jsonAccumulate = "";
           } else if (event.item.type === "computer_call") {
+            if (
+              !event.item.call_id ||
+              !event.item.id ||
+              !startedComputerCalls.delete(event.item.call_id)
+            ) {
+              throw new NetworkError(
+                "Responses computer call completed without a valid start event",
+              );
+            }
             yield {
               type: "tool_call_complete",
               toolId: event.item.call_id,
@@ -697,11 +735,14 @@ export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
   for (const m of messages) {
     if (m.thinkingBlocks) {
       for (const tb of m.thinkingBlocks) {
+        if (!tb.signature.startsWith("rs_")) {
+          continue;
+        }
         result.push({
           type: "reasoning",
           id: tb.signature,
           summary: [{ type: "summary_text", text: tb.thinking }],
-        } satisfies OpenAIMessageParam);
+        } satisfies OpenAI.Responses.ResponseReasoningItem);
       }
     }
 
@@ -947,10 +988,12 @@ export class OpenAICompatClient implements LLMClient {
 
             if (tc.function?.arguments) {
               entry.args += tc.function.arguments;
-              yield {
-                type: "tool_call_delta",
-                text: tc.function.arguments,
-              };
+              if (entry.started) {
+                yield {
+                  type: "tool_call_delta",
+                  text: tc.function.arguments,
+                };
+              }
             }
           }
         }
@@ -965,26 +1008,30 @@ export class OpenAICompatClient implements LLMClient {
             };
             reasoningAccumulate = "";
           }
+          const incompleteCall = [...toolCalls.values()].find(
+            (toolCall) => !toolCall.started,
+          );
+          if (incompleteCall) {
+            const missing = [
+              ...(incompleteCall.id ? [] : ["id"]),
+              ...(incompleteCall.name ? [] : ["name"]),
+            ].join(" and ");
+            throw new NetworkError(
+              `Chat Completions tool call ended without a valid ${missing}`,
+            );
+          }
+
           for (const tu of toolCalls.values()) {
-            let args: Record<string, unknown> = {};
-            const jsonArgs = tu.args;
-            if (jsonArgs) {
-              try {
-                const parsed: unknown = JSON.parse(jsonArgs);
-                args = isRecord(parsed) ? asRecord(parsed) : {};
-              } catch (err) {
-                log.error({ err }, "llm operation failed");
-                args = {};
-              }
-            }
-            // Emit unconditionally: some compat servers send "" (or nothing)
-            // instead of "{}" for no-argument tool calls, and gating the
-            // completion on non-empty arguments would silently drop the call.
+            const parsed = parseToolArguments(tu.args);
+            // Empty arguments are a valid no-argument call. Malformed non-empty
+            // JSON carries a parse marker so the executor can pair an error
+            // result without invoking the tool with an invented empty object.
             yield {
               type: "tool_call_complete",
               toolName: tu.name,
               toolId: tu.id,
-              arguments: args,
+              arguments: parsed.arguments,
+              ...(parsed.parseError ? { parseError: parsed.parseError } : {}),
             };
           }
         }

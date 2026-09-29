@@ -23,7 +23,7 @@
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AskUserQuestionTool, type Question } from "@/tools/ask-user.js";
 import type { ToolContext } from "@/tools/types.js";
@@ -87,6 +87,29 @@ describe("AskUserQuestionTool", () => {
       ],
     });
     expect(tooMany.isError).toBe(true);
+  });
+
+  it("enforces the 12-character header contract in schema and runtime", async () => {
+    const asker = vi.fn(() => Promise.resolve({}));
+    const tool = new AskUserQuestionTool(asker);
+
+    expect(tool.schema().input_schema).toMatchObject({
+      properties: {
+        questions: {
+          items: {
+            properties: { header: { maxLength: 12 } },
+          },
+        },
+      },
+    });
+    expect(
+      (
+        await tool.execute(toolContext, {
+          questions: [q({ header: "1234567890123" })],
+        })
+      ).isError,
+    ).toBe(true);
+    expect(asker).not.toHaveBeenCalled();
   });
 
   it("delegates to the asker and formats the answers", async () => {

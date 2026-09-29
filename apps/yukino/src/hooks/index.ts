@@ -30,9 +30,9 @@ import { strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "hooks" });
 
 /** Async command execution for hooks — non-blocking, 30s timeout, so the
- *  event loop isn't frozen during hook commands. The shell is the platform
- *  default (sh on POSIX, ComSpec/cmd on Windows) — hardcoding bash would
- *  ENOENT every hook on Windows hosts without bash on PATH. */
+ * event loop isn't frozen during hook commands. POSIX hooks intentionally use
+ * Bash; Windows keeps Node's platform default (ComSpec/cmd) because Bash is not
+ * guaranteed to be installed there. */
 function execHookAsync(
   command: string,
   opts: { env: NodeJS.ProcessEnv; cwd?: string; signal?: AbortSignal },
@@ -47,6 +47,7 @@ function execHookAsync(
         cwd: opts.cwd,
         signal: opts.signal,
         maxBuffer: 10 * 1024 * 1024,
+        ...(process.platform === "win32" ? {} : { shell: "bash" }),
       },
       (err, stdout) => {
         if (err) {
@@ -158,6 +159,9 @@ export class HookEngine {
           })
           .catch((err: unknown) => {
             log.error({ err }, "hooks operation failed");
+            if (onceKey !== null) {
+              this.firedOnce.delete(onceKey);
+            }
             // Same on_error semantics as the sync path: "ignore" stays
             // silent beyond the log; anything else surfaces the error.
             if ((hook.on_error ?? "ignore") !== "ignore") {

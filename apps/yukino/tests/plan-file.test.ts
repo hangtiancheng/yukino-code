@@ -34,8 +34,18 @@ import {
   resetPlanPath,
 } from "@/plan-file/index.js";
 import { buildPlanModeReminder } from "@/prompt/plan-mode.js";
+import { generateSlug } from "@/utils/slug.js";
 
 describe("plan-file", () => {
+  it("generates compact collision-resistant slugs without word lists", () => {
+    const slugs = Array.from({ length: 256 }, () => generateSlug());
+
+    expect(new Set(slugs).size).toBe(slugs.length);
+    expect(slugs.every((slug) => /^[a-z0-9]+-[a-f0-9]{12}$/u.test(slug))).toBe(
+      true,
+    );
+  });
+
   it("creates, saves, loads, and resets a plan", () => {
     resetPlanPath();
     const workDir = mkdtempSync(join(tmpdir(), "yukino-plan-"));

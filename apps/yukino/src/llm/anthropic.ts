@@ -31,7 +31,7 @@ import {
   NetworkError,
   RateLimitError,
 } from "./errors.js";
-import type { StreamEvent } from "./events.js";
+import { parseToolArguments, type StreamEvent } from "./events.js";
 
 import { resolveAPIKey } from "@/config/index.js";
 import {
@@ -61,10 +61,8 @@ import type {
 } from "@/tools/types.js";
 import {
   asErrorString,
-  asRecord,
   asString,
   contentToText,
-  isRecord,
   strArg,
 } from "@/utils/index.js";
 
@@ -231,14 +229,8 @@ export function buildAnthropicMessages(
 
       result.push({ role: "user", content: blocks });
     } else {
-      // Collapse consecutive plain user messages into a single entry: after
-      // compaction the summary (user) may be followed by kept user messages
-      // with no intervening assistant turn, so they become one user entry
-      // with multiple text blocks. Only merge when the previous entry is a
-      // plain user message (string, or first block text/image), never into a
-      // tool_result user entry — a user message right after tool results
-      // (e.g. a reminder) still starts a new entry, so the output can
-      // contain consecutive user entries.
+      // Anthropic messages must alternate roles. Merge every consecutive user
+      // turn, including reminders or steering immediately after tool results.
       if (result.length === 0) {
         result.push({
           role: "user",
@@ -247,20 +239,9 @@ export function buildAnthropicMessages(
         continue;
       }
 
-      let canMerge = false;
       const prev = result[result.length - 1];
       let content = prev.content;
-      if (
-        prev.role === "user" &&
-        (typeof content === "string" ||
-          (Array.isArray(content) &&
-            content.length > 0 &&
-            (content[0].type === "text" || content[0].type === "image")))
-      ) {
-        canMerge = true;
-      }
-
-      if (canMerge) {
+      if (prev.role === "user") {
         if (typeof content === "string") {
           content = prev.content =
             content.trim().length > 0
@@ -442,6 +423,11 @@ export class AnthropicClient implements LLMClient {
               thinkingAccumulate = "";
               thinkingSignature = "";
             } else if (block.type === "tool_use") {
+              if (!block.id || !block.name) {
+                throw new NetworkError(
+                  "Anthropic tool call started without a valid id or name",
+                );
+              }
               currentToolId = block.id;
               currentToolName =
                 block.name === "computer" ? "ComputerUse" : block.name;
@@ -471,6 +457,11 @@ export class AnthropicClient implements LLMClient {
                 text: delta.text,
               };
             } else if (delta.type === "input_json_delta") {
+              if (!currentToolId || !currentToolName) {
+                throw new NetworkError(
+                  "Anthropic tool arguments arrived before a valid tool call",
+                );
+              }
               jsonAccumulate += delta.partial_json;
               yield {
                 type: "tool_call_delta",
@@ -491,22 +482,13 @@ export class AnthropicClient implements LLMClient {
             }
 
             if (currentToolName) {
-              let args: Record<string, unknown> = {};
-              if (jsonAccumulate) {
-                try {
-                  const parsed: unknown = JSON.parse(jsonAccumulate);
-                  args = isRecord(parsed) ? asRecord(parsed) : {};
-                } catch (err) {
-                  log.error({ err }, "llm operation failed");
-                  args = {};
-                }
-              }
-
+              const parsed = parseToolArguments(jsonAccumulate);
               yield {
                 type: "tool_call_complete",
                 toolId: currentToolId,
                 toolName: currentToolName,
-                arguments: args,
+                arguments: parsed.arguments,
+                ...(parsed.parseError ? { parseError: parsed.parseError } : {}),
               };
 
               currentToolName = "";

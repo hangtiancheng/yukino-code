@@ -122,6 +122,7 @@ describe("tool pairing at turn boundaries", () => {
     expect(anthropic[1].content).toMatchObject([
       { type: "tool_result", tool_use_id: "a" },
       { type: "tool_result", tool_use_id: "b" },
+      { type: "text", text: "<system-reminder>after tools</system-reminder>" },
     ]);
     const chat = buildChatCompletionMessages(repaired);
     expect(chat.slice(0, 3).map((m) => m.role)).toEqual([

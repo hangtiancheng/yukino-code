@@ -66,8 +66,3 @@ export function renderMarkdown(text: string): string {
     ALLOWED_ATTR: ["href", "src", "alt", "title", "class"],
   });
 }
-
-/** Escape HTML special characters for safe insertion as text content. */
-export function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

@@ -40,6 +40,7 @@ import z, { parse, safeParse } from "zod";
 import { buildCompactionSummaryMessage } from "@/compact/prompts.js";
 import type { ToolResultBlock } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 import {
   normalizeToolResultContentBlock,
   type ToolResultContentBlock,
@@ -184,7 +185,12 @@ export function saveMessage(
   mkdirSync(dir, { recursive: true });
   const filePath = join(dir, `${sessionId}.jsonl`);
   const line = JSON.stringify(msg) + "\n";
-  writeFileSync(filePath, line, { flag: /* append */ "a", encoding: "utf-8" });
+  withFileSyncLock(filePath, () => {
+    writeFileSync(filePath, line, {
+      flag: /* append */ "a",
+      encoding: "utf-8",
+    });
+  });
 }
 
 // Append a compaction boundary to the session. The summary and the verbatim
@@ -206,12 +212,17 @@ export function saveCompactBoundary(
 
 /** Count the non-empty lines of a session log; undefined when it doesn't exist. */
 export function sessionLineCount(filePath: string): number | undefined {
-  if (!filePath || !existsSync(filePath)) {
+  if (!filePath || !existsSync(dirname(filePath))) {
     return undefined;
   }
-  return readFileSync(filePath, "utf-8")
-    .split("\n")
-    .filter((line) => line.trim().length > 0).length;
+  return withFileSyncLock(filePath, () => {
+    if (!existsSync(filePath)) {
+      return undefined;
+    }
+    return readFileSync(filePath, "utf-8")
+      .split("\n")
+      .filter((line) => line.trim().length > 0).length;
+  });
 }
 
 /**
@@ -226,21 +237,26 @@ export function truncateSessionLines(
   filePath: string,
   keepLines: number,
 ): void {
-  if (!filePath || !existsSync(filePath)) {
+  if (!filePath || !existsSync(dirname(filePath))) {
     return;
   }
-  const kept: string[] = [];
-  for (const line of readFileSync(filePath, "utf-8").split("\n")) {
-    if (kept.length >= keepLines) {
-      break;
+  withFileSyncLock(filePath, () => {
+    if (!existsSync(filePath)) {
+      return;
     }
-    if (line.trim().length > 0) {
-      kept.push(line);
+    const kept: string[] = [];
+    for (const line of readFileSync(filePath, "utf-8").split("\n")) {
+      if (kept.length >= keepLines) {
+        break;
+      }
+      if (line.trim().length > 0) {
+        kept.push(line);
+      }
     }
-  }
-  const tmp = `${filePath}.${String(process.pid)}.rewind-tmp`;
-  writeFileSync(tmp, kept.length > 0 ? kept.join("\n") + "\n" : "", "utf-8");
-  renameSync(tmp, filePath);
+    const tmp = `${filePath}.${String(process.pid)}.rewind-tmp`;
+    writeFileSync(tmp, kept.length > 0 ? kept.join("\n") + "\n" : "", "utf-8");
+    renameSync(tmp, filePath);
+  });
 }
 
 export function loadSession(
@@ -248,53 +264,68 @@ export function loadSession(
   sessionId: string,
 ): SessionMessage[] {
   const filePath = join(sessionsDir(workDir), `${sessionId}.jsonl`);
-  if (!existsSync(filePath)) {
+  if (!existsSync(dirname(filePath))) {
     return [];
   }
 
-  const out: SessionMessage[] = [];
-  for (const line of readFileSync(filePath, "utf-8").split("\n")) {
-    if (!line.trim()) {
-      continue;
+  return withFileSyncLock(filePath, () => {
+    if (!existsSync(filePath)) {
+      return [];
     }
-    try {
-      const message: unknown = JSON.parse(line);
-      const { success, data, error } = safeParse(SessionMessageSchema, message);
-      // Boundary records carry their text payload in `content`, so keep them
-      // (they pass the non-empty content check). Skip malformed or
-      // empty-content ordinary messages rather than crashing the load.
-      if (success) {
-        const isEmpty =
-          data.content.length === 0 && // empty text or content blocks
-          !(data.tool_uses?.length ?? 0) && // empty tool uses
-          !(data.tool_results?.length ?? 0); // empty tool results
-        if (!isEmpty) {
-          out.push(data);
-        }
-      } else {
-        log.error({ err: error }, "session operation failed");
+
+    const out: SessionMessage[] = [];
+    for (const line of readFileSync(filePath, "utf-8").split("\n")) {
+      if (!line.trim()) {
+        continue;
       }
-    } catch (err) {
-      log.error({ err }, "session operation failed");
-      // skip malformed line
+      try {
+        const message: unknown = JSON.parse(line);
+        const { success, data, error } = safeParse(
+          SessionMessageSchema,
+          message,
+        );
+        // Boundary records carry their text payload in `content`, so keep them
+        // (they pass the non-empty content check). Skip malformed or
+        // empty-content ordinary messages rather than crashing the load.
+        if (success) {
+          const isEmpty =
+            data.content.length === 0 && // empty text or content blocks
+            !(data.tool_uses?.length ?? 0) && // empty tool uses
+            !(data.tool_results?.length ?? 0); // empty tool results
+          if (!isEmpty) {
+            out.push(data);
+          }
+        } else {
+          log.error({ err: error }, "session operation failed");
+        }
+      } catch (err) {
+        log.error({ err }, "session operation failed");
+        // skip malformed line
+      }
     }
-  }
-  return out;
+    const now = new Date();
+    utimesSync(filePath, now, now);
+    return out;
+  });
 }
 
 /**
- * Marks a session as recently active by refreshing its mtime. Called right
- * after a resume: cleanExpiredSessions judges liveness by mtime, and a
- * resumed-but-not-yet-written session still carries its old timestamp —
- * without the touch, a concurrent process could sweep it out from under the
- * user. The touch also moves the session up in the recency-ordered list,
- * which matches how "recently resumed" should sort.
+ * Marks a session as recently active by refreshing its mtime. Session writes,
+ * loads, rewinds, touches, and expiry cleanup share the same cross-process lock,
+ * so cleanup cannot unlink a session that another process is resuming.
  */
 export function touchSession(workDir: string, sessionId: string): void {
   const filePath = join(sessionsDir(workDir), `${sessionId}.jsonl`);
+  if (!existsSync(dirname(filePath))) {
+    return;
+  }
   try {
-    const now = new Date();
-    utimesSync(filePath, now, now);
+    withFileSyncLock(filePath, () => {
+      if (existsSync(filePath)) {
+        const now = new Date();
+        utimesSync(filePath, now, now);
+      }
+    });
   } catch {
     // best-effort — the session may not exist (yet)
   }
@@ -493,42 +524,48 @@ export function listSessions(workDir: string): SessionInfo[] {
 
   for (const file of files) {
     const filePath = join(dir, file);
-    const stat = statSync(filePath);
-    const id = file.replace(".jsonl", "");
-
-    let firstMessage = "";
-    let messageCount = 0;
     try {
-      for (const line of readFileSync(filePath, "utf-8").split("\n")) {
-        if (!line.trim()) {
-          continue;
+      const info = withFileSyncLock(filePath, (): SessionInfo | null => {
+        if (!existsSync(filePath)) {
+          return null;
         }
-        let m: SessionMessage;
-        try {
-          const raw: unknown = JSON.parse(line);
-          m = parse(SessionMessageSchema, raw);
-        } catch (err) {
-          log.error({ err }, "session operation failed");
-          continue;
-        }
-        messageCount++;
-        // Label the session by its first user message, truncated to 100 chars.
-        if (!firstMessage && m.role === "user" && m.content) {
-          firstMessage = contentToText(m.content).slice(0, 100);
-        }
-      }
-    } catch (err2) {
-      log.error({ err: err2 }, "session operation failed");
-      continue;
-    }
+        const stat = statSync(filePath);
+        const id = file.replace(".jsonl", "");
+        let firstMessage = "";
+        let messageCount = 0;
 
-    sessions.push({
-      id,
-      firstMessage,
-      messageCount,
-      size: stat.size,
-      modTime: stat.mtime,
-    });
+        for (const line of readFileSync(filePath, "utf-8").split("\n")) {
+          if (!line.trim()) {
+            continue;
+          }
+          let message: SessionMessage;
+          try {
+            const raw: unknown = JSON.parse(line);
+            message = parse(SessionMessageSchema, raw);
+          } catch (err) {
+            log.error({ err }, "session operation failed");
+            continue;
+          }
+          messageCount++;
+          if (!firstMessage && message.role === "user" && message.content) {
+            firstMessage = contentToText(message.content).slice(0, 100);
+          }
+        }
+
+        return {
+          id,
+          firstMessage,
+          messageCount,
+          size: stat.size,
+          modTime: stat.mtime,
+        };
+      });
+      if (info) {
+        sessions.push(info);
+      }
+    } catch (err) {
+      log.error({ err }, "session operation failed");
+    }
   }
 
   sessions.sort((a, b) => b.modTime.getTime() - a.modTime.getTime());
@@ -564,8 +601,14 @@ export function cleanExpiredSessions(workDir: string): number {
   for (const file of files) {
     const filePath = join(dir, file);
     try {
-      const stat = statSync(filePath);
-      if (now - stat.mtimeMs > expiryMs) {
+      withFileSyncLock(filePath, () => {
+        if (!existsSync(filePath)) {
+          return;
+        }
+        const stat = statSync(filePath);
+        if (now - stat.mtimeMs <= expiryMs) {
+          return;
+        }
         unlinkSync(filePath);
         // Remove the session's subdirectory in one recursive pass: it holds
         // the tool-results spill files written by spillDir(), so one rm covers
@@ -588,7 +631,7 @@ export function cleanExpiredSessions(workDir: string): number {
           /** noop */
         }
         removed++;
-      }
+      });
     } catch (err) {
       log.error({ err }, "session operation failed");
       // Silently skip if deletion fails

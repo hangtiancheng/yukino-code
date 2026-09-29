@@ -78,6 +78,7 @@ export async function runFork(
   skill: Skill,
   args: string,
   host: SkillForkHost,
+  abortSignal?: AbortSignal,
 ): Promise<string> {
   let prompt = buildSkillPrompt(skill, args);
   const contextMode = skill.meta.forkContext ?? "none";
@@ -88,5 +89,7 @@ export async function runFork(
     prompt = `<parent-context>\n${escapeSkillXml(context)}\n</parent-context>\n\n${prompt}`;
   }
 
-  return host.runSubagent(prompt);
+  return abortSignal
+    ? host.runSubagent(prompt, abortSignal)
+    : host.runSubagent(prompt);
 }

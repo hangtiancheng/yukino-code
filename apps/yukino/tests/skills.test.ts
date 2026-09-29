@@ -114,6 +114,7 @@ describe("skill prompt display parsing", () => {
 describe("LoadSkillTool fork mode", () => {
   function forkFixture(mode: "inline" | "fork") {
     const calls: string[] = [];
+    const signals: (AbortSignal | undefined)[] = [];
     const activated: string[] = [];
     const catalog = new SkillCatalog();
     vi.spyOn(catalog, "get").mockReturnValue({
@@ -129,12 +130,13 @@ describe("LoadSkillTool fork mode", () => {
     const forkHost: SkillForkHost = {
       activateSkill: (n) => activated.push(n),
       snapshotParentMessages: () => "",
-      runSubagent: async (prompt) => {
+      runSubagent: async (prompt, abortSignal) => {
         calls.push(prompt);
+        signals.push(abortSignal);
         return Promise.resolve("3 risky pins found");
       },
     };
-    return { catalog, host, forkHost, calls, activated };
+    return { catalog, host, forkHost, calls, signals, activated };
   }
 
   it("runs a fork skill in a sub-agent and keeps the SOP out of the main context", async () => {
@@ -152,6 +154,19 @@ describe("LoadSkillTool fork mode", () => {
     expect(res.output).not.toContain("Inspect package.json");
     expect(calls[0]).toContain("Inspect package.json");
     expect(activated).toHaveLength(0);
+  });
+
+  it("passes the active tool cancellation signal to a forked skill", async () => {
+    const { catalog, host, forkHost, signals } = forkFixture("fork");
+    const controller = new AbortController();
+    const tool = new LoadSkillTool(catalog, host, forkHost);
+
+    await tool.execute(
+      { workDir: process.cwd(), abortSignal: controller.signal },
+      { name: "audit-deps" },
+    );
+
+    expect(signals).toEqual([controller.signal]);
   });
 
   it("falls back to inline when no fork host is wired", async () => {

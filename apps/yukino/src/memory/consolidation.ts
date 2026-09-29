@@ -20,18 +20,7 @@
  * SOFTWARE.
  */
 
-import {
-  existsSync,
-  statSync,
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  unlinkSync,
-  utimesSync,
-  openSync,
-  closeSync,
-  writeSync,
-} from "node:fs";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, basename } from "node:path";
 
@@ -43,6 +32,7 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import { listSessions } from "@/session/index.js";
+import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { GlobTool } from "@/tools/glob.js";
@@ -57,9 +47,6 @@ const DEFAULT_MIN_HOURS = 24;
 const DEFAULT_MIN_SESSIONS = 5;
 const SCAN_THROTTLE_MS = 10 * 60 * 1000;
 const LOCK_FILE = ".consolidate-lock";
-// A lock whose content is unreadable but was written very recently may belong
-// to a holder that has not finished writing its pid — never preempt those.
-const UNREADABLE_GRACE_MS = 5_000;
 const MAX_ENTRYPOINT_LINES = 200;
 
 /**
@@ -120,24 +107,26 @@ export class MemoryConsolidator {
       return Promise.resolve();
     }
 
-    const priorMtime = tryAcquireLock(memDir);
-    if (priorMtime === null) {
+    const releaseLock = tryAcquireFileSyncLock(
+      join(memDir, ".consolidate-running"),
+    );
+    if (!releaseLock) {
       return Promise.resolve();
     }
 
-    // Fire-and-forget: on failure the lock's prior mtime is restored so the
-    // time gate admits a retry instead of waiting out a full interval.
-    this.run(memDir, sessionIDs, priorMtime).catch(() => {
-      rollbackLock(memDir, priorMtime);
-    });
+    this.run(memDir, sessionIDs)
+      .then(() => {
+        markConsolidationSucceeded(memDir);
+      })
+      .catch(() => undefined)
+      .finally(releaseLock)
+      .catch((err: unknown) => {
+        log.error({ err }, "failed to release consolidation lock");
+      });
     return Promise.resolve();
   }
 
-  async run(
-    memDir: string,
-    sessionIDs: string[],
-    _priorMtime: number,
-  ): Promise<void> {
+  async run(memDir: string, sessionIDs: string[]): Promise<void> {
     const userMemDir = join(homedir(), ".yukino", "memory");
     const transcriptDir = join(this.workDir, ".yukino", "sessions");
     const prompt = buildConsolidationPrompt(
@@ -202,94 +191,11 @@ function readLastConsolidatedAt(memDir: string): number {
   }
 }
 
-/**
- * Acquires the consolidation lock. An existing lock is respected while its
- * recorded holder PID is still running — a live holder is never preempted,
- * however long the pass takes. Locks whose holder died (or whose content is
- * unreadable and older than UNREADABLE_GRACE_MS) are removed and replaced via
- * exclusive-create, which is atomic and therefore race-free. Returns the
- * lock's previous mtime on success (0 when no lock existed or its mtime could
- * not be read), or null when the lock is held. The mtime doubles as the
- * last-consolidation timestamp (see readLastConsolidatedAt), which is why
- * callers can undo a failed pass by restoring it via rollbackLock.
- */
-function tryAcquireLock(memDir: string): number | null {
-  const path = lockPath(memDir);
-  let mtimeMs: number | undefined;
-  let holderPid: number | undefined;
-
-  if (existsSync(path)) {
-    try {
-      mtimeMs = statSync(path).mtimeMs;
-      const raw = readFileSync(path, "utf-8").trim();
-      const parsed = parseInt(raw, 10);
-      if (Number.isFinite(parsed)) {
-        holderPid = parsed;
-      }
-    } catch (err) {
-      log.error({ err }, "failed to read consolidation lock file");
-    }
-    if (holderPid !== undefined) {
-      if (isProcessRunning(holderPid)) {
-        return null;
-      }
-    } else if (
-      mtimeMs !== undefined &&
-      Date.now() - mtimeMs < UNREADABLE_GRACE_MS
-    ) {
-      // Unreadable but freshly written — the holder may be mid-write.
-      return null;
-    }
-    try {
-      unlinkSync(path);
-    } catch (err) {
-      log.error({ err }, "failed to remove stale consolidation lock");
-      return null;
-    }
-  }
-
-  mkdirSync(memDir, { recursive: true });
-  // O_EXCL: the create either succeeds or loses to another process — unlike a
-  // plain write + read-back, two processes can never both hold the lock.
+function markConsolidationSucceeded(memDir: string): void {
   try {
-    const fd = openSync(path, "wx");
-    writeSync(fd, String(process.pid));
-    closeSync(fd);
+    writeFileSync(lockPath(memDir), "");
   } catch (err) {
-    log.warn({ err }, "consolidation lock create failed");
-    return null;
-  }
-
-  return mtimeMs ?? 0;
-}
-
-function rollbackLock(memDir: string, priorMtime: number): void {
-  const path = lockPath(memDir);
-  try {
-    // Roll back only while the lock still belongs to this process: after a
-    // takeover by another pass the file is theirs and must not be touched.
-    const raw = readFileSync(path, "utf-8").trim();
-    if (parseInt(raw, 10) !== process.pid) {
-      return;
-    }
-    if (priorMtime === 0) {
-      unlinkSync(path);
-      return;
-    }
-    writeFileSync(path, "");
-    const t = priorMtime / 1000;
-    utimesSync(path, t, t);
-  } catch (err) {
-    log.error({ err }, "failed to rollback consolidation lock");
-  }
-}
-
-function isProcessRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+    log.error({ err }, "failed to update consolidation timestamp");
   }
 }
 

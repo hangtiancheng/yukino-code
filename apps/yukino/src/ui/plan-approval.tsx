@@ -42,6 +42,7 @@ const PLAN_APPROVAL_OPTIONS = [
 export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
   const [cursor, setCursor] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackError, setFeedbackError] = useState(false);
 
   useInput((input, key) => {
     if (key.upArrow && cursor > 0) {
@@ -55,9 +56,9 @@ export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
         onSelect("manual");
       } else if (feedbackText) {
         onSelect("feedback", feedbackText);
+      } else {
+        setFeedbackError(true);
       }
-      // Empty feedback + Enter is a no-op; the placeholder text and the hint
-      // below explain what the field expects.
     } else if (key.escape) {
       // Escape defaults to the middle ground: approve the plan, but keep
       // confirming every edit. It does not cancel the approval.
@@ -67,13 +68,15 @@ export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
     } else if (cursor === 2 && key.backspace) {
       setFeedbackText((current) => current.slice(0, -1));
     } else if (cursor === 2 && input && !key.ctrl && !key.meta) {
+      setFeedbackError(false);
       setFeedbackText((current) => current + input);
     }
   });
 
   // Pasted text (bracketed paste) arrives as one chunk, not per-key input.
   usePaste((text) => {
-    if (cursor === 2) {
+    if (cursor === 2 && text) {
+      setFeedbackError(false);
       setFeedbackText((current) => current + text);
     }
   });
@@ -102,13 +105,16 @@ export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
         );
       })}
       {cursor === 2 ? (
-        <Box paddingLeft={3} paddingY={1}>
+        <Box flexDirection="column" paddingLeft={3} paddingY={1}>
           <Text color={THEME.text}>
             {feedbackText || (
               <Text color={THEME.dim}>Type feedback here...</Text>
             )}
             <Text inverse> </Text>
           </Text>
+          {feedbackError ? (
+            <Text color={THEME.error}>Feedback is required.</Text>
+          ) : null}
         </Box>
       ) : null}
     </SelectorFrame>

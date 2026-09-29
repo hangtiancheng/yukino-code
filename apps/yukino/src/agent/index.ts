@@ -507,6 +507,9 @@ export class Agent {
                     toolUseId: event.toolId,
                     toolName: event.toolName,
                     arguments: event.arguments,
+                    ...(event.parseError
+                      ? { parseError: event.parseError }
+                      : {}),
                     ...(event.providerItemId
                       ? { providerItemId: event.providerItemId }
                       : {}),
@@ -691,12 +694,17 @@ export class Agent {
             outputRecoveries = 0;
           }
 
-          this.conversation.addAssistantFull(
-            fullText,
-            thinkingBlocks,
-            toolUses,
-          );
-          this.persistLastMessage();
+          // Some providers can end a turn without emitting any content. Do not
+          // create or persist an empty assistant message: it adds no information
+          // and can leave resumed histories with invalid role alternation.
+          if (fullText || thinkingBlocks.length > 0 || toolUses.length > 0) {
+            this.conversation.addAssistantFull(
+              fullText,
+              thinkingBlocks,
+              toolUses,
+            );
+            this.persistLastMessage();
+          }
 
           if (lastUsage) {
             this.conversation.recordUsageAnchor(
@@ -977,6 +985,17 @@ export class Agent {
     );
 
     for (const tu of toolUses) {
+      if (tu.parseError) {
+        executor.submit(tu.toolUseId, tu.toolName, tu.arguments, tu.parseError);
+        if (!parallel) {
+          const batchResults = await executor.collectResults();
+          for (const r of batchResults) {
+            await this.processToolResult(r, toolUses, events);
+          }
+        }
+        continue;
+      }
+
       // Once the user interrupts, don't launch the remaining calls; report
       // them as interrupted so every tool_use keeps a paired tool_result.
       if (this.abortSignal?.aborted) {

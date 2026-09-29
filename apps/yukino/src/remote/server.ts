@@ -103,7 +103,6 @@ import {
   TaskManager,
   formatAgentTaskNotification,
 } from "@/subagent/task-manager.js";
-import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,
@@ -308,6 +307,14 @@ export interface RemoteAgentHandle {
 
 // -- Agent handle implementation -----------------------------------------------
 
+function composeAgentToolFilter(
+  enableCoordinatorMode: boolean,
+  handleFilter: ((name: string) => boolean) | null,
+): (name: string) => boolean {
+  const coordinatorFilter = coordinatorToolFilter(enableCoordinatorMode);
+  return (name) => coordinatorFilter(name) && (handleFilter?.(name) ?? true);
+}
+
 class AgentHandleImpl implements RemoteAgentHandle {
   client: LLMClient;
   conv: ConversationManager;
@@ -425,15 +432,12 @@ class AgentHandleImpl implements RemoteAgentHandle {
         maxOutput: getMaxOutputTokens(this.provider),
         recoveryState: this.recoveryState,
         activeSkills: this.activeSkills,
-        toolFilter: (name: string) => {
-          // Coordinator narrowing must pass, and any handle-level tool filter must
-          // pass as well; either one blocking is sufficient to deny. The handle's
-          // filter is currently never set (always null), but keep the gate here.
-          if (!coordinatorToolFilter(this.enableCoordinatorMode)(name)) {
-            return false;
-          }
-          return this.toolFilter ? this.toolFilter(name) : true;
-        },
+        // Coordinator narrowing and any handle-level restriction compose into
+        // one predicate shared with manual compaction's tool attachment.
+        toolFilter: composeAgentToolFilter(
+          this.enableCoordinatorMode,
+          this.toolFilter,
+        ),
         coordinatorActiveFn: () =>
           coordinatorActive(this.enableCoordinatorMode),
         instructions: this.longTermMemoryInstructions,
@@ -562,6 +566,11 @@ export async function createRemoteAgent(
     sessionId = newSessionId(),
   } = opts;
 
+  const hookErr = validateHooks(hookConfigs ?? []);
+  if (hookErr) {
+    throw hookErr;
+  }
+
   // 1. Create the per-session file history and file-state cache
   // (the session id itself is chosen above; the session file is written lazily)
   const fileHistory = new FileHistory(workDir, sessionId);
@@ -594,10 +603,6 @@ export async function createRemoteAgent(
   conv.injectLongTermMemory(instructions, memReminder);
 
   // 7. Initialize hooks
-  const hookErr = validateHooks(hookConfigs ?? []);
-  if (hookErr) {
-    log.warn({ message: hookErr.message }, "hook validation warning");
-  }
   const hookEngine = new HookEngine(hookConfigs ?? []);
 
   // 8. Load skills
@@ -626,55 +631,20 @@ export async function createRemoteAgent(
         .map((m) => `${m.role}: ${contentToText(m.content)}`)
         .join("\n");
     },
-    runSubagent: async (prompt: string) => {
-      if (!client) {
-        throw new Error("no llm client (provider not initialized)");
-      }
-      const { PermissionChecker: PC } = await import("../permissions/index.js");
-      const { Agent: AgentClass } = await import("../agent/index.js");
-
-      // Sub-agent uses an independent conversation to avoid polluting the main context
-      const subConv = new ConversationManager();
-      subConv.addUserMessage(prompt);
-
-      // Per-run background task registry (parity with subagent/spawn.ts): the
-      // forked registry shares tool instances with the host, so without this
-      // the fork's backgrounded commands would register in the host-level
-      // manager — the fork would never see their notifications, the main
-      // thread would be notified for commands it never issued, and nothing
-      // would kill the fork's shells when it exits.
-      const taskManager = new TaskManager();
-
-      const subAgent = new AgentClass({
+    runSubagent: (prompt: string, abortSignal?: AbortSignal) =>
+      spawnSubagent(
+        BUILTIN_AGENTS[0],
+        prompt,
         client,
-        registry: filterToolsForAgent(registry, undefined, undefined, false),
-        checker: new PC(workDir, "acceptEdits"),
-        conversation: subConv,
+        registry,
+        provider,
         workDir,
-        maxIterations: 200,
-        taskManager,
-        notificationFn: () =>
-          taskManager.drainNotifications().map(formatAgentTaskNotification),
-      });
-
-      let output = "";
-      try {
-        for await (const event of subAgent.run()) {
-          switch (event.type) {
-            case "stream_text":
-              output += event.text;
-              break;
-            case "loop_complete":
-              return output || "[No output]";
-            case "error":
-              throw event.error;
-          }
-        }
-        return output || "[No output]";
-      } finally {
-        await taskManager.stopAll();
-      }
-    },
+        undefined,
+        undefined,
+        undefined,
+        new PermissionChecker(workDir, "acceptEdits"),
+        { abortSignal, background: false },
+      ),
   };
 
   // 10. Register LoadSkill tool
@@ -1008,6 +978,8 @@ interface RemoteServerOptions {
   forkDisabled: boolean;
   /** Auto memory switch from config.yaml (`memory:`); defaults to true. */
   memoryEnabled?: boolean;
+  /** Agent constructor used for eager and lazy initialization. */
+  agentFactory?: typeof createRemoteAgent;
 }
 
 export class RemoteServer {
@@ -1018,6 +990,7 @@ export class RemoteServer {
   private opts: RemoteServerOptions;
 
   private agentHandle: RemoteAgentHandle | null = null;
+  private agentInitPromise: Promise<RemoteAgentHandle | null> | null = null;
   private streaming = false;
   private compactController: AbortController | null = null;
   private reviewController: AbortController | null = null;
@@ -1252,32 +1225,49 @@ export class RemoteServer {
     if (this.agentHandle) {
       return this.agentHandle;
     }
+    if (this.agentInitPromise) {
+      return this.agentInitPromise;
+    }
+
+    const factory = this.opts.agentFactory ?? createRemoteAgent;
+    const initPromise = (async (): Promise<RemoteAgentHandle | null> => {
+      try {
+        const handle = await factory({
+          provider: this.opts.providers[0],
+          workDir: cwd(),
+          hooks: this.opts.hookConfigs,
+          mcpServers: this.opts.mcpServers,
+          askUser: this.createAskUserCallback(),
+          enableCoordinatorMode: this.opts.enableCoordinatorMode,
+          forkDisabled: this.opts.forkDisabled,
+          memoryEnabled: this.opts.memoryEnabled !== false,
+        });
+        this.agentHandle = handle;
+        this.broadcast({
+          type: "connected",
+          data: { session: handle.sessionId, cwd: cwd() },
+        });
+        this.broadcastStatus();
+        return handle;
+      } catch (err) {
+        log.error({ err }, "failed to initialize agent");
+        this.broadcast({
+          type: "error",
+          data: {
+            message: `Failed to initialize agent: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        });
+        return null;
+      }
+    })();
+    this.agentInitPromise = initPromise;
+
     try {
-      this.agentHandle = await createRemoteAgent({
-        provider: this.opts.providers[0],
-        workDir: cwd(),
-        hooks: this.opts.hookConfigs,
-        mcpServers: this.opts.mcpServers,
-        askUser: this.createAskUserCallback(),
-        enableCoordinatorMode: this.opts.enableCoordinatorMode,
-        forkDisabled: this.opts.forkDisabled,
-        memoryEnabled: this.opts.memoryEnabled !== false,
-      });
-      this.broadcast({
-        type: "connected",
-        data: { session: this.agentHandle.sessionId, cwd: cwd() },
-      });
-      this.broadcastStatus();
-      return this.agentHandle;
-    } catch (err) {
-      log.error({ err }, "failed to initialize agent");
-      this.broadcast({
-        type: "error",
-        data: {
-          message: `Failed to initialize agent: ${err instanceof Error ? err.message : String(err)}`,
-        },
-      });
-      return null;
+      return await initPromise;
+    } finally {
+      if (this.agentInitPromise === initPromise) {
+        this.agentInitPromise = null;
+      }
     }
   }
 
@@ -1834,14 +1824,21 @@ export class RemoteServer {
     });
 
     try {
-      const toolNames = handle.registry.listTools().map((t) => t.name);
-      const toolSchemas = handle.registry.getAllSchemas();
+      const protocol = handle.client.protocol ?? "anthropic";
+      const toolFilter = composeAgentToolFilter(
+        handle.enableCoordinatorMode,
+        handle.toolFilter,
+      );
+      const toolNames = handle.registry.listVisibleToolNames(
+        protocol,
+        toolFilter,
+      );
+      const toolSchemas = handle.registry.getAllSchemas(protocol, toolFilter);
       const result = await forceCompact(
         handle.conv,
         handle.client,
         handle.recoveryState,
         toolNames,
-
         toolSchemas,
         getSessionFilePath(handle.workDir, handle.sessionId),
         controller.signal,
@@ -2065,10 +2062,6 @@ export class RemoteServer {
       });
       return;
     }
-    const handle = await this.ensureAgent();
-    if (!handle) {
-      return;
-    }
 
     const from = options.from?.trim() || undefined;
     const to = options.to?.trim() || undefined;
@@ -2089,17 +2082,24 @@ export class RemoteServer {
       return;
     }
 
+    // Claim the shared foreground slot before cold initialization yields. This
+    // prevents a second review or chat run from entering the same conversation.
     const controller = new AbortController();
     this.reviewController = controller;
     this.streaming = true;
     this.runCanceled = false;
-    const startTime = Date.now();
-    this.broadcast({
-      type: "code_review_progress",
-      data: { phase: "diff", message: "Starting code review…" },
-    });
 
     try {
+      const handle = await this.ensureAgent();
+      if (!handle) {
+        return;
+      }
+
+      const startTime = Date.now();
+      this.broadcast({
+        type: "code_review_progress",
+        data: { phase: "diff", message: "Starting code review…" },
+      });
       const result = await runCodeReview(
         {
           workDir: handle.workDir,
@@ -2427,7 +2427,8 @@ export class RemoteServer {
   async run(): Promise<void> {
     const { host, port } = parseRemoteAddress(this.opts.addr);
     try {
-      this.agentHandle = await createRemoteAgent({
+      const factory = this.opts.agentFactory ?? createRemoteAgent;
+      this.agentHandle = await factory({
         provider: this.opts.providers[0],
         workDir: cwd(),
         hooks: this.opts.hookConfigs,

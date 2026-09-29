@@ -34,6 +34,35 @@ export interface UsageInfo {
   cacheCreationInputTokens: number;
 }
 
+export function parseToolArguments(raw: string): {
+  arguments: Record<string, unknown>;
+  parseError?: string;
+} {
+  if (!raw.trim()) {
+    return { arguments: {} };
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return {
+        arguments: {},
+        parseError: "Invalid tool arguments: expected a JSON object",
+      };
+    }
+    return { arguments: Object.fromEntries(Object.entries(parsed)) };
+  } catch (error) {
+    return {
+      arguments: {},
+      parseError: `Invalid tool arguments JSON: ${error instanceof Error ? error.message : "parse failed"}`,
+    };
+  }
+}
+
 /** Events emitted by an LLM stream: text/thinking deltas, tool-call lifecycle, and stream end. */
 export type StreamEvent =
   | { type: "text_delta"; text: string }
@@ -46,6 +75,7 @@ export type StreamEvent =
       toolId: string;
       toolName: string;
       arguments: Record<string, unknown>;
+      parseError?: string;
       providerItemId?: string;
     }
   | { type: "stream_end"; stopReason: string; usage: UsageInfo };

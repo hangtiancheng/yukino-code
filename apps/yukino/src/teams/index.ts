@@ -25,6 +25,7 @@ import { join } from "node:path";
 
 import {
   detectBackend,
+  restoreTeammateCancel,
   spawnTeammate as spawnTeammateProcess,
 } from "./backend.js";
 import type { SpawnConfig } from "./backend.js";
@@ -54,9 +55,11 @@ import { SharedTaskStore } from "./shared-task.js";
 import {
   listTeamNames,
   readTeamFile,
+  sanitizeTeamName,
   teamDir,
   writeTeamFile,
   type TeamFile,
+  type TeamMemberEntry,
 } from "./team-file.js";
 
 import { createChildLogger } from "@/logger/index.js";
@@ -65,7 +68,7 @@ import { getOrCreatePlanPath } from "@/plan-file/index.js";
 import { buildTeammatePrompt } from "@/prompt/delegation.js";
 import type { SubagentProgressEvent } from "@/subagent/spawn.js";
 import { asErrorString } from "@/utils/index.js";
-import { randomVerb } from "@/utils/verbs.js";
+import { canonicalPath } from "@/utils/paths.js";
 
 // Submodule namespaces for library consumers (Teams.<Sub>.*).
 export * as Backend from "./backend.js";
@@ -97,8 +100,10 @@ export interface Member {
   done?: Promise<void>;
   mailbox: FileMailbox;
   uiState?: TeammateUIState;
-  /** Optional: tmux session name recorded at spawn (diagnostics only); stop goes through the cancel callback and the mailbox shutdown flow. Not set under the iTerm backend. */
+  /** Stable tmux session name, persisted so cancellation survives leader restart. */
   paneId?: string;
+  /** Actual backend used by this member (which can differ after fallback). */
+  backendType?: TeamMode;
   /** Whether this is an external-process teammate (tmux/iTerm); stopOne writes the mailbox shutdown notice only for external members. */
   external?: boolean;
 
@@ -151,22 +156,59 @@ export class Team {
     // Mailboxes live in a dedicated inboxes/ subdirectory, separate from
     // config.json and tasks.json at the team root, keeping the layout clean
     // as membership grows.
-    this.mailboxDir = join(teamDir(name), "inboxes");
+    this.mailboxDir = join(teamDir(workDir, name), "inboxes");
     mkdirSync(this.mailboxDir, { recursive: true });
     this.leaderMailbox = new FileMailbox(this.mailboxDir, LEADER_NAME);
   }
 
-  addMember(name: string): Member {
-    const mailbox = new FileMailbox(this.mailboxDir, name);
-    const member: Member = {
+  private createMember(name: string): Member {
+    return {
       name,
       active: false,
-      mailbox,
+      mailbox: new FileMailbox(this.mailboxDir, name),
       agentId: name,
+      backendType: this.mode,
       joinedAt: Math.floor(Date.now() / 1000),
     };
+  }
+
+  addMember(name: string): Member {
+    const member = this.createMember(name);
     this.members.set(name, member);
     this.persist();
+    return member;
+  }
+
+  /** Reconstructs a persisted member without writing a partial team snapshot. */
+  hydrateMember(entry: TeamMemberEntry): Member {
+    const member = this.createMember(entry.name);
+    member.agentId = entry.agentId;
+    member.agentType = entry.agentType;
+    member.model = entry.model;
+    member.worktreePath = entry.worktreePath;
+    member.joinedAt = entry.joinedAt;
+    member.backendType = isTeamMode(entry.backendType)
+      ? entry.backendType
+      : this.mode;
+    member.paneId = entry.paneId;
+    member.external =
+      member.backendType === "tmux" || member.backendType === "iterm";
+    member.active = entry.isActive === true && member.external;
+
+    if (member.active) {
+      getNameRegistry().register(member.name, member.agentId);
+      member.uiState = {
+        name: member.name,
+        teamName: this.name,
+        status: "running",
+        progress: createProgress(),
+        startTime: entry.joinedAt > 0 ? entry.joinedAt * 1000 : Date.now(),
+        spinnerVerb: "Working",
+      };
+      member.cancel = restoreTeammateCancel(member.backendType, member.paneId);
+    }
+
+    this.members.set(member.name, member);
     return member;
   }
 
@@ -203,7 +245,8 @@ export class Team {
         model: m.model,
         joinedAt: m.joinedAt ?? 0,
         worktreePath: m.worktreePath,
-        backendType: this.mode,
+        backendType: m.backendType ?? this.mode,
+        paneId: m.paneId,
         isActive: m.active,
       })),
     };
@@ -215,7 +258,7 @@ export class Team {
    * continuity, not runtime correctness.
    */
   persist(): void {
-    writeTeamFile(this.name, this.snapshot());
+    writeTeamFile(this.workDir, this.name, this.snapshot());
   }
 
   // Idle polling interval (in milliseconds). Polls the mailbox for new messages after a teammate completes a turn.
@@ -244,12 +287,13 @@ export class Team {
     providerBaseUrl?: string,
     originToolCallId?: string,
   ): void {
-    if (this.mode === "in-process") {
+    const mode = this.mode;
+    if (mode === "in-process") {
       this.spawnInProcess(name, task, runAgent, checker, originToolCallId);
       return;
     }
     try {
-      this.spawnExternal(name, task, providerBaseUrl, originToolCallId);
+      this.spawnExternal(mode, name, task, providerBaseUrl, originToolCallId);
     } catch {
       // Fall back to in-process mode when the external backend fails to launch (missing dependency / unsupported platform)
       this.spawnInProcess(name, task, runAgent, checker, originToolCallId);
@@ -263,6 +307,7 @@ export class Team {
    * worker all land in this directory, keeping both sides in sync.
    */
   private spawnExternal(
+    mode: Exclude<TeamMode, "in-process">,
     name: string,
     task: string,
     providerBaseUrl?: string,
@@ -270,6 +315,7 @@ export class Team {
   ): void {
     const member = this.addMember(name);
     member.active = true;
+    member.backendType = mode;
     // Persist the activation: the on-disk isActive otherwise stays false
     // until some later persist, and a restart would restore the member as
     // inactive even though the process is running.
@@ -286,7 +332,7 @@ export class Team {
       progress: createProgress(),
       ...(originToolCallId ? { originToolCallId } : {}),
       startTime: Date.now(),
-      spinnerVerb: randomVerb(),
+      spinnerVerb: "Working",
     };
 
     // Teammate entry point mirrors main.tsx: node runs this repo's entry script with --teammate flags.
@@ -294,7 +340,7 @@ export class Team {
     // passed explicitly so the shared task board resolves to the same tasks.json.
     const entry = process.argv[1] ?? "src/main.tsx";
     const config: SpawnConfig = {
-      mode: this.mode,
+      mode,
       command: "node",
       args: [
         entry,
@@ -317,6 +363,8 @@ export class Team {
     member.cancel = cancel;
     member.paneId = paneId;
     member.external = true;
+    // Persist only after spawn so the stable external handle is included.
+    this.persist();
   }
 
   /**
@@ -334,6 +382,7 @@ export class Team {
   ): void {
     const member = this.addMember(name);
     member.active = true;
+    member.backendType = "in-process";
     // Persist the activation (see spawnExternal for the rationale).
     this.persist();
     member.checker = checker;
@@ -352,7 +401,7 @@ export class Team {
       progress: createProgress(),
       ...(originToolCallId ? { originToolCallId } : {}),
       startTime: Date.now(),
-      spinnerVerb: randomVerb(),
+      spinnerVerb: "Working",
     };
     member.uiState = uiState;
 
@@ -475,6 +524,7 @@ export class Team {
         if (uiState.status === "running") {
           uiState.status = "idle";
         }
+        this.persist();
       }
     })();
     member.done = done;
@@ -607,6 +657,7 @@ export class Team {
     await Promise.allSettled(
       [...this.members.values()].map((member) => this.stopOne(member)),
     );
+    this.persist();
   }
 
   /**
@@ -663,19 +714,24 @@ export interface TeamManagerOptions {
 }
 
 export class TeamManager {
+  /** Teams keyed by their canonical disk slug; Team.name remains the display name. */
   private teams = new Map<string, Team>();
   private workDir: string;
   private claimLeadership: boolean;
-  // One shared task store per team, persisted at <team-dir>/tasks.json
+  // One shared task store per canonical team identity.
   private taskStores = new Map<string, SharedTaskStore>();
 
   constructor(workDir: string, opts: TeamManagerOptions = {}) {
-    this.workDir = workDir;
+    this.workDir = canonicalPath(workDir);
     this.claimLeadership = opts.claimLeadership ?? true;
   }
 
+  private teamKey(name: string): string {
+    return sanitizeTeamName(name);
+  }
+
   private teamDir(name: string): string {
-    return teamDir(name);
+    return teamDir(this.workDir, name);
   }
 
   create(
@@ -683,36 +739,40 @@ export class TeamManager {
     mode: TeamMode = detectBackend(),
     opts: { leaderAgentId?: string; description?: string } = {},
   ): Team {
+    const existing = this.get(name);
+    if (existing) {
+      return existing;
+    }
+
+    const key = this.teamKey(name);
     const team = new Team(name, mode, this.workDir);
     team.leaderAgentId = opts.leaderAgentId ?? "";
     team.description = opts.description;
     if (this.claimLeadership) {
       team.leaderPid = process.pid;
     }
-    this.teams.set(name, team);
+    this.teams.set(key, team);
     const store = new SharedTaskStore(join(this.teamDir(name), "tasks.json"));
     store.initEmpty();
-    this.taskStores.set(name, store);
+    this.taskStores.set(key, store);
     team.persist();
     return team;
   }
 
   /**
-   * Checks the in-memory cache first; on miss, looks for config.json on disk.
-   *
-   * A Team reconstructed from disk carries only metadata — members have no running
-   * agents. This is sufficient for SendMessage to deliver by name and for UI display;
-   * to actually run a member again, it must be re-spawned. A leader-side manager
-   * claims leadership by writing its own pid to config.json (teammate processes
-   * pass claimLeadership:false and leave the recorded pid alone).
+   * Checks the in-memory cache first; on miss, hydrates config.json without
+   * incremental member writes. Active members regain their runtime-facing UI,
+   * registry, and external cancellation metadata. A leader claims leadership
+   * with one final snapshot; teammate processes leave the file byte-identical.
    */
   get(name: string): Team | undefined {
-    const cached = this.teams.get(name);
+    const key = this.teamKey(name);
+    const cached = this.teams.get(key);
     if (cached) {
       return cached;
     }
 
-    const tf = readTeamFile(name);
+    const tf = readTeamFile(this.workDir, name);
     if (!tf) {
       return undefined;
     }
@@ -727,20 +787,14 @@ export class TeamManager {
     team.description = tf.description;
     team.createdAt = tf.createdAt;
     team.leaderPid = tf.leaderPid ?? 0;
-    for (const m of tf.members) {
-      const member = team.addMember(m.name);
-      member.agentId = m.agentId;
-      member.agentType = m.agentType;
-      member.model = m.model;
-      member.worktreePath = m.worktreePath;
-      member.joinedAt = m.joinedAt;
-      member.active = m.isActive === true;
+    for (const member of tf.members) {
+      team.hydrateMember(member);
     }
-    if (this.claimLeadership && team.leaderPid !== process.pid) {
+    if (this.claimLeadership) {
       team.leaderPid = process.pid;
       team.persist();
     }
-    this.teams.set(name, team);
+    this.teams.set(key, team);
     return team;
   }
 
@@ -750,21 +804,22 @@ export class TeamManager {
    * teammates keep running, and their notifications are drained again.
    */
   restoreFromDisk(): void {
-    for (const name of listTeamNames()) {
+    for (const name of listTeamNames(this.workDir)) {
       this.get(name);
     }
   }
 
   /** Retrieves the team's shared task store; loads from disk (tasks.json) when not cached in memory (e.g. in a teammate process). */
   getTaskStore(teamName: string): SharedTaskStore {
-    const cached = this.taskStores.get(teamName);
+    const key = this.teamKey(teamName);
+    const cached = this.taskStores.get(key);
     if (cached) {
       return cached;
     }
     const store = new SharedTaskStore(
       join(this.teamDir(teamName), "tasks.json"),
     );
-    this.taskStores.set(teamName, store);
+    this.taskStores.set(key, store);
     return store;
   }
 
@@ -777,7 +832,8 @@ export class TeamManager {
   }
 
   async delete(name: string): Promise<void> {
-    const team = this.teams.get(name);
+    const key = this.teamKey(name);
+    const team = this.teams.get(key);
     if (team) {
       // Unregister this team's members from the global name registry
       const registry = getNameRegistry();
@@ -785,27 +841,26 @@ export class TeamManager {
         registry.unregister(member.name);
       }
       await team.stopAll();
-      this.teams.delete(name);
+      this.teams.delete(key);
     }
-    this.taskStores.delete(name);
-    // The team directory contains config.json, tasks.json, mailboxes (inboxes/),
-    // and teammate logs (logs/). When the team is deleted, remove everything to
-    // prevent a future same-named team from picking up stale data.
-    rmSync(teamDir(name), { recursive: true, force: true });
+    this.taskStores.delete(key);
+    // The project-scoped team directory contains config.json, tasks.json,
+    // mailboxes (inboxes/), and teammate logs (logs/). Remove only this team's
+    // namespace so another project with the same team slug stays untouched.
+    rmSync(this.teamDir(name), { recursive: true, force: true });
   }
 
   /**
-   * Deletes every team: in-memory teams are stopped and unregistered, then any
-   * residual team directories on disk (e.g. leftovers from previous sessions,
-   * which never appear in list()) are removed too. Enforces the single-team
-   * invariant before a new team is created.
+   * Deletes every team in this project: in-memory teams are stopped and
+   * unregistered, then residual team directories from previous sessions are
+   * removed. Other project namespaces remain untouched.
    */
   async deleteAll(): Promise<void> {
     for (const team of this.list()) {
       await this.delete(team.name);
     }
     // Directory names are already sanitized; delete() re-sanitizes to the same value.
-    for (const name of listTeamNames()) {
+    for (const name of listTeamNames(this.workDir)) {
       await this.delete(name);
     }
   }
@@ -834,9 +889,20 @@ export class TeamManager {
       lines.push(`<task-notification team="${team.name}">`);
       for (const msg of msgs) {
         const member = team.getMember(msg.from);
-        if (member?.active && member.uiState && msg.text.startsWith("[idle]")) {
-          member.uiState.status = "idle";
+        if (member?.uiState && msg.text.startsWith("[idle]")) {
+          const failed = msg.text.includes(" failed:");
+          const stopped = msg.text.includes("reason: stopped");
+          member.uiState.status = failed
+            ? "failed"
+            : stopped
+              ? "stopped"
+              : "idle";
           clearActiveTools(member.uiState.progress);
+          if (failed || stopped) {
+            member.active = false;
+            getNameRegistry().unregister(member.name);
+            team.persist();
+          }
         }
         lines.push(`from=${msg.from}: ${msg.text}`);
       }

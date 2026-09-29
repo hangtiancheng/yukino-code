@@ -35,6 +35,7 @@ interface PendingCall {
   toolId: string;
   toolName: string;
   arguments: Record<string, unknown>;
+  parseError?: string;
 }
 
 interface ExecutionResult {
@@ -64,8 +65,14 @@ export class StreamingExecutor {
     toolId: string,
     toolName: string,
     args: Record<string, unknown>,
+    parseError?: string,
   ): void {
-    this.pending.push({ toolId, toolName, arguments: args });
+    this.pending.push({
+      toolId,
+      toolName,
+      arguments: args,
+      ...(parseError ? { parseError } : {}),
+    });
   }
 
   async collectResults(): Promise<ExecutionResult[]> {
@@ -73,8 +80,20 @@ export class StreamingExecutor {
     this.pending = [];
 
     const promises = calls.map(async (call) => {
-      const tool = this.registry.get(call.toolName);
       const start = Date.now();
+      if (call.parseError) {
+        return {
+          toolId: call.toolId,
+          toolName: call.toolName,
+          result: {
+            output: `Error: ${call.parseError}. The tool was not executed.`,
+            isError: true,
+          },
+          elapsed: 0,
+        };
+      }
+
+      const tool = this.registry.get(call.toolName);
       if (this.ctx.abortSignal?.aborted) {
         return {
           toolId: call.toolId,

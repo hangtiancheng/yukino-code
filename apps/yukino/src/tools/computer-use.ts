@@ -32,8 +32,9 @@ import { safeParse, z } from "zod";
 
 import {
   MACOS_SNIPPET,
+  WINDOWS_PWSH_ACTION_SNIPPET,
+  WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
   WINDOWS_PWSH_SNIPPET,
-  WINDOWS_PWSH_INCLUDES_CSHARP_SNIPPET,
 } from "./snippets.js";
 import type {
   Tool,
@@ -548,6 +549,7 @@ export class ComputerUseTool implements Tool {
   private coordinateScaleX = 1;
   private coordinateScaleY = 1;
   private macHelperPromise?: Promise<string>;
+  private windowsHelperPromise?: Promise<string>;
 
   constructor(options: ComputerUseToolOptions = {}) {
     this.displayHeightPx = options.displayHeightPx ?? MAX_SCREENSHOT_HEIGHT;
@@ -998,10 +1000,63 @@ export class ComputerUseTool implements Tool {
     }
   }
 
+  private async getWindowsHelper(signal?: AbortSignal): Promise<string> {
+    this.windowsHelperPromise ??= this.compileWindowsHelper(signal);
+    try {
+      return await this.windowsHelperPromise;
+    } catch (err) {
+      this.windowsHelperPromise = undefined;
+      throw err;
+    }
+  }
+
+  private async compileWindowsHelper(signal?: AbortSignal): Promise<string> {
+    const directory = await mkdtemp(
+      join(tmpdir(), "yukino-windows-computer-helper-"),
+    );
+    const assemblyPath = join(directory, "YukinoComputer.dll");
+    const unregisterCleanup = registerExitCleanup(() => {
+      try {
+        rmSync(directory, { recursive: true, force: true });
+      } catch {
+        // best-effort
+      }
+    });
+    try {
+      const result = await this.run(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Sta",
+          "-Command",
+          WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+        ],
+        {
+          env: {
+            ...process.env,
+            YUKINO_COMPUTER_ASSEMBLY: assemblyPath,
+          },
+          signal,
+          timeoutMs: 120_000,
+        },
+      );
+      if (result.code !== 0) {
+        throw commandError("powershell.exe", result);
+      }
+      return assemblyPath;
+    } catch (err) {
+      unregisterCleanup();
+      await rm(directory, { recursive: true, force: true });
+      throw err;
+    }
+  }
+
   private async executeWindows(
     action: NativeInput,
     signal?: AbortSignal,
   ): Promise<string> {
+    const assemblyPath = await this.getWindowsHelper(signal);
     const result = await this.run(
       "powershell.exe",
       [
@@ -1009,11 +1064,12 @@ export class ComputerUseTool implements Tool {
         "-NonInteractive",
         "-Sta",
         "-Command",
-        WINDOWS_PWSH_INCLUDES_CSHARP_SNIPPET,
+        WINDOWS_PWSH_ACTION_SNIPPET,
       ],
       {
         env: {
           ...process.env,
+          YUKINO_COMPUTER_ASSEMBLY: assemblyPath,
           YUKINO_COMPUTER_INPUT: Buffer.from(JSON.stringify(action)).toString(
             "base64",
           ),

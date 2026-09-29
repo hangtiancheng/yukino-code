@@ -274,13 +274,20 @@ public static class YukinoComputer
 }
 `;
 
-export const WINDOWS_PWSH_INCLUDES_CSHARP_SNIPPET = `
+export const WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET = `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -TypeDefinition @'
 ${WINDOWS_CSHARP_SNIPPET}
-'@
+'@ -OutputAssembly $env:YUKINO_COMPUTER_ASSEMBLY
+`;
+
+export const WINDOWS_PWSH_ACTION_SNIPPET = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -Path $env:YUKINO_COMPUTER_ASSEMBLY
 
 $payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:YUKINO_COMPUTER_INPUT)) | ConvertFrom-Json
 function Resolve-Key([string]$name) {

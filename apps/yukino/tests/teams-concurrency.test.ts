@@ -22,6 +22,7 @@
 
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -104,19 +105,18 @@ describe("FileMailbox lock discipline", () => {
     expect(mailbox.unreadCount()).toBe(1);
   });
 
-  it("takes over a stale lock whose holder process is dead", () => {
+  it("takes over a stale ticket whose holder process is dead", () => {
     const dir = makeTempDir();
     const mailbox = new FileMailbox(dir, "leader");
-    const lockPath = join(dir, "leader.json.lock");
-    // A holder pid that cannot exist and an mtime far past the stale
-    // threshold: the next operation must preempt it, not time out.
-    writeFileSync(lockPath, "999999999:deadbeef");
+    const lockDir = join(dir, "leader.json.lock");
+    mkdirSync(lockDir);
+    const staleTicket = join(lockDir, "ticket-0000000000000001-999999999-dead");
+    writeFileSync(staleTicket, "999999999");
     const old = new Date(Date.now() - 60_000);
-    utimesSync(lockPath, old, old);
+    utimesSync(staleTicket, old, old);
 
     expect(mailbox.unreadCount()).toBe(0);
-    // The takeover lock was ours to release: it must be gone.
-    expect(existsSync(lockPath)).toBe(false);
+    expect(existsSync(lockDir)).toBe(false);
   });
 });
 

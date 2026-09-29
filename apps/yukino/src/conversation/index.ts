@@ -31,6 +31,7 @@ export interface ToolUseBlock {
   toolUseId: string;
   toolName: string;
   arguments: Record<string, unknown>;
+  parseError?: string;
   providerItemId?: string;
 }
 

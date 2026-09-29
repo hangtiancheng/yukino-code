@@ -67,11 +67,85 @@ describe("FileHistory rewind", () => {
 
     expect(existsSync(newFile)).toBe(true);
 
-    // Rewind to the round-1 snapshot, i.e. the state before this file was created.
-    const changed = fh.rewind(0);
+    // Rewind after reloading to prove the absent baseline survives restart.
+    const resumed = new FileHistory(base, "session-1");
+    const changed = resumed.rewind(0);
 
     expect(existsSync(newFile)).toBe(false);
     expect(changed).toContain(newFile);
+  });
+
+  it("restores a pre-existing baseline first tracked after the target", () => {
+    const { base, projectDir } = makeTempProject();
+    const fh = new FileHistory(base, "session-1");
+    fh.makeSnapshot(0, "before tracking");
+
+    const existing = join(projectDir, "late-edit.ts");
+    writeFileSync(existing, "original before tracking");
+    fh.trackEdit(existing);
+    writeFileSync(existing, "modified");
+    fh.makeSnapshot(1, "after tracking");
+
+    const resumed = new FileHistory(base, "session-1");
+    const changed = resumed.rewind(0);
+
+    expect(readFileSync(existing, "utf-8")).toBe("original before tracking");
+    expect(changed).toContain(existing);
+  });
+
+  it("retains an existing baseline when restore fails so rewind can retry", () => {
+    const { base, projectDir } = makeTempProject();
+    const fh = new FileHistory(base, "session-1");
+    fh.makeSnapshot(0, "before tracking");
+
+    const parent = join(projectDir, "nested");
+    const existing = join(parent, "late-edit.ts");
+    mkdirSync(parent);
+    writeFileSync(existing, "original before tracking");
+    fh.trackEdit(existing);
+    writeFileSync(existing, "modified");
+    fh.makeSnapshot(1, "after tracking");
+
+    const baselineName = `${createHash("sha256")
+      .update(existing)
+      .digest("hex")
+      .slice(0, 16)}@baseline`;
+    const baselinePath = join(fileHistoryDir(base, "session-1"), baselineName);
+
+    rmSync(parent, { recursive: true });
+    writeFileSync(parent, "blocks directory creation");
+    expect(fh.rewind(0)).not.toContain(existing);
+    expect(existsSync(baselinePath)).toBe(true);
+
+    rmSync(parent);
+    mkdirSync(parent);
+    const resumed = new FileHistory(base, "session-1");
+    const changed = resumed.rewind(0);
+
+    expect(readFileSync(existing, "utf-8")).toBe("original before tracking");
+    expect(changed).toContain(existing);
+    expect(existsSync(baselinePath)).toBe(false);
+  });
+
+  it("retains an absent baseline when deletion fails so rewind can retry", () => {
+    const { base, projectDir } = makeTempProject();
+    const fh = new FileHistory(base, "session-1");
+    fh.makeSnapshot(0, "before tracking");
+
+    const newFile = join(projectDir, "late-file.ts");
+    fh.trackEdit(newFile);
+    mkdirSync(newFile);
+
+    expect(fh.rewind(0)).not.toContain(newFile);
+    expect(existsSync(newFile)).toBe(true);
+
+    rmSync(newFile, { recursive: true });
+    writeFileSync(newFile, "created after failed rewind");
+    const resumed = new FileHistory(base, "session-1");
+    const changed = resumed.rewind(0);
+
+    expect(changed).toContain(newFile);
+    expect(existsSync(newFile)).toBe(false);
   });
 
   it("restores an edit on an existing file", () => {

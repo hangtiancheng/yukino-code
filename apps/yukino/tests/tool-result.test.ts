@@ -29,6 +29,7 @@ import { describe, it, expect } from "vitest";
 import type { ToolResultBlock } from "@/conversation/index.js";
 import {
   applyBudget,
+  buildPersistedOutputPreview,
   isSpillReadback,
   persistLargeResult,
 } from "@/tool-result/index.js";
@@ -173,6 +174,51 @@ describe("tool result budget", () => {
       false,
     );
     expect(isSpillReadback("ReadFile", {}, workDir, "s")).toBe(false);
+    expect(
+      isSpillReadback(
+        "ReadFile",
+        {
+          file_path: join(
+            ".yukino",
+            "sessions",
+            "s",
+            "tool-results",
+            "relative.txt",
+          ),
+        },
+        workDir,
+        "s",
+      ),
+    ).toBe(true);
+    expect(
+      isSpillReadback(
+        "ReadFile",
+        {
+          file_path: join(
+            workDir,
+            ".yukino",
+            "sessions",
+            "s",
+            "tool-results-extra",
+            "sibling.txt",
+          ),
+        },
+        workDir,
+        "s",
+      ),
+    ).toBe(false);
+  });
+
+  it("labels in-memory persisted previews in characters", () => {
+    const preview = buildPersistedOutputPreview(
+      3000,
+      "界".repeat(2000),
+      "/tmp/output",
+    );
+
+    expect(preview).toContain("Output too large (3000 characters)");
+    expect(preview).toContain("Preview (first 2000 characters)");
+    expect(preview).not.toContain("9000 bytes");
   });
 
   it("persistLargeResult round-trips deterministically", () => {

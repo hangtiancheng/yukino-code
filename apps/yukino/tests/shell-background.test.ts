@@ -29,7 +29,10 @@ import { expect, it } from "vitest";
 import { TaskManager } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
 import { PowerShellTool } from "@/tools/powershell.js";
-import { readOutputFile } from "@/tools/shell-background.js";
+import {
+  buildBackgroundBody,
+  readOutputFile,
+} from "@/tools/shell-background.js";
 
 it.each([BashTool, PowerShellTool])(
   "does not advertise disabled foreground executions for %s",
@@ -71,6 +74,34 @@ it("truncates output on a UTF-8 boundary", () => {
         truncated: true,
       });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("reports file-backed multibyte previews in bytes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "yukino-output-"));
+  try {
+    const path = join(dir, "output");
+    writeFileSync(path, "界".repeat(11_000));
+
+    const result = buildBackgroundBody(
+      "$ ",
+      "emit-unicode",
+      {
+        code: 0,
+        signal: null,
+        aborted: false,
+        timedOut: false,
+        sizeKilled: false,
+      },
+      path,
+      30,
+    );
+
+    expect(result.output).toContain("Output too large (33000 bytes)");
+    expect(result.output).toContain("Preview (first 1998 bytes)");
+    expect(result.output).not.toContain("characters");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

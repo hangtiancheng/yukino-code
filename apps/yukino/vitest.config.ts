@@ -30,13 +30,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
     environment: "node",
     testTimeout: 100_000,
-    // exclude: ["coverage/**"],
     coverage: {
       provider: "v8",
-      include: ["src/**/*.ts"],
+      include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.d.ts"],
       reporter: ["html", "json-summary", "lcov", "text"],
       reportsDirectory: "coverage",

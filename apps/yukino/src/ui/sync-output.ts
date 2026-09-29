@@ -66,53 +66,45 @@ function isSyncOutputSupported(): boolean {
 
 /**
  * Installs synchronized output by monkey-patching process.stdout.write.
- * Uses queueMicrotask to batch all writes within the same synchronous frame
- * into a single BSU/ESU-wrapped write.
+ * The stream is corked for one synchronous frame, preserving every original
+ * chunk and write callback while batching it inside one BSU/ESU envelope.
  *
  * Ink's onRender is synchronous: all stdout.write calls of one render occur
- * in the same synchronous frame, so the queued microtask flush wraps them in
- * a single BSU...ESU envelope.
+ * before the queued microtask closes and uncorks the frame.
  */
 export function installSyncOutput(): void {
   if (!isSyncOutputSupported()) {
     return;
   }
 
-  const originalWrite: typeof process.stdout.write = process.stdout.write.bind(
-    process.stdout,
-  );
-  let frameBuffer = "";
+  const stdout = process.stdout;
+  const originalWrite: typeof stdout.write = stdout.write.bind(stdout);
+  const originalCork = stdout.cork.bind(stdout);
+  const originalUncork = stdout.uncork.bind(stdout);
   let scheduled = false;
 
   process.stdout.write = function (
-    chunk: unknown,
-    encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
-    callback?: (err?: Error) => void,
+    chunk: Uint8Array | string,
+    encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
+    callback?: (err?: Error | null) => void,
   ): boolean {
-    const str =
-      typeof chunk === "string"
-        ? chunk
-        : Buffer.isBuffer(chunk)
-          ? chunk.toString()
-          : String(chunk);
-    frameBuffer += str;
-
     if (!scheduled) {
       scheduled = true;
+      originalCork();
+      originalWrite(BSU);
       queueMicrotask(() => {
-        const data = BSU + frameBuffer + ESU;
-        frameBuffer = "";
-        scheduled = false;
-        originalWrite(data);
+        try {
+          originalWrite(ESU);
+        } finally {
+          scheduled = false;
+          originalUncork();
+        }
       });
     }
 
     if (typeof encodingOrCallback === "function") {
-      encodingOrCallback();
-    } else if (typeof callback === "function") {
-      callback();
+      return originalWrite(chunk, encodingOrCallback);
     }
-
-    return true;
+    return originalWrite(chunk, encodingOrCallback, callback);
   };
 }

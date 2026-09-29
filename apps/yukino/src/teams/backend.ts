@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 
 import type { TeamMode } from "./index.js";
 
@@ -87,12 +87,35 @@ function buildShellCommand(config: SpawnConfig): string {
   return [config.command, ...config.args].map(shellQuote).join(" ");
 }
 
+function cancelTmuxSession(sessionName: string): void {
+  try {
+    execSync(`tmux kill-session -t "${sessionName}"`, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (err) {
+    log.error({ err }, "teams operation failed");
+    // Session may have already exited; ignore.
+  }
+}
+
+/** Rebuilds the stable cancellation handle available for a restored tmux member. */
+export function restoreTeammateCancel(
+  mode: TeamMode,
+  paneId?: string,
+): (() => void) | undefined {
+  if (mode !== "tmux" || !paneId) {
+    return undefined;
+  }
+  return () => {
+    cancelTmuxSession(paneId);
+  };
+}
+
 export interface SpawnConfig {
-  mode: TeamMode;
+  mode: Exclude<TeamMode, "in-process">;
   command: string;
   args: string[];
   cwd: string;
-  env?: Record<string, string>;
 }
 
 export function spawnTeammate(config: SpawnConfig): {
@@ -100,68 +123,17 @@ export function spawnTeammate(config: SpawnConfig): {
   paneId?: string;
 } {
   switch (config.mode) {
-    case "in-process": {
-      const child = spawn(config.command, config.args, {
-        cwd: config.cwd,
-        stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env, ...config.env },
-      });
-      // Spawn failures (ENOENT) surface as an 'error' event; without a
-      // listener they crash the leader as an uncaughtException.
-      child.on("error", (err) => {
-        log.error({ err }, "teammate spawn failed");
-      });
-      // Drain the pipes: an unconsumed stdout/stderr blocks the child once
-      // its buffer fills (~64KB), freezing the teammate mid-task. Output goes
-      // to the leader's terminal like the tmux/iTerm panes show theirs.
-      child.stdout?.on("data", (chunk: Buffer) => {
-        process.stdout.write(chunk);
-      });
-      child.stderr?.on("data", (chunk: Buffer) => {
-        process.stderr.write(chunk);
-      });
-      return {
-        cancel: () => child.kill("SIGTERM"),
-      };
-    }
-
     case "tmux": {
       const sessionName = `yukino-${Date.now().toString(36)}`;
       const cmd = buildShellCommand(config);
-      try {
-        execSync(`tmux new-window -t "${sessionName}" -n teammate "${cmd}"`, {
-          cwd: config.cwd,
-          encoding: "utf-8",
-          stdio: ["pipe", "pipe", "pipe"],
-        });
-      } catch (err) {
-        log.error({ err }, "teams operation failed");
-
-        // The session name is freshly generated per spawn, so the `new-window`
-        // above normally fails (no such session exists yet) and creating a new
-        // detached session to host the teammate window is the usual path, not a
-        // rare fallback.
-
-        execSync(
-          `tmux new-session -d -s "${sessionName}" -n teammate "${cmd}"`,
-          {
-            cwd: config.cwd,
-            encoding: "utf-8",
-            stdio: ["pipe", "pipe", "pipe"],
-          },
-        );
-      }
+      execSync(`tmux new-session -d -s "${sessionName}" -n teammate "${cmd}"`, {
+        cwd: config.cwd,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
       return {
         cancel: () => {
-          try {
-            execSync(`tmux kill-session -t "${sessionName}"`, {
-              stdio: ["pipe", "pipe", "pipe"],
-            });
-          } catch (err) {
-            log.error({ err }, "teams operation failed");
-
-            // Session may have already exited; ignore
-          }
+          cancelTmuxSession(sessionName);
         },
         paneId: sessionName,
       };
@@ -169,7 +141,7 @@ export function spawnTeammate(config: SpawnConfig): {
 
     case "iterm": {
       // iTerm2 (macOS): use osascript to drive AppleScript, opening a new tab to run the teammate command.
-      // cd into the working directory first, then execute the teammate startup command — mirroring the tmux new-window behavior.
+      // cd into the working directory first, then execute the teammate startup command — mirroring the detached tmux session behavior.
       const cmd = buildShellCommand(config);
       const writeText = `cd ${shellQuote(config.cwd)} && ${cmd}`;
       // Escape backslashes and double quotes for the AppleScript string literal

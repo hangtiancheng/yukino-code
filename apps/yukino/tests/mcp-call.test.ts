@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { needsToolSearchBeta } from "@/llm/anthropic.js";
 import {
@@ -352,6 +352,17 @@ describe("three-way routing", () => {
     // every deferred MCP tool (tool_reference is dropped, McpCall hidden).
     expect(decideMode("", "openai", 200000, 500000)).toBe("dispatch");
     expect(decideMode("", "openai-compat", 200000, 500000)).toBe("dispatch");
+  });
+
+  test("native override maps non-Anthropic protocols to dispatch", () => {
+    vi.stubEnv("YUKINO_MCP_LOADING", "native");
+    try {
+      expect(decideMode("", "openai", 200000, 500000)).toBe("dispatch");
+      expect(decideMode("", "openai-compat", 200000, 500000)).toBe("dispatch");
+      expect(decideMode("", "anthropic", 200000, 500000)).toBe("native");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("third-party endpoint uses McpCall dispatch", () => {
