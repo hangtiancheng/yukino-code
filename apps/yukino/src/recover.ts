@@ -40,7 +40,7 @@ export function record(text: string): void {
     mkdirSync(LOG_DIR, { recursive: true });
     appendFileSync(LOG_PATH, `[${new Date().toISOString()}] ${text}\n`, "utf8");
   } catch {
-    // Swallow write errors
+    // Intentionally empty: a failing diagnostic write must not crash the process.
   }
 }
 
@@ -137,7 +137,7 @@ export function recover(): void {
       exitForTerminalGone("uncaught exception", err);
     }
     recordError("uncaught exception", err);
-    // Once a handler is registered the runtime no longer prints on its own; restore terminal output
+    // Once a handler is registered the runtime no longer prints the error itself; log it explicitly
     logger.fatal({ err }, "uncaught exception");
     captureTelemetryError(err, "uncaught exception");
     void shutdownTelemetry().finally(() => {

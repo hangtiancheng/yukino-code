@@ -97,9 +97,9 @@ export function teamDir(name: string): string {
 }
 
 /**
- * Lists every team that has data on disk, keyed by the (already sanitized)
- * team directory name. Returns an empty list when the base dir does not exist.
- * Used to sweep residual teams left behind by previous sessions.
+ * Lists every team that has data on disk, identified by its (already
+ * sanitized) directory name. Returns an empty list when the base dir does
+ * not exist. Used to sweep residual teams left behind by previous sessions.
  */
 export function listTeamNames(): string[] {
   try {

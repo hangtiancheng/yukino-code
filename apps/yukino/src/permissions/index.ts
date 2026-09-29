@@ -305,7 +305,6 @@ export class PathSandbox {
     // is /var/folders/..., not /tmp.
     this.projectDir = resolve(projectDir);
     this.allowedRoots = [this.projectDir, tmpdir()];
-    // Convert relative paths to absolute paths
     this.denyWritePaths = DEFAULT_DENY_WRITE.map((p) =>
       join(this.projectDir, p),
     );
@@ -314,7 +313,6 @@ export class PathSandbox {
   addRoot(root: string): void {
     this.allowedRoots.push(resolve(root));
   }
-  // Add custom deny-write paths
   addDenyWrite(path: string): void {
     this.denyWritePaths.push(resolve(path));
   }
@@ -362,7 +360,6 @@ function globMatch(pattern: string, content: string): boolean {
     "^" +
     pattern
       .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-      // In bash commands, * should match any character including / (commands are not paths)
       .replace(/\*/g, ".*")
       .replace(/\?/g, ".") +
     "$";

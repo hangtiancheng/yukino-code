@@ -180,7 +180,8 @@ describe.skipIf(!existsSync(tsxBin))(
       }
     });
 
-    // Guard against the fix silently disabling crash reporting altogether.
+    // Guard against the terminal-gone classification silently disabling crash
+    // reporting altogether.
     it("still reports a genuine bug as a crash", () => {
       const dir = mkdtempSync(join(tmpdir(), "yukino-crash-"));
       try {

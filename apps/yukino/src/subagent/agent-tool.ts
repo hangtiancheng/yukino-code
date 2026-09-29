@@ -155,8 +155,8 @@ export class AgentTool implements Tool {
   }
 
   /**
-   * Sets the team manager and teammate run callback, enabling the team_name parameter.
-   * Once configured, the Agent tool can spawn teammates directly without requiring a separate SpawnTeammate tool.
+   * Sets the team manager and teammate run callback, enabling the team_name parameter
+   * so teammates can be spawned directly through the Agent tool.
    */
   setTeamManager(
     mgr: TeamManager,
@@ -468,7 +468,7 @@ ${prompt}`;
 
     // Build a teammate-scoped tool registry: clone the parent registry, then
     // inject team-level task tools and a named SendMessage (overriding the
-    // inherited personal version so teammates share the same task list).
+    // inherited leader-named version so the teammate sends under its own name).
     // Two categories are excluded during cloning: tools no subagent should
     // have, and team membership management tools reserved for the Leader.
     const teammateRegistry = new ToolRegistry();

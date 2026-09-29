@@ -76,8 +76,9 @@ import { asErrorString, asRecord, strArg } from "@/utils/index.js";
 export * as Events from "./events.js";
 export * as StreamingExecutor from "./streaming-executor.js";
 
-// When the model stops on max_tokens, escalate its output ceiling once to this
-// value, then attempt a bounded number of multi-turn recoveries.
+// When the model stops on max_tokens, escalate its output ceiling once toward
+// this value (capped at the context window), then attempt a bounded number of
+// multi-turn recoveries.
 const MAX_TOKENS_CEILING = 64000;
 const MAX_TOKENS_RECOVERIES = 3;
 const MAX_RATE_LIMIT_RETRIES = 3;
@@ -864,7 +865,7 @@ export class Agent {
   }
 
   // Sleep for ms, resolving early with `true` if the abort signal fires during
-  // the wait (ctx-aware). Resolves `false` on timeout.
+  // the wait. Resolves `false` on timeout.
   private interruptibleSleep(ms: number): Promise<boolean> {
     return new Promise((resolve) => {
       if (this.abortSignal?.aborted) {
@@ -981,7 +982,6 @@ export class Agent {
         continue;
       }
 
-      // Fire pre-tool hooks
       if (this.hookEngine) {
         const hookResult = await this.hookEngine.firePreToolHooks(
           tu.toolName,

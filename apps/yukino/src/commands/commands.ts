@@ -43,7 +43,7 @@ export interface CommandContext {
   memoryList?: () => string[];
   /** Clears all memories */
   memoryClear?: () => void;
-  /** Returns the current model name */
+  /** Current model name */
   model?: string;
   /** Returns the current effective thinking level */
   thinkingLevel?: () => ThinkingLevel;
@@ -193,33 +193,27 @@ export function createDefaultRegistry(): CommandRegistry {
       lines.push("Yukino Status");
       lines.push("──────────────");
 
-      // Permission mode
       const mode = ctx.permissionMode ? ctx.permissionMode() : "default";
       lines.push(`  Mode:      ${mode}`);
 
-      // Token usage
       if (ctx.tokenCount) {
         const [input, output] = ctx.tokenCount();
         lines.push(`  Tokens:    ${String(input)} in / ${String(output)} out`);
       }
 
-      // Number of tools
       if (ctx.toolCount) {
         lines.push(`  Tools:     ${String(ctx.toolCount())} enabled`);
       }
 
-      // Number of memories
       if (ctx.memoryList) {
         const memories = ctx.memoryList();
         lines.push(`  Memories:  ${String(memories.length)} entries`);
       }
 
-      // Model
       if (ctx.model) {
         lines.push(`  Model:     ${ctx.model}`);
       }
 
-      // Working directory
       lines.push(`  Directory: ${ctx.workDir}`);
 
       return lines.join("\n");

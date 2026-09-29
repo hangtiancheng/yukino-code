@@ -313,8 +313,9 @@ export async function runCodeReview(
     outcomes.push(outcome);
   };
 
-  // Semaphore pool: bounded concurrency keeps provider rate limits and the
-  // terminal output readable; in-flight groups always run to completion.
+  // Worker pool: bounded concurrency keeps provider rate limits and the
+  // terminal output readable; the abort signal is checked before each new
+  // group is started.
   const queue = [...groups];
   const workers: Promise<void>[] = [];
   for (let i = 0; i < Math.min(maxConcurrency, queue.length); i++) {

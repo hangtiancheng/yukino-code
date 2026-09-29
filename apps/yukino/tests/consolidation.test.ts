@@ -242,6 +242,6 @@ describe("MemoryConsolidator", () => {
       if (notified) {
         console.log(`  Notification: ${notified}`);
       }
-    }, 120000); // 120s timeout
+    }, 120000);
   });
 });

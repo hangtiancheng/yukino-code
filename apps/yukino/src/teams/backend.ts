@@ -36,7 +36,7 @@ const log = createChildLogger({ module: "teams" });
  *   - Otherwise: tmux/iTerm panes when the corresponding environment is
  *     detected (TMUX / ITERM_SESSION_ID), else **in-process** so progress
  *     tracking works (agent events flow in the same process and can update
- *     the Spinner Tree in real time).
+ *     the teammate progress UI in real time).
  *
  * In-process teammates share the Node.js event loop but are context-isolated.
  * They communicate via the same file-based mailbox as external teammates.

@@ -60,7 +60,8 @@ export class BwrapSandbox implements Sandbox {
       args.push("--bind", path, path);
     }
 
-    // Enforce read-only on denied paths (overrides writable root mount sub-paths)
+    // Enforce read-only on denied paths; mounted after the allowWrite binds, so
+    // they take precedence where the paths overlap
     for (const path of config.denyWrite) {
       args.push("--ro-bind", path, path);
     }

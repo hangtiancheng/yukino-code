@@ -113,7 +113,8 @@ function parseCommandFile(base: string, full: string): Command | null {
         description = data.description ?? "";
         argumentHint = data["argument-hint"] ?? "";
       } catch {
-        // Ignore frontmatter parse errors; treat the whole file as the body.
+        // Ignore frontmatter parse errors; keep the body text that follows the
+        // frontmatter block.
       }
     }
   }

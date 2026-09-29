@@ -75,7 +75,6 @@ function isSafeRefName(name: string): boolean {
   return SAFE_REF_RE.test(name);
 }
 
-/** Helper to check if a path exists */
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -89,7 +88,7 @@ async function pathExists(path: string): Promise<boolean> {
 /**
  * Resolves the .git directory: handles scenarios where .git is a file instead of a directory
  * (e.g., in worktrees or submodules).
- * Returns an empty string to indicate it not a git repository
+ * Returns an empty string to indicate it is not a git repository
  */
 export async function resolveGitDir(root: string): Promise<string> {
   const gitPath = join(root, ".git");

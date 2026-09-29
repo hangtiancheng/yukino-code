@@ -358,7 +358,7 @@ export function AskUserDialog({ questions, onComplete }: Props) {
       return;
     }
 
-    // Tab navigation
+    // Question navigation (←/→, Tab)
     if (key.leftArrow && !isSubmitTab) {
       dispatch({ type: "prev" });
       return;
@@ -471,7 +471,6 @@ export function AskUserDialog({ questions, onComplete }: Props) {
     }
   });
 
-  // Dynamic help text
   const helpParts: string[] = [];
   if (!isSubmitTab && qs?.otherMode) {
     helpParts.push("Enter to confirm");

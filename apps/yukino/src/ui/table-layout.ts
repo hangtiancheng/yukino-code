@@ -43,7 +43,8 @@ export interface FittedTable {
  * text. Shrinking the widest columns in turn keeps the table readable — narrow
  * columns stay narrow while prose columns wrap — and wrapping the cells here
  * rather than letting cli-table3 do it keeps wide characters and overlong words
- * inside their column, because cli-table3 measures UTF-16 units, not columns.
+ * inside their column: cli-table3's word wrap never breaks an overlong word,
+ * and its char-level fallback counts UTF-16 units, not columns.
  *
  * Returns undefined when not even one content column per column fits; the
  * caller then falls back to raw text.

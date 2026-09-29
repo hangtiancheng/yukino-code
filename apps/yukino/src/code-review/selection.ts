@@ -36,8 +36,8 @@ import type { ExcludeReason, FileDecision, FileDiff } from "./types.js";
 /**
  * Rough token estimate. chars/4 is the standard
  * order-of-magnitude approximation and only feeds size gates and estimates,
- * never billing.
- * TODO: How about CJK?
+ * never billing. CJK text packs more tokens per character, so chars/4
+ * under-counts it.
  */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);

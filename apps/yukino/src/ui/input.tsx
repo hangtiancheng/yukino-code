@@ -620,8 +620,9 @@ export function InputBox(props: InputBoxProps) {
       updated[cursorLine] = finalLine;
       const finalValue = expandPastes(updated.join("\n"), pastes).trim();
       if (finalValue) {
-        // Sending is locked (agent streaming / compacting): keep the draft
-        // instead of submitting, so nothing is silently dropped.
+        // Sending is locked (submitDisabled, or a clipboard-image read still
+        // in flight): keep the draft instead of submitting, so nothing is
+        // silently dropped.
         if (submitDisabled || pasteImageInflightRef.current) {
           return;
         }

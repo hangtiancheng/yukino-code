@@ -115,7 +115,7 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
 
   // The team name resolves the shared task board. When the flag is absent,
   // derive it from the mailbox directory path: the mailbox dir is
-  // <team-dir>/inboxes, so the team name is one level up.
+  // <team>/inboxes, so the team name is one level up.
   if (!teamName) {
     const leaf = basename(teamDir);
     teamName = leaf === "inboxes" ? basename(dirname(teamDir)) : leaf;

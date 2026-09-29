@@ -81,9 +81,6 @@ const ThinkingLevelMapSchema = z.strictObject({
 
 export const ProviderConfigSchema = z.looseObject({
   name: z.string(),
-  /**
-   * enum: ["anthropic", "openai", "openai-compat"]
-   */
   protocol: z.enum(["anthropic", "openai", "openai-compat"]),
   base_url: z.string(),
   model: z.string(),

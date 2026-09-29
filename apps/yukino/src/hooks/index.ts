@@ -217,7 +217,6 @@ export class HookEngine {
               ...process.env,
               YUKINO_EVENT: context.event,
               YUKINO_TOOL: context.toolName ?? "",
-              // Inject the file path environment variable
               YUKINO_FILE_PATH: context.filePath ?? "",
             },
           });
@@ -276,7 +275,6 @@ export class HookEngine {
       }
 
       case "agent": {
-        // Agent-type hook: delegate execution to the injected agentRunner
         if (!this.agentRunner) {
           throw new Error(
             "agent-type hook configured but no AgentRunner registered",
@@ -424,20 +422,17 @@ export function validate(hooks: HookConfig[]): Error | null {
       ? `hook[${String(i)}] (id="${h.id}")`
       : `hook[${String(i)}]`;
 
-    // Required field: event
     if (!h.event) {
       errors.push(`${label}: event is required`);
     } else if (!validEvents.has(h.event)) {
       errors.push(`${label}: invalid event '${h.event}'`);
     }
 
-    // Required field: action.type
     if (!h.action.type) {
       errors.push(`${label}: action.type is required`);
     } else if (!validActions.has(h.action.type)) {
       errors.push(`${label}: invalid action type '${h.action.type}'`);
     } else {
-      // Check required fields specific to each action type
       switch (h.action.type) {
         case "command":
           if (!h.action.command?.trim()) {

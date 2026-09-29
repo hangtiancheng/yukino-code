@@ -314,7 +314,7 @@ function backUpPastToolUse(messages: Message[], keepStart: number): number {
 // we trust the last API-reported token count and only character-estimate the
 // messages appended after it (baseline + increment). On a cold start (no anchor
 // yet) we fall back to estimating the entire transcript so the very first turn
-// still works. Extended with cache tokens for a more accurate baseline.
+// still works.
 export function currentContextTokens(
   conv: ConversationManager,
   anchor?: UsageAnchor,
@@ -553,7 +553,7 @@ async function collectSummary(
   return summary;
 }
 
-/** Summary generation with PTL retry */
+/** Summary generation with prompt-too-long (PTL) retry. */
 async function requestSummaryWithPTLRetry(
   client: LLMClient,
   prefix: Message[],

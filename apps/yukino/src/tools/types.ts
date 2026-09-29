@@ -276,7 +276,7 @@ export interface ToolSchema {
   name: string;
   parameters?: Record<string, unknown>;
   strict?: boolean;
-  /** For OpenAI, this must be "function"; for Anthropic, it can be "custom" or null */
+  /** For OpenAI, this must be "function"; for Anthropic, it can be "custom" or omitted */
   type?: "function" | "custom";
   defer_loading?: boolean;
   description: string;

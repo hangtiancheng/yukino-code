@@ -43,7 +43,11 @@ import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "memory" });
 
-/** Caps for MEMORY.md index content: 200 lines or 25KB, whichever is hit first. */
+/**
+ * Caps for memory index content (MEMORY.md and the injected reminder):
+ * 200 lines or 25KB, whichever is hit first. The line cap also bounds the
+ * scanned headers per directory.
+ */
 const MAX_ENTRYPOINT_LINES = 200;
 const MAX_ENTRYPOINT_BYTES = 25_000;
 const MEMORY_INDEX_NAME = "MEMORY.md";
@@ -347,7 +351,6 @@ export class MemoryManager {
       allHeaders.push(...headers);
     }
 
-    // Filter out already-surfaced files
     const candidates = allHeaders.filter(
       (h) => !alreadySurfaced.has(h.filePath),
     );
@@ -367,9 +370,9 @@ export class MemoryManager {
     let rawResponse = "";
     try {
       const conversation = new ConversationManager();
-      // The TS LLMClient binds system prompts at construction time, so we
-      // inline the selector instructions as a user message (same pattern as
-      // the MemoryExtractor).
+      // The selector runs on the shared client, whose system prompt belongs
+      // to the main conversation, so the instructions are inlined as a user
+      // message (same pattern as the MemoryExtractor).
       conversation.addUserMessage(
         SELECT_MEMORIES_SYSTEM_PROMPT + "\n\n" + userMessage,
       );
@@ -400,7 +403,8 @@ export class MemoryManager {
       return [];
     }
 
-    // Build lookup maps: by filePath and by filename (relative)
+    // Lookup map keyed by filePath and by bare filename; on filename
+    // collisions the first header wins.
     const byKey = new Map<string, MemoryHeader>();
     for (const h of candidates) {
       byKey.set(h.filePath, h);
@@ -509,8 +513,8 @@ function formatMemoryManifest(memories: MemoryHeader[]): string {
 }
 
 /**
- * Extracts the first {...} JSON object from raw text, tolerating markdown
- * fences or prose around it.
+ * Extracts a {...} JSON object from raw text — the span from the first `{`
+ * to the last `}` — tolerating markdown fences or prose around it.
  */
 function extractJSONObject(raw: string): string {
   const trimmed = raw.trim();

@@ -73,7 +73,7 @@ export function createProgress(): AgentProgress {
   };
 }
 
-// Call this on each tool_use event from the teammate's agent
+// Bumps the tool-use count and appends to the activity log.
 export function recordToolUse(
   p: AgentProgress,
   toolName: string,
@@ -92,6 +92,8 @@ export function recordToolUse(
   }
 }
 
+// Call this on each tool_use event from the teammate's agent: records the use
+// and marks the tool as active until its result arrives.
 export function recordToolStart(
   p: AgentProgress,
   toolId: string,

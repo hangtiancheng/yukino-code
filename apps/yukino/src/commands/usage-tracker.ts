@@ -91,7 +91,7 @@ export class CommandUsageTracker {
         }
       }
     } catch {
-      // The usage file does not exist yet on first run; nothing to load.
+      // Missing or unreadable usage file (e.g. first run); nothing to load.
     }
   }
 

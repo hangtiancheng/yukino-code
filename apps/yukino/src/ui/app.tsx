@@ -259,7 +259,6 @@ export function App({
   // Memory paths already injected this session; pre-filtered before recall to avoid
   // the same memory occupying a slot every turn
   const surfacedMemoriesRef = useRef<Set<string>>(new Set());
-  // Tracks whether plan mode has been exited
   const hasExitedPlanModeRef = useRef(false);
   const permModeRef = useRef(permMode);
   useEffect(() => {
@@ -710,10 +709,8 @@ export function App({
         contextWindowRef.current = getContextWindow(provider);
         maxOutputRef.current = getMaxOutputTokens(provider);
 
-        // Init file history
         fileHistoryRef.current = new FileHistory(workDir, sessionIdRef.current);
 
-        // Inject long-term memory
         const instructions = loadInstructions(workDir);
         // memory: false disables the whole auto-memory pipeline; no manager is
         // created so nothing scans, rebuilds MEMORY.md, or injects reminders.
@@ -722,10 +719,8 @@ export function App({
         const memReminder = memMgr?.buildSystemReminder() ?? "";
         conversationRef.current.injectLongTermMemory(instructions, memReminder);
 
-        // Load prompt history
         setPromptHistory(historyMod.load(historyDir));
 
-        // Init hooks
         const hookErr = validateHooks(hooks);
         if (hookErr) {
           setMessages((prev) => [
@@ -735,7 +730,6 @@ export function App({
         }
         hookEngineRef.current = new HookEngine(hooks);
 
-        // Load skills
         const catalog = new SkillCatalog();
         catalog.load(workDir);
         skillCatalogRef.current = catalog;
@@ -744,7 +738,6 @@ export function App({
         // prompt; the Agent injects it via the first system-reminder, and
         // skills added mid-session are appended by skillDelta.
 
-        // Register the LoadSkill tool so the model can activate skills on demand.
         registryRef.current.register(
           new LoadSkillTool(catalog, skillHostRef.current),
         );
@@ -982,7 +975,6 @@ export function App({
           }
         };
 
-        // Register AgentTool with real spawn + live progress reporting.
         const agentTool = new AgentTool(
           workDir,
           registryRef.current,
@@ -1070,7 +1062,6 @@ export function App({
         );
         registryRef.current.register(agentTool);
 
-        // Connect MCP servers in background
         if (mcpServers.length > 0) {
           const mgr = new MCPManager();
           mcpManagerRef.current = mgr;
@@ -1358,9 +1349,8 @@ export function App({
             workDir,
             sessionIdRef.current,
           );
-          // Reset token counters
           output.resetUsage();
-          // Reset memory extraction and recall state
+          // Reset memory extraction, recall and compact-recovery state
           memCursorRef.current = 0;
           memExtractingRef.current = false;
           recentToolsRef.current = [];
@@ -1388,7 +1378,8 @@ export function App({
                 "Investigate and design your approach. The agent will call ExitPlanMode when the plan is ready.",
             },
           ]);
-          // Re-enter plan mode: if a plan file already exists, rebuild the reminder
+          // Re-entry after a previous plan-mode exit: if the plan file still
+          // exists, rebuild the re-entry reminder
           if (hasExitedPlanModeRef.current && planExists(workDir)) {
             const reentryMsg = buildPlanModeReentryReminder(planPath, true);
             if (reentryMsg) {
@@ -1532,7 +1523,6 @@ export function App({
           recentToolsRef.current = [];
           surfacedMemoriesRef.current.clear();
           recoveryStateRef.current = new RecoveryState();
-          // Reload the task list for the resumed session.
           taskListRef.current.useStore(new TaskStore(workDir, arg));
           // Re-key file history to the resumed session. Snapshots persist per
           // session and are reloaded on construction; /rewind after a resume
@@ -1609,7 +1599,6 @@ export function App({
               { role: "system", content: "Skills: no catalog loaded." },
             ]);
           } else if (parsed.args.trim() === "reload") {
-            // /skills reload — hot-reload the catalog from disk
             catalog.reload();
             wireSkillsToRegistry(
               catalog,
@@ -1899,7 +1888,6 @@ export function App({
     const checker = new PermissionChecker(workDir, modeOverride ?? permMode);
     checkerRef.current = checker;
 
-    // Attach the sandbox to the BashTool when sandboxing is enabled.
     const bashTool = registryRef.current.getInstanceOf("Bash", BashTool);
     let sandboxReady = false;
     if (bashTool && sandboxEnabledRef.current) {
@@ -1920,7 +1908,6 @@ export function App({
     // Auto-allow is safe only when the requested backend is actually ready.
     checker.sandboxEnabled = sandboxEnabledRef.current && sandboxReady;
     checker.sandboxAutoAllow = sandboxAutoAllowRef.current && sandboxReady;
-    // Memory recall: query relevant memories and provide context to LLM
     const recallPromise =
       memManagerRef.current && clientRef.current
         ? memManagerRef.current
@@ -2235,7 +2222,6 @@ export function App({
       }
 
       if (choice === "yolo") {
-        // Exit plan mode for YOLO approval
         hasExitedPlanModeRef.current = true;
         setPermMode("bypassPermissions");
 

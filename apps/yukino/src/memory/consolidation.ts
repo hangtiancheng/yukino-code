@@ -89,7 +89,7 @@ export class MemoryConsolidator {
 
   /**
    * Checks gating conditions and runs a consolidation pass in the background if met.
-   * Should be called after each Agent Loop turn completes.
+   * Should be called when each agent loop completes.
    */
   maybeRun(): Promise<void> {
     const memDir = join(this.workDir, ".yukino", "memory");

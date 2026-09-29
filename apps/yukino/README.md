@@ -12,7 +12,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 ### Core Capabilities
 
-- Multi-provider LLM support with Anthropic, OpenAI, and OpenAI-compatible protocols
+- Multi-provider LLM support with Anthropic (Anthropic Messages), OpenAI (OpenAI Responses), and OpenAI-compatible (OpenAI Chat Completions) protocols
 - Interactive terminal UI with streaming text, thinking indicators, and tool execution display
 - Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, the TaskCreate/TaskGet/TaskList/TaskUpdate todo tools, plus the orchestration and interaction tools: Agent, LoadSkill, InstallSkill, AskUserQuestion, SyntheticOutput, TeamCreate, SpawnTeammate, SendMessage, ListTeams, TeamDelete, and TaskStop
 - MCP (Model Context Protocol) server integration for extending the tool set with external services
@@ -100,12 +100,12 @@ providers:
 permission_mode: default
 
 mcp_servers:
-  - name: database
+  - name: yukino-mcp
     command: npx
     args: ["-y", "@yukino.js/mcp@latest"]
     env: # map<string, string>; supports ${VAR}, ${VAR:-default}, and $VAR
       API_BASE_URL: "https://yukino-js.dev"
-      API_KEY: "${DATABASE_API_KEY}"
+      API_KEY: "${YUKINO_MCP_API_KEY}"
 
 hooks:
   - event: pre_tool_use
@@ -218,10 +218,10 @@ In addition to `mcp_servers` in `config.yaml`, Yukino reads a project-level `.mc
 ```json
 {
   "mcpServers": {
-    "database": {
+    "yukino-mcp": {
       "command": "npx",
-      "args": ["-y", "@yukino-db/mcp@latest"],
-      "env": { "API_KEY": "${DATABASE_API_KEY}" }
+      "args": ["-y", "@yukino.js/mcp@latest"],
+      "env": { "API_KEY": "${YUKINO_MCP_API_KEY}" }
     },
     "remote": {
       "type": "http",

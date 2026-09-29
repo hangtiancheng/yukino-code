@@ -113,8 +113,8 @@ export function saveTranscript(
 }
 
 /**
- Loads a teammate's conversation history from disk.
- Returns null if the file does not exist or parsing fails.
+ * Loads a teammate's conversation history from disk.
+ * Returns null if the file does not exist or parsing fails.
  */
 export function loadTranscript(
   workDir: string,

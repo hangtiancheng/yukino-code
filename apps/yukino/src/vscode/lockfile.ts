@@ -119,7 +119,7 @@ export async function detectIde(cwd: string): Promise<DetectedIde | null> {
   try {
     filenames = (await readdir(dir)).filter((f) => f.endsWith(".lock"));
   } catch {
-    return null; // no ~/.claude/ide directory → extension never ran
+    return null; // no IDE lock directory → extension never ran
   }
 
   const lockfiles = (

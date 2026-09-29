@@ -24,9 +24,9 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 
 /**
- * One-shot LLM call helper. The TS LLMClient binds its system prompt at
- * construction, so single-purpose calls (grouping, plan, filter, re-location)
- * inline their instructions as the user message — the same pattern the memory
+ * One-shot LLM call helper. The single-purpose calls (grouping, plan, filter,
+ * re-location) inline their instructions as the user message instead of
+ * rebinding the client's system prompt — the same pattern the memory
  * selector uses.
  */
 export async function callOnce(

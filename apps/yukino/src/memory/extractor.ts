@@ -61,8 +61,8 @@ interface ParsedTextMemory {
  * - Sends existing memory manifest to the LLM before extraction for deduplication
  * - inProgress + pendingContext coalescing: at most one extraction is queued,
  *   and only the latest queued summary runs
- * - When the child agent makes no tool calls, falls back to parsing streamed
- *   text blocks (MEMORY_NAME/...) and writing them to disk
+ * - When the child agent writes no memory files via tools, falls back to
+ *   parsing streamed text blocks (MEMORY_NAME/...) and writing them to disk
  */
 export class MemoryExtractor {
   private client: LLMClient;
@@ -202,8 +202,9 @@ export class MemoryExtractor {
     });
 
     // Drive the child agent to completion without propagating events to the UI;
-    // concurrently collect streamed text as a fallback parse source when the LLM
-    // issues no tool calls (i.e., emits structured text blocks directly).
+    // concurrently collect streamed text as a fallback parse source in case no
+    // memory files are written via tools (i.e., the model emits structured text
+    // blocks directly).
     let streamedText = "";
     for await (const event of subagent.run()) {
       if (event.type === "stream_text") {
@@ -224,7 +225,6 @@ export class MemoryExtractor {
       saved = this.persistTextMemories(streamedText);
     }
 
-    // Rebuild index after writing
     if (saved.length > 0) {
       const mgr = new MemoryManager(this.workDir);
       mgr.rebuildIndex();
@@ -234,8 +234,8 @@ export class MemoryExtractor {
   }
 
   /**
-   * Text protocol fallback: when the sub-agent did not invoke any tools but
-   * instead emitted structured text blocks (MEMORY_NAME/MEMORY_TYPE/MEMORY_DESC/MEMORY_BODY,
+   * Text protocol fallback: when the sub-agent wrote no memory files via tools
+   * and instead emitted structured text blocks (MEMORY_NAME/MEMORY_TYPE/MEMORY_DESC/MEMORY_BODY,
    * separated by a standalone `---` line), parse them locally and persist by type.
    * Returns the list of written memory names (without extensions).
    */

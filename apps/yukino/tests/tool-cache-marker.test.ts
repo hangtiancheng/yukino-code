@@ -23,7 +23,7 @@
 // Cache breakpoint placement.
 //
 // Expected behavior: the breakpoint lands on the last non-deferred tool. A tool carrying
-// both defer_loading and cache_control causes the API to reject the entire request (400),
+// both defer_loading and cache_control causes the API to reject the entire request,
 // and MCP tools are registered after built-in tools, so the array tail is often a deferred
 // tool — we cannot simply mark the last element.
 import { describe, it, expect } from "vitest";
@@ -75,9 +75,8 @@ describe("cache breakpoint placement", () => {
   });
 
   it("marks nothing when all tools are deferred", () => {
-    // The API requires at least one non-deferred tool; in practice built-in tools are
-    // never deferred, so this is a defensive branch: skip caching rather than emit a
-    // request that would be rejected with 400
+    // Built-in tools are never deferred, so this is a defensive branch: skip caching
+    // rather than place the breakpoint on a deferred tool
     const tools: ToolSchema[] = [
       { name: "mcp__a__x", defer_loading: true, ...rest },
       { name: "mcp__b__y", defer_loading: true, ...rest },

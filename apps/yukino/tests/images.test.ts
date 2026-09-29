@@ -67,7 +67,7 @@ function noiseImage(width: number, height: number): Sharp {
   });
 }
 
-// 1600x1600 noise PNG ≈ 6.4MB: over the 3.75MB passthrough target but under
+// 1600x1600 noise PNG ≈ 6.75MB: over the 3.75MB passthrough target but under
 // the 2000px dimension cap, so only re-encoding (not resizing) is required.
 let oversizedPng: Buffer;
 // 3000x3000 noise JPEG (q100) ≈ 10MB: over both the size and dimension caps.

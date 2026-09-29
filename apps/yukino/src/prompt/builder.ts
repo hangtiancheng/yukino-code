@@ -87,11 +87,12 @@ export function detectEnvironment(workDir: string): EnvironmentContext {
   return env;
 }
 
-// The system prompt contains only project-agnostic product definitions so it stays
-// as a single global copy and keeps hitting the same cache across projects.
-// Project instructions, auto-memories, and the skill listing are all project-scoped
-// and injected into the conversation via conversation.injectLongTermMemory as a
-// system-reminder message.
+// The system prompt carries the product definitions plus a small environment
+// section (work dir, platform, git state, date); within a session it is a single
+// stable block that keeps the prompt-cache prefix intact. Project instructions,
+// auto-memories, and the skill listing are all project-scoped and injected into
+// the conversation via conversation.injectLongTermMemory as a system-reminder
+// message.
 export function buildSystemPrompt(env: EnvironmentContext): string {
   const b = new PromptBuilder();
   b.add(identitySection());

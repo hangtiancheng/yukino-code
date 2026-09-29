@@ -39,7 +39,8 @@ function splitDiffLines(text: string): string[] {
 /**
  * Undo git's C-style path quoting (`"a b\tc"` → `a b<TAB>c`). Git quotes
  * paths containing control characters or non-ASCII bytes; core.quotepath=false
- * (set on every invocation in git.ts) suppresses only the non-ASCII quoting.
+ * (set on every path-emitting invocation in git.ts) suppresses only the
+ * non-ASCII quoting.
  */
 export function unquoteGitPath(raw: string): string {
   const s = raw.trim();

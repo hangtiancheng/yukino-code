@@ -37,9 +37,11 @@ export class ToolRegistry {
 
   /**
    * How MCP tools are loaded, written by mcp/strategy after connecting to the
-   * server. ToolSearch relies on it to decide what to return, and the client
-   * relies on it to decide whether to send defer_loading. It stays eager when
-   * there is no MCP, which behaves the same as no deferral.
+   * server. ToolSearch relies on it to decide what to return, and
+   * getAllSchemas relies on it to decide whether deferred tools ship with
+   * defer_loading (native) or are omitted from tools[] entirely (dispatch).
+   * It stays eager when there is no MCP, which behaves the same as no
+   * deferral.
    */
   mcpLoadingMode: McpLoadingMode = "eager";
 

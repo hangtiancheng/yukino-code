@@ -323,7 +323,6 @@ export class MCPClient {
       await this.client?.close();
     } catch (err) {
       log.error({ err }, "mcp operation failed");
-      // ignore
     }
     this.client = null;
     this.transport = null;

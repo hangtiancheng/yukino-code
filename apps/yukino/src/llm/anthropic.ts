@@ -151,7 +151,8 @@ enum AnthropicErrorCode {
 }
 
 // User message content → Anthropic blocks. String content becomes a single
-// text block; block arrays (text/image) already use the provider shape.
+// text block; block arrays are normalized and already use the provider shape
+// (text/image/document). tool_reference and unsupported blocks are rejected.
 function userBlocksFor(
   content: Message["content"],
 ): Anthropic.ContentBlockParam[] {
@@ -231,13 +232,11 @@ export function buildAnthropicMessages(
     }
     // The first message's role MUST be user
     else {
-      // Summary (role: "user")
-      // Kept user messages (with no intervening assistant turn)
-      //
       // Merge consecutive user text messages to maintain alternation.
       // After compaction the summary (user) may be followed by kept user messages with no intervening assistant turn. The Anthropic API requires strict user/assistant alternation,
       // so we merge them into a single user entry with multiple text blocks.
-      // Only merge when the previous entry is a plain-text user (not a tool_result user).
+      // Only merge when the previous entry is a plain user message (string, or
+      // first block text/image), never into a tool_result user entry.
 
       if (result.length === 0) {
         result.push({
@@ -358,7 +357,6 @@ export class AnthropicClient implements LLMClient {
 
     markToolsForCache(antToolSchemas);
 
-    // Mark last user message tail for cache control
     markLastUserTailForCache(messages);
 
     const params: Anthropic.MessageCreateParamsStreaming = {

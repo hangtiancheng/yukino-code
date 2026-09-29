@@ -137,7 +137,7 @@ const defaultOptions: TerminalRendererOptions = {
   sanitize: false,
 };
 
-// === TerminalRenderer Class ===
+// === Renderer Class ===
 
 class Renderer {
   private readonly config: TerminalRendererOptions;

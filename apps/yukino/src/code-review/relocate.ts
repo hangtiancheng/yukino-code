@@ -38,7 +38,10 @@ import type { LLMClient } from "@/llm/client.js";
  * corrected snippet.
  */
 
-/** Extract the first fenced code block from a response. */
+/**
+ * Extract the first fenced code block from a response; falls back to the
+ * whole text when unfenced.
+ */
 export function extractCodeBlock(text: string): string {
   const m = /```[^\n]*\n([\s\S]*?)```/.exec(text);
   return (m ? (m[1] ?? "") : text).trim();

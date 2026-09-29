@@ -330,7 +330,6 @@ export class Team {
     // Register the member name in the global name registry so SendMessage can resolve and deliver by name
     getNameRegistry().register(name, name);
 
-    // Create UI state for progress tracking
     const uiState: TeammateUIState = {
       name,
       teamName: this.name,
@@ -342,7 +341,6 @@ export class Team {
     };
     member.uiState = uiState;
 
-    // Agent event callback: update progress
     const onEvent: AgentEventCallback = (event) => {
       switch (event.type) {
         case "tool_use":
@@ -375,7 +373,6 @@ export class Team {
       let idleReason = "available";
       try {
         while (member.active) {
-          // Execute one turn of the agent
           uiState.status = "running";
           const result = await runAgent(
             buildTeammatePrompt(this.name, name, nextPrompt),
@@ -410,7 +407,6 @@ export class Team {
             continue;
           }
 
-          // Send idle notification to the leader
           uiState.status = "idle";
           await this.leaderMailbox.send(
             name,
@@ -418,12 +414,11 @@ export class Team {
           );
           idleReason = "available";
 
-          // Poll mailbox for new messages or shutdown
           const pollResult = await this.waitForNextPromptOrShutdown(member);
           if (pollResult.shutdown || !member.active) {
-            // Before exiting, send the Leader an explicit acknowledgment so it knows the pane
-            // can be reclaimed. The teammate always approves here: it is already in the idle
-            // poll loop with no work in progress.
+            // Before exiting, send the Leader an explicit acknowledgment so it knows the
+            // teammate has stopped. The teammate always approves here: it is already in
+            // the idle poll loop with no work in progress.
             const req = pollResult.shutdown;
             if (req?.type === MSG_SHUTDOWN_REQUEST) {
               const resp = shutdownResponse(
@@ -651,7 +646,6 @@ export class TeamManager {
     team.leaderAgentId = opts.leaderAgentId ?? "";
     team.description = opts.description;
     this.teams.set(name, team);
-    // Initialize an empty shared task store when creating a new team
     const store = new SharedTaskStore(join(this.teamDir(name), "tasks.json"));
     store.initEmpty();
     this.taskStores.set(name, store);
@@ -762,8 +756,9 @@ export class TeamManager {
   }
 
   /**
-   * Reads all unread messages from the team leader's mailbox and returns them in XML tag format.
-   * This allows the model to parse team notifications in a structured manner.
+   * Reads all unread messages from each team's leader mailbox and returns them
+   * wrapped in <task-notification> XML tags, so the model can parse team
+   * notifications in a structured manner.
    */
   drainLeaderMailbox(): string[] {
     const out: string[] = [];

@@ -342,23 +342,21 @@ export class OpenAIClient implements LLMClient {
 
             // Responses API exposes the cached prefix via
             // input_tokens_details.cached_tokens, absent -> 0.
-            // There is no cache_creation concept here, so it stays 0.
             cacheReadInputTokens =
               usage.input_tokens_details?.cached_tokens ?? 0;
 
-            // input_tokens already includes the cached prefix;
-            // subtract so the usage anchor (input + cache_read) doesn't double-count it.
+            // input_tokens already includes the cached prefix; subtract so the
+            // usage anchor baseline doesn't double-count it.
             inputTokens = Math.max(
               0,
               usage.input_tokens - cacheReadInputTokens,
             );
           }
 
-          // Parse the actual stop reason from the Responses API.
-          // When the response status is "incomplete",
-          // check incomplete_details.reason
-          // for 'max_output_tokens' so the agent loop's max_tokens recovery can trigger.
-          // Otherwise default to "end_turn".
+          // Parse the actual stop reason from the Responses API. An incomplete
+          // response with reason 'max_output_tokens' maps to max_tokens so the
+          // agent loop's max_tokens recovery can trigger; any other incomplete
+          // reason throws. Complete responses default to "end_turn".
           let stopReason = "end_turn";
           const resp = event.response;
           if (
@@ -383,7 +381,7 @@ export class OpenAIClient implements LLMClient {
               inputTokens,
               outputTokens,
               cacheReadInputTokens,
-              cacheCreationInputTokens, // 0
+              cacheCreationInputTokens,
             },
           };
         } else if (event.type === "response.failed") {
@@ -682,9 +680,9 @@ function userPartsFor(
 }
 
 // Convert Yukino's conversation into Responses API input items:
-// assistant tool calls become function_call items and
-// tool results become function_call_output items,
-// so multi-turn tool use works over the Responses endpoint.
+// assistant tool calls become function_call items and tool results become
+// function_call_output items (ComputerUse maps to computer_call /
+// computer_call_output), so multi-turn tool use works over the Responses endpoint.
 export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
   const result: OpenAIMessageParam[] = [];
   const computerCalls = new Map<string, ToolUseBlock>();

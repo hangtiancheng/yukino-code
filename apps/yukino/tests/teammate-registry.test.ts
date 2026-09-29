@@ -97,7 +97,8 @@ describe("teammate worker tool registry", () => {
       expect(names.has(name)).toBe(true);
     }
 
-    // Spawning agents and managing team lifecycle are Leader-only capabilities
+    // Agent is blocked to prevent recursive spawning, ComputerUse is a
+    // main-thread-only device tool, and team lifecycle is Leader-only
     for (const name of ["Agent", "ComputerUse", "TeamCreate", "TeamDelete"]) {
       expect(names.has(name)).toBe(false);
     }

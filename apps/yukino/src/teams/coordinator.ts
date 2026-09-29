@@ -41,12 +41,6 @@
 // TeamCreate is not here because the Agent tool's team_name path auto-creates the
 // specified Team if it does not exist — the Leader simply dispatches teammates
 // without a separate team-creation step.
-//
-// Four-phase workflow:
-// 1. Research: teammates investigate in parallel; the Leader stays hands-off
-// 2. Synthesis: the Leader digests findings and writes an implementation spec
-// 3. Implementation: teammates modify code per the spec and commit
-// 4. Verification: teammates validate that the changes are correct
 const COORDINATOR_ALLOWED_TOOLS = new Set([
   "Agent",
   "SendMessage",

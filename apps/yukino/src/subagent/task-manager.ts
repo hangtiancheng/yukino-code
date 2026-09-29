@@ -121,8 +121,8 @@ export class TaskManager {
           // output (e.g. a killed background shell command's captured output
           // and exit facts): keep it instead of the generic "Stopped by user"
           // placeholder — the status attribute already says "cancelled".
-          // Plain Errors (an aborted background agent's rejection, a stopped
-          // JS evaluation's dispose fallout rethrown plainly) stay discarded.
+          // Plain Errors (e.g. an aborted background agent's rejection) stay
+          // discarded.
           task.output = error.output;
           this.emitChange();
         }

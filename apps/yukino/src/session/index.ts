@@ -493,7 +493,7 @@ export function listSessions(workDir: string): SessionInfo[] {
           continue;
         }
         messageCount++;
-        // Label the session by its first user message (untruncated role match).
+        // Label the session by its first user message, truncated to 100 chars.
         if (!firstMessage && m.role === "user" && m.content) {
           firstMessage = contentToText(m.content).slice(0, 100);
         }
@@ -549,8 +549,8 @@ export function cleanExpiredSessions(workDir: string): number {
       if (now - stat.mtimeMs > expiryMs) {
         unlinkSync(filePath);
         // Remove the session's subdirectory in one recursive pass: it holds
-        // the tool-results spill files written by spillDir() (note the
-        // hyphenated directory name), so a single rm covers both.
+        // the tool-results spill files written by spillDir(), so one rm covers
+        // the directory and everything inside it.
         const id = file.replace(".jsonl", "");
         try {
           rmSync(join(dir, id), { recursive: true, force: true });

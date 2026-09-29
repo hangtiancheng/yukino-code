@@ -125,9 +125,8 @@ const AppConfigSchema = z.looseObject({
   enable_coordinator_mode: z.boolean().optional(),
   /**
    * Whether to fork when subagent_type is omitted. Enabled by default, so this
-   * field is left as undefined to represent "not specified in config". Using a
-   * concrete boolean would make it impossible to distinguish "not set" from
-   * "explicitly false", and the latter could never be turned back off.
+   * field is left as undefined to represent "not specified in config"; only an
+   * explicit `false` disables forking (see forkEnabled).
    */
   enable_fork: z.boolean().optional(),
   /**
