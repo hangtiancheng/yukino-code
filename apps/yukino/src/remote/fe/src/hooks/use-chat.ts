@@ -178,6 +178,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       if (open) {
         return {
           ...state,
+          streaming: true,
           items: state.items.map((it) =>
             it.kind === "review" && it.id === open.id
               ? {
@@ -198,7 +199,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
         progress: msg.data.progress ?? null,
         done: false,
       };
-      return { ...state, items: [...state.items, item] };
+      return { ...state, streaming: true, items: [...state.items, item] };
     }
 
     case "steering_queued":
@@ -253,6 +254,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "replay_user":
       return {
         ...state,
+        streaming: true,
         items: [
           ...state.items,
           { kind: "user", id: nextId("usr"), content: msg.data.content },
