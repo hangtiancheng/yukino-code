@@ -37,7 +37,11 @@ const INSTRUCTIONS =
   "interactive app (charts, dashboards, calculators, visual demos) inline in the " +
   "conversation when the user wants to see or interact with a result rather than " +
   "read text. Before using browser automation tools, call tabs_context_mcp to discover " +
-  "the available Chrome tabs and their tab IDs.";
+  "the available Chrome tabs and their tab IDs. Use the github_* tools to inspect " +
+  "GitHub repositories (metadata, files, trees, commits, branches, tags), search code " +
+  "and repositories, work with issues and pull requests (list/create), and make changes " +
+  "(create repositories and branches, write single files); they run through the local " +
+  "gh CLI when it is authenticated and fall back to the GITHUB_TOKEN env var otherwise.";
 
 // registerTool throws on duplicate names — with per-request server instances
 // in HTTP mode that would surface as runtime 500s, so fail fast at startup.

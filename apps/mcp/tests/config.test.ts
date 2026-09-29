@@ -129,3 +129,38 @@ describe("loadConfig", () => {
     expect(config.redis.keyPrefix).toBe("custom:");
   });
 });
+
+describe("github config", () => {
+  it("defaults to unconfigured when the environment is empty", () => {
+    // Without an authenticated gh CLI or a token the github_* tools degrade
+    // per call; nothing in the code points at an account by default.
+    const config = loadConfig({});
+    expect(config.github.token).toBe("");
+    expect(config.github.baseUrl).toBe("");
+  });
+
+  it("treats empty strings as unset", () => {
+    const config = loadConfig({ GITHUB_BASE_URL: "" });
+    expect(config.github.baseUrl).toBe("");
+  });
+
+  it("prefers GITHUB_TOKEN over GH_TOKEN", () => {
+    const config = loadConfig({ GITHUB_TOKEN: "a", GH_TOKEN: "b" });
+    expect(config.github.token).toBe("a");
+  });
+
+  it("falls back to GH_TOKEN", () => {
+    expect(loadConfig({ GH_TOKEN: "b" }).github.token).toBe("b");
+  });
+
+  it("treats a blank GITHUB_TOKEN as unset", () => {
+    expect(loadConfig({ GITHUB_TOKEN: "   " }).github.token).toBe("");
+  });
+
+  it("strips trailing slashes from the base URL", () => {
+    const config = loadConfig({
+      GITHUB_BASE_URL: "https://ghe.example.com/api/v3//",
+    });
+    expect(config.github.baseUrl).toBe("https://ghe.example.com/api/v3");
+  });
+});

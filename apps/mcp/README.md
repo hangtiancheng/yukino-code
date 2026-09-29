@@ -1,11 +1,13 @@
 # @yukino.js/mcp
 
 The **Yukino MCP server** — an official collection of MCP tools for the
-[Yukino CLI](../../README.md). It ships three tool groups today: a semantic
+[Yukino CLI](../../README.md). It ships four tool groups today: a semantic
 `docs` RAG tool over your local Yukino knowledge base, a `create_app`
-tool that lets agents deliver interactive MCP Apps with a sandboxed UI, and
+tool that lets agents deliver interactive MCP Apps with a sandboxed UI,
 a `chrome` tool group that drives the user's browser through the Yukino
-Chrome extension.
+Chrome extension, and a `github` tool group that exposes GitHub
+repositories (files, trees, commits, branches, tags, issues, pull
+requests) to agents.
 
 [![npm](https://img.shields.io/npm/v/@yukino.js/mcp?label=npm&color=F05138)](https://www.npmjs.com/package/@yukino.js/mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f5a623.svg)](../../LICENSE)
@@ -49,17 +51,56 @@ page inspection (`read_page`, `find`, `get_page_text`, `read_console_messages`,
 - **Degraded mode** — without the extension installed/running, calls return a
   setup hint instead of failing silently.
 
+### `github` (repository access)
+
+Access to GitHub repositories. The repo-scoped tools take a `repo` argument —
+an `owner/name` path (e.g. `hangtiancheng/yukino-code`) — and the search
+tools take a GitHub query string.
+
+| Tool                           | Kind  | Purpose                                                        |
+| ------------------------------ | ----- | -------------------------------------------------------------- |
+| `github_read_file`             | read  | Read a file's text content at a ref                            |
+| `github_list_tree`             | read  | List files/directories at a path (recursive, flattened)        |
+| `github_list_commits`          | read  | List recent commits on a ref                                   |
+| `github_list_branches`         | read  | List branches (marks default / protected)                      |
+| `github_list_tags`             | read  | List tags with the commit sha each one points at               |
+| `github_get_repo`              | read  | Repository metadata: visibility, language, stars/forks, URLs   |
+| `github_search_code`           | read  | Search file contents (GitHub code-search query syntax)         |
+| `github_search_repositories`   | read  | Search repositories (name, language, stars, ...)               |
+| `github_list_issues`           | read  | List issues (pull requests excluded), with labels and authors  |
+| `github_list_pull_requests`    | read  | List pull requests with head/base refs and draft flag          |
+| `github_create_repo`           | write | Create a repository under the user or an organization          |
+| `github_create_issue`          | write | Open an issue (optional body, labels, assignees)               |
+| `github_create_pull_request`   | write | Open a pull request from a head branch (optionally as a draft) |
+| `github_create_branch`         | write | Create a branch from another branch, tag or sha                |
+| `github_create_or_update_file` | write | Write one file's content to a branch in a single commit        |
+
+**Backend selection** — each call picks a transport in this order:
+
+1. **`gh` CLI** — when the `gh` executable is on PATH and `gh auth status`
+   reports an authenticated login. Calls run through `gh api`, reusing the
+   machine's existing GitHub credentials; no token passes through this
+   process.
+2. **HTTP + token** — otherwise, when `GITHUB_TOKEN` (or `GH_TOKEN`) is set:
+   direct REST calls to `GITHUB_BASE_URL` (default `https://api.github.com`)
+   with the token as a bearer token.
+3. **Unavailable** — with neither, each `github_*` call answers with a clear
+   error naming both options; the server always starts either way.
+
 ## Configuration
 
-| Environment variable | Description                                      | Default                  |
-| -------------------- | ------------------------------------------------ | ------------------------ |
-| `EMBEDDING_MODEL`    | Embedding model id (e.g. `text-embedding-v4`)    | —                        |
-| `EMBEDDING_BASE_URL` | OpenAI-compatible `embeddings` endpoint base URL | —                        |
-| `EMBEDDING_API_KEY`  | API key (falls back to `OPENAI_API_KEY`)         | —                        |
-| `REDIS_URL`          | Redis connection string                          | `redis://localhost:6379` |
-| `REDIS_INDEX_NAME`   | Redis index name                                 | `idx:yukino`             |
-| `REDIS_KEY_PREFIX`   | Redis key prefix                                 | `yukino:`                |
-| `YUKINO_DOCS_DIR`    | Local docs directory to index                    | `~/.yukino/docs`         |
+| Environment variable | Description                                                                   | Default                  |
+| -------------------- | ----------------------------------------------------------------------------- | ------------------------ |
+| `EMBEDDING_MODEL`    | Embedding model id (e.g. `text-embedding-v4`)                                 | —                        |
+| `EMBEDDING_BASE_URL` | OpenAI-compatible `embeddings` endpoint base URL                              | —                        |
+| `EMBEDDING_API_KEY`  | API key (falls back to `OPENAI_API_KEY`)                                      | —                        |
+| `REDIS_URL`          | Redis connection string                                                       | `redis://localhost:6379` |
+| `REDIS_INDEX_NAME`   | Redis index name                                                              | `idx:yukino`             |
+| `REDIS_KEY_PREFIX`   | Redis key prefix                                                              | `yukino:`                |
+| `YUKINO_DOCS_DIR`    | Local docs directory to index                                                 | `~/.yukino/docs`         |
+| `GITHUB_TOKEN`       | Personal access token for the `github_*` HTTP fallback; secret — never logged | —                        |
+| `GH_TOKEN`           | Fallback for `GITHUB_TOKEN` (the variable the `gh` CLI uses)                  | —                        |
+| `GITHUB_BASE_URL`    | REST API base URL for the HTTP fallback (GitHub Enterprise API URL)           | `https://api.github.com` |
 
 Both **stdio** (default) and **HTTP** transports are supported — `startHttpServer`
 serves the same tools over streamable HTTP (`POST /mcp`) and legacy SSE
@@ -91,11 +132,12 @@ mcp/
 ├── src/
 │   ├── main.ts         # stdio/HTTP entrypoint + shutdown
 │   ├── server.ts       # MCP server + tool registration
-│   ├── http.ts         # streamable HTTP transport
+│   ├── http.ts         # h3 app: streamable HTTP + legacy SSE transports
 │   ├── shared/         # config (zod) + logger
 │   └── tools/
 │       ├── docs/       # RAG pipeline (chunk/embed/index/retrieve)
 │       ├── create-app/ # MCP App create tool + UI shell
-│       └── chrome/     # browser automation via the Chrome extension socket
+│       ├── chrome/     # browser automation via the Chrome extension socket
+│       └── github/     # gh-CLI/HTTP transports + GitHubClient + the github_* tools
 └── tests/
 ```

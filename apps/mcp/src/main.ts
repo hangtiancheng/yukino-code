@@ -73,7 +73,7 @@ async function main(): Promise<void> {
 
   if (useHttp) {
     const { host, port } = loadConfig();
-    const httpServer = startHttpServer(host, port);
+    const httpServer = await startHttpServer(host, port);
     registerSignalHandlers(() => httpServer.close());
   } else {
     const server = createServer();

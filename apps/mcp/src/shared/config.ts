@@ -42,9 +42,28 @@ export interface RedisConfig {
   keyPrefix: string;
 }
 
+export interface GitHubConfig {
+  /**
+   * Personal access token for the GitHub API (`GITHUB_TOKEN` env, with
+   * `GH_TOKEN` as a fallback). Empty means "not configured": without an
+   * authenticated gh CLI or a token the github_* tools answer with a clear
+   * unavailable error per call instead of failing at startup.
+   *
+   * The token is a secret: it is only ever sent in an Authorization header
+   * and must never be logged.
+   */
+  token: string;
+  /**
+   * REST API base URL (`GITHUB_BASE_URL` env); empty means the transport
+   * default (https://api.github.com, or a GitHub Enterprise API URL).
+   */
+  baseUrl: string;
+}
+
 export interface AppConfig {
   embedding: EmbeddingConfigResult;
   redis: RedisConfig;
+  github: GitHubConfig;
   /** Directory scanned recursively for knowledge-base documents. */
   docsDir: string;
   /** HTTP transport listen address (only used with --http). */
@@ -65,6 +84,9 @@ const EnvSchema = z.object({
   YUKINO_DOCS_DIR: z
     .string()
     .default(path.resolve(homedir(), ".yukino", "docs")),
+  GITHUB_TOKEN: z.string().optional(),
+  GH_TOKEN: z.string().optional(),
+  GITHUB_BASE_URL: z.string().optional(),
   // .catch: a malformed PORT in the environment must degrade to the default
   // instead of crashing the stdio server at startup.
   HOST: z.string().default("127.0.0.1"),
@@ -130,6 +152,10 @@ export function loadConfig(
       keyPrefix: parsed.REDIS_KEY_PREFIX,
     },
     docsDir: parsed.YUKINO_DOCS_DIR,
+    github: {
+      token: (parsed.GITHUB_TOKEN ?? parsed.GH_TOKEN ?? "").trim(),
+      baseUrl: (parsed.GITHUB_BASE_URL ?? "").replace(/\/+$/, ""),
+    },
     host: parsed.HOST,
     port: parsed.PORT,
   };
