@@ -109,7 +109,7 @@ export class SpawnTeammateTool implements Tool {
   constructor(
     private mgr: TeamManager,
     private runAgent: RunAgent,
-    private providerBaseUrl?: string,
+    private providerIndex?: number,
   ) {}
   schema(): ToolSchema {
     return {
@@ -171,7 +171,7 @@ export class SpawnTeammateTool implements Tool {
         isError: true,
       });
     }
-    t.spawnTeammate(name, task, this.runAgent, undefined, this.providerBaseUrl);
+    t.spawnTeammate(name, task, this.runAgent, undefined, this.providerIndex);
     return Promise.resolve({
       output: `Teammate '${name}' spawned in team '${team}'. Its result will arrive on the team channel; keep working and watch for it.`,
       isError: false,

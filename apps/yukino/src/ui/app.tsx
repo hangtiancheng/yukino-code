@@ -859,12 +859,11 @@ export function App({
         registryRef.current.register(
           new TeamCreateTool(teamManagerRef.current),
         );
+        // No provider index is passed: external teammates resolve
+        // `default_provider` from the config, which rememberProvider keeps in
+        // sync with the active selection.
         registryRef.current.register(
-          new SpawnTeammateTool(
-            teamManagerRef.current,
-            teamRunAgent,
-            selectedProviderRef.current.base_url,
-          ),
+          new SpawnTeammateTool(teamManagerRef.current, teamRunAgent),
         );
         registryRef.current.register(
           new SendMessageTool(teamManagerRef.current),
@@ -1101,11 +1100,9 @@ export function App({
         );
         agentTool.forkDisabled = forkDisabled ?? false;
         // Wire the team manager into AgentTool to enable the team_name teammate path (teammates receive shared task-board tools)
-        agentTool.setTeamManager(
-          teamManagerRef.current,
-          teamRunAgentFactory,
-          selectedProviderRef.current.base_url,
-        );
+        // The provider index is left unset so external teammates follow the
+        // persisted `default_provider`, i.e. the active selection.
+        agentTool.setTeamManager(teamManagerRef.current, teamRunAgentFactory);
         registryRef.current.register(agentTool);
 
         if (mcpServers.length > 0) {
@@ -1133,18 +1130,25 @@ export function App({
     }
   }, [appState, selectedProvider, initClient]);
 
-  const rememberProvider = (
+  // Provider entry identity: reference equality first, then base_url+name for
+  // re-parsed entries that are equal but not identical (see provider-login).
+  const providerIndexOf = (
     provider: ProviderConfig,
     list: ProviderConfig[] = providers,
-  ): void => {
-    const index = list.findIndex(
+  ): number =>
+    list.findIndex(
       (candidate) =>
         candidate === provider ||
         (candidate.base_url === provider.base_url &&
           candidate.name === provider.name),
     );
+
+  const rememberProvider = (
+    provider: ProviderConfig,
+    list: ProviderConfig[] = providers,
+  ): void => {
     try {
-      persistDefaultProvider(Math.max(index, 0));
+      persistDefaultProvider(Math.max(providerIndexOf(provider, list), 0));
     } catch {
       /* best effort */
     }
@@ -2944,7 +2948,7 @@ export function App({
           providerDialogActive
             ? {
                 providers,
-                currentBaseUrl: selectedProvider.base_url,
+                currentProviderIndex: providerIndexOf(selectedProvider),
                 reservedRows: footerRows,
                 onCancel: () => {
                   setProviderDialogActive(false);

@@ -32,6 +32,7 @@ import {
 import {
   getContextWindow,
   getMaxOutputTokens,
+  resolveDefaultProvider,
 } from "./config/provider-config.js";
 import { ConversationManager } from "./conversation/index.js";
 import { createClient } from "./llm/client.js";
@@ -135,7 +136,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   const workDir = process.cwd();
 
   const cfg = withProjectMcpServers(loadConfig(), workDir);
-  const provider = cfg.providers[0];
+  const provider = resolveDefaultProvider(cfg.providers, cfg.default_provider);
 
   const env = detectEnvironment(workDir);
   env.model = provider.model;
@@ -224,6 +225,8 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     backgroundTaskManager,
   );
   agentTool.forkDisabled = !forkEnabled(cfg);
+  // No provider index: external teammates resolve `default_provider` from
+  // the config — the same provider print mode runs with.
   agentTool.setTeamManager(
     teamManager,
     (teamRegistry, teamChecker, memberWorkDir = workDir) =>
@@ -242,7 +245,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
           // Teammates stay purely foreground: see SubagentRunOptions.backgroundTasks.
           { abortSignal, backgroundTasks: false },
         ),
-    provider.base_url,
   );
   registry.register(agentTool);
 

@@ -212,7 +212,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: providers(),
-        currentBaseUrl: "https://provider-12.invalid",
+        currentProviderIndex: 11,
         onSelect,
       }),
     );
@@ -249,7 +249,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: configured,
-        currentBaseUrl: "https://prod.invalid",
+        currentProviderIndex: 1,
         onSelect,
       }),
     );
@@ -296,7 +296,7 @@ describe("provider selector", () => {
     const view = (items: ProviderConfig[]) =>
       createElement(ProviderSelect, {
         providers: items,
-        currentBaseUrl: configured[1].base_url,
+        currentProviderIndex: 1,
         onSelect,
       });
     mount(view(configured));
@@ -324,7 +324,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: providers(3),
-        currentBaseUrl: "https://missing.invalid",
+        currentProviderIndex: 99,
         onSelect,
       }),
     );
@@ -352,7 +352,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: configured,
-        currentBaseUrl: "https://second.invalid",
+        currentProviderIndex: 1,
         onSelect,
       }),
     );
@@ -549,7 +549,7 @@ describe("selector layout", () => {
         dock(
           createElement(ProviderSelect, {
             providers: providers(),
-            currentBaseUrl: "https://provider-15.invalid",
+            currentProviderIndex: 14,
             onSelect: vi.fn(),
           }),
         ),

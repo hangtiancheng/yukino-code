@@ -61,6 +61,7 @@ import {
   memoryEnabled,
   withProjectMcpServers,
 } from "@/config/index.js";
+import { resolveDefaultProvider } from "@/config/provider-config.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import { createRemoteAgent } from "@/remote/server.js";
 import {
@@ -113,7 +114,10 @@ async function createRuntime(
   sessionId?: string,
 ): Promise<AcpRuntime> {
   const config = withProjectMcpServers(loadConfig(), workDir);
-  const provider = config.providers[0];
+  const provider = resolveDefaultProvider(
+    config.providers,
+    config.default_provider,
+  );
   if (!provider) {
     throw acp.RequestError.internalError(undefined, "No provider configured.");
   }

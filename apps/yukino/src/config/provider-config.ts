@@ -101,6 +101,18 @@ export const ProviderConfigSchema = z.looseObject({
 
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
+/**
+ * The provider selected by `default_provider`, falling back to the first
+ * entry when the recorded index is out of range (e.g. a hand-edited config).
+ * Callers guarantee a non-empty list (loadConfig validates it).
+ */
+export function resolveDefaultProvider(
+  providers: ProviderConfig[],
+  defaultProvider: number,
+): ProviderConfig {
+  return providers[defaultProvider] ?? providers[0];
+}
+
 export const DEFAULT_THINKING_LEVEL: ThinkingLevel = "high";
 export const DEFAULT_CONTEXT_WINDOW = 1_000_000;
 /**

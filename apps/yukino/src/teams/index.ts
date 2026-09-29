@@ -284,7 +284,7 @@ export class Team {
     task: string,
     runAgent: RunAgent,
     checker?: PermissionChecker,
-    providerBaseUrl?: string,
+    providerIndex?: number,
     originToolCallId?: string,
   ): void {
     const mode = this.mode;
@@ -293,7 +293,7 @@ export class Team {
       return;
     }
     try {
-      this.spawnExternal(mode, name, task, providerBaseUrl, originToolCallId);
+      this.spawnExternal(mode, name, task, providerIndex, originToolCallId);
     } catch {
       // Fall back to in-process mode when the external backend fails to launch (missing dependency / unsupported platform)
       this.spawnInProcess(name, task, runAgent, checker, originToolCallId);
@@ -310,7 +310,7 @@ export class Team {
     mode: Exclude<TeamMode, "in-process">,
     name: string,
     task: string,
-    providerBaseUrl?: string,
+    providerIndex?: number,
     originToolCallId?: string,
   ): void {
     const member = this.addMember(name);
@@ -353,7 +353,9 @@ export class Team {
         name,
         "--task",
         task,
-        ...(providerBaseUrl ? ["--provider-base-url", providerBaseUrl] : []),
+        ...(providerIndex !== undefined
+          ? ["--provider-index", String(providerIndex)]
+          : []),
       ],
       cwd: this.workDir,
     };

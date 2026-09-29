@@ -124,6 +124,41 @@ describe("remote execution boundaries", () => {
     expect(Reflect.get(server, "agentInitPromise")).toBeNull();
   });
 
+  it("starts the agent with the provider selected by default_provider", async () => {
+    const initialization = deferred<never>();
+    const agentFactory = vi.fn(() => initialization.promise);
+    const providers = [
+      {
+        name: "first",
+        protocol: "openai",
+        model: "first-model",
+        base_url: "https://first.invalid",
+      },
+      {
+        name: "second",
+        protocol: "openai",
+        model: "second-model",
+        base_url: "https://second.invalid",
+      },
+    ] satisfies ProviderConfig[];
+    const server = new RemoteServer({
+      providers,
+      defaultProvider: 1,
+      addr: ":18888",
+      enableCoordinatorMode: false,
+      forkDisabled: true,
+      agentFactory,
+    });
+
+    const pending = requirePromise(invokePrivate(server, "ensureAgent"));
+    expect(agentFactory).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: providers[1] }),
+    );
+
+    initialization.reject(new Error("expected test failure"));
+    await expect(pending).resolves.toBeNull();
+  });
+
   it("validates reviews before initialization and claims streaming during cold start", async () => {
     const initialization = deferred<never>();
     const agentFactory = vi.fn(() => initialization.promise);

@@ -175,6 +175,31 @@ describe("print mode argument parsing", () => {
   });
 });
 
+describe("print mode provider selection", () => {
+  it("runs with the provider recorded as default_provider", async () => {
+    cfg.default_provider = 1;
+    cfg.providers.push({
+      name: "second",
+      protocol: "openai",
+      model: "second-model",
+      base_url: "https://second.invalid",
+    });
+    await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
+    expect(vi.mocked(clients.createClient).mock.calls[0]?.[0]).toMatchObject({
+      base_url: "https://second.invalid",
+    });
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("falls back to the first provider when default_provider is out of range", async () => {
+    cfg.default_provider = 9;
+    await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
+    expect(vi.mocked(clients.createClient).mock.calls[0]?.[0]).toMatchObject({
+      base_url: "https://test.invalid",
+    });
+  });
+});
+
 describe("print mode delegation", () => {
   it("forks the live conversation by default and injects project instructions", async () => {
     writeFileSync(join(workDir, "AGENTS.md"), "Keep the project constraint.");

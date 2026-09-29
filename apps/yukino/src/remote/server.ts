@@ -57,6 +57,7 @@ import {
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
+  resolveDefaultProvider,
 } from "@/config/provider-config.js";
 import { persistThinkingLevel } from "@/config/provider-login.js";
 import { ConversationManager } from "@/conversation/index.js";
@@ -802,7 +803,9 @@ export async function createRemoteAgent(
   );
   // Wire the team manager into AgentTool so the team_name teammate path takes effect (teammates receive shared team task-board tools)
   agentTool.forkDisabled = forkDisabled ?? false;
-  agentTool.setTeamManager(teamManager, teamRunAgentFactory, provider.base_url);
+  // No provider index: external teammates resolve `default_provider` from
+  // the config — the same provider this server was started with.
+  agentTool.setTeamManager(teamManager, teamRunAgentFactory);
   registry.register(agentTool);
 
   // 14. Load user-defined slash commands
@@ -977,6 +980,8 @@ function formatPermissionDesc(
 
 interface RemoteServerOptions {
   providers: ProviderConfig[];
+  /** Index of the provider the server starts with; defaults to 0. */
+  defaultProvider?: number;
   mcpServers?: MCPServerConfig[];
   hookConfigs?: HookConfig[];
   addr: string;
@@ -1224,6 +1229,17 @@ export class RemoteServer {
   }
 
   /**
+   * The provider the server runs with: the `default_provider` entry, falling
+   * back to the first one when the recorded index is out of range.
+   */
+  private startProvider(): ProviderConfig {
+    return resolveDefaultProvider(
+      this.opts.providers,
+      this.opts.defaultProvider ?? 0,
+    );
+  }
+
+  /**
    * Returns the agent handle, initializing it on first use. On success the
    * real session id is broadcast so clients can show the welcome card.
    */
@@ -1239,7 +1255,7 @@ export class RemoteServer {
     const initPromise = (async (): Promise<RemoteAgentHandle | null> => {
       try {
         const handle = await factory({
-          provider: this.opts.providers[0],
+          provider: this.startProvider(),
           workDir: cwd(),
           hooks: this.opts.hookConfigs,
           mcpServers: this.opts.mcpServers,
@@ -2446,7 +2462,7 @@ export class RemoteServer {
     try {
       const factory = this.opts.agentFactory ?? createRemoteAgent;
       this.agentHandle = await factory({
-        provider: this.opts.providers[0],
+        provider: this.startProvider(),
         workDir: cwd(),
         hooks: this.opts.hookConfigs,
         mcpServers: this.opts.mcpServers,

@@ -30,7 +30,8 @@ import { updateSelectorQuery } from "./selector-search.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 
 interface ProviderSelectProps {
-  currentBaseUrl?: string;
+  /** Index into `providers` of the active provider; out-of-range marks none. */
+  currentProviderIndex?: number;
   reservedRows?: number;
   providers: ProviderConfig[];
   onCancel?: () => void;
@@ -38,14 +39,22 @@ interface ProviderSelectProps {
 }
 
 export function ProviderSelect({
-  currentBaseUrl,
+  currentProviderIndex,
   reservedRows,
   providers,
   onCancel,
   onSelect,
 }: ProviderSelectProps) {
   const [query, setQuery] = useState("");
-  const [focusedBaseUrl, setFocusedBaseUrl] = useState(currentBaseUrl);
+  const currentProvider =
+    currentProviderIndex === undefined
+      ? undefined
+      : providers[currentProviderIndex];
+  // Focus tracks base_url — the provider identity (see provider-login) — so it
+  // stays on the same entry when the list updates while the dialog is open.
+  const [focusedBaseUrl, setFocusedBaseUrl] = useState(
+    currentProvider?.base_url,
+  );
   const fuse = useMemo(
     () =>
       new Fuse(providers, {
@@ -85,7 +94,9 @@ export function ProviderSelect({
       const nextQuery = updateSelectorQuery(query, input, key);
       if (nextQuery !== query) {
         setQuery(nextQuery);
-        setFocusedBaseUrl(nextQuery.trim() ? undefined : currentBaseUrl);
+        setFocusedBaseUrl(
+          nextQuery.trim() ? undefined : currentProvider?.base_url,
+        );
       }
     }
   });
@@ -110,7 +121,7 @@ export function ProviderSelect({
           .map((provider, index) => (
             <SelectorListRow
               key={provider.base_url}
-              current={provider.base_url === currentBaseUrl}
+              current={provider === currentProvider}
               description={`${provider.protocol} · ${provider.model}`}
               focused={start + index === cursor}
               label={provider.name}

@@ -86,7 +86,7 @@ Yukino reads a single global YAML configuration file:
 
 - ~/.yukino/config.yaml
 
-Print, remote, and ACP modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. Example config.yaml:
+Print, remote, and ACP modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. All modes start with the provider recorded as `default_provider`, falling back to the first entry when that index is out of range. Example config.yaml:
 
 ```yaml
 permission_mode: bypassPermissions

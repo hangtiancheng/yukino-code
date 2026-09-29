@@ -127,6 +127,7 @@ async function main() {
     initLogger({ sessionId: newSessionId(), mode: "remote", stdout: true });
     const srv = new RemoteServer({
       providers: cfg.providers,
+      defaultProvider: cfg.default_provider,
       mcpServers: cfg.mcp_servers,
       hookConfigs: cfg.hooks,
       addr: remoteAddr,

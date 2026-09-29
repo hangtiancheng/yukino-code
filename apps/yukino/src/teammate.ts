@@ -28,6 +28,7 @@ import type { MCPServerConfig } from "./config/index.js";
 import {
   getContextWindow,
   getMaxOutputTokens,
+  resolveDefaultProvider,
   type ProviderConfig,
 } from "./config/provider-config.js";
 import { ConversationManager } from "./conversation/index.js";
@@ -82,7 +83,8 @@ interface TeammateArgs {
   teamName: string;
   memberName: string;
   initialTask: string;
-  providerBaseUrl?: string;
+  /** Index into the config's providers array; defaults to `default_provider`. */
+  providerIndex?: number;
 }
 
 export function parseTeammateFlags(args: string[]): TeammateArgs | null {
@@ -94,7 +96,7 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
   let teamName = "";
   let memberName = "";
   let initialTask = "";
-  let providerBaseUrl: string | undefined;
+  let providerIndex: number | undefined;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--team-dir" && args[i + 1]) {
@@ -110,8 +112,8 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
     if (args[i] === "--task" && args[i + 1]) {
       initialTask = args[++i];
     }
-    if (args[i] === "--provider-base-url" && args[i + 1]) {
-      providerBaseUrl = args[++i];
+    if (args[i] === "--provider-index" && args[i + 1]) {
+      providerIndex = Number(args[++i]);
     }
   }
 
@@ -123,7 +125,7 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
     const leaf = basename(teamDir);
     teamName = leaf === "inboxes" ? basename(dirname(teamDir)) : leaf;
   }
-  return { teamDir, teamName, memberName, initialTask, providerBaseUrl };
+  return { teamDir, teamName, memberName, initialTask, providerIndex };
 }
 
 // Exit after the leader has been dead for this long (checked every poll):
@@ -272,12 +274,16 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
   try {
     const workDir = process.cwd();
     const cfg = withProjectMcpServers(loadConfig(), workDir);
-    const provider = args.providerBaseUrl
-      ? cfg.providers.find((p) => p.base_url === args.providerBaseUrl)
-      : cfg.providers[0];
+    // Without an explicit index, follow `default_provider` (degrading to the
+    // first provider when out of range, mirroring the UI); an explicitly
+    // requested index must resolve.
+    const provider =
+      args.providerIndex === undefined
+        ? resolveDefaultProvider(cfg.providers, cfg.default_provider)
+        : cfg.providers[args.providerIndex];
     if (!provider) {
       throw new Error(
-        `Provider with base URL "${args.providerBaseUrl ?? ""}" is not configured.`,
+        `Provider at index ${args.providerIndex} is not configured.`,
       );
     }
     const conversation = new ConversationManager();
