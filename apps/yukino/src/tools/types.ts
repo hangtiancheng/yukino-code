@@ -281,7 +281,6 @@ export interface ToolSchema {
   defer_loading?: boolean;
   description: string;
 
-  /** The input schema for the tool. */
   input_schema: {
     type: "object";
     properties: Record<string, object>;

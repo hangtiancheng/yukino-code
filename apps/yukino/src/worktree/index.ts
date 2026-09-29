@@ -126,7 +126,7 @@ async function getCommonDir(gitDir: string): Promise<string> {
 
 interface GitHead {
   branch?: string; // Non-empty indicates on a branch
-  sha?: string; // Non-empty indicates detached HEAD
+  sha?: string; // Non-empty indicates detached HEAD or a resolved non-branch symref
 }
 
 /**
@@ -237,7 +237,7 @@ async function resolveRef(gitDir: string, ref: string): Promise<string> {
 
 /**
  * Pure filesystem read of a worktree's HEAD SHA. Directly reads the <worktreePath>/.git
- * pointer file, bypassing the upward traversal logic of resolveGitDir.
+ * pointer file without going through resolveGitDir.
  * Returns an empty string if it is not a valid worktree.
  *
  * Performance target: ≤10ms (pure file IO, no subprocesses).

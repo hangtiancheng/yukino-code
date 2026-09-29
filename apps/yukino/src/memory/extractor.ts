@@ -59,7 +59,8 @@ interface ParsedTextMemory {
  * MemoryExtractor implements the background memory-extraction subagent.
  * - Uses a child agent + tools (ReadFile/WriteFile/EditFile/Glob/Grep) instead of bare LLM calls
  * - Sends existing memory manifest to the LLM before extraction for deduplication
- * - inProgress + pendingContext merge strategy
+ * - inProgress + pendingContext coalescing: at most one extraction is queued,
+ *   and only the latest queued summary runs
  * - When the child agent makes no tool calls, falls back to parsing streamed
  *   text blocks (MEMORY_NAME/...) and writing them to disk
  */
@@ -281,7 +282,7 @@ export class MemoryExtractor {
     return memories;
   }
 
-  /** Parse a single block; MEMORY_BODY supports multi-line. Returns null for blocks without MEMORY_NAME. */
+  /** Parse a single block; MEMORY_BODY supports multi-line. Returns null for blocks with a missing or invalid MEMORY_NAME, or an empty body. */
   private parseTextMemoryBlock(block: string): ParsedTextMemory | null {
     const lines = block.split("\n");
     const mem: ParsedTextMemory = {

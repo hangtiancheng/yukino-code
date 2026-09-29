@@ -87,7 +87,7 @@ const UTIL_SYSTEM_PROMPT =
 /** Plan phase thresholds. */
 const PLAN_MODE_LINE_THRESHOLD = 50;
 const PLAN_MODE_GROUP_LINE_THRESHOLD = 100;
-/** Per-group agent turn cap. */
+/** Turn cap for one agent run (each round builds a fresh Agent). */
 const MAX_AGENT_ITERATIONS = 50;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_MAX_ROUNDS = 2;
@@ -596,7 +596,10 @@ async function runGroupAgent(
   return madeToolCalls;
 }
 
-/** Sort by path then line, and drop exact duplicates. */
+/**
+ * Drop duplicates sharing path, start line, and content, then sort by path,
+ * line, and severity.
+ */
 export function finalizeComments(comments: ReviewComment[]): ReviewComment[] {
   const seen = new Set<string>();
   const deduped: ReviewComment[] = [];

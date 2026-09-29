@@ -75,7 +75,7 @@ export function buildChangeFilesExceptGroup(
 
 const CONFIRMED_MAX_EXISTING_CODE = 200;
 const CONFIRMED_MAX_CONTENT = 300;
-/** Cap on confirmed findings carried into later rounds. */
+/** Cap on confirmed findings: the round loop stops once this many accumulate. */
 export const CONFIRMED_CAP = 30;
 
 function flattenOneLine(s: string): string {

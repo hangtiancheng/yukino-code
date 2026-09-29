@@ -29,8 +29,8 @@ import type { PermissionAction } from "./permission-dialog.js";
  * (run_in_background=false) subagents — tracked progress entries without a
  * taskId. Background shell tasks, background subagents (whose progress entry
  * carries the background task id) and teammates are deliberately excluded:
- * they survive a single interrupt and are stopped only when the TUI exits
- * (double Ctrl+C).
+ * they survive a single interrupt; interruptAll stops them only when the TUI
+ * exits (double Ctrl+C, /quit).
  */
 export function isForegroundBusy(
   isStreaming: boolean,
@@ -55,9 +55,9 @@ export interface InterruptDeps {
     current: ((answers: Record<string, string>) => void) | null;
   };
   setAskRequest: (request: null) => void;
-  /** Background tasks (Bash/PowerShell/background agents). Only stopped on exit. */
+  /** Background tasks (Bash/PowerShell/background agents). Stopped only via interruptAll (TUI exit). */
   backgroundTasks: { stopAll(): Promise<void> };
-  /** Teammates. Only stopped on exit. */
+  /** Teammates. Stopped only via interruptAll (TUI exit). */
   teams: { stopAll(): Promise<void> };
 }
 

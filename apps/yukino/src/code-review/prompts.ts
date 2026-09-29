@@ -21,9 +21,9 @@
  */
 
 /**
- * Prompt templates for yukino's tool names (CodeComment / ReadFile / Grep /
- * Glob) and loop semantics (a turn without tool calls ends the agent — no
- * task_done tool).
+ * Prompt templates for yukino's tool names (CodeComment / FileReadDiff /
+ * ReadFile / Grep / Glob) and loop semantics (a turn without tool calls ends
+ * the agent — no task_done tool).
  */
 
 export function renderTemplate(

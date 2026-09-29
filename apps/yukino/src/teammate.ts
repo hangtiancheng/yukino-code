@@ -222,7 +222,7 @@ export async function buildTeammateRegistry(opts: {
 
 export async function runTeammate(args: TeammateArgs): Promise<void> {
   // Initialize logger for this teammate subprocess. Subprocess skips cleanup
-  // to avoid multi-process races on unlinkSync.
+  // to avoid multi-process races on expired-log deletion.
   // args.teamDir is the mailbox dir (~/.yukino/teams/<team>/inboxes); logs
   // live in the sibling logs/ dir, which cleanExpiredLogs scans.
   const safeMemberName = sanitizeNameSegment(args.memberName);

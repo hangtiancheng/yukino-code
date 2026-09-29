@@ -263,7 +263,7 @@ export interface RemoteAgentHandle {
   /** Runs the agent loop: adds the user message, creates Agent, and yields events. */
   run(text: string, callbacks: RunCallbacks): AsyncGenerator<AgentEvent>;
 
-  /** Aborts the currently running agent loop (if any). */
+  /** Aborts the currently running agent loop (if any) and stops all background tasks and teammates. */
   abort(): void;
 
   /**
@@ -359,7 +359,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
     text: string,
     callbacks: RunCallbacks,
   ): AsyncGenerator<AgentEvent> {
-    // Add user message to conversation
     this.conv.addUserMessage(text);
 
     // Announce the instructions of every connected MCP server this conversation has
@@ -912,7 +911,7 @@ function wireSkillsToCommands(
 
 // -- Permission description formatter ------------------------------------------
 
-/** Formats a permission request description for the WS client popup. */
+/** Formats a permission request description for the WS client permission dialog. */
 function formatPermissionDesc(
   toolName: string,
   args: Record<string, unknown>,
@@ -1001,7 +1000,6 @@ export class RemoteServer {
 
     // Static file serving for fe/dist/
     this.app.use((ctx) => {
-      // Root path -> index.html
       const filePath = ctx.path === "/" ? "/index.html" : ctx.path;
       const result = serveStatic(filePath);
       if (result) {
@@ -1042,7 +1040,6 @@ export class RemoteServer {
         }
       }
 
-      // Send available slash commands
       this.send(ws, { type: "commands", data: this.buildCommandList() });
 
       ws.on("message", (data: Buffer) => {
@@ -1204,7 +1201,6 @@ export class RemoteServer {
     const workDir = handle.workDir;
     const sessionId = handle.sessionId;
 
-    // Persist user message to session
     saveMessage(workDir, sessionId, {
       role: "user",
       content: text,
@@ -1290,7 +1286,7 @@ export class RemoteServer {
     this.broadcast({ type: "steering_queued", data: { text } });
   }
 
-  /** Bridges an AgentEvent to the corresponding WS message and session persistence. */
+  /** Bridges an AgentEvent to the corresponding WS message; compact events also persist their boundary to the session. */
   private bridgeEvent(
     ev: AgentEvent,
     startTime: number,
@@ -1298,7 +1294,7 @@ export class RemoteServer {
     sessionId: string,
     appendStream: (text: string) => void,
   ): void {
-    // Unified structured event log (one JSONL line per discrete event).
+    // Unified structured event log; only noteworthy events emit a JSONL line (see log.ts).
     this.eventLogger.onEvent(ev);
 
     switch (ev.type) {
@@ -1393,7 +1389,6 @@ export class RemoteServer {
 
       case "compact":
         this.broadcast({ type: "compact", data: { message: ev.message } });
-        // Persist compact boundary
         if (ev.boundary) {
           saveCompactBoundary(workDir, sessionId, ev.boundary);
         }

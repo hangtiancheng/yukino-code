@@ -80,7 +80,7 @@ export function buildPlanModeReminder(
 
 /**
  * Builds the reminder displayed after exiting Plan Mode.
- * If a plan file exists, prompts the model to reference the file path.
+ * If a plan file exists, includes its path in case the model needs to reference it.
  */
 export function buildPlanModeExitReminder(
   planPath: string,

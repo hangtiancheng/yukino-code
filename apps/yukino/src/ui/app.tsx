@@ -851,7 +851,8 @@ export function App({
           backgroundTaskManagerRef.current,
         );
 
-        // Load user-defined slash commands from .yukino/commands/*.md.
+        // Load user-defined slash commands from .yukino/commands/*.md
+        // (user home, then project — project wins on a name collision).
         for (const cmd of loadUserCommands(workDir)) {
           try {
             cmdRegistryRef.current.register(cmd);
@@ -1541,10 +1542,10 @@ export function App({
           fileHistoryRef.current = new FileHistory(workDir, arg);
           // Rebuild the visible transcript. Tool chains are persisted as
           // assistant records with tool_uses and user records that carry only
-          // tool_results (empty text). Mapping those verbatim used to emit
-          // empty role:"user" messages, each rendering as a bare "❯" prompt
-          // mark. Fold them into turn_summary messages instead, mirroring how
-          // live turns are committed, and skip anything with no visible text.
+          // tool_results (empty text). Mapping those verbatim emits empty
+          // role:"user" messages that render as blank user-message boxes.
+          // Fold them into turn_summary messages instead, mirroring how live
+          // turns are committed, and skip anything with no visible text.
           const pendingUses = new Map<
             string,
             { toolName: string; argsSummary: string }

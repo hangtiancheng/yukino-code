@@ -372,10 +372,10 @@ function mcpServerFromJsonEntry(
 }
 
 /**
- * Reads project-level MCP servers from `<workDir>/.mcp.json`. A missing or
- * malformed file yields [] with a log entry so a broken repo-side config does
- * not prevent startup, and an entry that cannot be mapped is skipped so one bad
- * server does not hide its siblings.
+ * Reads project-level MCP servers from `<workDir>/.mcp.json`. A missing file
+ * yields [] silently and a malformed one yields [] with a log entry, so a
+ * broken repo-side config does not prevent startup, and an entry that cannot
+ * be mapped is skipped so one bad server does not hide its siblings.
  */
 export function loadProjectMcpServers(workDir: string): MCPServerConfig[] {
   const path = join(workDir, PROJECT_MCP_FILENAME);

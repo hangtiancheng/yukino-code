@@ -38,7 +38,8 @@ function splitDiffLines(text: string): string[] {
 
 /**
  * Undo git's C-style path quoting (`"a b\tc"` → `a b<TAB>c`). Git quotes
- * paths containing spaces or control characters unless core.quotepath=false.
+ * paths containing control characters or non-ASCII bytes; core.quotepath=false
+ * (set on every invocation in git.ts) suppresses only the non-ASCII quoting.
  */
 export function unquoteGitPath(raw: string): string {
   const s = raw.trim();
@@ -71,8 +72,9 @@ export function unquoteGitPath(raw: string): string {
         out += "\\";
         break;
       default:
-        // Octal escape (\NNN) — decode byte-wise; non-UTF8 sequences degrade
-        // to replacement chars, which only affects display of exotic paths.
+        // Octal escape (\NNN) — decode byte-wise, one char per octal byte; a
+        // multi-byte UTF-8 sequence stays split into its byte chars, which
+        // only affects display of exotic paths.
         if (next !== undefined && next >= "0" && next <= "7") {
           let oct = next;
           while (
@@ -99,7 +101,7 @@ function parseDiffHeaderLine(
   if (m) {
     return { oldPath: m[1], newPath: m[2] };
   }
-  // Quoted-side header: `diff --git "a/x y" "b/x y"`.
+  // Quoted-side header: `diff --git "a/x\ty" "b/x\ty"`.
   const q = /^diff --git "?a\/(.+?)"? "?b\/(.+?)"?$/.exec(line);
   if (q && (line.includes('"') || line.includes("\\"))) {
     return { oldPath: unquoteGitPath(q[1]), newPath: unquoteGitPath(q[2]) };

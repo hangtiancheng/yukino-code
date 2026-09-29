@@ -143,7 +143,7 @@ export interface CodeReviewOptions {
 export interface CodeReviewResult {
   mode: ReviewMode;
   comments: ReviewComment[];
-  /** Files that entered the reviewed set. */
+  /** Files in groups that completed their review. */
   filesReviewed: number;
   filesChanged: number;
   groups: { label: string; files: string[] }[];

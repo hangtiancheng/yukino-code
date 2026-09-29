@@ -238,7 +238,7 @@ async function compressWithSharp(
         return toResult(png, "image/png");
       }
     }
-    for (const quality of [80, 60, 40, 20] /** jpeg quality */) {
+    for (const quality of [80, 60, 40, 20]) {
       const jpeg = await sharp(buf)
         .resize(width, height, { fit: "inside", withoutEnlargement: true })
         .jpeg({ quality })

@@ -29,8 +29,8 @@ import { strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "hooks" });
 
-/** Async command execution for hooks — non-blocking, 30s timeout.
- *  Replaces execSync so the event loop isn't frozen during hook commands. */
+/** Async command execution for hooks — non-blocking, 30s timeout, so the
+ *  event loop isn't frozen during hook commands. */
 function execHookAsync(
   command: string,
   opts: { env: NodeJS.ProcessEnv; cwd?: string; signal?: AbortSignal },
@@ -92,7 +92,7 @@ export class HookEngine {
   private hooks: HookConfig[];
   private firedOnce = new Set<string>();
   private notifications: string[] = [];
-  // Executor for agent-type hooks, injected externally. Returns a clear error if no agent runner is registered.
+  // Executor for agent-type hooks, injected externally. Executing one without a registered runner throws a clear error.
   agentRunner?: (prompt: string, ctx: HookContext) => Promise<string>;
 
   constructor(hooks: HookConfig[]) {
@@ -276,7 +276,7 @@ export class HookEngine {
       }
 
       case "agent": {
-        // Agent-type hook: execute a subagent via the injected agentRunner
+        // Agent-type hook: delegate execution to the injected agentRunner
         if (!this.agentRunner) {
           throw new Error(
             "agent-type hook configured but no AgentRunner registered",

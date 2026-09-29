@@ -22,7 +22,7 @@
 
 // Structured logging for AgentEvent streams, filtered to what matters at the
 // recorded level (warn and above): degraded-service signals and errors.
-//   { "event": "retry", "reason": ..., "time": <pino timestamp> }
+//   { "event": "retry", "reason": ..., "delayMs": ..., "time": <pino timestamp> }
 // Routine progress events (tool_use, streamed text, turn/loop completion,
 // usage, permission requests) are intentionally not logged.
 

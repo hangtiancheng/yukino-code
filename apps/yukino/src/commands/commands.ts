@@ -189,7 +189,6 @@ export function createDefaultRegistry(): CommandRegistry {
     type: "local",
     description: "Show current status",
     handler: (ctx) => {
-      // Display actual runtime status instead of placeholder text
       const lines: string[] = [];
       lines.push("Yukino Status");
       lines.push("──────────────");

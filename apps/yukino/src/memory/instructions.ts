@@ -46,7 +46,7 @@ export interface InstructionSource {
  *     directory from the git root down to workDir
  *
  * Supports @include directives:
- *  - @./relative/path, @~/home/path, @/absolute/path
+ *  - @./relative/path, @../relative/path, @~/home/path, @/absolute/path
  *  - Resolved relative to the directory of the containing file
  *  - Ignored inside fenced code blocks
  *  - Cycle detection (the same absolute path is never included twice)
@@ -203,7 +203,7 @@ function expandIncludes(
 }
 
 /**
- * Parses @include lines: @./path, @~/path, @/abs/path.
+ * Parses @include lines: @./path, @../path, @~/path, @/abs/path.
  * Other @-tokens (e.g., @username) are ignored to avoid false positives.
  */
 function parseInclude(trimmed: string): string {
@@ -216,7 +216,7 @@ function parseInclude(trimmed: string): string {
   if (!rest) {
     return "";
   }
-  // Cannot contain spaces or tabs (excludes cases like @username)
+  // Cannot contain spaces or tabs: the include must occupy the whole line
   if (/[\s\t]/.test(rest)) {
     return "";
   }

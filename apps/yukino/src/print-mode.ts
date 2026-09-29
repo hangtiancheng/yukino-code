@@ -119,8 +119,11 @@ export function parsePrintFlags(args: string[]): PrintArgs | null {
 
 /**
  * Runs the Agent non-interactively and writes the result to stdout.
- * - text mode: emits only the model's text response
- * - stream-json mode: emits one JSON line per event
+ * - text mode: emits the model's streamed text, followed by background
+ *   task notifications
+ * - stream-json mode: emits one JSON line per supported event (tool_use,
+ *   tool_result, usage, error), plus task notifications and a final result
+ *   summary
  */
 export async function runPrintMode(args: PrintArgs): Promise<void> {
   const startTime = Date.now();

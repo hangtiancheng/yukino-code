@@ -89,7 +89,7 @@ function whyExcluded(d: FileDiff, options: SelectionOptions): ExcludeReason {
 }
 
 /**
- * The one deterministic pre-dispatch selection: user
+ * The one deterministic pre-dispatch selection: binary detection, user
  * excludes, the deletion rule, and the per-file diff-size ceiling. Pure —
  * no git, no LLM.
  */

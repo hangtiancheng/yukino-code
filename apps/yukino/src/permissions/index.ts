@@ -472,7 +472,7 @@ export class RuleEngine {
     this.projectPath = join(workDir, ".yukino", "permissions.yaml");
   }
 
-  // Read a single rules file; skips disk I/O and parsing on cache hit.
+  // Read a single rules file; skips re-reading and parsing on cache hit.
   private rulesFor(path: string): Rule[] {
     let st;
     try {
@@ -590,7 +590,7 @@ function modeDecide(
 export class PermissionChecker {
   mode: PermissionMode;
   planFilePath = "";
-  // Sandbox mode: when enabled, command-category tools run through OS sandbox isolation, with optional auto-allow
+  // Sandbox mode: when enabled, Bash commands run through OS sandbox isolation, with optional auto-allow
   sandboxEnabled = false;
   sandboxAutoAllow = false;
   private sandbox: PathSandbox;

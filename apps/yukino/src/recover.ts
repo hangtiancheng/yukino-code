@@ -158,7 +158,7 @@ export function recover(): void {
     });
   });
 
-  // Flush logs on exit.
+  // Flush logs and record the exit marker.
   process.on("exit", (code) => {
     closeLogger();
     recordExit(code);

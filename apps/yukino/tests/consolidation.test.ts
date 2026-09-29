@@ -183,7 +183,6 @@ describe("MemoryConsolidator", () => {
         "The user is a backend engineer who primarily works with Go and Java",
       );
 
-      // Write MEMORY.md
       writeFileSync(
         join(memDir, "MEMORY.md"),
         `- [No push](feedback_no_push.md) — Do not auto push
@@ -199,7 +198,6 @@ describe("MemoryConsolidator", () => {
         readFileSync(join(memDir, "MEMORY.md"), "utf-8"),
       );
 
-      // Build LLM client
       const { OpenAICompatClient } = await import("../src/llm/openai.js");
       const client = new OpenAICompatClient(
         {
@@ -230,7 +228,6 @@ describe("MemoryConsolidator", () => {
         readFileSync(join(memDir, "MEMORY.md"), "utf-8"),
       );
 
-      // Verify MEMORY.md was updated
       const indexContent = readFileSync(join(memDir, "MEMORY.md"), "utf-8");
       const indexLines = indexContent
         .split("\n")

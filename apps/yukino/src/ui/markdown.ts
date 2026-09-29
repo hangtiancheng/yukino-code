@@ -41,8 +41,8 @@ type MarkdownKind = "assistant" | "user" | "thinking";
  * renderer then prints the mailto target next to it, turning the remote into
  * `git@github.com (mailto:git@github.com):owner/repo.git`. Claiming the pattern
  * before marked's inline url rule sees it keeps such remotes verbatim; the
- * colon has to be followed by a path, so ordinary addresses such as
- * "foo@example.com: see the docs" still autolink.
+ * colon has to be followed by a non-space character, so ordinary addresses
+ * such as "foo@example.com: see the docs" still autolink.
  */
 const SCP_STYLE_REMOTE =
   /^[A-Za-z0-9._+-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+:(?=\S)/u;

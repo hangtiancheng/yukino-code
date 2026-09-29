@@ -113,7 +113,7 @@ function flushDestination(dest: unknown): void {
   }
 }
 
-// Only warnings and errors are recorded, by design.
+// Only warn level and above (warn, error, fatal) are recorded, by design.
 const LOG_LEVEL = "warn";
 
 /**
@@ -336,7 +336,7 @@ async function cleanExpiredLogs(workDir: string): Promise<number> {
 // (max 5 levels), preserves extra fields the same way, and normalizes
 // non-Error values to { message, value }.
 
-/** Serialized error shape: always has type/message/stack, optional cause + extras. */
+/** Serialized error shape: always has type/message; stack, cause, and extras are optional. */
 interface SerializedError {
   type: string;
   message: string;

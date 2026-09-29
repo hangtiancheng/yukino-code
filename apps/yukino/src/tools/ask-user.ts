@@ -78,8 +78,8 @@ export class AskUserQuestionTool implements Tool {
         questions: {
           type: "array" as const,
           description: "question",
-          minItems: 1, // Minimum questions count
-          maxItems: 4, // Maximum questions count
+          minItems: 1,
+          maxItems: 4,
           items: {
             type: "object" as const,
             properties: {
@@ -94,8 +94,8 @@ export class AskUserQuestionTool implements Tool {
               options: {
                 type: "array" as const,
                 description: "options",
-                minItems: 2, // Minimum options count
-                maxItems: 4, // Maximum options count
+                minItems: 2,
+                maxItems: 4,
                 items: {
                   type: "object" as const,
                   properties: {

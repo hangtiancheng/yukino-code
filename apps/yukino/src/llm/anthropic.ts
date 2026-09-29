@@ -506,7 +506,6 @@ export class AnthropicClient implements LLMClient {
                 arguments: args,
               };
 
-              // Reset
               currentToolName = "";
               currentToolId = "";
               jsonAccumulate = "";

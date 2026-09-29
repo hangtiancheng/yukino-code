@@ -20,9 +20,11 @@
  * SOFTWARE.
  */
 
-// MCP Transport over a WebSocket connection. The MCP SDK ships no WebSocket
-// client transport, and the VSCode extension's embedded MCP server only
-// speaks ws (subprotocol "mcp"), so we implement the Transport interface here.
+// MCP Transport over a WebSocket connection. The MCP SDK's WebSocket client
+// transport only accepts a URL and relies on the global WebSocket, so it
+// cannot attach the auth header that the VSCode extension's embedded MCP
+// server (ws, subprotocol "mcp") may require; hence we implement the
+// Transport interface here on top of the `ws` package.
 
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {

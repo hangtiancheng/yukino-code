@@ -319,7 +319,6 @@ export class OpenAIClient implements LLMClient {
               arguments: args,
             };
 
-            // Reset
             currentToolName = "";
             currentToolId = "";
             jsonAccumulate = "";
@@ -995,7 +994,7 @@ export class OpenAICompatClient implements LLMClient {
 
       // Map Chat Completions finish_reason to Yukino's internal stop reason.
       // "length" means the model hit max_tokens
-      // "tool_calls" means tool use;
+      // "tool_calls" — or any accumulated tool call — means tool use;
       // "stop" (or anything else) means normal end_turn
 
       let stopReason: string;

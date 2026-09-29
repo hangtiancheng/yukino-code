@@ -208,7 +208,6 @@ export class ToolRegistry {
   }
 
   findDeferredByNames(names: string[]): Tool[] {
-    // Case-insensitive name matching
     const lowerMap = new Map<string, Tool>();
     for (const [name, tool] of this.tools) {
       lowerMap.set(name.toLowerCase(), tool);
