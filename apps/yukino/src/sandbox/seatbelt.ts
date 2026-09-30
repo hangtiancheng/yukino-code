@@ -77,15 +77,11 @@ function buildProfile(config: SandboxConfig): string {
   lines.push("(version 1)");
   lines.push("(deny default)");
 
-  // Allow process execution and forking
   lines.push("(allow process-exec)");
   lines.push("(allow process-fork)");
-  // Allow reading system control parameters
   lines.push("(allow sysctl-read)");
-  // Allow reading the entire filesystem
   lines.push('(allow file-read* (subpath "/"))');
 
-  // Grant write access for allowed paths
   for (const path of config.allowWrite) {
     for (const variant of pathVariants(path)) {
       lines.push(`(allow file-write* (subpath "${variant}"))`);
@@ -101,7 +97,6 @@ function buildProfile(config: SandboxConfig): string {
     }
   }
 
-  // Network access control
   if (config.networkEnabled) {
     lines.push("(allow network*)");
   } else {

@@ -24,10 +24,10 @@ import type { CodeReviewStartPayload } from "@fe/types";
 
 /**
  * Browser port of the terminal CodeReviewFormSchema (src/code-review/form.ts):
- * same field rules, without pulling zod into the browser bundle. Unlike the
- * terminal transform, empty fields become `undefined` instead of `""`; the
- * server normalizes both. The server re-validates refs on receipt
- * (validateReviewInput + newline check).
+ * same field rules, implemented without zod. Unlike the terminal transform,
+ * empty fields become `undefined` instead of `""`; the server normalizes
+ * both. The server re-validates refs on receipt (validateReviewInput +
+ * newline check).
  */
 
 export type CodeReviewField = "focus" | "from" | "to" | "commit" | "exclude";

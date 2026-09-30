@@ -38,7 +38,6 @@ When the plan is ready, call ExitPlanMode for approval. End with AskUserQuestion
 // Sparse Plan Mode reminder text used on intermediate iterations.
 const planModeSparseReminder = `Plan mode still active. Read-only except plan file (%PLAN_PATH%). Keep Context, Approach, files, and Verification current. Use AskUserQuestion for clarification; call ExitPlanMode for approval, never prose or AskUserQuestion. Do not implement before the runtime approval gate allows it.`;
 
-// Prompt for exiting Plan Mode
 const planModeExitTemplate = `## Exited Plan Mode
 
 Plan mode has ended. Proceed within the approved scope and current permissions.%EXTRA%`;

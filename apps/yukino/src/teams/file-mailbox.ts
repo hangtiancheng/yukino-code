@@ -92,7 +92,7 @@ export class FileMailbox {
       return data;
     } catch (err) {
       log.error({ err }, "teams operation failed");
-      // Treat a corrupted file as an empty mailbox — one bad record should not block the entire teammate
+      // Treat a corrupted file as an empty mailbox rather than blocking the teammate
       return [];
     }
   }
@@ -153,7 +153,6 @@ export class FileMailbox {
     return Promise.resolve();
   }
 
-  // Reads unread messages and marks them as read in place (read-modify-write on the full array).
   receiveSync(): FileMailMessage[] {
     return withFileSyncLock(this.filePath, () => {
       const messages = this.readAll();
@@ -190,7 +189,6 @@ export class FileMailbox {
     });
   }
 
-  // Counts unread messages without consuming them.
   unreadCount(): number {
     return withFileSyncLock(
       this.filePath,
@@ -198,7 +196,6 @@ export class FileMailbox {
     );
   }
 
-  // Marks all messages in the mailbox as read without returning their content.
   markAllRead(): void {
     withFileSyncLock(this.filePath, () => {
       const messages = this.readAll();

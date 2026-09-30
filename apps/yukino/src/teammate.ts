@@ -378,7 +378,6 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
       }
     }
 
-    // Notify the leader that this teammate finished its initial task.
     await notifyIdle();
 
     // Poll the mailbox for follow-up messages. A hand-rolled loop instead of
@@ -388,7 +387,6 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
     polling: while (true) {
       const batch = await mailbox.receive();
       for (const [i, msg] of batch.entries()) {
-        // Graceful shutdown: stop polling and exit when the leader requests it.
         if (isShutdownRequest(msg)) {
           console.log(`Shutdown requested, ${args.memberName} exiting.`);
           break polling;

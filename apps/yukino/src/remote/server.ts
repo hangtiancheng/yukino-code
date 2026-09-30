@@ -362,7 +362,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
   private memoryConsolidator: MemoryConsolidator | null = null;
 
   private abortController: AbortController | null = null;
-  /** The agent of the current run, if any; used for mid-run steering. */
+  /** Agent of the current or most recent run; used for mid-run steering and post-run leftover draining. */
   private currentAgent: Agent | null = null;
 
   constructor(
@@ -1023,7 +1023,6 @@ export class RemoteServer {
   /** Whether a plan approval request is awaiting a client response. */
   private planApprovalPending = false;
 
-  // Pending permission/ask-user requests waiting for WS client responses
   private pendingPermissions = new Map<
     string,
     (response: "allow" | "deny" | "allowAlways") => void
@@ -1054,7 +1053,6 @@ export class RemoteServer {
       await next();
     });
 
-    // Static file serving for fe/dist/
     this.app.use((ctx) => {
       const filePath = ctx.path === "/" ? "/index.html" : ctx.path;
       const result = serveStatic(filePath);
@@ -1932,7 +1930,6 @@ export class RemoteServer {
     }
 
     if (args) {
-      // With arguments: send to agent loop
       this.streaming = true;
       this.exitPlanSucceeded = false;
       this.runCanceled = false;
@@ -2316,7 +2313,6 @@ export class RemoteServer {
     const replay = restoreRemoteSession(handle, targetId, saved);
     touchSession(workDir, targetId);
 
-    // Clear UI and replay messages
     this.broadcast({ type: "clear", data: null });
     for (const msg of replay) {
       // Messages carrying only tool results have no text content; skip pushing them to the frontend

@@ -71,7 +71,6 @@ export function createProgress(): AgentProgress {
   };
 }
 
-// Bumps the tool-use count and appends to the activity log.
 export function recordToolUse(
   p: AgentProgress,
   toolName: string,
@@ -127,7 +126,6 @@ export function recordTokens(
   p.tokenCount += inputTokens + outputTokens;
 }
 
-// Generate human-readable description for a tool use
 function describeToolActivity(
   toolName: string,
   input: Record<string, unknown>,
@@ -155,7 +153,7 @@ function describeToolActivity(
   }
 }
 
-// Summarize recent activities for display
+// Returns only the most recent activity's description for display.
 export function summarizeActivities(activities: ToolActivity[]): string {
   if (!activities.length) {
     return "";

@@ -133,7 +133,6 @@ export class SharedTaskStore {
     renameSync(tmpPath, this.path);
   }
 
-  /** Creates a shared task and returns the newly created entry. */
   create(
     title: string,
     description = "",
@@ -169,7 +168,6 @@ export class SharedTaskStore {
     return this.tasks.find((t) => t.id === id);
   }
 
-  /** Lists tasks, optionally filtered by status and/or assignee. */
   listTasks(status?: string, assignee?: string): SharedTask[] {
     this.load();
     return this.tasks.filter((t) => {

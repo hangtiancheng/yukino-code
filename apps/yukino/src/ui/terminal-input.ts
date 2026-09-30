@@ -102,8 +102,10 @@ export class TerminalInput extends Transform {
     if (output) {
       this.push(output);
     }
-    // A literal Escape must still reach Ink. Once a report has started, retain
-    // it across the theme timeout, including an ST terminator split at ESC / \.
+    // A literal Escape must still reach Ink: pending bytes are flushed after
+    // this timeout unless a paste is in progress or the buffer already starts
+    // with a full report prefix (retained until complete, even an ST
+    // terminator split at ESC / \).
     if (
       this.pending &&
       !this.pasting &&

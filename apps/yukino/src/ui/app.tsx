@@ -1791,7 +1791,6 @@ export function App({
           // rebuilds the conversation from it, so stale in-memory message
           // indexes from the previous process are never trusted.
           fileHistoryRef.current = new FileHistory(workDir, arg);
-          // Rebuild the visible transcript from the restored records.
           const resumedMessages = transcriptFromRestored(restored);
           resumedMessages.push({
             role: "system",

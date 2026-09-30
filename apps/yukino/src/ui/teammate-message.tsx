@@ -42,7 +42,6 @@ interface TeammateMessageExpose {
 // so this pattern no longer matches its output.
 const TEAM_MSG_RE = /^\[team\s+\S+\]\s+(\S+):\s+(.*)$/s;
 
-// Prefixes that indicate special message types.
 const IDLE_RE = /^\[idle\]\s*/;
 const SHUTDOWN_RE = /^\[shutdown\]\s*/;
 

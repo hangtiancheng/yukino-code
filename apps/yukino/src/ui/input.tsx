@@ -550,7 +550,7 @@ export function InputBox(props: InputBoxProps) {
   );
 
   const handleInput = (input: string, key: Key) => {
-    // Ink can deliver another key before React commits the preceding paste.
+    // Ink can deliver another key before React commits the preceding edit.
     const { lines, cursorLine, cursorCol, historyIndex, historyDraft, pastes } =
       getDraft();
     const isMultiline = lines.length > 1;

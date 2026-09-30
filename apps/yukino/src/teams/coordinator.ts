@@ -49,7 +49,6 @@ const COORDINATOR_ALLOWED_TOOLS = new Set([
   "TeamDelete",
 ]);
 
-/** Check if a tool is allowed in Coordinator Mode. */
 export function isCoordinatorTool(name: string): boolean {
   return COORDINATOR_ALLOWED_TOOLS.has(name);
 }

@@ -230,7 +230,6 @@ export class Team {
     this.persist();
   }
 
-  /** Exports the current state into a persistable structure. */
   snapshot(): TeamFile {
     return {
       name: this.name,
@@ -360,7 +359,6 @@ export class Team {
       cwd: this.workDir,
     };
 
-    // Launch the external process and record the cancel handle (used to stop it) and paneId (persisted so cancellation survives a leader restart) on the member
     const { cancel, paneId } = spawnTeammateProcess(config);
     member.cancel = cancel;
     member.paneId = paneId;
@@ -556,7 +554,6 @@ export class Team {
         return { prompt: "", shutdown };
       }
 
-      // Concatenate all messages as the user prompt for the next turn
       const prompt = msgs.map((m) => `From ${m.from}: ${m.text}`).join("\n\n");
       return { prompt: `You have new messages from your team:\n\n${prompt}` };
     }
@@ -838,7 +835,6 @@ export class TeamManager {
     const key = this.teamKey(name);
     const team = this.teams.get(key);
     if (team) {
-      // Unregister this team's members from the global name registry
       const registry = getNameRegistry();
       for (const member of team.listMembers()) {
         registry.unregister(member.name);

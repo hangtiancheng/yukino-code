@@ -125,7 +125,6 @@ export class EditFileTool implements Tool {
       if (ctx.abortSignal?.aborted) {
         return { output: "Error: operation interrupted", isError: true };
       }
-      // Gate: read-before-edit enforcement.
       if (ctx.fileStateCache) {
         const gate = ctx.fileStateCache.check(filePath);
         if (!gate.ok) {

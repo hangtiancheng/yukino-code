@@ -296,7 +296,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         coordinatorActive(cfg.enable_coordinator_mode ?? false),
     });
 
-    // Statistics
     let resultText = "";
     let numTurns = 0;
     const toolCalls: { tool: string; elapsed: number }[] = [];

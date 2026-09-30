@@ -200,7 +200,6 @@ describe("teams orchestration", () => {
     expect(
       drained.some((d) => d.includes("scout") && d.includes("[idle]")),
     ).toBe(true);
-    // Drained messages are consumed.
     expect(mgr.hasLeaderNotifications()).toBe(false);
     expect(mgr.drainLeaderMailbox()).toEqual([]);
   });

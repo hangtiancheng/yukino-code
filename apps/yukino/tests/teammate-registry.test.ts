@@ -72,8 +72,6 @@ describe("teammate worker tool registry", () => {
     });
     const names = new Set(registry.listTools().map((t) => t.name));
 
-    // Core file/command tools, general utilities, and inter-teammate
-    // collaboration tools (messaging and shared task board)
     for (const name of [
       "ReadFile",
       "WriteFile",

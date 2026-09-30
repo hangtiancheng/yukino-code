@@ -38,8 +38,8 @@ const log = createChildLogger({ module: "mcp" });
 export const MCP_TOOL_PREFIX = "mcp__";
 /**
  * Separator between the server segment and the tool segment in a tool name. A double
- * underscore keeps the boundary reversible — server names and tool names may themselves
- * contain single underscores.
+ * underscore marks the boundary — server names and tool names may themselves contain
+ * single underscores.
  */
 export const MCP_NAME_SEP = "__";
 

@@ -27,7 +27,6 @@
 export class NameRegistry {
   private names = new Map<string, string>();
 
-  /** Registers a name -> agentId mapping. */
   register(name: string, agentId: string): void {
     this.names.set(name, agentId);
   }
@@ -49,7 +48,6 @@ export class NameRegistry {
     return undefined;
   }
 
-  /** Removes a name mapping. */
   unregister(name: string): void {
     this.names.delete(name);
   }
@@ -62,7 +60,6 @@ export class NameRegistry {
 
 let instance: NameRegistry | undefined;
 
-/** Returns the global singleton registry. */
 export function getNameRegistry(): NameRegistry {
   instance ??= new NameRegistry();
   return instance;

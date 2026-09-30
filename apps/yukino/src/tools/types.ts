@@ -340,12 +340,12 @@ export interface Tool {
 
 export const SKIP_DIRS = new Set([
   ".agents",
-  ".git", // Git
-  ".yukino", // Yukino
-  ".next", // Next.js
-  ".venv", // Python venv
-  ".mypy_cache", // Python mypy
-  "__pycache__", // Python
-  "dist", // Webpack, Vite
-  "node_modules", // Node.js
+  ".git",
+  ".yukino",
+  ".next",
+  ".venv",
+  ".mypy_cache",
+  "__pycache__",
+  "dist",
+  "node_modules",
 ]);

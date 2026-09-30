@@ -285,7 +285,7 @@ describe("provider login", () => {
     persistDefaultProvider(2);
     expect(loadConfig(path).default_provider).toBe(2);
     expect(readFileSync(path, "utf-8")).toContain("default_provider: 2");
-    // Persisting the same index is a no-op (no needless rewrite).
+    // Persisting the same index again keeps the stored value intact.
     persistDefaultProvider(2);
     expect(loadConfig(path).default_provider).toBe(2);
   });

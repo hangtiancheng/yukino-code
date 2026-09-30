@@ -63,13 +63,9 @@ import {
 const log = createChildLogger({ module: "llm" });
 
 enum OpenAIErrorCode {
-  /** 413 Payload Too Large — The request entity is larger than the server is willing or able to process. */
   PromptTooLong = 413,
-  /** 401 Unauthorized — The request lacks valid authentication credentials. */
   InvalidAPIKey = 401,
-  /** 429 Too Many Requests — The client has sent too many requests in a given amount of time, triggering rate limiting. */
   RateLimitError = 429,
-  /** 400 Bad Request — The request was invalid or malformed. */
   BadRequest = 400,
 }
 

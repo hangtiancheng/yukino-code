@@ -319,7 +319,6 @@ export class SendMessageTool implements Tool {
       await target.send(this.senderName, structured.text, structured);
       return { output: `${msgType} sent to '${to}'.`, isError: false };
     }
-    // Broadcast: send to all members in the team except the sender
     if (to === "*") {
       let count = 0;
       for (const member of t.listMembers()) {
@@ -343,7 +342,6 @@ export class SendMessageTool implements Tool {
       return { output: `Message sent to '${to}'.`, isError: false };
     }
 
-    // Resolve the recipient name to a delivery identifier via the global name registry; fall back to the original name if unresolved
     const recipient = getNameRegistry().resolve(to) ?? to;
     try {
       await t.sendMessage(this.senderName, recipient, message);

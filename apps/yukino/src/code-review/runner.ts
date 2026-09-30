@@ -548,10 +548,10 @@ async function runGroupAgent(
         for (const cm of comments) {
           const d = deps.diffByPath.get(cm.path);
           let located = d ? resolveComment(cm, d) : false;
-          // Cross-file search precedes the LLM step: a successful
-          // re-location overwrites existing_code and marks the comment
-          // located in the file it was filed against, short-circuiting the
-          // deterministic cross-file probe.
+          // Cross-file search precedes the LLM step: relocateWithLlm
+          // overwrites existing_code (the evidence the filter judges
+          // later), so the deterministic cross-file probe gets first
+          // chance to locate the comment without that side effect.
           if (!located) {
             located = relocateAcrossFiles(cm, deps.allDiffs()) !== null;
           }

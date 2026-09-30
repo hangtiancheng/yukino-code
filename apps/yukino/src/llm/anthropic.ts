@@ -140,9 +140,7 @@ enum AnthropicErrorCode {
    * 400 invalid_request_error, not 413.
    */
   PromptTooLong = 413,
-  /** 401 Unauthorized — The request lacks valid authentication credentials. */
   InvalidAPIKey = 401,
-  /** 429 Too Many Requests — The client has sent too many requests in a given amount of time, triggering rate limiting. */
   RateLimitError = 429,
   /** 400 Bad Request — invalid_request_error; carries "prompt is too long: N tokens > M maximum" on context overflow. */
   BadRequest = 400,

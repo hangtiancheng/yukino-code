@@ -62,8 +62,8 @@ const estChars = (chars: number) => Math.ceil(chars / 3.5);
 describe("currentContextTokens (real-usage anchoring)", () => {
   it("falls back to whole-transcript char estimation when there is no anchor (cold start)", () => {
     const conversation = new ConversationManager();
-    conversation.addUserMessage("a".repeat(35)); // 35 chars
-    conversation.addAssistantMessage("b".repeat(35)); // 35 chars
+    conversation.addUserMessage("a".repeat(35));
+    conversation.addAssistantMessage("b".repeat(35));
 
     // No anchor → identical to estimating the whole transcript.
     const got = currentContextTokens(conversation, undefined);

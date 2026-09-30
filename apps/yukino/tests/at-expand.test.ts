@@ -124,7 +124,6 @@ describe("@image mention expansion (expandAtRefsWithImages)", () => {
       '<image type="base64" media_type="image/jpeg" path="shot.png" />',
     );
     expect(text).toContain('<file path="notes.md">');
-    // Followed by the image block.
     const image = out.find((b) => b.type === "image");
     expect(image).toBeDefined();
     const source = image?.source;

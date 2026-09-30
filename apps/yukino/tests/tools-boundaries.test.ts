@@ -57,7 +57,6 @@ function makeContext(): ToolContext {
   };
 }
 
-/** All shell output files currently on disk under a tool workDir. */
 function shellOutputFiles(root: string): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {

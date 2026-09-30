@@ -452,7 +452,6 @@ export class BashTool implements Tool {
 
       let timedOut = false;
       const timeoutTimer = setTimeout(() => {
-        // Auto-background on timeout when allowed; otherwise hard-kill.
         if (autoBackgroundAllowed && backgroundExecution("timeout") !== null) {
           return;
         }

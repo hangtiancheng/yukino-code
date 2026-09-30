@@ -55,10 +55,8 @@ export class BwrapSandbox implements Sandbox {
     // sandboxed process group must not outlive the session as an orphan.
     args.push("--die-with-parent");
 
-    // Mount the root filesystem as read-only
     args.push("--ro-bind", "/", "/");
 
-    // Grant write access via writable bind mounts for allowed paths
     for (const path of config.allowWrite) {
       args.push("--bind", path, path);
     }
