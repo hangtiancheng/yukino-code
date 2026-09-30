@@ -2,7 +2,6 @@
 
 Yukino (apps/yukino) is a terminal-based AI coding agent.
 
-- NEVER manually add MIT license headers to any file.
 - Fix all ESLint errors. Ignore all ESLint warnings.
 - Use `pnpm lint:fix` to automatically correct lint errors. This command is idempotent and non-destructive.
 - ZERO backward compatibility. Breaking changes are expected, acceptable, and preferred over legacy support.

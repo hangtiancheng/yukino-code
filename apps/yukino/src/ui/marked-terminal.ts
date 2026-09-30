@@ -12,6 +12,7 @@ import * as emoji from "node-emoji";
 import stringWidth from "string-width";
 import supportsHyperlinks from "supports-hyperlinks";
 
+import { THEME } from "./styles.js";
 import { highlightCode } from "./syntax-highlight.js";
 import { fitTableToWidth, renderTable } from "./table-layout.js";
 
@@ -77,32 +78,38 @@ function asTabNumber(tab: number | string) {
   return asTabNumber(tabN);
 }
 
-const defaultOptions: TerminalRendererOptions = {
-  code: chalk.yellow,
-  blockquote: chalk.gray.italic,
-  html: chalk.gray,
-  heading: chalk.green.bold,
-  firstHeading: chalk.magenta.underline.bold,
-  hr: chalk.reset,
-  listitem: chalk.reset,
-  list: list,
-  table: chalk.reset,
-  paragraph: chalk.reset,
-  strong: chalk.bold,
-  em: chalk.italic,
-  codespan: chalk.yellow,
-  del: chalk.dim.gray.strikethrough,
-  link: chalk.blue,
-  href: chalk.blue.underline,
-  text: identity,
-  unescape: true,
-  emoji: true,
-  width: 80,
-  showSectionPrefix: true,
-  reflowText: false,
-  tab: 4,
-  sanitize: false,
-};
+const DEFAULT_TAB = 4;
+
+// Built per renderer so a theme swap via setThemeMode is picked up; the chalk
+// colors are resolved from THEME instead of hardcoded ANSI names.
+function buildDefaultOptions(): TerminalRendererOptions {
+  return {
+    code: chalk.hex(THEME.mdCodeBlock),
+    blockquote: chalk.italic.hex(THEME.mdQuote),
+    html: chalk.hex(THEME.muted),
+    heading: chalk.bold.hex(THEME.mdHeading),
+    firstHeading: chalk.bold.underline.hex(THEME.mdHeading),
+    hr: chalk.reset,
+    listitem: chalk.reset,
+    list: list,
+    table: chalk.reset,
+    paragraph: chalk.reset,
+    strong: chalk.bold,
+    em: chalk.italic,
+    codespan: chalk.hex(THEME.mdCode),
+    del: chalk.strikethrough.hex(THEME.dim),
+    link: chalk.hex(THEME.mdLink),
+    href: chalk.underline.hex(THEME.mdLinkUrl),
+    text: identity,
+    unescape: true,
+    emoji: true,
+    width: 80,
+    showSectionPrefix: true,
+    reflowText: false,
+    tab: DEFAULT_TAB,
+    sanitize: false,
+  };
+}
 
 class Renderer {
   private readonly config: TerminalRendererOptions;
@@ -115,8 +122,8 @@ class Renderer {
   markedOptions: MarkedOptions | undefined;
 
   constructor(options?: Partial<TerminalRendererOptions>) {
-    this.config = { ...defaultOptions, ...options };
-    this.tabStr = sanitizeTab(this.config.tab, asTabNumber(defaultOptions.tab));
+    this.config = { ...buildDefaultOptions(), ...options };
+    this.tabStr = sanitizeTab(this.config.tab, asTabNumber(DEFAULT_TAB));
     this.emojiFn = this.config.emoji ? insertEmojis : identity;
     this.unescapeFn = this.config.unescape ? unescapeEntities : identity;
     this.transform = compose(undoColon, this.unescapeFn, this.emojiFn);

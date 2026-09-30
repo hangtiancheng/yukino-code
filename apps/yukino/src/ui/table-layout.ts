@@ -1,5 +1,6 @@
 import chalk from "chalk";
 
+import { THEME } from "./styles.js";
 import {
   truncateToWidth,
   visibleWidth,
@@ -116,7 +117,7 @@ export function renderTable(rows: string[][], columnWidths?: number[]): string {
   );
 
   const border = (left: string, mid: string, right: string): string =>
-    chalk.grey(
+    chalk.hex(THEME.muted)(
       left + widths.map((width) => "─".repeat(width)).join(mid) + right,
     );
 
@@ -135,9 +136,9 @@ export function renderTable(rows: string[][], columnWidths?: number[]): string {
           truncateToWidth(cell[line] ?? "", contentWidths[column]),
           contentWidths[column],
         );
-        return rowIndex === 0 ? chalk.red(content) : content;
+        return rowIndex === 0 ? chalk.hex(THEME.mdHeading)(content) : content;
       });
-      const vertical = chalk.grey("│");
+      const vertical = chalk.hex(THEME.muted)("│");
       lines.push(vertical + parts.join(vertical) + vertical);
     }
   });
