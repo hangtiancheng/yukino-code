@@ -12,8 +12,8 @@
   "dependencies": {
     "@yukino.js/lit-jsx": "latest",
     "lit": "^3.3.3",
-    "lucide-static": "^1.48.0",
-    "motion": "^13.4.4"
+    "lucide-static": "^1.49.0",
+    "motion": "^13.4.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

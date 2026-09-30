@@ -33,7 +33,6 @@ export function useAutoScroll<T extends HTMLElement>(dep: unknown) {
   const ref = useRef<T | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `dep` (the items array) intentionally triggers a re-scroll even though the effect body only reads DOM properties.
   useEffect(() => {
     const el = ref.current;
     if (!el || !autoScroll) {

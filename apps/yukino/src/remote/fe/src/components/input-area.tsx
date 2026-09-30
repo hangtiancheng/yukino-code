@@ -77,7 +77,6 @@ export function InputArea({
   }, [filtered]);
 
   // Auto-grow the textarea up to MAX_TEXTAREA_HEIGHT.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — when it changes we re-measure scrollHeight.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) {
