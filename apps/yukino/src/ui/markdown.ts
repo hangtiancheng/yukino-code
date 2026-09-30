@@ -21,7 +21,6 @@
  */
 
 import chalk from "chalk";
-import { supportsLanguage } from "cli-highlight";
 import { Marked } from "marked";
 import type { TokenizerExtension } from "marked";
 
@@ -29,6 +28,7 @@ import { visibleWidth, wrapToLines } from "./terminal-text.js";
 
 import { markedTerminal } from "@/ui/marked-terminal.js";
 import { THEME } from "@/ui/styles.js";
+import { isLanguageSupported } from "@/ui/syntax-highlight.js";
 
 chalk.level = 3;
 
@@ -67,61 +67,37 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
       : kind === "user"
         ? THEME.userMessageText
         : THEME.text;
-  const terminal = markedTerminal(
-    {
-      blockquote: (value) =>
-        value
-          .trimEnd()
-          .split("\n")
-          .map(
-            (line) =>
-              `${chalk.hex(THEME.mdQuoteBorder)("│")} ${chalk.italic.hex(THEME.mdQuote)(line.trimStart())}`,
-          )
-          .join("\n"),
-      code: chalk.hex(THEME.mdCodeBlock),
-      codespan: chalk.hex(THEME.mdCode),
-      del: chalk.strikethrough.hex(THEME.dim),
-      em: chalk.italic,
-      firstHeading: chalk.bold.underline.hex(THEME.mdHeading),
-      heading: chalk.bold.hex(THEME.mdHeading),
-      hr: chalk.hex(THEME.mdHr),
-      href: chalk.underline.hex(THEME.mdLinkUrl),
-      link: chalk.hex(THEME.mdLink),
-      listitem: chalk.hex(textColor),
-      paragraph: chalk.hex(textColor),
-      reflowText: true,
-      sanitize: true,
-      emoji: false,
-      showSectionPrefix: false,
-      strong: chalk.bold,
-      tab: 2,
-      table: chalk.hex(textColor),
-      text: chalk.hex(textColor),
-      width,
-    },
-    {
-      language: "plaintext",
-      theme: {
-        addition: chalk.hex(THEME.toolDiffAdded),
-        attr: chalk.hex(THEME.syntaxVariable),
-        built_in: chalk.hex(THEME.syntaxType),
-        class: chalk.hex(THEME.syntaxType),
-        comment: chalk.hex(THEME.syntaxComment),
-        default: chalk.hex(THEME.syntaxOperator),
-        deletion: chalk.hex(THEME.toolDiffRemoved),
-        function: chalk.hex(THEME.syntaxFunction),
-        keyword: chalk.hex(THEME.syntaxKeyword),
-        literal: chalk.hex(THEME.syntaxNumber),
-        name: chalk.hex(THEME.syntaxFunction),
-        number: chalk.hex(THEME.syntaxNumber),
-        params: chalk.hex(THEME.syntaxVariable),
-        string: chalk.hex(THEME.syntaxString),
-        title: chalk.hex(THEME.syntaxFunction),
-        type: chalk.hex(THEME.syntaxType),
-        variable: chalk.hex(THEME.syntaxVariable),
-      },
-    },
-  );
+  const terminal = markedTerminal({
+    blockquote: (value) =>
+      value
+        .trimEnd()
+        .split("\n")
+        .map(
+          (line) =>
+            `${chalk.hex(THEME.mdQuoteBorder)("│")} ${chalk.italic.hex(THEME.mdQuote)(line.trimStart())}`,
+        )
+        .join("\n"),
+    code: chalk.hex(THEME.mdCodeBlock),
+    codespan: chalk.hex(THEME.mdCode),
+    del: chalk.strikethrough.hex(THEME.dim),
+    em: chalk.italic,
+    firstHeading: chalk.bold.underline.hex(THEME.mdHeading),
+    heading: chalk.bold.hex(THEME.mdHeading),
+    hr: chalk.hex(THEME.mdHr),
+    href: chalk.underline.hex(THEME.mdLinkUrl),
+    link: chalk.hex(THEME.mdLink),
+    listitem: chalk.hex(textColor),
+    paragraph: chalk.hex(textColor),
+    reflowText: true,
+    sanitize: true,
+    emoji: false,
+    showSectionPrefix: false,
+    strong: chalk.bold,
+    tab: 2,
+    table: chalk.hex(textColor),
+    text: chalk.hex(textColor),
+    width,
+  });
   const markdown = new Marked({ breaks: false, gfm: true });
   markdown.use(terminal);
   markdown.use({ extensions: [scpStyleRemote] });
@@ -148,7 +124,7 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
           .split("\n")
           .map((line) => "  " + chalk.hex(THEME.mdCodeBlock)(line))
           .join("\n");
-        if (language && supportsLanguage(language)) {
+        if (language && isLanguageSupported(language)) {
           const highlighted = terminal.renderer?.code?.call(this, {
             ...token,
             lang: language,

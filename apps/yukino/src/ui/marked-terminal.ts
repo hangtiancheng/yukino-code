@@ -23,9 +23,6 @@
 import ansiEscapes from "ansi-escapes";
 import ansiRegex from "ansi-regex";
 import chalk from "chalk";
-import { highlight as highlightCli } from "cli-highlight";
-import type { HighlightOptions } from "cli-highlight";
-import Table from "cli-table3";
 import type {
   MarkedExtension,
   MarkedOptions,
@@ -37,11 +34,10 @@ import * as emoji from "node-emoji";
 import stringWidth from "string-width";
 import supportsHyperlinks from "supports-hyperlinks";
 
-import { fitTableToWidth } from "./table-layout.js";
+import { highlightCode } from "./syntax-highlight.js";
+import { fitTableToWidth, renderTable } from "./table-layout.js";
 
 type StyleFn = (...text: string[]) => string;
-
-type TableCtorOptions = Table.TableConstructorOptions;
 
 export interface TerminalRendererOptions {
   code: StyleFn;
@@ -68,7 +64,6 @@ export interface TerminalRendererOptions {
   showSectionPrefix: boolean;
   reflowText: boolean;
   tab: number | string;
-  tableOptions: TableCtorOptions;
   sanitize: boolean;
 }
 
@@ -128,32 +123,24 @@ const defaultOptions: TerminalRendererOptions = {
   showSectionPrefix: true,
   reflowText: false,
   tab: 4,
-  tableOptions: {},
   sanitize: false,
 };
 
 class Renderer {
   private readonly config: TerminalRendererOptions;
   private readonly tabStr: string;
-  private readonly tableSettings: TableCtorOptions;
   private readonly emojiFn: StyleFn;
   private readonly unescapeFn: StyleFn;
-  private readonly highlightOptions: HighlightOptions;
   private readonly transform: StyleFn;
 
   private parser: Parser | undefined;
   markedOptions: MarkedOptions | undefined;
 
-  constructor(
-    options?: Partial<TerminalRendererOptions>,
-    highlightOptions?: HighlightOptions,
-  ) {
+  constructor(options?: Partial<TerminalRendererOptions>) {
     this.config = { ...defaultOptions, ...options };
     this.tabStr = sanitizeTab(this.config.tab, asTabNumber(defaultOptions.tab));
-    this.tableSettings = this.config.tableOptions;
     this.emojiFn = this.config.emoji ? insertEmojis : identity;
     this.unescapeFn = this.config.unescape ? unescapeEntities : identity;
-    this.highlightOptions = highlightOptions ?? {};
     this.transform = compose(undoColon, this.unescapeFn, this.emojiFn);
   }
 
@@ -207,10 +194,7 @@ class Renderer {
 
   code(token: Tokens.Code): string {
     return section(
-      identify(
-        this.tabStr,
-        highlight(token.text, token.lang, this.config, this.highlightOptions),
-      ),
+      identify(this.tabStr, highlight(token.text, token.lang, this.config)),
     );
   }
 
@@ -339,27 +323,19 @@ class Renderer {
       ),
     );
 
-    // cli-table3 sizes its columns to the unwrapped cells, so a table with wide
-    // cells overflows the terminal. Wrap the cells into the configured width
-    // first, unless the caller pinned the columns itself.
-    const fitted =
-      this.tableSettings.colWidths && this.tableSettings.colWidths.length > 0
-        ? undefined
-        : fitTableToWidth(rows, token.header.length, this.config.width);
+    // Columns are sized to the unwrapped cells, so a table with wide cells
+    // overflows the terminal. Wrap the cells into the configured width first.
+    const fitted = fitTableToWidth(
+      rows,
+      token.header.length,
+      this.config.width,
+    );
 
-    const table = new Table({
-      ...this.tableSettings,
-      head: (fitted?.rows ?? rows)[0],
-      // The fitted cells arrive pre-wrapped, so cli-table3 must not wrap them
-      // again: it breaks long words and wide characters past the column width.
-      ...(fitted ? { colWidths: fitted.columnWidths, wordWrap: false } : {}),
-    });
-
-    for (const row of (fitted?.rows ?? rows).slice(1)) {
-      table.push(row);
-    }
-
-    return section(this.config.table(table.toString()));
+    return section(
+      this.config.table(
+        renderTable(fitted?.rows ?? rows, fitted?.columnWidths),
+      ),
+    );
   }
 
   strong(token: Tokens.Strong): string {
@@ -455,9 +431,8 @@ export default Renderer;
 
 export function markedTerminal(
   options?: Partial<TerminalRendererOptions>,
-  highlightOptions?: HighlightOptions,
 ): MarkedExtension {
-  const r = new Renderer(options, highlightOptions);
+  const r = new Renderer(options);
 
   const renderer: RendererObject = {
     space() {
@@ -742,24 +717,13 @@ function highlight(
   code: string,
   language: string | undefined,
   opts: TerminalRendererOptions,
-  highlightOpts: HighlightOptions,
 ): string {
   if (chalk.level === 0) {
     return code;
   }
 
-  const style = opts.code;
   code = fixHardReturn(code, opts.reflowText);
-
-  try {
-    const cliOpts: HighlightOptions = { ...highlightOpts };
-    if (language !== undefined) {
-      cliOpts.language = language;
-    }
-    return highlightCli(code, cliOpts);
-  } catch {
-    return style(code);
-  }
+  return highlightCode(code, language) ?? opts.code(code);
 }
 
 function insertEmojis(text: string): string {
