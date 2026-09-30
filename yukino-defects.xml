@@ -1,51 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Defect scan of the apps/yukino project (Yukino terminal AI coding agent).
-  Generated 2026-09-29 by a full-project comment/documentation audit.
-
-  Pass 2 (2026-09-30, this pass): after five code commits landed since the
-  first audit (22-line license-header removal from every file, deletion of
-  src/sandbox/sandbox-runtime.ts and the @anthropic-ai/sandbox-runtime
-  backend, the shiki highlighting switch + cli-table3 removal, a dependency
-  bump + biome removal, and the pi color scheme), twelve coordinated scope
-  audits re-read every file under src/, tests/, and the root docs/configs,
-  re-verified every recorded defect against the current code, re-anchored all
-  line numbers (recorded numbers were stale by the header removal), resolved
-  all 14 uncertain entries, fixed stale/redundant comments again, and added
-  new findings. README.md and AGENTS.md were re-audited line-by-line against
-  the code and required no changes.
-
-  Each <defect> carries:
-    category  - defect class (kebab-case)
-    severity  - critical | high | medium | low
-    uncertain - "true" when the finding depends on unverifiable assumptions or
-                may be an accepted design decision; "false" when confirmed
-    fixed     - "false" for every retained entry: documentation/comment
-                defects corrected during the audits were dropped from the
-                ledger, and all code-level findings are intentionally unfixed
-    scope     - (pass-2 new findings only) the audit scope that discovered it
-
-  Entries reviewed on 2026-09-30 carry:
-    <verdict audited="2026-09-30" pass="2"> - confirmed-defect |
-                design-intent | false-positive | obsolete. "design-intent",
-                "false-positive", and "obsolete" entries are kept for the
-                record so they are not re-reported.
-
-  Severities are kept stable across passes except where pass 2 produced new
-  reachability evidence: src/ui/app.tsx session-log-divergence low->medium,
-  src/remote/server.ts plan-approval race low->medium, and
-  src/acp/websocket.ts websocket-origin medium->high (consistency with the
-  remote-server missing-auth entry). Pass-2 re-grading proposals beyond these
-  were declined in favor of the recorded values.
-
-  Order: unfixed code/test defects (high -> medium -> low), then the defects
-  newly found by the first audit, then the defects newly found by the pass-2
-  audit.
--->
 <defects project="apps/yukino" generated="2026-09-29" audited="2026-09-30" pass="2">
-
-  <!-- ================= unfixed code and test defects ================= -->
-
   <defect category="missing-auth" severity="high" uncertain="false" fixed="false">
     <location>src/remote/server.ts:1023</location>
     <verdict audited="2026-09-30" pass="2">confirmed-defect</verdict>

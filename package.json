@@ -40,17 +40,6 @@
     "overrides": {
       "@yukino.js/yukino": "workspace:*",
       "@yukino.js/mcp": "workspace:*"
-    },
-    "onlyBuiltDependencies": [
-      "@bufbuild/buf",
-      "@parcel/watcher",
-      "@swc/core",
-      "better-sqlite3",
-      "core-js",
-      "esbuild",
-      "protobufjs",
-      "sharp",
-      "unrs-resolver"
-    ]
+    }
   }
 }
