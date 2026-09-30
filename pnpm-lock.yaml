@@ -5,7 +5,6 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@yukino.js/docs': workspace:*
   '@yukino.js/yukino': workspace:*
   '@yukino.js/mcp': workspace:*
 

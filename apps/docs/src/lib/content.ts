@@ -4,7 +4,6 @@ import type { MessageKey } from "./i18n";
 export const REPO_URL = "https://github.com/hangtiancheng/yukino-code";
 export const NPM_URL = "https://www.npmjs.com/package/@yukino.js/yukino";
 export const DOCS_URL = "https://hangtiancheng.github.io/yukino-code";
-export const SITE_URL = "https://hangtiancheng.github.io/yukino-code";
 export const VERSION = `v${__YUKINO_VERSION__}`;
 
 export type InstallMethodId = "curl" | "powershell" | "npm" | "pnpm";
@@ -355,32 +354,12 @@ export interface Protocol {
   id: ProtocolId;
   icon: string;
   name: string;
-  base: string;
-  env: string;
 }
 
 export const providerList: Protocol[] = [
-  {
-    id: "anthropic",
-    icon: icons.sparkle,
-    name: "anthropic",
-    base: "https://api.anthropic.com",
-    env: "ANTHROPIC_API_KEY",
-  },
-  {
-    id: "openai",
-    icon: icons.sparkle,
-    name: "openai",
-    base: "https://api.openai.com/v1",
-    env: "OPENAI_API_KEY",
-  },
-  {
-    id: "openaiCompat",
-    icon: icons.sparkle,
-    name: "openai-compat",
-    base: "http://localhost:11434/v1",
-    env: "OPENAI_API_KEY",
-  },
+  { id: "anthropic", icon: icons.sparkle, name: "anthropic" },
+  { id: "openai", icon: icons.sparkle, name: "openai" },
+  { id: "openaiCompat", icon: icons.sparkle, name: "openai-compat" },
 ];
 
 export type FooterColumnId = "product" | "developers" | "resources";

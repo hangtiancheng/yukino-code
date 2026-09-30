@@ -1,7 +1,6 @@
 {
   "name": "@yukino.js/mcp",
   "version": "0.0.1",
-  "private": true,
   "description": "Yukino official MCP tools collection",
   "keywords": [
     "MCP",
@@ -18,6 +17,9 @@
     "dist"
   ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "pnpm build:fe && tsx ./src/main.ts",
     "build": "tsup && vite build",

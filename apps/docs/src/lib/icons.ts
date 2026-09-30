@@ -1,4 +1,3 @@
-import activity from "lucide-static/icons/activity.svg?raw";
 import arrowRight from "lucide-static/icons/arrow-right.svg?raw";
 import arrowUp from "lucide-static/icons/arrow-up.svg?raw";
 import arrowUpRight from "lucide-static/icons/arrow-up-right.svg?raw";
@@ -32,7 +31,6 @@ import network from "lucide-static/icons/network.svg?raw";
 import pencilRuler from "lucide-static/icons/pencil-ruler.svg?raw";
 import plug from "lucide-static/icons/plug.svg?raw";
 import plus from "lucide-static/icons/plus.svg?raw";
-import scrollText from "lucide-static/icons/scroll-text.svg?raw";
 import search from "lucide-static/icons/search.svg?raw";
 import server from "lucide-static/icons/server.svg?raw";
 import shieldAlert from "lucide-static/icons/shield-alert.svg?raw";
@@ -51,7 +49,6 @@ import x from "lucide-static/icons/x.svg?raw";
 import zap from "lucide-static/icons/zap.svg?raw";
 
 export const icons = {
-  activity,
   arrowRight,
   arrowUp,
   arrowUpRight,
@@ -85,7 +82,6 @@ export const icons = {
   pencilRuler,
   plug,
   plus,
-  scrollText,
   search,
   server,
   shieldAlert,
@@ -103,5 +99,3 @@ export const icons = {
   x,
   zap,
 };
-
-export type IconName = keyof typeof icons;
