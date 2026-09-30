@@ -10,7 +10,8 @@ import { createYukinoAcpApp } from "./agent.js";
 import { parseRemoteAddress } from "@/remote/address.js";
 
 const ACP_PATH = "/acp";
-const DEFAULT_ADDRESS = "127.0.0.1:18889";
+const ACP_WS_DEFAULT_PORT = 18889;
+const DEFAULT_ADDRESS = `127.0.0.1:${String(ACP_WS_DEFAULT_PORT)}`;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 export interface AcpWebSocketServerHandle {
@@ -22,7 +23,10 @@ export function parseAcpWebSocketAddress(address?: string): {
   host: string;
   port: number;
 } {
-  const parsed = parseRemoteAddress(address ?? DEFAULT_ADDRESS);
+  const parsed = parseRemoteAddress(address ?? DEFAULT_ADDRESS, {
+    defaultPort: ACP_WS_DEFAULT_PORT,
+    allowEphemeral: true,
+  });
   if (!LOOPBACK_HOSTS.has(parsed.host)) {
     throw new Error("ACP WebSocket must listen on a loopback address.");
   }

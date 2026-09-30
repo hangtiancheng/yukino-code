@@ -2376,11 +2376,15 @@ export class RemoteServer {
   /**
    * Starts the Express HTTP + WebSocket server and blocks until stop() is called.
    * Initializing the agent handle happens eagerly; failures fall back to lazy
-   * init on first message. Blocking here (instead of resolving once listening)
-   * keeps the caller's exit bookkeeping after the server is actually down.
+   * init on first message. The actual bound address is announced once listening
+   * so an ephemeral (port 0) binding reports a reachable URL. Blocking here
+   * (instead of resolving once listening) keeps the caller's exit bookkeeping
+   * after the server is actually down.
    */
   async run(): Promise<void> {
-    const { host, port } = parseRemoteAddress(this.opts.addr);
+    const { host, port } = parseRemoteAddress(this.opts.addr, {
+      allowEphemeral: true,
+    });
     try {
       const factory = this.opts.agentFactory ?? createRemoteAgent;
       this.agentHandle = await factory({
@@ -2405,10 +2409,29 @@ export class RemoteServer {
       this.server.on("error", reject);
       this.server.listen(port, host, () => {
         this.startHeartbeat();
+        this.announceListening();
         resolve();
       });
     });
     await stopped;
+  }
+
+  /**
+   * Reports the actual bound address. Essential for port 0 (ephemeral)
+   * bindings, where the OS-assigned port is only known after listen() succeeds.
+   * Written to stderr to match --a2a / --acp-ws and to keep the stdout-mirrored
+   * JSONL log stream clean.
+   */
+  private announceListening(): void {
+    const bound = this.server.address();
+    if (!bound || typeof bound === "string") {
+      return;
+    }
+    const displayHost =
+      bound.family === "IPv6" ? `[${bound.address}]` : bound.address;
+    process.stderr.write(
+      `Remote server listening at http://${displayHost}:${String(bound.port)}\n`,
+    );
   }
 
   /**

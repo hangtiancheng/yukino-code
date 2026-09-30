@@ -75,6 +75,59 @@ describe("remote execution boundaries", () => {
     });
   });
 
+  it("applies a per-mode default port and opt-in ephemeral binding", () => {
+    // A bare host falls back to the caller's default port, not always 18888.
+    expect(parseRemoteAddress("localhost", { defaultPort: 18890 })).toEqual({
+      host: "localhost",
+      port: 18890,
+    });
+    expect(parseRemoteAddress("localhost", { defaultPort: 18889 })).toEqual({
+      host: "localhost",
+      port: 18889,
+    });
+    // Port 0 is rejected unless the caller opts into ephemeral binding.
+    expect(() => parseRemoteAddress(":0")).toThrow();
+    expect(parseRemoteAddress(":0", { allowEphemeral: true })).toEqual({
+      host: "127.0.0.1",
+      port: 0,
+    });
+  });
+
+  it("binds an ephemeral port and announces the reachable URL", async () => {
+    const writes: string[] = [];
+    const stderrSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        writes.push(String(chunk));
+        return true;
+      });
+    const server = new RemoteServer({
+      providers: [],
+      addr: "127.0.0.1:0",
+      enableCoordinatorMode: false,
+      forkDisabled: true,
+      agentFactory: () => Promise.reject(new Error("no provider")),
+    });
+    const runPromise = server.run();
+    try {
+      await vi.waitFor(() => {
+        expect(
+          writes.some((line) => line.includes("Remote server listening at")),
+        ).toBe(true);
+      });
+      const line =
+        writes.find((entry) => entry.includes("Remote server listening at")) ??
+        "";
+      // Port 0 must resolve to a real, reachable port in the announced URL.
+      expect(line).toMatch(/http:\/\/127\.0\.0\.1:\d+/);
+      expect(line).not.toContain(":0");
+    } finally {
+      await server.stop();
+      await runPromise;
+      stderrSpy.mockRestore();
+    }
+  });
+
   it.each(["localhost:9000oops", ":65536", ":-1", ":0", "::1:9000"])(
     "rejects invalid address %s before starting an agent",
     (address) => {

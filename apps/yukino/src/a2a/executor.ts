@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { TaskState } from "@a2a-js/sdk";
+import type { Message } from "@a2a-js/sdk";
 import { AgentEvent as A2aEvent } from "@a2a-js/sdk/server";
 import type {
   AgentExecutor,
@@ -32,7 +33,12 @@ import {
 import { resolveDefaultProvider } from "@/config/provider-config.js";
 import type { Decision } from "@/permissions/index.js";
 import { createRemoteAgent } from "@/remote/server.js";
-import { saveCompactBoundary, saveMessage } from "@/session/index.js";
+import {
+  loadSession,
+  rebuildFromSession,
+  saveCompactBoundary,
+  saveMessage,
+} from "@/session/index.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
 
@@ -48,10 +54,21 @@ export interface A2aRuntime {
   dispose(): Promise<void>;
 }
 
-export type A2aRuntimeFactory = (workDir: string) => Promise<A2aRuntime>;
+/**
+ * Builds a runtime for `workDir`. When `sessionId` is supplied the runtime is
+ * a recreation of a previously evicted session and restores that session's
+ * transcript so the conversation continues across eviction.
+ */
+export type A2aRuntimeFactory = (
+  workDir: string,
+  sessionId?: string,
+) => Promise<A2aRuntime>;
 
 /** Default factory: boots the full yukino agent stack for `workDir`. */
-export async function createA2aRuntime(workDir: string): Promise<A2aRuntime> {
+export async function createA2aRuntime(
+  workDir: string,
+  sessionId?: string,
+): Promise<A2aRuntime> {
   const config = withProjectMcpServers(loadConfig(), workDir);
   const provider = resolveDefaultProvider(
     config.providers,
@@ -68,7 +85,16 @@ export async function createA2aRuntime(workDir: string): Promise<A2aRuntime> {
     enableCoordinatorMode: config.enable_coordinator_mode ?? false,
     forkDisabled: !forkEnabled(config),
     memoryEnabled: memoryEnabled(config),
+    ...(sessionId ? { sessionId } : {}),
   });
+  if (sessionId) {
+    // Recreation after idle eviction: replay the persisted transcript.
+    // createRemoteAgent already injected long-term memory/instructions at the
+    // front of the conversation, so appending keeps that ordering intact.
+    runtime.conv.appendMessages(
+      rebuildFromSession(loadSession(workDir, sessionId)),
+    );
+  }
   return {
     sessionId: runtime.sessionId,
     workDir: runtime.workDir,
@@ -86,6 +112,11 @@ export async function createA2aRuntime(workDir: string): Promise<A2aRuntime> {
     },
   };
 }
+
+/** Idle grace period before an agent runtime is disposed to reclaim resources. */
+export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+const NO_ACTIVE_RUN = "No active run is awaiting a permission response.";
 
 interface Deferred {
   promise: Promise<void>;
@@ -122,8 +153,12 @@ interface ActiveRun {
 
 interface A2aSession {
   contextId: string;
-  runtimePromise: Promise<A2aRuntime>;
+  /** Persisted across eviction so a recreated runtime restores the transcript. */
+  sessionId?: string;
+  /** Null before first use and after idle eviction; created lazily. */
+  runtimePromise: Promise<A2aRuntime> | null;
   run: ActiveRun | null;
+  idleTimer: NodeJS.Timeout | null;
 }
 
 /**
@@ -133,6 +168,11 @@ interface A2aSession {
  * surface as `INPUT_REQUIRED` status updates carrying a yukino
  * `permission-request` data part; the client answers by sending a
  * `permission-response` data part back on the same task.
+ *
+ * Runtimes are created lazily (only for a valid, non-busy turn) and disposed
+ * after `idleTimeoutMs` without activity; the next message recreates the
+ * runtime and restores the persisted transcript, so eviction is transparent to
+ * the conversation while reclaiming MCP connections and background managers.
  */
 export class YukinoA2aExecutor implements AgentExecutor {
   private readonly sessions = new Map<string, A2aSession>();
@@ -141,6 +181,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
   constructor(
     private readonly runtimeFactory: A2aRuntimeFactory = createA2aRuntime,
     private readonly workDir: string = process.cwd(),
+    private readonly idleTimeoutMs: number = DEFAULT_IDLE_TIMEOUT_MS,
   ) {}
 
   async execute(
@@ -150,19 +191,33 @@ export class YukinoA2aExecutor implements AgentExecutor {
     const taskId = requestContext.taskId;
     const contextId = requestContext.contextId;
     const message = requestContext.userMessage;
-    const session = this.requireSession(contextId);
 
-    let runtime: A2aRuntime;
+    // Disarm eviction for the duration of this turn so the runtime cannot be
+    // disposed mid-processing; the finally block re-arms it once idle.
+    this.disarmIdleTimer(this.sessions.get(contextId));
     try {
-      runtime = await session.runtimePromise;
-    } catch (error) {
-      this.sessions.delete(contextId);
-      this.reject(session, eventBus, taskId, contextId, asErrorString(error));
-      return;
+      await this.dispatch(taskId, contextId, message, eventBus);
+    } finally {
+      const session = this.sessions.get(contextId);
+      if (session) {
+        this.armIdleTimer(session);
+      }
     }
+  }
 
+  private async dispatch(
+    taskId: string,
+    contextId: string,
+    message: Message,
+    eventBus: ExecutionEventBus,
+  ): Promise<void> {
     const response = findPermissionResponse(message);
     if (response) {
+      const session = this.sessions.get(contextId);
+      if (!session) {
+        this.reject(null, eventBus, taskId, contextId, NO_ACTIVE_RUN);
+        return;
+      }
       await this.handlePermissionResponse(
         session,
         taskId,
@@ -175,8 +230,10 @@ export class YukinoA2aExecutor implements AgentExecutor {
 
     const text = messageText(message);
     if (!text) {
+      // Reject without touching the session map: an invalid message must not
+      // create a session or spin up a runtime for a fresh contextId.
       this.reject(
-        session,
+        this.sessions.get(contextId) ?? null,
         eventBus,
         taskId,
         contextId,
@@ -185,20 +242,29 @@ export class YukinoA2aExecutor implements AgentExecutor {
       return;
     }
 
-    const run = session.run;
-    if (run && !run.finished) {
+    const existing = this.sessions.get(contextId);
+    if (existing?.run && !existing.run.finished) {
       this.reject(
-        session,
+        existing,
         eventBus,
         taskId,
         contextId,
-        `Context ${contextId} is busy with task ${run.taskId}. ` +
+        `Context ${contextId} is busy with task ${existing.run.taskId}. ` +
           "Cancel it or wait for it to finish before sending a new message.",
       );
       return;
     }
 
-    const started = this.startRun(
+    const session = existing ?? this.createSession(contextId);
+    let runtime: A2aRuntime;
+    try {
+      runtime = await this.ensureRuntime(session);
+    } catch (error) {
+      this.reject(session, eventBus, taskId, contextId, asErrorString(error));
+      return;
+    }
+
+    const run = this.startRun(
       session,
       runtime,
       taskId,
@@ -206,8 +272,8 @@ export class YukinoA2aExecutor implements AgentExecutor {
       text,
       eventBus,
     );
-    this.consume(session, started.run, text);
-    await started.run.settle.promise;
+    this.consume(session, run, text);
+    await run.settle.promise;
   }
 
   async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
@@ -216,13 +282,14 @@ export class YukinoA2aExecutor implements AgentExecutor {
     if (!session || !run || run.finished) {
       // No live run (e.g. the bus outlived its consumer): emit the terminal
       // state directly so the cancellation request still settles.
+      const contextId = session?.contextId ?? "";
       eventBus.publish(
         A2aEvent.statusUpdate(
           statusUpdate(
             taskId,
-            session?.contextId ?? "",
+            contextId,
             TaskState.TASK_STATE_CANCELED,
-            agentMessage(taskId, session?.contextId ?? "", [
+            agentMessage(taskId, contextId, [
               textPart("Task canceled by user request."),
             ]),
           ),
@@ -231,6 +298,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
       return;
     }
 
+    this.disarmIdleTimer(session);
     run.canceled = true;
     run.bus = eventBus;
     for (const pending of run.permissions.values()) {
@@ -241,12 +309,16 @@ export class YukinoA2aExecutor implements AgentExecutor {
     await run.done.promise;
   }
 
-  /** Aborts every session and disposes the underlying runtimes. */
+  /** Aborts every session, clears idle timers, and disposes the runtimes. */
   async dispose(): Promise<void> {
     const sessions = [...this.sessions.values()];
     this.sessions.clear();
     await Promise.all(
       sessions.map(async (session) => {
+        this.disarmIdleTimer(session);
+        if (!session.runtimePromise) {
+          return;
+        }
         let runtime: A2aRuntime;
         try {
           runtime = await session.runtimePromise;
@@ -267,18 +339,80 @@ export class YukinoA2aExecutor implements AgentExecutor {
     );
   }
 
-  private requireSession(contextId: string): A2aSession {
-    const existing = this.sessions.get(contextId);
-    if (existing) {
-      return existing;
-    }
+  private createSession(contextId: string): A2aSession {
     const session: A2aSession = {
       contextId,
-      runtimePromise: this.runtimeFactory(this.workDir),
+      sessionId: undefined,
+      runtimePromise: null,
       run: null,
+      idleTimer: null,
     };
     this.sessions.set(contextId, session);
     return session;
+  }
+
+  /**
+   * Returns the session's runtime, creating (or recreating after eviction) it
+   * lazily. A recreation passes the persisted sessionId so the factory restores
+   * the transcript. On failure the slot is cleared so a later message retries.
+   */
+  private async ensureRuntime(session: A2aSession): Promise<A2aRuntime> {
+    if (!session.runtimePromise) {
+      session.runtimePromise = this.runtimeFactory(
+        this.workDir,
+        session.sessionId,
+      ).then((runtime) => {
+        session.sessionId = runtime.sessionId;
+        return runtime;
+      });
+    }
+    try {
+      return await session.runtimePromise;
+    } catch (error) {
+      session.runtimePromise = null;
+      throw error;
+    }
+  }
+
+  private armIdleTimer(session: A2aSession): void {
+    this.disarmIdleTimer(session);
+    if (this.idleTimeoutMs <= 0 || !session.runtimePromise) {
+      return;
+    }
+    if (session.run && !session.run.finished) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      session.idleTimer = null;
+      this.evictSession(session);
+    }, this.idleTimeoutMs);
+    timer.unref();
+    session.idleTimer = timer;
+  }
+
+  private disarmIdleTimer(session: A2aSession | undefined): void {
+    if (session?.idleTimer) {
+      clearTimeout(session.idleTimer);
+      session.idleTimer = null;
+    }
+  }
+
+  /**
+   * Disposes an idle session's runtime to reclaim resources, keeping the
+   * contextId→sessionId mapping so the next message restores the transcript.
+   * Never evicts a session with an in-flight or permission-pending run.
+   */
+  private evictSession(session: A2aSession): void {
+    if (session.run && !session.run.finished) {
+      return;
+    }
+    const runtimePromise = session.runtimePromise;
+    session.runtimePromise = null;
+    if (runtimePromise) {
+      void runtimePromise
+        .then((runtime) => runtime.dispose())
+        .catch(() => undefined);
+    }
   }
 
   private findSessionByTask(taskId: string): A2aSession | undefined {
@@ -299,13 +433,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
   ): Promise<void> {
     const run = session.run;
     if (!run || run.finished) {
-      this.reject(
-        session,
-        eventBus,
-        taskId,
-        contextId,
-        "No active run is awaiting a permission response.",
-      );
+      this.reject(session, eventBus, taskId, contextId, NO_ACTIVE_RUN);
       return;
     }
     if (run.taskId !== taskId) {
@@ -353,7 +481,8 @@ export class YukinoA2aExecutor implements AgentExecutor {
     contextId: string,
     text: string,
     eventBus: ExecutionEventBus,
-  ): { run: ActiveRun } {
+  ): ActiveRun {
+    this.disarmIdleTimer(session);
     const run: ActiveRun = {
       taskId,
       runtime,
@@ -376,7 +505,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
         taskSnapshot(taskId, contextId, TaskState.TASK_STATE_SUBMITTED),
       ),
     );
-    return { run };
+    return run;
   }
 
   private consume(session: A2aSession, run: ActiveRun, text: string): void {
@@ -511,6 +640,8 @@ export class YukinoA2aExecutor implements AgentExecutor {
     }
     run.settle.resolve();
     run.done.resolve();
+    // The run reached a terminal state, so the session is now idle.
+    this.armIdleTimer(session);
   }
 
   private finalState(run: ActiveRun, failure: string | null): TaskState {
@@ -533,14 +664,14 @@ export class YukinoA2aExecutor implements AgentExecutor {
    * otherwise the request's own task fails.
    */
   private reject(
-    session: A2aSession,
+    session: A2aSession | null,
     eventBus: ExecutionEventBus,
     taskId: string,
     contextId: string,
     reason: string,
   ): void {
     const message = agentMessage(taskId, contextId, [textPart(reason)]);
-    if (session.run && !session.run.finished) {
+    if (session?.run && !session.run.finished) {
       eventBus.publish(A2aEvent.message(message));
       return;
     }

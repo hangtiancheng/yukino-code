@@ -110,10 +110,6 @@ interface InputBoxProps {
   /** Atomically pop the latest queued message, only when Up starts on a clean draft. */
   onRecallQueuedMessage?: () => string | undefined;
   disabled?: boolean;
-  /** Blocks Enter-to-send while still allowing typing/editing. No production
-   *  caller sets this: while the agent streams, plain text is steered into the
-   *  in-flight run instead (handleSubmit in app.tsx). */
-  submitDisabled?: boolean;
   history?: string[];
   commands?: Command[];
   thinkingLevels?: readonly ThinkingLevel[];
@@ -145,7 +141,6 @@ export function InputBox(props: InputBoxProps) {
     onSubmit,
     onRecallQueuedMessage,
     disabled,
-    submitDisabled,
     history = [],
     commands = [],
     thinkingLevels = THINKING_LEVELS,
@@ -623,10 +618,9 @@ export function InputBox(props: InputBoxProps) {
       updated[cursorLine] = finalLine;
       const finalValue = expandPastes(updated.join("\n"), pastes).trim();
       if (finalValue) {
-        // Sending is locked (submitDisabled, or a clipboard-image read still
-        // in flight): keep the draft instead of submitting, so nothing is
-        // silently dropped.
-        if (submitDisabled || pasteImageInflightRef.current) {
+        // A clipboard-image read is still in flight: keep the draft instead
+        // of submitting, so nothing is silently dropped.
+        if (pasteImageInflightRef.current) {
           return;
         }
         onSubmit(finalValue);

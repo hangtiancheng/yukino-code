@@ -341,4 +341,72 @@ describe("YukinoA2aExecutor", () => {
     expect(statusStates(events).at(-1)).toBe(TaskState.TASK_STATE_FAILED);
     await executor.dispose();
   });
+
+  it("does not create a runtime for an invalid message", async () => {
+    const workDir = makeWorkDir();
+    const factory = vi.fn(() => Promise.resolve(fakeRuntime(workDir)));
+    const executor = new YukinoA2aExecutor(factory, workDir);
+
+    const { events } = await executeTurn(
+      executor,
+      userMessage([]),
+      "task-6",
+      "context-6",
+    );
+    expect(statusStates(events).at(-1)).toBe(TaskState.TASK_STATE_FAILED);
+    // An empty message must not spin up an agent runtime.
+    expect(factory).not.toHaveBeenCalled();
+    await executor.dispose();
+  });
+
+  it("evicts an idle runtime and recreates it with the saved session id", async () => {
+    const workDir = makeWorkDir();
+    const createdSessionIds: (string | undefined)[] = [];
+    const disposed: string[] = [];
+    let counter = 0;
+    const factory: A2aRuntimeFactory = (_workDir, sessionId) => {
+      createdSessionIds.push(sessionId);
+      const id = sessionId ?? `session-${String(++counter)}`;
+      const runtime = fakeRuntime(workDir, {
+        events: [{ type: "loop_complete", stopReason: "end_turn" }],
+      });
+      return Promise.resolve({
+        ...runtime,
+        sessionId: id,
+        dispose: () => {
+          disposed.push(id);
+          return Promise.resolve();
+        },
+      });
+    };
+    const executor = new YukinoA2aExecutor(factory, workDir, 20);
+
+    await executeTurn(
+      executor,
+      userMessage(textParts("hello")),
+      "task-7",
+      "context-7",
+    );
+    expect(createdSessionIds).toEqual([undefined]);
+
+    // Let the idle timer fire and dispose the runtime.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 60);
+    });
+    expect(disposed).toEqual(["session-1"]);
+
+    // A follow-up on the same context recreates the runtime, passing the saved
+    // session id so the factory can restore the transcript.
+    const second = await executeTurn(
+      executor,
+      userMessage(textParts("again")),
+      "task-8",
+      "context-7",
+    );
+    expect(createdSessionIds).toEqual([undefined, "session-1"]);
+    expect(statusStates(second.events).at(-1)).toBe(
+      TaskState.TASK_STATE_COMPLETED,
+    );
+    await executor.dispose();
+  });
 });

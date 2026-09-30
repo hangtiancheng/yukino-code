@@ -131,7 +131,33 @@ describe("A2A server", () => {
     expect(parseA2aMode(["--remote"])).toBeNull();
     expect(() => parseA2aMode(["--a2a", "--remote"])).toThrow();
     expect(parseA2aAddress()).toEqual({ host: "127.0.0.1", port: 18890 });
+    // A bare host keeps the A2A default port, not the remote-mode 18888.
+    expect(parseA2aAddress("localhost")).toEqual({
+      host: "localhost",
+      port: 18890,
+    });
+    // Port 0 binds an ephemeral port; the server advertises the bound address.
+    expect(parseA2aAddress("0")).toEqual({ host: "127.0.0.1", port: 0 });
+    expect(parseA2aAddress("127.0.0.1:0")).toEqual({
+      host: "127.0.0.1",
+      port: 0,
+    });
     expect(() => parseA2aAddress("0.0.0.0:18890")).toThrow("loopback");
+  });
+
+  it("binds an ephemeral port and advertises the reachable address", async () => {
+    const server = await startA2aServer({
+      address: "0",
+      runtimeFactory: fakeRuntimeFactory(),
+    });
+    servers.push(server);
+    // Port 0 must resolve to a real, reachable port in the advertised URLs.
+    expect(server.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
+    expect(server.url).not.toContain(":0/");
+    const card = CardSchema.parse(await (await fetch(server.cardUrl)).json());
+    for (const iface of card.supportedInterfaces ?? []) {
+      expect(iface.url).toBe(server.url);
+    }
   });
 
   it("serves the agent card for v1.0 and legacy v0.3 clients", async () => {

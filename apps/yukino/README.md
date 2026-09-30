@@ -366,9 +366,10 @@ The -p flag sends a single prompt, runs the agent loop, and prints the result to
 yukino --remote                  # listens on 127.0.0.1:18888
 yukino --remote 9000             # custom loopback port (":9000" also works)
 yukino --remote 0.0.0.0:9000      # explicitly expose on all interfaces (no built-in authentication)
+yukino --remote 0                # OS-assigned ephemeral port; the actual URL is printed on startup
 ```
 
-Starts an Express HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction.
+Starts an Express HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction. With port 0 the OS picks a free port and the server prints the reachable address (e.g. `Remote server listening at http://127.0.0.1:61041`) so you know where to connect.
 
 ### ACP Mode (Editor Integration)
 
@@ -376,6 +377,7 @@ Starts an Express HTTP server and WebSocket bridge. The bundled React frontend i
 yukino --acp                 # Agent Client Protocol over stdio (cannot be combined with other flags)
 yukino --acp-ws              # ACP over WebSocket, listens on 127.0.0.1:18889
 yukino --acp-ws 9000         # ACP over WebSocket at a custom port (host:port also works)
+yukino --acp-ws 0            # OS-assigned ephemeral port; the actual ws:// URL is printed on startup
 ```
 
 Implements the Agent Client Protocol (`@agentclientprotocol/sdk`) so ACP-compatible editors can drive Yukino as an external agent. The WebSocket transport only binds loopback addresses.
@@ -387,7 +389,7 @@ yukino --a2a                 # A2A server, listens on 127.0.0.1:18890
 yukino --a2a 9000            # custom loopback port (host:port also works)
 ```
 
-Serves Yukino as an Agent2Agent (`@a2a-js/sdk`) agent so other A2A-compatible agents and orchestrators can call it. The agent card is published at `/.well-known/agent-card.json`; JSON-RPC is served at `POST /` and HTTP+JSON/REST under `/v1/...`, on protocol version 1.0 with a v0.3 compatibility layer. Each A2A context maps to one Yukino session: text messages run the agent loop and stream `working` status updates (assistant text, thinking, tool calls, tool results), and tool permission requests surface as `input-required` status updates carrying a `yukino: permission-request` data part. Clients answer by sending a `yukino: permission-response` data part (`{ permissionId, decision: allow | deny | allowAlways }`) back on the same task. The server only binds loopback addresses.
+Serves Yukino as an Agent2Agent (`@a2a-js/sdk`) agent so other A2A-compatible agents and orchestrators can call it. The agent card is published at `/.well-known/agent-card.json`; JSON-RPC is served at `POST /` and HTTP+JSON/REST under `/v1/...`, on protocol version 1.0 with a v0.3 compatibility layer. Each A2A context maps to one Yukino session: text messages run the agent loop and stream `working` status updates (assistant text, thinking, tool calls, tool results), and tool permission requests surface as `input-required` status updates carrying a `yukino: permission-request` data part. Clients answer by sending a `yukino: permission-response` data part (`{ permissionId, decision: allow | deny | allowAlways }`) back on the same task. Answer one pending permission per message: when several tools await approval at once, only the first `permission-response` in a message is applied and the agent re-emits `input-required` for the rest, so respond to them one at a time. The server only binds loopback addresses.
 
 ### Slash Commands
 

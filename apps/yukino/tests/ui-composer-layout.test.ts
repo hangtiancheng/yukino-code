@@ -1307,15 +1307,8 @@ describe("persistent composer drafts and input behavior", () => {
     expect(onEscape).toHaveBeenCalledTimes(1);
   });
 
-  it("allows edits with submission locked but does not register hidden input while disabled", () => {
+  it("does not register hidden input while disabled and preserves the draft on clear", () => {
     const ref = draftRef(["draft"]);
-    const onSubmit = vi.fn();
-    mount({ draftRef: ref, submitDisabled: true, onSubmit });
-    press("!");
-    press("", { return: true });
-    expect(ref.current?.lines).toEqual(["draft!"]);
-    expect(onSubmit).not.toHaveBeenCalled();
-    unmount();
     const clearRef: { current: (() => void) | null } = { current: null };
     mount({ draftRef: ref, disabled: true, clearRef });
     expect(terminal.input.current).toBeNull();
@@ -1323,7 +1316,7 @@ describe("persistent composer drafts and input behavior", () => {
     act(() => {
       clearRef.current?.();
     });
-    expect(ref.current?.lines).toEqual(["draft!"]);
+    expect(ref.current?.lines).toEqual(["draft"]);
   });
 
   it("clears submitted drafts even if onSubmit immediately unmounts the input", () => {

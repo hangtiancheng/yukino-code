@@ -41,6 +41,16 @@ describe("ACP transports", () => {
       host: "127.0.0.1",
       port: 18889,
     });
+    // A bare host keeps the ACP WebSocket default port, not remote's 18888.
+    expect(parseAcpWebSocketAddress("localhost")).toEqual({
+      host: "localhost",
+      port: 18889,
+    });
+    // Port 0 binds an ephemeral port; the server advertises the bound URL.
+    expect(parseAcpWebSocketAddress("0")).toEqual({
+      host: "127.0.0.1",
+      port: 0,
+    });
     expect(() => parseAcpWebSocketAddress("0.0.0.0:18889")).toThrow(
       "loopback address",
     );
@@ -58,6 +68,25 @@ describe("ACP transports", () => {
           clientCapabilities: {},
         });
         expect(response.protocolVersion).toBe(acp.PROTOCOL_VERSION);
+        expect(response.agentInfo?.name).toBe("yukino");
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("binds an ephemeral port and advertises the reachable URL", async () => {
+    const server = await startAcpWebSocketServer("0");
+    try {
+      expect(server.url).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\/acp$/);
+      expect(server.url).not.toContain(":0/");
+      const stream = createWebSocketStream(server.url, { WebSocket });
+      const client = acp.client({ name: "websocket-ephemeral-client" });
+      await client.connectWith(stream, async (context) => {
+        const response = await context.request(acp.methods.agent.initialize, {
+          protocolVersion: acp.PROTOCOL_VERSION,
+          clientCapabilities: {},
+        });
         expect(response.agentInfo?.name).toBe("yukino");
       });
     } finally {
