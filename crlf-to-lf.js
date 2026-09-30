@@ -1,26 +1,4 @@
 #!/usr/bin/env node
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 
 /**
  * Converts CRLF line endings to LF for all files that are not ignored by Git
@@ -34,11 +12,11 @@
  * found, it exits with code 1.
  */
 
-import { spawn } from 'node:child_process';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { access, readFile, stat, unlink, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
+import { spawn } from "node:child_process";
+import { createReadStream, createWriteStream } from "node:fs";
+import { access, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { pipeline } from "node:stream/promises";
 
 /**
  * @typedef {object} ExecResult
@@ -55,28 +33,32 @@ import { pipeline } from 'node:stream/promises';
  */
 async function execGit(cwd, args) {
   return new Promise((resolve, reject) => {
-    const proc = spawn('git', args, { cwd });
-    let stdout = '';
-    let stderr = '';
+    const proc = spawn("git", args, { cwd });
+    let stdout = "";
+    let stderr = "";
 
-    proc.stdout.setEncoding('utf8');
-    proc.stderr.setEncoding('utf8');
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
 
-    proc.stdout.on('data', (chunk) => {
+    proc.stdout.on("data", (chunk) => {
       stdout += chunk;
     });
 
-    proc.stderr.on('data', (chunk) => {
+    proc.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
 
-    proc.on('error', (err) => {
+    proc.on("error", (err) => {
       reject(err);
     });
 
-    proc.on('close', (code) => {
+    proc.on("close", (code) => {
       if (code !== 0) {
-        reject(new Error(`git ${args.join(' ')} failed with code ${code}: ${stderr.trim() || stdout.trim()}`));
+        reject(
+          new Error(
+            `git ${args.join(" ")} failed with code ${code}: ${stderr.trim() || stdout.trim()}`,
+          ),
+        );
         return;
       }
       resolve({ stdout, stderr });
@@ -92,7 +74,7 @@ async function execGit(cwd, args) {
  */
 async function findGitRoot(cwd) {
   try {
-    const { stdout } = await execGit(cwd, ['rev-parse', '--show-toplevel']);
+    const { stdout } = await execGit(cwd, ["rev-parse", "--show-toplevel"]);
     return stdout.trim();
   } catch {
     return null;
@@ -106,7 +88,7 @@ async function findGitRoot(cwd) {
  * @returns {string[]} Individual entries.
  */
 function parseNullDelimited(output) {
-  return output.split('\0').filter((entry) => entry.length > 0);
+  return output.split("\0").filter((entry) => entry.length > 0);
 }
 
 /**
@@ -116,8 +98,10 @@ function parseNullDelimited(output) {
  * @returns {Promise<string[]>}
  */
 async function getTrackedFiles(repoRoot) {
-  const { stdout } = await execGit(repoRoot, ['ls-files', '-z']);
-  return parseNullDelimited(stdout).map((relativePath) => path.resolve(repoRoot, relativePath));
+  const { stdout } = await execGit(repoRoot, ["ls-files", "-z"]);
+  return parseNullDelimited(stdout).map((relativePath) =>
+    path.resolve(repoRoot, relativePath),
+  );
 }
 
 /**
@@ -127,13 +111,18 @@ async function getTrackedFiles(repoRoot) {
  * @returns {Promise<string[]>}
  */
 async function getUntrackedFiles(repoRoot) {
-  const { stdout } = await execGit(repoRoot, ['status', '--porcelain', '--untracked-files=all', '-z']);
+  const { stdout } = await execGit(repoRoot, [
+    "status",
+    "--porcelain",
+    "--untracked-files=all",
+    "-z",
+  ]);
   const entries = parseNullDelimited(stdout);
   const files = [];
 
   for (const entry of entries) {
     // In --porcelain -z output, untracked files are reported as "?? <path>\0".
-    if (entry.startsWith('?? ')) {
+    if (entry.startsWith("?? ")) {
       const relativePath = entry.slice(3);
       files.push(path.resolve(repoRoot, relativePath));
     }
@@ -184,14 +173,14 @@ async function convertFile(filePath) {
   }
 
   // Fast path: skip files that contain no CRLF sequences.
-  if (!content.includes('\r\n')) {
+  if (!content.includes("\r\n")) {
     return false;
   }
 
-  const converted = content.toString('utf8').replace(/\r\n/g, '\n');
+  const converted = content.toString("utf8").replace(/\r\n/g, "\n");
   const tempPath = `${filePath}.tmp-crlf-fix-${Date.now()}`;
 
-  await writeFile(tempPath, converted, 'utf8');
+  await writeFile(tempPath, converted, "utf8");
   await pipeline(createReadStream(tempPath), createWriteStream(filePath));
   await unlink(tempPath);
 
@@ -230,7 +219,7 @@ async function main() {
   const files = Array.from(fileSet).sort();
 
   if (files.length === 0) {
-    console.log('No files to process.');
+    console.log("No files to process.");
     return;
   }
 
@@ -251,14 +240,19 @@ async function main() {
         skipped += 1;
       }
     } catch (err) {
-      errors.push({ file: filePath, error: err instanceof Error ? err.message : String(err) });
+      errors.push({
+        file: filePath,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  console.log(`\nDone. Scanned ${scanned}, converted ${converted}, skipped ${skipped}, errors ${errors.length}`);
+  console.log(
+    `\nDone. Scanned ${scanned}, converted ${converted}, skipped ${skipped}, errors ${errors.length}`,
+  );
 
   if (errors.length > 0) {
-    console.error('\nErrors:');
+    console.error("\nErrors:");
     for (const { file, error } of errors) {
       console.error(`  ${path.relative(repoRoot, file)}: ${error}`);
     }
@@ -267,6 +261,8 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(`Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
+  console.error(
+    `Unexpected error: ${err instanceof Error ? err.message : String(err)}`,
+  );
   process.exit(1);
 });
