@@ -211,7 +211,6 @@ export class SkillCatalog {
         }
       } catch (err) {
         log.error({ err }, "skills operation failed");
-        // Retain the cached version if reading fails
       }
     }
 

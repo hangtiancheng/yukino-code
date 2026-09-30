@@ -133,7 +133,6 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
 // window covers a normal restart, which re-claims leaderPid in config.json.
 const LEADER_LOST_EXIT_MS = 60_000;
 
-// Module-level child logger for teammate process.
 const log = createChildLogger({ module: "teammate" });
 
 function isPidAlive(pid: number): boolean {
@@ -259,8 +258,9 @@ export async function buildTeammateRegistry(opts: {
 export async function runTeammate(args: TeammateArgs): Promise<void> {
   // Initialize logger for this teammate subprocess. Subprocess skips cleanup
   // to avoid multi-process races on expired-log deletion.
-  // args.teamDir is the mailbox dir (~/.yukino/teams/<team>/inboxes); logs
-  // live in the sibling logs/ dir, which cleanExpiredLogs scans.
+  // args.teamDir is the mailbox dir
+  // (~/.yukino/teams/<namespace>/<team>/inboxes); logs live in the sibling
+  // logs/ dir.
   const safeMemberName = sanitizeNameSegment(args.memberName);
   initLogger({
     sessionId: `teammate-${safeMemberName}-${Date.now().toString(36)}`,

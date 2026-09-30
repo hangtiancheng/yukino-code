@@ -1,0 +1,1499 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Defect scan of the apps/yukino project (Yukino terminal AI coding agent).
+  Generated 2026-09-29 by a full-project comment/documentation audit that read
+  every file under src/, tests/, and the root docs.
+
+  Each <defect> carries:
+    category  - defect class (kebab-case)
+    severity  - critical | high | medium | low
+    uncertain - "true" when the finding depends on unverifiable assumptions or
+                may be an accepted design decision; "false" when confirmed
+    fixed     - "true" only for documentation/comment defects corrected during
+                this audit; all code-level findings are intentionally unfixed
+
+  Order: unfixed code/test defects (high -> medium -> low), then the
+  documentation/comment defects that were fixed during the audit.
+-->
+<defects project="apps/yukino" generated="2026-09-29">
+
+  <!-- ================= unfixed code and test defects ================= -->
+
+  <defect category="sandbox-escape" severity="high" uncertain="true" fixed="false">
+    <location>src/sandbox/seatbelt.ts:91</location>
+    <summary>Configured paths are interpolated into the seatbelt profile without escaping quotes or
+      parentheses</summary>
+    <detail>buildProfile embeds allowWrite/denyWrite paths directly into `(allow file-write*
+      (subpath "${variant}"))` strings. A path containing a double quote (e.g. a workDir or tmpdir
+      with `"` in its name, or an attacker-influenced writable root) can terminate the string
+      literal and inject arbitrary profile rules, potentially granting write access outside the
+      intended sandbox or causing sandbox-exec to fail open/closed unpredictably. The bwrap backend
+      passes paths via argv and is immune; only the seatbelt profile builder performs string
+      interpolation.</detail>
+  </defect>
+
+  <defect category="missing-auth" severity="high" uncertain="false" fixed="false">
+    <location>src/remote/server.ts:1082</location>
+    <summary>WebSocket endpoint has no authentication and no Origin validation, enabling
+      cross-origin hijacking of a localhost agent that can execute shell commands.</summary>
+    <detail>The `WebSocketServer` is created without `verifyClient` and the `connection` handler
+      accepts any socket, so a malicious web page the user visits can open `ws://127.0.0.1:18888/ws`
+      (browsers do not apply same-origin policy to WebSockets, and 18888 is the hard-coded default
+      port in address.ts). Once connected, that page can send `user_message` to start agent runs and
+      reply `permission_response: "allow"` to its own `permission_request` broadcasts, approving
+      Bash/PowerShell execution and yielding remote code execution as the user. Standard mitigation
+      (rejecting connections whose `Origin` header is not the served host, or requiring a shared
+      token) is absent.</detail>
+  </defect>
+
+  <defect category="command-injection" severity="high" uncertain="false" fixed="false">
+    <location>src/teams/backend.ts:129</location>
+    <summary>tmux spawn embeds the shell-quoted command inside outer double quotes, re-activating $,
+      backticks, " and \ in LLM-provided task text</summary>
+    <detail>spawnTeammate builds `tmux new-session ... "${cmd}"` where cmd's tokens were
+      single-quoted by shellQuote. Inside the outer double quotes those single quotes are literal,
+      so a task string containing `$(...)`, backticks, or `"` is interpreted by the leader's own
+      shell during execSync — e.g. task text `x"; rm -rf ~; "` breaks out of the quoting entirely.
+      The shellQuote JSDoc documents this caveat but the exposure remains: task text originates from
+      model output and can execute arbitrary commands in the leader process.</detail>
+  </defect>
+
+  <defect category="ink-static-shrink" severity="medium" uncertain="false" fixed="false">
+    <location>src/ui/transcript.tsx:51</location>
+    <summary>/rewind feedback and rebuilt transcript are never printed because Ink's Static only
+      appends past its high-water mark</summary>
+    <detail>handleRewindAction replaces `messages` with a shorter rebuilt list, but the Static key
+      (`transcript-${sessionId}-${termWidth}-${expanded}`) does not change on rewind. Ink's Static
+      renders `items.slice(index)` where `index` is the previous `items.length` (verified in
+      node_modules/ink/build/components/Static.js), so after the list shrinks, `slice` yields
+      nothing and the "⟲ Rewound to checkpoint..." confirmation plus any rebuilt items below the old
+      high-water mark are silently swallowed. The user gets no visible feedback that the rewind
+      happened.</detail>
+  </defect>
+
+  <defect category="race-condition" severity="medium" uncertain="true" fixed="false">
+    <location>src/sandbox/sandbox-runtime.ts:91</location>
+    <summary>Concurrent prepare() calls with differing configs can reset SandboxManager under a
+      running command</summary>
+    <detail>prepare() awaits any in-flight initializationPromise but then re-checks configKey and
+      may call SandboxManager.reset()+initialize() while another wrapped command is still executing
+      under the previous config. The comment in src/tools/bash.ts:257-262 explicitly acknowledges
+      that "a changing allowWrite entry ... letting concurrent commands reset each other's sandbox
+      state", confirming the race is real when configs differ; a command could run unsandboxed or
+      against the wrong policy during the reset window.</detail>
+  </defect>
+
+  <defect category="data-loss-on-read-error" severity="medium" uncertain="true" fixed="false">
+    <location>src/file-history/index.ts:244</location>
+    <summary>rewind() deletes the live file when the backup read fails for ANY reason, not just a
+      missing backup</summary>
+    <detail>The catch around readFileSync(backup.backupPath) treats every failure (EACCES, EIO,
+      EMFILE, not only ENOENT) as "file didn't exist at snapshot time" and unlinks the current file.
+      A transient read error on the backup therefore destroys user content instead of skipping it
+      and leaving the entry for retry, which is exactly the resilience the baseline path
+      (unresolvedBaselines) implements. Tests only cover the missing-backup case, so the broad catch
+      is untested.</detail>
+  </defect>
+
+  <defect category="missing-cleanup" severity="medium" uncertain="true" fixed="false">
+    <location>tests/team-file.test.ts:311</location>
+    <summary>Busy-loop reader child process can be orphaned if the test fails mid-way</summary>
+    <detail>The spawned reader hot-loops on `existsSync(stopPath)` and is only terminated by the
+      stop file written at line 354, after the 30-iteration persist loop. If `team.persist()` throws
+      or the test otherwise aborts before the stop file is written, the child spins at 100% CPU
+      indefinitely with no kill/teardown guard (no try/finally, no `reader.kill()` in a cleanup
+      hook).</detail>
+  </defect>
+
+  <defect category="prompt-behavior-mismatch" severity="medium" uncertain="false" fixed="false">
+    <location>src/agent/index.ts:344</location>
+    <summary>Plan-mode teammates are told every turn to call ExitPlanMode/AskUserQuestion, but both
+      tools are stripped from teammate registries</summary>
+    <detail>The Agent loop injects buildPlanModeReminder whenever checker.mode === "plan", which
+      holds for in-process plan-mode teammates (checker created in AgentTool.runAsTeammate, passed
+      through spawnSubagent as checkerOverride). The reminder instructs the model to call
+      ExitPlanMode for approval and AskUserQuestion for clarification, but cloneRegistryForTeammate
+      strips both via MAIN_AGENT_ONLY_TOOLS, and the team layer documents that ending the turn is
+      the plan-submission signal (teams/index.ts:459). The teammate receives per-turn instructions
+      referencing tools it cannot call and may burn turns on "unknown tool" errors;
+      buildTeammatePrompt ("plan approval ... handled by the host") directly contradicts the
+      reminder.</detail>
+  </defect>
+
+  <defect category="plan-file-mismatch" severity="medium" uncertain="false" fixed="false">
+    <location>src/teams/index.ts:572</location>
+    <summary>Worktree-isolated plan-mode teammates write the plan under the worktree, but
+      readPlanForReview reads a different file under the team workDir, so the Leader always sees an
+      empty plan</summary>
+    <detail>The teammate's Agent sets checker.planFilePath = getOrCreatePlanPath(memberWorkDir)
+      (agent/index.ts:345), which for worktree-isolated teammates is the worktree path, and the
+      Layer-0 exception lets it write there. readPlanForReview then calls
+      getOrCreatePlanPath(this.workDir) with the team's main workDir; because the plan path is a
+      process-wide singleton with workDir-scoped lookup (plan-file/index.ts:41), the worktree plan
+      fails isPlanUnderWorkDir and a fresh empty plan file is created and read, so approval proceeds
+      with the "(Plan file is empty...)" fallback. The same singleton also flip-flops when multiple
+      plan-mode agents with different workDirs run in one process, creating a new empty plan file on
+      each switch.</detail>
+  </defect>
+
+  <defect category="unbounded-memory-buffering" severity="medium" uncertain="false" fixed="false">
+    <location>src/tools/web-fetch.ts:268</location>
+    <summary>Response body is fully buffered before the 10MB size cap is enforced</summary>
+    <detail>The content-length pre-check at line 251 only works when the server sends an honest
+      Content-Length header; with chunked transfer encoding or a lying server,
+      `response.arrayBuffer()` buffers the entire body into memory before the `body.byteLength >
+      MAX_CONTENT_BYTES` check at line 276 runs. A malicious or compromised URL can therefore spike
+      process memory far beyond the documented 10MB limit. The cap should be enforced incrementally
+      while streaming the body.</detail>
+  </defect>
+
+  <defect category="ssrf" severity="medium" uncertain="true" fixed="false">
+    <location>src/tools/web-fetch.ts:225</location>
+    <summary>No restriction on fetching internal/loopback/link-local addresses</summary>
+    <detail>WebFetch accepts any http/https URL, including localhost, private RFC1918 ranges, and
+      link-local cloud-metadata endpoints such as 169.254.169.254, and follows redirects
+      automatically. The tool is categorized "read", so it may run without a permission prompt,
+      letting prompt-injected content steer the agent into probing or exfiltrating from internal
+      services. Uncertain because this may be an accepted design decision for a local coding agent.</detail>
+  </defect>
+
+  <defect category="prompt-robustness" severity="medium" uncertain="true" fixed="false">
+    <location>src/code-review/format.ts:53</location>
+    <summary>Diff bodies are interpolated into &lt;file&gt; elements without escaping</summary>
+    <detail>buildConcatenatedDiffs escapes only the path attributes; the diff text itself is
+      inserted raw. A changed file whose content contains a literal `&lt;/file&gt;` or `&lt;file
+      path=...&gt;` line (e.g. editing this very codebase, or any XML/markup file) can prematurely
+      close or forge the element boundary in the review, plan, and filter prompts, corrupting what
+      the model perceives as each file's diff.</detail>
+  </defect>
+
+  <defect category="logic-bug" severity="medium" uncertain="false" fixed="false">
+    <location>src/teams/index.ts:896</location>
+    <summary>drainLeaderMailbox's failed-detection string never matches the in-process failure
+      notification format</summary>
+    <detail>An in-process teammate that fails sends `[idle] &lt;name&gt; (reason: failed)`
+      (index.ts:521), but drainLeaderMailbox tests `msg.text.includes(" failed:")`, which only
+      matches the external format `[idle] &lt;name&gt; failed: ...` from teammate.ts. Consequently a
+      failed in-process teammate's uiState.status is overwritten from "failed" back to "idle", and
+      the `failed || stopped` branch is skipped so its name is never unregistered from the name
+      registry — SendMessage to the dead teammate then vanishes silently.</detail>
+  </defect>
+
+  <defect category="permission-bypass" severity="medium" uncertain="false" fixed="false">
+    <location>src/teams/tools.ts:407</location>
+    <summary>Mutating team tools declare category "read", which the permission checker auto-allows
+      without prompting</summary>
+    <detail>TeamCreateTool, SpawnTeammateTool, SendMessageTool, and TeamDeleteTool all set `category
+      = "read"` (tools.ts:52, 108, 186, 407). PermissionChecker.modeDecide returns "allow" for
+      category "read" in default and plan modes, so TeamDelete — which stops running members and
+      recursively deletes the team directory — and process-spawning tools execute with no permission
+      prompt. Comparable mutating tools (TaskStop, TaskCreate, TaskUpdate) correctly use "command".</detail>
+  </defect>
+
+  <defect category="resource-leak" severity="medium" uncertain="false" fixed="false">
+    <location>src/logger/index.ts:317</location>
+    <summary>cleanExpiredLogs scans ~/.yukino/teams/&lt;entry&gt;/logs but entries are namespace
+      hashes, so teammate logs are never cleaned</summary>
+    <detail>Team data lives at ~/.yukino/teams/&lt;sha256-namespace&gt;/&lt;slug&gt;/ (team-file.ts
+      teamsBaseDir), and teammate logs at .../&lt;namespace&gt;/&lt;slug&gt;/logs/. cleanExpiredLogs
+      iterates the top-level teams directory and cleans &lt;entry&gt;/logs — one level too shallow —
+      so expired teammate log files accumulate on disk forever. Found while verifying the (now
+      corrected) comment in src/teammate.ts that claimed cleanExpiredLogs scans the sibling logs
+      dir; the fix belongs in logger/index.ts.</detail>
+  </defect>
+
+  <defect category="stream-tool-state-race" severity="medium" uncertain="true" fixed="false">
+    <location>src/llm/openai.ts:253</location>
+    <summary>Responses stream tracks function-call state in single slots, corrupting output if two
+      calls interleave</summary>
+    <detail>OpenAIClient.stream uses single variables (currentToolName/currentToolId/jsonAccumulate)
+      for function_call items, while computer calls use a Set and the compat client uses a Map keyed
+      by index. If a gateway ever emits response.output_item.added for a second function_call before
+      the first one's done event, the state is overwritten and tool_call_complete events carry
+      mismatched ids/names/arguments. The official Responses API streams items sequentially, so this
+      is defensive-gap rather than an observed failure.</detail>
+  </defect>
+
+  <defect category="file-race" severity="medium" uncertain="false" fixed="false">
+    <location>src/file-history/index.ts:383</location>
+    <summary>snapshots.json is written non-atomically and without any lock</summary>
+    <detail>save() writes snapshots.json directly with writeFileSync (no tmp+rename, no
+      cross-process lock). A crash mid-write leaves corrupt JSON, and load() then discards the
+      entire snapshot/baseline history for the session. Two processes attached to the same session
+      (e.g. TUI and remote) can also overwrite each other's state silently.</detail>
+  </defect>
+
+  <defect category="logic-bug" severity="medium" uncertain="true" fixed="false">
+    <location>src/file-history/index.ts:412</location>
+    <summary>Legacy nextSnapshotSeq derivation can reuse still-live backup name suffixes</summary>
+    <detail>load() falls back to nextSnapshotSeq ?? snapshots.length for state files predating the
+      counter. If such a legacy file was pruned in the past, live snapshots can already carry backup
+      names (@sN with N >= snapshots.length) assigned before pruning, so new backups may overwrite
+      still-live backup files — the exact corruption the monotonic counter was introduced to
+      prevent.</detail>
+  </defect>
+
+  <defect category="file-race" severity="medium" uncertain="true" fixed="false">
+    <location>src/memory/manager.ts:326</location>
+    <summary>MEMORY.md is rewritten without locking while background agents may edit it</summary>
+    <detail>writeIndex() (reached every turn via buildSystemReminder → loadAll, and via rebuildIndex
+      after extraction) writes MEMORY.md with a plain writeFileSync, while the consolidation
+      subagent can concurrently edit the same file through WriteFile/EditFile. Last writer wins, so
+      index updates from either side can be silently lost.</detail>
+  </defect>
+
+  <defect category="unhandled-rejection" severity="medium" uncertain="true" fixed="false">
+    <location>src/acp/agent.ts:462</location>
+    <summary>Permission request promise left uncaught when the abort race wins</summary>
+    <detail>`Promise.race([permission, cancelled])` resolves with null on abort, but the
+      `permission` promise from `context.client.request(...)` stays pending with no catch handler.
+      If the client later rejects it (disconnect, transport failure), Node reports an unhandled
+      rejection, which can crash the ACP process mid-session.</detail>
+  </defect>
+
+  <defect category="unhandled-rejection" severity="medium" uncertain="true" fixed="false">
+    <location>src/acp/websocket.ts:166</location>
+    <summary>Shutdown path drops the rejection rethrown by server.close()</summary>
+    <detail>`void server.close().finally(resolve)` — `close()` deliberately rethrows the first
+      recorded error, and `.finally()` propagates it into a promise nothing handles. A failing close
+      during SIGINT/SIGTERM shutdown produces an unhandled rejection instead of a reported error.</detail>
+  </defect>
+
+  <defect category="ssrf" severity="medium" uncertain="true" fixed="false">
+    <location>src/skills/install-skill-tool.ts:116</location>
+    <summary>InstallSkill fetches model-supplied URLs with no internal-address restriction</summary>
+    <detail>`fetch(source)` follows redirects and accepts any http(s) URL, so the model can probe
+      loopback/link-local endpoints (e.g. cloud metadata at 169.254.169.254) and persist the
+      response body into `.agents/skills/&lt;name>/SKILL.md` where it can be read back. Permission
+      gating on the "write" category is the only mitigation.</detail>
+  </defect>
+
+  <defect category="websocket-origin" severity="medium" uncertain="true" fixed="false">
+    <location>src/acp/websocket.ts:71</location>
+    <summary>No Origin validation on the ACP WebSocket upgrade</summary>
+    <detail>The upgrade handler checks only the pathname; loopback-only binding is the sole access
+      control. A web page open in the user's browser (or any local process) can connect to
+      ws://127.0.0.1:18889/acp and drive the agent, including tool execution, unless the SDK's
+      `createNodeWebSocketUpgradeHandler` performs its own origin checks.</detail>
+  </defect>
+
+  <defect category="dead-code" severity="low" uncertain="false" fixed="false">
+    <location>src/ui/teammate-message.tsx:59</location>
+    <summary>TeammateMessage component is exported but unused anywhere</summary>
+    <detail>Grep across src/ shows TeammateMessage and parseTeammateMessage are only referenced
+      within teammate-message.tsx itself; teammate messages reach the conversation through
+      drainLeaderMailbox's task-notification XML instead. The file's own comments acknowledge it is
+      currently unused. Project policy (AGENTS.md) says dead code should be removed aggressively,
+      but removal is a code change outside this task's scope.</detail>
+  </defect>
+
+  <defect category="text-measurement" severity="low" uncertain="true" fixed="false">
+    <location>src/ui/marked-terminal.ts:600</location>
+    <summary>reflowText splits overlong words by UTF-16 code units, not terminal columns or
+      graphemes</summary>
+    <detail>In reflowText's overlong-word path, `word.substring(0, available)` and `column =
+      chunk.length` count UTF-16 units while the width budget is in terminal columns. CJK characters
+      (1 unit, 2 columns) can overflow the configured width by ~2x, and surrogate pairs/emoji may be
+      split mid-grapheme. Downstream wrapToLines in renderMarkdown clamps the visible overflow, so
+      impact is limited to reflowText's own width contract and possible broken characters.</detail>
+  </defect>
+
+  <defect category="input-handling" severity="low" uncertain="true" fixed="false">
+    <location>src/ui/terminal-input.ts:107</location>
+    <summary>Partial bracketed-paste markers are not exempt from the 25ms escape flush timer</summary>
+    <detail>The escape timer exempts pending input that starts with the OSC-11 or color-scheme
+      prefixes, but not a partial PASTE_START ("\x1b[200~"). If the marker arrives split across
+      chunks with a gap over 25ms (e.g. slow link), the pending partial bytes are flushed to Ink as
+      literal input and the following "0~" is treated as text, desynchronizing paste mode. The
+      comment at lines 105-106 only claims retention for reports, which matches the code.</detail>
+  </defect>
+
+  <defect category="performance" severity="low" uncertain="true" fixed="false">
+    <location>src/ui/input.tsx:424</location>
+    <summary>Synchronous recursive filesystem walk runs during render for @-mention completion</summary>
+    <detail>scanWorkdirFiles performs a recursive readdirSync/statSync walk (up to 2000 entries)
+      inside a useMemo during render whenever the @-mention cache is invalidated (30s TTL or
+      fileFactsVersion bump). On large workspaces this blocks Ink's event loop for the duration of
+      the walk, stalling input and animation; the 2000-entry cap bounds but does not eliminate the
+      stall.</detail>
+  </defect>
+
+  <defect category="unicode-handling" severity="low" uncertain="true" fixed="false">
+    <location>src/ui/plan-approval.tsx:69</location>
+    <summary>Feedback backspace deletes one UTF-16 code unit, splitting surrogate pairs</summary>
+    <detail>The plan-approval feedback field edits with `feedbackText.slice(0, -1)`, which deletes a
+      single UTF-16 code unit. Emoji and other non-BMP characters are stored as surrogate pairs, so
+      backspace leaves a lone surrogate that renders as a replacement character. This is
+      inconsistent with the grapheme-aware editing used by TextField and InputBox.</detail>
+  </defect>
+
+  <defect category="unicode-handling" severity="low" uncertain="true" fixed="false">
+    <location>src/ui/provider-login.tsx:484</location>
+    <summary>Cursor movement and deletion in provider-login fields operate on single UTF-16 code
+      units</summary>
+    <detail>Left/Right arrows, Backspace and Delete move `position` by ±1 code unit and slice
+      accordingly, so with non-BMP characters (emoji) the cursor can land inside a surrogate pair
+      and deletion can leave lone surrogates. Fields are mostly ASCII (URLs, keys, model ids), so
+      real-world impact is low, but the Name field accepts arbitrary text.</detail>
+  </defect>
+
+  <defect category="permission-bypass" severity="low" uncertain="true" fixed="false">
+    <location>src/permissions/index.ts:681</location>
+    <summary>Layer 3.5 sandbox auto-allow returns "allow" when Bash args.command is missing or
+      non-string</summary>
+    <detail>If strArg(args, "command") yields "" (missing/non-string command), the subcommand list
+      is empty, no deny/ask rule is evaluated, and the checker returns allow with reason "Sandbox
+      auto-allow". This is mitigated in practice because the Bash tool schema requires a string
+      command and Layer 1 evaluates the same empty content, but the layer itself silently approves a
+      call it never actually inspected.</detail>
+  </defect>
+
+  <defect category="unbounded-recursion" severity="low" uncertain="true" fixed="false">
+    <location>src/worktree/index.ts:183</location>
+    <summary>resolveRefInDir/resolveRef follow ref: symref chains without cycle detection or depth
+      limit</summary>
+    <detail>A loose ref file whose content is `ref: &lt;other&gt;` recurses through resolveRef →
+      resolveRefInDir indefinitely if the repository contains a symref cycle (corrupt or maliciously
+      crafted .git data). isSafeRefName blocks traversal but not cycles, so the recursion ends only
+      in a stack overflow, which may surface as an uncaught exception in callers like
+      readWorktreeHeadSha.</detail>
+  </defect>
+
+  <defect category="permission-bypass" severity="low" uncertain="true" fixed="false">
+    <location>src/todo/tools.ts:41</location>
+    <summary>Mutating task tools declare category "read", so they skip write-permission checks</summary>
+    <detail>TaskCreateTool and TaskUpdateTool persist state to &lt;workDir&gt;/.yukino/tasks/*.json
+      via TaskList mutations, yet all four task tools declare category = "read". The agent feeds
+      tool.category into PermissionChecker.check (src/agent/index.ts:1048-1070), where "read" is
+      auto-allowed in default and plan modes. Likely intentional for internal todo state, but it
+      lets plan-mode sessions mutate persisted files without any prompt.</detail>
+  </defect>
+
+  <defect category="unhandled-error" severity="low" uncertain="true" fixed="false">
+    <location>src/tool-result/index.ts:61</location>
+    <summary>writeSpill swallows write failures that lack an errno code and returns the path as if
+      written</summary>
+    <detail>The catch rethrows only when the error is an object with a `code` property other than
+      EEXIST; a failure without `code` (or a non-object throw) is logged and treated as success, so
+      the returned spill path may not exist. applyBudget/persistLargeResult then replace the
+      in-memory content with a preview pointing at a missing file, and the full tool output is lost.</detail>
+  </defect>
+
+  <defect category="race-condition" severity="low" uncertain="true" fixed="false">
+    <location>src/permissions/index.ts:510</location>
+    <summary>appendProjectRule does an unlocked read-modify-write of permissions.yaml</summary>
+    <detail>Two concurrent sessions or agents clicking "allow always" can both load the rule list,
+      then each writeFileSync the full file, so the second write silently drops the first session's
+      newly appended rule. Unlike the session store, no file lock (e.g. withFileSyncLock) guards
+      this path.</detail>
+  </defect>
+
+  <defect category="platform-compat" severity="low" uncertain="true" fixed="false">
+    <location>src/utils/paths.ts:72</location>
+    <summary>compactPath hardcodes "/" and never compacts home-relative paths on Windows</summary>
+    <detail>compactPath checks path.startsWith(`${home}/`), but on Windows resolve()/homedir()
+      produce backslash-separated paths, so the check never matches and paths are displayed in full
+      instead of as ~/... The rest of the codebase (e.g. plan-file/index.ts:35-36) explicitly
+      handles separator differences, making this an inconsistency rather than an intentional choice.</detail>
+  </defect>
+
+  <defect category="weak-assertion" severity="low" uncertain="false" fixed="false">
+    <location>tests/consolidation.test.ts:89</location>
+    <summary>Gate-skip tests assert nothing beyond "does not throw"</summary>
+    <detail>"skips when memory dir does not exist" (line 89) and "skips when session gate not met"
+      (line 128) call maybeRun() with no explicit expect(). The line-137 comment claims "the stub
+      client is never used", but the test never verifies that (e.g. with a spy), so a regression
+      that starts the LLM pass would still pass these tests as long as it does not throw.</detail>
+  </defect>
+
+  <defect category="flaky-timer" severity="low" uncertain="true" fixed="false">
+    <location>tests/consolidation.test.ts:124</location>
+    <summary>Real-timer 100ms sleep used to wait for potential async work</summary>
+    <detail>The test sleeps 100ms with a real setTimeout before asserting triggered === false. If a
+      regression ever schedules async work, 100ms is an arbitrary window that may be too short on a
+      loaded machine, turning a deterministic gate check into a sleep race. A vi.waitFor-style poll
+      or asserting on the lock state would be more robust.</detail>
+  </defect>
+
+  <defect category="flaky-timer" severity="low" uncertain="true" fixed="false">
+    <location>tests/bash-background.test.ts:249</location>
+    <summary>sleep(500) assumes partial output has flushed before stop</summary>
+    <detail>"preserves the captured output when a background task is stopped" waits a fixed 500ms
+      for `printf partial-out` to reach the output file, then stops the task and asserts the output
+      contains "partial-out". On a heavily loaded CI machine the child shell may not have flushed
+      within the window, making the assertion intermittently fail.</detail>
+  </defect>
+
+  <defect category="flaky-timer" severity="low" uncertain="true" fixed="false">
+    <location>tests/bash-background.test.ts:164</location>
+    <summary>sleep(300) before asserting a foreground task is registered</summary>
+    <detail>"backgrounds running foreground commands on demand (Ctrl+B path)" sleeps 300ms after
+      starting execute() and then expects hasForegroundTasks() to be true. If process spawn is
+      slower than 300ms the foreground registry is still empty and the test fails; the timing margin
+      is wall-clock dependent.</detail>
+  </defect>
+
+  <defect category="flaky-timer" severity="low" uncertain="false" fixed="false">
+    <location>tests/agent.test.ts:299</location>
+    <summary>Abort driven by a real 20ms setTimeout</summary>
+    <detail>The interrupt test schedules controller.abort() with a real 20ms timer while the tool
+      only resolves on the abort event. The test's correctness depends on wall-clock scheduling;
+      under event-loop starvation the abort can land late, stretching the run toward the test
+      timeout. Deterministic triggering (e.g. aborting after the tool_use event is observed) would
+      remove the race.</detail>
+  </defect>
+
+  <defect category="port-collision" severity="low" uncertain="false" fixed="false">
+    <location>tests/acp-transport.test.ts:72</location>
+    <summary>WebSocket test port derived from PID can collide</summary>
+    <detail>`20_000 + (process.pid % 20_000)` picks a fixed port per process. If another process
+      already binds that port, or two concurrent test processes have PIDs 20000 apart,
+      startAcpWebSocketServer fails with EADDRINUSE. Binding port 0 (ephemeral) would eliminate the
+      collision.</detail>
+  </defect>
+
+  <defect category="missing-cleanup" severity="low" uncertain="false" fixed="false">
+    <location>tests/at-expand.test.ts:41</location>
+    <summary>mkdtempSync temp dirs are never removed in several test files</summary>
+    <detail>at-expand.test.ts (lines 41, 51, 57, 64, 80, 99, 107), bash-background.test.ts
+      (makeContext), bash-subagent-routing.test.ts (makeWorkDir), clipboard-image.test.ts (lines 58,
+      73), command-loader.test.ts (cmdDir), and consolidation.test.ts (makeTempDir) create temp
+      directories that are never rmSync'd, leaking directories into the OS tmpdir on every run.
+      Other tests in this set (acp-agent, build-guards, config) do clean up, so the pattern is
+      inconsistent.</detail>
+  </defect>
+
+  <defect category="missing-cleanup" severity="low" uncertain="true" fixed="false">
+    <location>tests/acp-agent.test.ts:161</location>
+    <summary>First ACP test does not dispose the implementation in finally</summary>
+    <detail>The first test's finally block only removes the workDir, while the two sibling tests
+      also call `await implementation.dispose()`. The session is closed via session.close (which
+      disposes the runtime), so this is mostly cosmetic, but the asymmetry means any
+      connection-level resources registered by onConnect are only torn down when the client
+      connection closes.</detail>
+  </defect>
+
+  <defect category="weak-assertion" severity="low" uncertain="false" fixed="false">
+    <location>tests/diff.test.ts:102</location>
+    <summary>Truncation cap asserted as &lt;500 lines while MAX_DIFF_LINES is 200</summary>
+    <detail>The "caps output for very large diffs" test asserts text.split("\n").length &lt; 500,
+      but src/tools/diff.ts caps at MAX_DIFF_LINES=200 (201 lines including the truncation notice).
+      The bound would still pass if the cap silently regressed to anywhere under 499 lines, so it
+      only weakly pins the documented limit; asserting against the exported/actual cap (e.g. &lt;=
+      201) would catch drift.</detail>
+  </defect>
+
+  <defect category="silent-skip" severity="low" uncertain="true" fixed="false">
+    <location>tests/library-entry.test.ts:64</location>
+    <summary>Entire library-entry guard suite silently skips when dist/lib is absent</summary>
+    <detail>describe.skipIf(!existsSync(libEntry)) means that if the build stops emitting dist/lib
+      (or the entry moves), all ui-only-dependency, @/-leak, and API-surface guards pass vacuously
+      with no signal. The skip is presumably intentional for source-only checkouts, but a
+      missing-artifact condition and a not-yet-built condition are indistinguishable here.</detail>
+  </defect>
+
+  <defect category="missing-cleanup" severity="low" uncertain="false" fixed="false">
+    <location>tests/model-command.test.ts:38</location>
+    <summary>Mocked-home temp directories are created per test and never removed</summary>
+    <detail>beforeEach points the mocked os.homedir() at a fresh mkdtempSync directory containing a
+      written config.yaml, but no afterEach removes it, so every run leaks directories into the OS
+      tmpdir. delegation-prompts.test.ts in the same batch shows the repo's cleanup pattern (rmSync
+      in afterEach); this file omits it while writing real config files (mode 0600) to the leaked
+      dirs.</detail>
+  </defect>
+
+  <defect category="test-fixture-hygiene" severity="low" uncertain="true" fixed="false">
+    <location>tests/permissions.test.ts:234</location>
+    <summary>makeCheckerWithTiers called with a temp-dir path as the user-rules YAML content</summary>
+    <detail>`makeCheckerWithTiers(makeTmpDir(), body)` passes a directory path string as
+      `userRules`, which is written verbatim into the user-level permissions.yaml. It parses as a
+      bare string (not a rule list), so loadRulesFile silently returns [], and an extra temp dir is
+      created and leaked. The test still validates its claim via the project file, but the first
+      argument was almost certainly meant to be empty/valid YAML.</detail>
+  </defect>
+
+  <defect category="test-isolation" severity="low" uncertain="true" fixed="false">
+    <location>tests/permissions.test.ts:51</location>
+    <summary>makeChecker-based tests read the real ~/.yukino/permissions.yaml</summary>
+    <detail>makeChecker (and the "extra allowed roots"/"bypassPermissions" tests) construct
+      PermissionChecker without redirecting HOME, so RuleEngine merges the developer's real
+      user-level rules into every verdict. A user rule like `Bash(*) deny` would flip expected
+      outcomes. makeCheckerWithTiers in the same file demonstrates the intended HOME-redirection
+      isolation pattern.</detail>
+  </defect>
+
+  <defect category="weak-assertion" severity="low" uncertain="true" fixed="false">
+    <location>tests/provider-login.test.ts:288</location>
+    <summary>No-op rewrite claim is not actually asserted</summary>
+    <detail>The comment says persisting the same default_provider index is a no-op with "no needless
+      rewrite", but the test only re-reads the value (still 2). It never compares file content or
+      mtime before/after the second persistDefaultProvider(2) call, so the no-rewrite behavior in
+      src (provider-login.ts:230 early return) is unverified.</detail>
+  </defect>
+
+  <defect category="flaky-timing" severity="low" uncertain="true" fixed="false">
+    <location>tests/powershell-background.test.ts:168</location>
+    <summary>Real-timer sleep(700) race against a 1500ms command</summary>
+    <detail>"backgrounds running foreground commands on demand" waits a hardcoded 700ms of wall time
+      before checking hasForegroundTasks() and backgrounding. The margin against the 1500ms
+      Start-Sleep (plus pwsh startup overhead) is fixed and environment-dependent; a slow CI or a
+      fast-completing/failed spawn could flip the assertions. All other timing in the suite is
+      bounded by awaits on task.done.</detail>
+  </defect>
+
+  <defect category="flaky-timing" severity="low" uncertain="true" fixed="false">
+    <location>tests/powershell-background.test.ts:197</location>
+    <summary>Wall-clock bound on kill latency</summary>
+    <detail>"kills the process tree when a background task is stopped" asserts Date.now() - stopped
+      &lt; 3000. SIGKILL tree kills are fast, but this is a machine-load-dependent wall-clock
+      assertion that can fail spuriously on heavily loaded runners without indicating a real
+      regression.</detail>
+  </defect>
+
+  <defect category="duplicate-assertion" severity="low" uncertain="false" fixed="false">
+    <location>tests/resume-argument.test.ts:35</location>
+    <summary>Identical assertion repeated</summary>
+    <detail>`expect(parseResumeArgument(["--resume"])).toBe(true)` appears at line 30 and again
+      verbatim at line 35 within the same test. The second occurrence adds no coverage and looks
+      like a leftover copy-paste.</detail>
+  </defect>
+
+  <defect category="weak-assertion" severity="low" uncertain="true" fixed="false">
+    <location>tests/recover.test.ts:41</location>
+    <summary>Title promises timestamp coverage the test never asserts</summary>
+    <detail>"appends records with a timestamp" verifies entry content and append order, but never
+      asserts the `[ISO timestamp]` prefix that record() writes (src/recover.ts:42). The timestamp
+      behavior in the title is untested.</detail>
+  </defect>
+
+  <defect category="missing-cleanup" severity="low" uncertain="false" fixed="false">
+    <location>tests/recover.test.ts:60</location>
+    <summary>Temp dirs removed at end of test body instead of finally</summary>
+    <detail>The three "crash log" tests (lines 42-61, 65-78, 81-91) call rmSync only after their
+      assertions; any assertion failure leaks the yukino-crash-* temp directory (afterEach only
+      restores cwd). The child-process tests in the same file correctly use try/finally.</detail>
+  </defect>
+
+  <defect category="flaky-pattern" severity="low" uncertain="true" fixed="false">
+    <location>tests/teams.test.ts:85</location>
+    <summary>Real-time `wait(200)` sleeps used to await async teammate completion</summary>
+    <detail>The `wait` helper (used at lines 196, 215, 323, 428) races teammate task resolution
+      against a fixed 200ms wall-clock sleep. Under loaded CI workers or watch-mode parallelism,
+      mailbox notifications may not have landed within 200ms, producing intermittent failures
+      unrelated to product behavior. Awaiting the member's `done` promise or polling the mailbox
+      would be deterministic.</detail>
+  </defect>
+
+  <defect category="flaky-pattern" severity="low" uncertain="true" fixed="false">
+    <location>tests/terminal-input.test.ts:115</location>
+    <summary>Narrow real-timer margins over 100ms theme-detection and 25ms escape timeouts</summary>
+    <detail>`await delay(120)` (line 115) and `await delay(40)` (line 150) wait on real timers with
+      only 20ms/15ms of headroom over the src timeouts (terminal-theme.ts:143 default 100ms,
+      terminal-input.ts:116 escape timer 25ms). A scheduling hiccup can make the assertions run
+      before the timers fire. Fake timers would remove the race.</detail>
+  </defect>
+
+  <defect category="flaky-pattern" severity="low" uncertain="true" fixed="false">
+    <location>tests/tools-boundaries.test.ts:336</location>
+    <summary>Wall-clock assertion `Date.now() - started &lt; 1800` for prompt shell return</summary>
+    <detail>The test asserts the Bash call resolves in under 1800ms while a daemonized `sleep 2
+      &amp;` grandchild runs. The assertion is inherently timing-based; on a heavily loaded machine,
+      process startup plus the tool pipeline could exceed the bound even though the fd-mode behavior
+      under test is correct.</detail>
+  </defect>
+
+  <defect category="env-restore-bug" severity="low" uncertain="false" fixed="false">
+    <location>tests/teammate-registry.test.ts:51</location>
+    <summary>afterEach assigns possibly-undefined values to process.env, coercing to the string
+      "undefined"</summary>
+    <detail>`process.env.HOME = __origHome` when `__origHome` is undefined sets HOME to the literal
+      string "undefined" (Node coerces env assignments), leaking a bogus home directory into every
+      later test in the same worker. Sibling files (team-file.test.ts:57-66,
+      teams-shared-task.test.ts:54-63) correctly `delete` the variable in that case; this file does
+      not.</detail>
+  </defect>
+
+  <defect category="missing-cleanup" severity="low" uncertain="false" fixed="false">
+    <location>tests/session.test.ts:125</location>
+    <summary>mkdtempSync temp directories are never removed in several test files</summary>
+    <detail>session.test.ts, teams.test.ts (`workDir()`), teams-shared-task.test.ts (`tempDir()`),
+      todo.test.ts, tool-result.test.ts, tool-result-wiring.test.ts, tools-boundaries.test.ts
+      (`makeContext()`), and skills.test.ts (frontmatter tests) create temp dirs with no rmSync in
+      afterEach/afterAll, accumulating residue in the OS temp dir on every run. Other assigned files
+      (search-tools, shell-background, skills2, teammate-mode, teams-concurrency,
+      session-recovery-boundaries) do clean up, so the convention exists but is applied
+      inconsistently.</detail>
+  </defect>
+
+  <defect category="fragile-test" severity="low" uncertain="true" fixed="false">
+    <location>tests/teams-concurrency.test.ts:103</location>
+    <summary>`void mailbox.send(...)` followed by synchronous assertions relies on send's body being
+      fully synchronous</summary>
+    <detail>The test fire-and-forgets the async `send` and immediately asserts the lock file is gone
+      and `unreadCount()` is 1. This is only deterministic because FileMailbox.send
+      (src/teams/file-mailbox.ts:140-157) performs its entire locked write before any await. If send
+      ever gains a real await before the lock section, the test silently becomes a race instead of
+      failing loudly.</detail>
+  </defect>
+
+  <defect category="missing-cleanup" severity="low" uncertain="false" fixed="false">
+    <location>tests/worktree.test.ts:38</location>
+    <summary>Temp repositories created by initRepo are never removed</summary>
+    <detail>initRepo creates a mkdtempSync directory per test (two tests, each also spawning a
+      worktree inside it), but the file has no afterEach cleanup, unlike worktree-safety.test.ts
+      which tracks and rmSync's its temp dirs. Every run leaks two repo trees (with .git and
+      worktree contents) into the OS tmpdir. Accumulates across local runs and CI.</detail>
+  </defect>
+
+  <defect category="env-dependent-flakiness" severity="low" uncertain="true" fixed="false">
+    <location>tests/worktree.test.ts:42</location>
+    <summary>No isolation from the machine's global git config (GIT_CONFIG_GLOBAL / commit.gpgsign)</summary>
+    <detail>initRepo runs `git init` and `git commit` without setting GIT_CONFIG_GLOBAL=/dev/null
+      and without `-c commit.gpgsign=false`, both of which worktree-safety.test.ts deliberately
+      does. On machines whose global git config sets commit.gpgsign=true (no usable key) or an
+      interfering core.hooksPath, the setup commit can fail or behave differently, making these
+      tests environment-dependent while the sibling file is protected.</detail>
+  </defect>
+
+  <defect category="weak-assertion" severity="low" uncertain="true" fixed="false">
+    <location>tests/ui-agent-output.test.ts:571</location>
+    <summary>"cancels a scheduled stream flush when unmounted" only asserts clearTimeout was called
+      at all</summary>
+    <detail>The test spies globalThis.clearTimeout and expects it to have been called during
+      unmount, but any clearTimeout call from React/Ink internals during unmount would satisfy this
+      — it does not verify the specific stream-flush timer was cancelled. The neighboring test at
+      line 534 demonstrates the stronger pattern (advance timers and assert streamingText stays
+      empty).</detail>
+  </defect>
+
+  <defect category="fragile-test-helper" severity="low" uncertain="true" fixed="false">
+    <location>tests/ui-code-review-dialog.test.ts:98</location>
+    <summary>send()'s "handlers.length !== 2" guard is effectively dead because the useInput mock is
+      never cleared</summary>
+    <detail>beforeEach never calls vi.mocked(useInput).mockClear(), so mock.calls accumulate across
+      tests and slice(-2) always has length 2 after the first render; the guard can never fire
+      again. If a future render pass registered fewer than two handlers (e.g. TextField unmounted
+      while submitting), slice(-2) would silently dispatch to stale handlers from a previous test
+      instead of failing loudly.</detail>
+  </defect>
+
+  <defect category="code-duplication" severity="low" uncertain="true" fixed="false">
+    <location>src/subagent/agent-tool.ts:63</location>
+    <summary>FORK_QUERY_SOURCE exists as two independent constants that must stay byte-identical for
+      nested-fork detection to work</summary>
+    <detail>cloneRegistryForFork tags the cloned Agent tool with tool-filter.ts:181's exported
+      FORK_QUERY_SOURCE, while runFork's primary nested-fork check compares against
+      agent-tool.ts:63's private copy. If either string drifts, the primary check silently stops
+      matching and detection degrades to the fallback history scan (which fails after compaction).
+      agent-tool.ts already imports from tool-filter.js, so the exported constant could simply be
+      imported.</detail>
+  </defect>
+
+  <defect category="tool-policy-inconsistency" severity="low" uncertain="true" fixed="false">
+    <location>src/subagent/agent-tool.ts:300</location>
+    <summary>Background fork runs bypass ASYNC_AGENT_ALLOWED_TOOLS, unlike background
+      definition-based subagents</summary>
+    <detail>With run_in_background=true and no subagent_type, startBackground → runFork →
+      forkHandler → spawnSubagent receives options.conversation, so the registry is the
+      cloneRegistryForFork clone and options.background is never set; filterToolsForAgent's async
+      whitelist is never applied. The background fork keeps tools denied to background definition
+      agents (tagged Agent, TaskStop, team tools, InstallSkill), so the same run_in_background flag
+      yields different tool policies depending on the routing path.</detail>
+  </defect>
+
+  <defect category="shared-state-mutation" severity="low" uncertain="true" fixed="false">
+    <location>src/agent/index.ts:629</location>
+    <summary>max_tokens escalation mutates the shared LLM client, leaking a raised output ceiling
+      from a subagent into the parent and later runs</summary>
+    <detail>spawnSubagent reuses parentClient when a definition has no model/system-prompt override
+      (spawn.ts:108), so a subagent that hits max_tokens calls setMaxOutputTokens on the parent's
+      client. The parent Agent's own maxOutput field, which manageContext uses for context
+      budgeting, is not updated, so the token-budget computation and the actual request ceiling
+      diverge for all subsequent turns sharing that client.</detail>
+  </defect>
+
+  <defect category="fragile-parsing" severity="low" uncertain="true" fixed="false">
+    <location>src/subagent/loader.ts:109</location>
+    <summary>Frontmatter end is located with indexOf("---", 3), which matches "---" anywhere,
+      including inside YAML values</summary>
+    <detail>A definition whose frontmatter contains "---" inside a multi-line string (e.g. a
+      description containing a horizontal rule or dashed text) truncates the YAML block at that
+      position. The definition then either fails schema validation and is dropped with only an error
+      log, or parses with wrong fields. A line-anchored delimiter match would be robust.</detail>
+  </defect>
+
+  <defect category="inconsistent-arg-parsing" severity="low" uncertain="true" fixed="false">
+    <location>src/subagent/agent-tool.ts:292</location>
+    <summary>plan_mode_required is checked with strict === true while run_in_background uses
+      boolArg, so a string "true" silently starts the teammate without plan mode</summary>
+    <detail>boolArg coerces truthy non-booleans (utils/index.ts:187), but args.plan_mode_required
+      === true accepts only a real boolean. If the model sends plan_mode_required as the string
+      "true", the teammate spawns in acceptEdits mode instead of plan mode, silently losing the
+      read-only gating, with no error surfaced to the caller.</detail>
+  </defect>
+
+  <defect category="resource-leak" severity="low" uncertain="false" fixed="false">
+    <location>src/tools/computer-use.ts:977</location>
+    <summary>Mac helper exit-cleanup handler is never unregistered when compilation fails</summary>
+    <detail>`compileMacHelper` registers an exit-cleanup hook before running swiftc, but the catch
+      path at line 997 only removes the temp directory without unregistering the hook — unlike the
+      Windows counterpart (`compileWindowsHelper`, lines 1018/1049) which correctly calls
+      `unregisterCleanup()`. Repeated compile failures (e.g. missing Xcode tools with retries)
+      accumulate dead handlers in the exit-cleanup registry, each closing over a deleted directory
+      path.</detail>
+  </defect>
+
+  <defect category="argument-injection" severity="low" uncertain="true" fixed="false">
+    <location>src/tools/computer-use.ts:1226</location>
+    <summary>xdotool key names are passed without a `--` end-of-options separator</summary>
+    <detail>On Linux, `runXdotool(["key", keys.join("+")])` and the keydown/keyup loops (lines 1107,
+      1112) pass model-supplied key tokens directly; a token beginning with `-` (e.g. `--sync`,
+      `--clearmodifiers`) would be parsed as an xdotool option rather than a keysym. The `type`
+      action correctly uses `--` (line 1237) but `key`/`keydown`/`keyup` do not. Key names originate
+      from model output, which can be influenced by prompt injection in read content. Uncertain
+      because xdotool may reject or reinterpret such tokens harmlessly in the key subcommand.</detail>
+  </defect>
+
+  <defect category="unhandled-rejection" severity="low" uncertain="true" fixed="false">
+    <location>src/remote/server.ts:513</location>
+    <summary>`abort()` fires `stopAll()` promises with `void` and no `.catch`, risking unhandled
+      rejections.</summary>
+    <detail>`void this.backgroundTaskManager.stopAll()` and `void this.teamManager.stopAll()`
+      discard the promises without a catch handler. If either `stopAll` rejects (e.g. a
+      teammate/shell teardown throws), Node emits an unhandled-rejection warning or, under stricter
+      settings, terminates the process. The `stop()` path awaits these same calls inside try/catch,
+      so the fire-and-forget path in `abort()` is the inconsistent one. Uncertain because the
+      underlying `stopAll` implementations may already swallow errors internally.</detail>
+  </defect>
+
+  <defect category="state-desync" severity="low" uncertain="true" fixed="false">
+    <location>src/remote/fe/src/hooks/use-web-socket.ts:85</location>
+    <summary>Client `streaming` flag is not reconciled on reconnect, so the UI can stay stuck in
+      streaming mode.</summary>
+    <detail>On `onclose` the hook schedules a reconnect but never resets chat state, and the
+      server's reconnect payload (`connected` + `status`) carries no run/streaming information. If
+      the socket drops mid-run and the run finishes while disconnected, the client misses
+      `loop_complete`/`error` and `state.streaming` remains `true`, permanently showing the Stop
+      button and the steering placeholder. The `connected` reducer case in use-chat.ts also does not
+      clear `streaming`.</detail>
+  </defect>
+
+  <defect category="resource-leak" severity="low" uncertain="true" fixed="false">
+    <location>src/remote/server.ts:507</location>
+    <summary>`AgentHandleImpl.currentAgent` is never reset to null after a run completes.</summary>
+    <detail>The `run()` generator's `finally` clears `abortController` but leaves `currentAgent`
+      pointing at the finished `Agent`, so the last agent instance (and anything it transitively
+      retains) stays alive until the next run overwrites it. `takeSteeringLeftovers()` relies on
+      this reference to drain the just-finished agent, so it is partly intentional, but the stale
+      non-null reference between runs is a minor lifecycle imperfection rather than a clean
+      teardown.</detail>
+  </defect>
+
+  <defect category="path-traversal" severity="low" uncertain="true" fixed="false">
+    <location>src/remote/server.ts:238</location>
+    <summary>Static-file containment uses `fullPath.startsWith(FE_DIST)` without a path-separator
+      boundary.</summary>
+    <detail>The prefix check would also accept a sibling directory whose name shares the `FE_DIST`
+      prefix (e.g. `.../dist-evil`). It is currently safe in practice because `ctx.path` always
+      begins with `/`, so `join(FE_DIST, cleanPath)` always yields `FE_DIST/...`, but the guard
+      itself is fragile; comparing against `FE_DIST + sep` (or using `path.relative` and rejecting
+      `..`) would make the containment robust independent of that assumption.</detail>
+  </defect>
+
+  <defect category="logic-error" severity="low" uncertain="true" fixed="false">
+    <location>src/remote/server.ts:2323</location>
+    <summary>`handleResume` skip guard `!msg.content` does not catch empty content-block arrays.</summary>
+    <detail>The comment states tool-result-only messages are skipped because they have no text, but
+      `!msg.content` is only true for the empty string; an empty array `[]` is truthy, so such a
+      message would fall through and broadcast a `replay_user`/`replay_assistant` with empty text
+      (an empty bubble). In practice tool-result messages are persisted with `content: ""`, so this
+      rarely triggers, but the `RestoredMessage.content` type (`string | Record[]`) permits the `[]`
+      case (e.g. via compact `keep` messages), making the guard not fully aligned with its stated
+      intent.</detail>
+  </defect>
+
+  <defect category="performance" severity="low" uncertain="true" fixed="false">
+    <location>src/remote/fe/src/hooks/use-chat.ts:47</location>
+    <summary>Chat `items` grow unbounded and the message list is not virtualized.</summary>
+    <detail>Every server event appends to `state.items` and `MessageList` renders the entire array
+      via `items.map`, with `useAutoScroll` depending on the whole array. For very long-lived
+      sessions this is an ever-growing render and memory cost with no windowing/recycling. Not a
+      correctness bug, but a scalability concern for extended remote sessions.</detail>
+  </defect>
+
+  <defect category="diff-parsing" severity="low" uncertain="true" fixed="false">
+    <location>src/code-review/git.ts:94</location>
+    <summary>Synthesized untracked-file diffs embed raw paths without git-style quoting</summary>
+    <detail>untrackedFileDiff/untrackedBinaryDiff interpolate relPath directly into `diff --git
+      a/... b/...` headers and `+++ b/...` lines. Git quotes paths containing control characters,
+      quotes, or backslashes, but the synthesizer does not, so an untracked file whose name contains
+      a newline, `"`, `\`, or a ` b/` substring produces a diff that diff-parser's header regex
+      mis-splits or fails to match, silently dropping or corrupting that file's review input.</detail>
+  </defect>
+
+  <defect category="error-handling" severity="low" uncertain="true" fixed="false">
+    <location>src/code-review/git.ts:223</location>
+    <summary>Workspace fallback treats any `git diff HEAD` failure as "no commits yet"</summary>
+    <detail>tryGit returns null for every failure mode (corrupt repo, bad index, permission issues),
+      not just the unborn-HEAD case the comment describes. Any such failure silently degrades to
+      `git diff --staged`, which can yield a partial changeset that looks like a successful
+      workspace review instead of surfacing the real git error.</detail>
+  </defect>
+
+  <defect category="validation" severity="low" uncertain="false" fixed="false">
+    <location>src/code-review/comment-tool.ts:168</location>
+    <summary>parseComments accepts entries without existing_code, contradicting its own error text</summary>
+    <detail>Only non-record entries and empty `content` are dropped; a missing `existing_code`
+      yields an empty anchor that can never be positioned (resolution stays "unresolved"), yet the
+      comment is recorded silently. The zero-valid-comments error message claims "every entry needs
+      non-empty 'content' (and 'existing_code' to anchor a line)", which overstates what the parser
+      enforces.</detail>
+  </defect>
+
+  <defect category="logic" severity="low" uncertain="true" fixed="false">
+    <location>src/code-review/grouping.ts:135</location>
+    <summary>Split groups reuse the same label, producing duplicate group labels</summary>
+    <detail>enforceMaxFilesPerGroup and enforceGroupTokenBudget emit every chunk of a split group
+      under the original `g.label`. Duplicate labels then appear in result.groups, progress messages
+      ("[label] ..."), and ReviewComment.groupLabel, making groups indistinguishable for any
+      consumer that assumes label uniqueness.</detail>
+  </defect>
+
+  <defect category="logic" severity="low" uncertain="true" fixed="false">
+    <location>src/code-review/resolve.ts:189</location>
+    <summary>resolveComment treats a partially set line range as already resolved</summary>
+    <detail>The early return `cm.startLine > 0 || cm.endLine > 0` accepts a comment with only one
+      bound set (e.g. endLine > 0, startLine = 0) without any matching, and relocateWithLlm would
+      then mark resolution "llm" without verifying the corrected snippet. Currently unreachable
+      because parseComments zeroes both fields, but the guard is fragile against future callers.</detail>
+  </defect>
+
+  <defect category="logic" severity="low" uncertain="true" fixed="false">
+    <location>src/code-review/runner.ts:558</location>
+    <summary>LLM re-location is skipped when the filed path is not in the changeset</summary>
+    <detail>In the resolve closure, `d` is looked up once from diffByPath before the cross-file
+      probe; when the model files a comment against a path outside the changeset, `d` stays
+      undefined and `if (!located &amp;&amp; d)` skips relocateWithLlm even after
+      relocateAcrossFiles fails. Such comments remain permanently unresolved with no LLM fallback
+      attempt.</detail>
+  </defect>
+
+  <defect category="prompt-robustness" severity="low" uncertain="true" fixed="false">
+    <location>src/code-review/prompts.ts:273</location>
+    <summary>RELOCATION_USER wraps the diff in a ``` fence that diff content can close early</summary>
+    <detail>The template embeds `{{diff}}` inside a triple-backtick fence. Any diff touching
+      Markdown or prompt files can contain a ``` line, which terminates the fence early and leaves
+      the remainder of the diff (and the trailing instructions) outside the intended block,
+      degrading the re-location call for exactly the files most likely to contain fences.</detail>
+  </defect>
+
+  <defect category="protocol-inconsistency" severity="low" uncertain="false" fixed="false">
+    <location>src/teams/index.ts:490</location>
+    <summary>In-process teammate acks only typed shutdown requests; prefix-only "[shutdown]" notices
+      get no shutdown_response</summary>
+    <detail>isShutdownRequest (protocol.ts) deliberately accepts plain-text messages starting with
+      "[shutdown]" (manual mailbox writes, older processes), and stopOne itself sends exactly such
+      an untyped notice to external members. But the in-process loop gates its acknowledgment on
+      `req?.type === MSG_SHUTDOWN_REQUEST`, so an untyped shutdown ends the loop with no reply to
+      the leader, breaking the request/response correlation the protocol documents.</detail>
+  </defect>
+
+  <defect category="message-loss" severity="low" uncertain="true" fixed="false">
+    <location>src/teammate.ts:394</location>
+    <summary>External teammate drops already-consumed mailbox messages that follow a shutdown
+      request in the same batch</summary>
+    <detail>receiveSync marks the entire batch as read; the polling loop then processes messages in
+      order and `break polling` on a shutdown request discards any remaining messages in that batch
+      permanently. Senders of those messages receive no error and no processing. Narrow window, but
+      the messages are consumed and lost rather than requeued.</detail>
+  </defect>
+
+  <defect category="state-inconsistency" severity="low" uncertain="true" fixed="false">
+    <location>src/teams/index.ts:196</location>
+    <summary>Restored external members are marked active/"running" without verifying the pane
+      process still exists</summary>
+    <detail>hydrateMember sets `active = isActive &amp;&amp; external` and builds a "running"
+      uiState purely from the on-disk snapshot. If a tmux/iTerm teammate died while the leader was
+      down, the restored UI shows it as running indefinitely; nothing probes the tmux session or
+      process, and cancel (kill-session) on a dead session is silently ignored.</detail>
+  </defect>
+
+  <defect category="event-loop-blocking" severity="low" uncertain="true" fixed="false">
+    <location>src/teams/file-lock.ts:55</location>
+    <summary>Synchronous lock waits (Atomics.wait) block the leader's entire event loop for up to 5s
+      under cross-process contention</summary>
+    <detail>withFileSyncLock retries with sleepSync, which blocks the Node.js thread. All mailbox
+      operations (send/receiveSync/unreadCount) and config/task writes in the leader UI process go
+      through it, so a teammate process holding a lock — or a slow stale-entry cleanup — freezes the
+      TUI until the lock is granted or LOCK_ACQUIRE_TIMEOUT_MS (5s) elapses. Hold times are normally
+      tiny, so this is a design trade-off rather than a likely hang.</detail>
+  </defect>
+
+  <defect category="worktree-isolation-gap" severity="low" uncertain="true" fixed="false">
+    <location>src/teams/index.ts:309</location>
+    <summary>External (tmux/iTerm) teammates ignore worktree isolation: spawnExternal always uses
+      the team's workDir as cwd</summary>
+    <detail>agent-tool.ts computes a per-member worktree (memberWorkDir) and passes it only to the
+      in-process runAgent factory and setMemberMeta; Team.spawnTeammate has no workDir parameter, so
+      spawnExternal launches the process with `cwd: this.workDir`. The external teammate merely gets
+      a prompt notice about the worktree path and starts in the main checkout, weakening the
+      isolation guarantee for pane backends.</detail>
+  </defect>
+
+  <defect category="stale-lock" severity="low" uncertain="true" fixed="false">
+    <location>src/teams/file-lock.ts:147</location>
+    <summary>Stale lock entries are pruned only when the recorded PID is dead; PID reuse blocks
+      cleanup until acquisition times out</summary>
+    <detail>liveLockEntries removes an entry only if it is older than LOCK_STALE_MS AND its embedded
+      PID is not alive. If the crashed holder's PID was recycled by an unrelated live process, the
+      orphaned choosing/ticket entry is never removed and every contender times out after 5s and
+      throws, making the mailbox/task file permanently inaccessible until manual cleanup.</detail>
+  </defect>
+
+  <defect category="crash-window" severity="low" uncertain="true" fixed="false">
+    <location>src/teams/index.ts:364</location>
+    <summary>Leader crash between external spawn and the final persist loses paneId, leaving the
+      member un-killable after restore</summary>
+    <detail>spawnExternal persists isActive=true before spawning, then spawns, then persists again
+      to record paneId/cancel. A crash in between leaves the on-disk member active without a paneId;
+      restoreTeammateCancel returns undefined, so the restored leader can only request shutdown via
+      mailbox and cannot force-kill the tmux session.</detail>
+  </defect>
+
+  <defect category="mode-derivation" severity="low" uncertain="true" fixed="false">
+    <location>src/teams/index.ts:783</location>
+    <summary>Restored team mode is derived from the first member's backendType, so one in-process
+      fallback permanently downgrades the team</summary>
+    <detail>TeamManager.get() computes `mode = tf.members.find(m => m.backendType)?.backendType`.
+      Team mode is not persisted at team level; if the first spawn fell back to in-process (e.g.
+      tmux transiently failed), every later restore treats the team as in-process even after the
+      external backend becomes available, and new members spawn with the wrong backend.</detail>
+  </defect>
+
+  <defect category="error-classification" severity="low" uncertain="false" fixed="false">
+    <location>src/llm/openai.ts:1104</location>
+    <summary>Connection/abort SDK errors are classified as generic LLMError instead of NetworkError</summary>
+    <detail>OpenAI's APIConnectionError, APIConnectionTimeoutError, and APIUserAbortError all extend
+      OpenAI.APIError with status undefined, so they pass the 413/401/429 checks and land in the
+      generic branch, producing "OpenAI API error (undefined): ...". The NetworkError fallback is
+      unreachable for these SDK-thrown transport failures, defeating the error taxonomy (and
+      printing an "undefined" status to users).</detail>
+  </defect>
+
+  <defect category="error-classification" severity="low" uncertain="false" fixed="false">
+    <location>src/llm/anthropic.ts:652</location>
+    <summary>Connection/abort SDK errors are classified as generic LLMError instead of NetworkError</summary>
+    <detail>Anthropic's APIConnectionError, APIConnectionTimeoutError, and APIUserAbortError extend
+      Anthropic.APIError with status undefined, so classifyAnthropicError returns
+      LLMError("Anthropic API error (undefined): ...") rather than NetworkError. User aborts are
+      mitigated because the agent loop checks abortSignal.aborted before inspecting the error, but
+      genuine transport failures lose their NetworkError classification.</detail>
+  </defect>
+
+  <defect category="compaction-stop-reason" severity="low" uncertain="true" fixed="false">
+    <location>src/compact/compact.ts:538</location>
+    <summary>collectSummary rejects any stop reason other than end_turn/stop, including Anthropic's
+      stop_sequence</summary>
+    <detail>If the summary response ends with stop_reason "stop_sequence" (or a compat gateway's
+      equivalent), collectSummary throws "Compaction summary did not finish" even though a complete,
+      usable summary text was produced. This turns a successful summarization into a compaction
+      failure and increments the auto-compact circuit-breaker counter.</detail>
+  </defect>
+
+  <defect category="error-detail-loss" severity="low" uncertain="true" fixed="false">
+    <location>src/llm/model-discovery.ts:142</location>
+    <summary>Bare catch collapses all discovery failures into a generic error, discarding the cause</summary>
+    <detail>The catch block in discoverModels swallows the original error (HTTP status, zod parse
+      issues, network failures) and rethrows a generic "Model discovery failed" without a cause
+      chain, making provider/model-picker discovery problems hard to diagnose. It may be intentional
+      to avoid leaking endpoint details, but no logging preserves the cause either.</detail>
+  </defect>
+
+  <defect category="config-type-coercion" severity="low" uncertain="true" fixed="false">
+    <location>src/config/index.ts:238</location>
+    <summary>Fallback config parse coerces flag fields with Boolean(), accepting non-boolean values</summary>
+    <detail>In loadSingleFile's degraded path (full schema parse failed),
+      enable_coordinator_mode/enable_fork/enable_memory are read via Boolean(raw.x), so a mistyped
+      value like the string "false" or a number silently becomes true instead of surfacing a config
+      error. This only triggers when the primary AppConfigSchema parse already failed, so exposure
+      is limited.</detail>
+  </defect>
+
+  <defect category="metric-unit-assumption" severity="low" uncertain="true" fixed="false">
+    <location>src/telemetry/providers.ts:537</location>
+    <summary>recordMetric hardcodes unit "ms" for every histogram</summary>
+    <detail>ProviderRuntime.recordMetric creates all histograms with { unit: "ms" } while the public
+      API accepts any metric name/kind. All current histogram uses are durations, so nothing is
+      wrong today, but any future non-time histogram (e.g. token counts) would silently be exported
+      with an incorrect unit.</detail>
+  </defect>
+
+  <defect category="file-race" severity="low" uncertain="false" fixed="false">
+    <location>src/history/index.ts:78</location>
+    <summary>prompt_history.jsonl is rewritten without a lock or atomic rename</summary>
+    <detail>append() does a read-modify-write of the whole history file with a bare writeFileSync:
+      no withFileSyncLock (unlike the session module) and no tmp+rename. Two concurrent yukino
+      processes in the same workDir can lose entries, and a crash mid-write truncates/corrupts the
+      file. Impact is limited to prompt history, hence low severity.</detail>
+  </defect>
+
+  <defect category="logic-bug" severity="low" uncertain="false" fixed="false">
+    <location>src/memory/extractor.ts:223</location>
+    <summary>extract() returns inconsistent name formats across the two save paths</summary>
+    <detail>The fast path returns basenames with the .md extension (memoryPaths.map(basename)) while
+      the text-protocol fallback returns names without extensions. The TUI displays the list
+      verbatim ("Memory saved: ..."), so users see "topic.md" or "topic" depending on which path
+      saved the memory. Both callers currently tolerate it, but the return contract is incoherent.</detail>
+  </defect>
+
+  <defect category="error-handling" severity="low" uncertain="false" fixed="false">
+    <location>src/memory/consolidation.ts:121</location>
+    <summary>Consolidation run failures are swallowed without logging</summary>
+    <detail>maybeRun() chains .catch(() => undefined) after the background run, discarding any error
+      thrown by the consolidation subagent (including LLM and tool failures) with no log entry; only
+      lock-release failures are logged. Failed passes are invisible in diagnostics and simply retry
+      after the throttle window.</detail>
+  </defect>
+
+  <defect category="side-effect" severity="low" uncertain="true" fixed="false">
+    <location>src/memory/manager.ts:207</location>
+    <summary>loadAll materializes .yukino/memory/ and an empty MEMORY.md with zero memories</summary>
+    <detail>buildSystemReminder calls loadAll(), which runs writeIndex() before the empty check;
+      with no memories this mkdirs .yukino/memory and writes a newline-only MEMORY.md on every turn.
+      That materializes the directory that MemoryConsolidator.maybeRun uses as its enablement gate,
+      letting consolidation passes start on projects that never saved a memory.</detail>
+  </defect>
+
+  <defect category="error-handling" severity="low" uncertain="true" fixed="false">
+    <location>src/memory/extractor.ts:97</location>
+    <summary>Pending extraction runs inside finally and can mask the original error</summary>
+    <detail>In runExtraction(), if doExtract throws, the finally block awaits a queued
+      runExtraction(pending). If that nested run also throws, it replaces the original exception; if
+      it succeeds, its results are discarded because the original throw still propagates. The
+      recursion-in-finally structure makes failure attribution and result aggregation unreliable.</detail>
+  </defect>
+
+  <defect category="unbounded-growth" severity="low" uncertain="true" fixed="false">
+    <location>src/conversation/at-expand.ts:86</location>
+    <summary>No cap on the number of @refs or total inlined bytes</summary>
+    <detail>expandAtRefs/expandAtRefsWithImages bound each file (MAX_INLINE_BYTES) and the image
+      count, but not the number of refs or the cumulative appendix size. A message containing many
+      @tokens that resolve to files just under 100KB can produce an arbitrarily large outgoing
+      message (cost/provider-limit blowup) with no total-size guard.</detail>
+  </defect>
+
+  <defect category="prompt-injection" severity="low" uncertain="true" fixed="false">
+    <location>src/conversation/index.ts:135</location>
+    <summary>Reminder wrapper tags are not escaped against embedded content</summary>
+    <detail>addSystemReminder wraps arbitrary content in literal &lt;system-reminder&gt; tags
+      without escaping. Reminder payloads quote externally influenced text (memory files, tool
+      output, teammate mail), so content containing a closing tag can break out of the wrapper and
+      forge reminder-level context for the model.</detail>
+  </defect>
+
+  <defect category="logic-bug" severity="low" uncertain="true" fixed="false">
+    <location>src/memory/instructions.ts:163</location>
+    <summary>Fenced-code tracking toggles on any ``` line and can invert state</summary>
+    <detail>expandIncludes flips inCode on every line starting with ```, regardless of nesting or
+      info strings. An unbalanced fence (also possible inside an @included file, where state is
+      shared) inverts the flag, causing later @include lines to be wrongly expanded inside "code" or
+      literal @ lines to be processed outside it.</detail>
+  </defect>
+
+  <defect category="resource-leak" severity="low" uncertain="true" fixed="false">
+    <location>src/session/index.ts:256</location>
+    <summary>Crash between tmp write and rename leaves orphaned rewind-tmp files</summary>
+    <detail>truncateSessionLines writes &lt;file&gt;.&lt;pid&gt;.rewind-tmp inside the sessions
+      directory before renameSync. A crash in that window leaves the tmp file behind permanently:
+      listSessions filters on .jsonl and cleanExpiredSessions only removes .jsonl files and
+      per-session subdirectories, so nothing ever sweeps these orphans.</detail>
+  </defect>
+
+  <defect category="layout-duplication" severity="low" uncertain="true" fixed="false">
+    <location>src/session/index.ts:626</location>
+    <summary>file-history directory layout is reconstructed inline despite a declared single source
+      of truth</summary>
+    <detail>cleanExpiredSessions computes the file-history path as join(dirname(dir),
+      "file-history", id) instead of calling fileHistoryDir(), which its JSDoc declares the single
+      source of truth for that layout. Any future change to the layout must now be made in two
+      modules or expired-session cleanup will sweep the wrong directory.</detail>
+  </defect>
+
+  <defect category="unhandled-rejection" severity="low" uncertain="true" fixed="false">
+    <location>src/acp/agent.ts:545</location>
+    <summary>Connection-abort listener fires dispose() without catching rejection</summary>
+    <detail>`void implementation.dispose()` in the `onConnect` abort handler: if any
+      `runtime.dispose()` leg (background tasks, teams, MCP disconnect) rejects, the promise rejects
+      unobserved. Unlike `closeSession`, this path has no error channel.</detail>
+  </defect>
+
+  <defect category="resource-exhaustion" severity="low" uncertain="false" fixed="false">
+    <location>src/skills/install-skill-tool.ts:123</location>
+    <summary>Downloaded SKILL.md content is buffered with no size limit</summary>
+    <detail>`await resp.text()` reads the entire response into memory regardless of length. A
+      malicious or misconfigured URL serving a huge body can exhaust memory; the 30s timeout bounds
+      but does not cap the download.</detail>
+  </defect>
+
+  <defect category="parsing-inconsistency" severity="low" uncertain="true" fixed="false">
+    <location>src/commands/loader.ts:106</location>
+    <summary>Frontmatter terminator matched by substring, not line-anchored</summary>
+    <detail>`raw.indexOf("---", 3)` finds the first `---` anywhere, including mid-line inside a YAML
+      value (e.g. `description: a---b`), truncating frontmatter and corrupting the body.
+      `parseSkillFile` in src/skills/catalog.ts uses a line-anchored regex for the same job, so the
+      two loaders disagree on edge-case inputs.</detail>
+  </defect>
+
+  <defect category="symlink-recursion" severity="low" uncertain="true" fixed="false">
+    <location>src/commands/loader.ts:69</location>
+    <summary>walkDir follows symlinked directories and can recurse indefinitely</summary>
+    <detail>`statSync` resolves symlinks, so a symlink under `.yukino/commands` pointing at an
+      ancestor directory creates unbounded recursion (stack overflow) at command-load time. No depth
+      limit or cycle detection exists.</detail>
+  </defect>
+
+  <defect category="name-collision" severity="low" uncertain="true" fixed="false">
+    <location>src/mcp/tool-wrapper.ts:66</location>
+    <summary>buildMcpToolName is not injective for names containing double underscores</summary>
+    <detail>Server `a__b` with tool `c` and server `a` with tool `b__c` both compose to
+      `mcp__a__b__c`; the later registration silently shadows the earlier one in the registry.
+      Sanitization maps hyphens to underscores, widening the set of names that can collide.</detail>
+  </defect>
+
+  <defect category="usage-accounting" severity="low" uncertain="true" fixed="false">
+    <location>src/acp/agent.ts:503</location>
+    <summary>PromptResponse.usage reports session-cumulative totals on every prompt</summary>
+    <detail>`session.usage` accumulates via `addUsage` across all prompts and is returned whole in
+      each PromptResponse. If the ACP spec intends per-prompt usage, clients that sum responses
+      double-count; if it intends cumulative usage, the field name and per-turn return are still
+      easy to misread.</detail>
+  </defect>
+
+  <defect category="resource-leak" severity="low" uncertain="true" fixed="false">
+    <location>src/mcp/client.ts:318</location>
+    <summary>disconnect() nulls the transport without closing it when client.close() throws</summary>
+    <detail>The catch around `client.close()` logs and proceeds to set `transport = null`, dropping
+      the only reference. If close() failed before tearing down the transport, a spawned stdio child
+      process or open HTTP/SSE connection can outlive the client.</detail>
+  </defect>
+
+  <defect category="error-reporting" severity="low" uncertain="true" fixed="false">
+    <location>src/mcp/client.ts:177</location>
+    <summary>Image conversion failures are always reported as "too large"</summary>
+    <detail>`maybeResizeAndDownsampleImage` can also fail on corrupt or undecodable base64 data, but
+      the log message and the note injected into the tool output both assert the image was "too
+      large to fit the API limit", misleading the model and the user about the actual cause.</detail>
+  </defect>
+
+  <defect category="observability-gap" severity="low" uncertain="true" fixed="false">
+    <location>src/main.tsx:61</location>
+    <summary>ACP mode returns before initializeTelemetry(), so --acp/--acp-ws sessions are never
+      traced</summary>
+    <detail>main() dispatches --acp/--acp-ws to runAcp() before calling initializeTelemetry();
+      teammate, print, remote, and terminal modes all initialize it. Users who configure
+      OpenTelemetry/Langfuse via environment variables get tracing in every mode except ACP, with no
+      indication that ACP is excluded. May be intentional, but nothing documents the exclusion.</detail>
+  </defect>
+
+  <defect category="cli-argument-parsing" severity="low" uncertain="true" fixed="false">
+    <location>src/print-mode.ts:98</location>
+    <summary>-p rejects any prompt that starts with "-" and the error message suggests a fix that
+      does not work</summary>
+    <detail>parsePrintFlags treats a following argument starting with "-" as a missing prompt and
+      exits with "quote multi-word prompts", but quoting does not help: `yukino -p "-1"` is still
+      rejected because the check runs on the raw argv token. Legitimate prompts beginning with a
+      dash cannot be passed to print mode.</detail>
+  </defect>
+
+  <defect category="cli-argument-parsing" severity="low" uncertain="true" fixed="false">
+    <location>src/main.tsx:95</location>
+    <summary>--remote is silently ignored when combined with -p or teammate flags</summary>
+    <detail>main() parses --remote into remoteAddr first, but the print-mode and teammate branches
+      run before the remote branch and return, so `yukino --remote -p "x"` executes print mode with
+      no warning that --remote was discarded. Flag-combination conflicts are otherwise rejected
+      explicitly (e.g. --acp vs --acp-ws).</detail>
+  </defect>
+
+  <defect category="error-reporting" severity="low" uncertain="true" fixed="false">
+    <location>src/config/index.ts:166</location>
+    <summary>Malformed config.yaml degrades to empty defaults; the YAML error is only logged, not
+      surfaced</summary>
+    <detail>loadSingleFile logs "invalid yaml" and returns { default_provider: 0, providers: [], ...
+      } when yaml.load fails. The user then sees a downstream ConfigError about missing providers
+      instead of the actual parse problem, which is only visible in the pino log file. A hand-edited
+      config with a syntax error therefore produces a misleading failure message.</detail>
+  </defect>
+
+  <defect category="ux-inconsistency" severity="low" uncertain="true" fixed="false">
+    <location>src/commands/commands.ts:146</location>
+    <summary>Command lookup is case-sensitive: /help Help and /Help report "Unknown command"</summary>
+    <detail>CommandRegistry.find uses exact Map lookup and parse() preserves the input case, so any
+      non-lowercase command name fails even though all registered names are lowercase.
+      CommandRegistry.complete() lowercases for completion, making dispatch and completion disagree.
+      Minor UX inconsistency; many CLIs are case-sensitive by design, hence uncertain.</detail>
+  </defect>
+
+  <!-- ============ fixed documentation/comment defects ============ -->
+
+  <defect category="stale-documentation" severity="low" uncertain="false" fixed="true">
+    <location>README.md</location>
+    <summary>Slash-command table omitted /model and /status listed an incomplete output set</summary>
+    <detail>Verified against createDefaultRegistry (commands.ts) and the /status handler (app.tsx):
+      /model (switch model / open picker) was missing entirely, and /status actually reports mode,
+      model, provider, tokens, tools, sandbox, memories, skills, MCP, session, directory. Table
+      corrected.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/code-review/resolve.ts</location>
+    <summary>Comment claimed the review prompt forbids commenting on deleted code</summary>
+    <detail>MAIN_SYSTEM (prompts.ts) says to avoid commenting on deleted code, not forbid it.
+      Reworded to match the prompt.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/commands/usage-tracker.ts</location>
+    <summary>Restating comment inside catch block</summary>
+    <detail>Removed '// ignore write errors' — the log.error call already documents the handling.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/compact/compact.ts</location>
+    <summary>Comments used Python-style notation (conversation.len(), messages[:keepStart]) and
+      restated code</summary>
+    <detail>Rewrote anchorCount and keepStart comments in terms of the actual TypeScript API;
+      removed a restating comment in formatCompactSummary.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/config/index.ts</location>
+    <summary>Restating enum comment and stale example in provider-error comment</summary>
+    <detail>Removed the VALID_PROTOCOLS enum restatement; trimmed a stale '(e.g. a removed legacy
+      field)' example.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/config/provider-config.ts</location>
+    <summary>THINKING_LEVELS doc said levels map to effort strings only for openai protocols</summary>
+    <detail>Adaptive anthropic mode also maps levels to effort strings (output_config); doc
+      corrected to name both paths.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/config/provider-login.ts</location>
+    <summary>JSDoc claimed atomic write 'preserving 0600 permissions'</summary>
+    <detail>writeConfigAtomic creates the file with mode 0600 rather than preserving prior
+      permissions; reworded.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/conversation/pairing.ts</location>
+    <summary>Module comment said only Anthropic rejects unpaired tool_use</summary>
+    <detail>The OpenAI frontends reject unpaired tool calls as well; comment now names both protocol
+      families.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/file-history/index.ts</location>
+    <summary>sessionLineCount JSDoc justified survival via 'replayed 1:1 on resume'</summary>
+    <detail>The real invariant is that the session log is append-only and line positions are never
+      renumbered; corrected. Also removed a restating 'Compare with current file' comment.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/hooks/index.ts</location>
+    <summary>agentRunner comment said agent hooks 'always fail at runtime'; once-slot comment
+      ignored the async path</summary>
+    <detail>validate() rejects agent-type configs outright, so the path is unreachable outside
+      tests; once-slot release happens on sync and async failures. Both corrected.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/llm/anthropic.ts</location>
+    <summary>Comment said a missing message_stop 'yields no stream_end'</summary>
+    <detail>The code throws NetworkError instead of yielding; comment rewritten to describe the
+      throw.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/logger/index.ts</location>
+    <summary>logDir JSDoc used the wrong teammate log path (~/.yukino/teams/&lt;team&gt;/logs/)</summary>
+    <detail>Corrected to ~/.yukino/teams/&lt;namespace&gt;/&lt;team&gt;/logs/. Two redundant
+      one-line JSDoc restatements removed. (The code-level path bug is recorded separately as an
+      unfixed defect.)</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/memory/consolidation.ts</location>
+    <summary>Three decorative section dividers</summary>
+    <detail>Removed '--- Lock file management ---', '--- Session listing ---', '--- Prompt ---'
+      dividers that restated adjacent declarations.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/memory/extractor.ts</location>
+    <summary>Restating comments ('Build the child agent tool registry', 'drain')</summary>
+    <detail>Removed; the code is self-explanatory.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/memory/instructions.ts</location>
+    <summary>Restating '// ignore' in catch block</summary>
+    <detail>Removed; log.error already documents the handling.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/memory/manager.ts</location>
+    <summary>Two decorative 'Feature 1/Feature 2' dividers</summary>
+    <detail>Removed; the JSDoc of each method already describes it.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/memory/memory-age.ts</location>
+    <summary>Module doc said staleness text is 'appended' to memories</summary>
+    <detail>The reminder is rendered alongside memories at read time, not appended to the files;
+      corrected.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/permissions/index.ts</location>
+    <summary>CachedRules comment referenced 'mtime' while the field is mtimeNs</summary>
+    <detail>Updated to mtimeNs and reworded the rationale (either signal alone can miss a rewrite).</detail>
+  </defect>
+
+  <defect category="misplaced-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/remote/server.ts</location>
+    <summary>'Wire the team manager into AgentTool' comment sat above the forkDisabled assignment</summary>
+    <detail>Moved and merged with the adjacent provider-index comment directly above the
+      setTeamManager call it describes.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/session/index.ts</location>
+    <summary>Four comment inaccuracies</summary>
+    <detail>Fixed: ordinary session lines 'carry no type' (not 'have an empty type');
+      cleanExpiredSessions also removes the file-history directory; failures are logged, not
+      silently skipped; removed a restating catch comment.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/skills/catalog.ts</location>
+    <summary>Restating comment in catch block</summary>
+    <detail>Removed 'Retain the cached version if reading fails' — falling through keeps the cache
+      by construction.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/teammate.ts</location>
+    <summary>Comment claimed cleanExpiredLogs scans the sibling logs dir and used the wrong path
+      shape</summary>
+    <detail>The mailbox dir is ~/.yukino/teams/&lt;namespace&gt;/&lt;team&gt;/inboxes; the
+      cleanExpiredLogs claim was wrong (recorded as an unfixed defect) and removed. Also dropped a
+      redundant module-logger comment.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/teams/file-mailbox.ts</location>
+    <summary>Locking comment described an 'exclusive-create lock file'</summary>
+    <detail>The lock is a directory of exclusive-create contender entries; corrected. Decorative
+      dividers removed.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/teams/index.ts</location>
+    <summary>paneId called 'diagnostics'; shutdown ack comment ignored the typed-only gate</summary>
+    <detail>paneId is persisted so cancellation survives a leader restart; the ack is only sent for
+      typed shutdown requests. Both corrected.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/teams/progress.ts</location>
+    <summary>Restating schema labels</summary>
+    <detail>Removed 'Tool activity description' and 'Full teammate UI state' comments above
+      self-describing schemas.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/teams/team-file.ts</location>
+    <summary>JSDoc said the in-memory Member carries a 'conversation'</summary>
+    <detail>The non-serializable runtime state is mailbox, cancel callback, and UI state; corrected.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/tools/grep.ts</location>
+    <summary>Comment referenced '(old behavior)' for symlink following</summary>
+    <detail>Removed the historical aside; the current rule (follow file symlinks, never descend into
+      dir symlinks) is what matters.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/tools/powershell.ts</location>
+    <summary>Comment said the exit sweep kills 'this detached tree'</summary>
+    <detail>PowerShell tasks are not detached; corrected to 'this process tree'.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/ui/ask-user-dialog.tsx</location>
+    <summary>Five decorative section dividers plus two restating comments</summary>
+    <detail>Removed '── State management ──' etc., the '{/* "Other" option */}' marker, and '//
+      Submit view' which restated if (isSubmitTab).</detail>
+  </defect>
+
+  <defect category="misplaced-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/ui/chat.tsx</location>
+    <summary>CommittedMessage JSDoc was attached to the props interface</summary>
+    <detail>Moved the JSDoc above the CommittedMessage function it documents.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/ui/marked-terminal.ts</location>
+    <summary>Six decorative '=== ... ===' section dividers</summary>
+    <detail>Removed; they restated the adjacent declarations.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/ui/selector-search.ts</location>
+    <summary>Claimed only provider/session selectors call updateSelectorQuery</summary>
+    <detail>model-select.tsx also calls it; comment rewritten.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/ui/text-field.tsx</location>
+    <summary>Padding comment asserted QuestionContent padding as if universal</summary>
+    <detail>Only the ask-user dialog applies that padding; corrected to describe the shared
+      TextField accurately.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/utils/index.ts</location>
+    <summary>contentToText doc said non-text blocks 'become placeholders'</summary>
+    <detail>They are reduced to text-only summaries; corrected.</detail>
+  </defect>
+
+  <defect category="redundant-comment" severity="low" uncertain="false" fixed="true">
+    <location>src/worktree/index.ts</location>
+    <summary>Restating comment and decorative divider</summary>
+    <detail>Removed 'Loose file does not exist, try packed-refs' (covered by the adjacent comment)
+      and the '── Worktree Management ──' divider.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>tests/diff.test.ts</location>
+    <summary>Comment claimed context lines carry original (old-file) line numbers</summary>
+    <detail>src/tools/diff.ts documents — and the fourth test asserts — that context lines carry
+      new-file numbers; corrected.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>tests/read-file-image.test.ts</location>
+    <summary>Test title said 'returns a label text block'</summary>
+    <detail>The label is the output string; contentBlocks holds only the image block. Title
+      corrected to 'returns a text label plus an inline image block'.</detail>
+  </defect>
+
+  <defect category="stale-comment" severity="low" uncertain="false" fixed="true">
+    <location>tests/task-manager.test.ts</location>
+    <summary>Comment referenced a non-existent 'delegation-prompts' cross-link</summary>
+    <detail>Removed the stale reference; the pinned contract stands on its own.</detail>
+  </defect>
+</defects>

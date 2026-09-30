@@ -104,7 +104,6 @@ export class CommandUsageTracker {
       );
     } catch (err) {
       log.error({ err }, "commands operation failed");
-      // ignore write errors
     }
   }
 }

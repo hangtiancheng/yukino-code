@@ -39,8 +39,6 @@ import supportsHyperlinks from "supports-hyperlinks";
 
 import { fitTableToWidth } from "./table-layout.js";
 
-// === Type Definitions ===
-
 type StyleFn = (...text: string[]) => string;
 
 type TableCtorOptions = Table.TableConstructorOptions;
@@ -74,8 +72,6 @@ export interface TerminalRendererOptions {
   sanitize: boolean;
 }
 
-// === Constants ===
-
 const COLON_REPLACER = "*#COLON|*";
 const COLON_REPLACER_REGEXP = new RegExp(escapeRegExp(COLON_REPLACER), "g");
 
@@ -108,8 +104,6 @@ function asTabNumber(tab: number | string) {
   return asTabNumber(tabN);
 }
 
-// === Default Options ===
-
 const defaultOptions: TerminalRendererOptions = {
   code: chalk.yellow,
   blockquote: chalk.gray.italic,
@@ -137,8 +131,6 @@ const defaultOptions: TerminalRendererOptions = {
   tableOptions: {},
   sanitize: false,
 };
-
-// === Renderer Class ===
 
 class Renderer {
   private readonly config: TerminalRendererOptions;
@@ -459,8 +451,6 @@ class Renderer {
   }
 }
 
-// === Export ===
-
 export default Renderer;
 
 export function markedTerminal(
@@ -554,8 +544,6 @@ export function markedTerminal(
 
   return { renderer };
 }
-
-// === Helper Functions ===
 
 function textLength(str: string): number {
   // Column count, not UTF-16 length: CJK characters occupy two columns and

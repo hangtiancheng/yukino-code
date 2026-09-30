@@ -100,7 +100,7 @@ function readConfigRaw(path: string): Record<string, unknown> {
   return z.record(z.string(), z.unknown()).parse(raw ?? {});
 }
 
-/** Atomically write the global config, preserving 0600 permissions. */
+/** Atomically write the global config with 0600 permissions. */
 function writeConfigAtomic(path: string, raw: Record<string, unknown>): void {
   const directory = dirname(path);
   mkdirSync(directory, { recursive: true });

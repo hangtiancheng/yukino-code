@@ -53,7 +53,7 @@ function blocksOf(blocks: ToolResultContentBlock[] | undefined) {
 }
 
 describe("ReadFileTool images", () => {
-  it("returns a label text block plus an inline image block for a png", async () => {
+  it("returns a text label plus an inline image block for a png", async () => {
     const c = ctx();
     const buf = Buffer.concat([PNG_MAGIC, Buffer.from("tiny-png")]);
     const p = join(c.workDir, "shot.png");

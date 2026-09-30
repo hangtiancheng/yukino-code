@@ -181,7 +181,6 @@ export class MemoryExtractor {
   private async doExtract(conversationSummary: string): Promise<string[]> {
     const extractionPrompt = this.buildExtractionPrompt(conversationSummary);
 
-    // Build the child agent tool registry (file-operation tools only)
     const subRegistry = new ToolRegistry();
     subRegistry.register(new ReadFileTool());
     subRegistry.register(new WriteFileTool());
@@ -213,7 +212,6 @@ export class MemoryExtractor {
       if (event.type === "stream_text") {
         streamedText += event.text;
       }
-      // drain
     }
 
     // Fast path: LLM wrote memory files directly using WriteFile/EditFile tools

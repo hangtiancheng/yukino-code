@@ -21,9 +21,9 @@
  */
 
 /**
- * Memory freshness calculation and staleness reminders. Appends a prompt text
- * to memories at least 2 days old, instructing the model that the memory may be
- * stale and should be verified before use.
+ * Memory freshness calculation and staleness reminders. Memories at least
+ * 2 days old are rendered with a note instructing the model that the memory
+ * may be stale and should be verified before use.
  */
 export function memoryAgeDays(mtimeMs: number): number {
   return Math.max(0, Math.floor((Date.now() - mtimeMs) / 86_400_000));

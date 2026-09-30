@@ -282,8 +282,6 @@ export class MemoryManager {
     }
   }
 
-  // ── Feature 1: MEMORY.md index generation ──────────────────────────
-
   /**
    * Scans both userDir and projectDir for .md files (excluding MEMORY.md),
    * parses each file's frontmatter for name + description, and writes a
@@ -327,8 +325,6 @@ export class MemoryManager {
     }
     writeFileSync(indexPath, content, "utf-8");
   }
-
-  // ── Feature 2: findRelevantMemories ────────────────────────────────
 
   /**
    * Scans all memory headers from both dirs, asks the LLM to select the

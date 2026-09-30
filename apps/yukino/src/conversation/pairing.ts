@@ -22,12 +22,12 @@
 
 import type { Message, ToolResultBlock } from "./index.js";
 
-// Anthropic requires every tool_use to have a matching tool_result; a single missing
-// pairing causes the entire request to be rejected. Unpaired entries can creep into
-// the conversation history in several ways: the user interrupts mid-tool-execution,
-// a session is restored from disk after the process exits, or concurrent writes
-// interleave. Here we reconcile the pairing uniformly before sending the request, so
-// individual frontends don't each have to reimplement it.
+// Both Anthropic and OpenAI reject the entire request when a tool use lacks its
+// matching tool result. Unpaired entries can creep into the conversation history in
+// several ways: the user interrupts mid-tool-execution, a session is restored from
+// disk after the process exits, or concurrent writes interleave. Here we reconcile
+// the pairing uniformly before sending the request, so individual frontends don't
+// each have to reimplement it.
 
 /** Used to fill in tool calls that have no result. The tool may never have started,
  *  or it may have been interrupted partway through, so the wording must not assert

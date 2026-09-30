@@ -30,7 +30,7 @@ const log = createChildLogger({ module: "utils" });
 
 /**
  * Convert message content blocks to a plain-text fallback; non-text blocks
- * become placeholders (no base64 payloads).
+ * are reduced to text-only summaries (no base64 payloads).
  */
 export function contentToText(
   content: string | Record<string, unknown>[],

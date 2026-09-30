@@ -96,7 +96,8 @@ export function TextField({
     null,
   );
 
-  // SelectorFrame paddingX(1) + QuestionContent paddingLeft(1) eat 3 columns.
+  // SelectorFrame paddingX(1) eats 2 columns; the ask dialog's QuestionContent
+  // paddingLeft(1) eats the third.
   const rowWidth = Math.max(
     1,
     (stdout.columns || 80) - indent - visibleWidth(prompt) - 3,

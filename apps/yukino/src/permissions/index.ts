@@ -447,9 +447,9 @@ export function evaluateRules(
   return hit;
 }
 
-// Parse result for a single rules file. mtime + size together serve as the
-// change indicator — mtime alone is insufficient because consecutive writes
-// within the same millisecond may leave the timestamp unchanged.
+// Parse result for a single rules file. mtimeNs + size together serve as the
+// change indicator — either alone can miss a rewrite: filesystem timestamp
+// granularity can be coarse, and a rewrite can preserve the previous size.
 interface CachedRules {
   mtimeNs: bigint;
   size: bigint;

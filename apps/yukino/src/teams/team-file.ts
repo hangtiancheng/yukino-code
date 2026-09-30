@@ -62,7 +62,7 @@ export type TeamMemberEntry = z.infer<typeof TeamMemberEntrySchema>;
 /**
  * On-disk team configuration, stored at <teamsBaseDir>/<slug>/config.json.
  *
- * The in-memory Member carries a mailbox, cancel callback, and conversation — none of
+ * The in-memory Member carries a mailbox, cancel callback, and UI state — none of
  * which can be serialized — so what gets persisted is this pure-metadata structure,
  * with both sides correlated by member name.
  *

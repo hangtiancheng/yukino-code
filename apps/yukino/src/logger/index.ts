@@ -53,7 +53,7 @@ interface InitLoggerOptions {
    * <workDir>/.yukino/logs/ unless logDir is set.
    */
   workDir?: string;
-  /** Override log directory (teammates use ~/.yukino/teams/<team>/logs/). */
+  /** Override log directory (teammates use ~/.yukino/teams/<namespace>/<team>/logs/). */
   logDir?: string;
   /** Subprocess passes true to skip expired-log cleanup (avoid multi-process races). */
   skipCleanup?: boolean;
@@ -69,7 +69,6 @@ let currentLogger: Logger | null = null;
 let currentDest: ReturnType<typeof pino.destination> | null = null;
 let currentFd: number | null = null;
 
-/** Compute the log file path. */
 function resolveLogPath(opts: InitLoggerOptions): string {
   const dir =
     opts.logDir ?? join(opts.workDir ?? process.cwd(), ".yukino", "logs");
@@ -169,7 +168,6 @@ export function initLogger(opts: InitLoggerOptions): Logger {
   return currentLogger;
 }
 
-/** Return the current logger instance, or null if not initialized. */
 function getLogger(): Logger | null {
   return currentLogger;
 }

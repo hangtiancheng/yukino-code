@@ -173,8 +173,6 @@ export class MemoryConsolidator {
   }
 }
 
-// --- Lock file management ---
-
 function lockPath(memDir: string): string {
   return join(memDir, LOCK_FILE);
 }
@@ -199,15 +197,11 @@ function markConsolidationSucceeded(memDir: string): void {
   }
 }
 
-// --- Session listing ---
-
 function listSessionsSince(workDir: string, sinceMs: number): string[] {
   const sessions = listSessions(workDir);
   const since = new Date(sinceMs);
   return sessions.filter((s) => s.modTime > since).map((s) => s.id);
 }
-
-// --- Prompt ---
 
 function buildConsolidationPrompt(
   memDir: string,

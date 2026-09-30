@@ -152,8 +152,8 @@ describe("TaskManager", () => {
     finish("late result");
     await task.done;
     expect(task.status).toBe("cancelled");
-    // Pinned contract (see delegation-prompts): late results after a stop are
-    // discarded; shell kills surface through TaskFailure instead.
+    // Pinned contract: late results after a stop are discarded; shell kills
+    // surface through TaskFailure instead.
     expect(task.output).toBe("Stopped by user");
   });
 

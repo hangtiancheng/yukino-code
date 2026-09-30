@@ -33,7 +33,8 @@ describe("buildDiff", () => {
     expect(removals).toBe(1);
     expect(text).toContain("-    3  c");
     expect(text).toContain("+    3  X");
-    // Context lines should carry the correct original line numbers
+    // Context lines carry new-file line numbers (equal to the old-file numbers
+    // here because this edit does not change the line count)
     expect(text).toContain("   2  b");
     expect(text).toContain("   4  d");
   });

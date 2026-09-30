@@ -24,7 +24,8 @@ import type { Key } from "ink";
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-// Only provider/session selectors call this; action dialogs retain their own shortcuts.
+// Used by the provider, model and session selectors; action dialogs retain
+// their own shortcuts.
 export function updateSelectorQuery(
   query: string,
   input: string,

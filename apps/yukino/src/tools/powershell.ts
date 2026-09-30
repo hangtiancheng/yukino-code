@@ -500,7 +500,7 @@ export class PowerShellTool implements Tool {
         );
         // Crash-path orphan prevention: process.exit() (terminal gone,
         // uncaught exception) never reaches the task manager's stop, so the
-        // recover.ts sweep kills this detached tree synchronously instead.
+        // recover.ts sweep kills this process tree synchronously instead.
         const unregisterCleanup = registerExitCleanup(() => {
           killTree("SIGKILL");
         });

@@ -93,16 +93,16 @@ export const ChatView = React.memo(function (props: ChatViewProps) {
   );
 });
 
+interface CommitMessageProps {
+  message: ChatMessage;
+  expanded?: boolean | undefined;
+}
+
 /**
  * CommittedMessage renders a single finalized message for use inside Ink's
  * <Static> component. Once rendered, Static never re-renders it, eliminating
  * flicker from the scrollback history.
  */
-
-interface CommitMessageProps {
-  message: ChatMessage;
-  expanded?: boolean | undefined;
-}
 export function CommittedMessage(props: CommitMessageProps) {
   const { message, expanded = false } = props;
   return <MessageBlock message={message} expanded={expanded} />;

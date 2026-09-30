@@ -96,7 +96,8 @@ export class HookEngine {
   private notifications: string[] = [];
   // Executor for agent-type hooks, injected externally. Executing one without a
   // registered runner throws a clear error. No host registers one today (only
-  // tests do), so agent-type hooks currently always fail at runtime.
+  // tests do), and validate() rejects agent-type configs, so this path is
+  // unreachable outside tests.
   agentRunner?: (prompt: string, ctx: HookContext) => Promise<string>;
 
   constructor(hooks: HookConfig[]) {
@@ -137,8 +138,8 @@ export class HookEngine {
       }
 
       // Once-slot key, computed once: claimed before execution and released
-      // again when a sync execution fails — a once-hook that errored has not
-      // "fired", and the next matching event should retry it.
+      // again when execution fails (sync or async) — a once-hook that errored
+      // has not "fired", and the next matching event should retry it.
       const onceKey = hook.once
         ? hook.id === undefined
           ? `index:${String(index)}`

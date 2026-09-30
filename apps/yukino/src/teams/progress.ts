@@ -24,7 +24,6 @@ import { z } from "zod";
 
 import { strArg } from "@/utils/index.js";
 
-// Tool activity description
 export const ToolActivitySchema = z.object({
   toolName: z.string(),
   input: z.record(z.string(), z.unknown()),
@@ -48,7 +47,6 @@ export const AgentProgressSchema = z.object({
 });
 export type AgentProgress = z.infer<typeof AgentProgressSchema>;
 
-// Full teammate UI state
 export const TeammateUIStateSchema = z.object({
   name: z.string(),
   teamName: z.string(),

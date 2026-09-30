@@ -41,8 +41,9 @@ export function globalConfigPath(): string {
 
 /**
  * PI-equivalent thinking levels. `off` disables reasoning entirely; the rest
- * map to a provider-native effort string (openai / openai-compat) or a thinking
- * token budget (anthropic).
+ * map to a provider-native effort string (openai / openai-compat, and
+ * anthropic in adaptive mode) or a thinking token budget (anthropic in budget
+ * mode).
  */
 export const THINKING_LEVELS = [
   "off",

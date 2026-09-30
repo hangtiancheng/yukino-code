@@ -33,7 +33,6 @@ interface Props {
   questions: Question[];
   onComplete: (answers: Record<string, string>) => void;
 }
-// ── State management ──
 
 interface QuestionState {
   cursor: number;
@@ -81,8 +80,6 @@ function reducer(state: State, action: Action): State {
       return state;
   }
 }
-
-// ── Navigation bar ──
 
 function NavigationBar({
   questions,
@@ -137,7 +134,6 @@ function NavigationBar({
   );
 }
 
-// ── Question view: compact vertical single/multi-select ──
 function QuestionContent({
   question,
   state,
@@ -200,7 +196,6 @@ function QuestionContent({
           </Box>
         );
       })}
-      {/* "Other" option */}
       <Box flexDirection="column">
         <Text>
           <Text color={state.cursor === otherIndex ? THEME.accent : THEME.dim}>
@@ -229,8 +224,6 @@ function QuestionContent({
     </Box>
   );
 }
-
-// ── Submit view ──
 
 function SubmitContent({
   questions,
@@ -297,8 +290,6 @@ function SubmitContent({
     </Box>
   );
 }
-
-// ── Main component ──
 
 export function AskUserDialog({ questions, onComplete }: Props) {
   const hideSubmit = questions.length === 1 && !questions[0].multiSelect;
@@ -381,7 +372,6 @@ export function AskUserDialog({ questions, onComplete }: Props) {
       return;
     }
 
-    // Submit view
     if (isSubmitTab) {
       if (key.upArrow) {
         dispatch({ type: "set-submit-cursor", cursor: 0 });

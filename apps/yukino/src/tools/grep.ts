@@ -283,8 +283,8 @@ export class GrepTool implements Tool {
           try {
             fileStat = await lstat(fullPath);
             if (fileStat.isSymbolicLink()) {
-              // Follow file symlinks (old behavior), but never descend into
-              // symlinked directories — that is what makes cycles harmless.
+              // Follow file symlinks, but never descend into symlinked
+              // directories — that is what makes cycles harmless.
               fileStat = await stat(fullPath);
               if (!fileStat.isFile()) {
                 continue;

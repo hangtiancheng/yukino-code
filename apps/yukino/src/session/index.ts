@@ -47,7 +47,7 @@ import {
 } from "@/tools/types.js";
 import { contentToText } from "@/utils/index.js";
 
-// Persistent session lines. Ordinary messages have an empty `type`, while compaction boundary records
+// Persistent session lines. Ordinary messages carry no `type`, while compaction boundary records
 // have the type COMPACT_BOUNDARY. Their `content` is the JSON-serialized CompactBoundaryPayload
 // (containing a summary and the retained recent tail messages).
 // Inlining the retained tail directly into the boundary record avoids "physical location" issues:
@@ -300,7 +300,6 @@ export function loadSession(
         }
       } catch (err) {
         log.error({ err }, "session operation failed");
-        // skip malformed line
       }
     }
     const now = new Date();
@@ -575,10 +574,11 @@ export function listSessions(workDir: string): SessionInfo[] {
 /**
  * Cleans up expired sessions: deletes .jsonl files whose last modified time
  * exceeds SESSION_EXPIRY_DAYS, together with each session's subdirectory
- * (which holds the tool-results spill files written by spillDir()), to
- * prevent the session directory from growing indefinitely.
+ * (which holds the tool-results spill files written by spillDir()) and its
+ * file-history directory (backup snapshots, clipboard images), to prevent
+ * on-disk session state from growing indefinitely.
  * Invoked lazily by listSessions (once per process per sessions directory).
- * Silently skips failures (best-effort).
+ * Failures are logged and skipped (best-effort).
  */
 export function cleanExpiredSessions(workDir: string): number {
   const dir = sessionsDir(workDir);
@@ -634,7 +634,6 @@ export function cleanExpiredSessions(workDir: string): number {
       });
     } catch (err) {
       log.error({ err }, "session operation failed");
-      // Silently skip if deletion fails
     }
   }
   return removed;

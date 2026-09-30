@@ -360,7 +360,7 @@ export class Team {
       cwd: this.workDir,
     };
 
-    // Launch the external process and record the cancel handle (used to stop it) and paneId (diagnostics) on the member
+    // Launch the external process and record the cancel handle (used to stop it) and paneId (persisted so cancellation survives a leader restart) on the member
     const { cancel, paneId } = spawnTeammateProcess(config);
     member.cancel = cancel;
     member.paneId = paneId;
@@ -482,9 +482,10 @@ export class Team {
 
           const pollResult = await this.waitForNextPromptOrShutdown(member);
           if (pollResult.shutdown || !member.active) {
-            // Before exiting, send the Leader an explicit acknowledgment so it knows the
-            // teammate has stopped. The teammate always approves here: it is already in
-            // the idle poll loop with no work in progress.
+            // When the shutdown request is typed, send the Leader an explicit
+            // acknowledgment before exiting so it knows the teammate has
+            // stopped. The teammate always approves here: it is already in the
+            // idle poll loop with no work in progress.
             const req = pollResult.shutdown;
             if (req?.type === MSG_SHUTDOWN_REQUEST) {
               const resp = shutdownResponse(

@@ -57,8 +57,8 @@ export const SnapshotSchema = z.object({
   /**
    * Session-log line count at snapshot time. This is the authoritative rewind
    * coordinate: unlike messageIndex it survives resume and compaction, because
-   * the session file is replayed 1:1 on resume. Undefined for snapshots taken
-   * without a session log.
+   * the session log only grows by appending and its line positions are never
+   * renumbered. Undefined for snapshots taken without a session log.
    */
   sessionLineCount: z.number().optional(),
 });
@@ -257,7 +257,6 @@ export class FileHistory {
         continue;
       }
 
-      // Compare with current file
       let currentData: Buffer<ArrayBuffer> | null = null;
       try {
         currentData = readFileSync(filePath);

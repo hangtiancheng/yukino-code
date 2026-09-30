@@ -51,7 +51,6 @@ function isKeyofTypeofEnvKeyMap(k: string): k is keyof typeof ENV_KEY_MAP {
   return VALID_PROTOCOLS.has(k);
 }
 
-/** enum: "anthropic", "openai", "openai-compat" */
 const VALID_PROTOCOLS = new Set(Object.keys(ENV_KEY_MAP));
 
 export class ConfigError extends Error {
@@ -194,7 +193,7 @@ function loadSingleFile(path: string): AppConfig {
       providers = parsed.data.map(withProviderDefaults);
     } else {
       // Providers are required for the app to function; surface schema errors
-      // (e.g. a removed legacy field) instead of silently dropping them.
+      // instead of silently dropping them.
       throw new ConfigError(
         `Invalid provider configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
       );

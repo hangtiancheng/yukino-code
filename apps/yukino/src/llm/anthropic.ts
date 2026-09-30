@@ -539,9 +539,9 @@ export class AnthropicClient implements LLMClient {
         }
       }
 
-      // Without message_stop the response is truncated, not complete: yield
-      // no stream_end — a NetworkError lets the run's recovery paths retry
-      // instead of persisting a half response as a finished turn.
+      // Without message_stop the response is truncated, not complete: throw a
+      // NetworkError instead of yielding stream_end so the run surfaces an
+      // error rather than persisting a half response as a finished turn.
       if (!sawMessageStop) {
         throw new NetworkError(
           "Anthropic stream ended without message_stop; response was truncated",

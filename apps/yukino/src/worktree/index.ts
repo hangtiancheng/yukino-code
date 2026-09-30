@@ -198,7 +198,6 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
     // Loose ref missing is normal (packed refs); the packed-refs fallback
     // below is the real lookup for healthy worktrees.
     log.debug({ err }, "loose ref probe failed");
-    // Loose file does not exist, try packed-refs
   }
 
   try {
@@ -293,8 +292,6 @@ export async function getCurrentBranch(repoRoot: string): Promise<string> {
   }
   return head.branch ?? "";
 }
-
-// ── Worktree Management ──────────────────────────────────────────────
 
 export async function createAgentWorktree(
   slug: string,

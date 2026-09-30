@@ -801,10 +801,11 @@ export async function createRemoteAgent(
     },
     backgroundTaskManager,
   );
-  // Wire the team manager into AgentTool so the team_name teammate path takes effect (teammates receive shared team task-board tools)
   agentTool.forkDisabled = forkDisabled ?? false;
-  // No provider index: external teammates resolve `default_provider` from
-  // the config — the same provider this server was started with.
+  // Wire the team manager into AgentTool so the team_name teammate path takes
+  // effect (teammates receive shared team task-board tools). No provider index:
+  // external teammates resolve `default_provider` from the config — the same
+  // provider this server was started with.
   agentTool.setTeamManager(teamManager, teamRunAgentFactory);
   registry.register(agentTool);
 

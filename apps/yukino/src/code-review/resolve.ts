@@ -216,8 +216,8 @@ export function relocateAcrossFiles(
   const hits: { path: string; startLine: number; endLine: number }[] = [];
   for (const d of diffs) {
     if (d.isBinary || d.isDeleted) {
-      // Deleted code is reference-only (the prompt forbids commenting on it),
-      // and re-filing there would produce a "/dev/null" path.
+      // Deleted code is reference-only (the review prompt says to avoid
+      // commenting on it), and re-filing there would produce a "/dev/null" path.
       continue;
     }
     if (d.newPath === cm.path || d.oldPath === cm.path) {

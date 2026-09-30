@@ -55,18 +55,15 @@ const FileMailMessageSchema = z.object({
 
 export type FileMailMessage = z.infer<typeof FileMailMessageSchema>;
 
-// ---------------------------------------------------------------------------
 // Locking: every read-modify-write goes through withFileSyncLock (see
-// file-lock.ts) — exclusive-create lock file with token-protected release,
-// dead-holder-only preemption, and write-then-rename persistence below.
-// ---------------------------------------------------------------------------
+// file-lock.ts) — a lock directory of exclusive-create contender entries,
+// token-protected release, dead-holder-only preemption, and
+// write-then-rename persistence below.
 
 // Read messages retained in the mailbox file; older read messages are pruned
 // on write so long-lived teams do not grow the file without bound. Unread
 // messages are never dropped.
 const MAX_READ_MESSAGES = 500;
-
-// ---------------------------------------------------------------------------
 
 export class FileMailbox {
   private filePath: string;

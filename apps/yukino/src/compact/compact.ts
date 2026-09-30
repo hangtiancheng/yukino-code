@@ -111,8 +111,8 @@ export class AutoCompactTrackingState {
 export interface UsageAnchor {
   // input + cache_read + cache_creation + output from the last real API usage.
   baselineTokens: number;
-  // conversation.len() at the moment the anchor was recorded; only messages
-  // beyond this index are estimated incrementally.
+  // Message count at the moment the anchor was recorded; only messages beyond
+  // this index are estimated incrementally.
   anchorCount: number;
 }
 
@@ -490,7 +490,6 @@ function formatCompactSummary(raw: string): string {
   if (summaryMatch) {
     return summaryMatch[1].trim();
   }
-  // No <summary> tag: strip the <analysis> block and return the remainder
   const analysisMatch = /<analysis>[\s\S]*?<\/analysis>/.exec(raw);
   if (analysisMatch) {
     return raw.replace(analysisMatch[0], "").trim();
@@ -612,9 +611,9 @@ async function doCompact(
   // payload, so the retention boundary is determined directly from them.
   const estimationMessages = conv.getMessages();
 
-  // Decide how much recent history to keep verbatim. Only messages[:keepStart]
-  // get summarized; messages[keepStart:] are carried over untouched so the
-  // model still sees the literal recent exchange.
+  // Decide how much recent history to keep verbatim. Only the messages before
+  // keepStart get summarized; the messages from keepStart onward are carried
+  // over untouched so the model still sees the literal recent exchange.
   const keepStart = computeKeepStartIndex(estimationMessages);
 
   // Degenerate cases: if (almost) everything is already inside the kept tail,

@@ -295,7 +295,6 @@ function findGitRoot(start: string): string {
       }
     } catch (err) {
       log.error({ err }, "memory operation failed");
-      // ignore
     }
     const parent = dirname(cur);
     if (parent === cur) {
