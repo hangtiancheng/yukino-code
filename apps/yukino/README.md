@@ -17,7 +17,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 - Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, the TaskCreate/TaskGet/TaskList/TaskUpdate todo tools, plus the orchestration and interaction tools: Agent, LoadSkill, InstallSkill, AskUserQuestion, SyntheticOutput, TeamCreate, SpawnTeammate, SendMessage, ListTeams, TeamDelete, and TaskStop
 - MCP (Model Context Protocol) server integration for extending the tool set with external services
 - Permission system with four modes: default, acceptEdits, plan (read-only), and bypassPermissions
-- Sandbox support for isolated command execution: the native backend (bwrap on Linux, seatbelt on macOS) or the sandbox-runtime backend
+- Sandbox support for isolated command execution (bwrap on Linux, seatbelt on macOS)
 - Human-in-the-loop approval dialogs for file writes and shell commands, driven by permission mode and allow/deny rules
 
 ### Conversation and Memory
@@ -89,16 +89,28 @@ Yukino reads a single global YAML configuration file:
 Print, remote, and ACP modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. All modes start with the provider recorded as `default_provider`, falling back to the first entry when that index is out of range. Example config.yaml:
 
 ```yaml
+# Initial permission mode. Enum: default (ask per write/command) | acceptEdits (auto-approve
+# file edits) | plan (plan mode, no modifications) | bypassPermissions (approve everything).
+# Invalid values fall back to default; Shift+Tab cycles modes at runtime.
 permission_mode: bypassPermissions
+
+# Model providers. At least one is required.
 providers:
-  - name: ds-anthropic
+  - name: ds-anthropic # Display name
+    # Wire protocol. Enum: anthropic | openai | openai-compat. Also selects the API key
+    # environment fallback: anthropic → ANTHROPIC_API_KEY, openai / openai-compat → OPENAI_API_KEY.
     protocol: anthropic
+    # API endpoint. The provider identity — duplicate base_url across providers is rejected.
     base_url: https://api.deepseek.com/anthropic
-    model: deepseek-flash
-    api_key: sk-xyz
+    model: deepseek-flash # Model identifier
+    api_key: sk-xyz # Optional; omitted falls back to the protocol's environment variable
+    # Thinking level. Enum: off | minimal | low | medium | high | xhigh | max. Default: high.
     thinking: high
-    context_window: 1000000
+    context_window: 1000000 # Context window in tokens. Default: 1000000
+    # Output token ceiling. Default: 128000; clamped to context_window; the thinking
+    # budget shares this ceiling instead of raising it.
     max_output_tokens: 128000
+  # Second provider, same fields as above, demonstrating the openai-compat protocol.
   - name: ds-openai
     protocol: openai-compat
     base_url: https://api.deepseek.com
@@ -107,25 +119,47 @@ providers:
     thinking: high
     context_window: 1000000
     max_output_tokens: 128000
+
+# 0-based index of the provider selected at startup. Default: 0.
 default_provider: 0
+
+# Automatic memory master switch. Default: true. false turns off the whole pipeline:
+# index injection, recall, and background extraction (consolidation runs in remote mode only).
 enable_memory: false
+
+# Coordinator mode. Default: false. true narrows the leader's toolset to pure orchestration
+# (team/task management) so all actual work is delegated to teammates.
 enable_coordinator_mode: false
+
+# Whether an Agent call without subagent_type forks the current conversation (child inherits
+# the full history). Default: true; only an explicit false disables it — disabled calls spawn
+# a fresh general-purpose subagent instead.
 enable_fork: true
+
+# User-level MCP servers. Merged with the project-level .mcp.json; on a name collision the
+# user-level entry wins.
 mcp_servers:
-  - name: codegraph
-    command: codegraph
-    args:
+  - name: codegraph # Server name; must be unique across all MCP servers
+    command: codegraph # stdio server: executable. Exactly one of command | url per server.
+    args: # Command-line arguments
       - serve
       - "--mcp"
   - name: yukino-mcp # stdio
     command: pnpm
     args: ["--filter", "@yukino.js/mcp", "dev"]
+    # Environment variables for the child process (stdio only; ignored for url servers).
+    # Supports ${VAR}, ${VAR:-default}, $VAR; an unset variable without a default fails the
+    # connection.
     env:
       API_BASE_URL: "https://yukino-js.dev"
       API_KEY: "${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-http # streamable-http
-    url: "http://localhost:3300/mcp"
+    url: "http://localhost:3300/mcp" # Remote endpoint (command and url are mutually exclusive)
+    # Transport. Enum: http (streamable HTTP; the default when omitted) | sse (legacy) for url
+    # servers; command servers may only use stdio (omittable).
     transport: "http"
+    # HTTP request headers sent with every request (url only; ignored for stdio). Same ${VAR}
+    # expansion as env.
     headers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-sse # legacy sse
@@ -133,21 +167,46 @@ mcp_servers:
     transport: "sse"
     headers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
+
+# OS-level sandbox wrapping Bash commands in isolated execution
+# (seatbelt on macOS, bubblewrap on Linux; unavailable elsewhere).
 sandbox:
-  enabled: false
-  backend: sandbox-runtime
+  enabled: false # Master switch
+  # With the sandbox active, non-dangerous Bash commands skip human confirmation (explicit
+  # deny/ask rules still apply; Bash tool only). Default: false.
   auto_allow: false
-  network_enabled: true
+  network_enabled: true # Whether sandboxed commands may access the network
+
+# Event-driven hooks.
 hooks:
-  - id: pre-tool-use
+  - id: pre-tool-use # Optional identifier; the once-slot key (falls back to the array index)
+    # Trigger event. Enum: session_start | session_end | turn_start | turn_end | pre_send |
+    # post_receive | pre_tool_use | post_tool_use | shutdown.
     event: pre_tool_use
+    # Optional JavaScript expression; a truthy result fires the hook. Variables in scope:
+    # event, tool, filePath, message, args. Expressions that fail to compile or throw are
+    # logged and treated as false, so the hook is skipped.
     condition: 'event.endsWith("tool_use") && (tool.toLowerCase().includes("file") || /bash/i.test(tool))'
     action:
+      # Action type. Enum: command (shell command) | prompt (inject static text) | http
+      # (HTTP request) | agent (reserved; rejected by validation today).
       type: command
+      # Shell command: bash on POSIX, 30s timeout, working directory = project directory,
+      # with YUKINO_EVENT / YUKINO_TOOL / YUKINO_FILE_PATH injected; stdout is injected into
+      # the agent as a system reminder on the next turn.
       command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
+    # Whether successful output rejects the tool call (pre_tool_use only). Default: false.
+    # Mutually exclusive with async.
     reject: false
+    # Fire only once per session (keyed by id, or index). Default: false; a failed execution
+    # releases the slot so the next matching event retries.
     once: true
+    # Run in the background without blocking the main flow. Default: false; output is drained
+    # as a notification on the next turn.
     async: false
+    # Behavior when the action execution fails. Enum: ignore (default; log only) | fail
+    # (surface the error to the agent) | reject (treat the failure as a rejection; blocks the
+    # tool call on pre_tool_use).
     on_error: ignore
 ```
 
@@ -370,10 +429,10 @@ Pasting an image saves it as a PNG under `.yukino/file-history/<session-id>/`. I
 
 Besides the `yukino` CLI, the package ships a library entry for embedding Yukino in another host process.
 
-| Entry          | Output                                     | Contents                                                                                                                                                                                                           |
-| -------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| CLI (`yukino`) | `dist/main.js`                             | Fully bundled, minified single file with a shebang; Node built-ins plus modules with native binaries or runtime assets (`sharp`, `@anthropic-ai/sandbox-runtime`, ink's `react-devtools-core` peer) stay external. |
-| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts` | The `src/index.ts` barrel; runtime dependencies stay external and resolve from the consumer's `node_modules`.                                                                                                      |
+| Entry          | Output                                     | Contents                                                                                                                                                                          |
+| -------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI (`yukino`) | `dist/main.js`                             | Fully bundled, minified single file with a shebang; Node built-ins plus modules with native binaries or runtime assets (`sharp`, ink's `react-devtools-core` peer) stay external. |
+| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts` | The `src/index.ts` barrel; runtime dependencies stay external and resolve from the consumer's `node_modules`.                                                                     |
 
 The library entry is terminal-independent by contract: it must never reach `src/ui/**` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can import it. `pnpm build` enforces that contract:
 

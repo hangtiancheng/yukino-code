@@ -181,8 +181,8 @@ export class PowerShellTool implements Tool {
     const runInBackground =
       boolArg(args, "run_in_background") && backgroundAvailable;
 
-    // No OS-sandbox wrapping here: every sandbox backend wraps bash
-    // (`... bash -c '...'` — seatbelt, bwrap and sandbox-runtime alike), and
+    // No OS-sandbox wrapping here: both sandboxes wrap bash
+    // (`... bash -c '...'` — seatbelt and bwrap alike), and
     // Windows — this tool's primary platform — has no OS sandbox support anyway.
     const shell = process.platform === "win32" ? "powershell.exe" : "pwsh";
 

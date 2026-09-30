@@ -569,51 +569,5 @@ describe("config", () => {
         /Invalid MCP server configuration/,
       );
     });
-
-    it("loads the sandbox-runtime backend", () => {
-      const path = join(dir, "config.yaml");
-      writeFileSync(
-        path,
-        [
-          "providers:",
-          "  - name: provider",
-          "    protocol: anthropic",
-          "    base_url: https://provider.example.com",
-          "    model: model",
-          "sandbox:",
-          "  enabled: true",
-          "  backend: sandbox-runtime",
-          "  auto_allow: true",
-          "  network_enabled: false",
-          "",
-        ].join("\n"),
-      );
-
-      expect(loadConfig(path).sandbox).toEqual({
-        enabled: true,
-        backend: "sandbox-runtime",
-        auto_allow: true,
-        network_enabled: false,
-      });
-    });
-
-    it("rejects unknown sandbox backends", () => {
-      const path = join(dir, "config.yaml");
-      writeFileSync(
-        path,
-        [
-          "providers:",
-          "  - name: provider",
-          "    protocol: anthropic",
-          "    base_url: https://provider.example.com",
-          "    model: model",
-          "sandbox:",
-          "  backend: unknown",
-          "",
-        ].join("\n"),
-      );
-
-      expect(() => loadConfig(path)).toThrow(/Invalid sandbox configuration/);
-    });
   });
 });

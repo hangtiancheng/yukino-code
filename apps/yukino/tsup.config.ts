@@ -99,7 +99,7 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
     // their binaries and companion files remain resolvable from node_modules.
     build.onResolve(
       {
-        filter: /^(?:sharp|@anthropic-ai\/sandbox-runtime)(?:\/|$)/,
+        filter: /^sharp(?:\/|$)/,
       },
       (args) => ({
         path: args.path,

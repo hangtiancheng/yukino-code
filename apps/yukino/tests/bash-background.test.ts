@@ -295,11 +295,9 @@ describe("bash background execution", () => {
     });
     const taskId = taskIdFrom(result.output);
 
-    // The output-file DIRECTORY (stable per session) is what gets granted:
-    // allow-writing the random per-command file name would re-key the sandbox
-    // config and force sandbox-runtime to re-initialize on every command.
-    // The directory is created before prepare, so a bind-based sandbox can
-    // mount it.
+    // The output-file DIRECTORY (stable per session) is what gets granted,
+    // not the random per-command file name. The directory is created before
+    // prepare, so a bind-based sandbox can mount it.
     expect(seen.config).not.toBeNull();
     const granted = seen.config?.allowWrite ?? [];
     const outputDir = granted.find((p) => /[\\/]tool-results$/.test(p));

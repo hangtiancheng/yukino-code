@@ -406,10 +406,9 @@ export function App({
   // The agent instance of the in-flight run, if any. Steering targets it.
   const agentRef = useRef<Agent | null>(null);
   const fileStateCacheRef = useRef(new FileStateCache());
-  const sandboxBackend = sandboxYaml?.backend ?? "native";
   const sandboxRef = useRef<Promise<Sandbox | null> | null>(null);
   const getSandbox = (): Promise<Sandbox | null> =>
-    (sandboxRef.current ??= createSandbox(sandboxBackend));
+    (sandboxRef.current ??= createSandbox());
   const disposeSandbox = async (): Promise<void> => {
     const pending = sandboxRef.current;
     sandboxRef.current = null;
@@ -1468,8 +1467,8 @@ export function App({
       const sandbox = sandboxEnabled ? await getSandbox() : null;
       const sandboxReady = sandbox ? await sandbox.available() : false;
       const sbStatus = sandboxEnabled
-        ? `${sandboxAutoAllow ? "ON (auto-allow)" : "ON (manual)"}, ${sandboxBackend}, ${sandboxReady ? "ready" : "blocked"}`
-        : `OFF, ${sandboxBackend}`;
+        ? `${sandboxAutoAllow ? "ON (auto-allow)" : "ON (manual)"}, ${sandboxReady ? "ready" : "blocked"}`
+        : "OFF";
       const lines = [
         `Mode:      ${permMode}`,
         `Model:     ${selectedProvider.model}`,
@@ -1893,7 +1892,7 @@ export function App({
             await disposeSandbox();
             setMessages((prev) => [
               ...prev,
-              { role: "system", content: `Sandbox (${sandboxBackend}): OFF` },
+              { role: "system", content: "Sandbox: OFF" },
             ]);
             break;
           }
@@ -1901,7 +1900,7 @@ export function App({
           const sandbox = await getSandbox();
           const sbAvailable = (await sandbox?.available()) ?? false;
           const unavailableReason =
-            sandbox?.availabilityError ?? "sandbox backend unavailable";
+            sandbox?.availabilityError ?? "sandbox unavailable";
           const autoAllow = arg === "auto";
           const manual = arg === "manual";
           if (autoAllow || manual) {
@@ -1913,7 +1912,7 @@ export function App({
               ...prev,
               {
                 role: "system",
-                content: `Sandbox (${sandboxBackend}): ON + ${autoAllow ? "auto-allow" : "manual permissions"}${sbAvailable ? "" : ` (blocked: ${unavailableReason})`}`,
+                content: `Sandbox: ON + ${autoAllow ? "auto-allow" : "manual permissions"}${sbAvailable ? "" : ` (blocked: ${unavailableReason})`}`,
               },
             ]);
           } else {
@@ -1924,7 +1923,6 @@ export function App({
               : "OFF";
             const lines = [
               `Sandbox status: ${status}`,
-              `Backend: ${sandboxBackend}`,
               `Runtime: ${sbAvailable ? "ready" : `blocked (${unavailableReason})`}`,
               "",
               "Usage: /sandbox <mode>",
@@ -2135,7 +2133,7 @@ export function App({
       bashTool.sandboxRequired = false;
     }
 
-    // Auto-allow is safe only when the requested backend is actually ready.
+    // Auto-allow is safe only when the sandbox is actually ready.
     checker.sandboxEnabled = sandboxEnabledRef.current && sandboxReady;
     checker.sandboxAutoAllow = sandboxAutoAllowRef.current && sandboxReady;
     const recallPromise =

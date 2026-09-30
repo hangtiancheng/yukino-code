@@ -24,11 +24,9 @@ import os from "node:os";
 
 // Submodule namespaces for library consumers (Sandbox.<Sub>.*).
 export * as Bwrap from "./bwrap.js";
-export * as SandboxRuntime from "./sandbox-runtime.js";
 export * as Seatbelt from "./seatbelt.js";
 
-export type SandboxBackend = "native" | "sandbox-runtime";
-export type SandboxImplementation = "bwrap" | "sandbox-runtime" | "seatbelt";
+export type SandboxImplementation = "bwrap" | "seatbelt";
 
 /**
  * Sandbox configuration: controls file write permissions and network access.
@@ -57,8 +55,7 @@ export interface PreparedSandboxCommand {
 }
 
 /**
- * Unified sandbox interface: seatbelt (macOS) and bubblewrap (Linux) for the
- * native backend, plus the cross-platform @anthropic-ai/sandbox-runtime.
+ * Unified sandbox interface: seatbelt on macOS, bubblewrap on Linux.
  */
 export interface Sandbox {
   readonly implementation: SandboxImplementation;
@@ -76,20 +73,10 @@ export interface Sandbox {
 }
 
 /**
- * Creates the requested sandbox backend.
- *   native          seatbelt on macOS, bubblewrap on Linux (the default).
- *   sandbox-runtime the @anthropic-ai/sandbox-runtime backend.
- * The native backend returns null on platforms other than macOS and Linux;
- * sandbox-runtime is instantiated everywhere and reports support via available().
+ * Creates the platform sandbox: seatbelt on macOS, bubblewrap on Linux.
+ * Returns null on other platforms.
  */
-export async function createSandbox(
-  backend: SandboxBackend = "native",
-): Promise<Sandbox | null> {
-  if (backend === "sandbox-runtime") {
-    const { SandboxRuntimeSandbox } = await import("./sandbox-runtime.js");
-    return new SandboxRuntimeSandbox();
-  }
-
+export async function createSandbox(): Promise<Sandbox | null> {
   const platform = os.platform();
   if (platform === "darwin") {
     const { SeatbeltSandbox } = await import("./seatbelt.js");

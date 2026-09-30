@@ -305,7 +305,7 @@ export function formatFinalResult(
  * outputs keep the file on disk and the notification carries its path with a
  * byte-bounded preview, so the full text stays readable via ReadFile without
  * ever loading it into JS here. `annotate` is the sandbox's stderr annotator
- * (sandbox-runtime violation notes); the foreground path applies it in
+ * (sandbox violation notes); the foreground path applies it in
  * settleExit, and background notifications must report identically.
  */
 export function buildBackgroundBody(

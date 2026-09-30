@@ -107,7 +107,6 @@ export type HookConfig = z.infer<typeof HookConfigSchema>;
 
 const SandboxYamlConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  backend: z.enum(["native", "sandbox-runtime"]).optional(),
   auto_allow: z.boolean().optional(),
   network_enabled: z.boolean().optional(),
 });

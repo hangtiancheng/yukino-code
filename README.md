@@ -156,12 +156,10 @@ mcp_servers:
     headers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
 
-# OS-level sandbox wrapping Bash commands in isolated execution.
+# OS-level sandbox wrapping Bash commands in isolated execution
+# (seatbelt on macOS, bubblewrap on Linux; unavailable elsewhere).
 sandbox:
   enabled: false # Master switch
-  # Backend. Enum: native (seatbelt on macOS, bubblewrap on Linux, unavailable elsewhere;
-  # the default) | sandbox-runtime (@anthropic-ai/sandbox-runtime, cross-platform).
-  backend: sandbox-runtime
   # With the sandbox active, non-dangerous Bash commands skip human confirmation (explicit
   # deny/ask rules still apply; Bash tool only). Default: false.
   auto_allow: false

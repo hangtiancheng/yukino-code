@@ -256,10 +256,8 @@ export class BashTool implements Tool {
             ...this.sandboxConfig,
             // The child writes its output file directly; grant write access
             // to the output DIRECTORY (stable per session) rather than the
-            // per-command file (random name): a changing allowWrite entry
-            // re-keys the sandbox config and forces sandbox-runtime to
-            // re-initialize for every command, letting concurrent commands
-            // reset each other's sandbox state.
+            // per-command file (random name that does not exist yet), so a
+            // bind-based sandbox can mount it.
             allowWrite: [
               ...this.sandboxConfig.allowWrite,
               dirname(outputFile.path),
