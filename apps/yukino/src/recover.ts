@@ -132,7 +132,6 @@ export function recover(): void {
     });
   });
 
-  // Catch async errors that escape the main loop.
   process.on("unhandledRejection", (reason) => {
     if (isTerminalGone(reason)) {
       exitForTerminalGone("unhandled rejection", reason);

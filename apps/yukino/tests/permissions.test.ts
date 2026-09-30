@@ -199,7 +199,6 @@ describe("rule merging across files", () => {
         .effect,
     ).toBe("allow");
 
-    // Same checker instance: rule file edits take effect immediately
     writeFileSync(rulesFile, deny);
     expect(
       checker.check("Bash", "command", { command: "git push origin main" })

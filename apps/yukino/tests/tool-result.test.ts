@@ -47,7 +47,6 @@ describe("tool result budget", () => {
     );
     expect(replaced.length).toBe(1);
     expect(rs[2].content).toContain("<persisted-output>");
-    // The spill file stores the complete content
     const spilled = readFileSync(
       join(workDir, ".yukino", "sessions", "s", "tool-results", "t3.txt"),
       "utf-8",

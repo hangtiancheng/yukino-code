@@ -304,7 +304,6 @@ describe("teams orchestration", () => {
         .some((d) => d.includes("w1") && d.includes("[idle]")),
     ).toBe(true);
 
-    // SendMessage to an existing member lands in that member's mailbox.
     const send = await new SendMessageTool(mgr).execute(
       {
         workDir: workDir(),
@@ -415,7 +414,6 @@ describe("teams orchestration", () => {
 
     expect(result.isError).toBe(false);
     expect(result.output).toContain("fresh");
-    // Exactly one team remains — in memory and on disk.
     expect(mgr.list().map((team) => team.name)).toEqual(["fresh"]);
     expect(listTeamNames(project)).toEqual(["fresh"]);
   });

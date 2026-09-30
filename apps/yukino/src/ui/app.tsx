@@ -780,7 +780,6 @@ export function App({
           }),
         );
 
-        // Register AskUserQuestion, delegating the prompt to the UI dialog.
         registryRef.current.register(
           new AskUserQuestionTool(
             (questions) =>
@@ -2157,8 +2156,6 @@ export function App({
       maxOutput: maxOutputRef.current,
       recoveryState: recoveryStateRef.current,
       activeSkills: activeSkillsRef.current,
-      // The first system-reminder carries the full skill list; later turns
-      // only append the delta
       instructions: loadInstructions(workDir),
       memoryContent: memManagerRef.current?.buildSystemReminder() ?? "",
       skillSection: skillCatalogRef.current

@@ -144,7 +144,6 @@ mcp_servers:
       Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
 sandbox:
   enabled: false
-  backend: sandbox-runtime
   auto_allow: false
   network_enabled: true
 hooks:

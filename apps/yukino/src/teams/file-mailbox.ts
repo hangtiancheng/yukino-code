@@ -38,9 +38,6 @@ export type FileMailMessage = z.infer<typeof FileMailMessageSchema>;
 // token-protected release, dead-holder-only preemption, and
 // write-then-rename persistence below.
 
-// Read messages retained in the mailbox file; older read messages are pruned
-// on write so long-lived teams do not grow the file without bound. Unread
-// messages are never dropped.
 const MAX_READ_MESSAGES = 500;
 
 export class FileMailbox {

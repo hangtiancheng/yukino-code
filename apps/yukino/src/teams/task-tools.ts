@@ -8,7 +8,6 @@ import type {
 } from "@/tools/types.js";
 import { strArg, strList } from "@/utils/index.js";
 
-// Team shared task-board tools: TaskCreate / TaskGet / TaskList / TaskUpdate.
 // All four tools operate on the same team's SharedTaskStore, so teammates share a single task list.
 
 const VALID_STATUSES = new Set([

@@ -116,7 +116,6 @@ export class Team {
   private mailboxDir: string;
   private workDir: string;
 
-  // Team-level metadata for persistence
   leaderAgentId = "";
   description?: string;
   createdAt = Math.floor(Date.now() / 1000);
@@ -238,13 +237,12 @@ export class Team {
     writeTeamFile(this.workDir, this.name, this.snapshot());
   }
 
-  // Idle polling interval (in milliseconds). Polls the mailbox for new messages after a teammate completes a turn.
   static readonly IDLE_POLL_INTERVAL_MS = 500;
   // Grace period after the shutdown notice before force-killing an external
   // teammate: one mailbox poll interval (~2 s) plus exit time.
   static readonly STOP_GRACE_MS = 2_500;
-  // Shutdown prefix (single source: protocol.ts); the leader writes a
-  // message with this prefix to notify teammates to exit.
+  // The leader writes a mailbox message with this prefix to notify
+  // teammates to exit.
   static readonly SHUTDOWN_PREFIX = SHUTDOWN_PREFIX;
 
   /**
@@ -515,7 +513,6 @@ export class Team {
    * shutdown field. If the member is deactivated while waiting, a synthetic
    * shutdown message from the leader is returned instead.
    */
-
   private async waitForNextPromptOrShutdown(
     member: Member,
   ): Promise<{ prompt: string; shutdown?: FileMailMessage }> {

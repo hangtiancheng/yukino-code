@@ -118,8 +118,6 @@ export function spawnTeammate(config: SpawnConfig): {
     }
 
     case "iterm": {
-      // iTerm2 (macOS): use osascript to drive AppleScript, opening a new tab to run the teammate command.
-      // cd into the working directory first, then execute the teammate startup command — mirroring the detached tmux session behavior.
       const cmd = buildShellCommand(config);
       const writeText = `cd ${shellQuote(config.cwd)} && ${cmd}`;
       // Escape backslashes and double quotes for the AppleScript string literal
@@ -141,7 +139,6 @@ export function spawnTeammate(config: SpawnConfig): {
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
       });
-      // iTerm2 tabs are closed by the user; there is no programmatic session handle to force-kill, so cancellation is delegated to the mailbox shutdown flow
       return {
         cancel: () => {
           /* no-op: external iTerm tabs have no programmatic handle; shutdown is delivered via the mailbox */

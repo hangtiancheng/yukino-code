@@ -183,7 +183,6 @@ function persistProviderField(
   writeConfigAtomic(path, { ...config, providers });
 }
 
-/** Persist a provider's thinking level to the global config. */
 export function persistThinkingLevel(
   baseUrl: string,
   level: ThinkingLevel,

@@ -8,7 +8,6 @@ const log = createChildLogger({ module: "memory" });
 /** Maximum recursion depth for @include to prevent infinite nesting */
 const MAX_INCLUDE_DEPTH = 5;
 
-/** Loaded instruction file */
 export interface InstructionSource {
   path: string;
   content: string;
@@ -137,7 +136,6 @@ function expandIncludes(
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Detect fenced code block boundaries
     if (trimmed.startsWith("```")) {
       inCode = !inCode;
       out.push(line);

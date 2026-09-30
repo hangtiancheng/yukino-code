@@ -95,7 +95,6 @@ export function clearActiveTools(p: AgentProgress): void {
   p.activeTools = [];
 }
 
-// Call this on each usage event
 export function recordTokens(
   p: AgentProgress,
   inputTokens: number,

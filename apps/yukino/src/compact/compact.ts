@@ -442,7 +442,6 @@ function truncateHeadForPTL(
   return result;
 }
 
-/** Serialize prefix messages to text */
 function serializePrefixText(messages: Message[]): string {
   return messages
     .map((m) => {

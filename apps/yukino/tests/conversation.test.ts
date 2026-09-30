@@ -214,7 +214,6 @@ describe("ConversationManager", () => {
         },
       ]);
       const result = buildAnthropicMessages(mgr.getMessages());
-      // Consecutive user turns merge into one entry with text + image blocks.
       expect(result).toHaveLength(1);
       expect(result[0].role).toBe("user");
       const content = result[0].content;

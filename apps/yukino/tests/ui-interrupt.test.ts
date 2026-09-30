@@ -255,8 +255,6 @@ describe("Ctrl+C dispatch (useTerminalControls)", () => {
     send("c", { ctrl: true });
     expect(onInterrupt).toHaveBeenCalledTimes(1);
     expect(onExit).not.toHaveBeenCalled();
-    // A second press keeps interrupting (the count never advances to exit
-    // while foreground work is running).
     send("c", { ctrl: true });
     expect(onInterrupt).toHaveBeenCalledTimes(2);
     expect(onExit).not.toHaveBeenCalled();

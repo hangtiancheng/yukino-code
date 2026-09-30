@@ -1,7 +1,3 @@
-// ReadFileTool image behavior: images return a text fallback plus a rich image
-// block, magic bytes beat the extension, reads enter the fileStateCache, and
-// non-image bytes behind an image extension error out.
-
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

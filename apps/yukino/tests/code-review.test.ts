@@ -375,7 +375,6 @@ describe("grouping", () => {
     expect(groups).toHaveLength(3);
     expect(groups[0]?.label).toBe("core");
     expect(groups[0]?.diffs).toHaveLength(2);
-    // Uncovered files become single-file groups.
     expect(groups[1]?.diffs).toHaveLength(1);
     expect(groups[2]?.diffs).toHaveLength(1);
   });

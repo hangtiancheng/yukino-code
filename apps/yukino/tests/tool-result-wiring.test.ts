@@ -16,9 +16,8 @@ import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolResultContentBlock } from "@/tools/types.js";
 import { asString, isRecord } from "@/utils/index.js";
 
-// Wiring test for the tool-result budget in the Agent main loop: drives the
-// full main loop and verifies single-result spill, aggregate spill, readback
-// exemption, and that what enters the conversation history is the final form.
+// Wiring tests for the tool-result budget: these drive the full Agent main
+// loop and assert the budgeted final form is what enters conversation history.
 
 const USAGE: UsageInfo = {
   inputTokens: 1,
@@ -171,10 +170,8 @@ describe("tool result budget wiring", () => {
       fixedTool("BigTool", "x".repeat(60000)),
     ]);
 
-    // What enters history is the preview, not the original text
     const tr = toolResultsMsg(conv)?.toolResults?.[0];
     expect(tr?.content).toContain("<persisted-output>");
-    // The spill file stores the complete original text
     const spilled = readFileSync(join(spillDirOf(workDir), "t1.txt"), "utf-8");
     expect(spilled.length).toBe(60000);
   });
@@ -199,7 +196,6 @@ describe("tool result budget wiring", () => {
       fixedTool("ReadFile", "y".repeat(60000)),
     ]);
 
-    // Readback results are exempt from spilling: the original text enters history, and no new spill file is generated
     const tr = toolResultsMsg(conv)?.toolResults?.[0] ?? undefined;
     expect(tr?.content.length).toBe(60000);
     expect(existsSync(join(spillDirOf(workDir), "t_rb.txt"))).toBe(false);
@@ -275,9 +271,6 @@ describe("tool result budget wiring", () => {
   });
 });
 
-// End-to-end wiring for image tool results: the text fallback and structured
-// blocks must both reach the conversation, while session JSONL stores the
-// base64 payload inline and resume restores it.
 describe("image tool result wiring", () => {
   const PNG_DATA = Buffer.from("not-a-real-png-but-that-is-fine").toString(
     "base64",

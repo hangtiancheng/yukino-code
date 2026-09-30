@@ -24,7 +24,7 @@ interface TextFieldProps {
   /** Prefix rendered before the first visual row, e.g. "→ ". */
   prompt?: string;
   /** Called with the joined draft after every edit so the parent can persist
-   *  it across unmounts (the field itself is unmounted when inactive). */
+   *  it across unmounts (callers mount the field conditionally). */
   onChange?: (value: string) => void;
   /** Enter submits the current draft. */
   onSubmit: (value: string) => void;

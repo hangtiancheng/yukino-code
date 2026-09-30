@@ -34,7 +34,6 @@ import { contentToText } from "@/utils/index.js";
 // for the retained messages in the area preceding the boundary.
 export const COMPACT_BOUNDARY = "compact_boundary";
 
-/** Session expiry days. Session files older than this will be automatically cleaned up. */
 const SESSION_EXPIRY_DAYS = 30;
 
 // Tool block fields on disk always use snake_case; the in-memory conversation layer still uses camelCase.
@@ -267,9 +266,9 @@ export function loadSession(
         // empty-content ordinary messages rather than crashing the load.
         if (success) {
           const isEmpty =
-            data.content.length === 0 && // empty text or content blocks
-            !(data.tool_uses?.length ?? 0) && // empty tool uses
-            !(data.tool_results?.length ?? 0); // empty tool results
+            data.content.length === 0 &&
+            !(data.tool_uses?.length ?? 0) &&
+            !(data.tool_results?.length ?? 0);
           if (!isEmpty) {
             out.push(data);
           }
@@ -415,9 +414,9 @@ export function rebuildFromSession(saved: SessionMessage[]): RestoredMessage[] {
       for (const k of payload.keep) {
         if (
           (k.role !== "user" && k.role !== "assistant") ||
-          (k.content.length === 0 && // empty text or content blocks
-            !(k.tool_uses?.length ?? 0) && // empty tool uses
-            !(k.tool_results?.length ?? 0)) // empty tool results
+          (k.content.length === 0 &&
+            !(k.tool_uses?.length ?? 0) &&
+            !(k.tool_results?.length ?? 0))
         ) {
           continue;
         }
@@ -465,8 +464,8 @@ function toRestored(m: SessionMessage): RestoredMessage | null {
   }
   if (
     m.content.length === 0 &&
-    !(m.tool_uses?.length ?? 0) && // empty tool uses
-    !(m.tool_results?.length ?? 0) // empty tool results
+    !(m.tool_uses?.length ?? 0) &&
+    !(m.tool_results?.length ?? 0)
   ) {
     return null;
   }

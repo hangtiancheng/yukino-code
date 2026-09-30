@@ -75,7 +75,6 @@ function deferredStub(name: string): Tool {
   };
 }
 
-// Script for a single tool-call turn
 const toolTurn = (id: string): StreamEvent[] => [
   { type: "tool_call_start", toolName: "Echo", toolId: id },
   { type: "tool_call_complete", toolId: id, toolName: "Echo", arguments: {} },
@@ -112,7 +111,6 @@ async function drain(agent: Agent): Promise<void> {
 
 describe("deferred tool reminder", () => {
   it("is injected only once across four turns", async () => {
-    // Three tool-call turns + one final turn, four iterations total
     const client = new MockClient([
       toolTurn("t1"),
       toolTurn("t2"),

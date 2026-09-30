@@ -21,7 +21,6 @@ describe("FileMailbox", () => {
 
     await mbox.send("leader", "first");
     expect((await mbox.receive()).map((m) => m.text)).toEqual(["first"]);
-    // Nothing new yet.
     expect(await mbox.receive()).toEqual([]);
 
     await mbox.send("leader", "second");

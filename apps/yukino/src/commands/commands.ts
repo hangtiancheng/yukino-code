@@ -11,15 +11,12 @@ export interface CommandContext {
   args: string;
   conversation?: unknown;
   registry?: unknown;
-  /** Returns the current permission mode */
   permissionMode?: () => string;
   /** Returns token usage [input, output] */
   tokenCount?: () => [number, number];
   /** Returns the number of currently enabled tools */
   toolCount?: () => number;
-  /** Returns the list of memories */
   memoryList?: () => string[];
-  /** Current model name */
   model?: string;
   /** Returns the current effective thinking level */
   thinkingLevel?: () => ThinkingLevel;
@@ -42,10 +39,7 @@ export interface Command {
 
 export class CommandRegistry {
   private commands = new Map<string, Command>();
-  /**
-   * Registers a command. The name must not conflict with an existing command
-   * name; throws on a conflict.
-   */
+  /** Throws when the name conflicts with an existing command. */
   register(cmd: Command): void {
     if (this.commands.has(cmd.name)) {
       throw new Error(`Command '${cmd.name}' already registered`);
@@ -119,7 +113,6 @@ export function createDefaultRegistry(): CommandRegistry {
     type: "local",
     description: "Show available commands",
     handler: (ctx) => {
-      // Support /help <cmd> to view details of a single command
       if (ctx.args) {
         const cmd = registry.find(ctx.args);
         if (!cmd) {
@@ -222,6 +215,8 @@ export function createDefaultRegistry(): CommandRegistry {
     name: "memory",
     type: "local",
     description: "Show memory status",
+    // Placeholder token: the TUI and remote server intercept /memory by name
+    // and render the real status themselves.
     handler: () => "memory",
   });
 
@@ -258,6 +253,8 @@ export function createDefaultRegistry(): CommandRegistry {
     type: "local",
     description:
       "Show MCP server status; /mcp reload re-reads the config and reconnects",
+    // Placeholder token: the TUI and remote server intercept /mcp by name and
+    // render the real status themselves.
     handler: () => "mcp",
   });
 

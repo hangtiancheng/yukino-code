@@ -11,7 +11,6 @@ import z, { parse } from "zod";
 
 import { withFileSyncLock } from "./file-lock.js";
 
-/** A task on the team's shared task board, with dependency relations (blocks / blockedBy) and ownership (assignee). */
 export interface SharedTask {
   id: string;
   title: string;

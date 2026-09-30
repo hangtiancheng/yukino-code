@@ -146,8 +146,6 @@ const PENDING_REQUEST_TIMEOUT_MINUTES = 10;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_STALE_MS = 75_000;
 
-// -- WS inbound/outbound types and Zod schemas --------------------------------
-
 interface WsOutbound {
   type: string;
   data: unknown;
@@ -184,8 +182,6 @@ const CodeReviewStartSchema = z.object({
   commit: z.string().optional(),
   excludePatterns: z.array(z.string()).optional(),
 });
-
-// -- Static file serving -------------------------------------------------------
 
 const FE_DIST = [
   join(import.meta.dirname, "fe", "dist"),
@@ -225,8 +221,6 @@ function serveStatic(path: string): { body: Buffer; mime: string } | null {
   const mime = MIME_TYPES[extname(fullPath)] ?? "application/octet-stream";
   return { body, mime };
 }
-
-// -- RemoteAgentHandle interface -----------------------------------------------
 
 /** Callback injected into each agent run for the permission-request flow. */
 export interface RunCallbacks {
@@ -289,8 +283,6 @@ export interface RemoteAgentHandle {
    */
   clearConversation(): void;
 }
-
-// -- Agent handle implementation -----------------------------------------------
 
 function composeAgentToolFilter(
   enableCoordinatorMode: boolean,
@@ -517,8 +509,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
   }
 }
 
-// -- createRemoteAgent factory -------------------------------------------------
-
 export interface CreateRemoteAgentOptions {
   provider: ProviderConfig;
   workDir: string;
@@ -556,28 +546,22 @@ export async function createRemoteAgent(
     throw hookErr;
   }
 
-  // 1. Create the per-session file history and file-state cache
-  // (the session id itself is chosen above; the session file is written lazily)
+  // The session id itself is chosen above; the session file is written lazily.
   const fileHistory = new FileHistory(workDir, sessionId);
   const fileStateCache = new FileStateCache();
 
-  // 2. Build tool registry with all built-in tools
   const { registry, taskList } = buildToolRegistry(workDir, sessionId);
 
-  // 3. Build system prompt
   const env = detectEnvironment(workDir);
   env.model = provider.model;
   const systemPrompt = buildSystemPrompt(env);
 
-  // 4. Create LLM client
   const client = await createClient(provider, systemPrompt);
 
-  // 5. Create conversation manager
   const conv = new ConversationManager();
 
   const contextWindow = getContextWindow(provider);
 
-  // 6. Load instructions and memory, inject into conversation
   const instructions = loadInstructions(workDir);
   const memoryManager = new MemoryManager(workDir);
   // enable_memory: false keeps the index out of the conversation and nothing
@@ -587,14 +571,11 @@ export async function createRemoteAgent(
   const memReminder = memoryEnabled ? memoryManager.buildSystemReminder() : "";
   conv.injectLongTermMemory(instructions, memReminder);
 
-  // 7. Initialize hooks
   const hookEngine = new HookEngine(hookConfigs ?? []);
 
-  // 8. Load skills
   const catalog = new SkillCatalog();
   catalog.load(workDir);
 
-  // 9. SkillHost interface
   const activeSkills = new Map<string, string>();
   const skillHost: SkillHost = {
     activateSkill: (name, body) => {
@@ -632,10 +613,8 @@ export async function createRemoteAgent(
       ),
   };
 
-  // 10. Register LoadSkill tool
   registry.register(new LoadSkillTool(catalog, skillHost, skillForkHost));
 
-  // 11. Register AskUserQuestion tool when the host supports interactive questions
   if (askUser) {
     registry.register(new AskUserQuestionTool(askUser));
   }
@@ -664,7 +643,6 @@ export async function createRemoteAgent(
         // Teammates stay purely foreground: see SubagentRunOptions.backgroundTasks.
         { abortSignal, backgroundTasks: false },
       );
-  // 12. Register team tools (plus SyntheticOutput)
   const teamManager = new TeamManager(workDir);
   // Re-adopt any team left on disk (e.g. from a previous server run) so live
   // external teammates' notifications are drained and the UI sees them.
@@ -680,7 +658,6 @@ export async function createRemoteAgent(
   registry.register(new TaskStopTool(teamManager, backgroundTaskManager));
   registry.register(new SyntheticOutputTool());
 
-  // 13. Register AgentTool (with both spawn and fork paths)
   const agentTool = new AgentTool(
     workDir,
     registry,
@@ -716,7 +693,6 @@ export async function createRemoteAgent(
     conv,
     async (prompt, forkConv, forkRegistry, modelOverride?, context?) => {
       const forkWorkDir = context?.workDir ?? workDir;
-      // Fork path: create an isolated agent on the forked conversation
       const resolvedModel = modelOverride ?? provider.model;
       const forkEnv = detectEnvironment(forkWorkDir);
       forkEnv.model = resolvedModel;
@@ -787,7 +763,6 @@ export async function createRemoteAgent(
   agentTool.setTeamManager(teamManager, teamRunAgentFactory);
   registry.register(agentTool);
 
-  // 14. Load user-defined slash commands
   const cmdRegistry = createCommandRegistry();
   for (const cmd of loadUserCommands(workDir)) {
     try {
@@ -797,10 +772,8 @@ export async function createRemoteAgent(
     }
   }
 
-  // 15. Wire skills to slash commands
   wireSkillsToCommands(catalog, skillHost, cmdRegistry);
 
-  // 16. Initialize MCP servers
   let mcpManager: MCPManager | null = null;
 
   if (mcpConfigs && mcpConfigs.length > 0) {
@@ -809,7 +782,6 @@ export async function createRemoteAgent(
 
     const result = await mgr.connectAll(mcpConfigs);
 
-    // Register all MCP tools
     for (const { serverName, tool } of result.tools) {
       const mcpClient = mgr.getClient(serverName);
       if (mcpClient) {
@@ -832,7 +804,6 @@ export async function createRemoteAgent(
     }
   }
 
-  // 17. Construct the handle
   const handle = new AgentHandleImpl({
     client,
     conv,
@@ -871,8 +842,6 @@ export async function createRemoteAgent(
 
   return handle;
 }
-
-// -- Helper functions for agent initialization ---------------------------------
 
 /** Creates the tool registry and registers all 17 built-in tools. */
 function buildToolRegistry(
@@ -935,8 +904,6 @@ function wireSkillsToCommands(
   }
 }
 
-// -- Permission description formatter ------------------------------------------
-
 /** Formats a permission request description for the WS client permission dialog. */
 function formatPermissionDesc(
   toolName: string,
@@ -954,8 +921,6 @@ function formatPermissionDesc(
   }
   return parts.join("\n");
 }
-
-// -- RemoteServer --------------------------------------------------------------
 
 interface RemoteServerOptions {
   providers: ProviderConfig[];
@@ -1508,8 +1473,6 @@ export class RemoteServer {
     }
   }
 
-  // -- Slash command handling ---------------------------------------------------
-
   /** Handles slash command input: parse, dispatch to handler by type. */
   private async handleSlashCommand(input: string): Promise<void> {
     const handle = await this.ensureAgent();
@@ -1953,8 +1916,6 @@ export class RemoteServer {
     }
   }
 
-  // -- Plan approval ------------------------------------------------------------
-
   /** Builds the status snapshot message, or null before the agent exists. */
   private statusPayload(): WsOutbound | null {
     const handle = this.agentHandle;
@@ -2057,8 +2018,6 @@ export class RemoteServer {
       await this.handleUserMessage(`Execute this plan:\n\n${planContent}`);
     }
   }
-
-  // -- Code review ----------------------------------------------------------------
 
   /** Runs a code review configured through the browser form. */
   private async handleCodeReviewStart(
@@ -2184,8 +2143,6 @@ export class RemoteServer {
     }
   }
 
-  // -- Local status commands and session resume --------------------------------------
-
   /** Renders /memory output (parity with the terminal UI). */
   private buildMemoryStatus(args: string): string {
     const handle = this.agentHandle;
@@ -2269,7 +2226,6 @@ export class RemoteServer {
       return;
     }
 
-    // Resolve target session (by index or session ID)
     let targetId = args.trim();
     const idx = /^\d+$/.test(targetId) ? Number(targetId) : NaN;
     if (!Number.isNaN(idx) && idx >= 1 && idx <= sessions.length) {
@@ -2319,8 +2275,6 @@ export class RemoteServer {
     });
     this.broadcast({ type: "command_done", data: null });
   }
-
-  // -- Helper methods -----------------------------------------------------------
 
   /** Creates the askUser callback closure for createRemoteAgent. */
   private createAskUserCallback(): Asker {

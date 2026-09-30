@@ -12,7 +12,6 @@ import { join } from "node:path";
 
 import { z } from "zod";
 
-/** The single global config file: $HOME/.yukino/config.yaml. */
 export function globalConfigPath(): string {
   return join(homedir(), ".yukino", "config.yaml");
 }

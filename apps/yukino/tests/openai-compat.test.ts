@@ -116,7 +116,6 @@ describe("openai-compat chat message building", () => {
     expect(data2?.tool_call_id).toBe("c1");
     expect(data2?.content).toBe("a.txt");
 
-    // The plain user + final assistant turns survive too.
     expect(
       msgs.some((m) => m.role === "user" && m.content === "list files"),
     ).toBe(true);

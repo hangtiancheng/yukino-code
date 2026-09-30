@@ -20,7 +20,6 @@ const planModeExitTemplate = `## Exited Plan Mode
 
 Plan mode has ended. Proceed within the approved scope and current permissions.%EXTRA%`;
 
-// Prompt for re-entering Plan Mode: reminds the model that a plan file already exists and can be continued
 const planModeReentryTemplate = `Plan mode is active again. Review the existing plan at %PLAN_PATH%; refine or replace it as needed. Stay read-only except that file, and use ExitPlanMode for approval before implementation.`;
 
 // How many iterations before repeating the full reminder

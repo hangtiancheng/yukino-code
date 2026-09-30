@@ -3,8 +3,9 @@ import { Box, Text } from "ink";
 import { THEME } from "@/ui/styles.js";
 
 /**
- * Renders the line-numbered diff text produced by buildDiff() as colored lines:
- * lines starting with "+ " are green, "- " are red, others (context/summary lines) are dimmed.
+ * Renders the line-numbered diff text produced by buildDiff(), coloring each
+ * line by the "+ " / "- " prefixes buildDiff emits; every other line
+ * (context, truncation notice) renders as context.
  */
 export function DiffLines({ text }: { text: string }) {
   const lines = text.split("\n");

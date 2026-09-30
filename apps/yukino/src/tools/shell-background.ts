@@ -39,7 +39,6 @@ const BACKGROUND_PREVIEW_BYTES = TOOL_RESULT_PREVIEW_CHARS;
 export const BACKGROUND_MAX_OUTPUT_BYTES = 5 * 1024 * 1024 * 1024;
 export const SIZE_WATCHDOG_INTERVAL_MS = 500;
 
-/** Why a command moved to the background. */
 export type BackgroundReason = "explicit" | "user" | "timeout";
 
 /** Terminal facts about the child process, consumed to build results and notifications. */

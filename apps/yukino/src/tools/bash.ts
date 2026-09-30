@@ -513,8 +513,9 @@ export class BashTool implements Tool {
         backgrounded = true;
         settled = true;
         // The command now outlives both its foreground timeout and the
-        // caller's abort signal: only TaskStop or session shutdown can kill
-        // it. (A termination already underway is excluded by the
+        // caller's abort signal: only TaskStop, session shutdown, or the
+        // background output cap (watchdog keeps running at the 5GB ceiling)
+        // can kill it. (A termination already underway is excluded by the
         // `terminating` guard above, so no escalate timer can be pending here.)
         clearTimeout(timeoutTimer);
         ctx.abortSignal?.removeEventListener("abort", onAbort);

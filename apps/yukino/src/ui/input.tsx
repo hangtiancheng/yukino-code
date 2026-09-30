@@ -243,8 +243,8 @@ export function InputBox(props: InputBoxProps) {
       return;
     }
     clearRef.current = () => {
-      // While disabled (dialog overlay) the draft is hidden; leave it intact
-      // so it reappears unchanged when the input re-enables.
+      // While disabled (provider switching) the draft is hidden; leave it
+      // intact so it reappears unchanged when the input re-enables.
       if (disabled) {
         return;
       }

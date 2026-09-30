@@ -80,8 +80,9 @@ function asTabNumber(tab: number | string) {
 
 const DEFAULT_TAB = 4;
 
-// Built per renderer so a theme swap via setThemeMode is picked up; the chalk
-// colors are resolved from THEME instead of hardcoded ANSI names.
+// Built per renderer so THEME is only read at render time: evaluating these
+// chalk styles at module load would freeze the palette before startup's
+// setThemeMode applies the detected terminal theme.
 function buildDefaultOptions(): TerminalRendererOptions {
   return {
     code: chalk.hex(THEME.mdCodeBlock),

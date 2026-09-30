@@ -18,7 +18,6 @@ function resolveVersion(): string {
   if (typeof __YUKINO_VERSION__ !== "undefined") {
     return __YUKINO_VERSION__;
   }
-  // Dev fallback: walk up from this file to find package.json
   const here = path.dirname(fileURLToPath(import.meta.url));
   // Try both 1 and 2 levels up to cover src/, dist/ and dist/lib/ layouts
   for (const levels of ["..", "../.."]) {

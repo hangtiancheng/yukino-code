@@ -257,7 +257,8 @@ export function createChildLogger(bindings: { module: string }): Logger {
 // Expired log cleanup. Mirrors session/index.ts cleanExpiredSessions: same
 // directory iteration and 30-day mtime check; unlike the session sweep, which
 // logs failures, cleanup errors here stay silent.
-// Scans <workDir>/.yukino/logs/ and ~/.yukino/teams/<team>/logs/.
+// Scans <workDir>/.yukino/logs/ and the top-level
+// ~/.yukino/teams/<entry>/logs/ subdirectories (see cleanExpiredLogs).
 // All fs operations are async to avoid blocking the event loop.
 
 /** Clean expired log files in a single directory. Returns count removed. Failures are silent. */
@@ -287,10 +288,12 @@ async function cleanDir(dir: string): Promise<number> {
 }
 
 /**
- * Clean expired logs. Scans the project .yukino/logs/ and all team-specific
- * ~/.yukino/teams/<team>/logs/ directories (team data lives under the home
- * directory — see teams/team-file.ts teamsBaseDir). Only called by the main
- * process (teammate subprocesses skip via skipCleanup).
+ * Clean expired logs. Scans the project .yukino/logs/ and one logs/
+ * subdirectory per top-level entry of ~/.yukino/teams/. Teammate logs live
+ * one level deeper (~/.yukino/teams/<namespace>/<team>/logs/, per the
+ * logDir derivation in teammate.ts) and are never reached by this scan.
+ * Only called by the main process (teammate subprocesses skip via
+ * skipCleanup).
  */
 async function cleanExpiredLogs(workDir: string): Promise<number> {
   let removed = 0;

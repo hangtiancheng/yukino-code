@@ -51,7 +51,6 @@ export class ToolRegistry {
     return this.tools.get(name);
   }
 
-  /** Look up a tool and narrow it to a concrete class via instanceof. */
   getInstanceOf<T extends Tool>(
     name: string,
     ctor: abstract new (...args: never[]) => T,

@@ -18,7 +18,6 @@ describe("todo store-backed persistence", () => {
       true,
     );
 
-    // A fresh list over the same store recovers the tasks and continues ids.
     const reloaded = new TaskList(new TaskStore(workDir, "sess1"));
     expect(reloaded.list()).toHaveLength(2);
     expect(reloaded.list()[0].subject).toBe("first task");
@@ -48,7 +47,6 @@ describe("todo store-backed persistence", () => {
     const b = new TaskList(new TaskStore(workDir, "b"));
     expect(b.list()).toHaveLength(0);
 
-    // useStore repoints at session a's tasks.
     b.useStore(new TaskStore(workDir, "a"));
     expect(b.list()).toHaveLength(1);
     expect(b.list()[0].subject).toBe("for-a");

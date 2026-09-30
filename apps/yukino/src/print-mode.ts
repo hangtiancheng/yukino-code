@@ -53,19 +53,14 @@ import { SyntheticOutputTool } from "./tools/synthetic-output.js";
 import { ToolSearchTool } from "./tools/tool-search.js";
 import { WriteFileTool } from "./tools/write-file.js";
 
-/** Supported output formats for -p (print) mode. */
 type OutputFormat = "text" | "stream-json";
 
-/** Parsed arguments for -p mode. */
 export interface PrintArgs {
   prompt: string;
   outputFormat: OutputFormat;
 }
 
-/**
- * Parses -p related command-line flags.
- * Returns null when -p mode is not active.
- */
+/** Returns null when -p mode is not active. */
 export function parsePrintFlags(args: string[]): PrintArgs | null {
   const idx = args.indexOf("-p");
   if (idx === -1) {
@@ -83,7 +78,6 @@ export function parsePrintFlags(args: string[]): PrintArgs | null {
     process.exit(1);
   }
 
-  // Parse --output-format (defaults to "text")
   let outputFormat: OutputFormat = "text";
   const fmtIdx = args.indexOf("--output-format");
   if (fmtIdx !== -1) {
@@ -283,7 +277,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       if (args.outputFormat === "stream-json") {
         emitStreamJson(event);
       } else {
-        // text mode: emit only streamed text
         if (event.type === "stream_text") {
           process.stdout.write(event.text);
         }
@@ -341,7 +334,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     const backgroundNotifications = backgroundTaskManager.drainNotifications();
     const durationMs = Date.now() - startTime;
 
-    // text mode: ensure trailing newline
     if (
       args.outputFormat === "text" &&
       resultText &&

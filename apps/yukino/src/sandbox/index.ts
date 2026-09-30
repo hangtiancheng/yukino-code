@@ -6,15 +6,10 @@ export * as Seatbelt from "./seatbelt.js";
 
 export type SandboxImplementation = "bwrap" | "seatbelt";
 
-/**
- * Sandbox configuration: controls file write permissions and network access.
- */
 export interface SandboxConfig {
-  /** Paths where write operations are permitted. */
   allowWrite: string[];
   /** Paths that are always read-only (takes precedence over allowWrite). */
   denyWrite: string[];
-  /** Whether network access is allowed. */
   networkEnabled: boolean;
 }
 
@@ -38,9 +33,7 @@ export interface PreparedSandboxCommand {
 export interface Sandbox {
   readonly implementation: SandboxImplementation;
   readonly availabilityError?: string;
-  /** Checks whether the platform sandbox tooling is available. */
   available(): boolean | Promise<boolean>;
-  /** Prepares an executable and argv for sandboxed execution. */
   prepare(
     command: string,
     config: SandboxConfig,

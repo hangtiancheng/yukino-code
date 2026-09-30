@@ -376,7 +376,6 @@ export class PowerShellTool implements Tool {
 
       let timedOut = false;
       const timeoutTimer = setTimeout(() => {
-        // Auto-background on timeout when allowed; otherwise hard-kill.
         if (autoBackgroundAllowed && backgroundExecution("timeout") !== null) {
           return;
         }
@@ -448,7 +447,9 @@ export class PowerShellTool implements Tool {
         backgrounded = true;
         settled = true;
         // The command now outlives both its foreground timeout and the
-        // caller's abort signal: only TaskStop or session shutdown can kill it.
+        // caller's abort signal: only TaskStop, session shutdown, or the
+        // background output cap (watchdog keeps running at the 5GB ceiling)
+        // can kill it.
         clearTimeout(timeoutTimer);
         ctx.abortSignal?.removeEventListener("abort", onAbort);
         this.foreground.delete(foregroundKey);

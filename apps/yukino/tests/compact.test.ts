@@ -43,10 +43,9 @@ describe("currentContextTokens (real-usage anchoring)", () => {
     conversation.addUserMessage("a".repeat(35));
     conversation.addAssistantMessage("b".repeat(35));
 
-    // No anchor → identical to estimating the whole transcript.
     const got = currentContextTokens(conversation, undefined);
     expect(got).toBe(estimateTokens(conversation));
-    expect(got).toBe(estChars(70)); // 70 chars / 3.5 = 20
+    expect(got).toBe(estChars(70));
   });
 
   it("uses baseline + increment for messages appended after the anchor", () => {
@@ -61,11 +60,9 @@ describe("currentContextTokens (real-usage anchoring)", () => {
       anchorCount: 2, // it covered the first 2 messages
     };
 
-    // Nothing new yet → exactly the baseline, char count of old messages ignored.
     expect(currentContextTokens(conversation, anchor)).toBe(5000);
 
-    // Append a new message after the anchor → baseline + estimate of only that.
-    conversation.addUserMessage("z".repeat(70)); // 70 chars → ceil(70/3.5) = 20
+    conversation.addUserMessage("z".repeat(70));
     expect(currentContextTokens(conversation, anchor)).toBe(
       5000 + estChars(70),
     );
@@ -181,14 +178,11 @@ describe("computeKeepStartIndex (recent-history retention)", () => {
       conversation.addAssistantMessage(`tail${String(i)}`);
     }
 
-    const messages = conversation.getMessages(); // length 14
+    const messages = conversation.getMessages();
     const keepStart = computeKeepStartIndex(messages);
 
-    // Count-floor of 5 would pick idx 9 (tool_result user); must back up to 8.
     expect(keepStart).toBe(8);
-    // The kept tail must start with the tool_use assistant, not the orphan.
     expect(messages[keepStart].toolUses?.[0]?.toolUseId).toBe("tid-1");
-    // And the matching tool_result is inside the kept slice (not orphaned out).
     const kept = messages.slice(keepStart);
     const hasUse = kept.some((m) =>
       m.toolUses?.some((t) => t.toolUseId === "tid-1"),
@@ -204,15 +198,14 @@ describe("computeKeepStartIndex (recent-history retention)", () => {
     // already satisfies the token-floor (KEEP_RECENT_TOKENS = 10k), so the scan
     // stops after keeping exactly 1 and never reaches the KEEP_MAX_TOKENS (40k)
     // upper-bound check.
-    const big = "z".repeat(49000); // ceil(49000/3.5) = 14000 tokens each
+    const big = "z".repeat(49000);
     const messages: Message[] = Array.from({ length: 6 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",
       content: big,
     }));
     const keepStart = computeKeepStartIndex(messages);
-    // token-floor (10k) is met by the very first kept message → keep exactly 1.
     expect(keepStart).toBe(messages.length - 1);
-    expect(keepStart).toBeGreaterThan(0); // not everything kept
+    expect(keepStart).toBeGreaterThan(0);
   });
 });
 
@@ -261,23 +254,19 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     const after = conversation.getMessages();
     const joined = after.map((m) => contentToText(m.content)).join("\n");
 
-    // Recent original messages are still present verbatim (not just a summary).
     expect(joined).toContain("marker-recent-q");
     expect(joined).toContain("marker-recent-a");
     expect(joined).toContain("marker-recent-f");
-    // The summary is present with the framing wrapper...
     expect(joined).toContain("THE SUMMARY BODY");
     expect(joined).toContain(
       "The conversation history before this point was compacted",
     );
     expect(joined).toContain("Recent messages have been preserved verbatim");
-    // ...but the summary prompt only covered the prefix, NOT the kept tail.
     expect(lastPrompt()).toContain("OLD-PREFIX-0");
     expect(lastPrompt()).not.toContain("marker-recent-q");
-    // Transcript shrank (prefix collapsed) but kept tail + summary remain.
     // No assistant ack message — just summary + kept tail.
     expect(after.length).toBeLessThan(before);
-    expect(after.length).toBeGreaterThanOrEqual(2); // summary + >=1 kept (no ack)
+    expect(after.length).toBeGreaterThanOrEqual(2);
     expect(msg).toContain("kept");
   });
 
@@ -362,7 +351,6 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     // Everything is inside the kept tail → compaction skipped, transcript intact.
     expect(after).toEqual(before);
     expect(msg.toLowerCase()).toContain("skip");
-    // The verbatim originals are untouched (no summary injected).
     const joined = after.map((m) => contentToText(m.content)).join("\n");
     expect(joined).toContain("only-q marker");
     expect(joined).not.toContain(

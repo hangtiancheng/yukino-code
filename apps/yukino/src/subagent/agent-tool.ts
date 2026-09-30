@@ -273,7 +273,6 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
       );
     }
 
-    // Fork path: Inherits parent conversation context when subagent_type is not specified
     if (!subagentType) {
       if (background && this.conversation && this.forkHandler) {
         const snapshot = this.conversation.fork();
@@ -297,7 +296,6 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
       );
     }
 
-    // Definition path: Look up Agent definition by subagent_type
     const definition = this.definitions.find((d) => d.name === subagentType);
     if (!definition) {
       return {

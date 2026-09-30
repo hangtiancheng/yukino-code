@@ -184,7 +184,6 @@ describe("session save/load round-trip", () => {
     );
     expect(raw).toContain(data);
 
-    // Resume restores the inline image block byte-identically.
     const restored = rebuildFromSession(loadSession(workDir, id));
     expect(restored).toHaveLength(1);
     const content = restored[0].content;
@@ -357,13 +356,10 @@ describe("rebuildFromSession (compacted-state resume)", () => {
     expect(rebuilt[0].content).toContain(
       "Recent messages have been preserved verbatim",
     );
-    // Kept tail (original text) is replayed verbatim, in order, with roles.
     expect(rebuilt[1]).toEqual({ role: "user", content: "KEPT-Q recent" });
     expect(rebuilt[2]).toEqual({ role: "assistant", content: "KEPT-A recent" });
-    // Post-boundary continuation messages are replayed.
     expect(joined).toContain("user:POST-BOUNDARY-Q new");
     expect(joined).toContain("assistant:POST-BOUNDARY-A new");
-    // Pre-boundary originals are NOT replayed (the summary replaces them).
     expect(joined).not.toContain("must-not-replay");
     // Exactly: summary + 2 kept + 2 post-boundary.
     expect(rebuilt).toHaveLength(5);
@@ -446,7 +442,6 @@ describe("rebuildFromSession (compacted-state resume)", () => {
     expect(joined).toContain("SECOND-SUMMARY");
     expect(joined).toContain("SECOND-KEEP recent");
     expect(joined).toContain("AFTER-SECOND new");
-    // Nothing from before the last boundary leaks in.
     expect(joined).not.toContain("must-not-replay");
     expect(rebuilt).toHaveLength(3); // summary + 1 kept + 1 post-boundary
   });
@@ -520,7 +515,6 @@ describe("cleanExpiredSessions", () => {
     expect(cleanExpiredSessions(workDir)).toBe(1);
     expect(existsSync(join(sessionsRoot, `${expiredId}.jsonl`))).toBe(false);
     expect(existsSync(join(sessionsRoot, expiredId))).toBe(false);
-    // The fresh session and its spill files are untouched.
     expect(existsSync(join(sessionsRoot, `${freshId}.jsonl`))).toBe(true);
     expect(existsSync(join(freshSpill, "toolu_new.txt"))).toBe(true);
   });

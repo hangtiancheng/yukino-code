@@ -7,8 +7,6 @@ import {
 } from "./prompts.js";
 import type { FileDiff, ReviewComment } from "./types.js";
 
-/** Prompt assembly helpers. */
-
 /** Escape text used inside a double-quoted XML attribute. */
 function escapeXmlAttr(s: string): string {
   return s

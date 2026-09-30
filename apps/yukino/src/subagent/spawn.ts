@@ -71,7 +71,6 @@ export async function spawnSubagent(
 ): Promise<string> {
   options.abortSignal?.throwIfAborted();
   // Determine the model: call-level override > definition-level model > parent Agent's model
-
   const effectiveModel = modelOverride ?? definition.model;
   const resolvedModel = effectiveModel ?? parentProvider.model;
   const env = detectEnvironment(workDir);

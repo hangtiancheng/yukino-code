@@ -45,7 +45,6 @@ describe("InstallSkillTool", () => {
     );
     expect(existsSync(installed)).toBe(true);
     expect(readFileSync(installed, "utf-8")).toContain("conventional-commit");
-    // catalog reloaded with the new skill
     expect(catalog.has("commit-helper")).toBe(true);
   });
 

@@ -12,7 +12,6 @@ import { asErrorString } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "mcp" });
 
-/** Common prefix for MCP tool names. */
 export const MCP_TOOL_PREFIX = "mcp__";
 /**
  * Separator between the server segment and the tool segment in a tool name. A double

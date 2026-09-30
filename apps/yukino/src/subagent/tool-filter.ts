@@ -11,15 +11,12 @@ type AllTools =
   | "TaskGet"
   | "TaskList"
   | "TaskUpdate"
-
-  // === team run agent ===
   | "TeamCreate"
   | "SpawnTeammate"
   | "SendMessage"
   | "ListTeams"
   | "TeamDelete"
   | "SyntheticOutput"
-  // === end team run agent ===
   | "AskUserQuestion"
   | "Bash"
   | "PowerShell"
@@ -56,7 +53,7 @@ export const MAIN_AGENT_ONLY_TOOLS: ReadonlySet<string> = new Set([
 // Forks keep Agent (as a tagged clone) and TaskStop; only MAIN_AGENT_ONLY_TOOLS
 // is stripped from them.
 const SUBAGENT_EXTRA_TOOLS = [
-  "Agent", // Prevents recursive spawning of subagents
+  "Agent",
   "TaskStop",
 ] satisfies readonly AllTools[];
 export const SUBAGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
@@ -72,7 +69,6 @@ export const TEAMMATE_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "TeamDelete",
 ] satisfies readonly AllTools[]);
 
-// Asynchronous (background) Agents are restricted to only these tools
 export const ASYNC_AGENT_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "ReadFile",
   "WebFetch",
@@ -113,7 +109,6 @@ export function filterToolsForAgent(
 ): ToolRegistry {
   const disallowed = new Set(disallowedTools ?? []);
   const allowed = new Set(allowedTools ?? []);
-  // Enable whitelist intersection if a tools list is defined and is not the wildcard "*"
   const hasWhitelist =
     allowed.size > 0 && !(allowed.size === 1 && allowed.has("*"));
 
@@ -123,7 +118,6 @@ export function filterToolsForAgent(
   for (const tool of registry.listTools()) {
     const name = tool.name;
 
-    // Layer 1: MCP tools skip layers 2-3; definition-level lists still apply
     if (isMCPTool(name)) {
       if (!disallowed.has(name) && (!hasWhitelist || allowed.has(name))) {
         filtered.register(tool);
@@ -131,22 +125,18 @@ export function filterToolsForAgent(
       continue;
     }
 
-    // Layer 2: Global disallow — no subagent can use these
     if (SUBAGENT_DISALLOWED_TOOLS.has(name)) {
       continue;
     }
 
-    // Layer 3: Whitelist filtering for asynchronous Agents
     if (isAsync && !ASYNC_AGENT_ALLOWED_TOOLS.has(name)) {
       continue;
     }
 
-    // Layer 4: Definition-level blacklist
     if (disallowed.has(name)) {
       continue;
     }
 
-    // Layer 5: Definition-level whitelist intersection
     if (hasWhitelist && !allowed.has(name)) {
       continue;
     }

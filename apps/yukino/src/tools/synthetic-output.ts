@@ -79,9 +79,10 @@ export class SyntheticOutputTool implements Tool {
   }
 
   /**
-   * Only covers top-level type and required fields; an empty return string
-   * means it passed. Full JSON Schema validation is unnecessary here — what
-   * we guard against is the model delivering a structurally malformed result.
+   * Only covers the top-level type (object/array/string) and required fields;
+   * an empty return string means it passed. Full JSON Schema validation is
+   * unnecessary here — what we guard against is the model delivering a
+   * structurally malformed result.
    */
   private validateSchema(data: unknown): string {
     if (!this.jsonSchema) {

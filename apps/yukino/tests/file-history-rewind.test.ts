@@ -34,10 +34,9 @@ describe("FileHistory rewind", () => {
     const { base, projectDir } = makeTempProject();
     const fh = new FileHistory(base, "session-1");
 
-    // Round 1: no file changes, pure conversation, take a snapshot.
     fh.makeSnapshot(0, "Round 1");
 
-    // Round 2: create a new file. trackEdit is called before the write, when the file does not exist yet.
+    // trackEdit runs before the write, while the file does not exist yet.
     const newFile = join(projectDir, "new-file.ts");
     fh.trackEdit(newFile);
     writeFileSync(newFile, "export const x = 1;");

@@ -1,7 +1,5 @@
 import type { CodeReviewResult, ReviewComment } from "./types.js";
 
-/** Markdown report rendering for a finished review. */
-
 const SEVERITY_ICON: Record<string, string> = {
   critical: "🔴",
   high: "🟠",

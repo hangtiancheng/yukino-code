@@ -447,7 +447,6 @@ const SHARED_YUKINO_ENTRIES = [
 /** Same allowlist approach for the repo's .agents/ directory. */
 const SHARED_AGENTS_ENTRIES = ["AGENTS.md", "skills"];
 
-/** Copy shared .yukino/ settings from the main repo to the worktree. */
 async function copyYukinoSettings(
   repoRoot: string,
   wtPath: string,
