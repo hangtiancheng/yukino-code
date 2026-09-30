@@ -1,6 +1,3 @@
-// brew services stop redis
-// brew services start redis-stack
-
 import { createClient, type RedisClientType } from "redis";
 import { z } from "zod";
 

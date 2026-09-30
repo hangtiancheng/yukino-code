@@ -91,6 +91,7 @@ tools take a GitHub query string.
 
 | Environment variable | Description                                                                   | Default                  |
 | -------------------- | ----------------------------------------------------------------------------- | ------------------------ |
+| `EMBEDDING_PROTOCOL` | Embedding provider protocol (`openai` is the only supported value)            | `openai`                 |
 | `EMBEDDING_MODEL`    | Embedding model id (e.g. `text-embedding-v4`)                                 | —                        |
 | `EMBEDDING_BASE_URL` | OpenAI-compatible `embeddings` endpoint base URL                              | —                        |
 | `EMBEDDING_API_KEY`  | API key (falls back to `OPENAI_API_KEY`)                                      | —                        |
@@ -101,13 +102,15 @@ tools take a GitHub query string.
 | `GITHUB_TOKEN`       | Personal access token for the `github_*` HTTP fallback; secret — never logged | —                        |
 | `GH_TOKEN`           | Fallback for `GITHUB_TOKEN` (the variable the `gh` CLI uses)                  | —                        |
 | `GITHUB_BASE_URL`    | REST API base URL for the HTTP fallback (GitHub Enterprise API URL)           | `https://api.github.com` |
+| `HOST`               | HTTP transport bind address                                                   | `127.0.0.1`              |
+| `PORT`               | HTTP transport port                                                           | `3300`                   |
 
-Both **stdio** (default) and **HTTP** transports are supported — `startHttpServer`
-serves the same tools over streamable HTTP (`POST /mcp`) and legacy SSE
-(`GET /sse` + `POST /messages`). The HTTP endpoints are **unauthenticated**;
-keep `HOST` bound to localhost (the default) and only enable HTTP on a
-trusted machine — with the `chrome` tools registered, anyone who can reach
-the port can drive the browser.
+Both **stdio** (default) and **HTTP** transports are supported: `--http` (or
+`MCP_TRANSPORT=http`) starts `startHttpServer`, which serves the same tools over
+streamable HTTP (`POST /mcp`) and legacy SSE (`GET /sse` + `POST /messages`).
+The HTTP endpoints are **unauthenticated**; keep `HOST` bound to localhost (the
+default) and only enable HTTP on a trusted machine — with the `chrome` tools
+registered, anyone who can reach the port can drive the browser.
 
 ## Getting started
 
@@ -119,11 +122,12 @@ cp apps/mcp/.env.example apps/mcp/.env   # configure embedding + Redis
 pnpm --filter @yukino.js/mcp dev         # build UI + run over stdio
 ```
 
-| Command                              | Description                  |
-| ------------------------------------ | ---------------------------- |
-| `pnpm build:mcp` (root)              | Build wasm + marked-terminal |
-| `pnpm --filter @yukino.js/mcp build` | Bundle (tsup) + build UI     |
-| `pnpm --filter @yukino.js/mcp test`  | Build UI + vitest            |
+| Command                              | Description               |
+| ------------------------------------ | ------------------------- |
+| `pnpm --filter @yukino.js/mcp dev`   | Build UI + run over stdio |
+| `pnpm --filter @yukino.js/mcp build` | Bundle (tsup) + build UI  |
+| `pnpm --filter @yukino.js/mcp test`  | Build UI + vitest         |
+| `pnpm build` (root)                  | Build every workspace app |
 
 ## Layout
 
@@ -133,8 +137,11 @@ mcp/
 │   ├── main.ts         # stdio/HTTP entrypoint + shutdown
 │   ├── server.ts       # MCP server + tool registration
 │   ├── http.ts         # h3 app: streamable HTTP + legacy SSE transports
+│   ├── version.ts      # package version (build-time define, package.json fallback)
 │   ├── shared/         # config (zod) + logger
 │   └── tools/
+│       ├── index.ts    # the tool modules hosted by this server
+│       ├── types.ts    # ToolModule interface
 │       ├── docs/       # RAG pipeline (chunk/embed/index/retrieve)
 │       ├── create-app/ # MCP App create tool + UI shell
 │       ├── chrome/     # browser automation via the Chrome extension socket

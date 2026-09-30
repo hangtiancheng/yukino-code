@@ -20,13 +20,13 @@ export const INSTALL_METHODS: InstallMethod[] = [
     id: "curl",
     label: "curl",
     command:
-      "curl -fsSL https://hangtiancheng.github.io/yukino-code/install.sh | bash",
+      "curl -fsSL https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.sh | bash",
   },
   {
     id: "powershell",
     label: "PowerShell",
     command:
-      "irm https://hangtiancheng.github.io/yukino-code/install.ps1 | iex",
+      "irm https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.ps1 | iex",
   },
   { id: "npm", label: "npm", command: "npm i -g @yukino.js/yukino" },
   { id: "pnpm", label: "pnpm", command: "pnpm add -g @yukino.js/yukino" },

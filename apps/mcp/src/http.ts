@@ -19,8 +19,8 @@ export interface HttpServerHandle {
  * - Streamable HTTP:  POST /mcp        (stateless, JSON responses)
  * - legacy SSE:       GET /sse + POST /messages?sessionId=...
  * GET /mcp answers 405: stateless mode has no server-initiated notification
- * stream. No authentication in this iteration: binds to localhost by default
- * and is intended for local / trusted networks only.
+ * stream. Requests are unauthenticated: the listener binds to localhost by
+ * default and is intended for local / trusted networks only.
  */
 export async function startHttpServer(
   host: string,

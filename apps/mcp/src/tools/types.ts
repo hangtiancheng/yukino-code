@@ -8,10 +8,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 export interface ToolModule {
   /** Unique module name, used in logs. */
   name: string;
-  /** Register the module's tools on an MCP server instance. */
   register(server: McpServer): void;
-  /** Optional background initialization kicked off after transport connect. */
+  /** Kicked off after transport connect; tool calls await the same init. */
   init?(): Promise<void>;
-  /** Optional graceful shutdown. */
   shutdown?(): Promise<void>;
 }

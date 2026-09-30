@@ -1,22 +1,17 @@
-/**
- * Optional type for the second Logger argument; in practice this is usually
- * a caught exception object that the host logger records alongside the
- * message.
- */
+/** A caught exception, recorded by the host logger alongside the message. */
 export type LoggerDetail = Error | NodeJS.ErrnoException;
 
-/** Narrow unknown to LoggerDetail, for catch blocks to pass to the logger. */
 export function toLoggerDetail(detail: unknown): LoggerDetail | undefined {
   return detail instanceof Error ? detail : undefined;
 }
 
 /** Logging interface injected by the host; the production adapter maps it onto pino. */
 export interface Logger {
-  info: (message: string, detail?: LoggerDetail) => void; // informational
-  error: (message: string, detail?: LoggerDetail) => void; // error
-  warn: (message: string, detail?: LoggerDetail) => void; // warning
-  debug: (message: string, detail?: LoggerDetail) => void; // debug
-  silly: (message: string, detail?: LoggerDetail) => void; // most verbose level
+  info: (message: string, detail?: LoggerDetail) => void;
+  error: (message: string, detail?: LoggerDetail) => void;
+  warn: (message: string, detail?: LoggerDetail) => void;
+  debug: (message: string, detail?: LoggerDetail) => void;
+  silly: (message: string, detail?: LoggerDetail) => void;
 }
 
 export interface YukinoForChromeContext {

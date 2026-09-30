@@ -182,7 +182,7 @@ hooks:
       # Shell command: bash on POSIX, 30s timeout, working directory = project directory,
       # with YUKINO_EVENT / YUKINO_TOOL / YUKINO_FILE_PATH injected; stdout is injected into
       # the agent as a system reminder on the next turn.
-      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/agent` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
+      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/yukino` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
     # Whether successful output rejects the tool call (pre_tool_use only). Default: false.
     # Mutually exclusive with async.
     reject: false

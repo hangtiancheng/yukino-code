@@ -17,7 +17,6 @@ const yukinoPackage = JSON.parse(
   ),
 ) as { version: string };
 
-// https://vite.dev/config/
 export default defineConfig(({ command }) => ({
   base: process.env.DOCS_BASE ?? (command === "build" ? DEFAULT_BASE : "/"),
   define: {

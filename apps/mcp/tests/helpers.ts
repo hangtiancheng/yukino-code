@@ -18,7 +18,7 @@ export function firstText(result: { content: unknown }): string {
   return TextContentSchema.parse(content[0]).text;
 }
 
-/** A fresh temporary directory (the tmp_path fixture equivalent). */
+/** A fresh temporary directory. */
 export function makeTempDir(): string {
   return mkdtempSync(path.join(tmpdir(), "yukino-mcp-test-"));
 }

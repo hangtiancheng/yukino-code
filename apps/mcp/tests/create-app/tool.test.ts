@@ -66,7 +66,6 @@ describe("create_app", () => {
     const tool = tools.find((entry) => entry.name === "create_app");
     expect(tool).toBeDefined();
     const parsed = ToolSchema.parse(tool);
-    // registerAppTool also mirrors the URI under the flat "ui/resourceUri" key.
     expect(parsed._meta.ui.resourceUri).toBe(CREATED_APP_RESOURCE_URI);
     expect(parsed.annotations.openWorldHint).toBe(true);
   });

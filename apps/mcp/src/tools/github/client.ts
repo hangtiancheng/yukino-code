@@ -28,7 +28,7 @@ export function encodeRepo(repo: string): string {
   const parts = repo.trim().split("/");
   if (parts.length !== 2 || parts[0] === "" || parts[1] === "") {
     throw new GitHubError(
-      'Repository must be an `owner/name` path (e.g. "hangtiancheng/yukino-agent2"), ' +
+      'Repository must be an `owner/name` path (e.g. "hangtiancheng/yukino-code"), ' +
         `got "${repo}".`,
     );
   }
@@ -43,7 +43,7 @@ export function encodePath(filePath: string): string {
     .join("/");
 }
 
-/** Strip leading and trailing slashes (Python's `str.strip("/")`). */
+/** Remove leading and trailing slashes. */
 function stripSlashes(value: string): string {
   return value.replace(/^\/+/, "").replace(/\/+$/, "");
 }
@@ -186,8 +186,8 @@ export interface WrittenFile {
   created: boolean;
 }
 
-// Payloads validated as a whole mirror the Python original's pydantic models
-// (extra keys ignored — zod objects strip unknown keys by default).
+// Payloads are validated as a whole; zod objects strip unknown keys by
+// default, so extra API fields are ignored.
 
 const CreatedRepoSchema = z.object({
   id: z.number().int(),

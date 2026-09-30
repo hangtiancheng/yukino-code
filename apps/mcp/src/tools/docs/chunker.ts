@@ -5,9 +5,9 @@ export interface MarkdownChunk {
   title: string;
 }
 
-// Sizes match the proven yukino-chatbot RAG setup; 1000 chars stays far below
-// both the indexer's 8192-char storage cap and embedding-provider input
-// limits, so the embedded text is always identical to the stored text.
+// 1000 chars stays far below both the indexer's 8192-char storage cap and
+// embedding-provider input limits, so the embedded text is always identical
+// to the stored text.
 export const CHUNK_SIZE = 1000;
 export const CHUNK_OVERLAP = 200;
 

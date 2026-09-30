@@ -9,7 +9,6 @@ import { modules } from "./tools/index.js";
 
 let shuttingDown = false;
 
-/** Close transports and tool modules, then exit. Never runs twice. */
 function shutdown(reason: string, closeTransport: () => Promise<void>): void {
   if (shuttingDown) {
     return;

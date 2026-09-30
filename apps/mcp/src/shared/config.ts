@@ -87,8 +87,8 @@ function dropEmptyValues(
 function resolveEmbedding(
   env: z.infer<typeof EnvSchema>,
 ): EmbeddingConfigResult {
-  // Only the OpenAI-compatible protocol is supported for now; the switch
-  // exists so more protocols can be added without a config format change.
+  // Only the OpenAI-compatible protocol is implemented; any other value
+  // degrades the tool with a clear reason instead of a config parse error.
   const protocol = env.EMBEDDING_PROTOCOL ?? "openai";
   if (protocol !== "openai") {
     return {
