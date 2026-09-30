@@ -163,7 +163,7 @@ describe("library build ui-only dependency guard", () => {
       "react-dom/client",
       "zod",
       "@anthropic-ai/sdk",
-      "koa",
+      "express",
       "sharp",
       "ws",
     ]) {

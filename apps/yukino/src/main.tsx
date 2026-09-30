@@ -42,6 +42,12 @@ async function main() {
     return;
   }
 
+  if (args.includes("--a2a")) {
+    const { runA2a } = await import("./a2a/index.js");
+    await runA2a(args);
+    return;
+  }
+
   await initializeTelemetry();
   const teammateArgs = parseTeammateFlags(args);
   if (teammateArgs) {

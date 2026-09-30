@@ -9,6 +9,7 @@
 // nothing outside the terminal layer may use it; react-dom is imported only by
 // the standalone browser bundle under src/remote/fe, outside this graph.
 
+export * as A2a from "./a2a/index.js";
 export * as Acp from "./acp/index.js";
 export * as Agent from "./agent/index.js";
 export * as Bootstrap from "./bootstrap/index.js";

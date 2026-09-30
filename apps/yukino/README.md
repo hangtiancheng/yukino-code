@@ -6,7 +6,7 @@ Yukino is a terminal-based AI coding agent. It provides an interactive UI (termi
 
 Yukino runs as a single CLI binary that connects to configurable LLM providers (Anthropic, OpenAI, or any OpenAI-compatible endpoint). It renders a rich terminal interface using React and Ink, giving you streaming responses, tool execution feedback, permission prompts, and slash commands in a single pane.
 
-Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, an ACP (Agent Client Protocol) mode for editor integration, and team coordination where one leader agent manages multiple teammates (in-process, or as separate processes in tmux/iTerm panes) working in parallel.
+Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, an ACP (Agent Client Protocol) mode for editor integration, an A2A (Agent2Agent) server mode for agent-to-agent integration, and team coordination where one leader agent manages multiple teammates (in-process, or as separate processes in tmux/iTerm panes) working in parallel.
 
 ## Features
 
@@ -50,7 +50,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 ### Remote Mode
 
-- Koa HTTP server with WebSocket bridge for browser-based access
+- Express HTTP server with WebSocket bridge for browser-based access
 - React frontend served at a configurable address
 - Bidirectional message streaming between browser and agent
 
@@ -86,7 +86,7 @@ Yukino reads a single global YAML configuration file:
 
 - ~/.yukino/config.yaml
 
-Print, remote, and ACP modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. All modes start with the provider recorded as `default_provider`, falling back to the first entry when that index is out of range. Example config.yaml:
+Print, remote, ACP, and A2A modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. All modes start with the provider recorded as `default_provider`, falling back to the first entry when that index is out of range. Example config.yaml:
 
 ```yaml
 # Initial permission mode. Enum: default (ask per write/command) | acceptEdits (auto-approve
@@ -368,7 +368,7 @@ yukino --remote 9000             # custom loopback port (":9000" also works)
 yukino --remote 0.0.0.0:9000      # explicitly expose on all interfaces (no built-in authentication)
 ```
 
-Starts a Koa HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction.
+Starts an Express HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction.
 
 ### ACP Mode (Editor Integration)
 
@@ -379,6 +379,15 @@ yukino --acp-ws 9000         # ACP over WebSocket at a custom port (host:port al
 ```
 
 Implements the Agent Client Protocol (`@agentclientprotocol/sdk`) so ACP-compatible editors can drive Yukino as an external agent. The WebSocket transport only binds loopback addresses.
+
+### A2A Mode (Agent2Agent Server)
+
+```bash
+yukino --a2a                 # A2A server, listens on 127.0.0.1:18890
+yukino --a2a 9000            # custom loopback port (host:port also works)
+```
+
+Serves Yukino as an Agent2Agent (`@a2a-js/sdk`) agent so other A2A-compatible agents and orchestrators can call it. The agent card is published at `/.well-known/agent-card.json`; JSON-RPC is served at `POST /` and HTTP+JSON/REST under `/v1/...`, on protocol version 1.0 with a v0.3 compatibility layer. Each A2A context maps to one Yukino session: text messages run the agent loop and stream `working` status updates (assistant text, thinking, tool calls, tool results), and tool permission requests surface as `input-required` status updates carrying a `yukino: permission-request` data part. Clients answer by sending a `yukino: permission-response` data part (`{ permissionId, decision: allow | deny | allowAlways }`) back on the same task. The server only binds loopback addresses.
 
 ### Slash Commands
 

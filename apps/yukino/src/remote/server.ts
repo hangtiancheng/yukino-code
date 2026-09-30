@@ -1,4 +1,4 @@
-// Remote server: Koa.js HTTP + WebSocket bridge for browser-based access.
+// Remote server: Express HTTP + WebSocket bridge for browser-based access.
 // Serves the React frontend (fe/dist/) and bridges Agent events to WS.
 
 import { readFileSync, existsSync, statSync } from "node:fs";
@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { join, extname, normalize } from "node:path";
 import { cwd } from "node:process";
 
-import Koa from "koa";
+import express, { type Express } from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import z from "zod";
 
@@ -938,7 +938,7 @@ interface RemoteServerOptions {
 }
 
 export class RemoteServer {
-  private app: Koa;
+  private app: Express;
   private server: ReturnType<typeof createServer>;
   private wss: WebSocketServer;
   private clients = new Set<WebSocket>();
@@ -977,44 +977,37 @@ export class RemoteServer {
 
   constructor(opts: RemoteServerOptions) {
     this.opts = opts;
-    this.app = new Koa();
-    this.server = createServer((req, res) => {
-      void this.app.callback()(req, res);
-    });
+    this.app = express();
+    this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
     this.setupRoutes();
     this.setupWebSocket();
   }
 
-  /** Configures Koa middleware: static file serving + health check. */
+  /** Configures Express routes: static file serving + health check. */
   private setupRoutes(): void {
-    this.app.use(async (ctx, next) => {
-      if (ctx.path === "/health") {
-        ctx.body = { status: "ok", remote: true, clients: this.clients.size };
-        return;
-      }
-      await next();
+    this.app.all("/health", (_req, res) => {
+      res.json({ status: "ok", remote: true, clients: this.clients.size });
     });
 
-    this.app.use((ctx) => {
-      const filePath = ctx.path === "/" ? "/index.html" : ctx.path;
+    this.app.use((req, res) => {
+      const filePath = req.path === "/" ? "/index.html" : req.path;
       const result = serveStatic(filePath);
       if (result) {
-        ctx.type = result.mime;
-        ctx.body = result.body;
+        res.type(result.mime);
+        res.send(result.body);
         return;
       }
 
       // Fallback: serve index.html for client-side routing (SPA)
       const indexResult = serveStatic("/index.html");
       if (indexResult) {
-        ctx.type = indexResult.mime;
-        ctx.body = indexResult.body;
+        res.type(indexResult.mime);
+        res.send(indexResult.body);
         return;
       }
 
-      ctx.status = 404;
-      ctx.body = "Not found";
+      res.status(404).send("Not found");
     });
   }
 
@@ -2381,7 +2374,7 @@ export class RemoteServer {
   }
 
   /**
-   * Starts the Koa HTTP + WebSocket server and blocks until stop() is called.
+   * Starts the Express HTTP + WebSocket server and blocks until stop() is called.
    * Initializing the agent handle happens eagerly; failures fall back to lazy
    * init on first message. Blocking here (instead of resolving once listening)
    * keeps the caller's exit bookkeeping after the server is actually down.
