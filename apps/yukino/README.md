@@ -19,6 +19,20 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 - Permission system with four modes: default, acceptEdits, plan (read-only), and bypassPermissions
 - Sandbox support for isolated command execution (bwrap on Linux, seatbelt on macOS)
 - Human-in-the-loop approval dialogs for file writes and shell commands, driven by permission mode and allow/deny rules
+- Tool completion events stream as calls finish; conversation history and session logs retain the original call order
+- Asynchronous text reads and batched file edits with overlap validation and preserved line endings
+
+`EditFile` accepts `file_path` and a non-empty `edits` array. Each entry contains `old_string`, `new_string`, and optional `replace_all`. All entries match the original file, and validation completes before the file is written once. Use one call for disjoint changes in the same file:
+
+```json
+{
+  "file_path": "src/example.ts",
+  "edits": [
+    { "old_string": "const first = 1;", "new_string": "const first = 2;" },
+    { "old_string": "const second = 3;", "new_string": "const second = 4;" }
+  ]
+}
+```
 
 ### Conversation and Memory
 

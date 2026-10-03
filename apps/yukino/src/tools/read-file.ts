@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from "fs";
-import { basename, resolve } from "path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, resolve } from "node:path";
 
 import { READ_FILE_DESCRIPTION } from "./descriptions.js";
 import { utf8ByteLength } from "./shell-output.js";
@@ -14,13 +14,13 @@ import {
 
 import { isImagePath, loadImageAttachment } from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
-import { asErrorString } from "@/utils/index.js";
+import { asErrorString, isRecord } from "@/utils/index.js";
 import { intArg, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "tools" });
 const DEFAULT_LIMIT = 2000;
 const MAX_READ_BYTES = 50 * 1024;
-// Whole-file read admission cap (memory bound; see the stat.size check).
+// Whole-file read admission cap (memory bound; see the fileStat.size check).
 const MAX_READ_FILE_BYTES = 10 * 1024 * 1024;
 
 export class ReadFileTool implements Tool {
@@ -66,73 +66,75 @@ export class ReadFileTool implements Tool {
     };
   }
 
-  execute(
+  async execute(
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     const requestedPath = strArg(args, "file_path");
     if (!requestedPath) {
-      return Promise.resolve({
+      return {
         output: "Error: file_path is required",
         isError: true,
-      });
+      };
     }
 
     const filePath = resolve(ctx.workDir, requestedPath);
-    if (!existsSync(filePath)) {
-      return Promise.resolve({
-        output: `Error: file not found: ${filePath}`,
-        isError: true,
-      });
+    if (ctx.abortSignal?.aborted) {
+      return { output: "Error: operation interrupted", isError: true };
     }
-
-    let stat: ReturnType<typeof statSync>;
+    let fileStat: Awaited<ReturnType<typeof stat>>;
     try {
-      stat = statSync(filePath);
+      fileStat = await stat(filePath);
     } catch (err) {
-      return Promise.resolve({
-        output: `Error reading file: ${asErrorString(err)}`,
+      return {
+        output:
+          isRecord(err) && err.code === "ENOENT"
+            ? `Error: file not found: ${filePath}`
+            : `Error reading file: ${asErrorString(err)}`,
         isError: true,
-      });
+      };
     }
-    if (stat.isDirectory()) {
-      return Promise.resolve({
+    if (fileStat.isDirectory()) {
+      return {
         output: `Error: ${filePath} is a directory, not a file. Use Glob to list directory contents.`,
         isError: true,
-      });
+      };
     }
 
     if (isImagePath(filePath)) {
-      return this.readImage(ctx, filePath, stat.mtimeMs, stat.size);
+      return this.readImage(ctx, filePath, fileStat.mtimeMs, fileStat.size);
     }
 
     // Admission check before buffering: the read below loads the whole file
     // into a string, so a multi-hundred-MB file would spike memory and stall
     // the loop long before the 50KB output cap could matter.
-    if (stat.size > MAX_READ_FILE_BYTES) {
-      return Promise.resolve({
-        output: `Error: ${filePath} is ${String(stat.size)} bytes, over the ${String(MAX_READ_FILE_BYTES)}-byte read limit. Use Grep with a pattern, or Bash with head/tail/sed, to inspect parts of it.`,
+    if (fileStat.size > MAX_READ_FILE_BYTES) {
+      return {
+        output: `Error: ${filePath} is ${String(fileStat.size)} bytes, over the ${String(MAX_READ_FILE_BYTES)}-byte read limit. Use Grep with a pattern, or Bash with head/tail/sed, to inspect parts of it.`,
         isError: true,
-      });
+      };
     }
 
     const offset = intArg(args, "offset", 0);
     const limit = intArg(args, "limit", DEFAULT_LIMIT);
     if (offset < 0 || limit < 1) {
-      return Promise.resolve({
+      return {
         output: "Error: offset must be >= 0 and limit must be >= 1",
         isError: true,
-      });
+      };
     }
 
     try {
-      const content = readFileSync(filePath, "utf-8");
+      const content = await readFile(filePath, {
+        encoding: "utf-8",
+        signal: ctx.abortSignal,
+      });
       const lines = content.split("\n");
       if (offset >= lines.length) {
-        return Promise.resolve({
+        return {
           output: `Error: offset ${String(offset)} is beyond end of file (${String(lines.length)} lines total)`,
           isError: true,
-        });
+        };
       }
 
       const slice = lines.slice(offset, offset + limit);
@@ -144,10 +146,10 @@ export class ReadFileTool implements Tool {
           utf8ByteLength(numberedLine) + (numbered.length > 0 ? 1 : 0);
         if (outputBytes + lineBytes > MAX_READ_BYTES) {
           if (numbered.length === 0) {
-            return Promise.resolve({
+            return {
               output: `Error: line ${String(offset + index + 1)} exceeds the 50KB read limit; use Bash to inspect it in smaller chunks.`,
               isError: true,
-            });
+            };
           }
           break;
         }
@@ -159,14 +161,20 @@ export class ReadFileTool implements Tool {
       // mid-read, refuse to register it so later edits work from fresh
       // content. Otherwise register the file as "read" in the state cache so
       // subsequent EditFile / WriteFile calls are allowed.
-      const afterRead = statSync(filePath);
-      if (afterRead.mtimeMs !== stat.mtimeMs || afterRead.size !== stat.size) {
-        return Promise.resolve({
+      const afterRead = await stat(filePath);
+      if (
+        afterRead.mtimeMs !== fileStat.mtimeMs ||
+        afterRead.size !== fileStat.size
+      ) {
+        return {
           output: `Error: ${filePath} changed while it was being read; read it again before editing.`,
           isError: true,
-        });
+        };
       }
-      ctx.fileStateCache?.record(filePath, stat.mtimeMs);
+      if (ctx.abortSignal?.aborted) {
+        return { output: "Error: operation interrupted", isError: true };
+      }
+      ctx.fileStateCache?.record(filePath, fileStat.mtimeMs);
 
       const nextOffset = offset + numbered.length;
       const remaining = lines.length - nextOffset;
@@ -175,16 +183,18 @@ export class ReadFileTool implements Tool {
           `[${String(remaining)} more lines in file. Use offset=${String(nextOffset)} to continue.]`,
         );
       }
-      return Promise.resolve({
+      return {
         output: numbered.join("\n"),
         isError: false,
-      });
+      };
     } catch (err) {
       log.error({ err }, "tool operation failed");
-      return Promise.resolve({
-        output: `Error reading file: ${asErrorString(err)}`,
+      return {
+        output: ctx.abortSignal?.aborted
+          ? "Error: operation interrupted"
+          : `Error reading file: ${asErrorString(err)}`,
         isError: true,
-      });
+      };
     }
   }
 
@@ -196,12 +206,15 @@ export class ReadFileTool implements Tool {
   ): Promise<ToolResult> {
     try {
       const attachment = await loadImageAttachment(filePath);
-      const afterRead = statSync(filePath);
+      const afterRead = await stat(filePath);
       if (afterRead.mtimeMs !== mtimeMs || afterRead.size !== size) {
         return {
           output: `Error: ${filePath} changed while it was being read; read it again before editing.`,
           isError: true,
         };
+      }
+      if (ctx.abortSignal?.aborted) {
+        return { output: "Error: operation interrupted", isError: true };
       }
       ctx.fileStateCache?.record(filePath, mtimeMs);
       const imageBlock = {

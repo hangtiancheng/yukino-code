@@ -88,8 +88,7 @@ describe("file and memory execution", () => {
       (
         await new EditFileTool().execute(ctx, {
           file_path: "nested/test.txt",
-          old_string: "before",
-          new_string: "after",
+          edits: [{ old_string: "before", new_string: "after" }],
         })
       ).isError,
     ).toBe(false);

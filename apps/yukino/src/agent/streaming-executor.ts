@@ -53,84 +53,100 @@ export class StreamingExecutor {
     });
   }
 
-  async collectResults(): Promise<ExecutionResult[]> {
-    const calls = [...this.pending];
+  async *runPending(): AsyncGenerator<ExecutionResult> {
+    const calls = this.pending;
     this.pending = [];
 
-    const promises = calls.map(async (call) => {
-      const start = Date.now();
-      if (call.parseError) {
-        return {
-          toolId: call.toolId,
-          toolName: call.toolName,
-          result: {
-            output: `Error: ${call.parseError}. The tool was not executed.`,
-            isError: true,
-          },
-          elapsed: 0,
-        };
-      }
-
-      const tool = this.registry.get(call.toolName);
-      if (this.ctx.abortSignal?.aborted) {
-        return {
-          toolId: call.toolId,
-          toolName: call.toolName,
-          result: {
-            output: "Tool execution was cancelled before it started.",
-            isError: true,
-          },
-          elapsed: 0,
-        };
-      }
-
-      // On invalid tool name, return a single error and let the model self-correct with another tool; keep the loop running.
-      if (!tool) {
-        return {
-          toolId: call.toolId,
-          toolName: call.toolName,
-          result: {
-            output: `Error: unknown tool '${call.toolName}'`,
-            isError: true,
-          },
-          elapsed: 0,
-        };
-      }
-
-      try {
-        const result = await observeToolExecution(
-          call.toolName,
-          () =>
-            tool.execute(
-              { ...this.ctx, toolCallId: call.toolId },
-              call.arguments,
-            ),
-          this.telemetry,
-        );
-        return {
-          toolId: call.toolId,
-          toolName: call.toolName,
-          result,
-          elapsed: (Date.now() - start) / 1000,
-        };
-      } catch (err) {
-        log.error({ err }, "agent operation failed");
-        return {
-          toolId: call.toolId,
-          toolName: call.toolName,
-          result: {
-            output: `Error executing ${call.toolName}: ${asErrorString(err)}`,
-            isError: true,
-          },
-          elapsed: (Date.now() - start) / 1000,
-        };
-      }
+    const completed: ExecutionResult[] = [];
+    let wake: (() => void) | undefined;
+    const executions = calls.map(async (call) => {
+      const result = await this.executeCall(call);
+      completed.push(result);
+      wake?.();
+      wake = undefined;
     });
 
-    return Promise.all(promises);
+    try {
+      for (let index = 0; index < calls.length; index++) {
+        if (index === completed.length) {
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+          });
+        }
+        yield completed[index];
+      }
+    } finally {
+      await Promise.all(executions);
+    }
   }
 
-  hasPending(): boolean {
-    return this.pending.length > 0;
+  private async executeCall(call: PendingCall): Promise<ExecutionResult> {
+    const start = Date.now();
+    if (call.parseError) {
+      return {
+        toolId: call.toolId,
+        toolName: call.toolName,
+        result: {
+          output: `Error: ${call.parseError}. The tool was not executed.`,
+          isError: true,
+        },
+        elapsed: 0,
+      };
+    }
+
+    const tool = this.registry.get(call.toolName);
+    if (this.ctx.abortSignal?.aborted) {
+      return {
+        toolId: call.toolId,
+        toolName: call.toolName,
+        result: {
+          output: "Tool execution was cancelled before it started.",
+          isError: true,
+        },
+        elapsed: 0,
+      };
+    }
+
+    // On invalid tool name, return a single error and let the model self-correct with another tool; keep the loop running.
+    if (!tool) {
+      return {
+        toolId: call.toolId,
+        toolName: call.toolName,
+        result: {
+          output: `Error: unknown tool '${call.toolName}'`,
+          isError: true,
+        },
+        elapsed: 0,
+      };
+    }
+
+    try {
+      const result = await observeToolExecution(
+        call.toolName,
+        () =>
+          tool.execute(
+            { ...this.ctx, toolCallId: call.toolId },
+            call.arguments,
+          ),
+        this.telemetry,
+      );
+      return {
+        toolId: call.toolId,
+        toolName: call.toolName,
+        result,
+        elapsed: (Date.now() - start) / 1000,
+      };
+    } catch (err) {
+      log.error({ err }, "agent operation failed");
+      return {
+        toolId: call.toolId,
+        toolName: call.toolName,
+        result: {
+          output: `Error executing ${call.toolName}: ${asErrorString(err)}`,
+          isError: true,
+        },
+        elapsed: (Date.now() - start) / 1000,
+      };
+    }
   }
 }

@@ -30,10 +30,11 @@ export const READ_FILE_DESCRIPTION = `Read text with 1-based display line number
 - file_path is absolute or relative to the Agent's working directory. offset skips lines (0-based, default 0); limit defaults to 2000 lines, with a 50KB text output cap. Displayed line 101 starts at offset=100. Follow continuation/readback instructions for partial output.
 - Images ignore offset/limit. A successful read refreshes the file-state cache used by EditFile/WriteFile; re-read after an external-change error.`;
 
-export const EDIT_FILE_DESCRIPTION = `Replace exact text in an existing file and return a diff. Prefer this over whole-file rewrites.
+export const EDIT_FILE_DESCRIPTION = `Replace exact text in an existing file and return a diff. Prefer this over whole-file rewrites; batch disjoint changes in one edits array to read and write the file once.
 - file_path is absolute or relative to the Agent's working directory. ReadFile is required first; stale file-state errors require a fresh read and revised edit.
+- Each edits entry contains old_string and new_string, with optional replace_all. All matches use the original file; overlapping edits are rejected before writing. Merge overlapping changes into one entry.
 - old_string must be non-empty and unique unless replace_all=true (default false). Use enough context to disambiguate; preserve whitespace and exclude display line numbers.
-- new_string must differ from old_string; an empty string deletes the match.`;
+- new_string must differ from old_string; an empty string deletes the match. The file's line endings and unchanged text are preserved.`;
 
 export const WRITE_FILE_DESCRIPTION = `Write complete UTF-8 content to file_path, creating parent directories and overwriting existing content. Use for new files or complete rewrites; prefer EditFile for targeted changes.
 - file_path is absolute or relative to the Agent's working directory. Existing files require ReadFile first; re-read if the cached state is stale.

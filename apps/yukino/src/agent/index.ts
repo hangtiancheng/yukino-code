@@ -54,6 +54,8 @@ import { asErrorString, asRecord, strArg } from "@/utils/index.js";
 export * as Events from "./events.js";
 export * as StreamingExecutor from "./streaming-executor.js";
 
+type ToolResultEvent = Extract<AgentEvent, { type: "tool_result" }>;
+
 // When the model stops on max_tokens, escalate its output ceiling once toward
 // this value (capped at the context window), then attempt a bounded number of
 // multi-turn recoveries.
@@ -699,9 +701,10 @@ export class Agent {
           }
 
           if (toolUses.length > 0) {
-            const results = await this.executeTools(toolUses, telemetry);
-            for (const r of results) {
-              yield r;
+            const results = new Map<string, ToolResultEvent>();
+            for await (const result of this.executeTools(toolUses, telemetry)) {
+              results.set(result.toolId, result);
+              yield result;
             }
 
             // Readback results from spill files are exempt from spilling: if we
@@ -722,8 +725,9 @@ export class Agent {
             }
 
             const toolResults: ToolResultBlock[] = [];
-            for (const r of results) {
-              if (r.type === "tool_result") {
+            for (const tu of toolUses) {
+              const r = results.get(tu.toolUseId);
+              if (r) {
                 const toolResult: ToolResultBlock = {
                   toolUseId: r.toolId,
                   content: r.output,
@@ -765,10 +769,8 @@ export class Agent {
               if (tu.toolName !== "ExitPlanMode") {
                 return false;
               }
-              const result = results.find(
-                (r) => r.type === "tool_result" && r.toolId === tu.toolUseId,
-              );
-              return result?.type === "tool_result" && !result.isError;
+              const result = results.get(tu.toolUseId);
+              return result !== undefined && !result.isError;
             });
             this.conversation.addToolResultsMessage(toolResults);
             this.persistLastMessage();
@@ -900,25 +902,18 @@ export class Agent {
     });
   }
 
-  private async executeTools(
+  private async *executeTools(
     toolUses: ToolUseBlock[],
     telemetry: AgentTelemetry,
-  ): Promise<AgentEvent[]> {
-    const events: AgentEvent[] = [];
-
-    // Partition by adjacency: consecutive concurrency-safe calls form one parallel batch; unsafe calls each get their own batch
+  ): AsyncGenerator<ToolResultEvent> {
     const batches = this.partitionToolCalls(toolUses);
-
     for (const batch of batches) {
-      const batchEvents = await this.executeBatch(
+      yield* this.executeBatch(
         batch.blocks,
         batch.concurrent && batch.blocks.length > 1,
         telemetry,
       );
-      events.push(...batchEvents);
     }
-
-    return events;
   }
 
   private partitionToolCalls(
@@ -950,12 +945,12 @@ export class Agent {
   // executeBatch runs a set of tool calls through permission checks, hooks,
   // and the streaming executor. When parallel is true all calls run
   // concurrently; otherwise they run one at a time.
-  private async executeBatch(
+  private async *executeBatch(
     toolUses: ToolUseBlock[],
     parallel: boolean,
     telemetry: AgentTelemetry,
-  ): Promise<AgentEvent[]> {
-    const events: AgentEvent[] = [];
+  ): AsyncGenerator<ToolResultEvent> {
+    const callsById = new Map(toolUses.map((tu) => [tu.toolUseId, tu]));
     const executor = new StreamingExecutor(
       this.registry,
       {
@@ -975,9 +970,11 @@ export class Agent {
       if (tu.parseError) {
         executor.submit(tu.toolUseId, tu.toolName, tu.arguments, tu.parseError);
         if (!parallel) {
-          const batchResults = await executor.collectResults();
-          for (const r of batchResults) {
-            await this.processToolResult(r, toolUses, events);
+          for await (const result of executor.runPending()) {
+            yield await this.processToolResult(
+              result,
+              callsById.get(result.toolId),
+            );
           }
         }
         continue;
@@ -986,26 +983,26 @@ export class Agent {
       // Once the user interrupts, don't launch the remaining calls; report
       // them as interrupted so every tool_use keeps a paired tool_result.
       if (this.abortSignal?.aborted) {
-        events.push({
+        yield {
           type: "tool_result",
           toolName: tu.toolName,
           toolId: tu.toolUseId,
           output: "Error: command interrupted",
           isError: true,
           elapsed: 0,
-        });
+        };
         continue;
       }
 
       if (this.toolFilter && !this.toolFilter(tu.toolName)) {
-        events.push({
+        yield {
           type: "tool_result",
           toolName: tu.toolName,
           toolId: tu.toolUseId,
           output: `Tool '${tu.toolName}' is not available to this agent.`,
           isError: true,
           elapsed: 0,
-        });
+        };
         continue;
       }
 
@@ -1019,14 +1016,14 @@ export class Agent {
           },
         );
         if (hookResult.rejected) {
-          events.push({
+          yield {
             type: "tool_result",
             toolName: tu.toolName,
             toolId: tu.toolUseId,
             output: `Rejected by hook: ${hookResult.reason}`,
             isError: true,
             elapsed: 0,
-          });
+          };
           continue;
         }
       }
@@ -1043,14 +1040,14 @@ export class Agent {
         (!this.registry.get(target.name) ||
           (this.toolFilter && !this.toolFilter(target.name)))
       ) {
-        events.push({
+        yield {
           type: "tool_result",
           toolName: tu.toolName,
           toolId: tu.toolUseId,
           output: `Tool '${target.name}' is not available to this agent.`,
           isError: true,
           elapsed: 0,
-        });
+        };
         continue;
       }
       const decisions = [
@@ -1071,19 +1068,19 @@ export class Agent {
         decisions[0];
 
       if (decision.effect === "deny") {
-        events.push({
+        yield {
           type: "tool_result",
           toolName: tu.toolName,
           toolId: tu.toolUseId,
           output: `Permission denied: ${decision.reason}. This operation has been blocked by the security policy. Inform the user that the command was denied; do not describe what the command would do.`,
           isError: true,
           elapsed: 0,
-        });
+        };
         continue;
       }
 
       if (decision.effect === "ask" && !this.onPermissionRequest) {
-        events.push({
+        yield {
           type: "tool_result",
           toolName: tu.toolName,
           toolId: tu.toolUseId,
@@ -1091,7 +1088,7 @@ export class Agent {
             "Permission required, but this agent has no approval handler. The tool was not executed.",
           isError: true,
           elapsed: 0,
-        });
+        };
         continue;
       }
       if (decision.effect === "ask" && this.onPermissionRequest) {
@@ -1107,49 +1104,49 @@ export class Agent {
             this.checker.allowAlways(tu.toolName, tu.arguments);
           }
         } catch (err) {
-          events.push({
+          yield {
             type: "tool_result",
             toolName: tu.toolName,
             toolId: tu.toolUseId,
             output: `Permission request failed: ${asErrorString(err)}. The tool was not executed.`,
             isError: true,
             elapsed: 0,
-          });
+          };
           continue;
         }
         if (response === "deny") {
-          events.push({
+          yield {
             type: "tool_result",
             toolName: tu.toolName,
             toolId: tu.toolUseId,
             output: REJECTED_TOOL_RESULT,
             isError: true,
             elapsed: 0,
-          });
+          };
           continue;
         }
       }
 
       executor.submit(tu.toolUseId, tu.toolName, tu.arguments);
 
-      // Sequential mode: collect after every single call.
       if (!parallel) {
-        const batchResults = await executor.collectResults();
-        for (const r of batchResults) {
-          await this.processToolResult(r, toolUses, events);
+        for await (const result of executor.runPending()) {
+          yield await this.processToolResult(
+            result,
+            callsById.get(result.toolId),
+          );
         }
       }
     }
 
-    // Parallel mode: collect all results at once.
     if (parallel) {
-      const batchResults = await executor.collectResults();
-      for (const r of batchResults) {
-        await this.processToolResult(r, toolUses, events);
+      for await (const result of executor.runPending()) {
+        yield await this.processToolResult(
+          result,
+          callsById.get(result.toolId),
+        );
       }
     }
-
-    return events;
   }
 
   // processToolResult handles a single executor result: records file-read
@@ -1161,23 +1158,21 @@ export class Agent {
       result: ToolResult;
       elapsed: number;
     },
-    toolUses: ToolUseBlock[],
-    events: AgentEvent[],
-  ): Promise<void> {
+    toolUse: ToolUseBlock | undefined,
+  ): Promise<ToolResultEvent> {
     // Snapshot exactly what text ReadFile returned so recovery stays aligned with what the model saw.
     if (
       !r.result.isError &&
       r.toolName === "ReadFile" &&
       !r.result.contentBlocks?.length
     ) {
-      const tu = toolUses.find((t) => t.toolUseId === r.toolId);
-      const p = strArg(tu?.arguments ?? {}, "file_path");
+      const p = strArg(toolUse?.arguments ?? {}, "file_path");
       if (p) {
         this.recoveryState.recordFileRead(p, r.result.output);
       }
     }
 
-    events.push({
+    const event: ToolResultEvent = {
       type: "tool_result",
       toolName: r.toolName,
       toolId: r.toolId,
@@ -1187,11 +1182,11 @@ export class Agent {
         : {}),
       isError: r.result.isError,
       elapsed: r.elapsed,
-    });
+    };
 
     // Fire post-tool hooks; queue any output as a notification.
     if (this.hookEngine) {
-      const args = toolUses.find((tu) => tu.toolUseId === r.toolId)?.arguments;
+      const args = toolUse?.arguments;
       const hookResults = await this.hookEngine.fire(
         "post_tool_use",
         {
@@ -1213,6 +1208,7 @@ export class Agent {
         }
       }
     }
+    return event;
   }
 
   /**

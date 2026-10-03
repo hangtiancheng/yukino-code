@@ -18,6 +18,94 @@ export interface DiffResult {
   removals: number;
 }
 
+export interface TextReplacement {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export function buildEditDiff(
+  content: string,
+  replacements: TextReplacement[],
+): DiffResult {
+  const lineStarts = [0];
+  for (let index = 0; index < content.length; index++) {
+    if (content[index] === "\n") {
+      lineStarts.push(index + 1);
+    }
+  }
+  const groups: {
+    startLine: number;
+    endLine: number;
+    replacements: TextReplacement[];
+  }[] = [];
+  let line = 0;
+  for (const replacement of replacements) {
+    while (
+      line + 1 < lineStarts.length &&
+      lineStarts[line + 1] <= replacement.start
+    ) {
+      line++;
+    }
+    const startLine = Math.max(0, line - CONTEXT_LINES);
+    let endLine = line;
+    while (
+      endLine + 1 < lineStarts.length &&
+      lineStarts[endLine + 1] <= replacement.end
+    ) {
+      endLine++;
+    }
+    endLine = Math.min(lineStarts.length, endLine + 1 + CONTEXT_LINES);
+    const previous = groups.at(-1);
+    if (previous && startLine <= previous.endLine) {
+      previous.endLine = Math.max(previous.endLine, endLine);
+      previous.replacements.push(replacement);
+    } else {
+      groups.push({ startLine, endLine, replacements: [replacement] });
+    }
+  }
+
+  const output: string[] = [];
+  let additions = 0;
+  let removals = 0;
+  let lineDelta = 0;
+  let truncated = false;
+  for (const group of groups) {
+    const start = lineStarts[group.startLine];
+    const end = lineStarts[group.endLine] ?? content.length;
+    const before = content.slice(start, end);
+    const parts: string[] = [];
+    let cursor = start;
+    for (const replacement of group.replacements) {
+      parts.push(content.slice(cursor, replacement.start), replacement.text);
+      cursor = replacement.end;
+    }
+    parts.push(content.slice(cursor, end));
+    const after = parts.join("");
+    const diff = buildDiff(before, after);
+    additions += diff.additions;
+    removals += diff.removals;
+    if (output.length > 0 && output.length < MAX_DIFF_LINES) {
+      output.push("  ...");
+    }
+    for (const diffLine of diff.text.split("\n")) {
+      const match = /^([ +-])\s+(\d+) {2}(.*)$/s.exec(diffLine);
+      if (!match || output.length >= MAX_DIFF_LINES) {
+        truncated = true;
+        continue;
+      }
+      const offset = group.startLine + (match[1] === "-" ? 0 : lineDelta);
+      const number = Number(match[2]) + offset;
+      output.push(`${match[1]} ${String(number).padStart(4)}  ${match[3]}`);
+    }
+    lineDelta += after.split("\n").length - before.split("\n").length;
+  }
+  if (truncated) {
+    output.push(`  ... (diff truncated at ${String(MAX_DIFF_LINES)} lines)`);
+  }
+  return { text: output.join("\n"), additions, removals };
+}
+
 /**
  * Compares file content before and after editing, generating a line-numbered diff.
  * Leverages the property that edits typically modify only a small middle section
@@ -59,6 +147,8 @@ export function buildDiff(oldContent: string, newContent: string): DiffResult {
   let oldLineNo = contextStart + 1;
   let newLineNo = contextStart + 1;
   let truncated = false;
+  let additions = 0;
+  let removals = 0;
 
   const push = (prefix: string, lineNo: number, content: string) => {
     if (out.length >= MAX_DIFF_LINES) {
@@ -73,13 +163,31 @@ export function buildDiff(oldContent: string, newContent: string): DiffResult {
     oldLineNo++;
     newLineNo++;
   }
-  for (const l of removedLines) {
-    push("-", oldLineNo, l);
-    oldLineNo++;
-  }
-  for (const l of addedLines) {
-    push("+", newLineNo, l);
-    newLineNo++;
+  if (removedLines.length === addedLines.length) {
+    for (const [index, oldLine] of removedLines.entries()) {
+      const newLine = addedLines[index];
+      if (oldLine === newLine) {
+        push(" ", newLineNo, newLine);
+      } else {
+        push("-", oldLineNo, oldLine);
+        push("+", newLineNo, newLine);
+        removals++;
+        additions++;
+      }
+      oldLineNo++;
+      newLineNo++;
+    }
+  } else {
+    for (const l of removedLines) {
+      push("-", oldLineNo, l);
+      oldLineNo++;
+    }
+    for (const l of addedLines) {
+      push("+", newLineNo, l);
+      newLineNo++;
+    }
+    additions = addedLines.length;
+    removals = removedLines.length;
   }
   for (const l of contextAfter) {
     // Trailing context exists in both files; number it by its new-file
@@ -96,7 +204,7 @@ export function buildDiff(oldContent: string, newContent: string): DiffResult {
 
   return {
     text: out.join("\n"),
-    additions: addedLines.length,
-    removals: removedLines.length,
+    additions,
+    removals,
   };
 }

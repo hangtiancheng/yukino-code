@@ -74,6 +74,23 @@ function shellOutputFiles(root: string): string[] {
 }
 
 describe("file tool boundaries", () => {
+  it("does not cache a cancelled asynchronous read", async () => {
+    const context = makeContext();
+    const path = join(context.workDir, "cancelled.txt");
+    writeFileSync(path, "content");
+    const controller = new AbortController();
+    const pending = new ReadFileTool().execute(
+      { ...context, abortSignal: controller.signal },
+      { file_path: path },
+    );
+    controller.abort();
+    expect(await pending).toEqual({
+      output: "Error: operation interrupted",
+      isError: true,
+    });
+    expect(context.fileStateCache?.has(path)).toBe(false);
+  });
+
   it("bounds large reads and rejects offsets past EOF", async () => {
     const context = makeContext();
     const path = join(context.workDir, "large.txt");
@@ -117,10 +134,10 @@ describe("file tool boundaries", () => {
     await new ReadFileTool().execute(context, { file_path: path });
     const edit = await new EditFileTool().execute(context, {
       file_path: path,
-      old_string: "before",
+      edits: [{ old_string: "before" }],
     });
     expect(edit).toEqual({
-      output: "Error: new_string is required",
+      output: "Error: edits[0].new_string is required",
       isError: true,
     });
     expect(readFileSync(path, "utf-8")).toBe("before");
@@ -137,8 +154,7 @@ describe("file tool boundaries", () => {
     // dollar-quote to the text before / after the match.
     const edit = await new EditFileTool().execute(context, {
       file_path: path,
-      old_string: "MATCH",
-      new_string: "$$! $& $` $'",
+      edits: [{ old_string: "MATCH", new_string: "$$! $& $` $'" }],
     });
     expect(edit.isError).toBe(false);
     expect(readFileSync(path, "utf-8")).toBe("prefix $$! $& $` $' suffix");
@@ -148,9 +164,7 @@ describe("file tool boundaries", () => {
     await new ReadFileTool().execute(context, { file_path: allPath });
     const editAll = await new EditFileTool().execute(context, {
       file_path: allPath,
-      old_string: "a",
-      new_string: "$&$",
-      replace_all: true,
+      edits: [{ old_string: "a", new_string: "$&$", replace_all: true }],
     });
     expect(editAll.isError).toBe(false);
     expect(readFileSync(allPath, "utf-8")).toBe("$&$ $&$");
@@ -165,13 +179,11 @@ describe("file tool boundaries", () => {
     const [first, second] = await Promise.all([
       new EditFileTool().execute(context, {
         file_path: path,
-        old_string: "first",
-        new_string: "FIRST",
+        edits: [{ old_string: "first", new_string: "FIRST" }],
       }),
       new EditFileTool().execute(context, {
         file_path: path,
-        old_string: "second",
-        new_string: "SECOND",
+        edits: [{ old_string: "second", new_string: "SECOND" }],
       }),
     ]);
     expect(first.isError).toBe(false);
@@ -190,13 +202,11 @@ describe("file tool boundaries", () => {
     const [first, second] = await Promise.all([
       new EditFileTool().execute(context, {
         file_path: "real/file.txt",
-        old_string: "first",
-        new_string: "FIRST",
+        edits: [{ old_string: "first", new_string: "FIRST" }],
       }),
       new EditFileTool().execute(context, {
         file_path: "alias/file.txt",
-        old_string: "second",
-        new_string: "SECOND",
+        edits: [{ old_string: "second", new_string: "SECOND" }],
       }),
     ]);
     expect(first.isError).toBe(false);

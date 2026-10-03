@@ -1,8 +1,18 @@
 import { describe, it, expect } from "vitest";
 
-import { buildDiff } from "@/tools/diff.js";
+import { buildDiff, buildEditDiff } from "@/tools/diff.js";
 
 describe("buildDiff", () => {
+  it("does not count unchanged lines between equal-size edits as replacements", () => {
+    const { text, additions, removals } = buildDiff(
+      "first\nkeep\nlast",
+      "FIRST\nkeep\nLAST",
+    );
+    expect(additions).toBe(2);
+    expect(removals).toBe(2);
+    expect(text).toContain("     2  keep");
+    expect(text).not.toContain("-    2  keep");
+  });
   it("reports a single-line change with correct counts and markers", () => {
     const oldContent = "a\nb\nc\nd\ne\n";
     const newContent = "a\nb\nX\nd\ne\n";
@@ -77,6 +87,46 @@ describe("buildDiff", () => {
     const newLines = Array.from({ length: 500 }, (_, i) => `new${String(i)}`);
     const { text } = buildDiff(oldLines.join("\n"), newLines.join("\n"));
     expect(text).toContain("truncated");
+    expect(text.split("\n").length).toBeLessThanOrEqual(201);
+  });
+});
+
+describe("buildEditDiff", () => {
+  it("accounts for deletions when numbering later diff regions", () => {
+    const lines = Array.from(
+      { length: 100 },
+      (_, index) => `line-${String(index)}`,
+    );
+    const content = lines.join("\n");
+    const target = "line-90";
+    const start = content.indexOf(target);
+    const { text, additions, removals } = buildEditDiff(content, [
+      { start: 0, end: "line-0\nline-1\n".length, text: "" },
+      { start, end: start + target.length, text: "changed" },
+    ]);
+    expect(additions).toBe(1);
+    expect(removals).toBe(3);
+    expect(text).toContain("-   91  line-90");
+    expect(text).toContain("+   89  changed");
+    expect(text).toContain("    90  line-91");
+    expect(text).not.toContain("line-50");
+  });
+
+  it("caps the combined output of many separate diff regions", () => {
+    const lines = Array.from(
+      { length: 1_000 },
+      (_, index) => `line-${String(index)}`,
+    );
+    const content = lines.join("\n");
+    const replacements = Array.from({ length: 80 }, (_, index) => {
+      const target = `line-${String(index * 12)}\n`;
+      const start = content.indexOf(target);
+      return { start, end: start + target.length, text: "changed\n" };
+    });
+    const { text, additions, removals } = buildEditDiff(content, replacements);
+    expect(additions).toBe(80);
+    expect(removals).toBe(80);
+    expect(text).toContain("diff truncated at 200 lines");
     expect(text.split("\n").length).toBeLessThanOrEqual(201);
   });
 });
