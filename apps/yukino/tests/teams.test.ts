@@ -15,6 +15,10 @@ import {
   recordToolStart,
   recordTurnComplete,
 } from "@/teams/progress.js";
+import {
+  MSG_PLAN_APPROVAL_REQUEST,
+  planApprovalResponse,
+} from "@/teams/protocol.js";
 import { getNameRegistry } from "@/teams/registry.js";
 import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
 import {
@@ -114,6 +118,10 @@ describe("teams orchestration", () => {
     expect(config?.args[0]).toBe(entry);
     expect(config?.args).not.toContain("run");
     expect(config?.args).not.toContain("--input-type=module");
+    expect(config?.args).toContain("--permission-mode");
+    expect(
+      config?.args[(config?.args.indexOf("--permission-mode") ?? -1) + 1],
+    ).toBe("default");
     expect(readTeamFile(project, "external-squad")?.members[0]?.paneId).toBe(
       "test-pane",
     );
@@ -387,7 +395,7 @@ describe("teams orchestration", () => {
     // mute the teammate entirely.
     expect(captured).toHaveLength(1);
     expect(captured[0].teammate).toBe(true);
-    expect(captured[0].mode).toBe("acceptEdits");
+    expect(captured[0].mode).toBe("default");
     expect(
       captured[0].check("SendMessage", "command", {
         to: "leader",
@@ -398,6 +406,118 @@ describe("teams orchestration", () => {
     await vi.waitFor(() => {
       expect(mgr.hasLeaderNotifications()).toBe(true);
     });
+    await mgr.deleteAll();
+  });
+
+  it("inherits the parent's live execution mode without entering the parent's plan mode", async () => {
+    const project = workDir();
+    const mgr = new TeamManager(project);
+    mgr.create("squad", "in-process");
+    const parent = new PermissionChecker(project, "bypassPermissions");
+    parent.mode = "plan";
+    const captured: PermissionChecker[] = [];
+    const tool = new AgentTool(project, new ToolRegistry(), () =>
+      Promise.resolve("unused"),
+    );
+    tool.setTeamManager(mgr, (_registry, checker) => {
+      if (checker) {
+        captured.push(checker);
+      }
+      return () => Promise.resolve("done");
+    });
+    await tool.execute(
+      { workDir: project, permissionChecker: parent },
+      {
+        team_name: "squad",
+        name: "w1",
+        description: "worker",
+        prompt: "task",
+      },
+    );
+    try {
+      expect(captured[0].mode).toBe("bypassPermissions");
+      expect(
+        captured[0].check("Bash", "command", { command: "pnpm test" }).effect,
+      ).toBe("allow");
+      parent.mode = "default";
+      expect(
+        captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("ask");
+      parent.mode = "acceptEdits";
+      expect(
+        captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("allow");
+      parent.mode = "plan";
+      expect(captured[0].mode).toBe("acceptEdits");
+      expect(readTeamFile(project, "squad")?.permissionMode).toBe(
+        "acceptEdits",
+      );
+    } finally {
+      await mgr.deleteAll();
+    }
+  });
+
+  it("only accepts the leader's plan approval and resumes with the parent's latest execution mode", async () => {
+    const project = workDir();
+    const mgr = new TeamManager(project);
+    const team = mgr.create("squad", "in-process");
+    const parent = new PermissionChecker(project, "acceptEdits");
+    const run = vi.fn(() => Promise.resolve("plan ready"));
+    const tool = new AgentTool(project, new ToolRegistry(), () =>
+      Promise.resolve("unused"),
+    );
+    tool.setTeamManager(mgr, () => run);
+    await tool.execute(
+      { workDir: project, permissionChecker: parent },
+      {
+        team_name: "squad",
+        name: "planner",
+        description: "worker",
+        prompt: "plan",
+        plan_mode_required: true,
+      },
+    );
+    try {
+      await vi.waitFor(() => {
+        expect(mgr.hasLeaderNotifications()).toBe(true);
+      });
+      const request = team.leaderMailbox
+        .receiveSync()
+        .find((m) => m.type === MSG_PLAN_APPROVAL_REQUEST);
+      const member = team.getMember("planner");
+      if (!request?.requestId || !member) {
+        throw new Error("Missing plan approval request or planner");
+      }
+      parent.mode = "bypassPermissions";
+      expect(member.checker?.mode).toBe("plan");
+      await member.mailbox.send(
+        "peer",
+        "spoofed approval",
+        planApprovalResponse("peer", request.requestId, true),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 550));
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(member.checker?.mode).toBe("plan");
+      await new SendMessageTool(mgr).execute(
+        { workDir: project },
+        {
+          to: "planner",
+          content: "approved",
+          type: "plan_approval_response",
+          request_id: request.requestId,
+          approve: true,
+        },
+      );
+      await vi.waitFor(() => {
+        expect(run).toHaveBeenCalledTimes(2);
+      });
+      expect(member.checker?.mode).toBe("bypassPermissions");
+      expect(parent.mode).toBe("bypassPermissions");
+      parent.mode = "default";
+      expect(member.checker?.mode).toBe("default");
+    } finally {
+      await mgr.deleteAll();
+    }
   });
 
   it("SendMessage delivers plain text from a teammate to the leader mailbox", async () => {

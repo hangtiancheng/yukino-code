@@ -231,9 +231,11 @@ export function App({
     if (process.env.YUKINO_BYPASS_PERMISSIONS === "1") {
       return "bypassPermissions";
     }
-    const isPermissionMode = (mode: string): mode is PermissionMode =>
-      ["default", "acceptEdits", "plan", "bypassPermissions"].includes(mode);
-    if (permissionMode && isPermissionMode(permissionMode)) {
+    const isInitialPermissionMode = (
+      mode: string,
+    ): mode is Exclude<PermissionMode, "plan"> =>
+      ["default", "acceptEdits", "bypassPermissions"].includes(mode);
+    if (permissionMode && isInitialPermissionMode(permissionMode)) {
       return permissionMode;
     }
     return "default";
@@ -252,6 +254,9 @@ export function App({
   const permModeRef = useRef(permMode);
   useEffect(() => {
     permModeRef.current = permMode;
+    if (checkerRef.current) {
+      checkerRef.current.mode = permMode;
+    }
   }, [permMode]);
   const [mcpInfo, setMcpInfo] = useState<{
     servers: string[];
@@ -385,6 +390,9 @@ export function App({
   });
   const teamManagerRef = useRef(new TeamManager(workDir));
   useEffect(() => {
+    if (checkerRef.current) {
+      teamManagerRef.current.setPermissionChecker(checkerRef.current);
+    }
     // Re-adopt any team left on disk (e.g. from a previous session) so live
     // external teammates' notifications are drained and the UI shows them.
     teamManagerRef.current.restoreFromDisk();
@@ -429,10 +437,8 @@ export function App({
     [],
   );
   const abortControllerRef = useRef<AbortController | null>(null);
-  // Checker of the in-flight agent loop: a fresh checker is created per loop,
-  // so mid-loop permission-mode changes (Shift+Tab) must be applied to this
-  // live instance to take effect before the loop ends.
   const checkerRef = useRef<PermissionChecker | null>(null);
+  checkerRef.current ??= new PermissionChecker(workDir, permMode);
   const permissionResolveRef = useRef<
     ((v: "allow" | "deny" | "allowAlways") => void) | null
   >(null);
@@ -2070,8 +2076,11 @@ export function App({
             undefined,
             undefined,
             undefined,
-            undefined,
-            { abortSignal: signal ?? controller.signal },
+            checkerRef.current?.forWorkDir(workDir),
+            {
+              abortSignal: signal ?? controller.signal,
+              onPermissionRequest: requestPermission,
+            },
           ),
         snapshotParentMessages: (count) => {
           const msgs = conversationRef.current.getMessages();
@@ -2121,7 +2130,8 @@ export function App({
 
     // modeOverride avoids a stale-closure read of permMode right after a
     // setPermMode call (e.g. `/plan <args>` entering plan mode in the same tick).
-    const checker = new PermissionChecker(workDir, modeOverride ?? permMode);
+    const checker = checkerRef.current ?? new PermissionChecker(workDir);
+    checker.mode = modeOverride ?? permModeRef.current;
     checkerRef.current = checker;
 
     const bashTool = registryRef.current.getInstanceOf("Bash", BashTool);

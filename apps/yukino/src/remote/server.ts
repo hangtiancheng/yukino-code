@@ -122,6 +122,7 @@ import { ToolRegistry } from "@/tools/registry.js";
 import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
 import { ToolSearchTool } from "@/tools/tool-search.js";
+import type { ToolContext } from "@/tools/types.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 import { WriteFileTool } from "@/tools/write-file.js";
 import { contentToText, strArg } from "@/utils/index.js";
@@ -322,7 +323,13 @@ class AgentHandleImpl implements RemoteAgentHandle {
   longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
   workDir: string;
-  permissionMode: PermissionMode = "default";
+  checker: PermissionChecker;
+  get permissionMode(): PermissionMode {
+    return this.checker.mode;
+  }
+  set permissionMode(mode: PermissionMode) {
+    this.checker.mode = mode;
+  }
   /** Shared task board; /clear and /resume swap its store to the target session. */
   taskList: TaskList;
 
@@ -350,6 +357,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
       | "takeSteeringLeftovers"
       | "clearConversation"
       | "permissionMode"
+      | "checker"
     >,
   ) {
     this.client = agentHandleImpl.client;
@@ -378,6 +386,8 @@ class AgentHandleImpl implements RemoteAgentHandle {
       agentHandleImpl.longTermMemoryMemoryContent;
     this.provider = agentHandleImpl.provider;
     this.workDir = agentHandleImpl.workDir;
+    this.checker = new PermissionChecker(this.workDir);
+    this.teamManager.setPermissionChecker(this.checker);
     this.taskList = agentHandleImpl.taskList;
     this.abortController = null;
   }
@@ -398,7 +408,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.abortController = new AbortController();
 
     try {
-      const checker = new PermissionChecker(this.workDir, this.permissionMode);
+      const checker = this.checker;
       const agent = new Agent({
         client: this.client,
         registry: this.registry,
@@ -604,7 +614,11 @@ export async function createRemoteAgent(
         .map((m) => `${m.role}: ${contentToText(m.content)}`)
         .join("\n");
     },
-    runSubagent: (prompt: string, abortSignal?: AbortSignal) =>
+    runSubagent: (
+      prompt: string,
+      abortSignal?: AbortSignal,
+      context?: ToolContext,
+    ) =>
       spawnSubagent(
         BUILTIN_AGENTS[0],
         prompt,
@@ -615,8 +629,13 @@ export async function createRemoteAgent(
         undefined,
         undefined,
         undefined,
-        new PermissionChecker(workDir, "acceptEdits"),
-        { abortSignal, background: false },
+        context?.permissionChecker?.forWorkDir(workDir) ??
+          handle.checker.forWorkDir(workDir),
+        {
+          abortSignal,
+          background: false,
+          onPermissionRequest: context?.onPermissionRequest,
+        },
       ),
   };
 
@@ -711,9 +730,9 @@ export async function createRemoteAgent(
           )
         : client;
 
-      const checker =
-        context?.permissionChecker ??
-        new PermissionChecker(forkWorkDir, "acceptEdits");
+      const checker = (
+        context?.permissionChecker ?? handle.checker
+      ).forSubagent(forkWorkDir);
       forkConv.addUserMessage(prompt);
 
       // Per-run background task registry (parity with subagent/spawn.ts): the

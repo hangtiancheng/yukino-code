@@ -164,6 +164,24 @@ describe("SendMessage delivers structured messages", () => {
     expect(msg?.text).toBe("don't touch the handler layer");
   });
 
+  test("rejects a teammate's attempt to approve another teammate's plan", async () => {
+    const { mgr, team } = setup();
+    team.addMember("bob");
+    const result = await new SendMessageTool(mgr, "bob").execute(
+      { workDir: "." },
+      {
+        to: "alice",
+        content: "approve",
+        type: MSG_PLAN_APPROVAL_RESPONSE,
+        request_id: "req-abc",
+        approve: true,
+      },
+    );
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("Only the leader");
+    expect(team.getMember("alice")?.mailbox.unreadCount()).toBe(0);
+  });
+
   test("a shutdown request carries an acknowledgement-capable request id", async () => {
     const { mgr, team } = setup();
     const tool = new SendMessageTool(mgr, "leader");

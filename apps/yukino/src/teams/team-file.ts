@@ -52,6 +52,12 @@ const TeamFileSchema = z.object({
   description: z.string().optional(),
   createdAt: z.number(),
   leaderAgentId: z.string(),
+  permissionMode: z.enum([
+    "default",
+    "acceptEdits",
+    "plan",
+    "bypassPermissions",
+  ]),
   /** PID of the process currently acting as leader; written by leader-side TeamManager.get()/create(). */
   leaderPid: z.number().optional(),
   members: z.array(TeamMemberEntrySchema),
@@ -109,7 +115,10 @@ export function teamConfigPath(workDir: string, name: string): string {
  * propagating an exception.
  */
 export function readTeamFile(workDir: string, name: string): TeamFile | null {
-  const path = teamConfigPath(workDir, name);
+  return readTeamFileAtPath(teamConfigPath(workDir, name));
+}
+
+export function readTeamFileAtPath(path: string): TeamFile | null {
   if (!existsSync(path)) {
     return null;
   }

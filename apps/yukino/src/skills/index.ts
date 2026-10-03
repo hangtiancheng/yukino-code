@@ -1,3 +1,5 @@
+import type { ToolContext } from "@/tools/types.js";
+
 export interface SkillMeta {
   name: string;
   description: string;
@@ -17,7 +19,11 @@ export interface SkillHost {
 }
 
 export interface SkillForkHost extends SkillHost {
-  runSubagent(prompt: string, abortSignal?: AbortSignal): Promise<string>;
+  runSubagent(
+    prompt: string,
+    abortSignal?: AbortSignal,
+    context?: ToolContext,
+  ): Promise<string>;
   snapshotParentMessages(count: number): string;
 }
 

@@ -226,6 +226,87 @@ describe("teammate coordination tools", () => {
   });
 });
 
+describe("delegated permission modes", () => {
+  it.each(["allow", "ask"])(
+    "does not let an explicit %s rule bypass a locked plan",
+    (effect) => {
+      const dir = makeTmpDir();
+      const checker = makeChecker(dir, [{ rule: "WriteFile(*)", effect }]);
+      checker.planModeLocked = true;
+      expect(
+        checker.check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("deny");
+    },
+  );
+  it.each(["default", "acceptEdits", "bypassPermissions"] as const)(
+    "inherits %s and follows live mode changes across work directories",
+    (mode) => {
+      const dir = makeTmpDir();
+      const parent = new PermissionChecker(dir, mode);
+      const child = parent.forSubagent(makeTmpDir());
+      const nested = child.forWorkDir(makeTmpDir()).forSubagent(dir);
+      expect(child.mode).toBe(mode);
+      expect(nested.mode).toBe(mode);
+      parent.mode = "bypassPermissions";
+      expect(
+        nested.check("Bash", "command", { command: "pnpm test" }).effect,
+      ).toBe("allow");
+      parent.mode = "default";
+      expect(
+        child.check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("ask");
+    },
+  );
+
+  it("keeps the last non-plan mode when the parent enters plan, including newly spawned children", () => {
+    const dir = makeTmpDir();
+    const parent = new PermissionChecker(dir, "acceptEdits");
+    const child = parent.forSubagent(dir);
+    parent.mode = "plan";
+    expect(parent.mode).toBe("plan");
+    expect(child.mode).toBe("acceptEdits");
+    expect(parent.forSubagent(dir).mode).toBe("acceptEdits");
+    expect(
+      child.check("WriteFile", "write", { file_path: "a.ts" }).effect,
+    ).toBe("allow");
+    parent.mode = "bypassPermissions";
+    expect(child.mode).toBe("bypassPermissions");
+    parent.mode = "plan";
+    expect(child.mode).toBe("bypassPermissions");
+    expect(new PermissionChecker(dir, "plan").forSubagent(dir).mode).toBe(
+      "default",
+    );
+  });
+
+  it("holds a teammate's own plan gate through parent changes, then restores the current parent mode", () => {
+    const dir = makeTmpDir();
+    const parent = new PermissionChecker(dir, "acceptEdits");
+    const child = parent.forSubagent(dir);
+    child.planModeLocked = true;
+    child.planFilePath = join(dir, "plan.md");
+    child.teammate = true;
+    parent.mode = "bypassPermissions";
+    expect(child.mode).toBe("plan");
+    expect(parent.mode).toBe("bypassPermissions");
+    expect(
+      child.check("WriteFile", "write", { file_path: "a.ts" }).effect,
+    ).toBe("deny");
+    expect(
+      child.check("WriteFile", "write", { file_path: child.planFilePath })
+        .effect,
+    ).toBe("allow");
+    expect(
+      child.check("Bash", "command", { command: "git status" }).effect,
+    ).toBe("allow");
+    expect(
+      child.check("SendMessage", "command", { to: "leader", content: "ready" })
+        .effect,
+    ).toBe("allow");
+    child.planModeLocked = false;
+    expect(child.mode).toBe("bypassPermissions");
+  });
+});
+
 // Writes the user-level and project-level rule files separately to verify cross-file merging.
 // homedir() is redirected to a temp dir while constructing the checker so the
 // user-level file never touches the real ~/.yukino/permissions.yaml.

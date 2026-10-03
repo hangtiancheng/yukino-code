@@ -148,6 +148,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   // team at exit, which would kill external teammates left running by an
   // interactive session.
   const teamManager = new TeamManager(workDir);
+  teamManager.setPermissionChecker(checker);
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here
   // (Bash/PowerShell) so run_in_background and timeout auto-background deliver

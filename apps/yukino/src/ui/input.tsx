@@ -98,10 +98,9 @@ function scanWorkdirFiles(root: string, max = 2000): string[] {
 
 export type { InputDraft } from "./input-draft.js";
 
-const MODEL_CYCLE: PermissionMode[] = [
+const PERMISSION_MODE_CYCLE: Exclude<PermissionMode, "plan">[] = [
   "default",
   "acceptEdits",
-  "plan",
   "bypassPermissions",
 ];
 
@@ -119,7 +118,7 @@ interface InputBoxProps {
   statusLabel?: string;
   usageTracker?: CommandUsageTracker;
   permMode?: PermissionMode;
-  onModeChange?: (mode: PermissionMode) => void;
+  onModeChange?: (mode: Exclude<PermissionMode, "plan">) => void;
   workDir?: string;
   sessionId?: string;
   /** Bumped by the parent when workspace file facts change (file writes, agent
@@ -649,8 +648,10 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if ((input === "\x1b[Z" || (key.tab && key.shift)) && onModeChange) {
-      const idx = MODEL_CYCLE.indexOf(permMode);
-      const next = MODEL_CYCLE[(idx + 1) % MODEL_CYCLE.length];
+      const idx =
+        permMode === "plan" ? -1 : PERMISSION_MODE_CYCLE.indexOf(permMode);
+      const next =
+        PERMISSION_MODE_CYCLE[(idx + 1) % PERMISSION_MODE_CYCLE.length];
       onModeChange(next);
       return;
     }

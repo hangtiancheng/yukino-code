@@ -117,6 +117,7 @@ export class Team {
   private workDir: string;
 
   leaderAgentId = "";
+  permissionMode: PermissionChecker["mode"] = "default";
   description?: string;
   createdAt = Math.floor(Date.now() / 1000);
   /**
@@ -227,6 +228,7 @@ export class Team {
       description: this.description,
       createdAt: this.createdAt,
       leaderAgentId: this.leaderAgentId,
+      permissionMode: this.permissionMode,
       ...(this.leaderPid > 0 ? { leaderPid: this.leaderPid } : {}),
       members: [...this.members.values()].map((m) => ({
         agentId: m.agentId ?? m.name,
@@ -371,6 +373,8 @@ export class Team {
         name,
         "--task",
         task,
+        "--permission-mode",
+        this.permissionMode,
         ...(providerIndex !== undefined
           ? ["--provider-index", String(providerIndex)]
           : []),
@@ -627,6 +631,7 @@ export class Team {
       for (const m of member.mailbox.receiveSync()) {
         if (
           m.type === MSG_PLAN_APPROVAL_RESPONSE &&
+          m.from === LEADER_NAME &&
           m.requestId === req.requestId
         ) {
           response = m;
@@ -639,9 +644,8 @@ export class Team {
     if (!response) {
       return null;
     }
-    // On approval, switch back to normal permissions so the teammate can modify files; on rejection, stay in plan mode to revise
     if (approved(response) && member.checker) {
-      member.checker.mode = "default";
+      member.checker.planModeLocked = false;
     }
     return approved(response)
       ? "The Leader has approved your plan. Begin execution now."
@@ -742,12 +746,30 @@ export class TeamManager {
   private teams = new Map<string, Team>();
   private workDir: string;
   private claimLeadership: boolean;
+  private permissionChecker?: PermissionChecker;
+  private unsubscribePermissions?: () => void;
   // One shared task store per canonical team identity.
   private taskStores = new Map<string, SharedTaskStore>();
 
   constructor(workDir: string, opts: TeamManagerOptions = {}) {
     this.workDir = canonicalPath(workDir);
     this.claimLeadership = opts.claimLeadership ?? true;
+  }
+
+  setPermissionChecker(checker: PermissionChecker): void {
+    if (this.permissionChecker === checker) {
+      return;
+    }
+    this.unsubscribePermissions?.();
+    this.permissionChecker = checker;
+    const sync = () => {
+      for (const team of this.teams.values()) {
+        team.permissionMode = checker.delegatedMode;
+        team.persist();
+      }
+    };
+    this.unsubscribePermissions = checker.subscribeMode(sync);
+    sync();
   }
 
   private teamKey(name: string): string {
@@ -770,6 +792,7 @@ export class TeamManager {
 
     const key = this.teamKey(name);
     const team = new Team(name, mode, this.workDir);
+    team.permissionMode = this.permissionChecker?.delegatedMode ?? "default";
     team.leaderAgentId = opts.leaderAgentId ?? "";
     team.description = opts.description;
     if (this.claimLeadership) {
@@ -803,6 +826,8 @@ export class TeamManager {
 
     const team = new Team(tf.name, tf.mode, this.workDir);
     team.leaderAgentId = tf.leaderAgentId;
+    team.permissionMode =
+      this.permissionChecker?.delegatedMode ?? tf.permissionMode;
     team.description = tf.description;
     team.createdAt = tf.createdAt;
     team.leaderPid = tf.leaderPid ?? 0;

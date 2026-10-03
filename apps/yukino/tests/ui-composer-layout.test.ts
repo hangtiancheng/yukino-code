@@ -1315,17 +1315,34 @@ describe("persistent composer drafts and input behavior", () => {
     },
   );
 
-  it("retains Tab completion and Shift+Tab mode cycling", () => {
-    const ref = draftRef();
-    const onModeChange = vi.fn();
-    mount({ draftRef: ref, commands, onModeChange, workDir: "/virtual" });
-    press("/h");
-    press("", { tab: true });
-    expect(ref.current?.lines).toEqual(["/help "]);
-    press("", { tab: true, shift: true });
-    expect(onModeChange).toHaveBeenCalledWith("acceptEdits");
-    expect(ref.current?.lines).toEqual(["/help "]);
-  });
+  it.each([
+    ["default", "acceptEdits"],
+    ["acceptEdits", "bypassPermissions"],
+    ["bypassPermissions", "default"],
+    ["plan", "default"],
+  ] as const)(
+    "retains Tab completion while Shift+Tab switches %s to %s without entering plan",
+    (permMode, nextMode) => {
+      const ref = draftRef();
+      const onModeChange = vi.fn();
+      mount({
+        draftRef: ref,
+        commands,
+        permMode,
+        onModeChange,
+        workDir: "/virtual",
+      });
+      press("/h");
+      press("", { tab: true });
+      expect(ref.current?.lines).toEqual(["/help "]);
+      press("", { tab: true, shift: true });
+      expect(onModeChange).toHaveBeenLastCalledWith(nextMode);
+      press("\x1b[Z");
+      expect(onModeChange).toHaveBeenLastCalledWith(nextMode);
+      expect(onModeChange).toHaveBeenCalledTimes(2);
+      expect(ref.current?.lines).toEqual(["/help "]);
+    },
+  );
 
   it("dismisses autocomplete before delegating Escape", () => {
     const onEscape = vi.fn();

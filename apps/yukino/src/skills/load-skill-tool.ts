@@ -70,7 +70,7 @@ export class LoadSkillTool implements Tool {
     if (skill.meta.mode === "fork" && this.forkHost) {
       try {
         return {
-          output: await runFork(skill, "", this.forkHost, ctx.abortSignal),
+          output: await runFork(skill, "", this.forkHost, ctx.abortSignal, ctx),
           isError: false,
         };
       } catch (err) {

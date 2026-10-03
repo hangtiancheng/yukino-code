@@ -104,8 +104,8 @@ Print, remote, ACP, and A2A modes require at least one configured provider; the 
 
 ```yaml
 # Initial permission mode. Enum: default (ask per write/command) | acceptEdits (auto-approve
-# file edits) | plan (plan mode, no modifications) | bypassPermissions (approve everything).
-# Invalid values fall back to default; Shift+Tab cycles modes at runtime.
+# file edits) | bypassPermissions (approve everything).
+# Other values fall back to default. Shift+Tab cycles these modes; only /plan enters plan mode.
 permission_mode: bypassPermissions
 
 # Model providers. At least one is required.
@@ -444,7 +444,7 @@ Inside the UI, these commands are available:
 | Ctrl+T    | Toggle Teams dialog overlay (when not streaming)                                    |
 | Ctrl+B    | Move running foreground Bash/PowerShell tasks to the background                     |
 | Ctrl+V    | Paste a clipboard image (Alt+V on Windows)                                          |
-| Shift+Tab | Cycle permission modes                                                              |
+| Shift+Tab | Cycle default → acceptEdits → bypassPermissions; exit plan to default               |
 
 Pastes longer than 10 lines or 1,000 characters collapse to `[paste #1 +124 lines]` or `[paste #1 1234 chars]`. Clipboard images appear as `[Image #1]`. Arrow keys move across each placeholder as a unit, and Backspace/Delete remove it as a unit. Placeholders survive dialog switches; submitting restores the full text and image attachments.
 

@@ -98,14 +98,16 @@ export async function spawnSubagent(
         definition.disallowedTools,
         options.background ?? false,
       );
-  // When a teammate runs in plan mode, the checker is created and held by the team layer:
-  // after approval passes, the mode must be switched back to default in place. If the checker
-  // were only instantiated here, the team layer would have no handle to modify it.
-  const permMode =
-    options.permissionMode === "plan"
-      ? "plan"
-      : (definition.permissionMode ?? options.permissionMode ?? "acceptEdits");
-  const checker = checkerOverride ?? new PermissionChecker(workDir, permMode);
+  const inheritedChecker =
+    checkerOverride ??
+    new PermissionChecker(
+      workDir,
+      options.permissionMode ?? definition.permissionMode,
+    );
+  const checker = inheritedChecker.forSubagent(workDir);
+  if (definition.permissionMode === "plan") {
+    checker.planModeLocked = true;
+  }
   const conversation = options.conversation ?? new ConversationManager();
   conversation.addSystemReminder(buildSubagentInstructions(definition));
   conversation.addUserMessage(prompt);

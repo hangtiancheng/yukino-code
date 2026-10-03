@@ -9,6 +9,7 @@ import type { ConversationManager } from "@/conversation/index.js";
 import * as clients from "@/llm/client.js";
 import type { LLMClient } from "@/llm/client.js";
 import { OpenAIClient } from "@/llm/openai.js";
+import { PermissionChecker } from "@/permissions/index.js";
 import {
   buildSubagentInstructions,
   buildTeammatePrompt,
@@ -67,6 +68,84 @@ function stubClient(
 }
 
 describe("delegated prompt contracts", () => {
+  it.each([false, true])(
+    "uses live parent permissions while preserving an explicit read-only role (%s)",
+    async (readOnly) => {
+      const dir = workDir();
+      const parent = new PermissionChecker(dir);
+      const executed: string[] = [];
+      const modes = [
+        "default",
+        "acceptEdits",
+        "plan",
+        "bypassPermissions",
+        "default",
+      ] as const;
+      let request = 0;
+      const registry = new ToolRegistry();
+      registry.register({
+        name: "WriteProbe",
+        description: "write",
+        category: "write",
+        schema: () => ({
+          name: "WriteProbe",
+          description: "write",
+          input_schema: { type: "object", properties: {} },
+        }),
+        execute: () => {
+          executed.push(parent.mode);
+          return Promise.resolve({ output: "written", isError: false });
+        },
+      });
+      const client: LLMClient = {
+        setSystemPrompt: vi.fn(),
+        async *stream() {
+          await Promise.resolve();
+          const mode = modes[request++];
+          if (mode) {
+            parent.mode = mode;
+            yield {
+              type: "tool_call_complete",
+              toolId: `write-${request}`,
+              toolName: "WriteProbe",
+              arguments: { file_path: "a.ts" },
+            };
+          }
+          yield {
+            type: "stream_end",
+            stopReason: mode ? "tool_use" : "end_turn",
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              cacheReadInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          };
+        },
+      };
+      await spawnSubagent(
+        {
+          name: "worker",
+          description: "work",
+          ...(readOnly ? { permissionMode: "plan" as const } : {}),
+        },
+        "work",
+        client,
+        registry,
+        provider,
+        dir,
+        undefined,
+        undefined,
+        undefined,
+        parent,
+      );
+      expect(executed).toEqual(
+        readOnly ? [] : ["acceptEdits", "plan", "bypassPermissions"],
+      );
+      expect(parent.mode).toBe("default");
+    },
+  );
+
   it("delivers custom agent instructions without modifying the parent's system prompt", async () => {
     const client = stubClient((conversation) => {
       const content = JSON.stringify(conversation.getMessages());

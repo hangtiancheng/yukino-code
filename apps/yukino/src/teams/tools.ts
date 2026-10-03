@@ -190,6 +190,13 @@ export class SendMessageTool implements Tool {
           );
           break;
         case MSG_PLAN_APPROVAL_RESPONSE:
+          if (this.senderName !== LEADER_NAME) {
+            return {
+              output:
+                "Only the leader can approve or reject a teammate's plan.",
+              isError: true,
+            };
+          }
           if (!requestId || approve === undefined) {
             return {
               output:

@@ -12,8 +12,11 @@ import * as clients from "@/llm/client.js";
 import { OpenAIClient } from "@/llm/openai.js";
 import * as logger from "@/logger/index.js";
 import { MCPManager } from "@/mcp/manager.js";
+import { PermissionChecker } from "@/permissions/index.js";
 import { runTeammate } from "@/teammate.js";
 import { FileMailbox } from "@/teams/file-mailbox.js";
+import { TeamManager } from "@/teams/index.js";
+import { teamDir } from "@/teams/team-file.js";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
@@ -34,6 +37,7 @@ beforeEach(() => {
     teamName: "test",
     memberName: "ann",
     initialTask: "Review the project",
+    permissionMode: "default",
   };
   vi.spyOn(process, "cwd").mockReturnValue(workDir);
   vi.mocked(os.homedir).mockReturnValue(workDir);
@@ -120,6 +124,41 @@ async function* events(...items: AgentEvent[]): AsyncGenerator<AgentEvent> {
 }
 
 describe("teammate entry point", () => {
+  it("follows permission changes persisted by the leader without inheriting its plan mode", async () => {
+    const parent = new PermissionChecker(workDir, "acceptEdits");
+    const manager = new TeamManager(workDir);
+    manager.setPermissionChecker(parent);
+    manager.create(args.teamName, "tmux").addMember(args.memberName);
+    args.teamDir = join(teamDir(workDir, args.teamName), "inboxes");
+    args.permissionMode = "acceptEdits";
+    await queue("[shutdown] done");
+    vi.spyOn(Agent.prototype, "run").mockImplementation(function (this: Agent) {
+      const checker: unknown = Reflect.get(this, "checker");
+      if (!(checker instanceof PermissionChecker)) {
+        throw new Error("Missing checker");
+      }
+      return (async function* () {
+        await Promise.resolve();
+        expect(checker.mode).toBe("acceptEdits");
+        parent.mode = "bypassPermissions";
+        expect(
+          checker.check("Bash", "command", { command: "pnpm test" }).effect,
+        ).toBe("allow");
+        parent.mode = "plan";
+        expect(checker.mode).toBe("bypassPermissions");
+        parent.mode = "default";
+        expect(
+          checker.check("WriteFile", "write", { file_path: "a.ts" }).effect,
+        ).toBe("ask");
+        yield {
+          type: "loop_complete" as const,
+          stopReason: "completed" as const,
+        };
+      })();
+    });
+    await runTeammate(args);
+  });
+
   it("injects project instructions, handles follow-ups and disconnects on mailbox shutdown", async () => {
     writeFileSync(
       join(workDir, "AGENTS.md"),

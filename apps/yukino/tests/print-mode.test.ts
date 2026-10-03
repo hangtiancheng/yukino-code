@@ -277,6 +277,7 @@ describe("print mode delegation", () => {
     await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
 
     expect(spawn.mock.calls[0]?.[1]).toContain('You are "audit-api_routes"');
+    expect(spawn.mock.calls[0]?.[9]?.mode).toBe("bypassPermissions");
   });
 
   it("rejects an invalid explicit teammate name before spawning", async () => {

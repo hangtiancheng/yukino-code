@@ -271,7 +271,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
         prompt,
         boolArg(args, "plan_mode_required"),
         isolation === "worktree",
-        ctx.toolCallId,
+        ctx,
       );
     }
 
@@ -395,7 +395,7 @@ ${prompt}`;
     prompt: string,
     planModeRequired: boolean,
     worktreeIsolation: boolean,
-    originToolCallId?: string,
+    ctx: ToolContext,
   ): Promise<ToolResult> {
     if (!this.teamManager) {
       return {
@@ -459,11 +459,6 @@ ${prompt}`;
     teammateRegistry.register(
       new TeamTaskUpdateTool(this.teamManager, teamName),
     );
-    // The teammate checker is created here rather than inside spawnSubagent:
-    // it carries the teammate flag (coordination-tool exemption) and, in plan
-    // mode, the team layer must hold a handle to switch the mode back to
-    // default in place after plan approval.
-
     // Worktree isolation: the teammate works on its own branch; changes are NOT
     // merged automatically — the worktree path is recorded in member metadata
     // (setMemberMeta below) for the Leader/user to merge manually.
@@ -485,10 +480,11 @@ ${prompt}`;
       }
     }
 
-    const checker = new PermissionChecker(
-      memberWorkDir,
-      planModeRequired ? "plan" : "acceptEdits",
-    );
+    const parentChecker =
+      ctx.permissionChecker ?? new PermissionChecker(this.workDir);
+    this.teamManager.setPermissionChecker(parentChecker);
+    const checker = parentChecker.forSubagent(memberWorkDir);
+    checker.planModeLocked ||= planModeRequired;
     checker.teammate = true;
     const runAgent = this.teamRunAgentFactory?.(
       teammateRegistry,
@@ -503,7 +499,7 @@ ${prompt}`;
         runAgent,
         checker,
         this.teamProviderIndex,
-        originToolCallId,
+        ctx.toolCallId,
         memberWorkDir,
       );
       return {

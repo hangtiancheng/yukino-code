@@ -21,7 +21,7 @@ import { MCPManager } from "./mcp/manager.js";
 import { decideAndApply } from "./mcp/strategy.js";
 import { MCPToolWrapper } from "./mcp/tool-wrapper.js";
 import { loadInstructions } from "./memory/instructions.js";
-import { PermissionChecker } from "./permissions/index.js";
+import { PermissionChecker, type PermissionMode } from "./permissions/index.js";
 import { buildSystemPrompt, detectEnvironment } from "./prompt/builder.js";
 import { buildTeammatePrompt } from "./prompt/delegation.js";
 import { SkillCatalog } from "./skills/catalog.js";
@@ -42,7 +42,7 @@ import {
   TeamTaskListTool,
   TeamTaskUpdateTool,
 } from "./teams/task-tools.js";
-import { readTeamFile } from "./teams/team-file.js";
+import { readTeamFile, readTeamFileAtPath } from "./teams/team-file.js";
 import { SendMessageTool } from "./teams/tools.js";
 import { BashTool } from "./tools/bash.js";
 import { EditFileTool } from "./tools/edit-file.js";
@@ -64,6 +64,7 @@ interface TeammateArgs {
   teamName: string;
   memberName: string;
   initialTask: string;
+  permissionMode: PermissionMode;
   /** Index into the config's providers array; defaults to `default_provider`. */
   providerIndex?: number;
 }
@@ -78,6 +79,7 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
   let memberName = "";
   let initialTask = "";
   let providerIndex: number | undefined;
+  let permissionMode: PermissionMode | undefined;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--team-dir" && args[i + 1]) {
@@ -90,7 +92,21 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
       initialTask = args[++i];
     } else if (args[i] === "--provider-index" && args[i + 1]) {
       providerIndex = Number(args[++i]);
+    } else if (args[i] === "--permission-mode") {
+      const mode = args[++i];
+      if (
+        mode !== "default" &&
+        mode !== "acceptEdits" &&
+        mode !== "plan" &&
+        mode !== "bypassPermissions"
+      ) {
+        throw new Error("Invalid teammate --permission-mode.");
+      }
+      permissionMode = mode;
     }
+  }
+  if (!permissionMode) {
+    throw new Error("Teammate --permission-mode is required.");
   }
 
   // The team name resolves the shared task board. When the flag is absent,
@@ -101,7 +117,14 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
     const leaf = basename(teamDir);
     teamName = leaf === "inboxes" ? basename(dirname(teamDir)) : leaf;
   }
-  return { teamDir, teamName, memberName, initialTask, providerIndex };
+  return {
+    teamDir,
+    teamName,
+    memberName,
+    initialTask,
+    providerIndex,
+    permissionMode,
+  };
 }
 
 // Exit after the leader has been dead for this long (checked every poll):
@@ -296,7 +319,13 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
       contextWindow: getContextWindow(provider),
     });
 
-    const checker = new PermissionChecker(workDir, "acceptEdits");
+    const checker = new PermissionChecker(
+      workDir,
+      args.permissionMode,
+      () =>
+        readTeamFileAtPath(join(dirname(args.teamDir), "config.json"))
+          ?.permissionMode ?? args.permissionMode,
+    );
     checker.teammate = true;
 
     const agent = new Agent({

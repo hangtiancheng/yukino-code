@@ -91,6 +91,8 @@ describe("teammate worker tool registry", () => {
   it("parses --team-name", () => {
     const args = parseTeammateFlags([
       "--teammate",
+      "--permission-mode",
+      "default",
       "--team-dir",
       join(workDir, "alpha"),
       "--team-name",
@@ -104,9 +106,28 @@ describe("teammate worker tool registry", () => {
     expect(args?.memberName).toBe("ann");
   });
 
+  it.each(["default", "acceptEdits", "bypassPermissions"])(
+    "parses inherited permission mode %s",
+    (mode) => {
+      expect(
+        parseTeammateFlags(["--teammate", "--permission-mode", mode])
+          ?.permissionMode,
+      ).toBe(mode);
+    },
+  );
+
+  it("rejects missing or invalid permission modes", () => {
+    expect(() => parseTeammateFlags(["--teammate"])).toThrow("required");
+    expect(() =>
+      parseTeammateFlags(["--teammate", "--permission-mode", "invalid"]),
+    ).toThrow("Invalid");
+  });
+
   it("parses the provider index that selects the teammate provider", () => {
     const args = parseTeammateFlags([
       "--teammate",
+      "--permission-mode",
+      "default",
       "--team-dir",
       join(workDir, "alpha"),
       "--member-name",
@@ -125,6 +146,8 @@ describe("teammate worker tool registry", () => {
   it("derives team name from directory when --team-name is absent", () => {
     const args = parseTeammateFlags([
       "--teammate",
+      "--permission-mode",
+      "default",
       "--team-dir",
       join(workDir, "beta"),
       "--member-name",

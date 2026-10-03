@@ -575,7 +575,14 @@ function modeDecide(
 }
 
 export class PermissionChecker {
-  mode: PermissionMode;
+  private modeState: {
+    value: PermissionMode;
+    delegatedValue: Exclude<PermissionMode, "plan">;
+    source?: () => PermissionMode;
+    listeners: Set<() => void>;
+  };
+  private delegated = false;
+  planModeLocked = false;
   planFilePath = "";
   // Set for teammate checkers: unattended agents have no approval channel, so
   // team-internal coordination tools (messaging, shared task board) are allowed
@@ -590,18 +597,67 @@ export class PermissionChecker {
   constructor(
     private readonly workDir: string,
     mode: PermissionMode = "default",
+    modeSource?: () => PermissionMode,
   ) {
-    this.mode = mode;
+    this.modeState = {
+      value: mode,
+      delegatedValue: mode === "plan" ? "default" : mode,
+      source: modeSource,
+      listeners: new Set(),
+    };
     this.sandbox = new PathSandbox(workDir);
     this.ruleEngine = new RuleEngine(workDir);
   }
 
+  get mode(): PermissionMode {
+    return this.planModeLocked
+      ? "plan"
+      : this.delegated
+        ? this.delegatedMode
+        : (this.modeState.source?.() ?? this.modeState.value);
+  }
+
+  set mode(mode: PermissionMode) {
+    if (this.modeState.value === mode && !this.modeState.source) {
+      return;
+    }
+    this.modeState.value = mode;
+    if (mode !== "plan") {
+      this.modeState.delegatedValue = mode;
+    }
+    this.modeState.source = undefined;
+    for (const listener of this.modeState.listeners) {
+      listener();
+    }
+  }
+
+  get delegatedMode(): Exclude<PermissionMode, "plan"> {
+    const mode = this.modeState.source?.();
+    return mode && mode !== "plan" ? mode : this.modeState.delegatedValue;
+  }
+
+  subscribeMode(listener: () => void): () => void {
+    this.modeState.listeners.add(listener);
+    return () => {
+      this.modeState.listeners.delete(listener);
+    };
+  }
+
   forWorkDir(workDir: string): PermissionChecker {
     const checker = new PermissionChecker(workDir, this.mode);
+    checker.modeState = this.modeState;
+    checker.delegated = this.delegated;
+    checker.planModeLocked = this.planModeLocked;
     checker.ruleEngine = this.ruleEngine;
     checker.teammate = this.teammate;
     checker.sandboxEnabled = this.sandboxEnabled;
     checker.sandboxAutoAllow = this.sandboxAutoAllow;
+    return checker;
+  }
+
+  forSubagent(workDir: string): PermissionChecker {
+    const checker = this.forWorkDir(workDir);
+    checker.delegated = true;
     return checker;
   }
 
@@ -611,6 +667,28 @@ export class PermissionChecker {
     args: Record<string, unknown>,
   ): Decision {
     const content = extractContent(toolName, args);
+    const coordination =
+      this.teammate && TEAMMATE_COORDINATION_TOOLS.has(toolName);
+    const filePath = strArg(args, "file_path", strArg(args, "path", ""));
+    const planFileWrite =
+      this.mode === "plan" &&
+      (toolName === "WriteFile" || toolName === "EditFile") &&
+      !!this.planFilePath &&
+      canonicalPath(resolve(this.workDir, filePath)) ===
+        canonicalPath(resolve(this.workDir, this.planFilePath)) &&
+      !this.sandbox.checkDenyWrite(filePath);
+    if (
+      this.planModeLocked &&
+      category !== "read" &&
+      !coordination &&
+      !planFileWrite &&
+      !(category === "command" && isSafeCommand(content))
+    ) {
+      return {
+        effect: "deny",
+        reason: "Plan approval is required before executing mutations",
+      };
+    }
 
     // Layer 1: explicit rules, evaluated first so a deny/ask also gates the
     // Layer-0 plan-file write exception. The snapshot is taken lazily and shared
@@ -631,29 +709,18 @@ export class PermissionChecker {
 
     // Layer 1.5: teammate coordination — internal team messaging and the
     // shared task board. Explicit deny/ask rules above still gate them.
-    if (this.teammate && TEAMMATE_COORDINATION_TOOLS.has(toolName)) {
+    if (coordination) {
       return { effect: "allow", reason: "Teammate coordination tool" };
     }
 
     // Layer 0: plan-mode plan-file write exception.
     // Both WriteFile and EditFile targeting the plan file are allowed so the
     // model can create and update its plan.
-    if (
-      this.mode === "plan" &&
-      (toolName === "WriteFile" || toolName === "EditFile")
-    ) {
-      const path = strArg(args, "file_path", "");
-      if (
-        this.planFilePath &&
-        canonicalPath(resolve(this.workDir, path)) ===
-          canonicalPath(resolve(this.workDir, this.planFilePath)) &&
-        !this.sandbox.checkDenyWrite(path)
-      ) {
-        return {
-          effect: "allow",
-          reason: "Plan file write allowed in plan mode",
-        };
-      }
+    if (planFileWrite) {
+      return {
+        effect: "allow",
+        reason: "Plan file write allowed in plan mode",
+      };
     }
 
     // Layer 2: safe read-only command auto-allow (metaChar-guarded).
@@ -715,7 +782,6 @@ export class PermissionChecker {
     }
 
     // Layer 4: path sandbox (read/write tools that pass a file_path/path arg).
-    const filePath = strArg(args, "file_path", strArg(args, "path", ""));
     if ((category === "read" || category === "write") && filePath) {
       // denyWrite check takes priority: sensitive paths always deny writes
       if (category === "write") {

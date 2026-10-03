@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 
+import { Agent } from "@/agent/index.js";
 import { RecoveryState } from "@/compact/recovery.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
+import { PermissionChecker } from "@/permissions/index.js";
 import { parseRemoteAddress } from "@/remote/address.js";
 import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
@@ -312,6 +314,71 @@ describe("remote execution boundaries", () => {
     expect(filter?.("SendMessage")).toBe(true);
     expect(filter?.("Agent")).toBe(false);
     expect(filter?.("Bash")).toBe(false);
+  });
+
+  it("keeps remote skill subagents synchronized with the live parent execution mode", async () => {
+    const workDir = mkdtempSync(join(tmpdir(), "yukino-remote-permissions-"));
+    const skillDir = join(workDir, ".agents", "skills", "remote-fork");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, "SKILL.md"),
+      "---\nname: remote-fork\ndescription: test\ncontext: fork\n---\n\nDo work.",
+    );
+    const captured: PermissionChecker[] = [];
+    const run = vi.spyOn(Agent.prototype, "run").mockImplementation(function (
+      this: Agent,
+    ) {
+      const checker: unknown = Reflect.get(this, "checker");
+      if (!(checker instanceof PermissionChecker)) {
+        throw new Error("Missing checker");
+      }
+      captured.push(checker);
+      return (async function* () {
+        await Promise.resolve();
+        yield {
+          type: "loop_complete" as const,
+          stopReason: "completed" as const,
+        };
+      })();
+    });
+    try {
+      const handle = await createRemoteAgent({
+        provider: {
+          name: "test",
+          protocol: "openai",
+          base_url: "https://example.invalid",
+          api_key: "test",
+          model: "test",
+        },
+        workDir,
+        enableCoordinatorMode: false,
+        forkDisabled: false,
+        memoryEnabled: false,
+      });
+      handle.permissionMode = "acceptEdits";
+      const loadSkill = handle.registry.get("LoadSkill");
+      if (!loadSkill) {
+        throw new Error("Missing LoadSkill");
+      }
+      expect(
+        (await loadSkill.execute({ workDir }, { name: "remote-fork" })).isError,
+      ).toBe(false);
+      expect(captured).toHaveLength(1);
+      expect(captured[0].mode).toBe("acceptEdits");
+      handle.permissionMode = "bypassPermissions";
+      expect(
+        captured[0].check("Bash", "command", { command: "pnpm test" }).effect,
+      ).toBe("allow");
+      handle.permissionMode = "plan";
+      expect(captured[0].mode).toBe("bypassPermissions");
+      handle.permissionMode = "default";
+      expect(
+        captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("ask");
+    } finally {
+      run.mockRestore();
+      rmSync(workDir, { recursive: true, force: true });
+    }
   });
 
   it("cancels a remote fork skill through the active run signal", async () => {
