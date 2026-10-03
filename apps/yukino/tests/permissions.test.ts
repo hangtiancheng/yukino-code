@@ -106,6 +106,18 @@ describe("sandbox auto-allow respects deny/ask rules", () => {
     expect(result.effect).toBe("allow");
   });
 
+  it.each([{}, { command: 42 }, { command: "   " }])(
+    "does not auto-allow an uninspectable Bash command: %j",
+    (args) => {
+      const checker = makeChecker(makeTmpDir(), []);
+
+      const result = checker.check("Bash", "command", args);
+
+      expect(result.effect).toBe("ask");
+      expect(result.reason).toContain("non-empty Bash command");
+    },
+  );
+
   it("respects ask rule even with sandbox", () => {
     const dir = makeTmpDir();
     const checker = makeChecker(dir, [

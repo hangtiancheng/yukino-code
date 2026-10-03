@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 import type { TeamMode } from "./index.js";
 
@@ -48,10 +48,6 @@ export function detectBackendFromEnv(): TeamMode {
  * Arguments consisting solely of alphanumerics and a small set of safe symbols
  * are left unquoted for readability.
  *
- * Caveat: the single-quote protection only holds when the result reaches a
- * shell verbatim. The tmux branch below embeds the assembled command inside
- * outer double quotes, where single quotes are literal characters and `$`,
- * backticks, `"` and `\` remain shell-active.
  */
 function shellQuote(arg: string): string {
   if (/^[A-Za-z0-9_/.:=-]+$/.test(arg)) {
@@ -60,14 +56,14 @@ function shellQuote(arg: string): string {
   return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
-/** Joins the command and its arguments into a single shell string, quoting each token via shellQuote (see its caveat re: outer quoting layers). */
+/** Joins the command and its arguments into one command string for the child shell. */
 function buildShellCommand(config: SpawnConfig): string {
   return [config.command, ...config.args].map(shellQuote).join(" ");
 }
 
 function cancelTmuxSession(sessionName: string): void {
   try {
-    execSync(`tmux kill-session -t "${sessionName}"`, {
+    execFileSync("tmux", ["kill-session", "-t", sessionName], {
       stdio: ["pipe", "pipe", "pipe"],
     });
   } catch (err) {
@@ -119,11 +115,15 @@ export function spawnTeammate(config: SpawnConfig): {
     case "tmux": {
       const sessionName = config.paneId ?? `yukino-${Date.now().toString(36)}`;
       const cmd = buildShellCommand(config);
-      execSync(`tmux new-session -d -s "${sessionName}" -n teammate "${cmd}"`, {
-        cwd: config.cwd,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      execFileSync(
+        "tmux",
+        ["new-session", "-d", "-s", sessionName, "-n", "teammate", cmd],
+        {
+          cwd: config.cwd,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
       return {
         cancel: () => {
           cancelTmuxSession(sessionName);

@@ -8,6 +8,12 @@ import { WebSocketServer } from "ws";
 import { createYukinoAcpApp } from "./agent.js";
 
 import { parseRemoteAddress } from "@/remote/address.js";
+import {
+  addWebSocketToken,
+  authorizeWebSocketRequest,
+  createWebSocketAccessToken,
+  rejectWebSocketUpgrade,
+} from "@/websocket-security.js";
 
 const ACP_PATH = "/acp";
 const ACP_WS_DEFAULT_PORT = 18889;
@@ -37,6 +43,7 @@ export async function startAcpWebSocketServer(
   address?: string,
 ): Promise<AcpWebSocketServerHandle> {
   const { host, port } = parseAcpWebSocketAddress(address);
+  const accessToken = createWebSocketAccessToken();
   const acpServer = new AcpServer({
     createAgent: () => createYukinoAcpApp().app,
   });
@@ -51,9 +58,13 @@ export async function startAcpWebSocketServer(
   });
 
   httpServer.on("upgrade", (request, socket, head) => {
-    const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-    if (pathname !== ACP_PATH) {
-      socket.destroy();
+    const authorization = authorizeWebSocketRequest(
+      request,
+      ACP_PATH,
+      accessToken,
+    );
+    if (!authorization.allowed) {
+      rejectWebSocketUpgrade(socket, authorization);
       return;
     }
     handleUpgrade(request, socket, head);
@@ -85,7 +96,10 @@ export async function startAcpWebSocketServer(
   let closed = false;
 
   return {
-    url: `ws://${displayHost}:${String(boundAddress.port)}${ACP_PATH}`,
+    url: addWebSocketToken(
+      `ws://${displayHost}:${String(boundAddress.port)}${ACP_PATH}`,
+      accessToken,
+    ),
     async close(): Promise<void> {
       if (closed) {
         return;

@@ -233,6 +233,50 @@ describe("ComputerUseTool", () => {
     );
   });
 
+  it("terminates xdotool options before model-provided key names", async () => {
+    const runCommand = vi.fn(() =>
+      Promise.resolve({ code: 0, stdout: Buffer.alloc(0), stderr: "" }),
+    );
+    const tool = new ComputerUseTool({ platform: "linux", runCommand });
+
+    expect(
+      (
+        await tool.execute(context, {
+          action: "key",
+          keys: ["--clearmodifiers"],
+        })
+      ).isError,
+    ).toBe(false);
+    expect(
+      (
+        await tool.execute(context, {
+          action: "hold_key",
+          keys: ["--sync"],
+          duration: 0,
+        })
+      ).isError,
+    ).toBe(false);
+
+    expect(runCommand).toHaveBeenNthCalledWith(
+      1,
+      "xdotool",
+      ["key", "--", "--clearmodifiers"],
+      expect.objectContaining({}),
+    );
+    expect(runCommand).toHaveBeenNthCalledWith(
+      2,
+      "xdotool",
+      ["keydown", "--", "--sync"],
+      expect.objectContaining({}),
+    );
+    expect(runCommand).toHaveBeenNthCalledWith(
+      3,
+      "xdotool",
+      ["keyup", "--", "--sync"],
+      expect.objectContaining({}),
+    );
+  });
+
   it("exposes the OpenAI batch contract alongside Anthropic fields", () => {
     const tool = new ComputerUseTool({ platform: "linux" });
     const schema = tool.schema();

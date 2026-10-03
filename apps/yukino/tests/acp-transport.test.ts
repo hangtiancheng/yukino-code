@@ -10,6 +10,38 @@ import {
   startAcpWebSocketServer,
 } from "@/acp/websocket.js";
 
+function rejectedWebSocketStatus(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url, { headers });
+    socket.once("unexpected-response", (_request, response) => {
+      response.resume();
+      resolve(response.statusCode ?? 0);
+    });
+    socket.once("open", () => {
+      socket.close();
+      reject(new Error("WebSocket unexpectedly opened"));
+    });
+    socket.once("error", () => undefined);
+  });
+}
+
+function opensWebSocket(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url, { headers });
+    socket.once("open", () => {
+      socket.close();
+      resolve();
+    });
+    socket.once("error", reject);
+  });
+}
+
 describe("ACP transports", () => {
   it("advertises only implemented capabilities", async () => {
     const implementation = createYukinoAcpApp();
@@ -77,7 +109,9 @@ describe("ACP transports", () => {
   it("binds an ephemeral port and advertises the reachable URL", async () => {
     const server = await startAcpWebSocketServer("0");
     try {
-      expect(server.url).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\/acp$/);
+      expect(server.url).toMatch(
+        /^ws:\/\/127\.0\.0\.1:\d+\/acp\?token=[A-Za-z0-9_-]+$/,
+      );
       expect(server.url).not.toContain(":0/");
       const stream = createWebSocketStream(server.url, { WebSocket });
       const client = acp.client({ name: "websocket-ephemeral-client" });
@@ -88,6 +122,31 @@ describe("ACP transports", () => {
         });
         expect(response.agentInfo?.name).toBe("yukino");
       });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("requires the access token and rejects cross-origin browsers", async () => {
+    const server = await startAcpWebSocketServer("0");
+    try {
+      const authorized = new URL(server.url);
+      const withoutToken = new URL(server.url);
+      withoutToken.search = "";
+
+      await expect(rejectedWebSocketStatus(withoutToken.href)).resolves.toBe(
+        401,
+      );
+      await expect(
+        rejectedWebSocketStatus(authorized.href, {
+          Origin: "https://attacker.example",
+        }),
+      ).resolves.toBe(403);
+      await expect(
+        opensWebSocket(authorized.href, {
+          Origin: `http://${authorized.host}`,
+        }),
+      ).resolves.toBeUndefined();
     } finally {
       await server.close();
     }

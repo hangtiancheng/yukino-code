@@ -9,20 +9,20 @@ import {
   spawnTeammate,
 } from "@/teams/backend.js";
 
-const execSyncMock = vi.hoisted(() =>
-  vi.fn((_command: string, _options?: unknown) => ""),
+const execFileSyncMock = vi.hoisted(() =>
+  vi.fn((_file: string, _args?: readonly string[], _options?: unknown) => ""),
 );
 
 vi.mock("node:child_process", async (importOriginal) => ({
   ...(await importOriginal<typeof childProcess>()),
-  execSync: execSyncMock,
+  execFileSync: execFileSyncMock,
 }));
 
 const origTmux = process.env.TMUX;
 const origIterm = process.env.ITERM_SESSION_ID;
 
 beforeEach(() => {
-  execSyncMock.mockClear();
+  execFileSyncMock.mockClear();
 });
 
 afterEach(() => {
@@ -82,20 +82,72 @@ describe("tmux teammate backend", () => {
       cwd: "/tmp",
     });
 
-    expect(execSyncMock).toHaveBeenCalledOnce();
-    expect(execSyncMock.mock.calls[0]?.[0]).toContain("tmux new-session -d");
-    expect(execSyncMock.mock.calls[0]?.[0]).not.toContain("new-window");
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      "tmux",
+      [
+        "new-session",
+        "-d",
+        "-s",
+        expect.stringMatching(/^yukino-/),
+        "-n",
+        "teammate",
+        "node worker.js",
+      ],
+      expect.objectContaining({
+        cwd: "/tmp",
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      }),
+    );
     expect(spawned.paneId).toMatch(/^yukino-/);
+  });
+
+  test("passes hostile task text only as a tmux argv element", () => {
+    const hostile = 'x"; $(touch /tmp/yukino-pwned); `id`';
+
+    spawnTeammate({
+      mode: "tmux",
+      command: "node",
+      args: ["worker.js", hostile],
+      cwd: "/tmp",
+      paneId: "yukino-safe",
+    });
+
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      "tmux",
+      [
+        "new-session",
+        "-d",
+        "-s",
+        "yukino-safe",
+        "-n",
+        "teammate",
+        `node worker.js '${hostile}'`,
+      ],
+      expect.any(Object),
+    );
   });
 
   test("reconstructs cancellation from the persisted session name", () => {
     const cancel = restoreTeammateCancel("tmux", "yukino-restored");
     cancel?.();
 
-    expect(execSyncMock).toHaveBeenCalledWith(
-      'tmux kill-session -t "yukino-restored"',
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      "tmux",
+      ["kill-session", "-t", "yukino-restored"],
       expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
     );
     expect(restoreTeammateCancel("iterm")).toBeUndefined();
+  });
+
+  test("passes a restored session name only as a tmux argv element", () => {
+    const hostile = 'yukino-restored"; $(touch /tmp/yukino-pwned)';
+    restoreTeammateCancel("tmux", hostile)?.();
+
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      "tmux",
+      ["kill-session", "-t", hostile],
+      expect.any(Object),
+    );
   });
 });

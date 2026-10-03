@@ -136,6 +136,7 @@ describe("delegated prompt contracts", () => {
     const tool = new AgentTool(workDir(), new ToolRegistry(), () =>
       Promise.resolve("done"),
     );
+    expect(tool.category).toBe("command");
     expect(tool.schema().description).toContain("forks a snapshot");
     expect(
       JSON.stringify(tool.schema().input_schema.properties.name),

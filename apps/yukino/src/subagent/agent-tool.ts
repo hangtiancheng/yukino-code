@@ -51,7 +51,7 @@ Do not fork again or ask the user for confirmation. Respect current permissions 
 export class AgentTool implements Tool {
   name = "Agent";
   description = "Launch a subagent to handle complex, multi-step tasks.";
-  category = "read" as const;
+  category = "command" as const;
 
   private definitions: AgentDefinition[];
   private registry: ToolRegistry;

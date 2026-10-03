@@ -24,6 +24,10 @@ import type {
   ToolSchema,
 } from "@/tools/types.js";
 import { asErrorString, isRecord, strArg } from "@/utils/index.js";
+import {
+  fetchPublicHttpUrl,
+  type PublicHttpDependencies,
+} from "@/utils/public-http.js";
 
 const log = createChildLogger({ module: "skills" });
 const MAX_SKILL_DOWNLOAD_BYTES = 1024 * 1024;
@@ -84,6 +88,7 @@ export class InstallSkillTool implements Tool {
     private workDir: string,
     private catalog: SkillCatalog,
     private onInstalled?: () => void,
+    private network: PublicHttpDependencies = {},
   ) {}
 
   schema(): ToolSchema {
@@ -136,7 +141,11 @@ export class InstallSkillTool implements Tool {
           ? AbortSignal.any([ctx.abortSignal, timeout.signal])
           : timeout.signal;
         try {
-          const resp = await fetch(source, { signal });
+          const resp = await fetchPublicHttpUrl(
+            source,
+            { signal },
+            this.network,
+          );
           if (!resp.ok) {
             return {
               output: `Error: fetch failed (${String(resp.status)})`,

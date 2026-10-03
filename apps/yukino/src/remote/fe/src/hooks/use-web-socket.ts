@@ -14,6 +14,22 @@ interface UseWebSocketResult {
 
 const PING_INTERVAL_MS = 10_000;
 const RECONNECT_DELAY_MS = 3_000;
+const ACCESS_TOKEN_KEY = "yukino.remote.accessToken";
+
+function readAccessToken(): string | null {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get("token");
+  if (token) {
+    window.sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search,
+    );
+    return token;
+  }
+  return window.sessionStorage.getItem(ACCESS_TOKEN_KEY);
+}
 
 /**
  * Manage a single WebSocket connection to the remote backend with automatic
@@ -28,6 +44,10 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   const wsRef = useRef<WebSocket | null>(null);
   const pendingRef = useRef<ClientMessage[]>([]);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const accessTokenRef = useRef<string | null>(null);
+  if (accessTokenRef.current === null) {
+    accessTokenRef.current = readAccessToken();
+  }
   // Latest callbacks kept in refs so the effect can stay stable and avoid
   // tearing down the socket on every render.
   const onMessageRef = useRef(onMessage);
@@ -44,8 +64,14 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
       if (disposed) {
         return;
       }
+      const accessToken = accessTokenRef.current;
+      if (!accessToken) {
+        onCloseRef.current();
+        return;
+      }
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const url = `${proto}//${window.location.host}/ws`;
+      const url = new URL(`${proto}//${window.location.host}/ws`);
+      url.searchParams.set("token", accessToken);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 

@@ -125,6 +125,11 @@ import { ToolSearchTool } from "@/tools/tool-search.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 import { WriteFileTool } from "@/tools/write-file.js";
 import { contentToText, strArg } from "@/utils/index.js";
+import {
+  authorizeWebSocketRequest,
+  createWebSocketAccessToken,
+  rejectWebSocketUpgrade,
+} from "@/websocket-security.js";
 
 const log = createChildLogger({ module: "remote" });
 
@@ -957,6 +962,7 @@ export class RemoteServer {
   /** Last pong timestamp per client; drives the heartbeat sweep. */
   private lastPongAt = new Map<WebSocket, number>();
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private readonly accessToken = createWebSocketAccessToken();
 
   // Plan-mode state (parity with the terminal UI approval flow).
   private prePlanMode: PermissionMode = "default";
@@ -982,9 +988,27 @@ export class RemoteServer {
     this.opts = opts;
     this.app = express();
     this.server = createServer(this.app);
-    this.wss = new WebSocketServer({ server: this.server });
+    this.wss = new WebSocketServer({ noServer: true });
     this.setupRoutes();
+    this.setupWebSocketUpgrade();
     this.setupWebSocket();
+  }
+
+  private setupWebSocketUpgrade(): void {
+    this.server.on("upgrade", (request, socket, head) => {
+      const authorization = authorizeWebSocketRequest(
+        request,
+        "/ws",
+        this.accessToken,
+      );
+      if (!authorization.allowed) {
+        rejectWebSocketUpgrade(socket, authorization);
+        return;
+      }
+      this.wss.handleUpgrade(request, socket, head, (ws) => {
+        this.wss.emit("connection", ws, request);
+      });
+    });
   }
 
   /** Configures Express routes: static file serving + health check. */
@@ -2507,7 +2531,7 @@ export class RemoteServer {
     const displayHost =
       bound.family === "IPv6" ? `[${bound.address}]` : bound.address;
     process.stderr.write(
-      `Remote server listening at http://${displayHost}:${String(bound.port)}\n`,
+      `Remote server listening at http://${displayHost}:${String(bound.port)}/#token=${encodeURIComponent(this.accessToken)}\n`,
     );
   }
 

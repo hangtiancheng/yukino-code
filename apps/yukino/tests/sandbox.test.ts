@@ -37,4 +37,30 @@ describe("native sandboxes", () => {
       '(deny file-write* (subpath "private"))',
     );
   });
+
+  it("escapes configured paths inside the seatbelt profile", () => {
+    const injected = '/tmp/a"\\) (allow file-write* (subpath "/"))';
+    const prepared = new SeatbeltSandbox().prepare("printf ok", {
+      allowWrite: [injected],
+      denyWrite: [],
+      networkEnabled: false,
+    });
+
+    expect(prepared.args[1]).toContain(
+      '(allow file-write* (subpath "/tmp/a\\"\\\\) (allow file-write* (subpath \\"/\\"))"))',
+    );
+    expect(prepared.args[1]).not.toContain(
+      '(subpath "/tmp/a"\\) (allow file-write* (subpath "/"))")',
+    );
+  });
+
+  it("rejects paths that could inject additional profile lines", () => {
+    expect(() =>
+      new SeatbeltSandbox().prepare("printf ok", {
+        allowWrite: ["/tmp/safe\n(allow network*)"],
+        denyWrite: [],
+        networkEnabled: false,
+      }),
+    ).toThrow("cannot contain NUL or newline");
+  });
 });

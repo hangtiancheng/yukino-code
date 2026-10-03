@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
+import { WebSocket } from "ws";
 
 import { RecoveryState } from "@/compact/recovery.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
@@ -16,6 +17,38 @@ import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { ToolRegistry } from "@/tools/registry.js";
+
+function rejectedWebSocketStatus(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url, { headers });
+    socket.once("unexpected-response", (_request, response) => {
+      response.resume();
+      resolve(response.statusCode ?? 0);
+    });
+    socket.once("open", () => {
+      socket.close();
+      reject(new Error("WebSocket unexpectedly opened"));
+    });
+    socket.once("error", () => undefined);
+  });
+}
+
+function opensWebSocket(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url, { headers });
+    socket.once("open", () => {
+      socket.close();
+      resolve();
+    });
+    socket.once("error", reject);
+  });
+}
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {
@@ -119,8 +152,30 @@ describe("remote execution boundaries", () => {
         writes.find((entry) => entry.includes("Remote server listening at")) ??
         "";
       // Port 0 must resolve to a real, reachable port in the announced URL.
-      expect(line).toMatch(/http:\/\/127\.0\.0\.1:\d+/);
+      expect(line).toMatch(/http:\/\/127\.0\.0\.1:\d+\/#token=[A-Za-z0-9_-]+/);
       expect(line).not.toContain(":0");
+
+      const browserUrl = new URL(
+        /http:\/\/127\.0\.0\.1:\d+\/#token=[A-Za-z0-9_-]+/.exec(line)?.[0] ??
+          "",
+      );
+      const token = new URLSearchParams(browserUrl.hash.slice(1)).get("token");
+      expect(token).toBeTruthy();
+      const authorized = `ws://${browserUrl.host}/ws?token=${encodeURIComponent(token ?? "")}`;
+
+      await expect(
+        rejectedWebSocketStatus(`ws://${browserUrl.host}/ws`),
+      ).resolves.toBe(401);
+      await expect(
+        rejectedWebSocketStatus(authorized, {
+          Origin: "https://attacker.example",
+        }),
+      ).resolves.toBe(403);
+      await expect(
+        opensWebSocket(authorized, {
+          Origin: `http://${browserUrl.host}`,
+        }),
+      ).resolves.toBeUndefined();
     } finally {
       await server.stop();
       await runPromise;

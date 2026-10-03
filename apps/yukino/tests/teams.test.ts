@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PermissionChecker } from "@/permissions/index.js";
 import type * as teamBackend from "@/teams/backend.js";
 import { TeamManager } from "@/teams/index.js";
 import {
@@ -16,9 +17,10 @@ import {
 import { getNameRegistry } from "@/teams/registry.js";
 import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
 import {
-  TeamCreateTool,
-  SendMessageTool,
   ListTeamsTool,
+  SendMessageTool,
+  TeamCreateTool,
+  TeamDeleteTool,
 } from "@/teams/tools.js";
 
 const spawnTeammateMock = vi.hoisted(() =>
@@ -334,6 +336,23 @@ describe("teams orchestration", () => {
     const list = await new ListTeamsTool(mgr).execute();
     expect(list.output).toContain("t1");
     expect(list.output).toContain("w1");
+  });
+
+  it("requires approval for mutating coordination tools", () => {
+    const project = workDir();
+    const mgr = new TeamManager(project);
+    const checker = new PermissionChecker(project);
+    const mutatingTools = [
+      new TeamCreateTool(mgr),
+      new SendMessageTool(mgr),
+      new TeamDeleteTool(mgr),
+    ];
+
+    for (const tool of mutatingTools) {
+      expect(tool.category).toBe("command");
+      expect(checker.check(tool.name, tool.category, {}).effect).toBe("ask");
+    }
+    expect(new ListTeamsTool(mgr).category).toBe("read");
   });
 
   it("SendMessage delivers plain text from a teammate to the leader mailbox", async () => {

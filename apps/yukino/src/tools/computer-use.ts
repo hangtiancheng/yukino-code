@@ -1091,12 +1091,12 @@ export class ComputerUseTool implements Tool {
     const keys = action.keys ?? [];
     const keyDown = async (): Promise<void> => {
       for (const key of keys) {
-        await runXdotool(["keydown", key]);
+        await runXdotool(["keydown", "--", key]);
       }
     };
     const keyUp = async (): Promise<void> => {
       for (const key of [...keys].reverse()) {
-        await runXdotool(["keyup", key]);
+        await runXdotool(["keyup", "--", key]);
       }
     };
     const withKeys = async (operation: () => Promise<void>): Promise<void> => {
@@ -1210,7 +1210,7 @@ export class ComputerUseTool implements Tool {
         return "";
       }
       case "key":
-        await runXdotool(["key", keys.join("+")]);
+        await runXdotool(["key", "--", keys.join("+")]);
         return "";
       case "hold_key":
         await keyDown();

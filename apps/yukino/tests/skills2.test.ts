@@ -74,8 +74,15 @@ function localInstaller(content = document()) {
   writeFileSync(source, content);
   const catalog = new SkillCatalog();
   const onInstalled = vi.fn();
-  const tool = new InstallSkillTool(workDir, catalog, onInstalled);
-  return { source, catalog, onInstalled, tool };
+  const lookup = vi.fn(() =>
+    Promise.resolve([{ address: "93.184.216.34", family: 4 }]),
+  );
+  const fetcher: typeof fetch = (input, init) => globalThis.fetch(input, init);
+  const tool = new InstallSkillTool(workDir, catalog, onInstalled, {
+    fetcher,
+    lookup,
+  });
+  return { source, catalog, onInstalled, lookup, tool };
 }
 
 describe("skill installation boundaries", () => {
@@ -248,10 +255,15 @@ describe("skill download cancellation", () => {
   it("aborts an in-flight fetch when its caller cancels", async () => {
     const { tool, onInstalled } = localInstaller();
     let receivedSignal: AbortSignal | null | undefined;
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>((_input, init) => {
         receivedSignal = init?.signal;
+        markStarted();
         return new Promise((_resolve, reject) => {
           receivedSignal?.addEventListener(
             "abort",
@@ -270,6 +282,7 @@ describe("skill download cancellation", () => {
       { workDir, abortSignal: controller.signal },
       { source: "https://example.test/SKILL.md" },
     );
+    await started;
     controller.abort();
     expect((await result).isError).toBe(true);
     expect(receivedSignal?.aborted).toBe(true);
@@ -396,6 +409,73 @@ describe("skill download cancellation", () => {
     );
     expect(onInstalled).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("skill download network boundaries", () => {
+  it.each([
+    "http://127.0.0.1/SKILL.md",
+    "http://169.254.169.254/latest/meta-data",
+    "http://[::1]/SKILL.md",
+  ])("rejects literal non-public URL %s", async (source) => {
+    const fetcher = vi.fn<typeof fetch>();
+    const tool = new InstallSkillTool(workDir, new SkillCatalog(), undefined, {
+      fetcher,
+    });
+
+    const result = await tool.execute({ workDir }, { source });
+
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("non-public network address");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects hostnames with any private DNS answer", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const lookup = vi.fn(() =>
+      Promise.resolve([
+        { address: "93.184.216.34", family: 4 },
+        { address: "10.0.0.8", family: 4 },
+      ]),
+    );
+    const tool = new InstallSkillTool(workDir, new SkillCatalog(), undefined, {
+      fetcher,
+      lookup,
+    });
+
+    const result = await tool.execute(
+      { workDir },
+      { source: "https://example.test/SKILL.md" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("non-public network address");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("validates every redirect target before following it", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: "http://127.0.0.1/SKILL.md" },
+      }),
+    );
+    const lookup = vi.fn(() =>
+      Promise.resolve([{ address: "93.184.216.34", family: 4 }]),
+    );
+    const tool = new InstallSkillTool(workDir, new SkillCatalog(), undefined, {
+      fetcher,
+      lookup,
+    });
+
+    const result = await tool.execute(
+      { workDir },
+      { source: "https://example.test/SKILL.md" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("non-public network address");
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });
 

@@ -44,6 +44,13 @@ function pathVariants(path: string): string[] {
   return [...variants];
 }
 
+function quoteProfileString(value: string): string {
+  if (/\0|[\r\n]/u.test(value)) {
+    throw new Error("Seatbelt paths cannot contain NUL or newline characters");
+  }
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
 /**
  * Dynamically builds a seatbelt profile string.
  * Strategy: deny by default, then allow execution and reads, grant writes per path,
@@ -62,7 +69,9 @@ function buildProfile(config: SandboxConfig): string {
 
   for (const path of config.allowWrite) {
     for (const variant of pathVariants(path)) {
-      lines.push(`(allow file-write* (subpath "${variant}"))`);
+      lines.push(
+        `(allow file-write* (subpath ${quoteProfileString(variant)}))`,
+      );
     }
   }
 
@@ -70,8 +79,9 @@ function buildProfile(config: SandboxConfig): string {
   // a build-time existence check whose result can become stale before launch.
   for (const path of config.denyWrite) {
     for (const variant of pathVariants(path)) {
-      lines.push(`(deny file-write* (literal "${variant}"))`);
-      lines.push(`(deny file-write* (subpath "${variant}"))`);
+      const quoted = quoteProfileString(variant);
+      lines.push(`(deny file-write* (literal ${quoted}))`);
+      lines.push(`(deny file-write* (subpath ${quoted}))`);
     }
   }
 

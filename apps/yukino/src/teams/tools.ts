@@ -26,7 +26,7 @@ export class TeamCreateTool implements Tool {
   name = "TeamCreate";
   description =
     "Create a team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.";
-  category = "read" as const;
+  category = "command" as const;
   constructor(private mgr: TeamManager) {}
   schema(): ToolSchema {
     return {
@@ -82,7 +82,7 @@ export class SendMessageTool implements Tool {
   name = "SendMessage";
   description =
     "Send a message to a teammate or to the leader mailbox. Use to='leader' for the coordinator and to='*' to broadcast to all teammates.";
-  category = "read" as const;
+  category = "command" as const;
   constructor(
     private mgr: TeamManager,
     private senderName = LEADER_NAME,
@@ -301,7 +301,7 @@ export class ListTeamsTool implements Tool {
 export class TeamDeleteTool implements Tool {
   name = "TeamDelete";
   description = "Delete a team and stop its members.";
-  category = "read" as const;
+  category = "command" as const;
   constructor(private mgr: TeamManager) {}
   schema(): ToolSchema {
     return {
