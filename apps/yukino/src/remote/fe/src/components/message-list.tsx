@@ -30,7 +30,7 @@ export function MessageList({
   onRespondPermission,
   onAnswerAsk,
 }: MessageListProps) {
-  const { ref } = useAutoScroll<HTMLDivElement>(items);
+  const ref = useAutoScroll<HTMLDivElement>(items);
 
   return (
     <div

@@ -34,7 +34,13 @@ export function buildPlanModeReminder(
   planPath: string,
   planExist: boolean,
   iteration: number,
+  capabilities: {
+    canAskUser?: boolean;
+    canExitPlanMode?: boolean;
+  } = {},
 ): string {
+  const canAskUser = capabilities.canAskUser ?? true;
+  const canExitPlanMode = capabilities.canExitPlanMode ?? true;
   let planFileInfo = `Plan file: ${planPath}`;
   if (planExist) {
     planFileInfo += `\nA plan file already exists at ${planPath}. You can read it and make incremental edits using the EditFile tool.`;
@@ -44,11 +50,29 @@ export function buildPlanModeReminder(
 
   // Resending the full reminder every iteration is too token-expensive, but
   // sending it only once causes gradual drift; periodic repetition balances the two.
-  if ((iteration - 1) % reminderInterval === 0) {
-    return planModeFullReminder.replace("%PLAN_FILE_INFO%", () => planFileInfo);
-  }
-
-  return planModeSparseReminder.replace("%PLAN_PATH%", () => planPath);
+  const reminder =
+    (iteration - 1) % reminderInterval === 0
+      ? planModeFullReminder.replace("%PLAN_FILE_INFO%", () => planFileInfo)
+      : planModeSparseReminder.replace("%PLAN_PATH%", () => planPath);
+  return reminder
+    .replaceAll(
+      "Clarify material unknowns with AskUserQuestion.",
+      canAskUser
+        ? "Clarify material unknowns with AskUserQuestion."
+        : "Report material unknowns to the leader with SendMessage.",
+    )
+    .replaceAll(
+      "Use AskUserQuestion for clarification; call ExitPlanMode for approval, never prose or AskUserQuestion.",
+      canExitPlanMode
+        ? "Use AskUserQuestion for clarification; call ExitPlanMode for approval, never prose or AskUserQuestion."
+        : "Use SendMessage for clarification; finish the turn when the plan is ready so the runtime can submit it for approval.",
+    )
+    .replaceAll(
+      "When the plan is ready, call ExitPlanMode for approval. End with AskUserQuestion only for needed clarification, or ExitPlanMode for the handoff. Never request approval through prose or AskUserQuestion; wait for the runtime to exit plan mode.",
+      canExitPlanMode
+        ? "When the plan is ready, call ExitPlanMode for approval. End with AskUserQuestion only for needed clarification, or ExitPlanMode for the handoff. Never request approval through prose or AskUserQuestion; wait for the runtime to exit plan mode."
+        : "When the plan is ready, finish the turn. The runtime will submit the plan to the leader and wait for approval. Use SendMessage only for needed clarification.",
+    );
 }
 
 /**

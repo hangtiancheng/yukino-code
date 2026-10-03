@@ -15,7 +15,6 @@
 @theme {
   --color-bg: #f7f9fb;
   --color-surface: #ffffff;
-  --color-input: #ffffff;
   --color-tool: #f8fafc;
   --color-code: #f1f5f9;
   --color-base: #475569;
@@ -26,7 +25,6 @@
   --color-green: #15803d;
   --color-red: #dc2626;
   --color-yellow: #b45309;
-  --color-blue: #087ea4;
   --color-border: #e2e8f0;
 
   --font-sans:
@@ -37,7 +35,6 @@
     "Microsoft YaHei", monospace;
 
   --animate-blink: blink 1s step-end infinite;
-  --animate-spin-slow: spin 1s linear infinite;
   --animate-modal-in: modal-in 140ms ease-out;
 
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.04);

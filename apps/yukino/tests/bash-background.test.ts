@@ -1,14 +1,15 @@
 import {
   chmodSync,
   existsSync,
-  mkdtempSync,
+  mkdtempSync as createTempDir,
   readFileSync,
   readdirSync,
+  rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Sandbox, SandboxConfig } from "@/sandbox/index.js";
 import {
@@ -17,6 +18,14 @@ import {
 } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
 import type { ToolContext } from "@/tools/types.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -38,10 +47,12 @@ function taskIdFrom(output: string): string {
   return match?.[1] ?? "";
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 afterEach(() => {
   delete process.env.YUKINO_DISABLE_BACKGROUND_TASKS;
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
 });
 
 describe("bash background execution", () => {
@@ -139,8 +150,9 @@ describe("bash background execution", () => {
       command: "node -e \"setTimeout(() => console.log('bg-manual'), 1200)\"",
       timeout: 30,
     });
-    await sleep(300);
-    expect(bash.hasForegroundTasks()).toBe(true);
+    await vi.waitFor(() => {
+      expect(bash.hasForegroundTasks()).toBe(true);
+    });
     expect(bash.backgroundForegroundTasks()).toBe(1);
     expect(bash.hasForegroundTasks()).toBe(false);
 
@@ -217,14 +229,16 @@ describe("bash background execution", () => {
 
   it("preserves the captured output when a background task is stopped", async () => {
     const { bash, tasks } = makeTool();
-    const result = await bash.execute(makeContext(), {
-      command: "printf partial-out; sleep 30",
+    const context = makeContext();
+    const result = await bash.execute(context, {
+      command: "printf partial-out; touch partial-ready; sleep 30",
       run_in_background: true,
     });
     const taskId = taskIdFrom(result.output);
     const task = tasks.get(taskId);
-    // Let the partial output reach the file, then stop the task.
-    await sleep(500);
+    await vi.waitFor(() => {
+      expect(existsSync(join(context.workDir, "partial-ready"))).toBe(true);
+    });
     expect(tasks.stop(taskId)).toBe(true);
     await task?.done;
     expect(task?.status).toBe("cancelled");

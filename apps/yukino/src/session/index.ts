@@ -17,6 +17,7 @@ import z, { parse, safeParse } from "zod";
 
 import { buildCompactionSummaryMessage } from "@/compact/prompts.js";
 import type { ToolResultBlock } from "@/conversation/index.js";
+import { fileHistoryDir } from "@/file-history/index.js";
 import { createChildLogger } from "@/logger/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import {
@@ -143,6 +144,13 @@ function sessionsDir(workDir: string): string {
   return join(workDir, ".yukino", "sessions");
 }
 
+export function getSessionArtifactsDir(
+  workDir: string,
+  sessionId: string,
+): string {
+  return join(sessionsDir(workDir), sessionId);
+}
+
 export function getSessionFilePath(workDir: string, sessionId: string): string {
   return join(sessionsDir(workDir), sessionId + ".jsonl");
 }
@@ -231,8 +239,16 @@ export function truncateSessionLines(
       }
     }
     const tmp = `${filePath}.${String(process.pid)}.rewind-tmp`;
-    writeFileSync(tmp, kept.length > 0 ? kept.join("\n") + "\n" : "", "utf-8");
-    renameSync(tmp, filePath);
+    try {
+      writeFileSync(
+        tmp,
+        kept.length > 0 ? kept.join("\n") + "\n" : "",
+        "utf-8",
+      );
+      renameSync(tmp, filePath);
+    } finally {
+      rmSync(tmp, { force: true });
+    }
   });
 }
 
@@ -279,8 +295,12 @@ export function loadSession(
         log.error({ err }, "session operation failed");
       }
     }
-    const now = new Date();
-    utimesSync(filePath, now, now);
+    try {
+      const now = new Date();
+      utimesSync(filePath, now, now);
+    } catch {
+      // The session may be removed externally after a successful read.
+    }
     return out;
   });
 }
@@ -569,7 +589,13 @@ export function cleanExpiredSessions(workDir: string): number {
 
   let files: string[];
   try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+    const entries = readdirSync(dir);
+    for (const entry of entries) {
+      if (entry.endsWith(".rewind-tmp")) {
+        rmSync(join(dir, entry), { force: true });
+      }
+    }
+    files = entries.filter((f) => f.endsWith(".jsonl"));
   } catch (err) {
     log.error({ err }, "session operation failed");
     return 0;
@@ -592,7 +618,10 @@ export function cleanExpiredSessions(workDir: string): number {
         // the directory and everything inside it.
         const id = file.replace(".jsonl", "");
         try {
-          rmSync(join(dir, id), { recursive: true, force: true });
+          rmSync(getSessionArtifactsDir(workDir, id), {
+            recursive: true,
+            force: true,
+          });
         } catch {
           /** noop */
         }
@@ -600,7 +629,7 @@ export function cleanExpiredSessions(workDir: string): number {
         // images) lives outside sessions/; sweep it with the same expiry so
         // old sessions do not leave orphaned directories behind.
         try {
-          rmSync(join(dirname(dir), "file-history", id), {
+          rmSync(fileHistoryDir(workDir, id), {
             recursive: true,
             force: true,
           });

@@ -866,7 +866,7 @@ export class OpenAICompatClient implements LLMClient {
       messages,
       stream: true,
       stream_options: { include_usage: true },
-      max_tokens: this.maxOutputTokens,
+      max_completion_tokens: this.maxOutputTokens,
       ...(tools.length > 0 ? { tools } : {}),
       // Configured non-reasoning providers omit the field; off otherwise sends
       // none explicitly so a server default cannot silently enable reasoning.
@@ -1045,6 +1045,12 @@ export class OpenAICompatClient implements LLMClient {
 function classifyOpenAIError(err: unknown) {
   if (err instanceof LLMError) {
     return err;
+  }
+  if (
+    err instanceof OpenAI.APIConnectionError ||
+    err instanceof OpenAI.APIUserAbortError
+  ) {
+    return new NetworkError(`Network error: ${err.message}`);
   }
   if (err instanceof OpenAI.APIError) {
     if (

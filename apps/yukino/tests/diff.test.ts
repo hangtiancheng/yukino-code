@@ -77,6 +77,6 @@ describe("buildDiff", () => {
     const newLines = Array.from({ length: 500 }, (_, i) => `new${String(i)}`);
     const { text } = buildDiff(oldLines.join("\n"), newLines.join("\n"));
     expect(text).toContain("truncated");
-    expect(text.split("\n").length).toBeLessThan(500);
+    expect(text.split("\n").length).toBeLessThanOrEqual(201);
   });
 });

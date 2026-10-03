@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
  * Keeps a scroll container pinned to the bottom while new content streams in,
  * unless the user has scrolled up to read history.
  *
- * Returns a ref to attach to the scrollable element, plus the current
- * auto-scroll flag and its setter.
+ * Returns a ref to attach to the scrollable element.
  */
 export function useAutoScroll<T extends HTMLElement>(dep: unknown) {
   const ref = useRef<T | null>(null);
@@ -41,5 +40,5 @@ export function useAutoScroll<T extends HTMLElement>(dep: unknown) {
     };
   }, []);
 
-  return { ref, autoScroll, setAutoScroll };
+  return ref;
 }

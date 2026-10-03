@@ -475,6 +475,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
       yield* agent.run();
     } finally {
       this.abortController = null;
+      this.currentAgent = null;
     }
   }
 
@@ -503,6 +504,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.activeSkills.clear();
     this.sessionId = newSessionId();
     this.fileHistory = new FileHistory(this.workDir, this.sessionId);
+    this.fileStateCache = new FileStateCache();
     this.taskList.useStore(new TaskStore(this.workDir, this.sessionId));
     this.recoveryState = new RecoveryState();
     this.mcpAnnounced.clear();
@@ -591,7 +593,7 @@ export async function createRemoteAgent(
     // an arrow function closing over `activeSkills`, so the bind itself is a no-op.
     activateSkill: skillHost.activateSkill.bind(skillHost),
     snapshotParentMessages: (count: number) => {
-      const msgs = conv?.getMessages() ?? [];
+      const msgs = conv.getMessages();
       return msgs
         .slice(-count)
         .map((m) => `${m.role}: ${contentToText(m.content)}`)
@@ -906,7 +908,6 @@ function wireSkillsToCommands(
 
 /** Formats a permission request description for the WS client permission dialog. */
 function formatPermissionDesc(
-  toolName: string,
   args: Record<string, unknown>,
   decision: Decision,
 ): string {
@@ -965,6 +966,8 @@ export class RemoteServer {
   private runCanceled = false;
   /** Whether a plan approval request is awaiting a client response. */
   private planApprovalPending = false;
+  private planApprovalTimer: NodeJS.Timeout | null = null;
+  private pendingPlanExecution: string | null = null;
 
   private pendingPermissions = new Map<
     string,
@@ -1023,7 +1026,11 @@ export class RemoteServer {
       if (this.agentHandle) {
         this.send(ws, {
           type: "connected",
-          data: { session: this.agentHandle.sessionId, cwd: cwd() },
+          data: {
+            session: this.agentHandle.sessionId,
+            cwd: cwd(),
+            streaming: this.streaming,
+          },
         });
         const status = this.statusPayload();
         if (status) {
@@ -1032,6 +1039,9 @@ export class RemoteServer {
       }
 
       this.send(ws, { type: "commands", data: this.buildCommandList() });
+      if (this.planApprovalPending) {
+        this.sendPlanApprovalRequest(ws);
+      }
 
       ws.on("message", (data: Buffer) => {
         let raw: unknown;
@@ -1117,6 +1127,8 @@ export class RemoteServer {
             parsed.data.choice,
             parsed.data.feedback,
           );
+        } else {
+          log.warn({ issues: parsed.error.issues }, "malformed plan approval");
         }
         break;
       }
@@ -1124,6 +1136,11 @@ export class RemoteServer {
         const parsed = CodeReviewStartSchema.safeParse(msg.data);
         if (parsed.success) {
           await this.handleCodeReviewStart(parsed.data);
+        } else {
+          log.warn(
+            { issues: parsed.error.issues },
+            "malformed code review request",
+          );
         }
         break;
       }
@@ -1202,9 +1219,14 @@ export class RemoteServer {
         this.agentHandle = handle;
         this.broadcast({
           type: "connected",
-          data: { session: handle.sessionId, cwd: cwd() },
+          data: {
+            session: handle.sessionId,
+            cwd: cwd(),
+            streaming: this.streaming,
+          },
         });
         this.broadcastStatus();
+        this.broadcast({ type: "commands", data: this.buildCommandList() });
         return handle;
       } catch (err) {
         log.error({ err }, "failed to initialize agent");
@@ -1297,6 +1319,12 @@ export class RemoteServer {
       });
     } finally {
       this.streaming = false;
+    }
+
+    if (this.pendingPlanExecution) {
+      const plan = this.pendingPlanExecution;
+      this.pendingPlanExecution = null;
+      await this.handleUserMessage(plan);
     }
 
     if (!handle) {
@@ -1612,7 +1640,11 @@ export class RemoteServer {
         this.agentHandle.toolFilter = null;
         this.broadcast({
           type: "connected",
-          data: { session: this.agentHandle.sessionId, cwd: cwd() },
+          data: {
+            session: this.agentHandle.sessionId,
+            cwd: cwd(),
+            streaming: this.streaming,
+          },
         });
         this.broadcast({ type: "clear", data: null });
         this.broadcast({ type: "command_done", data: null });
@@ -1746,7 +1778,7 @@ export class RemoteServer {
     return {
       workDir: handle.workDir,
       args,
-      permissionMode: () => "default",
+      permissionMode: () => handle.permissionMode,
       tokenCount: () => [0, 0] as const,
       toolCount: () => handle.registry.listTools().length,
       memoryList: () =>
@@ -1936,11 +1968,13 @@ export class RemoteServer {
     }
   }
 
-  /** Sends the plan approval request with the current plan file content. */
-  private broadcastPlanApprovalRequest(): void {
+  private planApprovalMessage(): WsOutbound {
     const handle = this.agentHandle;
     if (!handle) {
-      return;
+      return {
+        type: "plan_approval_request",
+        data: { planPath: "", planContent: "" },
+      };
     }
     const planPath = getOrCreatePlanPath(handle.workDir);
     let planContent = "";
@@ -1951,11 +1985,34 @@ export class RemoteServer {
     } catch {
       /** noop */
     }
-    this.planApprovalPending = true;
-    this.broadcast({
+    return {
       type: "plan_approval_request",
       data: { planPath, planContent },
-    });
+    };
+  }
+
+  private sendPlanApprovalRequest(ws: WebSocket): void {
+    this.send(ws, this.planApprovalMessage());
+  }
+
+  /** Sends the plan approval request with the current plan file content. */
+  private broadcastPlanApprovalRequest(): void {
+    this.planApprovalPending = true;
+    this.broadcast(this.planApprovalMessage());
+    if (this.planApprovalTimer) {
+      clearTimeout(this.planApprovalTimer);
+    }
+    this.planApprovalTimer = setTimeout(() => {
+      this.planApprovalPending = false;
+      this.planApprovalTimer = null;
+      this.broadcast({
+        type: "system",
+        data: {
+          message: `Plan approval expired after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes.`,
+        },
+      });
+    }, PENDING_REQUEST_TIMEOUT_MS);
+    this.planApprovalTimer.unref();
   }
 
   /**
@@ -1971,6 +2028,10 @@ export class RemoteServer {
       return;
     }
     this.planApprovalPending = false;
+    if (this.planApprovalTimer) {
+      clearTimeout(this.planApprovalTimer);
+      this.planApprovalTimer = null;
+    }
 
     if (choice === "feedback") {
       const text = feedback?.trim() ?? "";
@@ -2008,7 +2069,12 @@ export class RemoteServer {
       },
     });
     if (planContent) {
-      await this.handleUserMessage(`Execute this plan:\n\n${planContent}`);
+      const execution = `Execute this plan:\n\n${planContent}`;
+      if (this.streaming) {
+        this.pendingPlanExecution = execution;
+      } else {
+        await this.handleUserMessage(execution);
+      }
     }
   }
 
@@ -2240,13 +2306,16 @@ export class RemoteServer {
     const replay = restoreRemoteSession(handle, targetId, saved);
     touchSession(workDir, targetId);
 
+    this.broadcast({
+      type: "connected",
+      data: { session: targetId, cwd: cwd(), streaming: false },
+    });
     this.broadcast({ type: "clear", data: null });
     for (const msg of replay) {
-      // Messages carrying only tool results have no text content; skip pushing them to the frontend
-      if (!msg.content) {
+      const displayContent = contentToText(msg.content);
+      if (!displayContent) {
         continue;
       }
-      const displayContent = contentToText(msg.content);
       if (msg.role === "user") {
         this.broadcast({
           type: "replay_user",
@@ -2283,6 +2352,10 @@ export class RemoteServer {
                 message: `Question timed out after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes with no answer; continuing with empty answers.`,
               },
             });
+            this.broadcast({
+              type: "request_expired",
+              data: { id, kind: "ask" },
+            });
             resolve({});
           }
         }, PENDING_REQUEST_TIMEOUT_MS);
@@ -2303,7 +2376,7 @@ export class RemoteServer {
       decision: Decision,
     ): Promise<"allow" | "deny" | "allowAlways"> => {
       const id = nextRequestId("perm");
-      const desc = formatPermissionDesc(toolName, args, decision);
+      const desc = formatPermissionDesc(args, decision);
       this.broadcast({
         type: "permission_request",
         data: { id, toolName, description: desc },
@@ -2316,6 +2389,10 @@ export class RemoteServer {
               data: {
                 message: `Permission request timed out after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes with no response; denying automatically.`,
               },
+            });
+            this.broadcast({
+              type: "request_expired",
+              data: { id, kind: "permission" },
             });
             resolve("deny");
           }

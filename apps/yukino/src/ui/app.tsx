@@ -80,6 +80,7 @@ import { syncMcpInstructions as announceMcpInstructions } from "@/mcp/instructio
 import { MCPManager, type ConnectResult } from "@/mcp/manager.js";
 import { applyMode, decideAndApply } from "@/mcp/strategy.js";
 import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
+import { MemoryConsolidator } from "@/memory/consolidation.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { MemoryManager, type RecallResult } from "@/memory/manager.js";
@@ -119,7 +120,6 @@ import { LEADER_NAME, SHUTDOWN_PREFIX } from "@/teams/protocol.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
-  SpawnTeammateTool,
   SendMessageTool,
   ListTeamsTool,
   TeamDeleteTool,
@@ -269,11 +269,19 @@ export function App({
   // Resolved context window for the active provider: the configured
   // context_window value, or DEFAULT_CONTEXT_WINDOW when unset.
   const contextWindowRef = useRef(
-    providers[0] ? getContextWindow(providers[0]) : DEFAULT_CONTEXT_WINDOW,
+    rememberedProvider
+      ? getContextWindow(rememberedProvider)
+      : providers[0]
+        ? getContextWindow(providers[0])
+        : DEFAULT_CONTEXT_WINDOW,
   );
   // Output ceiling for the active provider (PI's model.maxTokens equivalent).
   const maxOutputRef = useRef(
-    providers[0] ? getMaxOutputTokens(providers[0]) : undefined,
+    rememberedProvider
+      ? getMaxOutputTokens(rememberedProvider)
+      : providers[0]
+        ? getMaxOutputTokens(providers[0])
+        : undefined,
   );
   const conversationRef = useRef(new ConversationManager());
   const sessionIdRef = useRef(sessionMod.newSessionId());
@@ -367,6 +375,7 @@ export function App({
   const memExtractorRef = useRef<InstanceType<typeof MemoryExtractor> | null>(
     null,
   );
+  const memConsolidatorRef = useRef<MemoryConsolidator | null>(null);
   const memManagerRef = useRef<InstanceType<typeof MemoryManager> | null>(null);
   const activeSkillsRef = useRef(new Map<string, string>());
   const toolFilterRef = useRef<((name: string) => boolean) | null>(null);
@@ -428,6 +437,7 @@ export function App({
   >(null);
   const [rewindDialogActive, setRewindDialogActive] = useState(false);
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
+  const [transcriptRevision, setTranscriptRevision] = useState(0);
   // Steering messages queued into the in-flight agent, mirrored for display.
   // Entries are removed when the agent reports them delivered.
   const [steeringPending, setSteeringPending] = useState<string[]>([]);
@@ -795,20 +805,6 @@ export function App({
         // backgroundTasks:false — a teammate loop is one spawnSubagent run per
         // task turn, so a per-run manager's turn-end stopAll() would kill
         // anything the teammate backgrounded; teammates stay purely foreground.
-        const teamRunAgent: RunAgent = (task, onEvent, abortSignal) =>
-          spawnSubagent(
-            BUILTIN_AGENTS[0],
-            task,
-            clientRef.current ?? client,
-            registryRef.current,
-            selectedProviderRef.current,
-            workDir,
-            undefined,
-            onEvent,
-            undefined,
-            undefined,
-            { abortSignal, backgroundTasks: false },
-          );
         // RunAgent factory for teammates: runs the teammate agent main loop
         // against the teammate-scoped registry (shared task-board tools are
         // already injected by AgentTool before this factory is called).
@@ -834,12 +830,6 @@ export function App({
             );
         registryRef.current.register(
           new TeamCreateTool(teamManagerRef.current),
-        );
-        // No provider index is passed: external teammates resolve
-        // `default_provider` from the config, which rememberProvider keeps in
-        // sync with the active selection.
-        registryRef.current.register(
-          new SpawnTeammateTool(teamManagerRef.current, teamRunAgent),
         );
         registryRef.current.register(
           new SendMessageTool(teamManagerRef.current),
@@ -1750,6 +1740,10 @@ export function App({
               })),
             })),
           );
+          announcedMcpServersRef.current.clear();
+          if (mcpManagerRef.current) {
+            syncMcpInstructions(mcpManagerRef.current);
+          }
           announcedSkillsRef.current.clear();
           sessionIdRef.current = arg;
           // Mark the session active: expiry sweeping is mtime-based, and a
@@ -1966,6 +1960,7 @@ export function App({
       // File-based custom command or inline skill: render the body and run it as a user turn.
       const promptText = cmd.handler({ workDir, args: parsed.args });
       if (clientRef.current && promptText.trim()) {
+        setError(null);
         setMessages((prev) => [...prev, { role: "user", content: promptText }]);
         conversationRef.current.addUserMessage(promptText);
         sessionMod.saveMessage(workDir, sessionIdRef.current, {
@@ -2126,6 +2121,7 @@ export function App({
               clientRef.current,
               [...recentToolsRef.current],
               new Set(surfacedMemoriesRef.current),
+              controller.signal,
             )
             .then((memories): RecallResult => {
               // Only select and render here; the selected paths travel with the result
@@ -2220,6 +2216,15 @@ export function App({
           .finally(() => {
             memExtractingRef.current = false;
           });
+        memConsolidatorRef.current ??= new MemoryConsolidator(client, workDir, {
+          appendSystem: (message) => {
+            setMessages((current) => [
+              ...current,
+              { role: "system", content: message },
+            ]);
+          },
+        });
+        void memConsolidatorRef.current.maybeRun();
       },
       onPermissionRequest: async (toolName, args, decision) => {
         return new Promise<"allow" | "deny" | "allowAlways">((resolve) => {
@@ -2427,6 +2432,7 @@ export function App({
       setIsStreaming(false);
       output.finishTurn();
       abortControllerRef.current = null;
+      subagentCardsRef.current.clear();
     }
   };
 
@@ -2437,13 +2443,7 @@ export function App({
       conversationRef.current.addUserMessage(expanded);
       sessionMod.saveMessage(workDir, sessionIdRef.current, {
         role: "user",
-        content:
-          typeof expanded === "string"
-            ? text
-            : [
-                { type: "text", text },
-                ...expanded.filter((block) => block.type === "image"),
-              ],
+        content: expanded,
         timestamp: Math.floor(Date.now() / 1000),
       });
     }, modeOverride);
@@ -2534,7 +2534,13 @@ export function App({
     }
     conversationRef.current.truncateTo(snap.messageIndex);
     return transcriptFromRestored(
-      conversationRef.current.getMessages().filter((m) => m.role !== "system"),
+      conversationRef.current
+        .getMessages()
+        .filter(
+          (message) =>
+            message.role !== "system" &&
+            !contentToText(message.content).startsWith("<system-reminder>"),
+        ),
     );
   };
 
@@ -2562,6 +2568,7 @@ export function App({
               content: `⟲ Rewound to checkpoint. Restored ${String(changed.length)} file(s) and conversation.${fileList}`,
             },
           ]);
+          setTranscriptRevision((revision) => revision + 1);
           break;
         }
         case "conversation_only": {
@@ -2574,6 +2581,7 @@ export function App({
               content: `⟲ Rewound conversation. Files unchanged.`,
             },
           ]);
+          setTranscriptRevision((revision) => revision + 1);
           break;
         }
         case "code_only": {
@@ -2853,10 +2861,10 @@ export function App({
           model={selectedProvider.model || selectedProvider.name}
           workDir={workDir}
           provider={selectedProvider.name}
+          revision={transcriptRevision}
         />
 
         <ChatView
-          messages={[]}
           streamingText={isStreaming ? streamingText : undefined}
           thinkingText={isStreaming ? streamingThinking : undefined}
           expanded={toolsExpanded}

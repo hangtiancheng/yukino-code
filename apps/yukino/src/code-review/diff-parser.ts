@@ -6,7 +6,6 @@ import type { FileDiff, Hunk, HunkLine } from "./types.js";
  * raw diff text.
  */
 
-const DIFF_HEADER_RE = /^diff --git a\/(.+?) b\/(.+)$/;
 const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
 /** Split diff text on "\n" and drop the "\r" CRLF conversion leaves behind. */
@@ -76,16 +75,74 @@ export function unquoteGitPath(raw: string): string {
 function parseDiffHeaderLine(
   line: string,
 ): { oldPath: string; newPath: string } | null {
-  const m = DIFF_HEADER_RE.exec(line);
-  if (m) {
-    return { oldPath: m[1], newPath: m[2] };
+  const prefix = "diff --git ";
+  if (!line.startsWith(prefix)) {
+    return null;
   }
-  // Quoted-side header: `diff --git "a/x\ty" "b/x\ty"`.
-  const q = /^diff --git "?a\/(.+?)"? "?b\/(.+?)"?$/.exec(line);
-  if (q && (line.includes('"') || line.includes("\\"))) {
-    return { oldPath: unquoteGitPath(q[1]), newPath: unquoteGitPath(q[2]) };
+
+  const body = line.slice(prefix.length);
+  if (body.startsWith('"')) {
+    const paths: string[] = [];
+    let offset = 0;
+    for (const expectedPrefix of ["a/", "b/"]) {
+      if (body[offset] !== '"') {
+        return null;
+      }
+      let end = offset + 1;
+      for (; end < body.length; end++) {
+        if (body[end] === "\\") {
+          end++;
+        } else if (body[end] === '"') {
+          break;
+        }
+      }
+      if (end >= body.length) {
+        return null;
+      }
+      const decoded = unquoteGitPath(body.slice(offset, end + 1));
+      if (!decoded.startsWith(expectedPrefix)) {
+        return null;
+      }
+      paths.push(decoded.slice(expectedPrefix.length));
+      offset = end + 1;
+      if (expectedPrefix === "a/") {
+        if (body[offset] !== " ") {
+          return null;
+        }
+        offset++;
+      }
+    }
+    if (offset === body.length) {
+      return { oldPath: paths[0], newPath: paths[1] };
+    }
+    return null;
   }
-  return null;
+
+  if (!body.startsWith("a/")) {
+    return null;
+  }
+  const paths = body.slice(2);
+  const delimiter = " b/";
+  const candidates: number[] = [];
+  for (
+    let index = paths.indexOf(delimiter);
+    index >= 0;
+    index = paths.indexOf(delimiter, index + delimiter.length)
+  ) {
+    candidates.push(index);
+  }
+  const split =
+    candidates.find(
+      (index) =>
+        paths.slice(0, index) === paths.slice(index + delimiter.length),
+    ) ?? candidates.at(-1);
+  if (split === undefined) {
+    return null;
+  }
+  return {
+    oldPath: paths.slice(0, split),
+    newPath: paths.slice(split + delimiter.length),
+  };
 }
 
 /** Parse the `@@ ... @@` blocks of one file's diff text. */

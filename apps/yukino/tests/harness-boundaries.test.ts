@@ -144,9 +144,7 @@ describe("harness execution boundaries", () => {
     let calls = 0;
     config.client.stream = async function* () {
       calls++;
-      await Promise.resolve();
-      throw new ContextTooLongError("context too long");
-      yield end;
+      yield await Promise.reject(new ContextTooLongError("context too long"));
     };
     const events = await collect(config);
     expect(calls).toBe(1);

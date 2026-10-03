@@ -1,4 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 
 import z, { parse } from "zod";
@@ -50,6 +57,12 @@ export class TaskStore {
 
   save(tasks: StoredTask[]): void {
     mkdirSync(dirname(this.filePath), { recursive: true });
-    writeFileSync(this.filePath, JSON.stringify(tasks, null, 2), "utf-8");
+    const tempPath = `${this.filePath}.${String(process.pid)}.tmp`;
+    try {
+      writeFileSync(tempPath, JSON.stringify(tasks, null, 2), "utf-8");
+      renameSync(tempPath, this.filePath);
+    } finally {
+      rmSync(tempPath, { force: true });
+    }
   }
 }

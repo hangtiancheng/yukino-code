@@ -174,10 +174,6 @@ type CommandRunner = (
 ) => Promise<CommandResult>;
 
 export interface ComputerUseToolOptions {
-  displayHeightPx?: number;
-  displayNumber?: number;
-  displayWidthPx?: number;
-  enableZoom?: boolean;
   environment?: ComputerUseEnvironment;
   platform?: NodeJS.Platform;
   runCommand?: CommandRunner;
@@ -208,6 +204,7 @@ function runCommand(
 
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(command, [...args], {
+      detached: process.platform !== "win32",
       env: options.env ?? process.env,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -227,8 +224,27 @@ function runCommand(
       options.signal?.removeEventListener("abort", onAbort);
       callback();
     };
+    const terminate = (): void => {
+      if (child.pid === undefined) {
+        child.kill("SIGKILL");
+        return;
+      }
+      if (process.platform === "win32") {
+        spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+        }).unref();
+        return;
+      }
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        child.kill("SIGKILL");
+      }
+    };
     const fail = (message: string): void => {
-      child.kill();
+      terminate();
       finish(() => {
         rejectPromise(new Error(message));
       });
@@ -517,10 +533,6 @@ export class ComputerUseTool implements Tool {
   category: ToolCategory = "command";
   deferred = false;
 
-  private readonly displayHeightPx: number;
-  private readonly displayNumber?: number;
-  private readonly displayWidthPx: number;
-  private readonly enableZoom: boolean;
   private readonly environment: ComputerUseEnvironment;
   private readonly platform: NodeJS.Platform;
   private readonly run: CommandRunner;
@@ -530,10 +542,6 @@ export class ComputerUseTool implements Tool {
   private windowsHelperPromise?: Promise<string>;
 
   constructor(options: ComputerUseToolOptions = {}) {
-    this.displayHeightPx = options.displayHeightPx ?? MAX_SCREENSHOT_HEIGHT;
-    this.displayNumber = options.displayNumber;
-    this.displayWidthPx = options.displayWidthPx ?? MAX_SCREENSHOT_WIDTH;
-    this.enableZoom = options.enableZoom ?? true;
     this.platform = options.platform ?? process.platform;
     this.environment = options.environment ?? defaultEnvironment(this.platform);
     this.run = options.runCommand ?? runCommand;
@@ -952,7 +960,7 @@ export class ComputerUseTool implements Tool {
     // The binary is compiled once and held for the process lifetime; without
     // a cleanup hook every session that used ComputerUse would leave its
     // helper directory behind.
-    registerExitCleanup(() => {
+    const unregisterCleanup = registerExitCleanup(() => {
       try {
         rmSync(directory, { recursive: true, force: true });
       } catch {
@@ -973,6 +981,7 @@ export class ComputerUseTool implements Tool {
       }
       return executablePath;
     } catch (err) {
+      unregisterCleanup();
       await rm(directory, { recursive: true, force: true });
       throw err;
     }

@@ -1,18 +1,49 @@
-import { mkdtempSync, writeFileSync, mkdirSync } from "fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "fs";
 import { homedir } from "node:os";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 import { Agent } from "@/agent/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
 import { PermissionChecker } from "@/permissions/index.js";
 
+const tempDirs = new Set<string>();
+let originalHome: string | undefined;
+let originalUserProfile: string | undefined;
+
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), "yukino-test-"));
+  const directory = mkdtempSync(join(tmpdir(), "yukino-test-"));
+  tempDirs.add(directory);
+  return directory;
 }
+
+beforeEach(() => {
+  originalHome = process.env.HOME;
+  originalUserProfile = process.env.USERPROFILE;
+  const home = makeTmpDir();
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+});
+
+afterEach(() => {
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
+  if (originalUserProfile === undefined) {
+    delete process.env.USERPROFILE;
+  } else {
+    process.env.USERPROFILE = originalUserProfile;
+  }
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 function makeChecker(
   tmpDir: string,
@@ -103,7 +134,7 @@ describe("extra allowed roots", () => {
   it("opens a path outside the project once declared", () => {
     const dir = makeTmpDir();
     // makeTmpDir() won't work here: the system temp directory is already in the sandbox default allow list, so pick a path genuinely outside the project
-    const outside = join(homedir(), ".extra-root");
+    const outside = join(originalHome ?? "/", ".extra-root");
     const checker = new PermissionChecker(dir, "default");
     const target = join(outside, "MEMORY.md");
 
@@ -208,7 +239,7 @@ describe("rule merging across files", () => {
 
   it("deny beats allow regardless of order in the same file", () => {
     for (const body of [`${allow}\n${deny}`, `${deny}\n${allow}`]) {
-      const checker = makeCheckerWithTiers(makeTmpDir(), body);
+      const checker = makeCheckerWithTiers("", body);
       expect(
         checker.check("Bash", "command", { command: "git push origin main" })
           .effect,
@@ -266,7 +297,7 @@ describe("memory background agent sandbox", () => {
       const allowed = checker.check("WriteFile", "write", {
         file_path: userMemFile,
       });
-      expect(allowed.reason).not.toContain("outside allowed directories");
+      expect(allowed.effect).toBe("allow");
 
       // Paths outside the memory roots are unaffected and still denied by the override's scoping
       const unrelated = join(homedir(), "unrelated-dir", "x.txt");

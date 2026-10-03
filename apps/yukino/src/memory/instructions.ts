@@ -131,18 +131,32 @@ function expandIncludes(
 
   const lines = content.split("\n");
   const out: string[] = [];
-  let inCode = false;
+  let codeFence: { marker: "`" | "~"; length: number } | undefined;
 
   for (const line of lines) {
     const trimmed = line.trim();
-
-    if (trimmed.startsWith("```")) {
-      inCode = !inCode;
+    const fence = /^(`{3,}|~{3,})/u.exec(trimmed)?.[1];
+    if (!codeFence && fence) {
+      codeFence = {
+        marker: fence.startsWith("`") ? "`" : "~",
+        length: fence.length,
+      };
+      out.push(line);
+      continue;
+    }
+    if (
+      codeFence &&
+      new RegExp(
+        `^${codeFence.marker === "`" ? "`" : "~"}{${String(codeFence.length)},}\\s*$`,
+        "u",
+      ).test(trimmed)
+    ) {
+      codeFence = undefined;
       out.push(line);
       continue;
     }
 
-    if (!inCode) {
+    if (!codeFence) {
       const includePath = parseInclude(trimmed);
       if (includePath) {
         const resolved = resolveInclude(includePath, baseDir);

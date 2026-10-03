@@ -157,14 +157,18 @@ export function coerceBySchema(value: unknown, schema: unknown): unknown {
 export function mcpCallPermissionContent(server: string, tool: string): string {
   if (tool.startsWith(MCP_TOOL_PREFIX)) {
     const rest = tool.slice(MCP_TOOL_PREFIX.length);
-    const idx = rest.indexOf(MCP_NAME_SEP);
-    if (idx >= 0) {
-      // The full name already carries the server segment; use it to avoid building linear__linear__x
-      return (
-        sanitizeSegment(rest.slice(0, idx)) +
-        MCP_NAME_SEP +
-        sanitizeSegment(rest.slice(idx + MCP_NAME_SEP.length))
-      );
+    const lengthMatch = /^(\d+)_/u.exec(rest);
+    if (lengthMatch) {
+      const serverStart = lengthMatch[0].length;
+      const serverLength = Number.parseInt(lengthMatch[1], 10);
+      const separatorStart = serverStart + serverLength;
+      if (rest.slice(separatorStart, separatorStart + 2) === MCP_NAME_SEP) {
+        return (
+          rest.slice(serverStart, separatorStart) +
+          MCP_NAME_SEP +
+          rest.slice(separatorStart + MCP_NAME_SEP.length)
+        );
+      }
     }
   }
   return sanitizeSegment(server) + MCP_NAME_SEP + sanitizeSegment(tool);
@@ -227,9 +231,7 @@ export class McpCallTool implements Tool {
       : buildMcpToolName(server, name);
     const target = this.registry.get(fullName);
     // The routed server must be the one that permission rules evaluated.
-    return target &&
-      isMcpToolLike(target) &&
-      sanitizeSegment(target.mcpServerName) === sanitizeSegment(server)
+    return target && isMcpToolLike(target) && target.mcpServerName === server
       ? target
       : undefined;
   }

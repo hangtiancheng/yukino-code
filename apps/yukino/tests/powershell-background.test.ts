@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync as createTempDir, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   formatAgentTaskNotification,
@@ -11,6 +11,21 @@ import {
 } from "@/subagent/task-manager.js";
 import { PowerShellTool } from "@/tools/powershell.js";
 import type { ToolContext } from "@/tools/types.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 function pwshAvailable(): boolean {
   if (process.platform === "win32") {
@@ -49,8 +64,6 @@ function taskIdFrom(output: string): string {
   expect(match, `expected a task_id in: ${output}`).not.toBeNull();
   return match?.[1] ?? "";
 }
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describePwsh("PowerShell background execution", () => {
   it("gates run_in_background on the task manager", () => {
@@ -143,8 +156,9 @@ describePwsh("PowerShell background execution", () => {
       command: "Start-Sleep -Milliseconds 1500; Write-Output ps-manual",
       timeout: 30,
     });
-    await sleep(700);
-    expect(ps.hasForegroundTasks()).toBe(true);
+    await vi.waitFor(() => {
+      expect(ps.hasForegroundTasks()).toBe(true);
+    });
     expect(ps.backgroundForegroundTasks()).toBe(1);
     expect(ps.hasForegroundTasks()).toBe(false);
 

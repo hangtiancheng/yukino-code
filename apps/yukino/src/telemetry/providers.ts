@@ -48,7 +48,10 @@ import type {
   TelemetryRuntime,
 } from "./index.js";
 
+import { createChildLogger } from "@/logger/index.js";
 import { version } from "@/version.js";
+
+const log = createChildLogger({ module: "telemetry" });
 
 type OtlpProtocol = "grpc" | "http/json" | "http/protobuf";
 type SentryModule = typeof Sentry;
@@ -307,10 +310,14 @@ async function initializeSentry(): Promise<SentryModule | null> {
   return sentry;
 }
 
-async function safely<T>(operation: () => Promise<T>): Promise<T | null> {
+async function safely<T>(
+  label: string,
+  operation: () => Promise<T>,
+): Promise<T | null> {
   try {
     return await operation();
-  } catch {
+  } catch (err) {
+    log.error({ err, label }, "telemetry initialization failed");
     return null;
   }
 }
@@ -571,13 +578,15 @@ export async function createTelemetryRuntime(): Promise<TelemetryRuntime> {
   const [tracerProvider, loggerProvider, metricReaders, sentry] =
     await Promise.all([
       otelEnabled
-        ? safely(() => createTracerProvider(resource))
+        ? safely("traces", () => createTracerProvider(resource))
         : Promise.resolve(null),
       otelEnabled
-        ? safely(() => createLoggerProvider(resource))
+        ? safely("logs", () => createLoggerProvider(resource))
         : Promise.resolve(null),
-      otelEnabled ? safely(createMetricReaders) : Promise.resolve(null),
-      safely(initializeSentry),
+      otelEnabled
+        ? safely("metrics", createMetricReaders)
+        : Promise.resolve(null),
+      safely("sentry", initializeSentry),
     ]);
 
   const meterProvider =

@@ -128,108 +128,19 @@ export function memoryEnabled(cfg: AppConfig): boolean {
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 function loadSingleFile(path: string): AppConfig {
   const data = readFileSync(path, "utf-8");
   const raw: unknown = yaml.load(data);
-  if (!isRecord(raw)) {
-    log.error({ path }, "invalid yaml");
-    return { default_provider: 0, providers: [], mcp_servers: [], hooks: [] };
-  }
   const parsed = safeParse(AppConfigSchema, raw);
-  if (parsed.success) {
-    const data = parsed.data;
-    return {
-      ...data,
-      providers: data.providers.map(withProviderDefaults),
-    };
+  if (!parsed.success) {
+    throw new ConfigError(
+      `Invalid configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
+    );
   }
-  log.error({ error: parsed.error }, "config error");
-  let defaultProvider = 0;
-  let providers: ProviderConfig[] = [];
-  let permissionMode: string | undefined;
-  let mcpServers: MCPServerConfig[] = [];
-  let hooks: HookConfig[] = [];
-  let sandbox: SandboxYamlConfig | undefined = undefined;
-  let enableCoordinatorMode = false;
-  let enableFork = true;
-  let enableMemory = true;
-
-  if ("default_provider" in raw) {
-    const parsed = safeParse(z.number(), raw.default_provider);
-    if (parsed.success) {
-      defaultProvider = parsed.data;
-    }
-  }
-  if ("providers" in raw) {
-    const parsed = safeParse(z.array(ProviderConfigSchema), raw.providers);
-    if (parsed.success) {
-      providers = parsed.data.map(withProviderDefaults);
-    } else {
-      // Providers are required for the app to function; surface schema errors
-      // instead of silently dropping them.
-      throw new ConfigError(
-        `Invalid provider configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
-      );
-    }
-  }
-  if ("permission_mode" in raw && typeof raw.permission_mode === "string") {
-    permissionMode = raw.permission_mode;
-  }
-  if ("mcp_servers" in raw) {
-    const parsed = safeParse(z.array(MCPServerConfigSchema), raw.mcp_servers);
-    if (parsed.success) {
-      mcpServers = parsed.data;
-    } else {
-      throw new ConfigError(
-        `Invalid MCP server configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
-      );
-    }
-  }
-  if ("hooks" in raw) {
-    const parsed = safeParse(z.array(HookConfigSchema), raw.hooks);
-    if (parsed.success) {
-      hooks = parsed.data;
-    } else {
-      // Match providers/mcp_servers: a malformed hooks entry is a config
-      // error to surface, not something to silently drop to [].
-      throw new ConfigError(
-        `Invalid hooks configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
-      );
-    }
-  }
-  if ("sandbox" in raw) {
-    const parsed = safeParse(SandboxYamlConfigSchema, raw.sandbox);
-    if (parsed.success) {
-      sandbox = parsed.data;
-    } else {
-      throw new ConfigError(
-        `Invalid sandbox configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
-      );
-    }
-  }
-  if ("enable_coordinator_mode" in raw) {
-    enableCoordinatorMode = Boolean(raw.enable_coordinator_mode);
-  }
-  if ("enable_fork" in raw) {
-    enableFork = Boolean(raw.enable_fork);
-  }
-  if ("enable_memory" in raw) {
-    enableMemory = Boolean(raw.enable_memory);
-  }
+  const config = parsed.data;
   return {
-    default_provider: defaultProvider,
-    providers,
-    permission_mode: permissionMode,
-    mcp_servers: mcpServers,
-    hooks,
-    sandbox,
-    enable_coordinator_mode: enableCoordinatorMode,
-    enable_fork: enableFork,
-    enable_memory: enableMemory,
+    ...config,
+    providers: config.providers.map(withProviderDefaults),
   };
 }
 

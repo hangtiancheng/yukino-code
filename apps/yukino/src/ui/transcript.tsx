@@ -14,6 +14,7 @@ interface Props {
   model: string;
   workDir: string;
   provider: string;
+  revision: number;
 }
 
 export function Transcript({
@@ -24,10 +25,11 @@ export function Transcript({
   model,
   workDir,
   provider,
+  revision,
 }: Props) {
   return (
     <Static
-      key={`transcript-${sessionId}-${String(termWidth)}-${String(expanded)}`}
+      key={`transcript-${sessionId}-${String(termWidth)}-${String(expanded)}-${String(revision)}`}
       items={[
         { type: "brand" as const, key: "brand" },
         ...messages.map((message, index) => ({

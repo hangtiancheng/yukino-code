@@ -81,16 +81,15 @@ const YamlFrontmatterSchema = z.looseObject({
 });
 
 function parseAgentDefinition(content: string): AgentDefinition | null {
-  if (!content.startsWith("---")) {
-    return null;
-  }
-  const endIdx = content.indexOf("---", 3);
-  if (endIdx === -1) {
+  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u.exec(
+    content,
+  );
+  if (!match) {
     return null;
   }
 
-  const frontmatter = content.slice(3, endIdx).trim();
-  const body = content.slice(endIdx + 3).trim();
+  const frontmatter = match[1].trim();
+  const body = content.slice(match[0].length).trim();
 
   try {
     const raw: unknown = yaml.load(frontmatter);

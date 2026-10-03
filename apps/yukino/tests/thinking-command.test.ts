@@ -97,11 +97,10 @@ describe("/thinking command", () => {
     "does not save after a runtime setter failure: %s",
     (error) => {
       const persistThinkingLevel = vi.fn();
-      const level: ThinkingLevel = "high";
       const output = command?.handler({
         workDir: "/tmp",
         args: "low",
-        thinkingLevel: () => level,
+        thinkingLevel: () => "high",
         setThinkingLevel: () => {
           throw error;
         },
@@ -112,7 +111,6 @@ describe("/thinking command", () => {
       expect(output).toContain("Try /thinking");
       expect(output).not.toContain("Thinking level set to");
       expect(persistThinkingLevel).not.toHaveBeenCalled();
-      expect(level).toBe("high");
     },
   );
 

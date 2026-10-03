@@ -89,8 +89,8 @@ export class SkillCatalog {
   }
 
   private skillDirPaths(): string[] {
-    return [homedir(), ...(this.workDir ? [this.workDir] : [])].flatMap(
-      (root) => [".agents"].map((ecosystem) => join(root, ecosystem, "skills")),
+    return [homedir(), ...(this.workDir ? [this.workDir] : [])].map((root) =>
+      join(root, ".agents", "skills"),
     );
   }
 

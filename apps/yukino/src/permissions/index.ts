@@ -1,4 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 
@@ -6,6 +13,7 @@ import yaml from "js-yaml";
 import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";
 import { isObject, isRecord, strArg } from "@/utils/index.js";
 import { canonicalPath, isPathWithin } from "@/utils/paths.js";
@@ -487,27 +495,32 @@ export class RuleEngine {
   // format so "allow always" survives a restart.
   appendProjectRule(rule: Rule): void {
     mkdirSync(dirname(this.projectPath), { recursive: true });
-    const rules = loadRulesFile(this.projectPath);
-    // Deduplicate: skip if an identical {tool, pattern, effect} rule already
-    // exists. Without this, every "allow always" click on the same command
-    // appends a duplicate entry (the rule engine matches but allowAlways is
-    // still called in some flows, e.g. cross-session content variants).
-    const exists = rules.some(
-      (r) =>
-        r.tool === rule.tool &&
-        r.pattern === rule.pattern &&
-        r.effect === rule.effect,
-    );
-    if (exists) {
-      return;
-    }
+    withFileSyncLock(this.projectPath, () => {
+      const rules = loadRulesFile(this.projectPath);
+      const exists = rules.some(
+        (r) =>
+          r.tool === rule.tool &&
+          r.pattern === rule.pattern &&
+          r.effect === rule.effect,
+      );
+      if (exists) {
+        return;
+      }
 
-    rules.push(rule);
-    const entries = rules.map((r) => ({
-      rule: `${r.tool}(${r.pattern})`,
-      effect: r.effect,
-    }));
-    writeFileSync(this.projectPath, yaml.dump(entries), "utf-8");
+      rules.push(rule);
+      const entries = rules.map((r) => ({
+        rule: `${r.tool}(${r.pattern})`,
+        effect: r.effect,
+      }));
+      const tempPath = `${this.projectPath}.${String(process.pid)}.tmp`;
+      try {
+        writeFileSync(tempPath, yaml.dump(entries), "utf-8");
+        renameSync(tempPath, this.projectPath);
+        this.cache.delete(this.projectPath);
+      } finally {
+        rmSync(tempPath, { force: true });
+      }
+    });
   }
 }
 

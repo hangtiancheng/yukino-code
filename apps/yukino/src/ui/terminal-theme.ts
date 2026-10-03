@@ -166,7 +166,7 @@ export async function detectTerminalTheme(
     try {
       stdin.setRawMode(true);
       input.on("terminal-response", onData);
-      process.stdout.write("\x1b[?996n\x1b]11;?\x07");
+      process.stdout.write("\x1b[?997n\x1b]11;?\x07");
     } catch {
       finish("dark");
     }

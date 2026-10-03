@@ -125,16 +125,31 @@ describe("Yukino ACP agent", () => {
         );
         expect(response.stopReason).toBe("end_turn");
         expect(response.usage?.totalTokens).toBe(19);
+        const secondResponse = await context.request(
+          acp.methods.agent.session.prompt,
+          {
+            sessionId: created.sessionId,
+            prompt: [{ type: "text", text: "write another" }],
+          },
+        );
+        expect(secondResponse.usage?.totalTokens).toBe(19);
         await context.request(acp.methods.agent.session.close, {
           sessionId: created.sessionId,
         });
       });
 
-      expect(permissionIds).toEqual(["tool-1"]);
-      expect(permissionResults).toEqual(["allowAlways"]);
+      expect(permissionIds).toEqual(["tool-1", "tool-1"]);
+      expect(permissionResults).toEqual(["allowAlways", "allowAlways"]);
       expect(
         updates.map((notification) => notification.update.sessionUpdate),
-      ).toEqual(["agent_message_chunk", "tool_call_update", "usage_update"]);
+      ).toEqual([
+        "agent_message_chunk",
+        "tool_call_update",
+        "usage_update",
+        "agent_message_chunk",
+        "tool_call_update",
+        "usage_update",
+      ]);
       expect(dispose).toHaveBeenCalledOnce();
     } finally {
       rmSync(workDir, { recursive: true, force: true });

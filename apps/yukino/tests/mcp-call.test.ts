@@ -52,6 +52,11 @@ const toolSchema: ToolSchema = {
   input_schema: inputSchema,
 };
 
+const linearCreateIssue = buildMcpToolName("linear", "create_issue");
+const jiraCreateIssue = buildMcpToolName("jira", "create_issue");
+const chrome2Click = buildMcpToolName("chrome-2", "click");
+const chromeDevtoolsClick = buildMcpToolName("chrome-devtools", "click");
+
 /** A good-enough MCP tool stand-in: exposes its schema and records received arguments. */
 class FakeMcpTool implements MCPToolLike {
   name: string;
@@ -216,7 +221,7 @@ describe("McpCall tool name resolution", () => {
     const { dispatcher, tool } = setup();
     const res = await dispatcher.execute(toolContext, {
       server: "linear",
-      tool: "mcp__linear__create_issue",
+      tool: linearCreateIssue,
       arguments: { issueId: "A" },
     });
     expect(res.isError).toBe(false);
@@ -285,7 +290,8 @@ describe("McpCall tool name resolution", () => {
       arguments: {},
     });
     expect(res.isError).toBe(true);
-    expect(res.output).toContain("mcp__linear__create_issue");
+    expect(res.output).toContain(linearCreateIssue);
+    expect(res.output).toContain(jiraCreateIssue);
   });
 
   test("coerces arguments against the schema before forwarding", async () => {
@@ -409,17 +415,13 @@ describe("applyMode effect on tools[]", () => {
 
 describe("permission content normalization", () => {
   const cases: [string, string, string][] = [
-    ["linear", "mcp__linear__create_issue", "linear__create_issue"],
+    ["linear", linearCreateIssue, "linear__create_issue"],
     ["linear", "create_issue", "linear__create_issue"],
-    ["chrome-2", "mcp__chrome_2__click", "chrome_2__click"],
+    ["chrome-2", chrome2Click, "chrome_2__click"],
     // Short name and fully qualified name must produce the same content,
     // otherwise permission rules would fail to match
     ["chrome-devtools", "click", "chrome_devtools__click"],
-    [
-      "chrome-devtools",
-      "mcp__chrome_devtools__click",
-      "chrome_devtools__click",
-    ],
+    ["chrome-devtools", chromeDevtoolsClick, "chrome_devtools__click"],
   ];
   for (const [server, tool, want] of cases) {
     test(`${server} + ${tool}`, () => {
@@ -431,16 +433,14 @@ describe("permission content normalization", () => {
     expect(
       extractContent("McpCall", {
         server: "linear",
-        tool: "mcp__linear__create_issue",
+        tool: linearCreateIssue,
       }),
     ).toBe("linear__create_issue");
   });
 
   test("content extraction for other tools is unchanged", () => {
     expect(extractContent("Bash", { command: "ls" })).toBe("ls");
-    expect(extractContent("mcp__linear__create_issue", { title: "x" })).toBe(
-      "",
-    );
+    expect(extractContent(linearCreateIssue, { title: "x" })).toBe("");
   });
 });
 
@@ -468,7 +468,11 @@ describe("beta header for native deferred loading", () => {
     expect(
       needsToolSearchBeta([
         { ...toolSchema, name: "Bash" },
-        { ...toolSchema, name: "mcp__linear__x", defer_loading: true },
+        {
+          ...toolSchema,
+          name: buildMcpToolName("linear", "x"),
+          defer_loading: true,
+        },
       ]),
     ).toBe(true);
   });
@@ -483,13 +487,13 @@ describe("beta header for native deferred loading", () => {
 describe("tool naming", () => {
   test("double underscore separator", () => {
     expect(buildMcpToolName("linear", "create_issue")).toBe(
-      "mcp__linear__create_issue",
+      "mcp__6_linear__create_issue",
     );
   });
 
   test("hyphens and dots become underscores, consistent with Go/Python", () => {
     expect(buildMcpToolName("chrome-devtools", "take.snapshot")).toBe(
-      "mcp__chrome_devtools__take_snapshot",
+      "mcp__15_chrome_devtools__take_snapshot",
     );
   });
 
@@ -519,17 +523,14 @@ describe("per-mode tool selection", () => {
   }
 
   test("eager: neither is sent", () => {
-    expect(names("eager")).toEqual(["mcp__linear__create_issue"]);
+    expect(names("eager")).toEqual([linearCreateIssue]);
   });
 
   test("native: only ToolSearch is sent", () => {
-    expect(names("native")).toEqual([
-      "ToolSearch",
-      "mcp__linear__create_issue",
-    ]);
+    expect(names("native")).toEqual(["ToolSearch", linearCreateIssue]);
   });
 
-  test.each(["select:mcp__linear__create_issue", "fake"])(
+  test.each([`select:${linearCreateIssue}`, "fake"])(
     "native ToolSearch returns references for %s",
     async (query) => {
       const registry = new ToolRegistry();

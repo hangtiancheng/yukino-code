@@ -44,16 +44,6 @@ describe("FileMailbox", () => {
     expect(reader2.unreadCount()).toBe(1);
     expect((await reader2.receive()).map((m) => m.text)).toEqual(["c"]);
   });
-
-  it("markAllRead consumes without returning", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
-    const mbox = new FileMailbox(dir, "carol");
-    await mbox.send("leader", "x");
-    await mbox.send("leader", "y");
-    mbox.markAllRead();
-    expect(mbox.unreadCount()).toBe(0);
-    expect(await mbox.receive()).toEqual([]);
-  });
 });
 
 describe("FileMailbox lock ownership", () => {

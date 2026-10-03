@@ -42,6 +42,7 @@ let outputChunks: string[] = [];
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.mocked(useInput).mockClear();
   vi.mocked(useWindowSize).mockReturnValue({ columns: 80, rows: 24 });
   outputChunks = [];
   vi.spyOn(process.stdout, "write").mockImplementation(

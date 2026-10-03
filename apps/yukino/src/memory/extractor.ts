@@ -24,6 +24,7 @@ import { GrepTool } from "@/tools/grep.js";
 import { ReadFileTool } from "@/tools/read-file.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { WriteFileTool } from "@/tools/write-file.js";
+import { asErrorString } from "@/utils/index.js";
 
 /** A memory block parsed from LLM streamed text (MEMORY_NAME/MEMORY_TYPE/MEMORY_DESC/MEMORY_BODY). */
 interface ParsedTextMemory {
@@ -64,19 +65,31 @@ export class MemoryExtractor {
   private async runExtraction(conversationSummary: string): Promise<string[]> {
     this.inProgress = true;
     let result: string[] = [];
+    let failure: unknown;
 
     try {
       result = await this.doExtract(conversationSummary);
+    } catch (err) {
+      failure = err;
     } finally {
       this.inProgress = false;
       const pending = this.pendingContext;
       this.pendingContext = null;
       if (pending !== null) {
-        const trailingResult = await this.runExtraction(pending);
-        result = [...result, ...trailingResult];
+        try {
+          const trailingResult = await this.runExtraction(pending);
+          result = [...result, ...trailingResult];
+        } catch (err) {
+          failure ??= err;
+        }
       }
     }
 
+    if (failure !== undefined) {
+      throw failure instanceof Error
+        ? failure
+        : new Error(asErrorString(failure));
+    }
     return result;
   }
 
@@ -198,7 +211,7 @@ export class MemoryExtractor {
 
     let saved: string[];
     if (memoryPaths.length > 0) {
-      saved = memoryPaths.map((p) => basename(p));
+      saved = memoryPaths.map((p) => basename(p, ".md"));
     } else {
       // Fallback path: LLM emitted MEMORY_NAME/... text blocks directly; parse locally and persist
       saved = this.persistTextMemories(streamedText);

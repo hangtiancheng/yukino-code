@@ -10,6 +10,5 @@ describe("UI selection", () => {
       "session-123",
     );
     expect(parseResumeArgument(["--resume=session-456"])).toBe("session-456");
-    expect(parseResumeArgument(["--resume"])).toBe(true);
   });
 });

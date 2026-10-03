@@ -3,7 +3,11 @@ import { randomBytes } from "node:crypto";
 import type { AgentDefinition } from "./definition.js";
 import { loadAgentDefinitions } from "./loader.js";
 import { TaskManager } from "./task-manager.js";
-import { cloneRegistryForTeammate } from "./tool-filter.js";
+import {
+  cloneRegistryForTeammate,
+  filterToolsForAgent,
+  FORK_QUERY_SOURCE,
+} from "./tool-filter.js";
 
 import type { ConversationManager } from "@/conversation/index.js";
 import { createChildLogger, sanitizeNameSegment } from "@/logger/index.js";
@@ -38,8 +42,6 @@ function newAgentSlug(): string {
 
 // Leading marker for forked child Agents — used for nested fork detection
 const FORK_BOILERPLATE_TAG = "<fork_boilerplate>";
-const FORK_QUERY_SOURCE = "agent:builtin:fork";
-
 // System instructions injected into forked child Agents
 const FORK_BOILERPLATE = `${FORK_BOILERPLATE_TAG}
 You are a forked Yukino worker, not the parent agent. The inherited conversation is background context; work only on the assignment that follows.
@@ -267,7 +269,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
         teammateName,
         description,
         prompt,
-        args.plan_mode_required === true,
+        boolArg(args, "plan_mode_required"),
         isolation === "worktree",
         ctx.toolCallId,
       );
@@ -284,6 +286,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
             backgroundContext,
             isolation === "worktree",
             snapshot,
+            true,
           ),
         );
       }
@@ -439,6 +442,7 @@ ${prompt}`;
     while (memberName === LEADER_NAME || team.getMember(memberName)) {
       memberName = `${base}-${String(suffix++)}`;
     }
+    team.addMember(memberName);
 
     // Build a teammate-scoped tool registry: clone the parent registry, then
     // inject team-level task tools and a named SendMessage (overriding the
@@ -472,6 +476,7 @@ ${prompt}`;
 
 ${prompt}`;
       } catch (e) {
+        team.removeMember(memberName);
         return {
           output: `Error creating teammate worktree: ${asErrorString(e)}`,
           isError: true,
@@ -489,23 +494,23 @@ ${prompt}`;
     );
 
     if (runAgent) {
-      team.spawnTeammate(
+      const actualMode = team.spawnTeammate(
         memberName,
         teammatePrompt,
         runAgent,
         checker,
         this.teamProviderIndex,
         originToolCallId,
+        memberWorkDir,
       );
-      if (worktreeIsolation) {
-        team.setMemberMeta(memberName, { worktreePath: memberWorkDir });
-      }
+      return {
+        output: `Teammate '${memberName}' spawned in team '${teamName}' (mode: ${actualMode})${planModeRequired ? ", starting in plan mode" : ""}`,
+        isError: false,
+      };
     }
 
-    return {
-      output: `Teammate '${memberName}' spawned in team '${teamName}' (mode: ${team.mode})${planModeRequired ? ", starting in plan mode" : ""}`,
-      isError: false,
-    };
+    team.removeMember(memberName);
+    return { output: "Error: teammate runner is unavailable.", isError: true };
   }
 
   /**
@@ -520,6 +525,7 @@ ${prompt}`;
     ctx: ToolContext,
     isolate: boolean,
     conversationSnapshot?: ConversationManager,
+    isAsync = false,
   ): Promise<ToolResult> {
     if (!this.conversation || !this.forkHandler) {
       return {
@@ -565,7 +571,10 @@ ${prompt}`;
         };
       }
       const { cloneRegistryForFork } = await import("./tool-filter.js");
-      const forkedRegistry = cloneRegistryForFork(this.registry);
+      const clonedRegistry = cloneRegistryForFork(this.registry);
+      const forkedRegistry = isAsync
+        ? filterToolsForAgent(clonedRegistry, undefined, undefined, true)
+        : clonedRegistry;
       const snapshot = conversationSnapshot ?? this.conversation.fork();
       const output = await this.forkHandler(
         `${FORK_BOILERPLATE}\n\nYour task:\n${prompt}`,

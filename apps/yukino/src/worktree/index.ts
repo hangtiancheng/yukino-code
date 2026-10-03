@@ -158,7 +158,16 @@ async function readGitHead(gitDir: string): Promise<GitHead | null> {
 /**
  * Resolves a ref within a single git directory (checks loose files first, then packed-refs)
  */
-async function resolveRefInDir(dir: string, ref: string): Promise<string> {
+async function resolveRefInDir(
+  dir: string,
+  ref: string,
+  seen: Set<string>,
+): Promise<string> {
+  const key = `${dir}\0${ref}`;
+  if (seen.size >= 64 || seen.has(key)) {
+    return "";
+  }
+  seen.add(key);
   try {
     const content = (await readFile(join(dir, ref), "utf-8")).trim();
     if (content.startsWith("ref:")) {
@@ -166,7 +175,7 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
       if (!isSafeRefName(target)) {
         return "";
       }
-      return await resolveRef(dir, target);
+      return await resolveRef(dir, target, seen);
     }
     if (SHA_RE.test(content)) {
       return content;
@@ -205,15 +214,19 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
 }
 
 /** Resolves a git ref — checks the worktree gitDir first, then falls back to commonDir */
-async function resolveRef(gitDir: string, ref: string): Promise<string> {
-  const sha = await resolveRefInDir(gitDir, ref);
+async function resolveRef(
+  gitDir: string,
+  ref: string,
+  seen = new Set<string>(),
+): Promise<string> {
+  const sha = await resolveRefInDir(gitDir, ref, seen);
   if (sha) {
     return sha;
   }
 
   const commonDir = await getCommonDir(gitDir);
   if (commonDir && commonDir !== gitDir) {
-    return resolveRefInDir(commonDir, ref);
+    return resolveRefInDir(commonDir, ref, seen);
   }
   return "";
 }

@@ -1,5 +1,4 @@
 import { cpSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,22 +94,6 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
 };
 
 const uiDirs = [join(__dirname, "src", "ui") + sep];
-
-// Vite-style `?raw` imports: load the file
-// as a default-exported string, mirroring Vite/Vitest behavior.
-const rawImportPlugin: EsbuildPlugin = {
-  name: "raw-import",
-  setup(build) {
-    build.onResolve({ filter: /\?raw$/ }, (args) => ({
-      path: resolve(dirname(args.importer), args.path.replace(/\?raw$/, "")),
-      namespace: "raw-import",
-    }));
-    build.onLoad({ filter: /.*/, namespace: "raw-import" }, async (args) => ({
-      contents: await readFile(args.path, "utf8"),
-      loader: "text",
-    }));
-  },
-};
 
 // Library-build guard: the barrel entry (src/index.ts) must never reach the
 // terminal layer, neither through a bare ui-only specifier nor through a
@@ -263,7 +246,7 @@ const cliConfig: Options = {
   noExternal: [/.*/],
   define: { __YUKINO_VERSION__: JSON.stringify(pkg.version) },
   tsconfig: "tsconfig.json",
-  esbuildPlugins: [rawImportPlugin, externalizeNodeBuiltinsPlugin],
+  esbuildPlugins: [externalizeNodeBuiltinsPlugin],
   onSuccess: async () => {
     copyRemoteFrontend();
   },
@@ -298,11 +281,7 @@ const libConfig: Options = {
     ...Object.keys(pkg.optionalDependencies ?? {}),
   ].filter((dep) => !uiOnlySet.has(dep)),
   noExternal: [uiOnlyPattern],
-  esbuildPlugins: [
-    rawImportPlugin,
-    externalizeNodeBuiltinsPlugin,
-    banUIOnlyPlugin,
-  ],
+  esbuildPlugins: [externalizeNodeBuiltinsPlugin, banUIOnlyPlugin],
   onSuccess: async () => {
     assertNoAmbiguousExports();
   },

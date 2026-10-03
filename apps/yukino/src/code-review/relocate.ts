@@ -21,8 +21,19 @@ import type { LLMClient } from "@/llm/client.js";
  * whole text when unfenced.
  */
 export function extractCodeBlock(text: string): string {
-  const m = /```[^\n]*\n([\s\S]*?)```/.exec(text);
-  return (m ? (m[1] ?? "") : text).trim();
+  const opening = /^(?<fence>`{3,}|~{3,})[^\n]*\n/mu.exec(text);
+  const fence = opening?.groups?.fence;
+  if (!opening || !fence) {
+    return text.trim();
+  }
+  const contentStart = opening.index + opening[0].length;
+  const closing = new RegExp(
+    `^${fence[0]}{${String(fence.length)},}\\s*$`,
+    "mu",
+  ).exec(text.slice(contentStart));
+  return text
+    .slice(contentStart, closing ? contentStart + closing.index : undefined)
+    .trim();
 }
 
 /**

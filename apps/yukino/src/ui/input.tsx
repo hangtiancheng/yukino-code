@@ -187,6 +187,7 @@ export function InputBox(props: InputBoxProps) {
   const pasteImageInflightRef = useRef(false);
   const pasteGenerationRef = useRef(0);
   const [isPastingImage, setIsPastingImage] = useState(false);
+  const [workdirFiles, setWorkdirFiles] = useState<string[]>([]);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -349,6 +350,7 @@ export function InputBox(props: InputBoxProps) {
   }, [lines, commands, isMultiline, usageTracker, thinkingLevels]);
 
   const showDropdown =
+    !disabled &&
     filteredCmds.length > 0 &&
     lines[0].startsWith("/") &&
     !isMultiline &&
@@ -381,36 +383,45 @@ export function InputBox(props: InputBoxProps) {
     return m ? m[1] : null;
   }, [lines, cursorLine, cursorCol]);
 
+  const atCompletionActive = atQuery !== null;
+  useEffect(() => {
+    if (!atCompletionActive) {
+      setWorkdirFiles([]);
+      return;
+    }
+    const key = `${workDir}::${String(fileFactsVersion)}`;
+    const cache = fileCacheRef.current;
+    if (
+      cache?.key === key &&
+      Date.now() - cache.scannedAt < FILE_CACHE_TTL_MS
+    ) {
+      setWorkdirFiles(cache.files);
+      return;
+    }
+    const handle = setImmediate(() => {
+      const files = scanWorkdirFiles(workDir);
+      fileCacheRef.current = { key, files, scannedAt: Date.now() };
+      setWorkdirFiles(files);
+    });
+    return () => {
+      clearImmediate(handle);
+    };
+  }, [atCompletionActive, fileFactsVersion, workDir]);
+
   const filteredFiles = useMemo(() => {
     if (atQuery === null) {
       return [];
     }
-
-    const key = `${workDir}::${String(fileFactsVersion)}`;
-    let cache = fileCacheRef.current;
-    if (
-      cache?.key !== key ||
-      Date.now() - cache.scannedAt >= FILE_CACHE_TTL_MS
-    ) {
-      cache = {
-        key,
-        files: scanWorkdirFiles(workDir),
-        scannedAt: Date.now(),
-      };
-      fileCacheRef.current = cache;
-    }
-
-    const files = cache.files;
     const q = atQuery.toLowerCase();
     if (!q) {
-      return files.slice(0, 8);
+      return workdirFiles.slice(0, 8);
     }
-    const pre = files.filter((f) => f.toLowerCase().startsWith(q));
-    const sub = files.filter(
+    const pre = workdirFiles.filter((f) => f.toLowerCase().startsWith(q));
+    const sub = workdirFiles.filter(
       (f) => !f.toLowerCase().startsWith(q) && f.toLowerCase().includes(q),
     );
     return [...pre, ...sub].slice(0, 8);
-  }, [atQuery, workDir, fileFactsVersion]);
+  }, [atQuery, workdirFiles]);
 
   const showAtDropdown =
     !disabled &&
@@ -696,6 +707,7 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if (key.backspace || key.delete) {
+      setDropdownIndex(0);
       const line = lines[cursorLine] ?? "";
       if (key.delete && cursorCol < line.length) {
         const nextCol = inputBoundary(line, cursorCol, "next", pastes);

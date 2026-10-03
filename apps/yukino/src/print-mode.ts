@@ -1,5 +1,7 @@
 /* eslint-disable no-console -- non-interactive output mode: console.log is the program output channel */
 
+import { rmSync } from "node:fs";
+
 import type { AgentEvent } from "./agent/events.js";
 import { Agent } from "./agent/index.js";
 import {
@@ -20,6 +22,7 @@ import { MCPToolWrapper } from "./mcp/tool-wrapper.js";
 import { loadInstructions } from "./memory/instructions.js";
 import { PermissionChecker } from "./permissions/index.js";
 import { buildSystemPrompt, detectEnvironment } from "./prompt/builder.js";
+import { getSessionArtifactsDir, newSessionId } from "./session/index.js";
 import { AgentTool } from "./subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "./subagent/definition.js";
 import { spawnSubagent } from "./subagent/spawn.js";
@@ -67,13 +70,11 @@ export function parsePrintFlags(args: string[]): PrintArgs | null {
     return null;
   }
 
-  const prompt = args[idx + 1];
-  if (!prompt || prompt.startsWith("-")) {
-    // A following flag here means `-p` came without its prompt (e.g.
-    // `yukino -p --output-format stream-json "prompt"`): swallowing the flag
-    // as the prompt would silently drop the real one.
+  const separator = args[idx + 1] === "--";
+  const prompt = args[idx + (separator ? 2 : 1)];
+  if (!prompt || (!separator && prompt.startsWith("-"))) {
     console.error(
-      "Error: -p requires a prompt argument immediately after it (quote multi-word prompts)",
+      "Error: -p requires a prompt argument immediately after it; use '-p -- <prompt>' when the prompt starts with '-'",
     );
     process.exit(1);
   }
@@ -106,6 +107,14 @@ export function parsePrintFlags(args: string[]): PrintArgs | null {
 export async function runPrintMode(args: PrintArgs): Promise<void> {
   const startTime = Date.now();
   const workDir = process.cwd();
+  const sessionId = newSessionId();
+  const abortController = new AbortController();
+  const onInterrupt = (signal: NodeJS.Signals) => {
+    process.exitCode = signal === "SIGINT" ? 130 : 143;
+    abortController.abort();
+  };
+  process.once("SIGINT", onInterrupt);
+  process.once("SIGTERM", onInterrupt);
 
   const cfg = withProjectMcpServers(loadConfig(), workDir);
   const provider = resolveDefaultProvider(cfg.providers, cfg.default_provider);
@@ -252,6 +261,8 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       checker,
       conversation: conv,
       workDir,
+      sessionId,
+      abortSignal: abortController.signal,
       fileStateCache: new FileStateCache(),
       contextWindow: getContextWindow(provider),
       maxOutput: getMaxOutputTokens(provider),
@@ -365,6 +376,8 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       console.log(JSON.stringify(resultLine));
     }
   } finally {
+    process.off("SIGINT", onInterrupt);
+    process.off("SIGTERM", onInterrupt);
     // Child agents otherwise outlive the single-shot Leader and shared MCP connections.
     await backgroundTaskManager.stopAll();
     await teamManager.stopAll();
@@ -375,6 +388,10 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         // Cleanup must not mask an execution error or change the printed result.
       }
     }
+    rmSync(getSessionArtifactsDir(workDir, sessionId), {
+      recursive: true,
+      force: true,
+    });
   }
 }
 

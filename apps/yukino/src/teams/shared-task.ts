@@ -134,6 +134,7 @@ export class SharedTaskStore {
         createdBy,
       };
       this.tasks.push(task);
+      this.linkDependencies(task);
       this.save();
       return task;
     });
@@ -179,15 +180,16 @@ export class SharedTaskStore {
         task.description = fields.description;
       }
       for (const b of fields.addBlocks ?? []) {
-        if (!task.blocks.includes(b)) {
+        if (b !== task.id && !task.blocks.includes(b)) {
           task.blocks.push(b);
         }
       }
       for (const b of fields.addBlockedBy ?? []) {
-        if (!task.blockedBy.includes(b)) {
+        if (b !== task.id && !task.blockedBy.includes(b)) {
           task.blockedBy.push(b);
         }
       }
+      this.linkDependencies(task);
       this.save();
       return task;
     });
@@ -200,5 +202,28 @@ export class SharedTaskStore {
       this.nextId = 1;
       this.save();
     });
+  }
+
+  private linkDependencies(task: SharedTask): void {
+    task.blocks = [...new Set(task.blocks.filter((id) => id !== task.id))];
+    task.blockedBy = [
+      ...new Set(task.blockedBy.filter((id) => id !== task.id)),
+    ];
+    for (const blockedId of task.blocks) {
+      const blocked = this.tasks.find(
+        (candidate) => candidate.id === blockedId,
+      );
+      if (blocked && !blocked.blockedBy.includes(task.id)) {
+        blocked.blockedBy.push(task.id);
+      }
+    }
+    for (const blockerId of task.blockedBy) {
+      const blocker = this.tasks.find(
+        (candidate) => candidate.id === blockerId,
+      );
+      if (blocker && !blocker.blocks.includes(task.id)) {
+        blocker.blocks.push(task.id);
+      }
+    }
   }
 }

@@ -16,9 +16,31 @@ import { useCallback, useReducer } from "react";
 
 /** Monotonic id generator for newly created chat items. */
 let idCounter = 0;
+const MAX_CHAT_ITEMS = 1000;
+
 function nextId(prefix: string): string {
   idCounter += 1;
   return `${prefix}_${String(idCounter)}`;
+}
+
+function trimChatItems(state: ChatState): ChatState {
+  if (state.items.length <= MAX_CHAT_ITEMS) {
+    return state;
+  }
+  const items = state.items.slice(-MAX_CHAT_ITEMS);
+  const ids = new Set(items.map((item) => item.id));
+  return {
+    ...state,
+    items,
+    currentAssistantId:
+      state.currentAssistantId && ids.has(state.currentAssistantId)
+        ? state.currentAssistantId
+        : null,
+    currentThinkingId:
+      state.currentThinkingId && ids.has(state.currentThinkingId)
+        ? state.currentThinkingId
+        : null,
+  };
 }
 
 export interface ChatState {
@@ -128,9 +150,18 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       // Defensive: the server defers "connected" until the agent exists, so
       // session is normally non-empty; keep the guard for empty payloads.
       if (!msg.data.session) {
-        return { ...state, cwd: msg.data.cwd || state.cwd };
+        return {
+          ...state,
+          cwd: msg.data.cwd || state.cwd,
+          streaming: msg.data.streaming,
+        };
       }
-      return { ...state, session: msg.data.session, cwd: msg.data.cwd };
+      return {
+        ...state,
+        session: msg.data.session,
+        cwd: msg.data.cwd,
+        streaming: msg.data.streaming,
+      };
     }
 
     case "commands":
@@ -399,6 +430,32 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
         ],
       };
 
+    case "request_expired":
+      return {
+        ...state,
+        items: state.items.map((item) => {
+          if (
+            msg.data.kind === "permission" &&
+            item.kind === "permission" &&
+            item.id === msg.data.id
+          ) {
+            return {
+              ...item,
+              responded: true,
+              response: "deny" as const,
+            };
+          }
+          if (
+            msg.data.kind === "ask" &&
+            item.kind === "askUser" &&
+            item.id === msg.data.id
+          ) {
+            return { ...item, answered: true };
+          }
+          return item;
+        }),
+      };
+
     case "turn_complete":
       return state;
 
@@ -476,7 +533,7 @@ function reducer(state: ChatState, action: Action): ChatState {
       return { ...state, connection: action.status };
 
     case "message":
-      return applyMessage(state, action.message);
+      return trimChatItems(applyMessage(state, action.message));
 
     case "respondPermission":
       return {

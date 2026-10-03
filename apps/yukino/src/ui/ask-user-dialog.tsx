@@ -29,7 +29,6 @@ interface State {
 type Action =
   | { type: "next" }
   | { type: "prev" }
-  | { type: "goto"; index: number }
   | { type: "update"; index: number; updates: Partial<QuestionState> }
   | { type: "set-submit-cursor"; cursor: number };
 
@@ -45,8 +44,6 @@ function reducer(state: State, action: Action): State {
       };
     case "prev":
       return { ...state, currentIndex: Math.max(state.currentIndex - 1, 0) };
-    case "goto":
-      return { ...state, currentIndex: action.index };
     case "update": {
       const qs = [...state.questionStates];
       qs[action.index] = { ...qs[action.index], ...action.updates };

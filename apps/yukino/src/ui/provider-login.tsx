@@ -3,7 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
-import { cursorWindow, truncateToWidth } from "./terminal-text.js";
+import {
+  cursorWindow,
+  nextGraphemeBoundary,
+  previousGraphemeBoundary,
+  truncateToWidth,
+} from "./terminal-text.js";
 
 import {
   DEFAULT_CONTEXT_WINDOW,
@@ -380,6 +385,9 @@ export function ProviderLogin({
     if (submittingRef.current) {
       return;
     }
+    if (/\[<\d+;\d+;\d+[Mm]/u.test(input)) {
+      return;
+    }
     if (key.escape || input === "\x1b") {
       onCancel();
       return;
@@ -459,11 +467,11 @@ export function ProviderLogin({
     } else if (key.ctrl && input === "u") {
       updateText("", 0);
     } else if (key.leftArrow || (key.ctrl && input === "b")) {
-      const next = Math.max(0, position - 1);
+      const next = previousGraphemeBoundary(value, position);
       setCursor(next);
       cursorRef.current = next;
     } else if (key.rightArrow || (key.ctrl && input === "f")) {
-      const next = Math.min(value.length, position + 1);
+      const next = nextGraphemeBoundary(value, position);
       setCursor(next);
       cursorRef.current = next;
     } else if (key.home) {
@@ -474,15 +482,11 @@ export function ProviderLogin({
       cursorRef.current = value.length;
     } else if (key.backspace || key.delete) {
       if (key.backspace && position > 0) {
-        updateText(
-          value.slice(0, position - 1) + value.slice(position),
-          position - 1,
-        );
+        const previous = previousGraphemeBoundary(value, position);
+        updateText(value.slice(0, previous) + value.slice(position), previous);
       } else if (key.delete && position < value.length) {
-        updateText(
-          value.slice(0, position) + value.slice(position + 1),
-          position,
-        );
+        const next = nextGraphemeBoundary(value, position);
+        updateText(value.slice(0, position) + value.slice(next), position);
       }
     } else if (input && !key.ctrl && !key.meta) {
       insertText(input);

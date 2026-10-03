@@ -4,20 +4,32 @@ import {
   writeFileSync,
   readFileSync,
   mkdirSync,
+  rmSync,
   utimesSync,
   readdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 import type { LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
 
+const tempDirs = new Set<string>();
+
 function makeTempDir(): string {
-  return mkdtempSync(join(tmpdir(), "consolidation-test-"));
+  const directory = mkdtempSync(join(tmpdir(), "consolidation-test-"));
+  tempDirs.add(directory);
+  return directory;
 }
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 function writeMemory(
   dir: string,
@@ -68,8 +80,9 @@ describe("MemoryConsolidator", () => {
       const dir = makeTempDir();
 
       const consolidator = new MemoryConsolidator(createNoNetworkClient(), dir);
-      // Should not throw
+      const run = vi.spyOn(consolidator, "run");
       await consolidator.maybeRun();
+      expect(run).not.toHaveBeenCalled();
     });
 
     it("skips when time gate not met (lock file recent)", async () => {
@@ -85,22 +98,15 @@ describe("MemoryConsolidator", () => {
 
       createSessions(dir, 10);
 
-      let triggered = false;
-
       const consolidator = new MemoryConsolidator(
         createNoNetworkClient(),
         dir,
-        {
-          appendSystem: () => {
-            triggered = true;
-          },
-        },
+        { appendSystem: vi.fn() },
       );
+      const run = vi.spyOn(consolidator, "run");
 
       await consolidator.maybeRun();
-      // Wait a bit for any async work
-      await new Promise((r) => setTimeout(r, 100));
-      expect(triggered).toBe(false);
+      expect(run).not.toHaveBeenCalled();
     });
 
     it("skips when session gate not met (too few sessions)", async () => {
@@ -112,8 +118,9 @@ describe("MemoryConsolidator", () => {
       createSessions(dir, 2);
 
       const consolidator = new MemoryConsolidator(createNoNetworkClient(), dir);
-      // Should not throw: the session gate blocks before any LLM call, so the stub client is never used
+      const run = vi.spyOn(consolidator, "run");
       await consolidator.maybeRun();
+      expect(run).not.toHaveBeenCalled();
     });
 
     it("allows only one active pass in the same process", async () => {

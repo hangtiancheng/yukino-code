@@ -2,6 +2,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -10,7 +11,7 @@ import type * as nodeOs from "node:os";
 import { join } from "node:path";
 
 import yaml from "js-yaml";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { createDefaultRegistry, parse } from "@/commands/commands.js";
@@ -36,6 +37,10 @@ const input = {
 
 beforeEach(() => {
   homeRef.current = mkdtempSync(join(tmpdir(), "yukino-home-"));
+});
+
+afterEach(() => {
+  rmSync(homeRef.current, { recursive: true, force: true });
 });
 
 describe("/model command", () => {

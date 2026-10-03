@@ -10,6 +10,8 @@ import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "at-expand" });
 const MAX_INLINE_BYTES = 100_000;
+const MAX_INLINE_TOTAL_BYTES = 300_000;
+const MAX_AT_REFS = 32;
 // Files larger than this are never read, even for a narrow line range.
 const MAX_RANGE_FILE_BYTES = 10_000_000;
 
@@ -46,9 +48,22 @@ function collectAtRefs(text: string): string[] {
   // Clipboard images and paths containing spaces use quoted mentions.
   const pattern =
     /(?:^|\s)(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s]+))/g;
-  return [...text.matchAll(pattern)].map(
-    (match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5],
-  );
+  return [...text.matchAll(pattern)]
+    .slice(0, MAX_AT_REFS)
+    .map((match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5]);
+}
+
+function appendWithinLimit(
+  appendix: string,
+  block: string,
+): { appendix: string; appended: boolean } {
+  if (
+    Buffer.byteLength(appendix, "utf8") + Buffer.byteLength(block, "utf8") >
+    MAX_INLINE_TOTAL_BYTES
+  ) {
+    return { appendix, appended: false };
+  }
+  return { appendix: appendix + block, appended: true };
 }
 
 // Expand @path references in a user message by inlining the referenced files'
@@ -83,11 +98,17 @@ export function expandAtRefs(text: string, workDir: string): string {
             lineEnd,
           );
           if (snippet.length <= MAX_INLINE_BYTES) {
-            appendix += `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`;
+            appendix = appendWithinLimit(
+              appendix,
+              `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`,
+            ).appendix;
           }
         }
       } else if (st.size <= MAX_INLINE_BYTES) {
-        appendix += `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`;
+        appendix = appendWithinLimit(
+          appendix,
+          `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`,
+        ).appendix;
       }
     } catch (err) {
       log.error({ err }, "@-mention expansion failed");
@@ -135,15 +156,22 @@ export async function expandAtRefsWithImages(
         }
         try {
           const attachment = await loadImageAttachment(p);
-          imageBlocks.push({
+          const imageBlock = {
             type: "image",
             source: {
               type: "base64",
               media_type: attachment.mediaType,
               data: attachment.data,
             },
-          });
-          appendix += `\n\n<image type="base64" media_type="${attachment.mediaType}" path="${refPath}" />`;
+          };
+          const next = appendWithinLimit(
+            appendix,
+            `\n\n<image type="base64" media_type="${attachment.mediaType}" path="${refPath}" />`,
+          );
+          if (next.appended) {
+            appendix = next.appendix;
+            imageBlocks.push(imageBlock);
+          }
         } catch (err) {
           log.error({ err: err }, "@-mention expansion failed");
         }
@@ -155,11 +183,17 @@ export async function expandAtRefsWithImages(
             lineEnd,
           );
           if (snippet.length <= MAX_INLINE_BYTES) {
-            appendix += `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`;
+            appendix = appendWithinLimit(
+              appendix,
+              `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`,
+            ).appendix;
           }
         }
       } else if (st.size <= MAX_INLINE_BYTES) {
-        appendix += `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`;
+        appendix = appendWithinLimit(
+          appendix,
+          `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`,
+        ).appendix;
       }
     } catch (err) {
       log.error({ err }, "@-mention expansion failed");

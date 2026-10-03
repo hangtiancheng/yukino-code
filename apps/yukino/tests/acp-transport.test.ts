@@ -57,8 +57,7 @@ describe("ACP transports", () => {
   });
 
   it("serves ACP over WebSocket", async () => {
-    const port = 20_000 + (process.pid % 20_000);
-    const server = await startAcpWebSocketServer(`127.0.0.1:${String(port)}`);
+    const server = await startAcpWebSocketServer("0");
     try {
       const stream = createWebSocketStream(server.url, { WebSocket });
       const client = acp.client({ name: "websocket-test-client" });

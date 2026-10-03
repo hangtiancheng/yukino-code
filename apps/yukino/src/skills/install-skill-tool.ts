@@ -23,9 +23,54 @@ import type {
   ToolResult,
   ToolSchema,
 } from "@/tools/types.js";
-import { asErrorString, strArg } from "@/utils/index.js";
+import { asErrorString, isRecord, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "skills" });
+const MAX_SKILL_DOWNLOAD_BYTES = 1024 * 1024;
+
+async function readSkillResponse(
+  response: Response,
+  signal: AbortSignal,
+): Promise<string> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_SKILL_DOWNLOAD_BYTES
+  ) {
+    throw new Error("Skill download exceeds the 1 MiB size limit");
+  }
+  if (!response.body) {
+    return "";
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      signal.throwIfAborted();
+      const result: unknown = await reader.read();
+      if (!isRecord(result) || typeof result.done !== "boolean") {
+        throw new Error("Skill download returned an invalid response stream");
+      }
+      if (result.done) {
+        break;
+      }
+      if (!(result.value instanceof Uint8Array)) {
+        throw new Error("Skill download returned a non-byte response chunk");
+      }
+      totalBytes += result.value.byteLength;
+      if (totalBytes > MAX_SKILL_DOWNLOAD_BYTES) {
+        await reader.cancel();
+        throw new Error("Skill download exceeds the 1 MiB size limit");
+      }
+      chunks.push(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 // Installs a skill from a local file path or an http(s) URL into
 // .agents/skills/<name>/SKILL.md, then reloads the catalog.
@@ -98,7 +143,7 @@ export class InstallSkillTool implements Tool {
               isError: true,
             };
           }
-          content = await resp.text();
+          content = await readSkillResponse(resp, signal);
           signal.throwIfAborted();
         } finally {
           // Keep the timeout active until the response body has been consumed.

@@ -29,10 +29,13 @@ import { buildSkillSection } from "./skills/catalog.js";
 import type { SkillHost } from "./skills/index.js";
 import { InstallSkillTool } from "./skills/install-skill-tool.js";
 import { LoadSkillTool } from "./skills/load-skill-tool.js";
-import type { FileMailMessage } from "./teams/file-mailbox.js";
 import { FileMailbox } from "./teams/file-mailbox.js";
 import { TeamManager } from "./teams/index.js";
-import { LEADER_NAME, isShutdownRequest } from "./teams/protocol.js";
+import {
+  LEADER_NAME,
+  isShutdownRequest,
+  shutdownResponse,
+} from "./teams/protocol.js";
 import {
   TeamTaskCreateTool,
   TeamTaskGetTool,
@@ -79,18 +82,13 @@ export function parseTeammateFlags(args: string[]): TeammateArgs | null {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--team-dir" && args[i + 1]) {
       teamDir = args[++i];
-    }
-    if (args[i] === "--team-name" && args[i + 1]) {
+    } else if (args[i] === "--team-name" && args[i + 1]) {
       teamName = args[++i];
-    }
-
-    if (args[i] === "--member-name" && args[i + 1]) {
+    } else if (args[i] === "--member-name" && args[i + 1]) {
       memberName = args[++i];
-    }
-    if (args[i] === "--task" && args[i + 1]) {
+    } else if (args[i] === "--task" && args[i + 1]) {
       initialTask = args[++i];
-    }
-    if (args[i] === "--provider-index" && args[i + 1]) {
+    } else if (args[i] === "--provider-index" && args[i + 1]) {
       providerIndex = Number(args[++i]);
     }
   }
@@ -130,12 +128,8 @@ function readLeaderPid(workDir: string, teamName: string): number {
   return readTeamFile(workDir, teamName)?.leaderPid ?? 0;
 }
 
-function createIdleNotification(memberName: string): FileMailMessage {
-  return {
-    from: memberName,
-    text: `[idle] ${memberName} has completed their task and is waiting for new instructions.`,
-    timestamp: new Date().toISOString(),
-  };
+function createIdleNotification(memberName: string): string {
+  return `[idle] ${memberName} has completed their task and is waiting for new instructions.`;
 }
 
 /**
@@ -326,7 +320,7 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
     const notifyIdle = (): Promise<void> =>
       leaderMailbox.send(
         args.memberName,
-        createIdleNotification(args.memberName).text,
+        createIdleNotification(args.memberName),
       );
     // The leader's UI keeps showing "running" unless a notification arrives,
     // so a failure must be reported before this process exits.
@@ -366,6 +360,14 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
       const batch = await mailbox.receive();
       for (const [i, msg] of batch.entries()) {
         if (isShutdownRequest(msg)) {
+          mailbox.requeue(batch.filter((_, index) => index !== i));
+          const response = shutdownResponse(
+            args.memberName,
+            msg.requestId ?? "",
+            true,
+            "acknowledged, shutting down",
+          );
+          await leaderMailbox.send(args.memberName, response.text, response);
           console.log(`Shutdown requested, ${args.memberName} exiting.`);
           break polling;
         }
@@ -385,8 +387,8 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
         // else is pending: a queued follow-up would make the idle claim
         // stale. Shutdown notices are control messages, not tasks, and new
         // mail that arrived during the run keeps the claim honest too.
-        const moreTasks = batch.slice(i + 1).some((m) => !isShutdownRequest(m));
-        if (!moreTasks && mailbox.unreadCount() === 0) {
+        const moreMessages = batch.length > i + 1;
+        if (!moreMessages && mailbox.unreadCount() === 0) {
           await notifyIdle();
         }
       }

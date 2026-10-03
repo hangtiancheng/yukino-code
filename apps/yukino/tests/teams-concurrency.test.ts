@@ -75,10 +75,10 @@ describe("SharedTaskStore cross-instance writes", () => {
 });
 
 describe("FileMailbox lock discipline", () => {
-  it("releases the lock file once the operation completes", () => {
+  it("releases the lock file once the operation completes", async () => {
     const dir = makeTempDir();
     const mailbox = new FileMailbox(dir, "leader");
-    void mailbox.send("ann", "hello");
+    await mailbox.send("ann", "hello");
     expect(existsSync(join(dir, "leader.json.lock"))).toBe(false);
     expect(mailbox.unreadCount()).toBe(1);
   });
@@ -123,10 +123,18 @@ describe("FileHistory snapshot sequencing", () => {
     const snaps = fh.getSnapshots();
     const newest = snaps[snaps.length - 1];
     const prev = snaps[snaps.length - 2];
-    expect(readFileSync(newest.backups[file]?.backupPath ?? "", "utf-8")).toBe(
-      "content-101",
-    );
-    expect(readFileSync(prev.backups[file]?.backupPath ?? "", "utf-8")).toBe(
+    const newestBackup = newest.backups[file];
+    const previousBackup = prev.backups[file];
+    expect(newestBackup?.state).toBe("existing");
+    expect(previousBackup?.state).toBe("existing");
+    if (newestBackup?.state !== "existing") {
+      throw new Error("expected newest file-history backup to exist");
+    }
+    if (previousBackup?.state !== "existing") {
+      throw new Error("expected previous file-history backup to exist");
+    }
+    expect(readFileSync(newestBackup.backupPath, "utf-8")).toBe("content-101");
+    expect(readFileSync(previousBackup.backupPath, "utf-8")).toBe(
       "content-100",
     );
 

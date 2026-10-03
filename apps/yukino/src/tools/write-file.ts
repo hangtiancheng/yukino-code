@@ -95,7 +95,12 @@ export class WriteFileTool implements Tool {
         mkdirSync(dirname(filePath), { recursive: true });
         writeFileSync(filePath, content, "utf-8");
         ctx.fileStateCache?.update(filePath);
-        const lineCount = content.split("\n").length;
+        const lineCount =
+          content.length === 0
+            ? 0
+            : content.endsWith("\n")
+              ? content.slice(0, -1).split("\n").length
+              : content.split("\n").length;
         return Promise.resolve({
           output: `Successfully wrote to ${filePath} (${String(lineCount)} lines)`,
           isError: false,

@@ -171,7 +171,11 @@ const toolArgsSchema = z.record(z.string(), z.unknown()).nullable();
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("connected"),
-    data: z.strictObject({ session: z.string(), cwd: z.string() }),
+    data: z.strictObject({
+      session: z.string(),
+      cwd: z.string(),
+      streaming: z.boolean(),
+    }),
   }),
   z.strictObject({
     type: z.literal("commands"),
@@ -242,6 +246,13 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     data: z.strictObject({
       id: z.string(),
       questions: z.array(questionSchema),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("request_expired"),
+    data: z.strictObject({
+      id: z.string(),
+      kind: z.enum(["permission", "ask"]),
     }),
   }),
   z.strictObject({

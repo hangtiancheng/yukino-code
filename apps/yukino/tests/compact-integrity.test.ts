@@ -13,19 +13,30 @@ function history() {
   const conv = new ConversationManager();
   for (let index = 0; index < 20; index++) {
     conv.addUserMessage(`task ${String(index)} ` + "context ".repeat(200));
-    conv.addAssistantMessage("answer");
+    conv.addAssistantFull("answer", [], []);
   }
-  conv.addAssistantMessageWithTools("read image", [
+  conv.addAssistantFull(
+    "read image",
+    [],
+    [
+      {
+        toolUseId: "read",
+        toolName: "ReadFile",
+        arguments: { file_path: "a.png" },
+      },
+    ],
+  );
+  conv.addToolResultsMessage([
     {
       toolUseId: "read",
-      toolName: "ReadFile",
-      arguments: { file_path: "a.png" },
-    },
-  ]);
-  conv.addToolResultMessage("read", "image read", false, [
-    {
-      type: "image",
-      source: { type: "base64", media_type: "image/png", data: "QUJD" },
+      content: "image read",
+      isError: false,
+      contentBlocks: [
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/png", data: "QUJD" },
+        },
+      ],
     },
   ]);
   conv.addSystemReminder("Keep the latest user constraints");

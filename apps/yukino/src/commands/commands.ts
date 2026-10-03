@@ -41,14 +41,15 @@ export class CommandRegistry {
   private commands = new Map<string, Command>();
   /** Throws when the name conflicts with an existing command. */
   register(cmd: Command): void {
-    if (this.commands.has(cmd.name)) {
+    const key = cmd.name.toLowerCase();
+    if (this.commands.has(key)) {
       throw new Error(`Command '${cmd.name}' already registered`);
     }
-    this.commands.set(cmd.name, cmd);
+    this.commands.set(key, cmd);
   }
 
   find(name: string): Command | undefined {
-    return this.commands.get(name);
+    return this.commands.get(name.toLowerCase());
   }
 
   complete(prefix: string): Command[] {

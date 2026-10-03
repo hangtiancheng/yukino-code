@@ -589,6 +589,12 @@ export function markLastUserTailForCache(
 }
 
 function classifyAnthropicError(err: unknown) {
+  if (
+    err instanceof Anthropic.APIConnectionError ||
+    err instanceof Anthropic.APIUserAbortError
+  ) {
+    return new NetworkError(`Network error: ${err.message}`);
+  }
   if (err instanceof Anthropic.APIError) {
     if (
       err.status === AnthropicErrorCode.PromptTooLong ||

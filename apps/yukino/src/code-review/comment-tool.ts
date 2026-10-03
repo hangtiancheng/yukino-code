@@ -115,7 +115,8 @@ export function parseComments(
       continue;
     }
     const content = strArg(item, "content").trim();
-    if (!content) {
+    const existingCode = strArg(item, "existing_code").trim();
+    if (!content || !existingCode) {
       droppedEntries++;
       continue;
     }
@@ -128,7 +129,7 @@ export function parseComments(
     comments.push({
       path,
       content,
-      existingCode: strArg(item, "existing_code"),
+      existingCode,
       suggestionCode: suggestionCode ? suggestionCode : undefined,
       startLine: 0,
       endLine: 0,
@@ -157,20 +158,12 @@ export function parseComments(
 export class CommentCollector {
   private comments: ReviewComment[] = [];
 
-  add(cm: ReviewComment): void {
-    this.comments.push(cm);
-  }
-
   addAll(cms: ReviewComment[]): void {
     this.comments.push(...cms);
   }
 
   all(): ReviewComment[] {
     return [...this.comments];
-  }
-
-  forPath(path: string): ReviewComment[] {
-    return this.comments.filter((c) => c.path === path);
   }
 
   /** Total count, usable as a cursor for since(). */
@@ -185,10 +178,6 @@ export class CommentCollector {
   removeAt(indices: number[]): void {
     const drop = new Set(indices);
     this.comments = this.comments.filter((_, i) => !drop.has(i));
-  }
-
-  count(): number {
-    return this.comments.length;
   }
 }
 

@@ -161,8 +161,24 @@ export function boolArg(
   if (typeof v === "boolean") {
     return v;
   }
-
-  return fallback ?? Boolean(v);
+  if (typeof v === "string") {
+    const normalized = v.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "0") {
+      return false;
+    }
+  }
+  if (typeof v === "number") {
+    if (v === 1) {
+      return true;
+    }
+    if (v === 0) {
+      return false;
+    }
+  }
+  return fallback ?? false;
 }
 
 export function formatToolArgs(args: Record<string, unknown>): string {

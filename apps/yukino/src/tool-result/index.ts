@@ -3,6 +3,7 @@ import { join, resolve, sep } from "node:path";
 
 import type { ToolResultBlock } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
+import { getSessionArtifactsDir } from "@/session/index.js";
 import { isObject } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "tool-result" });
@@ -16,8 +17,10 @@ const MESSAGE_AGGREGATE_LIMIT = 200000;
 export const TOOL_RESULT_PREVIEW_CHARS = 2000;
 
 export function spillDir(workDir: string, sessionId: string): string {
-  const id = sessionId || "default";
-  return join(workDir, ".yukino", "sessions", id, "tool-results");
+  if (!sessionId) {
+    throw new Error("Tool-result spilling requires a session ID");
+  }
+  return join(getSessionArtifactsDir(workDir, sessionId), "tool-results");
 }
 
 // Persist the full text of a tool result to disk. tool_use_id is unique per
@@ -36,9 +39,10 @@ function writeSpill(
     writeFileSync(path, content, { encoding: "utf-8", flag: "wx" });
   } catch (err: unknown) {
     log.error({ err }, "tool-result operation failed");
-    if (isObject(err) && "code" in err && err.code !== "EEXIST") {
-      throw err;
+    if (isObject(err) && "code" in err && err.code === "EEXIST") {
+      return path;
     }
+    throw err;
   }
   return path;
 }
@@ -118,6 +122,9 @@ export function isSpillReadback(
   }
   const raw = args.file_path;
   if (typeof raw !== "string" || !raw) {
+    return false;
+  }
+  if (!sessionId) {
     return false;
   }
   // Resolve against workDir like ReadFileTool does — under remote/teammate

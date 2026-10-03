@@ -1,8 +1,5 @@
 import { PassThrough } from "node:stream";
-import {
-  setImmediate as nextTick,
-  setTimeout as delay,
-} from "node:timers/promises";
+import { setImmediate as nextTick } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
 import { render, type Instance } from "ink";
@@ -60,6 +57,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => instance?.unmount());
   instance = undefined;
   input.dispose();
@@ -85,12 +83,13 @@ function readInput(): string {
 
 describe("terminal input report filtering", () => {
   it("buffers typing during detection and consumes a later, split OSC terminator", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const theme = detectTerminalTheme(input);
     terminal.stream.write("anth" + colorScheme);
     expect(await theme).toBe("light");
     expect(terminal.controls.isRaw).toBe(false);
     terminal.stream.write(osc.slice(0, -1));
-    await delay(120);
+    await vi.advanceTimersByTimeAsync(120);
     expect(readInput()).toBe("anth");
     terminal.stream.write("\\ropic");
     await nextTick();
@@ -98,7 +97,10 @@ describe("terminal input report filtering", () => {
   });
 
   it("filters responses arriving after the detection timeout", async () => {
-    expect(await detectTerminalTheme(input, 5)).toBe("dark");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const theme = detectTerminalTheme(input, 5);
+    await vi.advanceTimersByTimeAsync(5);
+    expect(await theme).toBe("dark");
     terminal.stream.write(osc + colorScheme + "\\/user");
     await nextTick();
     expect(readInput()).toBe("\\/user");
@@ -117,6 +119,7 @@ describe("terminal input report filtering", () => {
   });
 
   it("preserves UTF-8, backslashes, keyboard sequences and bracketed paste", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const text = "\\path/日本語😁\x1b[A\x1b[1;5D\x03";
     const paste = "\x1b[200~" + osc + colorScheme + "\\\x1b[201~";
     for (const byte of Buffer.from(text + paste)) {
@@ -125,7 +128,7 @@ describe("terminal input report filtering", () => {
     await nextTick();
     expect(readInput()).toBe(text + paste);
     terminal.stream.write("\x1b");
-    await delay(40);
+    await vi.advanceTimersByTimeAsync(40);
     expect(readInput()).toBe("\x1b");
   });
 

@@ -280,15 +280,23 @@ describe("config", () => {
     });
 
     it("falls back to env var", () => {
-      process.env.ANTHROPIC_API_KEY = "sk-from-env";
-      const p: ProviderConfig = {
-        name: "p",
-        base_url: "#",
-        protocol: "anthropic",
-        model: "m",
-      };
-      expect(resolveAPIKey(p)).toBe("sk-from-env");
-      delete process.env.ANTHROPIC_API_KEY;
+      const previous = process.env.ANTHROPIC_API_KEY;
+      try {
+        process.env.ANTHROPIC_API_KEY = "sk-from-env";
+        const p: ProviderConfig = {
+          name: "p",
+          base_url: "#",
+          protocol: "anthropic",
+          model: "m",
+        };
+        expect(resolveAPIKey(p)).toBe("sk-from-env");
+      } finally {
+        if (previous === undefined) {
+          delete process.env.ANTHROPIC_API_KEY;
+        } else {
+          process.env.ANTHROPIC_API_KEY = previous;
+        }
+      }
     });
   });
 
@@ -543,9 +551,7 @@ describe("config", () => {
           "",
         ].join("\n"),
       );
-      expect(() => loadConfig(path)).toThrow(
-        /Invalid MCP server configuration/,
-      );
+      expect(() => loadConfig(path)).toThrow(/Invalid configuration/);
     });
   });
 });

@@ -41,7 +41,7 @@ describe("currentContextTokens (real-usage anchoring)", () => {
   it("falls back to whole-transcript char estimation when there is no anchor (cold start)", () => {
     const conversation = new ConversationManager();
     conversation.addUserMessage("a".repeat(35));
-    conversation.addAssistantMessage("b".repeat(35));
+    conversation.addAssistantFull("b".repeat(35), [], []);
 
     const got = currentContextTokens(conversation, undefined);
     expect(got).toBe(estimateTokens(conversation));
@@ -53,7 +53,7 @@ describe("currentContextTokens (real-usage anchoring)", () => {
     // Two messages were already covered by the API usage that produced the
     // anchor; their characters must NOT be re-counted.
     conversation.addUserMessage("x".repeat(1000));
-    conversation.addAssistantMessage("y".repeat(1000));
+    conversation.addAssistantFull("y".repeat(1000), [], []);
 
     const anchor: UsageAnchor = {
       baselineTokens: 5000, // the real API-reported full context size
@@ -167,15 +167,19 @@ describe("computeKeepStartIndex (recent-history retention)", () => {
       if (i % 2 === 0) {
         conversation.addUserMessage(`u${String(i)}`);
       } else {
-        conversation.addAssistantMessage(`a${String(i)}`);
+        conversation.addAssistantFull(`a${String(i)}`, [], []);
       }
     }
-    conversation.addAssistantMessageWithTools("calling tool", [
-      { toolUseId: "tid-1", toolName: "Read", arguments: { path: "/x" } },
+    conversation.addAssistantFull(
+      "calling tool",
+      [],
+      [{ toolUseId: "tid-1", toolName: "Read", arguments: { path: "/x" } }],
+    );
+    conversation.addToolResultsMessage([
+      { toolUseId: "tid-1", content: "file contents", isError: false },
     ]);
-    conversation.addToolResultMessage("tid-1", "file contents", false);
     for (let i = 10; i < 14; i++) {
-      conversation.addAssistantMessage(`tail${String(i)}`);
+      conversation.addAssistantFull(`tail${String(i)}`, [], []);
     }
 
     const messages = conversation.getMessages();
@@ -217,11 +221,11 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
       conversation.addUserMessage(
         `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
       );
-      conversation.addAssistantMessage(`old-reply-${String(i)}`);
+      conversation.addAssistantFull(`old-reply-${String(i)}`, [], []);
     }
     // ...and a recent tail we expect to survive untouched.
     conversation.addUserMessage("RECENT-QUESTION marker-recent-q");
-    conversation.addAssistantMessage("RECENT-ANSWER marker-recent-a");
+    conversation.addAssistantFull("RECENT-ANSWER marker-recent-a", [], []);
     conversation.addUserMessage("RECENT-FOLLOWUP marker-recent-f");
 
     const { client, lastPrompt } = stubClient("THE SUMMARY BODY");
@@ -276,10 +280,10 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
       conversation.addUserMessage(
         `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
       );
-      conversation.addAssistantMessage(`old-reply-${String(i)}`);
+      conversation.addAssistantFull(`old-reply-${String(i)}`, [], []);
     }
     conversation.addUserMessage("recent question");
-    conversation.addAssistantMessage("recent answer");
+    conversation.addAssistantFull("recent answer", [], []);
 
     const sessionPath = "/tmp/yukino-session-transcript.jsonl";
     const { client } = stubClient("PERSISTED SUMMARY");
@@ -302,18 +306,22 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     const conversation = new ConversationManager();
     for (let i = 0; i < 20; i++) {
       conversation.addUserMessage(`prefix-${String(i)}-` + "p".repeat(1200));
-      conversation.addAssistantMessage(`reply-${String(i)}`);
+      conversation.addAssistantFull(`reply-${String(i)}`, [], []);
     }
     // Recent tail containing a tool pair near the boundary.
-    conversation.addAssistantMessageWithTools("running read", [
-      { toolUseId: "keep-tid", toolName: "Read", arguments: { path: "/a" } },
-    ]);
-    conversation.addToolResultMessage(
-      "keep-tid",
-      "RESULT-CONTENT-marker",
-      false,
+    conversation.addAssistantFull(
+      "running read",
+      [],
+      [{ toolUseId: "keep-tid", toolName: "Read", arguments: { path: "/a" } }],
     );
-    conversation.addAssistantMessage("done with tool");
+    conversation.addToolResultsMessage([
+      {
+        toolUseId: "keep-tid",
+        content: "RESULT-CONTENT-marker",
+        isError: false,
+      },
+    ]);
+    conversation.addAssistantFull("done with tool", [], []);
     conversation.addUserMessage("thanks");
 
     const { client } = stubClient("summary");
@@ -335,7 +343,7 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
   it("degenerates to no-op when there are too few messages to compact", async () => {
     const conversation = new ConversationManager();
     conversation.addUserMessage("only-q marker");
-    conversation.addAssistantMessage("only-a marker");
+    conversation.addAssistantFull("only-a marker", [], []);
 
     const { client } = stubClient("should-not-be-used");
     const before = conversation.getMessages();

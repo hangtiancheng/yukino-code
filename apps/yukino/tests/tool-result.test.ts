@@ -1,8 +1,8 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync as createTempDir, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
 import type { ToolResultBlock } from "@/conversation/index.js";
 import {
@@ -11,6 +11,21 @@ import {
   isSpillReadback,
   persistLargeResult,
 } from "@/tool-result/index.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 function batch(...sizes: number[]): ToolResultBlock[] {
   return sizes.map((n, i) => ({
     toolUseId: `t${String(i + 1)}`,

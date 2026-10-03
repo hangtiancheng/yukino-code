@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -22,12 +22,14 @@ import { asString } from "@/utils/index.js";
 // platforms, so set both.
 let realHome: string | undefined;
 let realUserProfile: string | undefined;
+let homeDir = "";
+const workDirs = new Set<string>();
 beforeEach(() => {
   realHome = process.env.HOME;
   realUserProfile = process.env.USERPROFILE;
-  const tmp = mkdtempSync(join(tmpdir(), "yukino-home-"));
-  process.env.HOME = tmp;
-  process.env.USERPROFILE = tmp;
+  homeDir = mkdtempSync(join(tmpdir(), "yukino-home-"));
+  process.env.HOME = homeDir;
+  process.env.USERPROFILE = homeDir;
 });
 afterEach(() => {
   if (realHome === undefined) {
@@ -40,9 +42,18 @@ afterEach(() => {
   } else {
     process.env.USERPROFILE = realUserProfile;
   }
+  rmSync(homeDir, { recursive: true, force: true });
+  for (const directory of workDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  workDirs.clear();
 });
 
-const workDir = () => mkdtempSync(join(tmpdir(), "yukino-coord-"));
+const workDir = () => {
+  const directory = mkdtempSync(join(tmpdir(), "yukino-coord-"));
+  workDirs.add(directory);
+  return directory;
+};
 const ctx = { workDir: process.cwd() };
 
 describe("coordinator tool set", () => {

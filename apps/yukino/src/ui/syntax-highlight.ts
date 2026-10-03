@@ -249,11 +249,7 @@ function getHighlighter(): HighlighterCore {
 
 export function isLanguageSupported(language: string): boolean {
   const normalized = language.toLowerCase();
-  return (
-    SUPPORTED_LANGUAGES.has(normalized) ||
-    isPlainLang(normalized) ||
-    normalized === "ansi"
-  );
+  return SUPPORTED_LANGUAGES.has(normalized) || isPlainLang(normalized);
 }
 
 /**

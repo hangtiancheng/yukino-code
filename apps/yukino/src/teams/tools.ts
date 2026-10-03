@@ -1,5 +1,4 @@
 import {
-  isValidTeammateName,
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
@@ -11,7 +10,7 @@ import {
 } from "./protocol.js";
 import { getNameRegistry } from "./registry.js";
 
-import type { TeamManager, RunAgent, Team } from "./index.js";
+import type { TeamManager, Team } from "./index.js";
 
 import { createChildLogger } from "@/logger/index.js";
 import type {
@@ -76,84 +75,6 @@ export class TeamCreateTool implements Tool {
         `Use Agent tool with team_name='${team.name}' to add teammates.`,
       isError: false,
     };
-  }
-}
-
-export class SpawnTeammateTool implements Tool {
-  name = "SpawnTeammate";
-  description =
-    "Spawn a teammate in a team to work on a task in the background. Its result is delivered back to you on the team channel when it finishes.";
-  category = "read" as const;
-  constructor(
-    private mgr: TeamManager,
-    private runAgent: RunAgent,
-    private providerIndex?: number,
-  ) {}
-  schema(): ToolSchema {
-    return {
-      name: this.name,
-      description: this.description,
-      input_schema: {
-        type: "object",
-        properties: {
-          team: {
-            type: "string",
-            description: "Team name (created if missing)",
-          },
-          name: {
-            type: "string",
-            description:
-              "Teammate name using only letters, digits, underscores, and hyphens. 'leader' is reserved.",
-          },
-          task: {
-            type: "string",
-            description: "The task for the teammate",
-          },
-        },
-        required: ["team", "name", "task"],
-      },
-    };
-  }
-
-  async execute(
-    ctx: ToolContext,
-    args: Record<string, unknown>,
-  ): Promise<ToolResult> {
-    const team = strArg(args, "team");
-    const name = strArg(args, "name");
-    const task = strArg(args, "task");
-    if (!team || !name || !task) {
-      return Promise.resolve({
-        output: "Error: team, name and task are required",
-        isError: true,
-      });
-    }
-    if (!isValidTeammateName(name)) {
-      return Promise.resolve({
-        output:
-          `Error: invalid teammate name '${name}'. ` +
-          "Use only letters, digits, underscores, and hyphens; 'leader' is reserved.",
-        isError: true,
-      });
-    }
-    // Single-team invariant: creating a team sweeps every other team first,
-    // matching TeamCreate semantics.
-    let t = this.mgr.get(team);
-    if (!t) {
-      await this.mgr.deleteAll();
-      t = this.mgr.create(team);
-    }
-    if (t.getMember(name)) {
-      return Promise.resolve({
-        output: `Error: teammate '${name}' already exists in team '${team}'.`,
-        isError: true,
-      });
-    }
-    t.spawnTeammate(name, task, this.runAgent, undefined, this.providerIndex);
-    return Promise.resolve({
-      output: `Teammate '${name}' spawned in team '${team}'. Its result will arrive on the team channel; keep working and watch for it.`,
-      isError: false,
-    });
   }
 }
 

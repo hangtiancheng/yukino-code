@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import {
   detectBackend,
+  isTeammateAlive,
   restoreTeammateCancel,
   spawnTeammate as spawnTeammateProcess,
 } from "./backend.js";
@@ -20,7 +21,6 @@ import {
 import {
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
-  MSG_SHUTDOWN_REQUEST,
   SHUTDOWN_PREFIX,
   approved,
   isShutdownRequest,
@@ -150,10 +150,20 @@ export class Team {
   }
 
   addMember(name: string): Member {
+    if (this.members.has(name)) {
+      throw new Error(`Teammate '${name}' already exists`);
+    }
     const member = this.createMember(name);
     this.members.set(name, member);
     this.persist();
     return member;
+  }
+
+  removeMember(name: string): void {
+    if (this.members.delete(name)) {
+      getNameRegistry().unregister(name);
+      this.persist();
+    }
   }
 
   /** Reconstructs a persisted member without writing a partial team snapshot. */
@@ -170,7 +180,10 @@ export class Team {
     member.paneId = entry.paneId;
     member.external =
       member.backendType === "tmux" || member.backendType === "iterm";
-    member.active = entry.isActive === true && member.external;
+    member.active =
+      entry.isActive &&
+      member.external &&
+      isTeammateAlive(member.backendType, member.paneId);
 
     if (member.active) {
       getNameRegistry().register(member.name, member.agentId);
@@ -210,6 +223,7 @@ export class Team {
   snapshot(): TeamFile {
     return {
       name: this.name,
+      mode: this.mode,
       description: this.description,
       createdAt: this.createdAt,
       leaderAgentId: this.leaderAgentId,
@@ -261,17 +275,40 @@ export class Team {
     checker?: PermissionChecker,
     providerIndex?: number,
     originToolCallId?: string,
-  ): void {
+    memberWorkDir = this.workDir,
+  ): TeamMode {
     const mode = this.mode;
-    if (mode === "in-process") {
-      this.spawnInProcess(name, task, runAgent, checker, originToolCallId);
-      return;
+    if (mode === "in-process" || checker?.mode === "plan") {
+      this.spawnInProcess(
+        name,
+        task,
+        runAgent,
+        checker,
+        originToolCallId,
+        memberWorkDir,
+      );
+      return "in-process";
     }
     try {
-      this.spawnExternal(mode, name, task, providerIndex, originToolCallId);
+      this.spawnExternal(
+        mode,
+        name,
+        task,
+        providerIndex,
+        originToolCallId,
+        memberWorkDir,
+      );
+      return mode;
     } catch {
-      // Fall back to in-process mode when the external backend fails to launch (missing dependency / unsupported platform)
-      this.spawnInProcess(name, task, runAgent, checker, originToolCallId);
+      this.spawnInProcess(
+        name,
+        task,
+        runAgent,
+        checker,
+        originToolCallId,
+        memberWorkDir,
+      );
+      return "in-process";
     }
   }
 
@@ -287,10 +324,16 @@ export class Team {
     task: string,
     providerIndex?: number,
     originToolCallId?: string,
+    memberWorkDir = this.workDir,
   ): void {
-    const member = this.addMember(name);
+    const member = this.getMember(name) ?? this.addMember(name);
     member.active = true;
     member.backendType = mode;
+    member.external = true;
+    member.paneId =
+      mode === "tmux" ? `yukino-${Date.now().toString(36)}` : undefined;
+    member.worktreePath =
+      memberWorkDir === this.workDir ? undefined : memberWorkDir;
     // Persist the activation: the on-disk isActive otherwise stays false
     // until some later persist, and a restart would restore the member as
     // inactive even though the process is running.
@@ -332,7 +375,8 @@ export class Team {
           ? ["--provider-index", String(providerIndex)]
           : []),
       ],
-      cwd: this.workDir,
+      cwd: memberWorkDir,
+      paneId: member.paneId,
     };
 
     const { cancel, paneId } = spawnTeammateProcess(config);
@@ -355,10 +399,15 @@ export class Team {
     runAgent: RunAgent,
     checker?: PermissionChecker,
     originToolCallId?: string,
+    memberWorkDir = this.workDir,
   ): void {
-    const member = this.addMember(name);
+    const member = this.getMember(name) ?? this.addMember(name);
     member.active = true;
     member.backendType = "in-process";
+    member.external = false;
+    member.paneId = undefined;
+    member.worktreePath =
+      memberWorkDir === this.workDir ? undefined : memberWorkDir;
     // Persist the activation (see spawnExternal for the rationale).
     this.persist();
     member.checker = checker;
@@ -410,7 +459,6 @@ export class Team {
     // Main loop: execute task → idle notification → poll mailbox → resume execution upon receiving new message
     const done = (async () => {
       let nextPrompt = task;
-      let idleReason = "available";
       try {
         while (member.active) {
           uiState.status = "running";
@@ -430,15 +478,13 @@ export class Team {
             );
             break;
           }
-          // Plan-mode teammate: teammates have no ExitPlanMode tool — ending the turn is
-          // the submission signal, by which time the plan should have been written to the
-          // plan file. Submit it to the Leader for approval; only after approval is the
-          // read-only restriction lifted and execution begins.
+          // Plan-mode teammates submit by ending the turn; their tool registry
+          // intentionally omits the main-thread ExitPlanMode dialog tool.
           if (member.checker?.mode === "plan") {
             uiState.status = "idle";
             const next = await this.runPlanApproval(
               member,
-              this.readPlanForReview(),
+              this.readPlanForReview(member),
             );
             if (next === null) {
               break;
@@ -450,9 +496,8 @@ export class Team {
           uiState.status = "idle";
           await this.leaderMailbox.send(
             name,
-            `[idle] ${name} (reason: ${idleReason})`,
+            `[idle] ${name} (reason: available)`,
           );
-          idleReason = "available";
 
           const pollResult = await this.waitForNextPromptOrShutdown(member);
           if (pollResult.shutdown || !member.active) {
@@ -461,7 +506,7 @@ export class Team {
             // stopped. The teammate always approves here: it is already in the
             // idle poll loop with no work in progress.
             const req = pollResult.shutdown;
-            if (req?.type === MSG_SHUTDOWN_REQUEST) {
+            if (req) {
               const resp = shutdownResponse(
                 member.name,
                 req.requestId ?? "",
@@ -526,6 +571,7 @@ export class Team {
       // Return the shutdown message itself (not a boolean) so the caller can use its requestId to send a response
       const shutdown = msgs.find((m) => isShutdownRequest(m));
       if (shutdown) {
+        member.mailbox.requeue(msgs.filter((message) => message !== shutdown));
         return { prompt: "", shutdown };
       }
 
@@ -539,9 +585,12 @@ export class Team {
   }
 
   /** Reads the teammate's plan file for review; returns a fallback note when empty or unreadable. */
-  private readPlanForReview(): string {
+  private readPlanForReview(member: Member): string {
     try {
-      const text = readFileSync(getOrCreatePlanPath(this.workDir), "utf-8");
+      const text = readFileSync(
+        getOrCreatePlanPath(member.worktreePath ?? this.workDir),
+        "utf-8",
+      );
       if (text.trim()) {
         return text;
       }
@@ -752,12 +801,7 @@ export class TeamManager {
       return undefined;
     }
 
-    const mode = tf.members.find((m) => m.backendType)?.backendType;
-    const team = new Team(
-      tf.name,
-      isTeamMode(mode) ? mode : "in-process",
-      this.workDir,
-    );
+    const team = new Team(tf.name, tf.mode, this.workDir);
     team.leaderAgentId = tf.leaderAgentId;
     team.description = tf.description;
     team.createdAt = tf.createdAt;
@@ -864,7 +908,9 @@ export class TeamManager {
       for (const msg of msgs) {
         const member = team.getMember(msg.from);
         if (member?.uiState && msg.text.startsWith("[idle]")) {
-          const failed = msg.text.includes(" failed:");
+          const failed =
+            msg.text.includes(" failed:") ||
+            msg.text.includes("reason: failed");
           const stopped = msg.text.includes("reason: stopped");
           member.uiState.status = failed
             ? "failed"

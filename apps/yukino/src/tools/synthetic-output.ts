@@ -79,7 +79,7 @@ export class SyntheticOutputTool implements Tool {
   }
 
   /**
-   * Only covers the top-level type (object/array/string) and required fields;
+   * Only covers the top-level type and required fields;
    * an empty return string means it passed. Full JSON Schema validation is
    * unnecessary here — what we guard against is the model delivering a
    * structurally malformed result.
@@ -101,6 +101,15 @@ export class SyntheticOutputTool implements Tool {
       }
       if (expected === "string" && typeof data !== "string") {
         return `Expected string, got ${isArray ? "array" : typeof data}`;
+      }
+      if (expected === "number" && typeof data !== "number") {
+        return `Expected number, got ${isArray ? "array" : typeof data}`;
+      }
+      if (expected === "boolean" && typeof data !== "boolean") {
+        return `Expected boolean, got ${isArray ? "array" : typeof data}`;
+      }
+      if (expected === "null" && data !== null) {
+        return `Expected null, got ${isArray ? "array" : typeof data}`;
       }
     }
 

@@ -1,15 +1,36 @@
 import { writeFileSync } from "fs";
-import { mkdtempSync, existsSync, readFileSync, mkdirSync } from "node:fs";
+import {
+  mkdtempSync as createTempDir,
+  existsSync,
+  readFileSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
 import type { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { MemoryManager } from "@/memory/manager.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 class MockClient implements LLMClient {
   lastPrompt = "";
@@ -242,9 +263,7 @@ describe("MemoryManager malformed files", () => {
     expect(manager.loadAll().some((memory) => memory.path === badPath)).toBe(
       false,
     );
-    expect(readFileSync(join(dir, "MEMORY.md"), "utf-8")).not.toContain(
-      "bad.md",
-    );
+    expect(existsSync(join(dir, "MEMORY.md"))).toBe(false);
     await expect(
       manager.findRelevantMemories(
         "query",

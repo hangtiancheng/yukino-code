@@ -45,9 +45,13 @@ export function isPathWithin(root: string, path: string): boolean {
 
 export function compactPath(path: string): string {
   const home = homedir();
-  return path === home
-    ? "~"
-    : path.startsWith(`${home}/`)
-      ? `~/${path.slice(home.length + 1)}`
-      : path;
+  const homeRelative = relative(home, path);
+  if (homeRelative === "") {
+    return "~";
+  }
+  return !homeRelative.startsWith(`..${sep}`) &&
+    homeRelative !== ".." &&
+    !isAbsolute(homeRelative)
+    ? join("~", homeRelative)
+    : path;
 }

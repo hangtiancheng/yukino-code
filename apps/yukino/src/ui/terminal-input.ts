@@ -84,9 +84,14 @@ export class TerminalInput extends Transform {
     // this timeout unless a paste is in progress or the buffer already starts
     // with a full report prefix (retained until complete, even an ST
     // terminator split at ESC / \).
+    const prefixes = [OSC_BACKGROUND, COLOR_SCHEME, PASTE_START];
+    const incompleteKnownSequence =
+      this.pending !== "\x1b" &&
+      prefixes.some((prefix) => prefix.startsWith(this.pending));
     if (
       this.pending &&
       !this.pasting &&
+      !incompleteKnownSequence &&
       !this.pending.startsWith(OSC_BACKGROUND) &&
       !this.pending.startsWith(COLOR_SCHEME)
     ) {

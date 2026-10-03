@@ -37,7 +37,8 @@ export function sanitizeSegment(s: string): string {
  * tools by server; assembling the string by hand would skip sanitization.
  */
 export function mcpToolNamePrefix(serverName: string): string {
-  return MCP_TOOL_PREFIX + sanitizeSegment(serverName) + MCP_NAME_SEP;
+  const server = sanitizeSegment(serverName);
+  return `${MCP_TOOL_PREFIX}${String(server.length)}_${server}${MCP_NAME_SEP}`;
 }
 
 export function buildMcpToolName(serverName: string, toolName: string): string {

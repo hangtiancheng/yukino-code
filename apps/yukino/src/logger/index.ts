@@ -257,8 +257,7 @@ export function createChildLogger(bindings: { module: string }): Logger {
 // Expired log cleanup. Mirrors session/index.ts cleanExpiredSessions: same
 // directory iteration and 30-day mtime check; unlike the session sweep, which
 // logs failures, cleanup errors here stay silent.
-// Scans <workDir>/.yukino/logs/ and the top-level
-// ~/.yukino/teams/<entry>/logs/ subdirectories (see cleanExpiredLogs).
+// Scans <workDir>/.yukino/logs/ and teammate team log directories.
 // All fs operations are async to avoid blocking the event loop.
 
 /** Clean expired log files in a single directory. Returns count removed. Failures are silent. */
@@ -288,10 +287,8 @@ async function cleanDir(dir: string): Promise<number> {
 }
 
 /**
- * Clean expired logs. Scans the project .yukino/logs/ and one logs/
- * subdirectory per top-level entry of ~/.yukino/teams/. Teammate logs live
- * one level deeper (~/.yukino/teams/<namespace>/<team>/logs/, per the
- * logDir derivation in teammate.ts) and are never reached by this scan.
+ * Clean expired logs. Scans the project .yukino/logs/ and every
+ * ~/.yukino/teams/<namespace>/<team>/logs/ directory.
  * Only called by the main process (teammate subprocesses skip via
  * skipCleanup).
  */
@@ -306,8 +303,16 @@ async function cleanExpiredLogs(workDir: string): Promise<number> {
   } catch {
     return removed; // no teams directory
   }
-  for (const team of teams) {
-    removed += await cleanDir(join(teamsDir, team, "logs"));
+  for (const namespace of teams) {
+    let teamNames: string[];
+    try {
+      teamNames = await readdir(join(teamsDir, namespace));
+    } catch {
+      continue;
+    }
+    for (const teamName of teamNames) {
+      removed += await cleanDir(join(teamsDir, namespace, teamName, "logs"));
+    }
   }
   return removed;
 }

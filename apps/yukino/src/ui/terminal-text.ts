@@ -40,15 +40,16 @@ export function cursorWindow(
   maxWidth: number,
 ): CursorWindow {
   const columns = Math.max(1, Math.floor(maxWidth));
-  const position = Math.max(0, Math.min(cursor, value.length));
-  const current = value[position] ?? " ";
+  const position = clampToGraphemeBoundary(value, cursor);
+  const currentEnd = nextGraphemeBoundary(value, position);
+  const current = value.slice(position, currentEnd) || " ";
   const currentValue =
     visibleWidth(current) > columns || visibleWidth(current) === 0
       ? " "
       : current;
   const currentWidth = visibleWidth(currentValue);
   const left = value.slice(0, position);
-  const right = value.slice(position + (position < value.length ? 1 : 0));
+  const right = value.slice(position < value.length ? currentEnd : position);
   const fullWidth =
     visibleWidth(value) + (position === value.length ? currentWidth : 0);
 

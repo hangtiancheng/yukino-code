@@ -1,10 +1,14 @@
 /**
  * Extract the base command name from a command string.
- * For piped commands, take the last segment: bash and PowerShell both surface
- * the exit code of the last command in a pipeline.
+ * Take the last command in a pipeline or command chain because shells surface
+ * the exit code of the command that ran last.
  */
 export function extractBaseCmd(command: string): string {
-  const lastSegment = command.split("|").pop()?.trim() ?? command;
+  const lastSegment =
+    command
+      .split(/\|\||&&|[|;]/u)
+      .pop()
+      ?.trim() ?? command;
   const tokens = lastSegment.split(/\s+/);
   for (const token of tokens) {
     // Skip tokens like VAR=value or $env:VAR=value (variable assignments)
@@ -210,7 +214,8 @@ const EXIT_CODE_HINTS = new Map<string, Map<number, string>>([
     new Map([
       [2, "usage or system error"],
       [3, "jq program failed to compile"],
-      [5, "no valid result was produced"],
+      [4, "no valid result was produced (with -e)"],
+      [5, "halt_error was called without a custom exit code"],
     ]),
   ],
   ["ping", new Map([[1, "no response received"]])],

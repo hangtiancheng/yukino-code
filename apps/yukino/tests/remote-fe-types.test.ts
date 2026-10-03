@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import { isServerMessage, type ServerMessage } from "@/remote/fe/src/types.js";
 
 const validMessages: Record<ServerMessage["type"], ServerMessage> = {
-  connected: { type: "connected", data: { session: "s1", cwd: "/repo" } },
+  connected: {
+    type: "connected",
+    data: { session: "s1", cwd: "/repo", streaming: false },
+  },
   commands: {
     type: "commands",
     data: [{ name: "compact", description: "Compact context" }],
@@ -44,6 +47,10 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
   permission_request: {
     type: "permission_request",
     data: { id: "p1", toolName: "Write", description: "write a.ts" },
+  },
+  request_expired: {
+    type: "request_expired",
+    data: { id: "p1", kind: "permission" },
   },
   ask_user: {
     type: "ask_user",

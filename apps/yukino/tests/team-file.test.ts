@@ -1,5 +1,11 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,14 +26,16 @@ import {
 // platforms, so set both.
 let origHome: string | undefined;
 let origUserProfile: string | undefined;
+let homeDir = "";
+const workDirs = new Set<string>();
 
 beforeEach(() => {
   getNameRegistry().clear();
   origHome = process.env.HOME;
   origUserProfile = process.env.USERPROFILE;
-  const tmp = mkdtempSync(join(tmpdir(), "yukino-home-"));
-  process.env.HOME = tmp;
-  process.env.USERPROFILE = tmp;
+  homeDir = mkdtempSync(join(tmpdir(), "yukino-home-"));
+  process.env.HOME = homeDir;
+  process.env.USERPROFILE = homeDir;
 });
 
 afterEach(() => {
@@ -42,9 +50,18 @@ afterEach(() => {
   } else {
     process.env.USERPROFILE = origUserProfile;
   }
+  rmSync(homeDir, { recursive: true, force: true });
+  for (const directory of workDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  workDirs.clear();
 });
 
-const workDir = () => mkdtempSync(join(tmpdir(), "yukino-work-"));
+const workDir = () => {
+  const directory = mkdtempSync(join(tmpdir(), "yukino-work-"));
+  workDirs.add(directory);
+  return directory;
+};
 
 describe("team config persistence", () => {
   test("can be read back by a fresh TeamManager after writing to disk", () => {
@@ -146,7 +163,7 @@ describe("team config persistence", () => {
     expect(existsSync(teamDir(secondProject, "Shared Team"))).toBe(false);
   });
 
-  test("teammate hydration is byte-identical and restores active runtime state", () => {
+  test("teammate hydration is byte-identical and drops stale runtime state", () => {
     const project = workDir();
     const leader = new TeamManager(project);
     const team = leader.create("restored", "tmux", {
@@ -165,15 +182,15 @@ describe("team config persistence", () => {
     const restored = teammate.get("restored")?.getMember("alice");
 
     expect(readFileSync(path)).toEqual(before);
-    expect(restored?.active).toBe(true);
-    expect(restored?.uiState?.status).toBe("running");
+    expect(restored?.active).toBe(false);
+    expect(restored?.uiState).toBeUndefined();
     expect(restored?.external).toBe(true);
-    expect(restored?.cancel).toBeTypeOf("function");
+    expect(restored?.cancel).toBeUndefined();
     expect(restored?.paneId).toBe("yukino-persisted-pane");
-    expect(getNameRegistry().resolve("alice")).toBe("alice");
+    expect(getNameRegistry().resolve("alice")).toBeUndefined();
   });
 
-  test("restores active iTerm members without inventing a cancel handle", () => {
+  test("does not restore unverifiable iTerm liveness", () => {
     const project = workDir();
     const leader = new TeamManager(project);
     const team = leader.create("iterm-restored", "iterm");
@@ -188,7 +205,8 @@ describe("team config persistence", () => {
       .get("iterm-restored")
       ?.getMember("bob");
 
-    expect(restored?.uiState?.status).toBe("running");
+    expect(restored?.active).toBe(false);
+    expect(restored?.uiState).toBeUndefined();
     expect(restored?.external).toBe(true);
     expect(restored?.cancel).toBeUndefined();
   });
@@ -325,12 +343,19 @@ describe("team config persistence", () => {
       reader.stdout.on("data", onData);
     });
 
-    for (let index = 0; index < 30; index++) {
-      team.description = `${String(index)}:${"x".repeat(256 * 1024)}`;
-      team.persist();
+    try {
+      for (let index = 0; index < 30; index++) {
+        team.description = `${String(index)}:${"x".repeat(256 * 1024)}`;
+        team.persist();
+      }
+      writeFileSync(stopPath, "stop");
+      await closed;
+    } finally {
+      if (!reader.killed) {
+        reader.kill("SIGKILL");
+      }
+      await closed;
     }
-    writeFileSync(stopPath, "stop");
-    await closed;
 
     expect(output).not.toContain("invalid:");
     expect(readTeamFile(project, "atomic")?.description).toBe(team.description);

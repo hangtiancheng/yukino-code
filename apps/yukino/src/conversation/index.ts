@@ -48,27 +48,6 @@ export class ConversationManager {
     });
   }
 
-  addAssistantMessage(content: string): void {
-    this.history.push({ role: "assistant", content });
-  }
-
-  addToolUseMessage(
-    text: string,
-    toolUseId: string,
-    toolName: string,
-    args: Record<string, unknown>,
-  ): void {
-    this.history.push({
-      role: "assistant",
-      content: text,
-      toolUses: [{ toolUseId, toolName, arguments: args }],
-    });
-  }
-
-  addAssistantMessageWithTools(text: string, toolUses: ToolUseBlock[]): void {
-    this.history.push({ role: "assistant", content: text, toolUses });
-  }
-
   addAssistantFull(
     text: string,
     thinking: ThinkingBlock[],
@@ -79,26 +58,6 @@ export class ConversationManager {
       content: text,
       thinkingBlocks: thinking.length > 0 ? thinking : undefined,
       toolUses: toolUses.length > 0 ? toolUses : undefined,
-    });
-  }
-
-  addToolResultMessage(
-    toolUseId: string,
-    content: string,
-    isError: boolean,
-    contentBlocks?: ToolResultContentBlock[],
-  ): void {
-    this.history.push({
-      role: "user",
-      content: "",
-      toolResults: [
-        {
-          toolUseId,
-          content,
-          ...(contentBlocks?.length ? { contentBlocks } : {}),
-          isError,
-        },
-      ],
     });
   }
 

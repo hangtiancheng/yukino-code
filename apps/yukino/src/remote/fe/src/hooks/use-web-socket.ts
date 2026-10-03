@@ -26,6 +26,7 @@ const RECONNECT_DELAY_MS = 3_000;
 export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   const { onMessage, onOpen, onClose } = opts;
   const wsRef = useRef<WebSocket | null>(null);
+  const pendingRef = useRef<ClientMessage[]>([]);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Latest callbacks kept in refs so the effect can stay stable and avoid
   // tearing down the socket on every render.
@@ -50,6 +51,9 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
       ws.onopen = () => {
         onOpenRef.current();
+        for (const message of pendingRef.current.splice(0)) {
+          ws.send(JSON.stringify(message));
+        }
         if (pingRef.current) {
           clearInterval(pingRef.current);
         }
@@ -123,6 +127,8 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
+    } else {
+      pendingRef.current.push(message);
     }
   }, []);
 

@@ -34,7 +34,6 @@ export interface ChatMessage {
 }
 
 interface ChatViewProps {
-  messages: ChatMessage[];
   streamingText?: string;
   thinkingText?: string;
   expanded?: boolean;
@@ -53,12 +52,9 @@ function StreamingText({ text }: { text: string }) {
 }
 
 export const ChatView = React.memo(function (props: ChatViewProps) {
-  const { messages, streamingText, thinkingText, expanded = false } = props;
+  const { streamingText, thinkingText, expanded = false } = props;
   return (
     <Box flexDirection="column">
-      {messages.map((msg, i) => (
-        <MessageBlock key={i} message={msg} expanded={expanded} />
-      ))}
       {thinkingText ? (
         <ThinkingBlock text={thinkingText} expanded={expanded} streaming />
       ) : null}

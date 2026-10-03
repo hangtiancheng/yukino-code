@@ -1,6 +1,9 @@
+import { randomBytes } from "node:crypto";
 import {
   readFileSync,
   readdirSync,
+  renameSync,
+  rmSync,
   unlinkSync,
   existsSync,
   mkdirSync,
@@ -18,6 +21,7 @@ import { memoryAge, memoryFreshnessText } from "./memory-age.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "memory" });
 
@@ -184,7 +188,9 @@ export class MemoryManager {
 
   loadAll(): MemoryFile[] {
     const memories = this.scanAllMemories();
-    this.writeIndex(memories);
+    if (memories.length > 0) {
+      this.writeIndex(memories);
+    }
     return memories;
   }
 
@@ -291,17 +297,25 @@ export class MemoryManager {
       capEntrypoint(lines.slice(0, MAX_ENTRYPOINT_LINES).join("\n")) + "\n";
     const indexPath = join(this.projectDir, MEMORY_INDEX_NAME);
 
-    mkdirSync(this.projectDir, { recursive: true });
-    if (existsSync(indexPath)) {
-      try {
-        if (readFileSync(indexPath, "utf-8") === content) {
-          return;
+    withFileSyncLock(indexPath, () => {
+      mkdirSync(this.projectDir, { recursive: true });
+      if (existsSync(indexPath)) {
+        try {
+          if (readFileSync(indexPath, "utf-8") === content) {
+            return;
+          }
+        } catch {
+          // Rewrite an unreadable index from the successfully scanned memories.
         }
-      } catch {
-        // Rewrite an unreadable index from the successfully scanned memories.
       }
-    }
-    writeFileSync(indexPath, content, "utf-8");
+      const temporary = `${indexPath}.${String(process.pid)}.${randomBytes(8).toString("hex")}.tmp`;
+      try {
+        writeFileSync(temporary, content, "utf-8");
+        renameSync(temporary, indexPath);
+      } finally {
+        rmSync(temporary, { force: true });
+      }
+    });
   }
 
   /**
@@ -315,6 +329,7 @@ export class MemoryManager {
     client: LLMClient,
     recentTools: string[] = [],
     alreadySurfaced = new Set<string>(),
+    abortSignal?: AbortSignal,
   ): Promise<RelevantMemory[]> {
     // 1. Scan both dirs for memory headers
     const allHeaders: MemoryHeader[] = [];
@@ -352,7 +367,7 @@ export class MemoryManager {
         SELECT_MEMORIES_SYSTEM_PROMPT + "\n\n" + userMessage,
       );
 
-      const stream = client.stream(conversation, []);
+      const stream = client.stream(conversation, [], abortSignal);
       for await (const event of stream) {
         if (event.type === "text_delta") {
           rawResponse += event.text;
@@ -459,7 +474,7 @@ export class MemoryManager {
       }
       parts.push(content + "\n\n---\n");
     }
-    return parts.join("\n");
+    return capEntrypoint(parts.join("\n"));
   }
 }
 

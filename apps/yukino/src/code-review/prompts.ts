@@ -8,11 +8,9 @@ export function renderTemplate(
   template: string,
   vars: Record<string, string>,
 ): string {
-  let out = template;
-  for (const [key, value] of Object.entries(vars)) {
-    out = out.replaceAll(`{{${key}}}`, value);
-  }
-  return out;
+  return template.replace(/\{\{([^{}]+)\}\}/gu, (placeholder, key: string) =>
+    Object.hasOwn(vars, key) ? vars[key] : placeholder,
+  );
 }
 
 export const GROUPING_SYSTEM = `You are a file grouping assistant for code review. Group changed files into semantically related clusters that should be reviewed together.

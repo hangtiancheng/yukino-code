@@ -547,13 +547,15 @@ describe("agent output hook", () => {
   });
 
   it("cancels a scheduled stream flush when unmounted", () => {
+    const setTimeout = vi.spyOn(globalThis, "setTimeout");
     const send = startLoop();
     send({ type: "stream_text", text: "pending" });
+    const scheduled: unknown = setTimeout.mock.results.at(-1)?.value;
     const clearTimeout = vi.spyOn(globalThis, "clearTimeout");
     act(() => {
       instance?.unmount();
     });
-    expect(clearTimeout).toHaveBeenCalled();
+    expect(clearTimeout).toHaveBeenCalledWith(scheduled);
   });
 
   it("commits thinking and completed tools once when a loop ends without turn_complete", () => {

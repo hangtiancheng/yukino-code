@@ -2,6 +2,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -9,7 +10,7 @@ import { tmpdir } from "node:os";
 import type * as nodeOs from "node:os";
 import { join } from "node:path";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "@/commands/commands.js";
 import { loadConfig } from "@/config/index.js";
@@ -37,8 +38,23 @@ const input = {
   model: "test-model",
 };
 
+const tempDirs = new Set<string>();
+
+function makeTempDir(prefix: string): string {
+  const directory = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.add(directory);
+  return directory;
+}
+
 beforeEach(() => {
-  homeRef.current = mkdtempSync(join(tmpdir(), "yukino-home-"));
+  homeRef.current = makeTempDir("yukino-home-");
+});
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
 });
 
 describe("provider login", () => {
@@ -263,9 +279,12 @@ describe("provider login", () => {
     persistDefaultProvider(2);
     expect(loadConfig(path).default_provider).toBe(2);
     expect(readFileSync(path, "utf-8")).toContain("default_provider: 2");
-    // Persisting the same index again keeps the stored value intact.
+    const before = statSync(path, { bigint: true });
     persistDefaultProvider(2);
     expect(loadConfig(path).default_provider).toBe(2);
+    const after = statSync(path, { bigint: true });
+    expect(after.ino).toBe(before.ino);
+    expect(after.mtimeNs).toBe(before.mtimeNs);
   });
 
   it("throws when persisting a thinking level for an unknown provider", () => {
@@ -276,7 +295,7 @@ describe("provider login", () => {
   });
 
   it("applies defaults to old configuration without model-name inference", () => {
-    const directory = mkdtempSync(join(tmpdir(), "yukino-defaults-"));
+    const directory = makeTempDir("yukino-defaults-");
     const path = join(directory, "config.yaml");
     writeFileSync(
       path,
@@ -290,13 +309,13 @@ describe("provider login", () => {
   });
 
   it("reports invalid provider fields instead of dropping the provider", () => {
-    const directory = mkdtempSync(join(tmpdir(), "yukino-invalid-thinking-"));
+    const directory = makeTempDir("yukino-invalid-thinking-");
     const path = join(directory, "config.yaml");
     writeFileSync(
       path,
       "providers:\n  - name: old\n    protocol: anthropic\n    base_url: https://example.com\n    model: claude-old\n    thinking: true\n",
     );
-    expect(() => loadConfig(path)).toThrow(/Invalid provider configuration/);
+    expect(() => loadConfig(path)).toThrow(/Invalid configuration/);
   });
 
   it("reports a missing global config file with a clean error", () => {

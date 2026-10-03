@@ -2,6 +2,7 @@ import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
+import { truncateToWidth } from "./terminal-text.js";
 
 import { ICONS, THEME } from "@/ui/styles.js";
 
@@ -51,7 +52,7 @@ export function PermissionDialog({
   return (
     <SelectorFrame
       hint="↑↓ navigate · Enter select · Escape deny"
-      subtitle={detail.length > 160 ? `${detail.slice(0, 160)}…` : detail}
+      subtitle={truncateToWidth(detail, 160)}
       title={`${toolName} requires approval`}
     >
       {PERMISSION_OPTIONS.map((option, index) => {

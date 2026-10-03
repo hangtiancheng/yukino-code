@@ -170,30 +170,4 @@ export class FileMailbox {
       () => this.readAll().filter((m) => !m.read).length,
     );
   }
-
-  markAllRead(): void {
-    withFileSyncLock(this.filePath, () => {
-      const messages = this.readAll();
-      let changed = false;
-      for (const m of messages) {
-        if (!m.read) {
-          m.read = true;
-          changed = true;
-        }
-      }
-      if (changed) {
-        this.writeAll(this.pruneRead(messages));
-      }
-    });
-  }
-
-  async *poll(intervalMs = 1000): AsyncGenerator<FileMailMessage> {
-    while (true) {
-      const messages = await this.receive();
-      for (const msg of messages) {
-        yield msg;
-      }
-      await new Promise((r) => setTimeout(r, intervalMs));
-    }
-  }
 }

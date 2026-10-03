@@ -8,6 +8,7 @@ import type * as Ink from "ink";
 import { act, createElement } from "react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MockInstance } from "vitest";
 
 import type { Command } from "@/commands/commands.js";
 import { saveClipboardImage } from "@/images/clipboard.js";
@@ -109,6 +110,7 @@ const footerProps: ComponentProps<typeof Footer> = {
 const stats = "↑1.3k ↓230 20.0%/200k";
 const initialColorLevel = chalk.level;
 let instance: Instance | undefined;
+let stdoutWrite: MockInstance<NodeJS.WriteStream["write"]>;
 
 function draftRef(
   lines = [""],
@@ -176,7 +178,10 @@ function footer(
   );
 }
 
-function mount(props: Partial<ComponentProps<typeof InputBox>> = {}) {
+function mount(
+  props: Partial<ComponentProps<typeof InputBox>> = {},
+  debug = false,
+) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   act(() => {
     instance = render(
@@ -184,6 +189,7 @@ function mount(props: Partial<ComponentProps<typeof InputBox>> = {}) {
       {
         interactive: false,
         patchConsole: false,
+        debug,
       },
     );
   });
@@ -207,6 +213,16 @@ function press(text = "", overrides: Partial<Key> = {}) {
   });
 }
 
+function flushWorkdirScan() {
+  act(() => {
+    vi.runOnlyPendingTimers();
+  });
+}
+
+function lastTerminalFrame(): string {
+  return String(stdoutWrite.mock.calls.at(-1)?.[0] ?? "");
+}
+
 beforeEach(() => {
   terminal.columns = 80;
   terminal.rows = 24;
@@ -216,7 +232,9 @@ beforeEach(() => {
   chalk.level = 0;
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", false);
-  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  stdoutWrite = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation(() => true);
 });
 
 afterEach(() => {
@@ -347,6 +365,7 @@ describe("composer completion rows", () => {
     const ref = draftRef(["check @one"]);
     const onEscape = vi.fn();
     mount({ draftRef: ref, onEscape });
+    flushWorkdirScan();
     press("", { escape: true });
     expect(ref.current?.lines).toEqual(["check @one"]);
     expect(ref.current?.cursorCol).toBe(10);
@@ -360,6 +379,7 @@ describe("composer completion rows", () => {
   it("completes the @ token at the caret and preserves the rest of the line", () => {
     const ref = draftRef(["check @one please"], 0, 10);
     mount({ draftRef: ref });
+    flushWorkdirScan();
     press("", { tab: true });
     expect(ref.current?.lines).toEqual(["check @one.ts please"]);
     expect(ref.current?.cursorCol).toBe(14);
@@ -369,6 +389,7 @@ describe("composer completion rows", () => {
     const ref = draftRef(["@one"]);
     const onSubmit = vi.fn();
     mount({ draftRef: ref, onSubmit });
+    flushWorkdirScan();
     press("", { escape: true });
     press("", { return: true });
     expect(onSubmit).toHaveBeenCalledWith("@one");
@@ -402,10 +423,16 @@ describe("composer completion rows", () => {
 
   it("paints a full-width selected @file row and aligns its arrow with slash rows", () => {
     chalk.level = 3;
-    const output = composer(30, {
-      workDir: "/virtual",
-      draftRef: draftRef(["@"]),
-    });
+    terminal.columns = 30;
+    mount(
+      {
+        workDir: "/virtual",
+        draftRef: draftRef(["@"]),
+      },
+      true,
+    );
+    flushWorkdirScan();
+    const output = lastTerminalFrame();
     const row =
       output.split("\n").find((line) => line.includes("@one.ts")) ?? "";
     expect(
@@ -419,10 +446,16 @@ describe("composer completion rows", () => {
 
   it("clips long @file suggestions to one row", () => {
     terminal.files = ["とても長いファイルパス/".repeat(8) + "file.ts"];
-    const output = composer(20, {
-      workDir: "/virtual",
-      draftRef: draftRef(["@"]),
-    });
+    terminal.columns = 20;
+    mount(
+      {
+        workDir: "/virtual",
+        draftRef: draftRef(["@"]),
+      },
+      true,
+    );
+    flushWorkdirScan();
+    const output = lastTerminalFrame();
     expect(output.split("\n")).toHaveLength(5);
     expect(output.split("\n").every((line) => visibleWidth(line) <= 20)).toBe(
       true,
@@ -613,6 +646,7 @@ describe("composer queue recall and visual navigation", () => {
     const ref = draftRef(["first", "@"], 1);
     const onRecallQueuedMessage = vi.fn(() => "queued");
     mount({ draftRef: ref, onRecallQueuedMessage });
+    flushWorkdirScan();
     press("", { upArrow: true });
     expect(ref.current?.cursorLine).toBe(1);
     expect(ref.current?.cursorCol).toBe(1);
@@ -1240,6 +1274,7 @@ describe("persistent composer drafts and input behavior", () => {
     expect(onSubmit).toHaveBeenLastCalledWith("/model");
     expect(ref.current).toEqual(draftRef().current);
     press("@");
+    flushWorkdirScan();
     press("", { return: true });
     expect(ref.current?.lines).toEqual(["@one.ts "]);
     expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -1303,6 +1338,7 @@ describe("persistent composer drafts and input behavior", () => {
     expect(onEscape).toHaveBeenCalledTimes(1);
     unmount();
     mount({ draftRef: draftRef(["text @one"]), onEscape, workDir: "/virtual" });
+    flushWorkdirScan();
     press("", { escape: true });
     expect(onEscape).toHaveBeenCalledTimes(1);
   });

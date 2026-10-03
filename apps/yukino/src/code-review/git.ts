@@ -58,20 +58,29 @@ function looksBinary(content: Buffer): boolean {
   return window.includes(0);
 }
 
+function quoteDiffPath(prefix: "a" | "b", path: string): string {
+  const value = `${prefix}/${path}`;
+  return /[\s"\\]/u.test(value) ? JSON.stringify(value) : value;
+}
+
 function untrackedBinaryDiff(path: string): string {
+  const oldPath = quoteDiffPath("a", path);
+  const newPath = quoteDiffPath("b", path);
   return (
-    `diff --git a/${path} b/${path}\n` +
+    `diff --git ${oldPath} ${newPath}\n` +
     `new file mode 100644\n` +
-    `Binary files /dev/null and b/${path} differ\n`
+    `Binary files /dev/null and ${newPath} differ\n`
   );
 }
 
 /** Synthesize a new-file diff for one untracked workspace file. */
 function untrackedFileDiff(relPath: string, content: Buffer): string {
+  const oldPath = quoteDiffPath("a", relPath);
+  const newPath = quoteDiffPath("b", relPath);
   const parts: string[] = [
-    `diff --git a/${relPath} b/${relPath}`,
+    `diff --git ${oldPath} ${newPath}`,
     "--- /dev/null",
-    `+++ b/${relPath}`,
+    `+++ ${newPath}`,
   ];
   let text = content.toString("utf8");
   let lines = text.split("\n");

@@ -286,6 +286,7 @@ export class Agent {
     );
 
     let maxTokensEscalated = false;
+    const initialMaxOutput = this.maxOutput;
     let outputRecoveries = 0;
     let rateLimitRetries = 0;
     let iteration = 0;
@@ -327,6 +328,10 @@ export class Agent {
               planPath,
               planExists(this.workDir),
               iteration,
+              {
+                canAskUser: toolSchemaNames.includes("AskUserQuestion"),
+                canExitPlanMode: toolSchemaNames.includes("ExitPlanMode"),
+              },
             ),
           );
         }
@@ -597,7 +602,7 @@ export class Agent {
           // re-prompts the model to resume from where it stopped. The escalated
           // ceiling stays inside the context window (PI never requests more than
           // the model window can hold).
-          if (stopReason === "max_tokens") {
+          if (stopReason === "max_tokens" && toolUses.length === 0) {
             const ceiling = Math.min(MAX_TOKENS_CEILING, this.contextWindow);
             if (
               !maxTokensEscalated &&
@@ -842,6 +847,10 @@ export class Agent {
       try {
         await this.fireLifecycle("session_end");
       } finally {
+        if (maxTokensEscalated && this.client.setMaxOutputTokens) {
+          this.client.setMaxOutputTokens(initialMaxOutput);
+          this.maxOutput = initialMaxOutput;
+        }
         endAgentTelemetry(
           telemetry,
           this.abortSignal?.aborted ? "interrupted" : "completed",

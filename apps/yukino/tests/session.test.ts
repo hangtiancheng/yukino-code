@@ -1,16 +1,17 @@
 import { spawn } from "node:child_process";
 import {
   existsSync,
-  mkdtempSync,
+  mkdtempSync as createTempDir,
   mkdirSync,
   readFileSync,
+  rmSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
 import {
   saveMessage,
@@ -31,6 +32,20 @@ const t1 = t0 + 1;
 const t2 = t0 + 2;
 const t3 = t0 + 3;
 const t4 = t0 + 4;
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 describe("session save/load round-trip", () => {
   it("falls back to the last valid boundary when a later boundary is damaged", () => {

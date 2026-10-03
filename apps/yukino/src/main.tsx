@@ -37,19 +37,34 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.includes("--acp") || args.includes("--acp-ws")) {
+    await initializeTelemetry();
+    setTelemetryMode("acp");
     const { runAcp } = await import("./acp/index.js");
-    await runAcp(args);
+    try {
+      await runAcp(args);
+    } finally {
+      await shutdownTelemetry();
+    }
     return;
   }
 
   if (args.includes("--a2a")) {
+    await initializeTelemetry();
+    setTelemetryMode("a2a");
     const { runA2a } = await import("./a2a/index.js");
-    await runA2a(args);
+    try {
+      await runA2a(args);
+    } finally {
+      await shutdownTelemetry();
+    }
     return;
   }
 
   await initializeTelemetry();
   const teammateArgs = parseTeammateFlags(args);
+  if (args.includes("--remote") && (teammateArgs || args.includes("-p"))) {
+    throw new Error("--remote cannot be combined with -p or teammate mode.");
+  }
   if (teammateArgs) {
     setTelemetryMode("teammate");
     try {

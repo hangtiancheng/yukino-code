@@ -1,29 +1,66 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
+  mkdtempSync as createTempDir,
   realpathSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
 import { createAgentWorktree } from "@/worktree/index.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
+
+function runGit(repo: string, args: string[]): void {
+  const emptyConfig = join(repo, ".empty-gitconfig");
+  writeFileSync(emptyConfig, "");
+  execFileSync("git", args, {
+    cwd: repo,
+    env: {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: emptyConfig,
+      GIT_CONFIG_NOSYSTEM: "1",
+    },
+    stdio: "ignore",
+  });
+}
 
 function initRepo(): string {
   // realpath: on macOS mkdtemp returns /var/... which is a symlink to
   // /private/var/...; git resolves it, so compare against the real path.
   const repo = realpathSync(mkdtempSync(join(tmpdir(), "yukino-wt-")));
-  execSync("git init -q -b main", { cwd: repo });
-  execSync(
-    "git -c user.email=t@test -c user.name=t commit -q --allow-empty -m init",
-    {
-      cwd: repo,
-    },
-  );
+  runGit(repo, ["init", "-q", "-b", "main"]);
+  runGit(repo, [
+    "-c",
+    "user.email=t@test",
+    "-c",
+    "user.name=t",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "init",
+  ]);
   return repo;
 }
 

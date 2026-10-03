@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync as createTempDir, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,7 +17,6 @@ import { getNameRegistry } from "@/teams/registry.js";
 import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
 import {
   TeamCreateTool,
-  SpawnTeammateTool,
   SendMessageTool,
   ListTeamsTool,
 } from "@/teams/tools.js";
@@ -40,13 +39,15 @@ vi.mock("@/teams/backend.js", async (importOriginal) => ({
 // platforms, so set both.
 let realHome: string | undefined;
 let realUserProfile: string | undefined;
+let homeDir = "";
+const workDirs = new Set<string>();
 beforeEach(() => {
   spawnTeammateMock.mockClear();
   realHome = process.env.HOME;
   realUserProfile = process.env.USERPROFILE;
-  const tmp = mkdtempSync(join(tmpdir(), "yukino-home-"));
-  process.env.HOME = tmp;
-  process.env.USERPROFILE = tmp;
+  homeDir = createTempDir(join(tmpdir(), "yukino-home-"));
+  process.env.HOME = homeDir;
+  process.env.USERPROFILE = homeDir;
 });
 afterEach(() => {
   if (realHome === undefined) {
@@ -59,9 +60,17 @@ afterEach(() => {
   } else {
     process.env.USERPROFILE = realUserProfile;
   }
+  rmSync(homeDir, { recursive: true, force: true });
+  for (const directory of workDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  workDirs.clear();
 });
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const workDir = () => mkdtempSync(join(tmpdir(), "yukino-team-"));
+const workDir = () => {
+  const directory = createTempDir(join(tmpdir(), "yukino-team-"));
+  workDirs.add(directory);
+  return directory;
+};
 
 describe("teammate progress", () => {
   it("tracks active tools, turns, and cumulative tokens", () => {
@@ -171,7 +180,9 @@ describe("teams orchestration", () => {
       "agent-tool-call",
     );
 
-    await wait(200);
+    await vi.waitFor(() => {
+      expect(mgr.hasLeaderNotifications()).toBe(true);
+    });
     expect(mgr.hasLeaderNotifications()).toBe(true);
     const drained = mgr.drainLeaderMailbox();
     // The teammate sends an [idle] notification with its name after finishing
@@ -189,7 +200,11 @@ describe("teams orchestration", () => {
       .spawnTeammate("flaky", "boom", () =>
         Promise.reject(new Error("kaboom")),
       );
-    await wait(200);
+    await vi.waitFor(() => {
+      expect(mgr.get("squad")?.getMember("flaky")?.uiState?.status).toBe(
+        "failed",
+      );
+    });
     expect(mgr.drainLeaderMailbox().some((d) => d.includes("failed"))).toBe(
       true,
     );
@@ -287,17 +302,14 @@ describe("teams orchestration", () => {
       ).output,
     ).toContain("created");
 
-    const spawn = new SpawnTeammateTool(mgr, (task) =>
-      Promise.resolve(`done:${task}`),
-    );
-    const r = await spawn.execute(
-      {
-        workDir: workDir(),
-      },
-      { team: "t1", name: "w1", task: "task A" },
-    );
-    expect(r.isError).toBe(false);
-    await wait(200);
+    mgr
+      .get("t1")
+      ?.spawnTeammate("w1", "task A", (task: string) =>
+        Promise.resolve(`done:${task}`),
+      );
+    await vi.waitFor(() => {
+      expect(mgr.hasLeaderNotifications()).toBe(true);
+    });
     expect(
       mgr
         .drainLeaderMailbox()
@@ -357,32 +369,11 @@ describe("teams orchestration", () => {
     expect(mgr.drainLeaderMailbox()).toEqual([]);
   });
 
-  it("rejects invalid, reserved, and duplicate explicit teammate names", async () => {
+  it("rejects duplicate teammate reservations", () => {
     const mgr = new TeamManager(workDir());
-    const spawn = new SpawnTeammateTool(mgr, () => Promise.resolve("done"));
-
-    for (const name of ["api/reviewer", "leader"]) {
-      const result = await spawn.execute(
-        { workDir: workDir() },
-        { team: "squad", name, task: "inspect" },
-      );
-      expect(result.isError).toBe(true);
-    }
-    expect(mgr.list()).toEqual([]);
-
-    const first = await spawn.execute(
-      { workDir: workDir() },
-      { team: "squad", name: "reviewer", task: "inspect" },
-    );
-    const duplicate = await spawn.execute(
-      { workDir: workDir() },
-      { team: "squad", name: "reviewer", task: "inspect again" },
-    );
-    expect(first.isError).toBe(false);
-    expect(duplicate.isError).toBe(true);
-    expect(duplicate.output).toContain("already exists");
-
-    await mgr.stopAll();
+    const team = mgr.create("squad");
+    team.addMember("reviewer");
+    expect(() => team.addMember("reviewer")).toThrow("already exists");
   });
 
   it("TeamCreate sweeps other teams so at most one exists", async () => {
@@ -394,14 +385,14 @@ describe("teams orchestration", () => {
       { workDir: workDir() },
       { team_name: "old" },
     );
-    const spawn = new SpawnTeammateTool(mgr, (task) =>
-      Promise.resolve(`done:${task}`),
-    );
-    await spawn.execute(
-      { workDir: workDir() },
-      { team: "old", name: "w1", task: "task A" },
-    );
-    await wait(200);
+    mgr
+      .get("old")
+      ?.spawnTeammate("w1", "task A", (task: string) =>
+        Promise.resolve(`done:${task}`),
+      );
+    await vi.waitFor(() => {
+      expect(mgr.get("old")?.getMember("w1")?.uiState?.status).toBe("idle");
+    });
 
     // A disk-only leftover from a previous session, unknown to this manager.
     new TeamManager(project).create("stale");
@@ -427,16 +418,6 @@ describe("teams orchestration", () => {
             workDir: workDir(),
           },
           {},
-        )
-      ).isError,
-    ).toBe(true);
-    expect(
-      (
-        await new SpawnTeammateTool(mgr, () => Promise.resolve("x")).execute(
-          {
-            workDir: workDir(),
-          },
-          { team: "t" },
         )
       ).isError,
     ).toBe(true);

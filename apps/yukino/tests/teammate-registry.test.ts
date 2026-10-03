@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -26,8 +26,17 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env.HOME = __origHome;
-  process.env.USERPROFILE = __origUserProfile;
+  if (__origHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = __origHome;
+  }
+  if (__origUserProfile === undefined) {
+    delete process.env.USERPROFILE;
+  } else {
+    process.env.USERPROFILE = __origUserProfile;
+  }
+  rmSync(workDir, { recursive: true, force: true });
 });
 
 describe("teammate worker tool registry", () => {

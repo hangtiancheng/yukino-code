@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   unlinkSync,
   writeFileSync,
 } from "fs";
@@ -11,19 +12,22 @@ import { dirname, join, resolve } from "path";
 import { safeParse, z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "file-history" });
 
 const MAX_SNAPSHOTS = 100;
 const MAX_SUMMARY_TEXT_LENGTH = 60;
 
-export const BackupSchema = z.object({
-  /** Snapshot-scoped destination for the file content. */
-  backupPath: z.string(),
-  time: z.string(),
-  /** Capture failed, so rewind must leave the current file untouched. */
-  unavailable: z.literal(true).optional(),
-});
+export const BackupSchema = z.discriminatedUnion("state", [
+  z.object({
+    state: z.literal("existing"),
+    backupPath: z.string(),
+    time: z.string(),
+  }),
+  z.object({ state: z.literal("absent"), time: z.string() }),
+  z.object({ state: z.literal("unavailable"), time: z.string() }),
+]);
 
 export type Backup = z.infer<typeof BackupSchema>;
 
@@ -55,7 +59,7 @@ const FileBaselineSchema = z.discriminatedUnion("state", [
 type FileBaseline = z.infer<typeof FileBaselineSchema>;
 
 const PersistedStateSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   trackedFiles: z.array(z.string()),
   snapshots: z.array(SnapshotSchema),
   /** First-track file states used when rewinding before a file was tracked. */
@@ -66,7 +70,7 @@ const PersistedStateSchema = z.object({
    * suffixes and overwrite still-live backups; the counter never repeats.
    * Absent in pre-evolution files — derived on load for those.
    */
-  nextSnapshotSeq: z.number().optional(),
+  nextSnapshotSeq: z.number(),
 });
 
 type PersistedState = z.infer<typeof PersistedStateSchema>;
@@ -90,6 +94,7 @@ export function fileHistoryDir(baseDir: string, sessionId: string): string {
 
 export class FileHistory {
   private sessionDir: string;
+  private statePath: string;
 
   /** Tracked file absolute paths. */
   private trackedFiles = new Set<string>();
@@ -101,8 +106,11 @@ export class FileHistory {
 
   constructor(baseDir: string, sessionID: string) {
     this.sessionDir = fileHistoryDir(baseDir, sessionID);
+    this.statePath = join(this.sessionDir, "snapshots.json");
     mkdirSync(this.sessionDir, { recursive: true });
-    this.load();
+    withFileSyncLock(this.statePath, () => {
+      this.loadUnlocked();
+    });
   }
 
   /**
@@ -111,12 +119,15 @@ export class FileHistory {
    * the point where tracking began.
    */
   trackEdit(path: string): void {
-    const filePath = resolve(path);
-    if (!this.trackedFiles.has(filePath)) {
-      this.baselines.set(filePath, this.captureBaseline(filePath));
-      this.trackedFiles.add(filePath);
-    }
-    this.save();
+    withFileSyncLock(this.statePath, () => {
+      this.loadUnlocked();
+      const filePath = resolve(path);
+      if (!this.trackedFiles.has(filePath)) {
+        this.baselines.set(filePath, this.captureBaseline(filePath));
+        this.trackedFiles.add(filePath);
+      }
+      this.saveUnlocked();
+    });
   }
 
   private captureBaseline(filePath: string): FileBaseline {
@@ -156,58 +167,63 @@ export class FileHistory {
     userText: string,
     sessionLineCount?: number,
   ): void {
-    let text = userText;
-    if (text.length > MAX_SUMMARY_TEXT_LENGTH) {
-      text = text.slice(0, MAX_SUMMARY_TEXT_LENGTH) + "...";
-    }
-    const now = new Date().toISOString();
-    const snapshotIndex = this.nextSnapshotSeq;
-    this.nextSnapshotSeq++;
-    const backups: Record<string, Backup> = {};
-    for (const filePath of this.trackedFiles) {
-      const backupPath = join(
-        this.sessionDir,
-        getBackupName(filePath, snapshotIndex),
-      );
-      if (!existsSync(filePath)) {
-        // Absent at snapshot time: keep the entry with an unwritten backup path;
-        // rewind treats a missing backup file as "delete this file".
-        backups[filePath] = { backupPath, time: now };
-        continue;
+    withFileSyncLock(this.statePath, () => {
+      this.loadUnlocked();
+      let text = userText;
+      if (text.length > MAX_SUMMARY_TEXT_LENGTH) {
+        text = text.slice(0, MAX_SUMMARY_TEXT_LENGTH) + "...";
       }
-      try {
-        writeFileSync(backupPath, readFileSync(filePath));
-      } catch (err) {
-        log.error({ err }, "file-history operation failed");
-        backups[filePath] = { backupPath, time: now, unavailable: true };
-        continue;
+      const now = new Date().toISOString();
+      const snapshotIndex = this.nextSnapshotSeq;
+      this.nextSnapshotSeq++;
+      const backups: Record<string, Backup> = {};
+      for (const filePath of this.trackedFiles) {
+        const backupPath = join(
+          this.sessionDir,
+          getBackupName(filePath, snapshotIndex),
+        );
+        if (!existsSync(filePath)) {
+          backups[filePath] = { state: "absent", time: now };
+          continue;
+        }
+        try {
+          writeFileSync(backupPath, readFileSync(filePath));
+          backups[filePath] = { state: "existing", backupPath, time: now };
+        } catch (err) {
+          log.error({ err }, "file-history operation failed");
+          backups[filePath] = { state: "unavailable", time: now };
+        }
       }
-      backups[filePath] = { backupPath, time: now };
-    }
-    this.snapshots.push({
-      messageIndex,
-      userText: text,
-      backups,
-      timestamp: now,
-      ...(sessionLineCount === undefined ? {} : { sessionLineCount }),
-    });
+      this.snapshots.push({
+        messageIndex,
+        userText: text,
+        backups,
+        timestamp: now,
+        ...(sessionLineCount === undefined ? {} : { sessionLineCount }),
+      });
 
-    if (this.snapshots.length > MAX_SNAPSHOTS) {
-      const pruned = this.snapshots.slice(
-        0,
-        this.snapshots.length - MAX_SNAPSHOTS,
-      );
-      this.snapshots = this.snapshots.slice(
-        this.snapshots.length - MAX_SNAPSHOTS,
-      );
-      // Pruned snapshots can no longer be rewound to: delete their backups so
-      // the directory does not grow without bound.
-      this.deleteBackups(pruned);
-    }
-    this.save();
+      if (this.snapshots.length > MAX_SNAPSHOTS) {
+        const pruned = this.snapshots.slice(
+          0,
+          this.snapshots.length - MAX_SNAPSHOTS,
+        );
+        this.snapshots = this.snapshots.slice(
+          this.snapshots.length - MAX_SNAPSHOTS,
+        );
+        this.deleteBackups(pruned);
+      }
+      this.saveUnlocked();
+    });
   }
 
   rewind(snapshotIndex: number): string[] {
+    return withFileSyncLock(this.statePath, () => {
+      this.loadUnlocked();
+      return this.rewindUnlocked(snapshotIndex);
+    });
+  }
+
+  private rewindUnlocked(snapshotIndex: number): string[] {
     if (snapshotIndex < 0 || snapshotIndex >= this.snapshots.length) {
       throw new Error(`Invalid snapshot index: ${String(snapshotIndex)}`);
     }
@@ -215,15 +231,11 @@ export class FileHistory {
     const target = this.snapshots[snapshotIndex];
     const changed: string[] = [];
     for (const [filePath, backup] of Object.entries(target.backups)) {
-      if (backup.unavailable) {
+      if (backup.state === "unavailable") {
         continue;
       }
 
-      let backupData: Buffer<ArrayBuffer> | null = null;
-      try {
-        backupData = readFileSync(backup.backupPath);
-      } catch {
-        // Backup missing -> file didn't exist at snapshot time -> delete it now.
+      if (backup.state === "absent") {
         if (existsSync(filePath)) {
           try {
             unlinkSync(filePath);
@@ -232,6 +244,14 @@ export class FileHistory {
             log.error({ err }, "file-history operation failed");
           }
         }
+        continue;
+      }
+
+      let backupData: Buffer<ArrayBuffer>;
+      try {
+        backupData = readFileSync(backup.backupPath);
+      } catch (err) {
+        log.error({ err }, "file-history backup read failed");
         continue;
       }
 
@@ -323,7 +343,7 @@ export class FileHistory {
       ...Object.keys(target.backups),
       ...unresolvedBaselines,
     ]);
-    this.save();
+    this.saveUnlocked();
 
     return changed;
   }
@@ -332,6 +352,9 @@ export class FileHistory {
   private deleteBackups(snapshots: Snapshot[]): void {
     for (const snapshot of snapshots) {
       for (const backup of Object.values(snapshot.backups)) {
+        if (backup.state !== "existing") {
+          continue;
+        }
         try {
           unlinkSync(backup.backupPath);
         } catch {
@@ -342,40 +365,52 @@ export class FileHistory {
   }
 
   getSnapshots(): Snapshot[] {
-    return [...this.snapshots];
+    return withFileSyncLock(this.statePath, () => {
+      this.loadUnlocked();
+      return [...this.snapshots];
+    });
   }
 
   hasSnapshots(): boolean {
-    return this.snapshots.length > 0;
+    return withFileSyncLock(this.statePath, () => {
+      this.loadUnlocked();
+      return this.snapshots.length > 0;
+    });
   }
 
-  save(): void {
+  private saveUnlocked(): void {
     const state: PersistedState = {
-      version: 1,
+      version: 2,
       trackedFiles: [...this.trackedFiles],
       snapshots: this.snapshots,
       baselines: Object.fromEntries(this.baselines),
       nextSnapshotSeq: this.nextSnapshotSeq,
     };
+    const temporary = `${this.statePath}.${String(process.pid)}.tmp`;
     try {
-      writeFileSync(
-        join(this.sessionDir, "snapshots.json"),
-        JSON.stringify(state, null, 2),
-        "utf-8",
-      );
+      writeFileSync(temporary, JSON.stringify(state, null, 2), "utf-8");
+      renameSync(temporary, this.statePath);
     } catch (err) {
       log.error({ err }, "file-history operation failed");
+      try {
+        unlinkSync(temporary);
+      } catch {
+        // Nothing to clean up.
+      }
     }
   }
 
-  private load(): void {
-    const filePath = join(this.sessionDir, "snapshots.json");
-    if (!existsSync(filePath)) {
+  private loadUnlocked(): void {
+    this.trackedFiles = new Set();
+    this.baselines = new Map();
+    this.snapshots = [];
+    this.nextSnapshotSeq = 0;
+    if (!existsSync(this.statePath)) {
       return;
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(readFileSync(filePath, "utf-8"));
+      raw = JSON.parse(readFileSync(this.statePath, "utf-8"));
     } catch (err) {
       log.error({ err }, "file-history operation failed");
       return;
@@ -387,7 +422,7 @@ export class FileHistory {
     }
     const state: PersistedState = result.data;
     this.snapshots = state.snapshots;
-    this.nextSnapshotSeq = state.nextSnapshotSeq ?? state.snapshots.length;
+    this.nextSnapshotSeq = state.nextSnapshotSeq;
     for (const [path, baseline] of Object.entries(state.baselines ?? {})) {
       this.baselines.set(path, baseline);
     }
@@ -401,13 +436,6 @@ export class FileHistory {
       const last = state.snapshots[state.snapshots.length - 1];
       for (const path of Object.keys(last.backups)) {
         this.trackedFiles.add(path);
-      }
-    }
-    // Legacy histories lack baselines. Treat those as unavailable rather than
-    // guessing that a file first tracked after a target snapshot was new.
-    for (const path of this.trackedFiles) {
-      if (!this.baselines.has(path)) {
-        this.baselines.set(path, { state: "unavailable" });
       }
     }
   }

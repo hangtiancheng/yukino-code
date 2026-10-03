@@ -33,24 +33,6 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function isPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err: unknown) {
-    return errorCode(err) === "EPERM";
-  }
-}
-
-function entryPid(entry: string): number | undefined {
-  const match = /^(?:choosing-([1-9]\d*)-|ticket-\d+-([1-9]\d*)-)/u.exec(entry);
-  if (!match) {
-    return undefined;
-  }
-  const pid = Number.parseInt(match[1] ?? match[2] ?? "", 10);
-  return Number.isSafeInteger(pid) ? pid : undefined;
-}
-
 interface LockContender {
   choosingPath: string;
   ticketPath: string;
@@ -60,6 +42,24 @@ interface LockContender {
 function ticketNumber(entry: string): number {
   const match = /^ticket-(\d+)-/u.exec(entry);
   return match ? Number.parseInt(match[1] ?? "0", 10) : 0;
+}
+
+function lockOwnerPid(entry: string): number | null {
+  const match = /^(?:choosing-|ticket-\d+-)(\d+)-/u.exec(entry);
+  if (!match) {
+    return null;
+  }
+  const pid = Number.parseInt(match[1] ?? "", 10);
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return errorCode(err) === "EPERM";
+  }
 }
 
 function createContender(lockDir: string): LockContender {
@@ -120,11 +120,10 @@ function liveLockEntries(
     }
     try {
       const info = statSync(entryPath);
-      const pid = entryPid(entry);
+      const ownerPid = lockOwnerPid(entry);
       if (
         now - info.mtimeMs > LOCK_STALE_MS &&
-        pid !== undefined &&
-        !isPidAlive(pid)
+        (ownerPid === null || !isProcessAlive(ownerPid))
       ) {
         unlinkSync(entryPath);
       }

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -39,7 +39,7 @@ function walkDir(base: string, dir: string): Command[] {
     const full = join(dir, entry);
     let st;
     try {
-      st = statSync(full);
+      st = lstatSync(full);
     } catch {
       continue;
     }
@@ -80,20 +80,19 @@ function parseCommandFile(base: string, full: string): Command | null {
   let argumentHint = "";
   let body = raw;
 
-  if (raw.startsWith("---")) {
-    const end = raw.indexOf("---", 3);
-    if (end !== -1) {
-      const frontmatter = raw.slice(3, end).trim();
-      body = raw.slice(end + 3).trim();
-      try {
-        const p: unknown = yaml.load(frontmatter);
-        const data = parse(YamlFrontmatterSchema, p);
-        description = data.description ?? "";
-        argumentHint = data["argument-hint"] ?? "";
-      } catch {
-        // Ignore frontmatter parse errors; keep the body text that follows the
-        // frontmatter block.
-      }
+  const frontmatterMatch =
+    /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u.exec(raw);
+  if (frontmatterMatch) {
+    const frontmatter = frontmatterMatch[1].trim();
+    body = raw.slice(frontmatterMatch[0].length).trim();
+    try {
+      const p: unknown = yaml.load(frontmatter);
+      const data = parse(YamlFrontmatterSchema, p);
+      description = data.description ?? "";
+      argumentHint = data["argument-hint"] ?? "";
+    } catch {
+      // Ignore frontmatter parse errors; keep the body text that follows the
+      // frontmatter block.
     }
   }
 

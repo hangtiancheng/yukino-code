@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 
 import type { TeamMode } from "./index.js";
 
@@ -94,6 +94,21 @@ export interface SpawnConfig {
   command: string;
   args: string[];
   cwd: string;
+  paneId?: string;
+}
+
+export function isTeammateAlive(mode: TeamMode, paneId?: string): boolean {
+  if (mode !== "tmux" || !paneId) {
+    return false;
+  }
+  try {
+    execFileSync("tmux", ["has-session", "-t", paneId], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function spawnTeammate(config: SpawnConfig): {
@@ -102,7 +117,7 @@ export function spawnTeammate(config: SpawnConfig): {
 } {
   switch (config.mode) {
     case "tmux": {
-      const sessionName = `yukino-${Date.now().toString(36)}`;
+      const sessionName = config.paneId ?? `yukino-${Date.now().toString(36)}`;
       const cmd = buildShellCommand(config);
       execSync(`tmux new-session -d -s "${sessionName}" -n teammate "${cmd}"`, {
         cwd: config.cwd,
@@ -120,21 +135,18 @@ export function spawnTeammate(config: SpawnConfig): {
     case "iterm": {
       const cmd = buildShellCommand(config);
       const writeText = `cd ${shellQuote(config.cwd)} && ${cmd}`;
-      // Escape backslashes and double quotes for the AppleScript string literal
-      const escaped = writeText.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-      const lines = [
-        'tell application "iTerm2"',
-        "  tell current window",
-        "    create tab with default profile",
-        `    tell current session to write text "${escaped}"`,
+      const script = [
+        "on run argv",
+        "  set commandText to item 1 of argv",
+        '  tell application "iTerm2"',
+        "    tell current window",
+        "      create tab with default profile",
+        "      tell current session to write text commandText",
+        "    end tell",
         "  end tell",
-        "end tell",
-      ];
-      // Pass each line via -e wrapped in single quotes to prevent the shell from interpreting special characters in the AppleScript
-      const eArgs = lines
-        .map((l) => `-e '${l.replace(/'/g, `'\\''`)}'`)
-        .join(" ");
-      execSync(`osascript ${eArgs}`, {
+        "end run",
+      ].join("\n");
+      execFileSync("osascript", ["-e", script, writeText], {
         cwd: config.cwd,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],

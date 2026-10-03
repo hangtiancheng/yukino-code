@@ -152,6 +152,12 @@ export class AskUserQuestionTool implements Tool {
     }
 
     const answer = await this.ask(questions);
+    if (Object.keys(answer).length === 0) {
+      return {
+        output: "User cancelled or did not answer the questions.",
+        isError: true,
+      };
+    }
     const parts = Object.entries(answer).map(([q, a]) => `"${q}" = "${a}"`);
 
     return {

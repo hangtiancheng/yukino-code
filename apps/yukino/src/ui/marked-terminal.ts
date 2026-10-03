@@ -9,6 +9,7 @@ import type {
   Parser,
 } from "marked";
 import * as emoji from "node-emoji";
+import sliceAnsi from "slice-ansi";
 import stringWidth from "string-width";
 import supportsHyperlinks from "supports-hyperlinks";
 
@@ -52,6 +53,10 @@ const COLON_REPLACER_REGEXP = new RegExp(escapeRegExp(COLON_REPLACER), "g");
 const TAB_ALLOWED_CHARACTERS = ["\t"];
 
 const ANSI_REGEXP: RegExp = ansiRegex();
+const ANSI_SPLIT_REGEXP = new RegExp(`(${ANSI_REGEXP.source})`, "gu");
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
 
 const HARD_RETURN = "\r";
 const HARD_RETURN_RE = new RegExp(HARD_RETURN);
@@ -161,10 +166,6 @@ class Renderer {
     throw new Error(
       "TerminalRenderer: options not set. Call setContext() before rendering.",
     );
-  }
-
-  textLength(str: string): number {
-    return textLength(str);
   }
 
   space(_token: Tokens.Space): "" {
@@ -413,8 +414,6 @@ class Renderer {
   }
 }
 
-export default Renderer;
-
 export function markedTerminal(
   options?: Partial<TerminalRendererOptions>,
 ): MarkedExtension {
@@ -523,8 +522,7 @@ function reflowText(text: string, width: number, gfm: boolean): string {
   const reflowed: string[] = [];
 
   for (const sectionStr of sections) {
-    // eslint-disable-next-line no-control-regex
-    const fragments = sectionStr.split(/(\x1b\[(?:\d{1,3})(?:;\d{1,3})*m)/g);
+    const fragments = sectionStr.split(ANSI_SPLIT_REGEXP);
     let column = 0;
     let currentLine = "";
     let lastWasEscapeChar = false;
@@ -557,30 +555,30 @@ function reflowText(text: string, width: number, gfm: boolean): string {
             currentLine = word;
             column = wordWidth;
           } else {
-            const available = width - column - (addSpace ? 1 : 0);
-            const head = word.substring(0, available);
             if (addSpace) {
               currentLine += " ";
+              column++;
             }
-            currentLine += head;
-            reflowed.push(currentLine);
-            currentLine = "";
-            column = 0;
-
-            let remaining = word.substring(head.length);
+            let remaining = word;
             while (remaining.length > 0) {
-              const chunk = remaining.substring(0, width);
+              const available = width - column;
+              if (available <= 0) {
+                reflowed.push(currentLine);
+                currentLine = "";
+                column = 0;
+                continue;
+              }
+              const chunk = takeColumns(remaining, available);
               if (chunk.length === 0) {
                 break;
               }
-
-              if (chunk.length < width) {
-                currentLine = chunk;
-                column = chunk.length;
-                break;
-              } else {
-                reflowed.push(chunk);
-                remaining = remaining.substring(width);
+              currentLine += chunk;
+              column += stringWidth(chunk);
+              remaining = remaining.slice(chunk.length);
+              if (remaining.length > 0) {
+                reflowed.push(currentLine);
+                currentLine = "";
+                column = 0;
               }
             }
           }
@@ -605,6 +603,17 @@ function reflowText(text: string, width: number, gfm: boolean): string {
   }
 
   return reflowed.join("\n");
+}
+
+function takeColumns(text: string, width: number): string {
+  const sliced = sliceAnsi(text, 0, width);
+  if (sliced) {
+    return sliced;
+  }
+  return (
+    GRAPHEME_SEGMENTER.segment(text)[Symbol.iterator]().next().value?.segment ??
+    ""
+  );
 }
 
 function indentLines(indent: string, text: string): string {

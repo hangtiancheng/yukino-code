@@ -17,12 +17,7 @@ import { withFileSyncLock } from "./file-lock.js";
 
 import { canonicalPath } from "@/utils/paths.js";
 
-/**
- * Metadata for a single team member. isActive is optional only for backward
- * compatibility with older files; current snapshots persist every activation
- * and deactivation. paneId is the stable tmux session identifier used to
- * reconstruct cancellation after a leader restart; iTerm does not provide one.
- */
+/** Metadata for a single team member. */
 export const TeamMemberEntrySchema = z.object({
   agentId: z.string(),
   name: z.string(),
@@ -30,9 +25,9 @@ export const TeamMemberEntrySchema = z.object({
   model: z.string().optional(),
   joinedAt: z.number(),
   worktreePath: z.string().optional(),
-  backendType: z.string().optional(),
+  backendType: z.enum(["in-process", "tmux", "iterm"]),
   paneId: z.string().optional(),
-  isActive: z.boolean().optional(),
+  isActive: z.boolean(),
 });
 
 export type TeamMemberEntry = z.infer<typeof TeamMemberEntrySchema>;
@@ -53,6 +48,7 @@ export type TeamMemberEntry = z.infer<typeof TeamMemberEntrySchema>;
  */
 const TeamFileSchema = z.object({
   name: z.string(),
+  mode: z.enum(["in-process", "tmux", "iterm"]),
   description: z.string().optional(),
   createdAt: z.number(),
   leaderAgentId: z.string(),

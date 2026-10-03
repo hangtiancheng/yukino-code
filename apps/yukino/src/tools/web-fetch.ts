@@ -10,7 +10,7 @@ import type {
 } from "./types.js";
 
 import { createChildLogger } from "@/logger/index.js";
-import { asErrorString, strArg } from "@/utils/index.js";
+import { asErrorString, isRecord, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "tools" });
 
@@ -241,9 +241,38 @@ export class WebFetchTool implements Tool {
       };
     }
 
-    let body: ArrayBuffer;
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return {
+        output: "Error: response body is unavailable",
+        isError: true,
+      };
+    }
+    const chunks: Uint8Array[] = [];
+    let receivedBytes = 0;
     try {
-      body = await response.arrayBuffer();
+      while (true) {
+        const readResult: unknown = await reader.read();
+        if (!isRecord(readResult)) {
+          throw new Error("Invalid response stream result");
+        }
+        if (readResult.done === true) {
+          break;
+        }
+        const value = readResult.value;
+        if (!(value instanceof Uint8Array)) {
+          throw new Error("Invalid response stream chunk");
+        }
+        receivedBytes += value.byteLength;
+        if (receivedBytes > MAX_CONTENT_BYTES) {
+          await reader.cancel();
+          return {
+            output: `Error: response exceeds the ${String(MAX_CONTENT_BYTES)}-byte limit`,
+            isError: true,
+          };
+        }
+        chunks.push(value);
+      }
     } catch (err) {
       log.error({ err, url }, "reading response body failed");
       return {
@@ -251,14 +280,7 @@ export class WebFetchTool implements Tool {
         isError: true,
       };
     }
-    if (body.byteLength > MAX_CONTENT_BYTES) {
-      return {
-        output: `Error: response is ${String(body.byteLength)} bytes, over the ${String(MAX_CONTENT_BYTES)}-byte limit`,
-        isError: true,
-      };
-    }
-
-    const raw = Buffer.from(body).toString("utf-8");
+    const raw = Buffer.concat(chunks, receivedBytes).toString("utf-8");
     let markdown: string;
     try {
       markdown = contentType.includes("text/html")

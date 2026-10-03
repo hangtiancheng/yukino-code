@@ -96,7 +96,9 @@ export class MemoryConsolidator {
       .then(() => {
         markConsolidationSucceeded(memDir);
       })
-      .catch(() => undefined)
+      .catch((err: unknown) => {
+        log.error({ err }, "memory consolidation failed");
+      })
       .finally(releaseLock)
       .catch((err: unknown) => {
         log.error({ err }, "failed to release consolidation lock");

@@ -2,6 +2,7 @@ import { Box, Text, useInput, usePaste } from "ink";
 import { useState } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
+import { previousGraphemeBoundary } from "./terminal-text.js";
 
 import { ICONS, THEME } from "@/ui/styles.js";
 
@@ -41,11 +42,21 @@ export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
       // Escape defaults to the middle ground: approve the plan, but keep
       // confirming every edit. It does not cancel the approval.
       onSelect("manual");
-    } else if (key.tab && key.shift && cursor === 2 && feedbackText) {
-      onSelect("feedback", feedbackText);
+    } else if (key.tab) {
+      if (key.shift && cursor === 2 && feedbackText) {
+        onSelect("feedback", feedbackText);
+      }
     } else if (cursor === 2 && key.backspace) {
-      setFeedbackText((current) => current.slice(0, -1));
-    } else if (cursor === 2 && input && !key.ctrl && !key.meta) {
+      setFeedbackText((current) =>
+        current.slice(0, previousGraphemeBoundary(current, current.length)),
+      );
+    } else if (
+      cursor === 2 &&
+      input &&
+      !key.ctrl &&
+      !key.meta &&
+      !/\[<\d+;\d+;\d+[Mm]/u.test(input)
+    ) {
       setFeedbackError(false);
       setFeedbackText((current) => current + input);
     }

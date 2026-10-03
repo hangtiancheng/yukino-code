@@ -294,12 +294,23 @@ export class MCPClient {
   }
 
   async disconnect(): Promise<void> {
+    const client = this.client;
+    const transport = this.transport;
+    this.client = null;
+    this.transport = null;
+    let clientClosed = false;
     try {
-      await this.client?.close();
+      await client?.close();
+      clientClosed = true;
     } catch (err) {
       log.error({ err }, "mcp operation failed");
     }
-    this.client = null;
-    this.transport = null;
+    if (!clientClosed && transport) {
+      try {
+        await transport.close();
+      } catch (err) {
+        log.error({ err }, "mcp transport close failed");
+      }
+    }
   }
 }

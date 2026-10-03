@@ -26,7 +26,7 @@ import {
   formatDiffEntry,
   parseGroupingResponse,
 } from "@/code-review/grouping.js";
-import { stripMarkdownFences } from "@/code-review/prompts.js";
+import { renderTemplate, stripMarkdownFences } from "@/code-review/prompts.js";
 import { extractCodeBlock, relocateWithLlm } from "@/code-review/relocate.js";
 import {
   relocateAcrossFiles,
@@ -193,6 +193,24 @@ describe("diff-parser", () => {
     expect(unquoteGitPath('"src/a b.ts"')).toBe("src/a b.ts");
     expect(unquoteGitPath('"src/a\\tb.ts"')).toBe("src/a\tb.ts");
     expect(unquoteGitPath("plain.ts")).toBe("plain.ts");
+  });
+
+  it('parses unquoted paths containing a " b/" segment', async () => {
+    const path = "src/a b/feature.ts";
+    const diffs = await parseDiffText(
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`,
+    );
+    expect(diffs[0]?.oldPath).toBe(path);
+    expect(diffs[0]?.newPath).toBe(path);
+  });
+
+  it("parses quoted paths containing spaces", async () => {
+    const path = "src/a b.ts";
+    const diffs = await parseDiffText(
+      `diff --git "a/${path}" "b/${path}"\n--- "a/${path}"\n+++ "b/${path}"\n@@ -1 +1 @@\n-old\n+new\n`,
+    );
+    expect(diffs[0]?.oldPath).toBe(path);
+    expect(diffs[0]?.newPath).toBe(path);
   });
 
   it("reads new file content through the injected reader", async () => {
@@ -504,7 +522,10 @@ describe("comment-tool", () => {
     expect(parsed.comments[0]?.path).toBe("a.ts");
     expect(parsed.droppedEntries).toBe(2);
 
-    const allBad = parseComments({ comments: [{ path: "b.ts" }] }, "f.ts");
+    const allBad = parseComments(
+      { comments: [{ path: "b.ts", content: "missing anchor" }] },
+      "f.ts",
+    );
     expect(allBad.error).toContain("no valid comments");
   });
 
@@ -537,17 +558,21 @@ describe("comment-tool", () => {
 
   it("collector supports snapshot deltas and index removal", () => {
     const collector = new CommentCollector();
-    collector.add(makeComment({ content: "one" }));
+    collector.addAll([makeComment({ content: "one" })]);
     const mark = collector.snapshot();
-    collector.add(makeComment({ content: "two" }));
-    collector.add(makeComment({ content: "three" }));
+    collector.addAll([
+      makeComment({ content: "two" }),
+      makeComment({ content: "three" }),
+    ]);
     expect(collector.since(mark).map((c) => c.content)).toEqual([
       "two",
       "three",
     ]);
     collector.removeAt([mark + 1]);
     expect(collector.all().map((c) => c.content)).toEqual(["one", "two"]);
-    expect(collector.forPath("src/app.ts")).toHaveLength(2);
+    expect(collector.all().filter((c) => c.path === "src/app.ts")).toHaveLength(
+      2,
+    );
   });
 });
 
@@ -633,7 +658,19 @@ describe("prompts/relocate helpers", () => {
     expect(extractCodeBlock("text\n```ts\nconst a = 1;\n```\nmore")).toBe(
       "const a = 1;",
     );
+    expect(extractCodeBlock("````ts\nbefore\n```\nafter\n````")).toBe(
+      "before\n```\nafter",
+    );
     expect(extractCodeBlock("no fence here")).toBe("no fence here");
+  });
+
+  it("substitutes template placeholders in one pass", () => {
+    expect(
+      renderTemplate("{{first}} {{second}}", {
+        first: "{{second}}",
+        second: "done",
+      }),
+    ).toBe("{{second}} done");
   });
 });
 

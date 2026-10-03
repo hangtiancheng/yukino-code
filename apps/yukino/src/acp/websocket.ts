@@ -141,11 +141,11 @@ export async function runAcpWebSocket(address?: string): Promise<void> {
   const server = await startAcpWebSocketServer(address);
   process.stderr.write(`ACP WebSocket listening at ${server.url}\n`);
 
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
     const shutdown = (): void => {
       process.off("SIGINT", shutdown);
       process.off("SIGTERM", shutdown);
-      void server.close().finally(resolve);
+      void server.close().then(resolve, reject);
     };
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);

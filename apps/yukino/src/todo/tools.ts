@@ -207,7 +207,9 @@ export class TaskUpdateTool implements Tool {
     }
 
     if (status === "deleted") {
-      this.list.delete(taskId);
+      if (!this.list.delete(taskId)) {
+        return { output: "Task not found", isError: true };
+      }
       return Promise.resolve({
         output: `Task #${taskId} deleted`,
         isError: false,
@@ -223,13 +225,13 @@ export class TaskUpdateTool implements Tool {
     if (status) {
       updates.status = status;
     }
-    if (subject) {
+    if (subject !== undefined) {
       updates.subject = subject;
     }
-    if (description) {
+    if (description !== undefined) {
       updates.description = description;
     }
-    if (owner) {
+    if (owner !== undefined) {
       updates.owner = owner;
     }
     const task = this.list.update(taskId, updates);

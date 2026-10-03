@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -51,9 +52,18 @@ function mockClient(turns: StreamEvent[][]): LLMClient {
     },
   };
 }
-const workDir = () => mkdtempSync(join(tmpdir(), "yukino-data-"));
+const workDirs = new Set<string>();
+const workDir = () => {
+  const directory = mkdtempSync(join(tmpdir(), "yukino-data-"));
+  workDirs.add(directory);
+  return directory;
+};
 
 afterEach(() => {
+  for (const directory of workDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  workDirs.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -111,7 +121,7 @@ describe("file and memory execution", () => {
       await new MemoryExtractor(client, directory).extract(
         "User explicitly requested a durable project preference.",
       ),
-    ).toEqual(["preference.md"]);
+    ).toEqual(["preference"]);
     expect(
       readFileSync(join(directory, ".yukino/memory/MEMORY.md"), "utf-8"),
     ).toContain("preference.md");
@@ -260,7 +270,7 @@ describe("fork and restored context", () => {
       if (Array.isArray(content)) {
         content[0].text = "child change";
       }
-      snapshot.addAssistantMessage("worker result");
+      snapshot.addAssistantFull("worker result", [], []);
       return Promise.resolve("verified worker result");
     });
     const tool = new AgentTool(

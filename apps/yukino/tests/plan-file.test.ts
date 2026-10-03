@@ -1,8 +1,8 @@
-import { mkdtempSync, existsSync } from "node:fs";
+import { mkdtempSync as createTempDir, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
 import {
   getOrCreatePlanPath,
@@ -13,6 +13,21 @@ import {
 } from "@/plan-file/index.js";
 import { buildPlanModeReminder } from "@/prompt/plan-mode.js";
 import { generateSlug } from "@/utils/slug.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 describe("plan-file", () => {
   it("generates compact collision-resistant slugs without word lists", () => {

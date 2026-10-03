@@ -18,7 +18,6 @@ import type {
   PromptResponse,
   ResumeSessionRequest,
   SessionNotification,
-  Usage,
 } from "@agentclientprotocol/sdk";
 
 import {
@@ -79,7 +78,6 @@ interface AcpSession {
   tail: Promise<void>;
   turnAbort: AbortController | null;
   closed: boolean;
-  usage: Usage;
 }
 
 export interface YukinoAcpApp {
@@ -203,7 +201,6 @@ export class YukinoAcpAgent {
       tail: Promise.resolve(),
       turnAbort: null,
       closed: false,
-      usage: emptyUsage(),
     };
     this.sessions.set(runtime.sessionId, session);
     return session;
@@ -400,6 +397,7 @@ export class YukinoAcpAgent {
 
     let reason: PromptResponse["stopReason"] = "end_turn";
     let sawUsage = false;
+    let usage = emptyUsage();
 
     for await (const event of session.runtime.run(text, {
       onPermissionRequest: async (toolName, args, decision, toolCallId) => {
@@ -459,7 +457,7 @@ export class YukinoAcpAgent {
         reason = stopReason(event.stopReason);
       }
       if (event.type === "usage") {
-        session.usage = addUsage(session.usage, event);
+        usage = addUsage(usage, event);
         sawUsage = true;
       }
       const update = agentEventToUpdate(
@@ -478,7 +476,7 @@ export class YukinoAcpAgent {
 
     return {
       stopReason: reason,
-      ...(sawUsage ? { usage: session.usage } : {}),
+      ...(sawUsage ? { usage } : {}),
     };
   }
 }

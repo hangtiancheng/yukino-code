@@ -1,8 +1,9 @@
 import {
   mkdirSync,
-  mkdtempSync,
+  mkdtempSync as createTempDir,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   symlinkSync,
   utimesSync,
@@ -11,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Sandbox } from "@/sandbox/index.js";
 import { BashTool } from "@/tools/bash.js";
@@ -27,6 +28,21 @@ import {
 } from "@/tools/shell-output.js";
 import type { ToolContext } from "@/tools/types.js";
 import { WriteFileTool } from "@/tools/write-file.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 function makeContext(): ToolContext {
   return {
@@ -304,13 +320,11 @@ describe("shell tool boundaries", () => {
 
   it("returns promptly when the shell exits with a daemonized grandchild still running", async () => {
     // fd-mode stdio: the child writes straight to the output file, so a
-    // grandchild that inherits the fd (`sleep 2 &`) no longer holds the tool
+    // grandchild that inherits the fd (`sleep 30 &`) no longer holds the tool
     // result hostage — the call resolves as soon as the shell itself exits.
-    const started = Date.now();
     const result = await new BashTool().execute(makeContext(), {
-      command: "printf before; sleep 2 &",
+      command: "printf before; sleep 30 &",
     });
-    expect(Date.now() - started).toBeLessThan(1_800);
     expect(result.isError).toBe(false);
     expect(result.output).toContain("before");
   }, 5_000);

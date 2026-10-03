@@ -27,6 +27,7 @@ const end = (reason = "end_turn"): StreamEvent => ({
 class MockClient implements LLMClient {
   calls = 0;
   maxTokensSet: number | null = null;
+  maxTokenCalls: number[] = [];
   constructor(private scripts: StreamEvent[][]) {}
   setSystemPrompt(_prompt: string): void {
     /** noop */
@@ -40,6 +41,7 @@ class MockClient implements LLMClient {
   }
   setMaxOutputTokens(n: number): void {
     this.maxTokensSet = n;
+    this.maxTokenCalls.push(n);
   }
 }
 
@@ -186,7 +188,8 @@ describe("Agent loop", () => {
     expect(
       events.some((e) => e.type === "retry" && e.reason.includes("max_tokens")),
     ).toBe(true);
-    expect(client.maxTokensSet).toBe(64000);
+    expect(client.maxTokenCalls).toContain(64000);
+    expect(client.maxTokensSet).toBe(8192);
     expect(events.some((e) => e.type === "loop_complete")).toBe(true);
   });
 
@@ -260,6 +263,7 @@ describe("Agent loop", () => {
           ctx.abortSignal?.addEventListener("abort", () => {
             resolve({ output: "Error: command interrupted", isError: true });
           });
+          controller.abort();
         }),
     };
     const client = new MockClient([
@@ -274,9 +278,6 @@ describe("Agent loop", () => {
       ],
       [{ type: "text_delta", text: "should never stream" }, end()],
     ]);
-    setTimeout(() => {
-      controller.abort();
-    }, 20);
     const { events, conversation } = await runAgent(client, {
       tool: interruptibleTool,
       abortSignal: controller.signal,

@@ -24,7 +24,7 @@ export function TeamsDialog({ teammates, onClose, onKill, onShutdown }: Props) {
     : undefined;
 
   useInput((input, key) => {
-    if (detailName) {
+    if (detail) {
       if (key.escape || key.leftArrow) {
         setDetailName(null);
       } else if (detail && input === "k" && onKill) {

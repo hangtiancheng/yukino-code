@@ -11,10 +11,8 @@ import importPlugin from "eslint-plugin-import";
 
 export default defineConfig(
   globalIgnores([
-    "app",
     "dist",
     "node_modules",
-    "out",
     "eslint.config.js",
     "tsup.config.ts",
     "vitest.config.ts",
@@ -91,8 +89,5 @@ export default defineConfig(
         },
       ],
     },
-  },
-  {
-    ignores: ["dist/", "node_modules/"],
   },
 );

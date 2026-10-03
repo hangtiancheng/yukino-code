@@ -351,6 +351,35 @@ describe("skill download cancellation", () => {
     expect(existsSync(join(workDir, ".agents"))).toBe(false);
   });
 
+  it("rejects streamed downloads larger than 1 MiB", async () => {
+    const { tool, onInstalled } = localInstaller();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(() =>
+        Promise.resolve(
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(new Uint8Array(600 * 1024));
+                controller.enqueue(new Uint8Array(600 * 1024));
+                controller.close();
+              },
+            }),
+          ),
+        ),
+      ),
+    );
+
+    const result = await tool.execute(
+      { workDir },
+      { source: "https://example.test/SKILL.md" },
+    );
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("1 MiB");
+    expect(onInstalled).not.toHaveBeenCalled();
+    expect(existsSync(join(workDir, ".agents"))).toBe(false);
+  });
+
   it("installs raw URLs and releases the deadline after success or HTTP failure", async () => {
     vi.useFakeTimers();
     const { tool, catalog, onInstalled } = localInstaller();

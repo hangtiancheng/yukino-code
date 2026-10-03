@@ -12,10 +12,6 @@ export interface AgentDefinition {
   background?: boolean;
   isolation?: "worktree";
   initialPrompt?: string;
-  omitMarkdown?: boolean;
-  skills?: string[];
-  memory?: boolean;
-  mcpServers?: string[];
 }
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [

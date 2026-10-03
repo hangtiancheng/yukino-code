@@ -12,7 +12,6 @@ type AllTools =
   | "TaskList"
   | "TaskUpdate"
   | "TeamCreate"
-  | "SpawnTeammate"
   | "SendMessage"
   | "ListTeams"
   | "TeamDelete"

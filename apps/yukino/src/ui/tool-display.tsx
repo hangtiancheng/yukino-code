@@ -148,19 +148,3 @@ export function ToolBlock({
     />
   );
 }
-
-export function ToolDisplay({
-  tools,
-  expanded = false,
-}: {
-  tools: ToolBlockInfo[];
-  expanded?: boolean;
-}) {
-  return (
-    <Box flexDirection="column">
-      {tools.map((tool) => (
-        <ToolBlock key={tool.toolId} tool={tool} expanded={expanded} />
-      ))}
-    </Box>
-  );
-}
