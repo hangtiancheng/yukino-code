@@ -3,8 +3,8 @@ import { embed, embedMany, type EmbeddingModel } from "ai";
 
 import type { EmbeddingConfig } from "../../shared/config.js";
 
-// OpenAI-compatible endpoints cap inputs per request (DashScope
-// text-embedding-v4 allows 10) while the SDK default is 2048 per call, so
+// OpenAI-compatible endpoints cap inputs per request
+// while the SDK default is 2048 per call, so
 // large documents would fail with "batch size is invalid" without splitting.
 export const EMBED_BATCH_SIZE = 10;
 
