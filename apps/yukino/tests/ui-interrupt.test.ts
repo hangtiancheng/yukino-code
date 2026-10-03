@@ -195,13 +195,10 @@ describe("createInterruptHandlers (interrupt scope)", () => {
 });
 
 interface HarnessProps {
-  isStreaming: boolean;
   hasRunningWork: boolean;
   clearInputRef: RefObject<(() => void) | null>;
   onInterrupt: () => void;
   onExit: () => void;
-  teamsDialogOpen: boolean;
-  onToggleTeams: () => void;
   onBackgroundShells: () => void;
 }
 
@@ -213,7 +210,6 @@ function Harness(props: HarnessProps) {
 
 function mountControls(
   opts: {
-    isStreaming?: boolean;
     hasRunningWork?: boolean;
   } = {},
 ) {
@@ -223,13 +219,10 @@ function mountControls(
   act(() => {
     instance = render(
       createElement(Harness, {
-        isStreaming: opts.isStreaming ?? false,
         hasRunningWork: opts.hasRunningWork ?? false,
         clearInputRef: { current: clearInput },
         onInterrupt,
         onExit,
-        teamsDialogOpen: false,
-        onToggleTeams: vi.fn(),
         onBackgroundShells: vi.fn(),
       }),
       { patchConsole: false, interactive: false, debug: true },
@@ -240,12 +233,10 @@ function mountControls(
 
 /** Dispatch a keypress to the handlers registered by the latest render. */
 function send(input = "", key: Partial<Key> = {}): void {
-  // useTerminalControls registers four useInput handlers per render; the last
-  // four recorded calls are the freshest closures. Only the Ctrl+C handler
-  // reacts to the inputs used here, the others check for o/b/t.
+  // useTerminalControls registers three useInput handlers per render.
   const handlers = vi
     .mocked(useInput)
-    .mock.calls.slice(-4)
+    .mock.calls.slice(-3)
     .map((call) => call[0])
     .filter(
       (handler): handler is (input: string, key: Key) => void =>

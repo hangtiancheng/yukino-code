@@ -441,10 +441,12 @@ Inside the UI, these commands are available:
 | --------- | ----------------------------------------------------------------------------------- |
 | Ctrl+C    | Clear input or interrupt streaming (first press), exit app (second press within 2s) |
 | Ctrl+O    | Toggle full vs. truncated tool output                                               |
-| Ctrl+T    | Toggle Teams dialog overlay (when not streaming)                                    |
+| ↓         | On the last input line, view all teammates and background subagents                 |
 | Ctrl+B    | Move running foreground Bash/PowerShell tasks to the background                     |
 | Ctrl+V    | Paste a clipboard image (Alt+V on Windows)                                          |
 | Shift+Tab | Cycle default → acceptEdits → bypassPermissions; exit plan to default               |
+
+Press ↓ on the last visual row of the input to view all teammates and background subagents, including while the foreground agent is streaming. Completion menus and prompt-history navigation take precedence. Enter opens an agent's details, Escape returns or closes the list, and the unsent draft and cursor are preserved. Teammate spawn cards scroll with the transcript like background subagent cards; current progress is available in the Agents list.
 
 Pastes longer than 10 lines or 1,000 characters collapse to `[paste #1 +124 lines]` or `[paste #1 1234 chars]`. Clipboard images appear as `[Image #1]`. Arrow keys move across each placeholder as a unit, and Backspace/Delete remove it as a unit. Placeholders survive dialog switches; submitting restores the full text and image attachments.
 

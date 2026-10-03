@@ -108,6 +108,7 @@ interface InputBoxProps {
   onSubmit: (text: string) => void;
   /** Atomically pop the latest queued message, only when Up starts on a clean draft. */
   onRecallQueuedMessage?: () => string | undefined;
+  onOpenAgents?: () => void;
   disabled?: boolean;
   history?: string[];
   commands?: Command[];
@@ -139,6 +140,7 @@ export function InputBox(props: InputBoxProps) {
   const {
     onSubmit,
     onRecallQueuedMessage,
+    onOpenAgents,
     disabled,
     history = [],
     commands = [],
@@ -828,37 +830,37 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if (key.downArrow) {
-      if (!isMultiline || historyIndex >= 0) {
-        if (historyIndex >= 0) {
-          preferredColumnRef.current = null;
+      if (historyIndex === -1) {
+        onOpenAgents?.();
+        return;
+      }
+      preferredColumnRef.current = null;
+      if (historyIndex > 0) {
+        const nextIdx = historyIndex - 1;
+        setHistoryIndex(nextIdx);
+        const entry = history[history.length - 1 - nextIdx] ?? "";
+        const entryLines = entry.split("\n");
+        setLines(entryLines);
+        if (pastes) {
+          setPastes(undefined);
         }
-        if (historyIndex > 0) {
-          const nextIdx = historyIndex - 1;
-          setHistoryIndex(nextIdx);
-          const entry = history[history.length - 1 - nextIdx] ?? "";
-          const entryLines = entry.split("\n");
-          setLines(entryLines);
-          if (pastes) {
-            setPastes(undefined);
+        setCursorLine(0);
+        setCursorCol(entryLines[0].length);
+      } else {
+        setHistoryIndex(-1);
+        const draft = historyDraft;
+        setHistoryDraft(null);
+        if (draft) {
+          setLines(draft.lines);
+          setCursorLine(draft.cursorLine);
+          setCursorCol(draft.cursorCol);
+          if (draft.pastes || pastes) {
+            setPastes(draft.pastes);
           }
+        } else {
+          setLines([""]);
           setCursorLine(0);
-          setCursorCol(entryLines[0].length);
-        } else if (historyIndex === 0) {
-          setHistoryIndex(-1);
-          const draft = historyDraft;
-          setHistoryDraft(null);
-          if (draft) {
-            setLines(draft.lines);
-            setCursorLine(draft.cursorLine);
-            setCursorCol(draft.cursorCol);
-            if (draft.pastes || pastes) {
-              setPastes(draft.pastes);
-            }
-          } else {
-            setLines([""]);
-            setCursorLine(0);
-            setCursorCol(0);
-          }
+          setCursorCol(0);
         }
       }
       return;

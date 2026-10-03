@@ -393,7 +393,6 @@ describe("shared live and committed tool cards", () => {
               loading: true,
             },
           ],
-          persistentAgentTools: [],
           subagents: [
             {
               toolCallId: "a",
@@ -440,8 +439,7 @@ describe("shared live and committed tool cards", () => {
       chalk.level = 3;
       const rendered = renderToString(
         createElement(AgentActivity, {
-          tools: [],
-          persistentAgentTools: [
+          tools: [
             {
               toolId: "team-agent",
               toolName: "Agent",

@@ -2,25 +2,19 @@ import { useInput, useStdout } from "ink";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 interface Options {
-  isStreaming: boolean;
   hasRunningWork: boolean;
   clearInputRef: RefObject<(() => void) | null>;
   onInterrupt: () => void;
   onExit: () => void;
-  teamsDialogOpen: boolean;
-  onToggleTeams: () => void;
   /** Move every running foreground Bash/PowerShell task to the background (Ctrl+B). */
   onBackgroundShells?: () => void;
 }
 
 export function useTerminalControls({
-  isStreaming,
   hasRunningWork,
   clearInputRef,
   onInterrupt,
   onExit,
-  teamsDialogOpen,
-  onToggleTeams,
   onBackgroundShells,
 }: Options) {
   const { stdout } = useStdout();
@@ -123,15 +117,6 @@ export function useTerminalControls({
       onBackgroundShells?.();
     }
   });
-
-  useInput(
-    (input, key) => {
-      if (key.ctrl && input === "t" && !isStreaming) {
-        onToggleTeams();
-      }
-    },
-    { isActive: !teamsDialogOpen },
-  );
 
   return { termWidth, toolsExpanded, ctrlCHint };
 }

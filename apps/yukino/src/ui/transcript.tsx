@@ -55,8 +55,8 @@ export function Transcript({
               <Text color={THEME.dim}> v{version}</Text>
             </Text>
             <Text color={THEME.muted}>
-              Esc interrupt · Ctrl+C clear/exit · /commands · Ctrl+O details ·
-              Ctrl+T teams
+              Esc interrupt · Ctrl+C clear/exit · /commands · Ctrl+O details · ↓
+              on last input line: agents
             </Text>
             <Text color={THEME.dim} wrap="truncate-end">
               {provider}/{model} · {compactPath(workDir)}

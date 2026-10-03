@@ -31,9 +31,6 @@ export function useAgentOutput(
   const [streamingThinking, setStreamingThinking] = useState("");
   const [retryStatus, setRetryStatus] = useState<string | undefined>();
   const [activeTools, setActiveTools] = useState<ToolBlockInfo[]>([]);
-  const [persistentAgentTools, setPersistentAgentTools] = useState<
-    ToolBlockInfo[]
-  >([]);
   const [inputTokens, setInputTokens] = useState(0);
   const [outputTokens, setOutputTokens] = useState(0);
   // Session-wide totals, kept in a ref because the exit-summary callback reads
@@ -77,7 +74,6 @@ export function useAgentOutput(
   const resetUsage = () => {
     setInputTokens(0);
     setOutputTokens(0);
-    setPersistentAgentTools([]);
     usageTotalsRef.current = {
       cacheCreationTokens: 0,
       cacheReadTokens: 0,
@@ -96,8 +92,6 @@ export function useAgentOutput(
     let turnThinkingDuration = 0;
     const turnToolCalls = new Map<string, ToolSummaryItem | undefined>();
     const pendingToolArgs = new Map<string, string>();
-    const persistentAgentToolIds = new Set<string>();
-    const pendingTeamDeletes = new Map<string, string>();
 
     const resetTurn = () => {
       turnThinkingText = "";
@@ -106,8 +100,6 @@ export function useAgentOutput(
       turnToolCalls.clear();
       setStreamingThinking("");
       pendingToolArgs.clear();
-      persistentAgentToolIds.clear();
-      pendingTeamDeletes.clear();
     };
 
     return (event: AgentEvent) => {
@@ -155,33 +147,6 @@ export function useAgentOutput(
             loading: true,
           };
           setActiveTools((tools) => [...tools, tool]);
-          // Only teammate spawns stay pinned across turns. One-shot background
-          // agents (run_in_background) commit to history like any other tool
-          // call — their result reaches the user as a task notification.
-          const teamName = event.args.team_name;
-          if (
-            event.toolName === "Agent" &&
-            typeof teamName === "string" &&
-            teamName
-          ) {
-            persistentAgentToolIds.add(event.toolId);
-            setPersistentAgentTools((tools) => [
-              ...tools.filter((item) => item.toolId !== event.toolId),
-              {
-                ...tool,
-                args: {
-                  description: event.args.description,
-                  team_name: teamName,
-                },
-              },
-            ]);
-          }
-          if (
-            event.toolName === "TeamDelete" &&
-            typeof event.args.name === "string"
-          ) {
-            pendingTeamDeletes.set(event.toolId, event.args.name);
-          }
           break;
         }
         case "tool_result": {
@@ -209,42 +174,16 @@ export function useAgentOutput(
               : tool;
           setActiveTools((tools) => tools.map(completeTool));
 
-          const deletedTeam = pendingTeamDeletes.get(event.toolId);
-          if (deletedTeam && !event.isError) {
-            setPersistentAgentTools((tools) =>
-              tools.filter((tool) => tool.args.team_name !== deletedTeam),
-            );
-          }
-
-          // TeamCreate enforces single-team semantics: every existing team is
-          // deleted before the new one is created, so all pinned teammate
-          // cards are stale and must go.
-          if (event.toolName === "TeamCreate" && !event.isError) {
-            setPersistentAgentTools([]);
-          }
-
-          if (persistentAgentToolIds.has(event.toolId) && !event.isError) {
-            setPersistentAgentTools((tools) => tools.map(completeTool));
-            turnToolCalls.delete(event.toolId);
-          } else {
-            if (persistentAgentToolIds.has(event.toolId)) {
-              setPersistentAgentTools((tools) =>
-                tools.filter((tool) => tool.toolId !== event.toolId),
-              );
-            }
-            turnToolCalls.set(event.toolId, {
-              toolName: event.toolName,
-              argsSummary:
-                pendingToolArgs.get(`${event.toolName}:${event.toolId}`) ?? "",
-              output,
-              isError: event.isError,
-              elapsed: event.elapsed,
-              ...(decoration?.status ? { status: decoration.status } : {}),
-              ...(decoration?.progress
-                ? { progress: decoration.progress }
-                : {}),
-            });
-          }
+          turnToolCalls.set(event.toolId, {
+            toolName: event.toolName,
+            argsSummary:
+              pendingToolArgs.get(`${event.toolName}:${event.toolId}`) ?? "",
+            output,
+            isError: event.isError,
+            elapsed: event.elapsed,
+            ...(decoration?.status ? { status: decoration.status } : {}),
+            ...(decoration?.progress ? { progress: decoration.progress } : {}),
+          });
           break;
         }
         case "usage": {
@@ -319,7 +258,6 @@ export function useAgentOutput(
     retryStatus,
     streamingTextRef,
     activeTools,
-    persistentAgentTools,
     inputTokens,
     outputTokens,
     usageTotalsRef,

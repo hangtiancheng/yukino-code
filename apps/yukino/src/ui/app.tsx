@@ -5,6 +5,7 @@ import { Box, Text, useApp } from "ink";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import { AgentActivity, type SubagentProgress } from "./agent-activity.js";
+import { AgentStatus } from "./agent-status.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "./chat.js";
 import { Footer } from "./footer.js";
 import { InteractionDock } from "./interaction-dock.js";
@@ -18,7 +19,6 @@ import type { PlanChoice } from "./plan-approval.js";
 import { ProviderLogin } from "./provider-login.js";
 import { ProviderSelect } from "./provider-select.js";
 import type { RewindAction } from "./rewind-dialog.js";
-import { TeamStatus } from "./team-status.js";
 import { Transcript } from "./transcript.js";
 import {
   useAgentOutput,
@@ -221,7 +221,6 @@ export function App({
     streamingThinking,
     streamingTextRef,
     activeTools,
-    persistentAgentTools,
     inputTokens,
     outputTokens,
   } = output;
@@ -473,9 +472,12 @@ export function App({
     null,
   );
   const teammateStates = useTeammateStates(teamManagerRef.current);
-  const [teamsDialogOpen, setTeamsDialogOpen] = useState(false);
+  const [agentsDialogOpen, setAgentsDialogOpen] = useState(false);
   const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<AgentTask[]>([]);
+  const backgroundSubagents = backgroundTasks.filter(
+    (task) => task.kind !== "shell",
+  );
   const subagentIdRef = useRef(0);
   // Terminal card decoration (status + progress line) for Agent calls, keyed by
   // tool call id. Consulted when the tool result is committed to transcript
@@ -579,15 +581,10 @@ export function App({
   // instead of interrupting anything.
   const foregroundBusy = isForegroundBusy(isStreaming, isCompacting, subagents);
   const { termWidth, toolsExpanded, ctrlCHint } = useTerminalControls({
-    isStreaming,
     hasRunningWork: foregroundBusy,
     clearInputRef,
     onInterrupt: interruptForeground,
     onExit: requestExit,
-    teamsDialogOpen,
-    onToggleTeams: () => {
-      setTeamsDialogOpen((open) => !open);
-    },
     onBackgroundShells: () => {
       // Gate the keypress: keep Ctrl+B inert when nothing is backgroundable,
       // and yield the key to the provider-login form while it is open (that
@@ -2698,7 +2695,7 @@ export function App({
     resumeDialogActive ||
     permissionRequest !== null ||
     askRequest !== null ||
-    teamsDialogOpen;
+    agentsDialogOpen;
   const followUps = useFollowUpQueue({
     blocked: turnBlocked,
     send: processSubmission,
@@ -2912,7 +2909,6 @@ export function App({
 
         <AgentActivity
           tools={activeTools}
-          persistentAgentTools={persistentAgentTools}
           subagents={subagents}
           backgroundTasks={backgroundTasks}
           teammates={teammateStates}
@@ -2935,12 +2931,9 @@ export function App({
           <Text color={THEME.dim}>Press Ctrl+C again to exit.</Text>
         </Box>
       )}
-      <TeamStatus
-        count={
-          teammateStates.filter(
-            (t) => t.status === "running" || t.status === "idle",
-          ).length
-        }
+      <AgentStatus
+        teammates={teammateStates.length}
+        backgroundSubagents={backgroundSubagents.length}
       />
       <InteractionDock
         login={
@@ -3060,18 +3053,23 @@ export function App({
               }
             : undefined
         }
-        teams={
-          teamsDialogOpen
+        agents={
+          agentsDialogOpen
             ? {
                 teammates: teammateStates,
+                backgroundTasks: backgroundSubagents,
+                subagents,
                 onClose: () => {
-                  setTeamsDialogOpen(false);
+                  setAgentsDialogOpen(false);
                 },
                 onKill: (name, teamName) => {
                   const team = teamManagerRef.current.get(teamName);
                   if (team) {
                     void team.stopMember(name);
                   }
+                },
+                onStopBackground: (taskId) => {
+                  backgroundTaskManagerRef.current.stop(taskId);
                 },
                 onShutdown: (name, teamName) => {
                   const team = teamManagerRef.current.get(teamName);
@@ -3095,6 +3093,12 @@ export function App({
           commands: cmdRegistryRef.current.listCommands(),
           thinkingLevels: availableThinkingLevels,
           onRecallQueuedMessage: recallQueuedMessage,
+          onOpenAgents:
+            teammateStates.length > 0 || backgroundSubagents.length > 0
+              ? () => {
+                  setAgentsDialogOpen(true);
+                }
+              : undefined,
           usageTracker: usageTrackerRef.current,
           inputState: error
             ? "error"

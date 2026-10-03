@@ -5,7 +5,7 @@ import chalk from "chalk";
 import { render, renderToString } from "ink";
 import type { Instance, Key } from "ink";
 import type * as Ink from "ink";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
@@ -464,6 +464,62 @@ describe("composer completion rows", () => {
 });
 
 describe("composer queue recall and visual navigation", () => {
+  it.each(["focused", "agent"] as const)(
+    "opens agents from the last input line while %s without changing the draft",
+    (inputState) => {
+      const ref = draftRef(["first", "last"], 1, 2);
+      const onOpenAgents = vi.fn();
+      mount({ draftRef: ref, onOpenAgents, inputState });
+      press("", { downArrow: true });
+      expect(onOpenAgents).toHaveBeenCalledOnce();
+      expect(ref.current).toEqual(draftRef(["first", "last"], 1, 2).current);
+    },
+  );
+
+  it("moves through wrapped rows and logical lines before opening agents", () => {
+    terminal.columns = 16;
+    const ref = draftRef(["abcdefghijklmnop", "last"], 0, 0);
+    const onOpenAgents = vi.fn();
+    mount({ draftRef: ref, onOpenAgents });
+    press("", { downArrow: true });
+    expect(ref.current?.cursorLine).toBe(0);
+    expect(ref.current?.cursorCol).toBeGreaterThan(0);
+    expect(onOpenAgents).not.toHaveBeenCalled();
+    press("", { downArrow: true });
+    expect(ref.current?.cursorLine).toBe(1);
+    expect(onOpenAgents).not.toHaveBeenCalled();
+    press("", { downArrow: true });
+    expect(onOpenAgents).toHaveBeenCalledOnce();
+  });
+
+  it.each(["/", "@"])(
+    "keeps %s completion navigation ahead of the agents shortcut",
+    (text) => {
+      const ref = draftRef([text]);
+      const onOpenAgents = vi.fn();
+      mount({ draftRef: ref, commands, onOpenAgents, workDir: "/virtual" });
+      flushWorkdirScan();
+      press("", { downArrow: true });
+      expect(onOpenAgents).not.toHaveBeenCalled();
+      press("", { escape: true });
+      press("", { downArrow: true });
+      expect(onOpenAgents).toHaveBeenCalledOnce();
+      expect(ref.current?.lines).toEqual([text]);
+    },
+  );
+
+  it("restores the history draft before a subsequent Down opens agents", () => {
+    const ref = draftRef(["draft"], 0, 3);
+    const onOpenAgents = vi.fn();
+    mount({ draftRef: ref, history: ["previous"], onOpenAgents });
+    press("", { upArrow: true });
+    press("", { downArrow: true });
+    expect(onOpenAgents).not.toHaveBeenCalled();
+    expect(ref.current).toEqual(draftRef(["draft"], 0, 3).current);
+    press("", { downArrow: true });
+    expect(onOpenAgents).toHaveBeenCalledOnce();
+  });
+
   it("falls back to history when the queue is empty and restores the clean draft", () => {
     const ref = draftRef();
     const onRecallQueuedMessage = vi.fn(() => undefined);
@@ -860,6 +916,61 @@ describe("footer priorities", () => {
 });
 
 describe("persistent composer drafts and input behavior", () => {
+  it("opens the background-only agents dock during streaming and restores the draft on Escape", () => {
+    const onSubmit = vi.fn();
+    function AgentsDock() {
+      const [open, setOpen] = useState(false);
+      return createElement(InteractionDock, {
+        composer: {
+          onSubmit,
+          inputState: "agent",
+          onOpenAgents: () => {
+            setOpen(true);
+          },
+        },
+        agents: open
+          ? {
+              teammates: [],
+              subagents: [],
+              backgroundTasks: [
+                {
+                  id: "agent-1",
+                  name: "background review",
+                  status: "running",
+                  output: "",
+                  cancel: vi.fn(),
+                  done: Promise.resolve(),
+                },
+              ],
+              onClose: () => {
+                setOpen(false);
+              },
+            }
+          : undefined,
+      });
+    }
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    act(() => {
+      instance = render(createElement(AgentsDock), {
+        interactive: false,
+        patchConsole: false,
+        debug: true,
+      });
+    });
+    press("draft");
+    press("", { leftArrow: true });
+    press("", { downArrow: true });
+    expect(terminal.paste.current).toBeNull();
+    expect(stripVTControlCharacters(lastTerminalFrame())).toContain(
+      "agent-1: background review",
+    );
+    press("", { escape: true });
+    expect(terminal.paste.current).not.toBeNull();
+    press("!");
+    press("\r", { return: true });
+    expect(onSubmit).toHaveBeenCalledWith("draf!t");
+  });
+
   it("restores the dock-owned draft and caret after a provider selector closes", () => {
     const onSubmit = vi.fn();
     const onCancel = vi.fn();

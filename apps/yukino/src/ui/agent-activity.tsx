@@ -13,7 +13,6 @@ export type { SubagentProgress } from "./agent-tool-progress.js";
 
 interface Props {
   tools: ToolBlockInfo[];
-  persistentAgentTools: ToolBlockInfo[];
   subagents: SubagentProgress[];
   backgroundTasks: AgentTask[];
   teammates: TeammateUIState[];
@@ -23,23 +22,15 @@ interface Props {
 
 export const AgentActivity = memo(function AgentActivity({
   tools,
-  persistentAgentTools,
   subagents,
   backgroundTasks,
   teammates,
   isAsking,
   expanded,
 }: Props) {
-  const merged = new Map(
-    persistentAgentTools.map((tool) => [tool.toolId, tool]),
-  );
-  for (const tool of tools) {
-    merged.set(tool.toolId, tool);
-  }
-
-  return !isAsking && merged.size > 0 ? (
+  return !isAsking && tools.length > 0 ? (
     <AgentToolProgress
-      tools={[...merged.values()]}
+      tools={tools}
       subagents={subagents}
       backgroundTasks={backgroundTasks}
       teammates={teammates}

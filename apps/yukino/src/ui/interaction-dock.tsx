@@ -1,5 +1,6 @@
 import { useRef, type ComponentProps } from "react";
 
+import { AgentsDialog } from "./agents-dialog.js";
 import { AskUserDialog } from "./ask-user-dialog.js";
 import { CodeReviewDialog } from "./code-review-dialog.js";
 import type { InputDraft } from "./input-draft.js";
@@ -11,7 +12,6 @@ import { ProviderLogin } from "./provider-login.js";
 import { ProviderSelect } from "./provider-select.js";
 import RewindDialog from "./rewind-dialog.js";
 import { SessionSelector } from "./session-selector.js";
-import { TeamsDialog } from "./teams-dialog.js";
 import { ThinkingSelect } from "./thinking-select.js";
 
 interface Props {
@@ -25,7 +25,7 @@ interface Props {
   resume?: ComponentProps<typeof SessionSelector>;
   permission?: ComponentProps<typeof PermissionDialog>;
   askUser?: ComponentProps<typeof AskUserDialog>;
-  teams?: ComponentProps<typeof TeamsDialog>;
+  agents?: ComponentProps<typeof AgentsDialog>;
   composer: ComponentProps<typeof InputBox>;
 }
 
@@ -40,7 +40,7 @@ export function InteractionDock({
   resume,
   permission,
   askUser,
-  teams,
+  agents,
   composer,
 }: Props) {
   const draftRef = useRef<InputDraft | null>(null);
@@ -71,8 +71,8 @@ export function InteractionDock({
   if (askUser) {
     return <AskUserDialog {...askUser} />;
   }
-  if (teams) {
-    return <TeamsDialog {...teams} />;
+  if (agents) {
+    return <AgentsDialog {...agents} />;
   }
   if (thinking) {
     return <ThinkingSelect {...thinking} />;

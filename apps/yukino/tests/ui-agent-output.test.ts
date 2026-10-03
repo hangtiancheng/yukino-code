@@ -172,7 +172,7 @@ describe("agent output hook", () => {
     });
   });
 
-  it("keeps successful teammate Agent cards dynamic instead of committing them", () => {
+  it("commits teammate Agent cards to history instead of pinning them across turns", () => {
     const send = startLoop();
     send({
       type: "tool_use",
@@ -180,7 +180,7 @@ describe("agent output hook", () => {
       toolId: "team-agent",
       args: { description: "reviewer", team_name: "squad" },
     });
-    expect(state().output.persistentAgentTools).toEqual([
+    expect(state().output.activeTools).toEqual([
       expect.objectContaining({ toolId: "team-agent", loading: true }),
     ]);
 
@@ -197,21 +197,23 @@ describe("agent output hook", () => {
     );
 
     expect(state().output.activeTools).toEqual([]);
-    expect(state().output.persistentAgentTools).toEqual([
-      expect.objectContaining({
-        toolId: "team-agent",
-        output: "Teammate spawned",
-        loading: false,
-      }),
-    ]);
     expect(
       state().messages.flatMap((message) => message.toolSummary ?? []),
-    ).toEqual([]);
+    ).toEqual([
+      expect.objectContaining({
+        toolName: "Agent",
+        output: "Teammate spawned",
+        isError: false,
+      }),
+    ]);
 
     act(() => {
-      state().output.resetUsage();
+      state().output.prepareTurn();
     });
-    expect(state().output.persistentAgentTools).toEqual([]);
+    expect(state().output.activeTools).toEqual([]);
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toHaveLength(1);
   });
 
   it("commits background Agent cards to history like plain tool calls", () => {
@@ -238,10 +240,7 @@ describe("agent output hook", () => {
       { type: "turn_complete" },
     );
 
-    // One-shot background calls must not stay pinned to the bottom: their
-    // card scrolls away with the transcript like any other tool card, and
-    // the result reaches the user as a task notification.
-    expect(state().output.persistentAgentTools).toEqual([]);
+    expect(state().output.activeTools).toEqual([]);
     expect(
       state().messages.flatMap((message) => message.toolSummary ?? []),
     ).toEqual([
@@ -315,7 +314,7 @@ describe("agent output hook", () => {
     );
 
     // The interrupted card must not look like a success: status drives the
-    // red "stopped" styling, matching the persistent background cards.
+    // red "stopped" styling.
     const stopped = state().output.activeTools.find(
       (tool) => tool.toolId === "agent-stop",
     );
@@ -355,7 +354,7 @@ describe("agent output hook", () => {
     expect(summary[2]?.progress).toBeUndefined();
   });
 
-  it("removes every persistent card for a deleted team", () => {
+  it("keeps teammate spawn history after deleting the team", () => {
     const send = startLoop();
     for (const [toolId, teamName] of [
       ["a-1", "alpha"],
@@ -395,14 +394,18 @@ describe("agent output hook", () => {
         isError: false,
         elapsed: 0.1,
       },
+      { type: "turn_complete" },
     );
 
+    expect(state().output.activeTools).toEqual([]);
     expect(
-      state().output.persistentAgentTools.map((tool) => tool.toolId),
-    ).toEqual(["b-1"]);
+      state()
+        .messages.flatMap((message) => message.toolSummary ?? [])
+        .map((tool) => tool.toolName),
+    ).toEqual(["Agent", "Agent", "Agent", "TeamDelete"]);
   });
 
-  it("clears every pinned teammate card when TeamCreate succeeds", () => {
+  it("keeps previous teammate spawn history when TeamCreate replaces a team", () => {
     const send = startLoop();
     for (const toolId of ["a-1", "a-2"]) {
       send(
@@ -422,11 +425,6 @@ describe("agent output hook", () => {
         },
       );
     }
-    expect(
-      state().output.persistentAgentTools.map((tool) => tool.toolId),
-    ).toEqual(["a-1", "a-2"]);
-
-    // TeamCreate deletes every existing team, so all pinned cards are stale.
     send(
       {
         type: "tool_use",
@@ -444,7 +442,6 @@ describe("agent output hook", () => {
       },
     );
 
-    expect(state().output.persistentAgentTools).toEqual([]);
     // The TeamCreate call itself still commits to history like a normal tool.
     expect(
       state().messages.flatMap((message) => message.toolSummary ?? []),
@@ -454,7 +451,8 @@ describe("agent output hook", () => {
       state()
         .messages.flatMap((message) => message.toolSummary ?? [])
         .map((tool) => tool.toolName),
-    ).toEqual(["TeamCreate"]);
+    ).toEqual(["Agent", "Agent", "TeamCreate"]);
+    expect(state().output.activeTools).toEqual([]);
   });
 
   it("keeps retry, compaction, and token accounting without dropping pending text", () => {
