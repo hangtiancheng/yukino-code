@@ -33,6 +33,10 @@ export interface InterruptDeps {
     current: ((decision: PermissionAction) => void) | null;
   };
   setPermissionRequest: (request: null) => void;
+  /** Permission asks queued behind the single dialog slot (subagents/teammates). */
+  permissionQueue: {
+    current: { present: () => void; deny: () => void }[];
+  };
   askResolveRef: {
     current: ((answers: Record<string, string>) => void) | null;
   };
@@ -68,6 +72,9 @@ export function createInterruptHandlers(
     deps.permissionResolveRef.current?.("deny");
     deps.permissionResolveRef.current = null;
     deps.setPermissionRequest(null);
+    for (const queued of deps.permissionQueue.current.splice(0)) {
+      queued.deny();
+    }
     deps.askResolveRef.current?.({});
     deps.askResolveRef.current = null;
     deps.setAskRequest(null);

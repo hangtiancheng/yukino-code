@@ -127,6 +127,7 @@ describe("createInterruptHandlers (interrupt scope)", () => {
       abortControllerRef: { current: controller },
       permissionResolveRef: { current: permissionResolve },
       setPermissionRequest,
+      permissionQueue: { current: [] },
       askResolveRef: { current: askResolve },
       setAskRequest,
       backgroundTasks: { stopAll: stopBackgroundTasks },
@@ -159,6 +160,17 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     // background subagents or teammates.
     expect(h.stopBackgroundTasks).not.toHaveBeenCalled();
     expect(h.stopTeams).not.toHaveBeenCalled();
+  });
+
+  it("interruptForeground denies queued permission asks without presenting them", () => {
+    const h = mountHandlers();
+    const present = vi.fn();
+    const deny = vi.fn();
+    h.deps.permissionQueue.current.push({ present, deny });
+    h.handlers.interruptForeground();
+    expect(deny).toHaveBeenCalledTimes(1);
+    expect(present).not.toHaveBeenCalled();
+    expect(h.deps.permissionQueue.current).toHaveLength(0);
   });
 
   it("interruptAll (TUI exit) additionally stops background tasks and teammates", () => {

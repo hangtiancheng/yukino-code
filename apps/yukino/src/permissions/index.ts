@@ -14,6 +14,7 @@ import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
+import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/protocol.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";
 import { isObject, isRecord, strArg } from "@/utils/index.js";
 import { canonicalPath, isPathWithin } from "@/utils/paths.js";
@@ -576,6 +577,10 @@ function modeDecide(
 export class PermissionChecker {
   mode: PermissionMode;
   planFilePath = "";
+  // Set for teammate checkers: unattended agents have no approval channel, so
+  // team-internal coordination tools (messaging, shared task board) are allowed
+  // outright instead of falling through to an auto-denied "ask".
+  teammate = false;
   // Sandbox mode: when enabled, Bash commands run through OS sandbox isolation, with optional auto-allow
   sandboxEnabled = false;
   sandboxAutoAllow = false;
@@ -594,6 +599,7 @@ export class PermissionChecker {
   forWorkDir(workDir: string): PermissionChecker {
     const checker = new PermissionChecker(workDir, this.mode);
     checker.ruleEngine = this.ruleEngine;
+    checker.teammate = this.teammate;
     checker.sandboxEnabled = this.sandboxEnabled;
     checker.sandboxAutoAllow = this.sandboxAutoAllow;
     return checker;
@@ -621,6 +627,12 @@ export class PermissionChecker {
         effect: explicitEffect,
         reason: `Permission rule: ${explicitEffect}`,
       };
+    }
+
+    // Layer 1.5: teammate coordination — internal team messaging and the
+    // shared task board. Explicit deny/ask rules above still gate them.
+    if (this.teammate && TEAMMATE_COORDINATION_TOOLS.has(toolName)) {
+      return { effect: "allow", reason: "Teammate coordination tool" };
     }
 
     // Layer 0: plan-mode plan-file write exception.

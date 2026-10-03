@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PermissionChecker } from "@/permissions/index.js";
+import { AgentTool } from "@/subagent/agent-tool.js";
 import type * as teamBackend from "@/teams/backend.js";
 import { TeamManager } from "@/teams/index.js";
 import {
@@ -22,6 +23,7 @@ import {
   TeamCreateTool,
   TeamDeleteTool,
 } from "@/teams/tools.js";
+import { ToolRegistry } from "@/tools/registry.js";
 
 const spawnTeammateMock = vi.hoisted(() =>
   vi.fn((_config: teamBackend.SpawnConfig) => ({
@@ -353,6 +355,49 @@ describe("teams orchestration", () => {
       expect(checker.check(tool.name, tool.category, {}).effect).toBe("ask");
     }
     expect(new ListTeamsTool(mgr).category).toBe("read");
+  });
+
+  it("gives spawned teammates a coordination-capable checker", async () => {
+    const project = workDir();
+    const mgr = new TeamManager(project);
+    const captured: PermissionChecker[] = [];
+    const tool = new AgentTool(project, new ToolRegistry(), () =>
+      Promise.resolve("unused"),
+    );
+    tool.setTeamManager(mgr, (_registry, checker) => {
+      if (checker) {
+        captured.push(checker);
+      }
+      return (task) => Promise.resolve(`done:${task}`);
+    });
+
+    const result = await tool.execute(
+      { workDir: project },
+      {
+        team_name: "squad",
+        name: "w1",
+        description: "worker",
+        prompt: "task A",
+      },
+    );
+    expect(result.isError).toBe(false);
+
+    // The teammate checker must exempt coordination tools: teammates have no
+    // approval dialog, so an "ask" decision would auto-deny SendMessage and
+    // mute the teammate entirely.
+    expect(captured).toHaveLength(1);
+    expect(captured[0].teammate).toBe(true);
+    expect(captured[0].mode).toBe("acceptEdits");
+    expect(
+      captured[0].check("SendMessage", "command", {
+        to: "leader",
+        content: "x",
+      }).effect,
+    ).toBe("allow");
+
+    await vi.waitFor(() => {
+      expect(mgr.hasLeaderNotifications()).toBe(true);
+    });
   });
 
   it("SendMessage delivers plain text from a teammate to the leader mailbox", async () => {

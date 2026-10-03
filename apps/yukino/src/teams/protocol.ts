@@ -18,6 +18,20 @@ export const MSG_PLAN_APPROVAL_REQUEST = "plan_approval_request";
 export const MSG_PLAN_APPROVAL_RESPONSE = "plan_approval_response";
 export const LEADER_NAME = "leader";
 
+// Team-internal coordination tools. Teammates run unattended — they have no
+// permission dialog of their own — so messaging and the shared task board
+// must never fall through to an "ask" decision on a teammate checker. These
+// are exempted on the checker itself (see PermissionChecker.teammate); the
+// "command" categories stay in place so the Leader's calls still go through
+// permission policy. Explicit deny/ask rules still take precedence.
+export const TEAMMATE_COORDINATION_TOOLS: ReadonlySet<string> = new Set([
+  "SendMessage",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+]);
+
 const teammateNamePattern = /^[a-zA-Z0-9_-]+$/;
 
 export function isValidTeammateName(name: string): boolean {

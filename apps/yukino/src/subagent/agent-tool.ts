@@ -459,9 +459,10 @@ ${prompt}`;
     teammateRegistry.register(
       new TeamTaskUpdateTool(this.teamManager, teamName),
     );
-    // The plan-mode teammate requires the checker to be created here: after team-level approval
-    // passes, the mode must be switched back to default in place. If the checker were created
-    // only inside spawnSubagent, no one would have a handle to modify it.
+    // The teammate checker is created here rather than inside spawnSubagent:
+    // it carries the teammate flag (coordination-tool exemption) and, in plan
+    // mode, the team layer must hold a handle to switch the mode back to
+    // default in place after plan approval.
 
     // Worktree isolation: the teammate works on its own branch; changes are NOT
     // merged automatically — the worktree path is recorded in member metadata
@@ -484,9 +485,11 @@ ${prompt}`;
       }
     }
 
-    const checker = planModeRequired
-      ? new PermissionChecker(memberWorkDir, "plan")
-      : undefined;
+    const checker = new PermissionChecker(
+      memberWorkDir,
+      planModeRequired ? "plan" : "acceptEdits",
+    );
+    checker.teammate = true;
     const runAgent = this.teamRunAgentFactory?.(
       teammateRegistry,
       checker,

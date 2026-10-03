@@ -171,6 +171,61 @@ describe("bypassPermissions mode", () => {
   });
 });
 
+describe("teammate coordination tools", () => {
+  it("auto-allows SendMessage and task-board tools for teammate checkers", () => {
+    const checker = new PermissionChecker(makeTmpDir(), "acceptEdits");
+    checker.teammate = true;
+
+    const message = checker.check("SendMessage", "command", {
+      to: "leader",
+      content: "done",
+    });
+    expect(message.effect).toBe("allow");
+    expect(message.reason).toBe("Teammate coordination tool");
+
+    expect(
+      checker.check("TaskCreate", "command", {
+        subject: "s",
+        description: "d",
+      }).effect,
+    ).toBe("allow");
+    expect(checker.check("TaskUpdate", "command", { taskId: "1" }).effect).toBe(
+      "allow",
+    );
+  });
+
+  it("keeps SendMessage behind approval for non-teammate checkers", () => {
+    const checker = new PermissionChecker(makeTmpDir(), "acceptEdits");
+
+    const result = checker.check("SendMessage", "command", {
+      to: "leader",
+      content: "done",
+    });
+    expect(result.effect).toBe("ask");
+  });
+
+  it("explicit deny rules still gate teammate coordination tools", () => {
+    const dir = makeTmpDir();
+    const checker = makeChecker(dir, [
+      { rule: "SendMessage(*)", effect: "deny" },
+    ]);
+    checker.teammate = true;
+
+    expect(
+      checker.check("SendMessage", "command", { to: "leader", content: "x" })
+        .effect,
+    ).toBe("deny");
+  });
+
+  it("forWorkDir preserves the teammate flag", () => {
+    const dir = makeTmpDir();
+    const checker = new PermissionChecker(dir, "acceptEdits");
+    checker.teammate = true;
+
+    expect(checker.forWorkDir(dir).teammate).toBe(true);
+  });
+});
+
 // Writes the user-level and project-level rule files separately to verify cross-file merging.
 // homedir() is redirected to a temp dir while constructing the checker so the
 // user-level file never touches the real ~/.yukino/permissions.yaml.

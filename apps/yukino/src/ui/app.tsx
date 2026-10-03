@@ -138,6 +138,7 @@ import {
   hasAnyForegroundTasks,
 } from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
+import type { PermissionRequestHandler } from "@/tools/types.js";
 import { activityStatusColor, THEME, thinkingLevelColor } from "@/ui/styles.js";
 import { useFollowUpQueue } from "@/ui/use-follow-up-queue.js";
 import { useIdeInput } from "@/ui/use-ide-input.js";
@@ -435,6 +436,12 @@ export function App({
   const permissionResolveRef = useRef<
     ((v: "allow" | "deny" | "allowAlways") => void) | null
   >(null);
+  // Permission asks from the main loop, subagents and teammates share the
+  // single dialog slot; concurrent requests queue here and are presented in
+  // order (or denied wholesale on interrupt).
+  const permissionQueueRef = useRef<
+    { present: () => void; deny: () => void }[]
+  >([]);
   const [rewindDialogActive, setRewindDialogActive] = useState(false);
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
   const [transcriptRevision, setTranscriptRevision] = useState(0);
@@ -492,8 +499,36 @@ export function App({
         setPermissionRequest,
         askResolveRef,
         setAskRequest,
+        permissionQueue: permissionQueueRef,
         backgroundTasks: backgroundTaskManagerRef.current,
         teams: teamManagerRef.current,
+      }),
+    [],
+  );
+
+  // Shared approval channel: the main agent loop, subagents and in-process
+  // teammates all route "ask" decisions to the same modal dialog.
+  const requestPermission = useCallback<PermissionRequestHandler>(
+    (toolName, args, decision) =>
+      new Promise((resolve) => {
+        const present = () => {
+          permissionResolveRef.current = resolve;
+          setPermissionRequest({
+            toolName,
+            argsSummary: formatToolArgs(args),
+            reason: decision.reason,
+          });
+        };
+        if (permissionResolveRef.current) {
+          permissionQueueRef.current.push({
+            present,
+            deny: () => {
+              resolve("deny");
+            },
+          });
+        } else {
+          present();
+        }
       }),
     [],
   );
@@ -826,7 +861,11 @@ export function App({
               onEvent,
               undefined,
               teamChecker,
-              { abortSignal, backgroundTasks: false },
+              {
+                abortSignal,
+                backgroundTasks: false,
+                onPermissionRequest: requestPermission,
+              },
             );
         registryRef.current.register(
           new TeamCreateTool(teamManagerRef.current),
@@ -2226,16 +2265,7 @@ export function App({
         });
         void memConsolidatorRef.current.maybeRun();
       },
-      onPermissionRequest: async (toolName, args, decision) => {
-        return new Promise<"allow" | "deny" | "allowAlways">((resolve) => {
-          permissionResolveRef.current = resolve;
-          setPermissionRequest({
-            toolName,
-            argsSummary: formatToolArgs(args),
-            reason: decision.reason,
-          });
-        });
-      },
+      onPermissionRequest: requestPermission,
     });
 
     agentRef.current = agent;
@@ -3003,6 +3033,7 @@ export function App({
                   permissionResolveRef.current?.(action);
                   permissionResolveRef.current = null;
                   setPermissionRequest(null);
+                  permissionQueueRef.current.shift()?.present();
                 },
               }
             : undefined

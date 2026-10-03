@@ -297,6 +297,7 @@ export async function runTeammate(args: TeammateArgs): Promise<void> {
     });
 
     const checker = new PermissionChecker(workDir, "acceptEdits");
+    checker.teammate = true;
 
     const agent = new Agent({
       client,
