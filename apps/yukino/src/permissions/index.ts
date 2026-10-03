@@ -247,8 +247,6 @@ const CONTENT_FIELDS: Record<string, string> = {
   InstallSkill: "source",
 };
 
-const DEFAULT_DENY_WRITE: string[] = [];
-
 export function extractContent(
   toolName: string,
   args: Record<string, unknown>,
@@ -284,7 +282,6 @@ export function extractContent(
 
 export class PathSandbox {
   private allowedRoots: string[];
-  private denyWritePaths: string[];
   private projectDir: string;
 
   constructor(projectDir: string) {
@@ -292,34 +289,10 @@ export class PathSandbox {
     // is /var/folders/..., not /tmp.
     this.projectDir = resolve(projectDir);
     this.allowedRoots = [this.projectDir, tmpdir()];
-    this.denyWritePaths = DEFAULT_DENY_WRITE.map((p) =>
-      join(this.projectDir, p),
-    );
   }
 
   addRoot(root: string): void {
     this.allowedRoots.push(resolve(root));
-  }
-
-  /**
-   * Check whether a path is in the deny-write list.
-   * denyWrite has the highest priority — even if the path is within an allowed root, writes are still denied.
-   */
-  checkDenyWrite(filePath: string): Decision | null {
-    const absolute = resolve(this.projectDir, filePath);
-    const canonical = canonicalPath(absolute);
-    for (const denied of this.denyWritePaths) {
-      if (
-        isPathWithin(denied, absolute) ||
-        isPathWithin(canonicalPath(denied), canonical)
-      ) {
-        return {
-          effect: "deny",
-          reason: `Path ${filePath} is in deny-write list`,
-        };
-      }
-    }
-    return null;
   }
 
   check(filePath: string): Decision | null {
@@ -481,15 +454,6 @@ export class RuleEngine {
   // decision (e.g. compound-command checks) memoize and share one snapshot.
   snapshot(): Rule[] {
     return [this.userPath, this.projectPath].flatMap((p) => this.rulesFor(p));
-  }
-
-  // Take a snapshot then adjudicate: reuses the previous parse result when
-  // files are unchanged; a freshly written "allow always" rule takes effect
-  // immediately. Priority is deny > ask > allow regardless of which layer or
-  // line a rule resides on, so a deny cannot be overridden by an allow from
-  // another layer. Returns null when no rule matches.
-  evaluate(toolName: string, content: string): RuleEffect | null {
-    return evaluateRules(this.snapshot(), toolName, content);
   }
 
   // Persists a rule to the project-level YAML file in the `Tool(pattern)`
@@ -675,8 +639,7 @@ export class PermissionChecker {
       (toolName === "WriteFile" || toolName === "EditFile") &&
       !!this.planFilePath &&
       canonicalPath(resolve(this.workDir, filePath)) ===
-        canonicalPath(resolve(this.workDir, this.planFilePath)) &&
-      !this.sandbox.checkDenyWrite(filePath);
+        canonicalPath(resolve(this.workDir, this.planFilePath));
     if (
       this.planModeLocked &&
       category !== "read" &&
@@ -692,10 +655,9 @@ export class PermissionChecker {
 
     // Layer 1: explicit rules, evaluated first so a deny/ask also gates the
     // Layer-0 plan-file write exception. The snapshot is taken lazily and shared
-    // with the Layer-3.5 sub-command checks and Layer 5 (the Layer-4 override
-    // re-evaluates through the engine cache). Only deny/ask short-circuit here:
-    // an explicit allow deliberately falls through so the dangerous-command,
-    // deny-write and per-subcommand checks below can still take precedence, and
+    // with the Layer-3.5 sub-command checks. Only deny/ask short-circuit here:
+    // an explicit allow deliberately falls through so the dangerous-command
+    // and per-subcommand checks below can still take precedence, and
     // is returned at Layer 5 if none fires.
     let snapshot: Rule[] | null = null;
     const rules = (): Rule[] => (snapshot ??= this.ruleEngine.snapshot());
@@ -781,34 +743,20 @@ export class PermissionChecker {
       };
     }
 
-    // Layer 4: path sandbox (read/write tools that pass a file_path/path arg).
-    if ((category === "read" || category === "write") && filePath) {
-      // denyWrite check takes priority: sensitive paths always deny writes
-      if (category === "write") {
-        const denyDecision = this.sandbox.checkDenyWrite(filePath);
-        if (denyDecision) {
-          return denyDecision;
-        }
-      }
+    // Layer 4: only writes need path approval; reads and bypass mode skip it.
+    if (category === "write" && filePath && this.mode !== "bypassPermissions") {
       const sandboxDecision = this.sandbox.check(filePath);
-      if (sandboxDecision && this.mode !== "bypassPermissions") {
-        // An explicit rule (e.g. `ReadFile(/foo/*)` allow) overrides the
-        // sandbox ask; otherwise rules for outside paths could never apply.
-        const ruleEffect = this.ruleEngine.evaluate(toolName, content);
-        if (ruleEffect) {
-          return {
-            effect: ruleEffect,
-            reason: `Permission rule: ${ruleEffect}`,
-          };
-        }
+      if (sandboxDecision && explicitEffect !== "allow") {
         return { effect: "ask", reason: sandboxDecision.reason };
       }
     }
 
     // Layer 5: rule engine — per-tool content + glob match.
-    const ruleEffect = evaluateRules(rules(), toolName, content);
-    if (ruleEffect) {
-      return { effect: ruleEffect, reason: `Permission rule: ${ruleEffect}` };
+    if (explicitEffect) {
+      return {
+        effect: explicitEffect,
+        reason: `Permission rule: ${explicitEffect}`,
+      };
     }
 
     // Layer 6: mode matrix.
@@ -818,10 +766,7 @@ export class PermissionChecker {
     };
   }
 
-  // Allow an extra directory outside the sandbox baseline (project root +
-  // os.tmpdir()) for read/write. Hosts opt in explicitly per checker; no
-  // production caller exists today (only tests) — the memory subsystem
-  // enforces its own dedicated checker instead.
+  // Allow writes to an extra directory outside the project + os.tmpdir().
   allowExtraRoot(path: string): void {
     this.sandbox.addRoot(path);
   }

@@ -139,14 +139,36 @@ describe("teammate entry point", () => {
       }
       return (async function* () {
         await Promise.resolve();
+        const outside = {
+          file_path: join(
+            os.tmpdir(),
+            "..",
+            "yukino-outside-project",
+            "file.ts",
+          ),
+        };
         expect(checker.mode).toBe("acceptEdits");
+        expect(checker.check("ReadFile", "read", outside).effect).toBe("allow");
+        expect(checker.check("WriteFile", "write", outside).reason).toContain(
+          "outside allowed directories",
+        );
         parent.mode = "bypassPermissions";
+        expect(checker.check("WriteFile", "write", outside).effect).toBe(
+          "allow",
+        );
         expect(
           checker.check("Bash", "command", { command: "pnpm test" }).effect,
         ).toBe("allow");
         parent.mode = "plan";
         expect(checker.mode).toBe("bypassPermissions");
+        expect(checker.check("WriteFile", "write", outside).effect).toBe(
+          "allow",
+        );
         parent.mode = "default";
+        expect(checker.check("ReadFile", "read", outside).effect).toBe("allow");
+        expect(checker.check("WriteFile", "write", outside).reason).toContain(
+          "outside allowed directories",
+        );
         expect(
           checker.check("WriteFile", "write", { file_path: "a.ts" }).effect,
         ).toBe("ask");

@@ -15,6 +15,7 @@ import {
   buildTeammatePrompt,
 } from "@/prompt/delegation.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@/subagent/definition.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import { ToolRegistry } from "@/tools/registry.js";
@@ -68,6 +69,76 @@ function stubClient(
 }
 
 describe("delegated prompt contracts", () => {
+  it.each(BUILTIN_AGENTS)(
+    "lets $name read outside-root files without an approval channel",
+    async (definition) => {
+      const dir = workDir();
+      const parent = new PermissionChecker(dir);
+      const modes = [
+        "default",
+        "acceptEdits",
+        "plan",
+        "bypassPermissions",
+      ] as const;
+      const executed: string[] = [];
+      const registry = new ToolRegistry();
+      const target = join(tmpdir(), "..", "yukino-outside-project", "file.ts");
+      registry.register({
+        name: "ReadFile",
+        description: "read",
+        category: "read",
+        schema: () => ({
+          name: "ReadFile",
+          description: "read",
+          input_schema: { type: "object", properties: {} },
+        }),
+        execute: () => {
+          executed.push(parent.mode);
+          return Promise.resolve({ output: "read", isError: false });
+        },
+      });
+      let request = 0;
+      const client = new OpenAIClient(provider, "system");
+      vi.spyOn(client, "stream").mockImplementation(async function* () {
+        await Promise.resolve();
+        const mode = modes[request++];
+        if (mode) {
+          parent.mode = mode;
+          yield {
+            type: "tool_call_complete",
+            toolId: `read-${request}`,
+            toolName: "ReadFile",
+            arguments: { file_path: target },
+          };
+        }
+        yield {
+          type: "stream_end",
+          stopReason: mode ? "tool_use" : "end_turn",
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+          },
+        };
+      });
+      vi.spyOn(clients, "createClient").mockResolvedValue(client);
+      await spawnSubagent(
+        definition,
+        "Read the outside file",
+        client,
+        registry,
+        provider,
+        dir,
+        undefined,
+        undefined,
+        undefined,
+        parent,
+      );
+      expect(executed).toEqual(modes);
+    },
+  );
+
   it.each([false, true])(
     "uses live parent permissions while preserving an explicit read-only role (%s)",
     async (readOnly) => {

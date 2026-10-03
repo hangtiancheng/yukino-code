@@ -224,6 +224,8 @@ hooks:
     on_error: ignore
 ```
 
+Main agents, subagents, and teammates use the same path sandbox policy: read-only tools can access paths outside the working directory without path approval. Writes outside the agent's working directory, the system temp directory, or an explicitly allowed root require approval unless an explicit allow rule applies. `bypassPermissions` disables this path sandbox; switching back restores it. Explicit deny/ask rules and an agent's own plan approval lock still apply. The OS-level Bash sandbox is separate and remains controlled by the `sandbox` configuration or `/sandbox` command.
+
 Provider fields:
 
 | Field              | Required | Description                                                                                                                |

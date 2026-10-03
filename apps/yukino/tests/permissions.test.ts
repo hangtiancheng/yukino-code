@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from "fs";
 import { homedir } from "node:os";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { Agent } from "@/agent/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { PermissionChecker } from "@/permissions/index.js";
+import { PathSandbox, PermissionChecker } from "@/permissions/index.js";
 
 const tempDirs = new Set<string>();
 let originalHome: string | undefined;
@@ -29,6 +29,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   if (originalHome === undefined) {
     delete process.env.HOME;
   } else {
@@ -160,14 +161,177 @@ describe("extra allowed roots", () => {
   });
 });
 
-describe("bypassPermissions mode", () => {
-  it("leaves ordinary files alone", () => {
-    const dir = makeTmpDir();
-    const checker = new PermissionChecker(dir, "bypassPermissions");
-    const result = checker.check("WriteFile", "write", {
-      file_path: join(dir, "a.txt"),
+describe.each(["main", "subagent", "teammate"] as const)(
+  "%s path sandbox",
+  (kind) => {
+    function forAgent(parent: PermissionChecker): PermissionChecker {
+      if (kind === "main") {
+        return parent;
+      }
+      const checker = parent.forSubagent(makeTmpDir());
+      checker.teammate = kind === "teammate";
+      return checker;
+    }
+
+    function outsideFile(): string {
+      return join(originalHome ?? "/", ".outside-project", "file.ts");
+    }
+
+    it.each(["default", "acceptEdits", "plan", "bypassPermissions"] as const)(
+      "skips path checks for read-only tools in %s",
+      (mode) => {
+        const checker = forAgent(new PermissionChecker(makeTmpDir(), mode));
+        const pathCheck = vi.spyOn(PathSandbox.prototype, "check");
+        for (const [tool, args] of [
+          ["ReadFile", { file_path: outsideFile() }],
+          ["Glob", { path: outsideFile(), pattern: "**/*" }],
+          ["Grep", { path: outsideFile(), pattern: "text" }],
+        ] as const) {
+          expect(checker.check(tool, "read", args).effect).toBe("allow");
+        }
+        expect(pathCheck).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["default", "acceptEdits", "plan"] as const)(
+      "still asks for outside-root writes in %s",
+      (mode) => {
+        const checker = forAgent(new PermissionChecker(makeTmpDir(), mode));
+        for (const tool of ["WriteFile", "EditFile"]) {
+          expect(
+            checker.check(tool, "write", { file_path: outsideFile() }),
+          ).toEqual({
+            effect: "ask",
+            reason: `Path ${outsideFile()} is outside allowed directories`,
+          });
+        }
+        expect(
+          checker.check("WriteProbe", "write", { path: outsideFile() }).effect,
+        ).toBe("ask");
+      },
+    );
+
+    it("does not run path checks for writes in bypassPermissions", () => {
+      const checker = forAgent(
+        new PermissionChecker(makeTmpDir(), "bypassPermissions"),
+      );
+      const pathCheck = vi.spyOn(PathSandbox.prototype, "check");
+      for (const tool of ["WriteFile", "EditFile"]) {
+        expect(
+          checker.check(tool, "write", { file_path: outsideFile() }).effect,
+        ).toBe("allow");
+      }
+      expect(
+        checker.check("WriteProbe", "write", { path: outsideFile() }).effect,
+      ).toBe("allow");
+      expect(pathCheck).not.toHaveBeenCalled();
     });
-    expect(result.effect).not.toBe("deny");
+
+    it("follows live parent mode changes without inheriting the parent's plan mode", () => {
+      const parent = new PermissionChecker(makeTmpDir(), "acceptEdits");
+      const checker = forAgent(parent);
+      const args = { file_path: outsideFile() };
+      expect(checker.check("WriteFile", "write", args).effect).toBe("ask");
+      parent.mode = "bypassPermissions";
+      expect(checker.check("WriteFile", "write", args).effect).toBe("allow");
+      parent.mode = "plan";
+      expect(checker.check("WriteFile", "write", args).effect).toBe(
+        kind === "main" ? "ask" : "allow",
+      );
+      parent.mode = "default";
+      expect(checker.check("WriteFile", "write", args).effect).toBe("ask");
+      expect(checker.check("ReadFile", "read", args).effect).toBe("allow");
+    });
+
+    it.each(["deny", "ask"] as const)(
+      "preserves explicit %s rules for reads and bypassed writes",
+      (effect) => {
+        const parent = makeChecker(makeTmpDir(), [
+          { rule: "ReadFile(*)", effect },
+          { rule: "WriteFile(*)", effect },
+        ]);
+        const checker = forAgent(parent);
+        for (const mode of [
+          "default",
+          "acceptEdits",
+          "plan",
+          "bypassPermissions",
+        ] as const) {
+          parent.mode = mode;
+          expect(
+            checker.check("ReadFile", "read", { file_path: outsideFile() }),
+          ).toEqual({ effect, reason: `Permission rule: ${effect}` });
+          expect(
+            checker.check("WriteFile", "write", { file_path: outsideFile() }),
+          ).toEqual({ effect, reason: `Permission rule: ${effect}` });
+        }
+      },
+    );
+
+    it("allows explicitly approved outside-root writes", () => {
+      const checker = forAgent(
+        makeChecker(makeTmpDir(), [{ rule: "WriteFile(*)", effect: "allow" }]),
+      );
+      expect(
+        checker.check("WriteFile", "write", { file_path: outsideFile() }),
+      ).toEqual({ effect: "allow", reason: "Permission rule: allow" });
+    });
+  },
+);
+
+describe("locked plans and path sandbox", () => {
+  it.each(["default", "acceptEdits", "plan", "bypassPermissions"] as const)(
+    "allows outside-root reads without unlocking subagents or teammates in %s",
+    (mode) => {
+      const parent = new PermissionChecker(makeTmpDir(), mode);
+      const target = join(originalHome ?? "/", ".outside-project", "file.ts");
+      const pathCheck = vi.spyOn(PathSandbox.prototype, "check");
+      for (const teammate of [false, true]) {
+        const checker = parent.forSubagent(makeTmpDir());
+        checker.teammate = teammate;
+        checker.planModeLocked = true;
+        checker.planFilePath = `${target}.plan.md`;
+        expect(
+          checker.check("ReadFile", "read", { file_path: target }).effect,
+        ).toBe("allow");
+        expect(
+          checker.check("Grep", "read", { path: target, pattern: "text" })
+            .effect,
+        ).toBe("allow");
+        expect(
+          checker.check("WriteFile", "write", { file_path: target }),
+        ).toEqual({
+          effect: "deny",
+          reason: "Plan approval is required before executing mutations",
+        });
+        expect(
+          checker.check("WriteFile", "write", {
+            file_path: checker.planFilePath,
+          }).effect,
+        ).toBe("allow");
+        expect(checker.planModeLocked).toBe(true);
+      }
+      expect(pathCheck).not.toHaveBeenCalled();
+    },
+  );
+
+  it("still checks symlink targets for non-bypassed writes", () => {
+    const dir = makeTmpDir();
+    symlinkSync(originalHome ?? "/", join(dir, "external"), "dir");
+    const parent = new PermissionChecker(dir, "acceptEdits");
+    const checkers = [parent, parent.forSubagent(dir), parent.forSubagent(dir)];
+    checkers[2].teammate = true;
+    const args = {
+      file_path: join(dir, "external", ".outside-project", "file.ts"),
+    };
+    for (const checker of checkers) {
+      expect(checker.check("WriteFile", "write", args).effect).toBe("ask");
+      expect(checker.check("ReadFile", "read", args).effect).toBe("allow");
+    }
+    parent.mode = "bypassPermissions";
+    for (const checker of checkers) {
+      expect(checker.check("WriteFile", "write", args).effect).toBe("allow");
+    }
   });
 });
 
