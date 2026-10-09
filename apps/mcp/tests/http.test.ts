@@ -139,8 +139,9 @@ describe("streamable HTTP", () => {
       })
       .parse(await response.json());
     const names = new Set(body.result.tools.map((tool) => tool.name));
-    expect(names.has("github_get_repo")).toBe(true);
-    expect(names.has("github_search_code")).toBe(true);
+    expect(names.has("github_tool")).toBe(true);
+    expect(names.has("postgres_tool")).toBe(true);
+    expect(names.has("prometheus_tool")).toBe(true);
   });
 });
 

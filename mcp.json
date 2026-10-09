@@ -1,0 +1,60 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ]
+    },
+    "yukino-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@yukino.js/mcp@latest"
+      ],
+      "env": {
+        "EMBEDDING_PROTOCOL": "${EMBEDDING_PROTOCOL:-openai}",
+        "EMBEDDING_MODEL": "${EMBEDDING_MODEL:-text-embedding-v4}",
+        "EMBEDDING_API_KEY": "${EMBEDDING_API_KEY:-}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY:-}",
+        "EMBEDDING_BASE_URL": "${EMBEDDING_BASE_URL:-}",
+        "YUKINO_DOCS_DIR": "${YUKINO_DOCS_DIR:-}",
+        "YUKINO_INDEX_DB": "${YUKINO_INDEX_DB:-}",
+        "REDIS_URL": "${REDIS_URL:-redis://localhost:6379}",
+        "GITHUB_TOKEN": "${GITHUB_TOKEN:-}",
+        "GH_TOKEN": "${GH_TOKEN:-}",
+        "GH_ENTERPRISE_TOKEN": "${GH_ENTERPRISE_TOKEN:-}",
+        "GITHUB_ENTERPRISE_TOKEN": "${GITHUB_ENTERPRISE_TOKEN:-}",
+        "GITHUB_BASE_URL": "${GITHUB_BASE_URL:-}",
+        "GH_HOST": "${GH_HOST:-}",
+        "POSTGRES_URL": "${POSTGRES_URL:-}",
+        "POSTGRESQL_URL": "${POSTGRESQL_URL:-}",
+        "DATABASE_URL": "${DATABASE_URL:-}",
+        "MYSQL_URL": "${MYSQL_URL:-}",
+        "MONGODB_URL": "${MONGODB_URL:-}",
+        "MONGODB_DATABASE": "${MONGODB_DATABASE:-}",
+        "PROMETHEUS_BASE_URL": "${PROMETHEUS_BASE_URL:-http://localhost:9090}",
+        "PROMETHEUS_URL": "${PROMETHEUS_URL:-}",
+        "PROMETHEUS_TOKEN": "${PROMETHEUS_TOKEN:-}",
+        "PROMETHEUS_USERNAME": "${PROMETHEUS_USERNAME:-}",
+        "PROMETHEUS_PASSWORD": "${PROMETHEUS_PASSWORD:-}"
+      }
+    },
+    "yukino-mcp-http": {
+      "type": "http",
+      "url": "http://localhost:3300/mcp",
+      "headers": {
+        "Authorization": "Bearer ${YUKINO_MCP_AUTH_TOKEN:-}"
+      }
+    },
+    "yukino-mcp-sse": {
+      "type": "sse",
+      "url": "http://localhost:3300/sse",
+      "headers": {
+        "Authorization": "Bearer ${YUKINO_MCP_AUTH_TOKEN:-}"
+      }
+    }
+  }
+}

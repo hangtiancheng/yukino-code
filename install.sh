@@ -1,23 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (c) 2026 hangtiancheng
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
 
 # install.sh — Bootstrap installer for yukino CLI via npm global install.
 #
@@ -106,56 +87,64 @@ else
 	mkdir -p "$CONFIG_DIR"
 	cat >"$CONFIG_FILE" <<'EOF'
 permission_mode: bypassPermissions
-default_provider: 0
 providers:
-  - name: anthropic
+  - name: ds-anthropic
     protocol: anthropic
     base_url: https://api.deepseek.com/anthropic
-    model: "deepseek-flash"
-    api_key: "<your-api-key>"
+    model: deepseek-flash
+    api_key: sk-xyz
     thinking: high
     context_window: 1000000
     max_output_tokens: 128000
-  - name: openai-compat
+  - name: ds-openai
     protocol: openai-compat
     base_url: https://api.deepseek.com
-    model: "deepseek-flash"
-    api_key: "<your-api-key>"
+    model: deepseek-flash
+    api_key: sk-xyz
     thinking: high
     context_window: 1000000
     max_output_tokens: 128000
+default_provider: 0
+enable_memory: false
+enable_coordinator_mode: false
+enable_fork: true
 mcp_servers:
-  - name: "yukino-mcp-stdio"
-    command: "pnpm"
+  - name: codegraph
+    command: codegraph
+    args:
+      - serve
+      - "--mcp"
+  - name: yukino-mcp # stdio
+    command: pnpm
     args: ["--filter", "@yukino.js/mcp", "dev"]
     env:
-      GITHUB_TOKEN: "${GITHUB_TOKEN}"
-  - name: "yukino-mcp-http"
-    url: "http://127.0.0.1:3300/mcp"
+      API_BASE_URL: "https://yukino-js.dev"
+      API_KEY: "${YUKINO_MCP_API_KEY}"
+  - name: yukino-mcp-http # streamable-http
+    url: "http://localhost:3300/mcp"
     transport: "http"
-    headers: { Authorization: "Bearer <your-token>" }
-  - name: "yukino-mcp-sse"
-    url: "http://127.0.0.1:3300/sse"
+    headers:
+      Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
+  - name: yukino-mcp-sse # legacy sse
+    url: "http://localhost:3300/sse"
     transport: "sse"
-hooks:
-  - id: lint-on-edit
-    # enum: session_start | session_end | turn_start | turn_end | pre_send | post_receive | pre_tool_use | post_tool_use | shutdown
-    event: post_tool_use
-    condition: 'tool == "EditFile"'
-    action:
-      # enum: command | prompt | http | agent
-      type: command
-      command: pnpm exec eslint --fix "$YUKINO_FILE_PATH"
-    reject: false # Only effective on pre_tool_use
-    once: false
-    async: false
-    on_error: ignore
+    headers:
+      Authorization: "Bearer ${YUKINO_MCP_API_KEY}"
 sandbox:
   enabled: false
   auto_allow: false
   network_enabled: true
-memory: true
-enable_coordinator_mode: false
+hooks:
+  - id: pre-tool-use
+    event: pre_tool_use
+    condition: 'event.endsWith("tool_use") && (tool.toLowerCase().includes("file") || /bash/i.test(tool))'
+    action:
+      type: command
+      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository lives at https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino, you may fetch https://hangtiancheng.github.io/h/llms.txt (`base/yukino` section) and https://hangtiancheng.github.io/h/llms-full.txt to gain self-knowledge"
+    reject: false
+    once: true
+    async: false
+    on_error: ignore
 EOF
 	ok "Wrote default config to $CONFIG_FILE"
 fi

@@ -1,29 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { z } from "zod";
-
-import type { DocsContext } from "./redis-client.js";
-import { float32ToBuffer } from "./utils.js";
+import { blobToVector, normalizeVector } from "./utils.js";
+import type { DocsContext, VectorCache } from "./store.js";
+import { currentDataVersion, readMeta } from "./store.js";
 
 export interface RetrievedDoc {
   id: string;
@@ -31,26 +8,6 @@ export interface RetrievedDoc {
   metadata: Record<string, unknown>;
   score: number;
 }
-
-// Runtime validation of a RediSearch KNN result document: the reply shape is
-// not statically guaranteed, so parse with zod instead of casting. Fields are
-// optional because zod v4 treats bare z.unknown() keys as required.
-const DocValueSchema = z.looseObject({
-  content: z.unknown().optional(),
-  metadata: z.unknown().optional(),
-  // RediSearch injects __vector_score (COSINE distance: 0=identical, 2=opposite).
-  __vector_score: z.unknown().optional(),
-});
-
-const SearchResultSchema = z.object({
-  total: z.number(),
-  documents: z.array(
-    z.object({
-      id: z.string(),
-      value: DocValueSchema,
-    }),
-  ),
-});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -68,46 +25,123 @@ function parseMetadata(raw: unknown): Record<string, unknown> {
   }
 }
 
-// Convert COSINE distance [0, 2] to a similarity score [0, 1], higher is better.
-function distanceToScore(distance: unknown): number {
-  const d =
-    typeof distance === "number" ? distance : Number(distance ?? Number.NaN);
-  if (!Number.isFinite(d)) {
-    return 0;
+/**
+ * Load every stored vector into one contiguous matrix. Vectors are stored
+ * L2-normalized, so scoring is a plain dot product; at the scale of a personal
+ * knowledge base (thousands of chunks) scanning them costs single-digit
+ * milliseconds, which is far less than the round trip to an external index.
+ */
+function buildCache(ctx: DocsContext, dataVersion: number): VectorCache {
+  const dim = Number(readMeta(ctx.db, "dim"));
+  const rows = ctx.db.prepare("SELECT id, vector FROM chunks").all() as {
+    id: unknown;
+    vector: unknown;
+  }[];
+  if (!Number.isInteger(dim) || dim <= 0) {
+    return { dataVersion, dim: 0, ids: [], matrix: new Float32Array(0) };
   }
-  return (2 - d) / 2;
+
+  const matrix = new Float32Array(rows.length * dim);
+  const ids: string[] = [];
+  for (const row of rows) {
+    if (typeof row.id !== "string" || !(row.vector instanceof Uint8Array)) {
+      continue;
+    }
+    // A row written under a different dimension can only be stale data; skip
+    // it rather than misreading the matrix.
+    if (row.vector.byteLength !== dim * 4) {
+      continue;
+    }
+    matrix.set(blobToVector(row.vector, dim), ids.length * dim);
+    ids.push(row.id);
+  }
+  return {
+    dataVersion,
+    dim,
+    ids,
+    matrix: matrix.subarray(0, ids.length * dim),
+  };
+}
+
+function ensureCache(ctx: DocsContext): VectorCache {
+  const dataVersion = currentDataVersion(ctx.db);
+  const cache = ctx.cache;
+  if (cache !== null && cache.dataVersion === dataVersion) {
+    return cache;
+  }
+  const rebuilt = buildCache(ctx, dataVersion);
+  ctx.cache = rebuilt;
+  return rebuilt;
+}
+
+interface Scored {
+  index: number;
+  score: number;
+}
+
+/** Top-K selection by a single pass, keeping a sorted array of at most K. */
+function topK(scores: Float32Array, k: number): Scored[] {
+  const best: Scored[] = [];
+  for (let i = 0; i < scores.length; i++) {
+    const score = scores[i];
+    if (best.length === k && score <= best[best.length - 1].score) {
+      continue;
+    }
+    let at = best.length;
+    while (at > 0 && best[at - 1].score < score) {
+      at--;
+    }
+    best.splice(at, 0, { index: i, score });
+    if (best.length > k) {
+      best.pop();
+    }
+  }
+  return best;
 }
 
 export async function retrieve(
   ctx: DocsContext,
   query: string,
-  topK: number,
+  limit: number,
 ): Promise<RetrievedDoc[]> {
-  const vec = float32ToBuffer(await ctx.embedder.embedText(query));
+  const queryVector = normalizeVector(await ctx.embedder.embedText(query));
+  const cache = ensureCache(ctx);
+  if (cache.ids.length === 0 || queryVector.length !== cache.dim) {
+    return [];
+  }
 
-  const raw: unknown = await ctx.client.ft.search(
-    ctx.redis.indexName,
-    `*=>[KNN ${topK} @vector $vec]`,
-    {
-      PARAMS: { vec },
-      DIALECT: 2,
-      RETURN: ["content", "metadata", "__vector_score"],
-      LIMIT: { from: 0, size: topK },
-    },
+  const scores = new Float32Array(cache.ids.length);
+  for (let i = 0; i < cache.ids.length; i++) {
+    const offset = i * cache.dim;
+    let dot = 0;
+    for (let d = 0; d < cache.dim; d++) {
+      dot += cache.matrix[offset + d] * queryVector[d];
+    }
+    // Guard the [-1, 1] cosine range against float error before mapping it.
+    scores[i] = dot < -1 ? -1 : dot > 1 ? 1 : dot;
+  }
+
+  const selected = topK(scores, limit);
+  const read = ctx.db.prepare(
+    "SELECT content, metadata FROM chunks WHERE id = ?",
   );
 
-  const result = SearchResultSchema.parse(raw);
-  const prefix = ctx.redis.keyPrefix;
-
-  return (
-    result.documents
-      .map((doc) => ({
-        id: doc.id.startsWith(prefix) ? doc.id.slice(prefix.length) : doc.id,
-        content: String(doc.value.content ?? ""),
-        metadata: parseMetadata(doc.value.metadata),
-        score: distanceToScore(doc.value.__vector_score),
-      }))
-      // RediSearch does not guarantee KNN results ordered by distance.
-      .sort((a, b) => b.score - a.score)
-  );
+  const docs: RetrievedDoc[] = [];
+  for (const hit of selected) {
+    const row = read.get(cache.ids[hit.index]) as
+      { content?: unknown; metadata?: unknown } | undefined;
+    if (row === undefined) {
+      continue;
+    }
+    docs.push({
+      id: cache.ids[hit.index],
+      content: String(row.content ?? ""),
+      metadata: parseMetadata(row.metadata),
+      // Report the score on the same [0, 1] scale as the previous vector index:
+      // cosine distance d mapped through (2 - d) / 2, which is (1 + cosine) / 2
+      // — 1 for identical vectors and 0 for opposite ones.
+      score: (1 + hit.score) / 2,
+    });
+  }
+  return docs;
 }

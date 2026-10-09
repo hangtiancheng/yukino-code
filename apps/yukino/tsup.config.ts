@@ -1,27 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { cpSync, readFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,12 +10,20 @@ import type { Options } from "tsup";
 type EsbuildPlugin = NonNullable<Options["esbuildPlugins"]>[number];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const remoteBrowserDist = join(__dirname, "src", "remote", "browser", "dist");
+
+const copyRemoteBrowser = (): void => {
+  cpSync(remoteBrowserDist, join(__dirname, "dist", "browser", "dist"), {
+    recursive: true,
+  });
+};
 
 const pkg = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
 ) as {
   version: string;
   dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
 };
 
 // UI-only dependencies: reached exclusively from the terminal layer
@@ -48,19 +33,18 @@ const pkg = JSON.parse(
 // the actual import sites and fails on drift, so it cannot go stale silently.
 // react is included: the barrel no longer re-exports src/ui, so react is
 // reached exclusively from the terminal layer. react-dom is absent — only the
-// standalone browser bundle (src/remote/fe, own tsup build) imports it, which
+// standalone browser bundle (src/remote/browser, own tsup build) imports it, which
 // never enters the CLI/library graph.
 const uiOnlyDeps = [
   "ink",
   "ansi-escapes",
   "ansi-regex",
   "chalk",
-  "cli-highlight",
-  "cli-table3",
   "fuse.js",
   "marked",
   "node-emoji",
   "react",
+  "shiki",
   "slice-ansi",
   "string-width",
   "supports-hyperlinks",
@@ -91,7 +75,7 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
     // their binaries and companion files remain resolvable from node_modules.
     build.onResolve(
       {
-        filter: /^(?:sharp|@anthropic-ai\/sandbox-runtime)(?:\/|$)/,
+        filter: /^sharp(?:\/|$)/,
       },
       (args) => ({
         path: args.path,
@@ -110,22 +94,6 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
 };
 
 const uiDirs = [join(__dirname, "src", "ui") + sep];
-
-// Vite-style `?raw` imports: load the file
-// as a default-exported string, mirroring Vite/Vitest behavior.
-const rawImportPlugin: EsbuildPlugin = {
-  name: "raw-import",
-  setup(build) {
-    build.onResolve({ filter: /\?raw$/ }, (args) => ({
-      path: resolve(dirname(args.importer), args.path.replace(/\?raw$/, "")),
-      namespace: "raw-import",
-    }));
-    build.onLoad({ filter: /.*/, namespace: "raw-import" }, async (args) => ({
-      contents: await readFile(args.path, "utf8"),
-      loader: "text",
-    }));
-  },
-};
 
 // Library-build guard: the barrel entry (src/index.ts) must never reach the
 // terminal layer, neither through a bare ui-only specifier nor through a
@@ -250,12 +218,12 @@ const assertNoAmbiguousExports = (): void => {
   );
 };
 
-// CLI entry: fully bundled, minified single-graph output with a shebang so the
-// `yukino` bin is self-contained. `!lib/**` keeps its clean sweep out of the
+// Keep maintenance commands separate from the runtime so Windows updates do not
+// load and lock native dependencies. `!lib/**` keeps the clean sweep out of the
 // library output below — tsup runs an array config concurrently, so a `**/*`
 // sweep here races with, and can delete, dist/lib.
 const cliConfig: Options = {
-  entry: ["src/main.tsx"],
+  entry: { main: "src/cli.ts" },
   format: ["esm"],
   env: {
     NODE_ENV: "production",
@@ -265,6 +233,7 @@ const cliConfig: Options = {
   outDir: "dist",
   clean: ["!lib/**"],
   minify: true,
+  splitting: true,
   banner: {
     js: [
       "#!/usr/bin/env node",
@@ -278,7 +247,10 @@ const cliConfig: Options = {
   noExternal: [/.*/],
   define: { __YUKINO_VERSION__: JSON.stringify(pkg.version) },
   tsconfig: "tsconfig.json",
-  esbuildPlugins: [rawImportPlugin, externalizeNodeBuiltinsPlugin],
+  esbuildPlugins: [externalizeNodeBuiltinsPlugin],
+  onSuccess: async () => {
+    copyRemoteBrowser();
+  },
 };
 
 // Library entry: keeps dependencies external (consumers resolve them from their
@@ -302,15 +274,15 @@ const libConfig: Options = {
   // Runtime dependencies stay external, except the ui-only ones: those
   // must reach banUIOnlyPlugin, so a reachable ui-only package fails
   // the build instead of being silently kept as an external import.
-  external: [...Object.keys(pkg.dependencies ?? {})].filter(
-    (dep) => !uiOnlySet.has(dep),
-  ),
+  // optionalDependencies (the telemetry stack) are external too: they are
+  // loaded lazily behind a guarded dynamic import and degrade to a noop
+  // runtime when absent — bundling them would defeat their optionality.
+  external: [
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.optionalDependencies ?? {}),
+  ].filter((dep) => !uiOnlySet.has(dep)),
   noExternal: [uiOnlyPattern],
-  esbuildPlugins: [
-    rawImportPlugin,
-    externalizeNodeBuiltinsPlugin,
-    banUIOnlyPlugin,
-  ],
+  esbuildPlugins: [externalizeNodeBuiltinsPlugin, banUIOnlyPlugin],
   onSuccess: async () => {
     assertNoAmbiguousExports();
   },

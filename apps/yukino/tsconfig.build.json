@@ -10,7 +10,7 @@
     "node_modules",
     "dist",
     "docs",
-    "src/remote/fe",
+    "src/remote/browser",
     "tests",
     "examples"
   ]

@@ -1,28 +1,7 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { modules } from "./tools/index.js";
+import { TOOL_NAMES } from "./tools/names.js";
 import { version } from "./version.js";
 
 export const SERVER_NAME = "yukino-mcp";
@@ -30,18 +9,27 @@ export const SERVER_NAME = "yukino-mcp";
 // Surfaced to clients at initialize time; yukino injects it into the model's
 // context, improving tool selection.
 const INSTRUCTIONS =
-  "yukino-mcp provides tools for the Yukino CLI. Use docs to semantically " +
+  `yukino-mcp provides tools for the Yukino CLI. Use ${TOOL_NAMES.docsTool} to semantically ` +
   "search the user's local knowledge base (Markdown/text files under ~/.yukino/docs) " +
   "whenever a question may be covered by project- or team-specific documents, " +
-  "runbooks or notes. Use create_app to display a self-contained HTML document as an " +
+  `runbooks or notes. Use ${TOOL_NAMES.createApp} to display a self-contained HTML document as an ` +
   "interactive app (charts, dashboards, calculators, visual demos) inline in the " +
   "conversation when the user wants to see or interact with a result rather than " +
-  "read text. Before using browser automation tools, call tabs_context_mcp to discover " +
-  "the available Chrome tabs and their tab IDs. Use the github_* tools to inspect " +
-  "GitHub repositories (metadata, files, trees, commits, branches, tags), search code " +
-  "and repositories, work with issues and pull requests (list/create), and make changes " +
-  "(create repositories and branches, write single files); they run through the local " +
-  "gh CLI when it is authenticated and fall back to the GITHUB_TOKEN env var otherwise.";
+  "read text. " +
+  `Use ${TOOL_NAMES.githubTool} to run any gh CLI command for GitHub repositories, ` +
+  "issues, pull requests, reviews/merges, Actions, releases and projects. " +
+  "Supply args without the leading gh. Use gh api for any REST endpoint and " +
+  "gh api graphql for GraphQL queries/mutations; --paginate --slurp for pagination, " +
+  "--json/--jq for focused output, stdin for --input - or --body-file -, and cwd " +
+  "for local repository operations. Requires gh on PATH, with gh auth login or " +
+  "GH_TOKEN/GITHUB_TOKEN. Use --help to discover subcommands and flags. " +
+  `Use ${TOOL_NAMES.docsSync} after changing local knowledge-base files or to await initial indexing. ` +
+  `Use ${TOOL_NAMES.postgresTool} and ${TOOL_NAMES.mysqlTool} to execute any SQL (including writes, DDL and ` +
+  `multiple statements), ${TOOL_NAMES.redisTool} for arbitrary Redis command batches, ${TOOL_NAMES.mongodbTool} ` +
+  `for any MongoDB database command, and ${TOOL_NAMES.prometheusTool} for PromQL, alerts, targets ` +
+  "and any Prometheus HTTP API or administrative endpoint. Connection URLs may be " +
+  "configured in the environment or supplied per call. Public tool names use " +
+  "snake_case with at least two words; existing compound names remain unchanged.";
 
 // registerTool throws on duplicate names — with per-request server instances
 // in HTTP mode that would surface as runtime 500s, so fail fast at startup.

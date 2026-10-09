@@ -1,27 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { sourcesKey, type DocsContext } from "./redis-client.js";
-import { escapeTagValue, float32ToBuffer } from "./utils.js";
+import type { DocsContext } from "./store.js";
+import { invalidateCache, isBusyError } from "./store.js";
+import { normalizeVector, vectorToBlob } from "./utils.js";
 
 export interface IndexChunk {
   id: string;
@@ -29,12 +8,75 @@ export interface IndexChunk {
   metadata: Record<string, unknown>;
 }
 
-// Cap stored content: Redis TEXT has no built-in limit and oversized chunks
-// only bloat tool responses.
+// Cap stored content: the source text has no built-in limit and oversized
+// chunks only bloat tool responses.
 const MAX_CONTENT_LENGTH = 8192;
 
-// Insert document chunks. hSet is idempotent (overwrites), so re-indexing the
-// same id is safe. Uses MULTI/EXEC for atomic batch writes.
+/** Thrown when another process holds the write lock for longer than we wait. */
+export class LockConflictError extends Error {
+  constructor(source: string) {
+    super(`another process is writing "${source}" to the index`);
+    this.name = "LockConflictError";
+  }
+}
+
+/**
+ * Run `work` in an IMMEDIATE transaction. BEGIN IMMEDIATE takes the write lock
+ * up front, so a concurrent writer surfaces as SQLITE_BUSY here rather than as
+ * a failure halfway through — which is what the previous Redis implementation
+ * needed a SET NX lock plus a Lua script for. SQLite's transaction now gives
+ * the same all-or-nothing swap with a single COMMIT.
+ */
+function transact<T>(ctx: DocsContext, label: string, work: () => T): T {
+  try {
+    ctx.db.exec("BEGIN IMMEDIATE");
+  } catch (err) {
+    throw isBusyError(err) ? new LockConflictError(label) : err;
+  }
+  try {
+    const result = work();
+    ctx.db.exec("COMMIT");
+    return result;
+  } catch (err) {
+    try {
+      ctx.db.exec("ROLLBACK");
+    } catch {
+      // The transaction is already gone; the original error is what matters.
+    }
+    throw err;
+  }
+}
+
+function prepareUpsert(ctx: DocsContext) {
+  return ctx.db.prepare(
+    "INSERT INTO chunks (id, source, content, metadata, created_at, vector) " +
+      "VALUES (?, ?, ?, ?, ?, ?) " +
+      "ON CONFLICT(id) DO UPDATE SET " +
+      "source = excluded.source, content = excluded.content, " +
+      "metadata = excluded.metadata, created_at = excluded.created_at, " +
+      "vector = excluded.vector",
+  );
+}
+
+function insertChunk(
+  insert: ReturnType<typeof prepareUpsert>,
+  source: string,
+  chunk: IndexChunk,
+  embedding: number[],
+  createdAt: string,
+): void {
+  insert.run(
+    chunk.id,
+    source,
+    chunk.content.slice(0, MAX_CONTENT_LENGTH),
+    JSON.stringify(chunk.metadata),
+    createdAt,
+    vectorToBlob(normalizeVector(embedding)),
+  );
+}
+
+// Insert document chunks. The upsert is keyed on the deterministic chunk id, so
+// re-indexing the same id replaces it in place.
 export async function indexChunks(
   ctx: DocsContext,
   chunks: IndexChunk[],
@@ -43,83 +85,90 @@ export async function indexChunks(
     return 0;
   }
   const vectors = await ctx.embedder.embedTexts(chunks.map((c) => c.content));
-
-  const pipeline = ctx.client.multi();
-  for (let i = 0; i < chunks.length; i++) {
-    const key = `${ctx.redis.keyPrefix}${chunks[i].id}`;
-    pipeline.hSet(key, {
-      vector: float32ToBuffer(vectors[i]),
-      content: chunks[i].content.slice(0, MAX_CONTENT_LENGTH),
-      _source: String(chunks[i].metadata["_source"] ?? ""),
-      metadata: JSON.stringify(chunks[i].metadata),
-      created_at: new Date().toISOString(),
-    });
-  }
-  await pipeline.exec();
+  const createdAt = new Date().toISOString();
+  transact(ctx, String(chunks[0]?.metadata["_source"] ?? "index"), () => {
+    const insert = prepareUpsert(ctx);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      insertChunk(
+        insert,
+        String(chunk.metadata["_source"] ?? ""),
+        chunk,
+        vectors[i],
+        createdAt,
+      );
+    }
+  });
+  invalidateCache(ctx);
   return chunks.length;
 }
 
-/** Thrown when another server instance holds the per-source delete lock. */
-export class LockConflictError extends Error {
-  constructor(source: string) {
-    super(`another deletion is in progress for source "${source}"`);
-    this.name = "LockConflictError";
+/**
+ * Embed first, then atomically replace a source's chunks and its content hash
+ * in one transaction. Embedding happens before the write lock is taken, so a
+ * provider failure leaves both the previous chunks and the recorded hash
+ * untouched.
+ */
+export async function replaceSource(
+  ctx: DocsContext,
+  source: string,
+  chunks: IndexChunk[],
+  hash: string | null,
+): Promise<number> {
+  const vectors = chunks.length
+    ? await ctx.embedder.embedTexts(chunks.map((c) => c.content))
+    : [];
+  if (
+    vectors.length !== chunks.length ||
+    vectors.some((v) => v.length === 0 || v.some((n) => !Number.isFinite(n)))
+  ) {
+    throw new Error("Embedding provider returned invalid or missing vectors.");
   }
+
+  const createdAt = new Date().toISOString();
+  transact(ctx, source, () => {
+    ctx.db.prepare("DELETE FROM chunks WHERE source = ?").run(source);
+    const insert = prepareUpsert(ctx);
+    for (let i = 0; i < chunks.length; i++) {
+      insertChunk(insert, source, chunks[i], vectors[i], createdAt);
+    }
+    if (hash === null) {
+      ctx.db.prepare("DELETE FROM sources WHERE source = ?").run(source);
+    } else {
+      ctx.db
+        .prepare(
+          "INSERT INTO sources (source, hash) VALUES (?, ?) " +
+            "ON CONFLICT(source) DO UPDATE SET hash = excluded.hash",
+        )
+        .run(source, hash);
+    }
+  });
+  invalidateCache(ctx);
+  return chunks.length;
 }
 
-// Delete all chunks whose _source TAG matches `source`. Redis has no
-// DELETE-WHERE, so search-then-delete in batches. A SETNX lock guards against
-// concurrent deletions of the same source from parallel server instances
-// (one MCP server is spawned per CLI session).
 export async function deleteBySource(
   ctx: DocsContext,
   source: string,
 ): Promise<void> {
-  const escaped = escapeTagValue(source);
-  const lockKey = `${ctx.redis.keyPrefix}lock:delete:${escaped}`;
-
-  // 30s TTL as a safety net against deadlocks from crashed holders.
-  const acquired = await ctx.client.set(lockKey, "1", { NX: true, EX: 30 });
-  if (!acquired) {
-    throw new LockConflictError(source);
-  }
-
-  try {
-    const BATCH = 1000;
-    for (;;) {
-      const result = await ctx.client.ft.search(
-        ctx.redis.indexName,
-        `@_source:{${escaped}}`,
-        {
-          RETURN: [],
-          LIMIT: { from: 0, size: BATCH },
-        },
-      );
-      if (result.total === 0 || result.documents.length === 0) {
-        return;
-      }
-
-      const pipeline = ctx.client.multi();
-      for (const doc of result.documents) {
-        pipeline.del(doc.id);
-      }
-      await pipeline.exec();
-
-      if (result.documents.length < BATCH) {
-        return;
-      }
-    }
-  } finally {
-    await ctx.client.del(lockKey);
-  }
+  await replaceSource(ctx, source, [], null);
 }
 
 /** Read the source -> content-hash map recorded by previous syncs. */
 export async function readSourceHashes(
   ctx: DocsContext,
 ): Promise<Map<string, string>> {
-  const raw = await ctx.client.hGetAll(sourcesKey(ctx.redis));
-  return new Map(Object.entries(raw));
+  const rows = ctx.db.prepare("SELECT source, hash FROM sources").all() as {
+    source: unknown;
+    hash: unknown;
+  }[];
+  const hashes = new Map<string, string>();
+  for (const row of rows) {
+    if (typeof row.source === "string" && typeof row.hash === "string") {
+      hashes.set(row.source, row.hash);
+    }
+  }
+  return hashes;
 }
 
 export async function writeSourceHash(
@@ -127,12 +176,17 @@ export async function writeSourceHash(
   source: string,
   hash: string,
 ): Promise<void> {
-  await ctx.client.hSet(sourcesKey(ctx.redis), source, hash);
+  ctx.db
+    .prepare(
+      "INSERT INTO sources (source, hash) VALUES (?, ?) " +
+        "ON CONFLICT(source) DO UPDATE SET hash = excluded.hash",
+    )
+    .run(source, hash);
 }
 
 export async function removeSourceHash(
   ctx: DocsContext,
   source: string,
 ): Promise<void> {
-  await ctx.client.hDel(sourcesKey(ctx.redis), source);
+  ctx.db.prepare("DELETE FROM sources WHERE source = ?").run(source);
 }

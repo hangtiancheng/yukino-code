@@ -1,40 +1,18 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { createClient } from "redis";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LockConflictError } from "@/tools/docs/indexer.js";
 import { buildChunks, syncDocs } from "@/tools/docs/pipeline.js";
-import type { DocsContext } from "@/tools/docs/redis-client.js";
+import type { DocsContext } from "@/tools/docs/store.js";
 import { sha256 } from "@/tools/docs/utils.js";
+import { makeIndexFixture, type IndexFixture } from "./fixture.js";
 
 const indexerMocks = vi.hoisted(() => ({
   deleteBySource: vi.fn<(ctx: unknown, source: string) => Promise<void>>(
     async () => undefined,
   ),
-  indexChunks: vi.fn<
-    (ctx: unknown, chunks: { id: string }[]) => Promise<number>
-  >(async (_ctx, chunks) => chunks.length),
+  replaceSource: vi.fn<
+    (ctx: unknown, source: string, chunks: { id: string }[]) => Promise<number>
+  >(async (_ctx, _source, chunks) => chunks.length),
   readSourceHashes: vi.fn<() => Promise<Map<string, string>>>(
     async () => new Map(),
   ),
@@ -47,9 +25,9 @@ const indexerMocks = vi.hoisted(() => ({
 }));
 
 const scannerMocks = vi.hoisted(() => ({
-  scanDocsDir: vi.fn<() => Promise<{ source: string; content: string }[]>>(
-    async () => [],
-  ),
+  scanDocsDir: vi.fn<
+    () => Promise<{ source: string; content: string | null }[]>
+  >(async () => []),
 }));
 
 vi.mock("@/tools/docs/indexer.js", async (importOriginal) => {
@@ -59,26 +37,26 @@ vi.mock("@/tools/docs/indexer.js", async (importOriginal) => {
 });
 vi.mock("@/tools/docs/scanner.js", () => scannerMocks);
 
+// syncDocs only forwards the context to the (mocked) indexer functions, so a
+// throwaway database is enough to satisfy the type.
+let fixture: IndexFixture | null = null;
+
 function makeCtx(): DocsContext {
-  return {
-    // Never connected: syncDocs only forwards the context to (mocked) indexer functions.
-    client: createClient(),
-    embedder: {
-      embedText: async () => [0],
-      embedTexts: async (texts: string[]) => texts.map(() => [0]),
-    },
-    redis: {
-      url: "redis://localhost:6379",
-      indexName: "idx:test",
-      keyPrefix: "test:",
-    },
-  };
+  if (fixture === null) {
+    fixture = makeIndexFixture();
+  }
+  return fixture.ctx;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   indexerMocks.readSourceHashes.mockResolvedValue(new Map());
   scannerMocks.scanDocsDir.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  fixture?.cleanup();
+  fixture = null;
 });
 
 describe("buildChunks", () => {
@@ -106,16 +84,14 @@ describe("syncDocs", () => {
 
     const stats = await syncDocs(makeCtx(), "/docs");
 
-    expect(indexerMocks.deleteBySource).toHaveBeenCalledWith(
+    expect(indexerMocks.replaceSource).toHaveBeenCalledWith(
       expect.anything(),
       "new.md",
-    );
-    expect(indexerMocks.indexChunks).toHaveBeenCalledTimes(1);
-    expect(indexerMocks.writeSourceHash).toHaveBeenCalledWith(
-      expect.anything(),
-      "new.md",
+      expect.any(Array),
       sha256(content),
     );
+    expect(indexerMocks.replaceSource).toHaveBeenCalledTimes(1);
+
     expect(stats).toEqual({
       indexed: 1,
       skipped: 0,
@@ -137,7 +113,7 @@ describe("syncDocs", () => {
     const stats = await syncDocs(makeCtx(), "/docs");
 
     expect(indexerMocks.deleteBySource).not.toHaveBeenCalled();
-    expect(indexerMocks.indexChunks).not.toHaveBeenCalled();
+    expect(indexerMocks.replaceSource).not.toHaveBeenCalled();
     expect(stats.skipped).toBe(1);
   });
 
@@ -152,10 +128,7 @@ describe("syncDocs", () => {
       expect.anything(),
       "gone.md",
     );
-    expect(indexerMocks.removeSourceHash).toHaveBeenCalledWith(
-      expect.anything(),
-      "gone.md",
-    );
+
     expect(stats.removed).toBe(1);
   });
 
@@ -164,7 +137,7 @@ describe("syncDocs", () => {
       { source: "bad.md", content: "# Bad" },
       { source: "good.md", content: "# Good" },
     ]);
-    indexerMocks.indexChunks
+    indexerMocks.replaceSource
       .mockRejectedValueOnce(new Error("embed exploded"))
       .mockResolvedValueOnce(1);
 
@@ -172,19 +145,14 @@ describe("syncDocs", () => {
 
     expect(stats.failed).toBe(1);
     expect(stats.indexed).toBe(1);
-    expect(indexerMocks.writeSourceHash).toHaveBeenCalledTimes(1);
-    expect(indexerMocks.writeSourceHash).toHaveBeenCalledWith(
-      expect.anything(),
-      "good.md",
-      expect.any(String),
-    );
+    expect(indexerMocks.replaceSource).toHaveBeenCalledTimes(2);
   });
 
   it("counts lock conflicts as skipped, not failed", async () => {
     scannerMocks.scanDocsDir.mockResolvedValue([
       { source: "busy.md", content: "# Busy" },
     ]);
-    indexerMocks.deleteBySource.mockRejectedValueOnce(
+    indexerMocks.replaceSource.mockRejectedValueOnce(
       new LockConflictError("busy.md"),
     );
 
@@ -193,5 +161,17 @@ describe("syncDocs", () => {
     expect(stats.skipped).toBe(1);
     expect(stats.failed).toBe(0);
     expect(indexerMocks.writeSourceHash).not.toHaveBeenCalled();
+  });
+  it("preserves the old index for files that could not be read", async () => {
+    scannerMocks.scanDocsDir.mockResolvedValue([
+      { source: "unreadable.md", content: null },
+    ]);
+    indexerMocks.readSourceHashes.mockResolvedValue(
+      new Map([["unreadable.md", "old"]]),
+    );
+    const stats = await syncDocs(makeCtx(), "/docs");
+    expect(stats.failed).toBe(1);
+    expect(indexerMocks.deleteBySource).not.toHaveBeenCalled();
+    expect(indexerMocks.replaceSource).not.toHaveBeenCalled();
   });
 });

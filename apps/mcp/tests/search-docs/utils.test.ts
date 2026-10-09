@@ -1,58 +1,46 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { describe, expect, it } from "vitest";
 
-import { escapeTagValue, float32ToBuffer, sha256 } from "@/tools/docs/utils.js";
+import {
+  blobToVector,
+  normalizeVector,
+  sha256,
+  vectorToBlob,
+} from "@/tools/docs/utils.js";
 
-describe("escapeTagValue", () => {
-  it("escapes hyphens, dots and slashes in filenames", () => {
-    expect(escapeTagValue("upload-test.v2.md")).toBe("upload\\-test\\.v2\\.md");
-    expect(escapeTagValue("guides/setup.md")).toBe("guides\\/setup\\.md");
+describe("normalizeVector", () => {
+  it("scales to unit length so a dot product is the cosine similarity", () => {
+    const unit = normalizeVector([3, 4]);
+    expect(unit[0]).toBeCloseTo(0.6, 6);
+    expect(unit[1]).toBeCloseTo(0.8, 6);
+    expect(Math.hypot(...unit)).toBeCloseTo(1, 6);
   });
 
-  it("keeps letters, digits, underscore and CJK untouched", () => {
-    expect(escapeTagValue("abc_123")).toBe("abc_123");
-    expect(escapeTagValue("知識ベース")).toBe("知識ベース");
+  it("leaves a zero vector alone instead of producing NaN", () => {
+    expect(Array.from(normalizeVector([0, 0]))).toEqual([0, 0]);
   });
 
-  it("escapes spaces and punctuation", () => {
-    expect(escapeTagValue("a b{c}")).toBe("a\\ b\\{c\\}");
+  it("does not mutate the input", () => {
+    const input = [3, 4];
+    normalizeVector(input);
+    expect(input).toEqual([3, 4]);
   });
 });
 
-describe("float32ToBuffer", () => {
-  it("produces 4 bytes per float, little-endian, round-trippable", () => {
+describe("vectorToBlob / blobToVector", () => {
+  it("round-trips through the BLOB column layout", () => {
     const values = [0.5, -1.25, 3];
-    const buf = float32ToBuffer(values);
-    expect(buf.length).toBe(values.length * 4);
-    const back = Array.from(
-      new Float32Array(buf.buffer, buf.byteOffset, values.length),
-    );
-    expect(back).toEqual(values);
+    const blob = vectorToBlob(values);
+    expect(blob.byteLength).toBe(values.length * 4);
+    expect(Array.from(blobToVector(blob, values.length))).toEqual(values);
+  });
+
+  it("accepts a Float32Array without copying", () => {
+    const floats = new Float32Array([1, 2]);
+    expect(vectorToBlob(floats).byteLength).toBe(8);
   });
 
   it("handles empty input", () => {
-    expect(float32ToBuffer([]).length).toBe(0);
+    expect(vectorToBlob([]).byteLength).toBe(0);
   });
 });
 

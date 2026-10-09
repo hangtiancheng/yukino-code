@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { LitElement, customElement, state } from "@yukino.js/lit-jsx";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { cn } from "@/lib/cn";
@@ -48,7 +26,7 @@ import {
 } from "@/lib/styles";
 import { Section, SectionHeader } from "./ui/section";
 
-type SceneId = "refactor" | "ratelimit" | "darkmode" | "audit";
+type SceneId = "refactor" | "ratelimit" | "darkmode" | "audit" | "goal";
 
 type Step =
   | { kind: "thinking" }
@@ -87,8 +65,8 @@ const SCENES: Scene[] = [
     elapsed: "3.4s",
     steps: [
       { kind: "thinking" },
-      { kind: "tool", name: "Glob", arg: "src/**/*.ts" },
       { kind: "tool", name: "Grep", arg: '"rateLimit" · include *.ts' },
+      { kind: "tool", name: "LSP", arg: "references · RateLimiter" },
       { kind: "tool", name: "ReadFile", arg: "src/middleware/rate-limit.ts" },
       { kind: "answer" },
     ],
@@ -115,8 +93,26 @@ const SCENES: Scene[] = [
     steps: [
       { kind: "thinking" },
       { kind: "tool", name: "EnterWorktree", arg: "payments-audit" },
-      { kind: "tool", name: "SpawnTeammate", arg: "security-auditor" },
-      { kind: "tool", name: "SpawnTeammate", arg: "perf-auditor" },
+      {
+        kind: "tool",
+        name: "Agent",
+        arg: "team_name=audit · security-auditor",
+      },
+      { kind: "tool", name: "Agent", arg: "team_name=audit · perf-auditor" },
+      { kind: "answer" },
+    ],
+  },
+  {
+    id: "goal",
+    model: "claude-sonnet-4",
+    tokens: "63.9k",
+    elapsed: "48.2s",
+    steps: [
+      { kind: "thinking" },
+      { kind: "tool", name: "Goal", arg: "persistent goal · budget 100k" },
+      { kind: "tool", name: "ReadFile", arg: "src/config/loader.ts" },
+      { kind: "tool", name: "EditFile", arg: "src/config/loader.ts" },
+      { kind: "tool", name: "Bash", arg: "pnpm test" },
       { kind: "answer" },
     ],
   },
@@ -128,8 +124,10 @@ const TOOL_ICONS: Record<string, string> = {
   ReadFile: icons.fileCode,
   EditFile: icons.pencilRuler,
   Bash: icons.terminal,
+  LSP: icons.braces,
   EnterWorktree: icons.gitBranch,
-  SpawnTeammate: icons.network,
+  Agent: icons.bot,
+  Goal: icons.target,
 };
 
 const TABS = [
@@ -173,6 +171,10 @@ const PRINT_LINES = [
     tone: "muted",
   },
   { text: '{"type":"loop_complete","stopReason":"end_turn"}', tone: "ok" },
+  {
+    text: '{"type":"result","result":"Fixed the off-by-one.","num_turns":3,"duration_ms":900}',
+    tone: "ok",
+  },
 ] as const;
 
 @customElement("docs-terminal-showcase")

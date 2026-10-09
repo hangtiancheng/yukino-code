@@ -1,37 +1,13 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/shared/logger.js";
 import { splitMarkdown } from "./chunker.js";
 import {
   deleteBySource,
-  indexChunks,
+  replaceSource,
   LockConflictError,
   readSourceHashes,
-  removeSourceHash,
-  writeSourceHash,
   type IndexChunk,
 } from "./indexer.js";
-import type { DocsContext } from "./redis-client.js";
+import type { DocsContext } from "./store.js";
 import { scanDocsDir } from "./scanner.js";
 import { sha256 } from "./utils.js";
 
@@ -62,7 +38,7 @@ export async function buildChunks(
 /**
  * Incrementally sync the docs directory into the vector index:
  * - unchanged files (same content sha256 as the recorded one) are skipped,
- * - new/changed files are delete-then-reindexed under their _source,
+ * - new/changed files are embedded before their chunks/hash are atomically replaced,
  * - records of files deleted from disk are removed from the index.
  * Per-file failures are logged and skipped so one bad file never aborts the
  * sync; a lock conflict means a sibling server instance is already handling
@@ -85,18 +61,22 @@ export async function syncDocs(
   const seen = new Set<string>();
   for (const doc of docs) {
     seen.add(doc.source);
+    if (doc.content === null) {
+      stats.failed++;
+      continue;
+    }
     const hash = sha256(doc.content);
     if (known.get(doc.source) === hash) {
       stats.skipped++;
       continue;
     }
     try {
-      await deleteBySource(ctx, doc.source);
-      const count = await indexChunks(
+      const count = await replaceSource(
         ctx,
+        doc.source,
         await buildChunks(doc.source, doc.content),
+        hash,
       );
-      await writeSourceHash(ctx, doc.source, hash);
       stats.indexed++;
       stats.chunks += count;
     } catch (err) {
@@ -119,7 +99,6 @@ export async function syncDocs(
     }
     try {
       await deleteBySource(ctx, source);
-      await removeSourceHash(ctx, source);
       stats.removed++;
     } catch (err) {
       if (err instanceof LockConflictError) {

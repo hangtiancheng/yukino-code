@@ -18,7 +18,7 @@ export function firstText(result: { content: unknown }): string {
   return TextContentSchema.parse(content[0]).text;
 }
 
-/** A fresh temporary directory (the tmp_path fixture equivalent). */
+/** A fresh temporary directory. */
 export function makeTempDir(): string {
   return mkdtempSync(path.join(tmpdir(), "yukino-mcp-test-"));
 }
@@ -96,7 +96,6 @@ export function stubFetchRoutes(routes: FetchRoute[]): FetchStub {
   const fetchStub = async (
     input: string | URL | Request,
     init?: RequestInit,
-    // eslint-disable-next-line @typescript-eslint/require-await
   ): Promise<Response> => {
     const url =
       typeof input === "string"

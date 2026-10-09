@@ -1,24 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// Must stay the first import: it patches the warning handler before any
+// module below loads `node:sqlite` (see the file for why).
+import "./shared/quiet-sqlite-warning.js";
 import "dotenv/config";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
@@ -30,7 +12,6 @@ import { modules } from "./tools/index.js";
 
 let shuttingDown = false;
 
-/** Close transports and tool modules, then exit. Never runs twice. */
 function shutdown(reason: string, closeTransport: () => Promise<void>): void {
   if (shuttingDown) {
     return;
@@ -79,7 +60,7 @@ async function main(): Promise<void> {
     const server = createServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    // When the client disconnects, open handles like the Redis connection
+    // When the client disconnects, open handles like the SQLite database
     // would keep the process alive — exit through shutdown instead. The SDK
     // transport does not self-close on stdin EOF, so watch stdin directly.
     server.server.onclose = () => {

@@ -1,53 +1,41 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { loadConfig } from "../../shared/config.js";
-import { logger } from "../../shared/logger.js";
-import type { ToolModule } from "../types.js";
+import { loadConfig } from "@/shared/config.js";
+import { logger } from "@/shared/logger.js";
+import { TOOL_NAMES } from "@/tools/names.js";
+import type { ToolModule } from "@/tools/types.js";
 import { createEmbedder } from "./embedder.js";
-import { syncDocs } from "./pipeline.js";
+import { syncDocs, type SyncStats } from "./pipeline.js";
 import {
-  closeRedis,
-  connectRedis,
-  ensureIndex,
+  closeStore,
+  ensureSchema,
+  openStore,
   type DocsContext,
-} from "./redis-client.js";
+} from "./store.js";
 import { retrieve, type RetrievedDoc } from "./retriever.js";
 
 type EngineState =
   | { status: "ready"; ctx: DocsContext }
   | { status: "degraded"; reason: string };
 
-// Fast phase budget (connect + dimension probe + index check). Callers sit on
+// Fast phase budget (open + dimension probe + schema check). Callers sit on
 // the MCP client's 60s call timeout, so a hanging provider must degrade early.
 const INIT_TIMEOUT_MS = 15_000;
-// A degraded engine retries at most this often (Redis/provider may come back
-// up mid-session without restarting the CLI).
+// A degraded engine retries at most this often (the embedding provider may come
+// back up mid-session without restarting the CLI).
 const DEGRADED_RETRY_MS = 30_000;
 
 // Process-wide engine singleton shared by every transport session.
+let syncPromise: Promise<SyncStats> | null = null;
+
+function runSync(ctx: DocsContext): Promise<SyncStats> {
+  syncPromise ??= syncDocs(ctx, loadConfig().docsDir).finally(() => {
+    syncPromise = null;
+  });
+  return syncPromise;
+}
+
 let statePromise: Promise<EngineState> | null = null;
 let settled: EngineState | null = null;
 let lastDegradedAt = 0;
@@ -98,8 +86,8 @@ function withTimeout<T>(
 
 /**
  * Two-phase initialization, degrading (never throwing) on any failure:
- * - fast phase (awaited): config check, Redis connect, dimension probe +
- *   index ensure — after this queries can already run against existing data;
+ * - fast phase (awaited): config check, index open, dimension probe +
+ *   schema ensure — after this queries can already run against existing data;
  * - background phase (fire-and-forget): incremental docs sync, so a large
  *   knowledge base never blocks the first tool call into the client timeout.
  */
@@ -115,36 +103,36 @@ async function initEngine(): Promise<EngineState> {
 
   let ctx: DocsContext;
   try {
-    const client = await withTimeout(
-      connectRedis(config.redis),
-      INIT_TIMEOUT_MS,
-      "redis connection",
-    );
-    ctx = { client, embedder, redis: config.redis };
+    ctx = {
+      db: openStore(config.index),
+      embedder,
+      index: config.index,
+      cache: null,
+    };
   } catch (err) {
     const reason =
-      `cannot connect to Redis at ${config.redis.url} ` +
-      `(is Redis Stack running?): ${errorMessage(err)}`;
-    logger.warn({ err }, "docs degraded: redis unreachable");
+      `cannot open the vector index at ${config.index.dbPath}: ` +
+      `${errorMessage(err)}`;
+    logger.warn({ err }, "docs degraded: index unreachable");
     return { status: "degraded", reason };
   }
 
   try {
     await withTimeout(
-      ensureIndex(ctx),
+      ensureSchema(ctx),
       INIT_TIMEOUT_MS,
       "vector index initialization",
     );
   } catch (err) {
-    await closeRedis(ctx.client);
+    closeStore(ctx.db);
     const reason =
       "failed to initialize the vector index (check the embedding endpoint/API key " +
-      `and that Redis has the RediSearch module): ${errorMessage(err)}`;
+      `and that ${config.index.dbPath} is writable): ${errorMessage(err)}`;
     logger.warn({ err }, "docs degraded: index initialization failed");
     return { status: "degraded", reason };
   }
 
-  void syncDocs(ctx, config.docsDir).catch((err: unknown) => {
+  void runSync(ctx).catch((err: unknown) => {
     logger.warn({ err }, "background docs sync failed");
   });
 
@@ -190,7 +178,47 @@ export const docsModule: ToolModule = {
   register(server: McpServer): void {
     const docsDir = loadConfig().docsDir;
     server.registerTool(
-      "docs",
+      TOOL_NAMES.docsSync,
+      {
+        title: "Sync Docs",
+        description:
+          "Refresh the RAG knowledge base from the configured local docs directory. Waits for initial/in-flight indexing, adds/updates changed files and removes deleted files. Call after editing documents or when docs_tool reports indexing in progress. Per-file failures preserve the previous version and are reported in stats.",
+        inputSchema: {},
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
+      },
+      async () => {
+        const state = await getState();
+        if (state.status === "degraded")
+          return {
+            content: [
+              { type: "text", text: `docs is unavailable: ${state.reason}` },
+            ],
+            isError: true,
+          };
+        try {
+          const stats = await runSync(state.ctx);
+          return {
+            content: [{ type: "text", text: JSON.stringify(stats) }],
+            structuredContent: { ...stats },
+            ...(stats.failed ? { isError: true } : {}),
+          };
+        } catch (err) {
+          return {
+            content: [
+              { type: "text", text: `docs sync failed: ${errorMessage(err)}` },
+            ],
+            isError: true,
+          };
+        }
+      },
+    );
+    server.registerTool(
+      TOOL_NAMES.docsTool,
       {
         title: "Search Docs",
         description:
@@ -224,27 +252,34 @@ export const docsModule: ToolModule = {
               content: [
                 {
                   type: "text",
-                  text: "No matching documents in the knowledge base.",
+                  text: syncPromise
+                    ? "Knowledge base indexing is still in progress. Call docs_sync to wait for it, then retry the search."
+                    : "No matching documents in the knowledge base.",
                 },
               ],
             };
           }
-          return { content: [{ type: "text", text: formatResults(docs) }] };
+          return {
+            content: [{ type: "text", text: formatResults(docs) }],
+            structuredContent: {
+              documents: docs,
+              indexing: syncPromise !== null,
+            },
+          };
         } catch (err) {
           logger.warn({ err }, "docs query failed");
-          // The Redis client's reconnect strategy gives up quickly by design,
-          // so a dropped connection never self-heals. Mark the engine degraded
-          // (cached, so the retry-window backoff still applies) to let a later
-          // call re-initialize it from scratch.
-          if (!state.ctx.client.isOpen) {
+          // A closed database handle never self-heals, so mark the engine
+          // degraded (cached, so the retry-window backoff still applies) to let
+          // a later call re-initialize it from scratch.
+          if (!state.ctx.db.isOpen) {
             const degraded: EngineState = {
               status: "degraded",
-              reason: `redis connection lost: ${errorMessage(err)}`,
+              reason: `vector index connection lost: ${errorMessage(err)}`,
             };
             settled = degraded;
             statePromise = Promise.resolve(degraded);
             lastDegradedAt = Date.now();
-            void closeRedis(state.ctx.client);
+            closeStore(state.ctx.db);
           }
           return {
             content: [
@@ -266,7 +301,7 @@ export const docsModule: ToolModule = {
     // ~4s); only close what is already connected. In-flight work dies with
     // the process.
     if (settled?.status === "ready") {
-      await closeRedis(settled.ctx.client);
+      closeStore(settled.ctx.db);
     }
   },
 };

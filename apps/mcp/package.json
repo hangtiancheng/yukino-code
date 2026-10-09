@@ -1,7 +1,6 @@
 {
   "name": "@yukino.js/mcp",
   "version": "0.0.1",
-  "private": true,
   "description": "Yukino official MCP tools collection",
   "keywords": [
     "MCP",
@@ -18,6 +17,9 @@
     "dist"
   ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "pnpm build:fe && tsx ./src/main.ts",
     "build": "tsup && vite build",
@@ -25,27 +27,32 @@
     "test": "pnpm build:fe && vitest run",
     "test:watch": "pnpm build:fe && vitest",
     "format": "prettier -w ./ --experimental-cli",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "happy:fix": "pnpm typecheck && pnpm format && pnpm build && pnpm test"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.57",
-    "@langchain/core": "^1.2.13",
+    "@ai-sdk/openai-compatible": "^3.0.67",
+    "@langchain/core": "^1.2.17",
     "@langchain/textsplitters": "^1.0.2",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
-    "@modelcontextprotocol/sdk": "^1.30.1",
-    "ai": "^7.0.118",
-    "h3": "2.0.1-rc.32",
-    "pino": "^10.3.1",
-    "redis": "^6.2.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "ai": "^7.0.136",
+    "h3": "^2.0.2",
+    "mongodb": "^7.7.0",
+    "mysql2": "^3.24.5",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "redis": "^6.3.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^24.19.0",
+    "@types/node": "^24.19.1",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "daisyui": "^5.7.46",
+    "@vitejs/plugin-react": "^6.1.2",
+    "daisyui": "^5.7.47",
     "dotenv": "^17.4.2",
     "prettier": "^3.9.9",
     "react": "19.2.7",
@@ -54,11 +61,11 @@
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vite": "^8.3.1",
+    "vite": "^8.3.4",
     "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24.0.0"
   }
 }

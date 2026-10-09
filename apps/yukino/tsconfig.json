@@ -30,6 +30,6 @@
     "resolveJsonModule": true,
     "plugins": []
   },
-  "include": ["shims.d.ts", "src", "tests", "tsup.config.ts"],
-  "exclude": ["node_modules", "dist", "docs", "src/remote/fe"]
+  "include": ["src", "tests", "tsup.config.ts"],
+  "exclude": ["node_modules", "dist", "docs", "src/remote/browser"]
 }

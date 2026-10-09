@@ -1,31 +1,9 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 import { icons } from "./icons";
 import type { MessageKey } from "./i18n";
 
 export const REPO_URL = "https://github.com/hangtiancheng/yukino-code";
 export const NPM_URL = "https://www.npmjs.com/package/@yukino.js/yukino";
-export const DOCS_URL = "https://hangtiancheng.github.io/yukino-code";
-export const SITE_URL = "https://hangtiancheng.github.io/yukino-code";
+export const DOCS_URL = `${REPO_URL}/tree/main/apps/yukino#readme`;
 export const VERSION = `v${__YUKINO_VERSION__}`;
 
 export type InstallMethodId = "curl" | "powershell" | "npm" | "pnpm";
@@ -41,13 +19,13 @@ export const INSTALL_METHODS: InstallMethod[] = [
     id: "curl",
     label: "curl",
     command:
-      "curl -fsSL https://hangtiancheng.github.io/yukino-code/install.sh | bash",
+      "curl -fsSL https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.sh | bash",
   },
   {
     id: "powershell",
     label: "PowerShell",
     command:
-      "irm https://hangtiancheng.github.io/yukino-code/install.ps1 | iex",
+      "irm https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.ps1 | iex",
   },
   { id: "npm", label: "npm", command: "npm i -g @yukino.js/yukino" },
   { id: "pnpm", label: "pnpm", command: "pnpm add -g @yukino.js/yukino" },
@@ -106,8 +84,8 @@ export interface Stat {
 
 export const stats: Stat[] = [
   { id: "protocols", value: "3" },
-  { id: "tools", value: "29" },
-  { id: "modes", value: "5" },
+  { id: "tools", value: "33" },
+  { id: "modes", value: "6" },
   { id: "context", value: "1M" },
 ];
 
@@ -128,7 +106,10 @@ export type FeatureId =
   | "hooks"
   | "ide"
   | "observability"
-  | "acp";
+  | "acp"
+  | "library"
+  | "goals"
+  | "webSearch";
 
 export interface Feature {
   id: FeatureId;
@@ -180,6 +161,9 @@ export const features: Feature[] = [
     decor: "obs",
   },
   { id: "acp", icon: icons.handshake, accent: "accent" },
+  { id: "library", icon: icons.blocks, accent: "neutral" },
+  { id: "goals", icon: icons.target, accent: "brand" },
+  { id: "webSearch", icon: icons.globe, accent: "accent" },
 ];
 
 export interface ObsBadge {
@@ -193,17 +177,17 @@ export const observabilityList: ObsBadge[] = [
   { id: "sentry", name: "Sentry" },
 ];
 
-export type RunModeId = "tui" | "print" | "remote" | "teammate" | "acp";
+export type RunModeId = "tui" | "print" | "remote" | "teammate" | "acp" | "a2a";
 
 export interface RunMode {
   id: RunModeId;
   icon: string;
   command: string;
-  wide?: boolean;
+  default?: boolean;
 }
 
 export const runModes: RunMode[] = [
-  { id: "tui", icon: icons.squareTerminal, command: "yukino", wide: true },
+  { id: "tui", icon: icons.squareTerminal, command: "yukino", default: true },
   {
     id: "print",
     icon: icons.fileText,
@@ -216,6 +200,7 @@ export const runModes: RunMode[] = [
     command: 'yukino --teammate --team-name audit --task "…"',
   },
   { id: "acp", icon: icons.plug, command: "yukino --acp" },
+  { id: "a2a", icon: icons.network, command: "yukino --a2a" },
 ];
 
 export type ToolGroup =
@@ -235,16 +220,20 @@ export const tools: ToolItem[] = [
   { name: "PowerShell", icon: icons.squareTerminal, group: "Shell" },
   { name: "Glob", icon: icons.folderTree, group: "Search" },
   { name: "Grep", icon: icons.search, group: "Search" },
+  { name: "WebSearch", icon: icons.globe, group: "Search" },
   { name: "WebFetch", icon: icons.globe, group: "Search" },
+  { name: "LSP", icon: icons.braces, group: "Search" },
   { name: "ToolSearch", icon: icons.search, group: "Search" },
   { name: "Agent", icon: icons.bot, group: "Orchestrate" },
+  { name: "Goal", icon: icons.target, group: "Orchestrate" },
   { name: "AskUserQuestion", icon: icons.users, group: "Orchestrate" },
+  { name: "TodoWrite", icon: icons.listChecks, group: "Orchestrate" },
+  { name: "TaskOutput", icon: icons.activity, group: "Orchestrate" },
   { name: "EnterWorktree", icon: icons.gitBranch, group: "Orchestrate" },
   { name: "ExitWorktree", icon: icons.gitBranch, group: "Orchestrate" },
   { name: "ExitPlanMode", icon: icons.listTree, group: "Orchestrate" },
   { name: "SyntheticOutput", icon: icons.fileText, group: "Orchestrate" },
   { name: "TeamCreate", icon: icons.users, group: "Teams" },
-  { name: "SpawnTeammate", icon: icons.bot, group: "Teams" },
   { name: "SendMessage", icon: icons.inbox, group: "Teams" },
   { name: "ListTeams", icon: icons.users, group: "Teams" },
   { name: "TeamDelete", icon: icons.users, group: "Teams" },
@@ -287,16 +276,19 @@ export const permissionModes: PermissionMode[] = [
 ];
 
 export const slashCommands = [
-  { cmd: "/login", desc: "discover models" },
+  { cmd: "/login", desc: "configure a provider" },
   { cmd: "/provider", desc: "switch provider" },
+  { cmd: "/model", desc: "switch model" },
   { cmd: "/plan", desc: "read-only planning" },
+  { cmd: "/goal", desc: "persistent goals" },
   { cmd: "/compact", desc: "shrink context" },
+  { cmd: "/clear", desc: "reset the session" },
   { cmd: "/resume", desc: "continue a session" },
   { cmd: "/rewind", desc: "undo a turn" },
   { cmd: "/memory", desc: "inspect memories" },
   { cmd: "/skills", desc: "browse skills" },
+  { cmd: "/skill", desc: "run a skill" },
   { cmd: "/worktree", desc: "isolate work" },
-  { cmd: "/review", desc: "structured review" },
   { cmd: "/code-review", desc: "audit the diff" },
   { cmd: "/sandbox", desc: "toggle sandbox" },
   { cmd: "/mcp", desc: "manage MCP servers" },
@@ -320,7 +312,8 @@ export const workflowSteps: WorkflowStep[] = [
   { step: "04", id: "ship", icon: icons.gitBranch },
 ];
 
-export type ShortcutId = "ctrlO" | "shiftTab" | "ctrlT";
+export type ShortcutId =
+  "ctrlC" | "ctrlO" | "downArrow" | "ctrlB" | "ctrlV" | "shiftTab";
 
 export interface Shortcut {
   id: ShortcutId;
@@ -328,9 +321,12 @@ export interface Shortcut {
 }
 
 export const shortcuts: Shortcut[] = [
+  { id: "ctrlC", term: "Ctrl+C" },
   { id: "ctrlO", term: "Ctrl+O" },
+  { id: "downArrow", term: "↓" },
+  { id: "ctrlB", term: "Ctrl+B" },
+  { id: "ctrlV", term: "Ctrl+V" },
   { id: "shiftTab", term: "Shift+Tab" },
-  { id: "ctrlT", term: "Ctrl+T" },
 ];
 
 export type AgentCardId = "generalPurpose" | "plan" | "explore";
@@ -350,10 +346,13 @@ export const agentCards: AgentCard[] = [
 export const faqIds = [
   "providers",
   "planMode",
+  "goal",
   "sandbox",
+  "websearch",
   "data",
   "headless",
   "ide",
+  "scrollback",
   "hooks",
   "teammates",
   "delegation",
@@ -361,6 +360,7 @@ export const faqIds = [
   "memory",
   "telemetry",
   "acp",
+  "a2a",
 ] as const;
 
 export type FaqId = (typeof faqIds)[number];
@@ -371,32 +371,12 @@ export interface Protocol {
   id: ProtocolId;
   icon: string;
   name: string;
-  base: string;
-  env: string;
 }
 
 export const providerList: Protocol[] = [
-  {
-    id: "anthropic",
-    icon: icons.sparkle,
-    name: "anthropic",
-    base: "https://api.anthropic.com",
-    env: "ANTHROPIC_API_KEY",
-  },
-  {
-    id: "openai",
-    icon: icons.sparkle,
-    name: "openai",
-    base: "https://api.openai.com/v1",
-    env: "OPENAI_API_KEY",
-  },
-  {
-    id: "openaiCompat",
-    icon: icons.sparkle,
-    name: "openai-compat",
-    base: "http://localhost:11434/v1",
-    env: "MY_GATEWAY_KEY",
-  },
+  { id: "anthropic", icon: icons.sparkle, name: "anthropic" },
+  { id: "openai", icon: icons.sparkle, name: "openai" },
+  { id: "openaiCompat", icon: icons.sparkle, name: "openai-compat" },
 ];
 
 export type FooterColumnId = "product" | "developers" | "resources";

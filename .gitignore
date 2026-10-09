@@ -198,11 +198,8 @@ tsconfig.tsbuildinfo
 target
 **/target
 
-*.local.yaml
-**/*.local.yaml
-
 .yukino/
 **/.yukino/
 
 .playwright-cli/
-agents
+apps/yukino/coverage

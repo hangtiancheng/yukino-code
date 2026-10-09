@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -37,33 +15,38 @@ export type EmbeddingConfigResult =
   { ok: true; config: EmbeddingConfig } | { ok: false; reason: string };
 
 export interface RedisConfig {
+  /** Only the unrestricted redis_tool uses this; the docs index is SQLite-backed. */
   url: string;
-  indexName: string;
-  keyPrefix: string;
+}
+
+export interface IndexConfig {
+  /** SQLite file holding the docs RAG vector index. */
+  dbPath: string;
 }
 
 export interface GitHubConfig {
-  /**
-   * Personal access token for the GitHub API (`GITHUB_TOKEN` env, with
-   * `GH_TOKEN` as a fallback). Empty means "not configured": without an
-   * authenticated gh CLI or a token the github_* tools answer with a clear
-   * unavailable error per call instead of failing at startup.
-   *
-   * The token is a secret: it is only ever sent in an Authorization header
-   * and must never be logged.
-   */
+  /** Optional GITHUB_TOKEN/GH_TOKEN passed to gh through its environment. */
   token: string;
-  /**
-   * REST API base URL (`GITHUB_BASE_URL` env); empty means the transport
-   * default (https://api.github.com, or a GitHub Enterprise API URL).
-   */
+  /** Legacy GITHUB_BASE_URL; its hostname is used when GH_HOST is unset. */
   baseUrl: string;
+  /** Optional GitHub Enterprise hostname (GH_HOST). */
+  hostname: string;
 }
 
 export interface AppConfig {
   embedding: EmbeddingConfigResult;
+  index: IndexConfig;
   redis: RedisConfig;
   github: GitHubConfig;
+  postgres: { url: string };
+  mysql: { url: string };
+  mongodb: { url: string; database: string };
+  prometheus: {
+    baseUrl: string;
+    token: string;
+    username: string;
+    password: string;
+  };
   /** Directory scanned recursively for knowledge-base documents. */
   docsDir: string;
   /** HTTP transport listen address (only used with --http). */
@@ -79,14 +62,27 @@ const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   EMBEDDING_BASE_URL: z.string().optional(),
   REDIS_URL: z.string().default("redis://localhost:6379"),
-  REDIS_INDEX_NAME: z.string().default("idx:yukino"),
-  REDIS_KEY_PREFIX: z.string().default("yukino:"),
   YUKINO_DOCS_DIR: z
     .string()
     .default(path.resolve(homedir(), ".yukino", "docs")),
+  YUKINO_INDEX_DB: z
+    .string()
+    .default(path.resolve(homedir(), ".yukino", "index.sqlite")),
   GITHUB_TOKEN: z.string().optional(),
   GH_TOKEN: z.string().optional(),
   GITHUB_BASE_URL: z.string().optional(),
+  GH_HOST: z.string().optional(),
+  POSTGRES_URL: z.string().optional(),
+  POSTGRESQL_URL: z.string().optional(),
+  DATABASE_URL: z.string().optional(),
+  MYSQL_URL: z.string().optional(),
+  MONGODB_URL: z.string().optional(),
+  MONGODB_DATABASE: z.string().optional(),
+  PROMETHEUS_BASE_URL: z.string().optional(),
+  PROMETHEUS_URL: z.string().optional(),
+  PROMETHEUS_TOKEN: z.string().optional(),
+  PROMETHEUS_USERNAME: z.string().optional(),
+  PROMETHEUS_PASSWORD: z.string().optional(),
   // .catch: a malformed PORT in the environment must degrade to the default
   // instead of crashing the stdio server at startup.
   HOST: z.string().default("127.0.0.1"),
@@ -109,8 +105,8 @@ function dropEmptyValues(
 function resolveEmbedding(
   env: z.infer<typeof EnvSchema>,
 ): EmbeddingConfigResult {
-  // Only the OpenAI-compatible protocol is supported for now; the switch
-  // exists so more protocols can be added without a config format change.
+  // Only the OpenAI-compatible protocol is implemented; any other value
+  // degrades the tool with a clear reason instead of a config parse error.
   const protocol = env.EMBEDDING_PROTOCOL ?? "openai";
   if (protocol !== "openai") {
     return {
@@ -146,15 +142,35 @@ export function loadConfig(
   const parsed = EnvSchema.parse(dropEmptyValues(env));
   return {
     embedding: resolveEmbedding(parsed),
-    redis: {
-      url: parsed.REDIS_URL,
-      indexName: parsed.REDIS_INDEX_NAME,
-      keyPrefix: parsed.REDIS_KEY_PREFIX,
-    },
+    index: { dbPath: parsed.YUKINO_INDEX_DB },
+    redis: { url: parsed.REDIS_URL },
     docsDir: parsed.YUKINO_DOCS_DIR,
     github: {
       token: (parsed.GITHUB_TOKEN ?? parsed.GH_TOKEN ?? "").trim(),
       baseUrl: (parsed.GITHUB_BASE_URL ?? "").replace(/\/+$/, ""),
+      hostname: parsed.GH_HOST ?? "",
+    },
+    postgres: {
+      url:
+        parsed.POSTGRES_URL ??
+        parsed.POSTGRESQL_URL ??
+        parsed.DATABASE_URL ??
+        "",
+    },
+    mysql: { url: parsed.MYSQL_URL ?? "" },
+    mongodb: {
+      url: parsed.MONGODB_URL ?? "",
+      database: parsed.MONGODB_DATABASE ?? "",
+    },
+    prometheus: {
+      baseUrl: (
+        parsed.PROMETHEUS_BASE_URL ??
+        parsed.PROMETHEUS_URL ??
+        ""
+      ).replace(/\/+$/, ""),
+      token: parsed.PROMETHEUS_TOKEN ?? "",
+      username: parsed.PROMETHEUS_USERNAME ?? "",
+      password: parsed.PROMETHEUS_PASSWORD ?? "",
     },
     host: parsed.HOST,
     port: parsed.PORT,

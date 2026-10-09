@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import os from "node:os";
 import path from "node:path";
 
@@ -30,11 +8,10 @@ import { loadConfig } from "@/shared/config.js";
 describe("loadConfig", () => {
   it("applies defaults when env is empty", () => {
     const config = loadConfig({});
-    expect(config.redis).toEqual({
-      url: "redis://localhost:6379",
-      indexName: "idx:yukino",
-      keyPrefix: "yukino:",
-    });
+    expect(config.redis).toEqual({ url: "redis://localhost:6379" });
+    expect(config.index.dbPath).toBe(
+      path.join(os.homedir(), ".yukino", "index.sqlite"),
+    );
     expect(config.docsDir).toBe(path.join(os.homedir(), ".yukino", "docs"));
     expect(config.port).toBe(3300);
     expect(config.embedding.ok).toBe(false);
@@ -120,23 +97,22 @@ describe("loadConfig", () => {
     const config = loadConfig({
       PORT: "8080",
       YUKINO_DOCS_DIR: "/tmp/kb",
-      REDIS_INDEX_NAME: "idx:custom",
-      REDIS_KEY_PREFIX: "custom:",
+      YUKINO_INDEX_DB: "/tmp/kb/index.sqlite",
     });
     expect(config.port).toBe(8080);
     expect(config.docsDir).toBe("/tmp/kb");
-    expect(config.redis.indexName).toBe("idx:custom");
-    expect(config.redis.keyPrefix).toBe("custom:");
+    expect(config.index.dbPath).toBe("/tmp/kb/index.sqlite");
   });
 });
 
 describe("github config", () => {
   it("defaults to unconfigured when the environment is empty", () => {
-    // Without an authenticated gh CLI or a token the github_* tools degrade
+    // Without an authenticated gh CLI or a token github_tool degrades
     // per call; nothing in the code points at an account by default.
     const config = loadConfig({});
     expect(config.github.token).toBe("");
     expect(config.github.baseUrl).toBe("");
+    expect(config.github.hostname).toBe("");
   });
 
   it("treats empty strings as unset", () => {
@@ -162,5 +138,74 @@ describe("github config", () => {
       GITHUB_BASE_URL: "https://ghe.example.com/api/v3//",
     });
     expect(config.github.baseUrl).toBe("https://ghe.example.com/api/v3");
+  });
+
+  it("loads the gh Enterprise host", () => {
+    expect(loadConfig({ GH_HOST: "ghe.example.com" }).github.hostname).toBe(
+      "ghe.example.com",
+    );
+  });
+});
+
+describe("database and Prometheus config", () => {
+  it("leaves optional backends unconfigured without preventing startup", () => {
+    const config = loadConfig({});
+    expect(config.postgres.url).toBe("");
+    expect(config.mysql.url).toBe("");
+    expect(config.mongodb).toEqual({ url: "", database: "" });
+    expect(config.prometheus).toEqual({
+      baseUrl: "",
+      token: "",
+      username: "",
+      password: "",
+    });
+  });
+
+  it("resolves PostgreSQL URL precedence and ignores empty placeholders", () => {
+    expect(
+      loadConfig({
+        POSTGRES_URL: "primary",
+        POSTGRESQL_URL: "secondary",
+        DATABASE_URL: "fallback",
+      }).postgres.url,
+    ).toBe("primary");
+    expect(
+      loadConfig({
+        POSTGRES_URL: " ",
+        POSTGRESQL_URL: "secondary",
+        DATABASE_URL: "fallback",
+      }).postgres.url,
+    ).toBe("secondary");
+    expect(loadConfig({ DATABASE_URL: "fallback" }).postgres.url).toBe(
+      "fallback",
+    );
+  });
+
+  it("loads database targets and Prometheus authentication", () => {
+    const config = loadConfig({
+      MYSQL_URL: "mysql://localhost/db",
+      MONGODB_URL: "mongodb://localhost/db",
+      MONGODB_DATABASE: "other_db",
+      PROMETHEUS_BASE_URL: "https://metrics.example.com/prometheus///",
+      PROMETHEUS_URL: "http://fallback:9090",
+      PROMETHEUS_TOKEN: "token",
+      PROMETHEUS_USERNAME: "user",
+      PROMETHEUS_PASSWORD: "password",
+    });
+    expect(config.mysql.url).toBe("mysql://localhost/db");
+    expect(config.mongodb).toEqual({
+      url: "mongodb://localhost/db",
+      database: "other_db",
+    });
+    expect(config.prometheus).toEqual({
+      baseUrl: "https://metrics.example.com/prometheus",
+      token: "token",
+      username: "user",
+      password: "password",
+    });
+    expect(
+      loadConfig({ PROMETHEUS_URL: "http://fallback:9090/" }).prometheus
+        .baseUrl,
+    ).toBe("http://fallback:9090");
   });
 });

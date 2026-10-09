@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -122,20 +100,25 @@ function Shell(): ReactElement {
   const [connectError, setConnectError] = useState<string | null>(null);
 
   useEffect(() => {
-    const app = new App({ name: "yukino create_app", version: "1.0.0" });
+    const app = new App(
+      { name: "yukino create_app", version: "1.0.0" },
+      {},
+      { autoResize: false },
+    );
+    let stopResize: (() => void) | undefined;
 
-    app.ontoolinputpartial = (params) => {
+    app.addEventListener("toolinputpartial", (params) => {
       const html = readStringField(params.arguments, "html");
       setState({ phase: "streaming", bytes: html?.length ?? 0 });
-    };
-    app.ontoolinput = (params) => {
+    });
+    app.addEventListener("toolinput", (params) => {
       const html = readStringField(params.arguments, "html");
       const title = readStringField(params.arguments, "title");
       if (html !== undefined) {
         setState({ phase: "ready", html, title: title ?? FALLBACK_TITLE });
       }
-    };
-    app.ontoolresult = (result) => {
+    });
+    app.addEventListener("toolresult", (result) => {
       if (result.isError) {
         setState({
           phase: "failed",
@@ -155,22 +138,27 @@ function Shell(): ReactElement {
           message: "Tool result contained no app HTML.",
         });
       }
-    };
+    });
     // daisyUI themes key off the data-theme attribute, so the host theme must
     // be mirrored there; style variables and fonts stay on CSS custom props.
-    app.onhostcontextchanged = (ctx) => {
+    app.addEventListener("hostcontextchanged", (ctx) => {
       if (ctx.theme) applyDocumentTheme(ctx.theme);
       if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
       if (ctx.styles?.css?.fonts) applyHostFonts(ctx.styles.css.fonts);
-    };
+    });
+    app.addEventListener("toolcancelled", () => {
+      setState({ phase: "failed", message: "App creation was cancelled." });
+    });
     app.onteardown = async () => {
       return {};
     };
 
+    const transport = new PostMessageTransport();
     let cancelled = false;
-    void app.connect(new PostMessageTransport()).then(
+    void app.connect(transport).then(
       () => {
         if (cancelled) return;
+        stopResize = app.setupSizeChangedNotifications();
         applyHostContextStyles(app);
         setConnected(true);
       },
@@ -181,6 +169,8 @@ function Shell(): ReactElement {
     );
     return () => {
       cancelled = true;
+      stopResize?.();
+      void transport.close();
     };
   }, []);
 
