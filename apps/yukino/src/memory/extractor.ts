@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   readdirSync,
   readFileSync,
@@ -27,7 +5,6 @@ import {
   mkdirSync,
   writeFileSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import { join, basename } from "node:path";
 
 import yaml from "js-yaml";
@@ -39,6 +16,7 @@ import { extractWrittenPaths } from "./written-paths.js";
 import { Agent } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
+import { projectPath, yukinoPath } from "@/storage/paths.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { GlobTool } from "@/tools/glob.js";
@@ -46,6 +24,7 @@ import { GrepTool } from "@/tools/grep.js";
 import { ReadFileTool } from "@/tools/read-file.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { WriteFileTool } from "@/tools/write-file.js";
+import { asErrorString } from "@/utils/index.js";
 
 /** A memory block parsed from LLM streamed text (MEMORY_NAME/MEMORY_TYPE/MEMORY_DESC/MEMORY_BODY). */
 interface ParsedTextMemory {
@@ -66,13 +45,13 @@ interface ParsedTextMemory {
  */
 export class MemoryExtractor {
   private client: LLMClient;
-  private workDir: string;
+  private cwd: string;
   private inProgress = false;
   private pendingContext: string | null = null;
 
-  constructor(client: LLMClient, workDir: string) {
+  constructor(client: LLMClient, cwd: string) {
     this.client = client;
-    this.workDir = workDir;
+    this.cwd = cwd;
   }
 
   async extract(conversationSummary: string): Promise<string[]> {
@@ -86,28 +65,37 @@ export class MemoryExtractor {
   private async runExtraction(conversationSummary: string): Promise<string[]> {
     this.inProgress = true;
     let result: string[] = [];
+    let failure: unknown;
 
     try {
       result = await this.doExtract(conversationSummary);
+    } catch (err) {
+      failure = err;
     } finally {
       this.inProgress = false;
       const pending = this.pendingContext;
       this.pendingContext = null;
       if (pending !== null) {
-        const trailingResult = await this.runExtraction(pending);
-        result = [...result, ...trailingResult];
+        try {
+          const trailingResult = await this.runExtraction(pending);
+          result = [...result, ...trailingResult];
+        } catch (err) {
+          failure ??= err;
+        }
       }
     }
 
+    if (failure !== undefined) {
+      throw failure instanceof Error
+        ? failure
+        : new Error(asErrorString(failure));
+    }
     return result;
   }
 
   /** Scan existing memory files and build a manifest for LLM deduplication */
   private scanExistingMemories(): string {
-    const dirs = [
-      join(this.workDir, ".yukino", "memory"),
-      join(homedir(), ".yukino", "memory"),
-    ];
+    const dirs = [projectPath(this.cwd, "memory"), yukinoPath("memory")];
     const entries: string[] = [];
 
     for (const dir of dirs) {
@@ -121,8 +109,13 @@ export class MemoryExtractor {
         for (const file of files) {
           try {
             const content = readFileSync(join(dir, file), "utf-8");
-            const typeMatch = /type:\s*(.+)/.exec(content);
-            const descMatch = /description:\s*(.+)/.exec(content);
+            // Line-anchored with optional indent: matches both top-level
+            // `type:` (fallback writer) and nested `  type:` (prompt format),
+            // without matching words like "prototype:" inside body text.
+            const typeMatch = /^\s*type:\s*"?([^"\n]+?)"?\s*$/m.exec(content);
+            const descMatch = /^\s*description:\s*"?([^"\n]+?)"?\s*$/m.exec(
+              content,
+            );
             const type = typeMatch?.[1]?.trim() ?? "reference";
             const desc = descMatch?.[1]?.trim() ?? "";
             entries.push(`- [${type}] ${file}: ${desc}`);
@@ -140,8 +133,8 @@ export class MemoryExtractor {
 
   private buildExtractionPrompt(conversationSummary: string): string {
     const manifest = this.scanExistingMemories();
-    const projectMemDir = join(this.workDir, ".yukino", "memory");
-    const userMemDir = join(homedir(), ".yukino", "memory");
+    const projectMemDir = projectPath(this.cwd, "memory");
+    const userMemDir = yukinoPath("memory");
 
     return [
       "# Task",
@@ -176,7 +169,6 @@ export class MemoryExtractor {
   private async doExtract(conversationSummary: string): Promise<string[]> {
     const extractionPrompt = this.buildExtractionPrompt(conversationSummary);
 
-    // Build the child agent tool registry (file-operation tools only)
     const subRegistry = new ToolRegistry();
     subRegistry.register(new ReadFileTool());
     subRegistry.register(new WriteFileTool());
@@ -184,7 +176,7 @@ export class MemoryExtractor {
     subRegistry.register(new GlobTool());
     subRegistry.register(new GrepTool());
 
-    const subChecker = new MemoryPermissionChecker(this.workDir);
+    const subChecker = new MemoryPermissionChecker(this.cwd);
 
     const forkedConv = new ConversationManager();
     forkedConv.addUserMessage(extractionPrompt);
@@ -194,7 +186,7 @@ export class MemoryExtractor {
       registry: subRegistry,
       checker: subChecker,
       conversation: forkedConv,
-      workDir: this.workDir,
+      cwd: this.cwd,
       fileStateCache: new FileStateCache(),
       maxIterations: 5,
     });
@@ -205,10 +197,12 @@ export class MemoryExtractor {
     // blocks directly).
     let streamedText = "";
     for await (const event of subagent.run()) {
+      if (event.type === "error") {
+        throw event.error;
+      }
       if (event.type === "stream_text") {
         streamedText += event.text;
       }
-      // drain
     }
 
     // Fast path: LLM wrote memory files directly using WriteFile/EditFile tools
@@ -217,14 +211,14 @@ export class MemoryExtractor {
 
     let saved: string[];
     if (memoryPaths.length > 0) {
-      saved = memoryPaths.map((p) => basename(p));
+      saved = memoryPaths.map((p) => basename(p, ".md"));
     } else {
       // Fallback path: LLM emitted MEMORY_NAME/... text blocks directly; parse locally and persist
       saved = this.persistTextMemories(streamedText);
     }
 
     if (saved.length > 0) {
-      const mgr = new MemoryManager(this.workDir);
+      const mgr = new MemoryManager(this.cwd);
       mgr.rebuildIndex();
     }
 
@@ -248,7 +242,7 @@ export class MemoryExtractor {
       const dir = this.dirForMemoryType(mem.type);
       const filePath = join(dir, `${mem.name}.md`);
       if (
-        new MemoryPermissionChecker(this.workDir).check("WriteFile", "write", {
+        new MemoryPermissionChecker(this.cwd).check("WriteFile", "write", {
           file_path: filePath,
         }).effect !== "allow"
       ) {
@@ -299,6 +293,14 @@ export class MemoryExtractor {
       const bodyMatch = /^MEMORY_BODY:\s?(.*)$/i.exec(line);
 
       if (nameMatch) {
+        if (mem.name) {
+          // Malformed block carrying a second record: reset the accumulated
+          // fields instead of merging them across the two records.
+          mem.type = "";
+          mem.description = "";
+          mem.body = "";
+          bodyLines.length = 0;
+        }
         mem.name = nameMatch[1].trim();
         inBody = false;
       } else if (typeMatch) {
@@ -308,6 +310,11 @@ export class MemoryExtractor {
         mem.description = descMatch[1].trim();
         inBody = false;
       } else if (bodyMatch) {
+        if (mem.body !== "" || bodyLines.length > 0) {
+          // A second MEMORY_BODY starts a new body: the previous body's
+          // continuation lines belong to it, not to this one.
+          bodyLines.length = 0;
+        }
         mem.body = bodyMatch[1];
         inBody = true;
       } else if (inBody) {
@@ -333,9 +340,9 @@ export class MemoryExtractor {
   private dirForMemoryType(type: string): string {
     const t = type.toLowerCase();
     if (t === "user" || t === "feedback") {
-      return join(homedir(), ".yukino", "memory");
+      return yukinoPath("memory");
     }
-    return join(this.workDir, ".yukino", "memory");
+    return projectPath(this.cwd, "memory");
   }
 
   /** Format a memory file: frontmatter (name/description/type) + body */

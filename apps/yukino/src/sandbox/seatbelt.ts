@@ -1,28 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+import { existsSync, realpathSync } from "node:fs";
 
-import { existsSync, statSync } from "node:fs";
+import type {
+  Sandbox,
+  SandboxConfig,
+  SandboxExecutionContext,
+} from "./index.js";
 
-import type { Sandbox, SandboxConfig } from "./index.js";
+import { resolveToolPath } from "@/utils/paths.js";
 
 // Hardcoded path to prevent PATH injection attacks
 const SANDBOX_EXEC_PATH = "/usr/bin/sandbox-exec";
@@ -41,12 +25,51 @@ export class SeatbeltSandbox implements Sandbox {
   prepare(
     command: string,
     config: SandboxConfig,
+    context: SandboxExecutionContext,
   ): { executable: string; args: string[] } {
     return {
       executable: SANDBOX_EXEC_PATH,
-      args: ["-p", buildProfile(config), "bash", "-c", command],
+      args: [
+        "-p",
+        buildProfile({
+          ...config,
+          allowWrite: config.allowWrite.map((path) =>
+            resolveToolPath(context.cwd, path),
+          ),
+          denyWrite: config.denyWrite.map((path) =>
+            resolveToolPath(context.cwd, path),
+          ),
+        }),
+        "bash",
+        "-c",
+        command,
+      ],
     };
   }
+}
+
+/**
+ * Expands a configured path to every form the kernel may report for it.
+ * seatbelt matches canonical paths, so symlinked spellings (e.g. "/tmp" for
+ * "/private/tmp", "/var/folders/..." for "/private/var/folders/...") never
+ * hit a rule written against the symlink. Emitting both forms keeps rules
+ * effective however the caller spelled the path.
+ */
+function pathVariants(path: string): string[] {
+  const variants = new Set<string>([path]);
+  try {
+    variants.add(realpathSync(path));
+  } catch {
+    // Path may not exist yet; the original form is still emitted.
+  }
+  return [...variants];
+}
+
+function quoteProfileString(value: string): string {
+  if (/\0|[\r\n]/u.test(value)) {
+    throw new Error("Seatbelt paths cannot contain NUL or newline characters");
+  }
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
 /**
@@ -60,28 +83,29 @@ function buildProfile(config: SandboxConfig): string {
   lines.push("(version 1)");
   lines.push("(deny default)");
 
-  // Allow process execution and forking
   lines.push("(allow process-exec)");
   lines.push("(allow process-fork)");
-  // Allow reading system control parameters
   lines.push("(allow sysctl-read)");
-  // Allow reading the entire filesystem
   lines.push('(allow file-read* (subpath "/"))');
 
-  // Grant write access for allowed paths
   for (const path of config.allowWrite) {
-    lines.push(`(allow file-write* (subpath "${path}"))`);
+    for (const variant of pathVariants(path)) {
+      lines.push(
+        `(allow file-write* (subpath ${quoteProfileString(variant)}))`,
+      );
+    }
   }
 
-  // Deny write access for denied paths; seatbelt evaluates later rules with higher priority.
-  // Use 'literal' for exact file matching, 'subpath' for directory prefix matching.
+  // Deny both the exact path and every descendant. Emitting both forms avoids
+  // a build-time existence check whose result can become stale before launch.
   for (const path of config.denyWrite) {
-    const matcher =
-      existsSync(path) && statSync(path).isDirectory() ? "subpath" : "literal";
-    lines.push(`(deny file-write* (${matcher} "${path}"))`);
+    for (const variant of pathVariants(path)) {
+      const quoted = quoteProfileString(variant);
+      lines.push(`(deny file-write* (literal ${quoted}))`);
+      lines.push(`(deny file-write* (subpath ${quoted}))`);
+    }
   }
 
-  // Network access control
   if (config.networkEnabled) {
     lines.push("(allow network*)");
   } else {

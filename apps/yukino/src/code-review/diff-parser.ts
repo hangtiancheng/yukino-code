@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { FileDiff, Hunk, HunkLine } from "./types.js";
 
 /**
@@ -28,7 +6,6 @@ import type { FileDiff, Hunk, HunkLine } from "./types.js";
  * raw diff text.
  */
 
-const DIFF_HEADER_RE = /^diff --git a\/(.+?) b\/(.+)$/;
 const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
 /** Split diff text on "\n" and drop the "\r" CRLF conversion leaves behind. */
@@ -95,19 +72,86 @@ export function unquoteGitPath(raw: string): string {
   return out;
 }
 
+function readQuotedPath(raw: string): { path: string; rest: string } | null {
+  for (let end = 1; end < raw.length; end++) {
+    if (raw[end] === "\\") {
+      end++;
+    } else if (raw[end] === '"') {
+      return {
+        path: unquoteGitPath(raw.slice(0, end + 1)),
+        rest: raw.slice(end + 1),
+      };
+    }
+  }
+  return null;
+}
+
 function parseDiffHeaderLine(
   line: string,
 ): { oldPath: string; newPath: string } | null {
-  const m = DIFF_HEADER_RE.exec(line);
-  if (m) {
-    return { oldPath: m[1], newPath: m[2] };
+  const prefix = "diff --git ";
+  if (!line.startsWith(prefix)) {
+    return null;
   }
-  // Quoted-side header: `diff --git "a/x\ty" "b/x\ty"`.
-  const q = /^diff --git "?a\/(.+?)"? "?b\/(.+?)"?$/.exec(line);
-  if (q && (line.includes('"') || line.includes("\\"))) {
-    return { oldPath: unquoteGitPath(q[1]), newPath: unquoteGitPath(q[2]) };
+
+  const body = line.slice(prefix.length);
+  const quote = body.indexOf('"');
+  if (quote >= 0) {
+    let oldPath: string;
+    let newRaw: string;
+    if (quote === 0) {
+      const first = readQuotedPath(body);
+      if (!first?.rest.startsWith(" ")) {
+        return null;
+      }
+      oldPath = first.path;
+      newRaw = first.rest.slice(1);
+    } else {
+      if (body[quote - 1] !== " ") {
+        return null;
+      }
+      oldPath = body.slice(0, quote - 1);
+      newRaw = body.slice(quote);
+    }
+    let newPath = newRaw;
+    if (newRaw.startsWith('"')) {
+      const second = readQuotedPath(newRaw);
+      if (!second || second.rest) {
+        return null;
+      }
+      newPath = second.path;
+    }
+    if (!oldPath.startsWith("a/") || !newPath.startsWith("b/")) {
+      return null;
+    }
+    return { oldPath: oldPath.slice(2), newPath: newPath.slice(2) };
   }
-  return null;
+
+  if (!body.startsWith("a/")) {
+    return null;
+  }
+  const paths = body.slice(2);
+  const delimiter = " b/";
+  const candidates: number[] = [];
+  for (
+    let index = paths.indexOf(delimiter);
+    index >= 0;
+    index = paths.indexOf(delimiter, index + delimiter.length)
+  ) {
+    candidates.push(index);
+  }
+  const split =
+    candidates.find(
+      (index) =>
+        paths.slice(0, index) === paths.slice(index + delimiter.length),
+    ) ?? candidates.at(-1);
+  if (split === undefined) {
+    return null;
+  }
+  return {
+    oldPath: paths.slice(0, split),
+    newPath: paths.slice(split + delimiter.length),
+  };
 }
 
 /** Parse the `@@ ... @@` blocks of one file's diff text. */

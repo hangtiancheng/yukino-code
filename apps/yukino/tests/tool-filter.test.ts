@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { describe, it, expect } from "vitest";
 
 import {
@@ -62,6 +40,19 @@ const ALL = [
 ];
 
 describe("main-agent-only tool policy", () => {
+  it("treats a wildcard mixed with named tools as unrestricted rather than hiding other tools", () => {
+    const registry = filterToolsForAgent(
+      buildRegistry(["ReadFile", "Grep", "Bash"]),
+      ["*", "ReadFile"],
+      undefined,
+      false,
+    );
+    expect(registry.listTools().map((tool) => tool.name)).toEqual([
+      "ReadFile",
+      "Grep",
+      "Bash",
+    ]);
+  });
   it("keeps MAIN_AGENT_ONLY_TOOLS inside the subagent disallow list", () => {
     for (const name of MAIN_AGENT_ONLY_TOOLS) {
       expect(SUBAGENT_DISALLOWED_TOOLS.has(name)).toBe(true);
@@ -75,15 +66,13 @@ describe("main-agent-only tool policy", () => {
     for (const name of ["ComputerUse", "AskUserQuestion", "ExitPlanMode"]) {
       expect(names.has(name)).toBe(false);
     }
-    // A fork is the leader's own extension: coordination (TaskStop) and delegation
-    // (Agent, re-tagged as a fork) stay available; only the main-thread-only set
-    // is stripped.
+    // TaskStop is scoped to owned background tasks; Agent delegates without team authority.
     for (const name of ["TaskStop", "Agent", "ReadFile", "Bash"]) {
       expect(names.has(name)).toBe(true);
     }
   });
 
-  it("strips main-agent-only tools plus Agent and TaskStop from defined subagents", () => {
+  it("strips main-agent-only tools plus Agent from defined subagents", () => {
     const filtered = filterToolsForAgent(
       buildRegistry(ALL),
       ["*"],
@@ -97,11 +86,10 @@ describe("main-agent-only tool policy", () => {
       "AskUserQuestion",
       "ExitPlanMode",
       "Agent",
-      "TaskStop",
     ]) {
       expect(names.has(name)).toBe(false);
     }
-    for (const name of ["ReadFile", "Bash"]) {
+    for (const name of ["ReadFile", "Bash", "TaskStop"]) {
       expect(names.has(name)).toBe(true);
     }
   });

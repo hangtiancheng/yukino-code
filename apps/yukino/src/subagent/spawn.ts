@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { AgentDefinition } from "./definition.js";
 import { formatAgentTaskNotification, TaskManager } from "./task-manager.js";
 import { filterToolsForAgent } from "./tool-filter.js";
@@ -61,6 +39,7 @@ export type SubagentProgressEvent =
 export type AgentEventSink = (event: SubagentProgressEvent) => void;
 
 export interface SubagentRunOptions {
+  agentName?: string;
   abortSignal?: AbortSignal;
   background?: boolean;
   onPermissionRequest?: AgentConfig["onPermissionRequest"];
@@ -71,9 +50,7 @@ export interface SubagentRunOptions {
    * In-process teammate turns pass false: a teammate loop is one run per task
    * turn, so the turn-end stopAll() would immediately kill anything the
    * teammate backgrounded, and the drain disappears before any notification
-   * could be delivered. Teammates stay purely foreground (matching the
-   * subprocess teammate path); neither path exposes the Agent tool, so a
-   * teammate never has subagents of its own.
+   * could be delivered. Teammates stay purely foreground and do not expose the Agent tool.
    */
   backgroundTasks?: boolean;
 }
@@ -84,7 +61,7 @@ export async function spawnSubagent(
   parentClient: LLMClient,
   parentRegistry: ToolRegistry,
   parentProvider: ProviderConfig,
-  workDir: string,
+  cwd: string,
   onProgress?: (p: { turn?: number; lastTool?: string }) => void,
   onEvent?: AgentEventSink,
   modelOverride?: string,
@@ -93,10 +70,9 @@ export async function spawnSubagent(
 ): Promise<string> {
   options.abortSignal?.throwIfAborted();
   // Determine the model: call-level override > definition-level model > parent Agent's model
-
   const effectiveModel = modelOverride ?? definition.model;
   const resolvedModel = effectiveModel ?? parentProvider.model;
-  const env = detectEnvironment(workDir);
+  const env = detectEnvironment(cwd);
   env.model = resolvedModel;
   const systemPrompt =
     definition.systemPromptOverride ?? buildSystemPrompt(env);
@@ -121,48 +97,43 @@ export async function spawnSubagent(
         definition.disallowedTools,
         options.background ?? false,
       );
-  // When a teammate runs in plan mode, the checker is created and held by the team layer:
-  // after approval passes, the mode must be switched back to default in place. If the checker
-  // were only instantiated here, the team layer would have no handle to modify it.
-  const permMode =
-    options.permissionMode === "plan"
-      ? "plan"
-      : (definition.permissionMode ?? options.permissionMode ?? "acceptEdits");
-  const checker = checkerOverride ?? new PermissionChecker(workDir, permMode);
-  const conversation = options.conversation ?? new ConversationManager();
-  conversation.addSystemReminder(buildSubagentInstructions(definition));
-  conversation.addUserMessage(prompt);
-
-  // Per-run background task registry: Bash commands backgrounded inside this
-  // subagent register here and notify this subagent's own loop (via
-  // notificationFn below), not the main thread. Null when the caller opted out
-  // (in-process teammate turns) — the explicit null also blocks the tools'
-  // fallback to their host-wired instance manager.
   const taskManager =
     options.backgroundTasks === false ? null : new TaskManager();
-
-  const agent = new Agent({
-    client,
-    registry,
-    checker,
-    conversation,
-    workDir,
-    maxIterations: definition.maxTurns ?? 200,
-    abortSignal: options.abortSignal,
-    onPermissionRequest: options.onPermissionRequest,
-    fileStateCache: new FileStateCache(),
-    instructions: loadInstructions(workDir),
-    contextWindow: getContextWindow(provider),
-    maxOutput: getMaxOutputTokens(provider),
-    taskManager,
-    notificationFn: taskManager
-      ? () => taskManager.drainNotifications().map(formatAgentTaskNotification)
-      : undefined,
-  });
-
   let output = "";
   let turn = 0;
   try {
+    const inheritedChecker =
+      checkerOverride ?? new PermissionChecker(cwd, options.permissionMode);
+    const checker = inheritedChecker.teammate
+      ? inheritedChecker.forCwd(cwd)
+      : inheritedChecker.forSubagent(cwd, definition.permissionMode);
+    const conversation = options.conversation ?? new ConversationManager();
+    if (!options.conversation || conversation.getMessages().length === 0) {
+      conversation.addSystemReminder(buildSubagentInstructions(definition));
+    }
+    conversation.addUserMessage(prompt);
+
+    const agent = new Agent({
+      agentName: options.agentName ?? definition.name,
+      client,
+      registry,
+      checker,
+      conversation,
+      cwd,
+      maxIterations: definition.maxTurns ?? 200,
+      abortSignal: options.abortSignal,
+      onPermissionRequest: options.onPermissionRequest,
+      fileStateCache: new FileStateCache(),
+      instructions: loadInstructions(cwd),
+      contextWindow: getContextWindow(provider),
+      maxOutput: getMaxOutputTokens(provider),
+      taskManager,
+      notificationFn: taskManager
+        ? () =>
+            taskManager.drainNotifications().map(formatAgentTaskNotification)
+        : undefined,
+    });
+
     for await (const event of agent.run()) {
       switch (event.type) {
         case "stream_text":
@@ -214,6 +185,12 @@ export async function spawnSubagent(
     // itself is synchronous, but the runners' post-kill cleanup (sandbox
     // teardown, output-file unlink) and Windows' async taskkill would
     // otherwise race a prompt process exit.
-    await taskManager?.stopAll();
+    try {
+      await taskManager?.stopAll();
+    } finally {
+      if (!options.conversation) {
+        await registry.dispose();
+      }
+    }
   }
 }

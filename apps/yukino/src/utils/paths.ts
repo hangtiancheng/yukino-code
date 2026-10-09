@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import {
@@ -31,6 +9,16 @@ import {
   resolve,
   sep,
 } from "node:path";
+
+export function resolveToolPath(cwd: string, path: string): string {
+  const expanded =
+    path === "~"
+      ? homedir()
+      : path.startsWith("~/") || (sep === "\\" && path.startsWith("~\\"))
+        ? join(homedir(), path.slice(2))
+        : path;
+  return resolve(cwd, expanded);
+}
 
 /** Resolve symlinks even when the final file or some parent directories do not exist yet. */
 export function canonicalPath(path: string): string {
@@ -67,9 +55,13 @@ export function isPathWithin(root: string, path: string): boolean {
 
 export function compactPath(path: string): string {
   const home = homedir();
-  return path === home
-    ? "~"
-    : path.startsWith(`${home}/`)
-      ? `~/${path.slice(home.length + 1)}`
-      : path;
+  const homeRelative = relative(home, path);
+  if (homeRelative === "") {
+    return "~";
+  }
+  return !homeRelative.startsWith(`..${sep}`) &&
+    homeRelative !== ".." &&
+    !isAbsolute(homeRelative)
+    ? join("~", homeRelative)
+    : path;
 }

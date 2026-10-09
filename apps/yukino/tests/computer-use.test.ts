@@ -1,32 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { writeFile } from "node:fs/promises";
+import { access, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { dirname } from "node:path";
 
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { runExitCleanups } from "@/bootstrap/exit-cleanup.js";
 import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { AnthropicClient } from "@/llm/anthropic.js";
@@ -39,12 +19,17 @@ import {
 import { TaskList } from "@/todo/index.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import {
+  WINDOWS_PWSH_ACTION_SNIPPET,
+  WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+} from "@/tools/snippets.js";
 import type { ToolContext } from "@/tools/types.js";
 import { asRecord } from "@/utils/index.js";
 
-const context: ToolContext = { workDir: tmpdir() };
+const context: ToolContext = { cwd: tmpdir() };
 
 afterEach(() => {
+  runExitCleanups();
   vi.unstubAllGlobals();
 });
 
@@ -88,6 +73,138 @@ describe("ComputerUseTool", () => {
     expect(runCommand).not.toHaveBeenCalled();
   });
 
+  it("compiles the Windows helper once and runs every action in its own process", async () => {
+    const calls: {
+      args: readonly string[];
+      command: string;
+      options?: {
+        env?: NodeJS.ProcessEnv;
+        signal?: AbortSignal;
+        timeoutMs?: number;
+      };
+    }[] = [];
+    const runCommand = vi.fn(
+      (
+        command: string,
+        args: readonly string[],
+        options?: {
+          env?: NodeJS.ProcessEnv;
+          signal?: AbortSignal;
+          timeoutMs?: number;
+        },
+      ) => {
+        calls.push({ command, args, options });
+        return Promise.resolve({
+          code: 0,
+          stdout: Buffer.alloc(0),
+          stderr: "",
+        });
+      },
+    );
+    const controller = new AbortController();
+    const windowsContext = { ...context, abortSignal: controller.signal };
+    const tool = new ComputerUseTool({ platform: "win32", runCommand });
+
+    const first = await tool.execute(windowsContext, {
+      action: "mouse_move",
+      coordinate: [10, 20],
+    });
+    const second = await tool.execute(windowsContext, {
+      action: "key",
+      keys: ["CTRL", "S"],
+    });
+
+    expect(first.isError).toBe(false);
+    expect(second.isError).toBe(false);
+    expect(calls).toHaveLength(3);
+    expect(calls.map(({ args }) => args.at(-1))).toEqual([
+      WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+      WINDOWS_PWSH_ACTION_SNIPPET,
+      WINDOWS_PWSH_ACTION_SNIPPET,
+    ]);
+    for (const call of calls) {
+      expect(call.command).toBe("powershell.exe");
+      expect(call.args.slice(0, 4)).toEqual([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Sta",
+        "-Command",
+      ]);
+      expect(call.options?.signal).toBe(controller.signal);
+    }
+    const assemblyPath = z
+      .string()
+      .parse(calls[0]?.options?.env?.YUKINO_COMPUTER_ASSEMBLY);
+    expect(calls[0]?.options?.timeoutMs).toBe(120_000);
+    expect(calls.slice(1).map(({ options }) => options?.timeoutMs)).toEqual([
+      15_000, 15_000,
+    ]);
+    expect(
+      calls
+        .slice(1)
+        .map(({ options }) => options?.env?.YUKINO_COMPUTER_ASSEMBLY),
+    ).toEqual([assemblyPath, assemblyPath]);
+  });
+
+  it("cleans up and retries Windows helper compilation after failure", async () => {
+    const calls: {
+      args: readonly string[];
+      options?: { env?: NodeJS.ProcessEnv };
+    }[] = [];
+    const runCommand = vi.fn(
+      (
+        _command: string,
+        args: readonly string[],
+        options?: { env?: NodeJS.ProcessEnv },
+      ) => {
+        calls.push({ args, options });
+        return Promise.resolve(
+          calls.length === 1
+            ? {
+                code: 1,
+                stdout: Buffer.alloc(0),
+                stderr: "compile failed",
+              }
+            : { code: 0, stdout: Buffer.alloc(0), stderr: "" },
+        );
+      },
+    );
+    const tool = new ComputerUseTool({ platform: "win32", runCommand });
+
+    const failed = await tool.execute(context, {
+      action: "mouse_move",
+      coordinate: [10, 20],
+    });
+    const failedAssemblyPath = z
+      .string()
+      .parse(calls[0]?.options?.env?.YUKINO_COMPUTER_ASSEMBLY);
+
+    expect(failed.isError).toBe(true);
+    expect(failed.output).toContain("compile failed");
+    await expect(access(dirname(failedAssemblyPath))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    const retried = await tool.execute(context, {
+      action: "key",
+      keys: ["ENTER"],
+    });
+    const retriedAssemblyPath = z
+      .string()
+      .parse(calls[1]?.options?.env?.YUKINO_COMPUTER_ASSEMBLY);
+
+    expect(retried.isError).toBe(false);
+    expect(calls.map(({ args }) => args.at(-1))).toEqual([
+      WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+      WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+      WINDOWS_PWSH_ACTION_SNIPPET,
+    ]);
+    expect(retriedAssemblyPath).not.toBe(failedAssemblyPath);
+    expect(calls[2]?.options?.env?.YUKINO_COMPUTER_ASSEMBLY).toBe(
+      retriedAssemblyPath,
+    );
+  });
+
   it("normalizes OpenAI click actions for the Linux backend", async () => {
     const runCommand = vi.fn(() =>
       Promise.resolve({ code: 0, stdout: Buffer.alloc(0), stderr: "" }),
@@ -112,6 +229,50 @@ describe("ComputerUseTool", () => {
       2,
       "xdotool",
       ["click", "--repeat", "1", "--delay", "80", "3"],
+      expect.objectContaining({}),
+    );
+  });
+
+  it("terminates xdotool options before model-provided key names", async () => {
+    const runCommand = vi.fn(() =>
+      Promise.resolve({ code: 0, stdout: Buffer.alloc(0), stderr: "" }),
+    );
+    const tool = new ComputerUseTool({ platform: "linux", runCommand });
+
+    expect(
+      (
+        await tool.execute(context, {
+          action: "key",
+          keys: ["--clearmodifiers"],
+        })
+      ).isError,
+    ).toBe(false);
+    expect(
+      (
+        await tool.execute(context, {
+          action: "hold_key",
+          keys: ["--sync"],
+          duration: 0,
+        })
+      ).isError,
+    ).toBe(false);
+
+    expect(runCommand).toHaveBeenNthCalledWith(
+      1,
+      "xdotool",
+      ["key", "--", "--clearmodifiers"],
+      expect.objectContaining({}),
+    );
+    expect(runCommand).toHaveBeenNthCalledWith(
+      2,
+      "xdotool",
+      ["keydown", "--", "--sync"],
+      expect.objectContaining({}),
+    );
+    expect(runCommand).toHaveBeenNthCalledWith(
+      3,
+      "xdotool",
+      ["keyup", "--", "--sync"],
       expect.objectContaining({}),
     );
   });

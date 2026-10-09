@@ -1,28 +1,7 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import OpenAI from "openai";
+import { z } from "zod";
 
-import type { LLMClient } from "./client.js";
+import type { LLMClient, LLMStreamOptions } from "./client.js";
 import {
   AuthenticationError,
   containsContextLengthError,
@@ -30,8 +9,9 @@ import {
   LLMError,
   NetworkError,
   RateLimitError,
+  ServerError,
 } from "./errors.js";
-import type { StreamEvent } from "./events.js";
+import { parseToolArguments, type StreamEvent } from "./events.js";
 
 import { resolveAPIKey } from "@/config/index.js";
 import {
@@ -51,7 +31,7 @@ import type {
 } from "@/conversation/index.js";
 import { ensureToolPairing } from "@/conversation/pairing.js";
 import { createChildLogger } from "@/logger/index.js";
-import type { ProviderToolSchema, ToolSchema } from "@/tools/types.js";
+import type { ProviderToolSchema } from "@/tools/types.js";
 import {
   asRecord,
   asString,
@@ -62,14 +42,57 @@ import {
 
 const log = createChildLogger({ module: "llm" });
 
+const ComputerPointSchema = z.object({ x: z.number(), y: z.number() });
+const ComputerModifierKeysSchema = z.array(z.string()).nullable().optional();
+const ComputerActionSchema = z
+  .discriminatedUnion("type", [
+    z.object({
+      type: z.literal("click"),
+      ...ComputerPointSchema.shape,
+      button: z
+        .enum(["left", "right", "wheel", "back", "forward"])
+        .default("left"),
+      keys: ComputerModifierKeysSchema,
+    }),
+    z.object({
+      type: z.literal("double_click"),
+      ...ComputerPointSchema.shape,
+      keys: z.array(z.string()).nullable().default(null),
+    }),
+    z.object({
+      type: z.literal("drag"),
+      path: z.array(ComputerPointSchema),
+      keys: ComputerModifierKeysSchema,
+    }),
+    z.object({ type: z.literal("keypress"), keys: z.array(z.string()) }),
+    z.object({
+      type: z.literal("move"),
+      ...ComputerPointSchema.shape,
+      keys: ComputerModifierKeysSchema,
+    }),
+    z.object({ type: z.literal("screenshot") }),
+    z.object({
+      type: z.literal("scroll"),
+      ...ComputerPointSchema.shape,
+      scrollX: z.number().default(0),
+      scrollY: z.number().default(0),
+      keys: ComputerModifierKeysSchema,
+    }),
+    z.object({ type: z.literal("type"), text: z.string() }),
+    z.object({ type: z.literal("wait") }),
+  ])
+  .transform((action): OpenAI.Responses.ComputerAction => {
+    if (action.type !== "scroll") {
+      return action;
+    }
+    const { scrollX, scrollY, ...rest } = action;
+    return { ...rest, scroll_x: scrollX, scroll_y: scrollY };
+  });
+
 enum OpenAIErrorCode {
-  /** 413 Payload Too Large — The request entity is larger than the server is willing or able to process. */
   PromptTooLong = 413,
-  /** 401 Unauthorized — The request lacks valid authentication credentials. */
   InvalidAPIKey = 401,
-  /** 429 Too Many Requests — The client has sent too many requests in a given amount of time, triggering rate limiting. */
   RateLimitError = 429,
-  /** 400 Bad Request — The request was invalid or malformed. */
   BadRequest = 400,
 }
 
@@ -124,14 +147,12 @@ function toOpenAIResponsesTool(
   schema: ProviderToolSchema,
 ): OpenAI.Responses.Tool {
   if ("input_schema" in schema) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const tool = schema as ToolSchema;
     return {
       type: "function",
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.input_schema,
-      strict: tool.strict ?? false,
+      name: schema.name,
+      description: schema.description,
+      parameters: schema.input_schema,
+      strict: schema.strict ?? false,
     };
   }
   if (
@@ -150,15 +171,13 @@ function toOpenAICompatTool(
   schema: ProviderToolSchema,
 ): OpenAI.ChatCompletionFunctionTool {
   if ("input_schema" in schema) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const tool = schema as ToolSchema;
     return {
       type: "function",
       function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.input_schema,
-        strict: tool.strict ?? false,
+        name: schema.name,
+        description: schema.description,
+        parameters: schema.input_schema,
+        strict: schema.strict ?? false,
       },
     };
   }
@@ -202,6 +221,7 @@ export class OpenAIClient implements LLMClient {
     conversation: ConversationManager,
     toolSchemas: ProviderToolSchema[],
     abortSignal?: AbortSignal,
+    options?: LLMStreamOptions,
   ): AsyncGenerator<StreamEvent> {
     // Reconcile tool-call/result pairing before sending the request, for the same reasons as the Anthropic branch
     const messages = buildOpenAIInput(
@@ -225,7 +245,13 @@ export class OpenAIClient implements LLMClient {
       model: this.model,
       input,
       stream: true,
-      max_output_tokens: this.maxOutputTokens,
+      max_output_tokens:
+        options?.maxOutputTokens === undefined
+          ? this.maxOutputTokens
+          : getMaxOutputTokens({
+              ...this.config,
+              max_output_tokens: options.maxOutputTokens,
+            }),
       ...(tools.length > 0 ? { tools } : {}),
       // Only explicit reasoning:false omits the field. Off sends none to defeat
       // server-default reasoning; requesting a summary while off is unnecessary.
@@ -255,6 +281,8 @@ export class OpenAIClient implements LLMClient {
       let jsonAccumulate = "";
       let reasoningId = "";
       let reasoningText = "";
+      let reasoningPartText = "";
+      const startedComputerCalls = new Set<string>();
       let sawTerminalResponse = false;
 
       for await (const event of stream) {
@@ -265,14 +293,20 @@ export class OpenAIClient implements LLMClient {
           };
         } else if (event.type === "response.reasoning_summary_text.delta") {
           reasoningText += event.delta;
+          reasoningPartText += event.delta;
           yield { type: "thinking_delta", text: event.delta };
         } else if (event.type === "response.reasoning_summary_text.done") {
-          yield {
-            type: "thinking_complete",
-            thinking: reasoningText,
-            signature: reasoningId,
-          };
+          if (!reasoningPartText) {
+            reasoningText += event.text;
+            yield { type: "thinking_delta", text: event.text };
+          }
+          reasoningPartText = "";
         } else if (event.type === "response.function_call_arguments.delta") {
+          if (!currentToolId || !currentToolName) {
+            throw new NetworkError(
+              "Responses tool arguments arrived before a valid tool call",
+            );
+          }
           jsonAccumulate += event.delta;
           yield {
             type: "tool_call_delta",
@@ -280,6 +314,11 @@ export class OpenAIClient implements LLMClient {
           };
         } else if (event.type === "response.output_item.added") {
           if (event.item.type === "function_call") {
+            if (!event.item.call_id || !event.item.name) {
+              throw new NetworkError(
+                "Responses tool call started without a valid id or name",
+              );
+            }
             currentToolName = event.item.name;
             currentToolId = event.item.call_id;
             jsonAccumulate = "";
@@ -290,6 +329,12 @@ export class OpenAIClient implements LLMClient {
               toolId: currentToolId,
             };
           } else if (event.item.type === "computer_call") {
+            if (!event.item.call_id || !event.item.id) {
+              throw new NetworkError(
+                "Responses computer call started without a valid id",
+              );
+            }
+            startedComputerCalls.add(event.item.call_id);
             yield {
               type: "tool_call_start",
               toolName: "ComputerUse",
@@ -298,31 +343,50 @@ export class OpenAIClient implements LLMClient {
           } else if (event.item.type === "reasoning") {
             reasoningId = event.item.id ?? "";
             reasoningText = "";
+            reasoningPartText = "";
           }
         } else if (event.type === "response.output_item.done") {
-          if (event.item.type === "function_call" && currentToolName) {
-            let args: Record<string, unknown> = {};
-            if (jsonAccumulate) {
-              try {
-                const parsed: unknown = JSON.parse(jsonAccumulate);
-                args = isRecord(parsed) ? asRecord(parsed) : {};
-              } catch (err) {
-                log.error({ err }, "llm operation failed");
-                args = {};
-              }
+          if (event.item.type === "reasoning") {
+            if (reasoningText) {
+              yield {
+                type: "thinking_complete",
+                thinking: reasoningText,
+                signature: reasoningId,
+              };
             }
-
+            reasoningId = "";
+            reasoningText = "";
+            reasoningPartText = "";
+          } else if (event.item.type === "function_call") {
+            if (!currentToolId || !currentToolName) {
+              throw new NetworkError(
+                "Responses tool call completed without a valid start event",
+              );
+            }
+            const parsed = parseToolArguments(
+              jsonAccumulate.trim() ? jsonAccumulate : event.item.arguments,
+            );
             yield {
               type: "tool_call_complete",
               toolId: currentToolId,
               toolName: currentToolName,
-              arguments: args,
+              arguments: parsed.arguments,
+              ...(parsed.parseError ? { parseError: parsed.parseError } : {}),
             };
 
             currentToolName = "";
             currentToolId = "";
             jsonAccumulate = "";
           } else if (event.item.type === "computer_call") {
+            if (
+              !event.item.call_id ||
+              !event.item.id ||
+              !startedComputerCalls.delete(event.item.call_id)
+            ) {
+              throw new NetworkError(
+                "Responses computer call completed without a valid start event",
+              );
+            }
             yield {
               type: "tool_call_complete",
               toolId: event.item.call_id,
@@ -555,22 +619,10 @@ function computerActionsForResponses(
   }
   const actions: OpenAI.Responses.ComputerActionList = [];
   for (const raw of args.actions) {
-    if (!isRecord(raw) || typeof raw.type !== "string") {
-      continue;
+    const parsed = ComputerActionSchema.safeParse(raw);
+    if (parsed.success) {
+      actions.push(parsed.data);
     }
-    if (raw.type === "scroll") {
-      actions.push({
-        type: "scroll",
-        x: Number(raw.x),
-        y: Number(raw.y),
-        scroll_x: Number(raw.scrollX),
-        scroll_y: Number(raw.scrollY),
-        ...(Array.isArray(raw.keys) ? { keys: raw.keys.map(String) } : {}),
-      });
-      continue;
-    }
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    actions.push(raw as unknown as OpenAI.Responses.ComputerAction);
   }
   return actions;
 }
@@ -697,11 +749,14 @@ export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
   for (const m of messages) {
     if (m.thinkingBlocks) {
       for (const tb of m.thinkingBlocks) {
+        if (!tb.signature.startsWith("rs_")) {
+          continue;
+        }
         result.push({
           type: "reasoning",
           id: tb.signature,
           summary: [{ type: "summary_text", text: tb.thinking }],
-        } satisfies OpenAIMessageParam);
+        } satisfies OpenAI.Responses.ResponseReasoningItem);
       }
     }
 
@@ -831,6 +886,7 @@ export class OpenAICompatClient implements LLMClient {
     conversation: ConversationManager,
     toolSchemas: ProviderToolSchema[],
     abortSignal?: AbortSignal,
+    options?: LLMStreamOptions,
   ): AsyncGenerator<StreamEvent> {
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       {
@@ -851,7 +907,13 @@ export class OpenAICompatClient implements LLMClient {
       messages,
       stream: true,
       stream_options: { include_usage: true },
-      max_tokens: this.maxOutputTokens,
+      max_completion_tokens:
+        options?.maxOutputTokens === undefined
+          ? this.maxOutputTokens
+          : getMaxOutputTokens({
+              ...this.config,
+              max_output_tokens: options.maxOutputTokens,
+            }),
       ...(tools.length > 0 ? { tools } : {}),
       // Configured non-reasoning providers omit the field; off otherwise sends
       // none explicitly so a server default cannot silently enable reasoning.
@@ -875,6 +937,8 @@ export class OpenAICompatClient implements LLMClient {
           id: string;
           name: string;
           args: string;
+          /** Whether tool_call_start has been emitted for this call. */
+          started: boolean;
         }
       >();
 
@@ -912,34 +976,40 @@ export class OpenAICompatClient implements LLMClient {
 
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {
-            if (!toolCalls.has(tc.index)) {
-              toolCalls.set(tc.index, {
+            let entry = toolCalls.get(tc.index);
+            if (!entry) {
+              entry = {
                 id: tc.id ?? "",
                 name: tc.function?.name ?? "",
                 args: "",
-              });
-
-              if (tc.id) {
-                yield {
-                  type: "tool_call_start",
-                  toolName: tc.function?.name ?? "",
-                  toolId: tc.id ?? "",
-                };
-              }
+                started: false,
+              };
+              toolCalls.set(tc.index, entry);
             }
 
-            const existing = toolCalls.get(tc.index);
-            if (existing) {
-              if (tc.id) {
-                existing.id = tc.id;
-              }
+            if (tc.id) {
+              entry.id = tc.id;
+            }
+            if (tc.function?.name) {
+              entry.name = tc.function.name;
+            }
 
-              if (tc.function?.name) {
-                existing.name = tc.function.name;
-              }
+            // Emit start as soon as both id and name are known: compat
+            // gateways sometimes deliver the id only in a later delta, and
+            // consumers must never see deltas/complete for a call that never
+            // "started".
+            if (!entry.started && entry.id && entry.name) {
+              entry.started = true;
+              yield {
+                type: "tool_call_start",
+                toolName: entry.name,
+                toolId: entry.id,
+              };
+            }
 
-              if (tc.function?.arguments) {
-                existing.args += tc.function.arguments;
+            if (tc.function?.arguments) {
+              entry.args += tc.function.arguments;
+              if (entry.started) {
                 yield {
                   type: "tool_call_delta",
                   text: tc.function.arguments,
@@ -959,26 +1029,30 @@ export class OpenAICompatClient implements LLMClient {
             };
             reasoningAccumulate = "";
           }
+          const incompleteCall = [...toolCalls.values()].find(
+            (toolCall) => !toolCall.started,
+          );
+          if (incompleteCall) {
+            const missing = [
+              ...(incompleteCall.id ? [] : ["id"]),
+              ...(incompleteCall.name ? [] : ["name"]),
+            ].join(" and ");
+            throw new NetworkError(
+              `Chat Completions tool call ended without a valid ${missing}`,
+            );
+          }
+
           for (const tu of toolCalls.values()) {
-            let args: Record<string, unknown> = {};
-            const jsonArgs = tu.args;
-            if (jsonArgs) {
-              try {
-                const parsed: unknown = JSON.parse(jsonArgs);
-                args = isRecord(parsed) ? asRecord(parsed) : {};
-              } catch (err) {
-                log.error({ err }, "llm operation failed");
-                args = {};
-              }
-            }
-            // Emit unconditionally: some compat servers send "" (or nothing)
-            // instead of "{}" for no-argument tool calls, and gating the
-            // completion on non-empty arguments would silently drop the call.
+            const parsed = parseToolArguments(tu.args);
+            // Empty arguments are a valid no-argument call. Malformed non-empty
+            // JSON carries a parse marker so the executor can pair an error
+            // result without invoking the tool with an invented empty object.
             yield {
               type: "tool_call_complete",
               toolName: tu.name,
               toolId: tu.id,
-              arguments: args,
+              arguments: parsed.arguments,
+              ...(parsed.parseError ? { parseError: parsed.parseError } : {}),
             };
           }
         }
@@ -989,11 +1063,6 @@ export class OpenAICompatClient implements LLMClient {
           "Chat Completions stream ended before a finish reason",
         );
       }
-
-      // Map Chat Completions finish_reason to Yukino's internal stop reason.
-      // "length" means the model hit max_tokens
-      // "tool_calls" — or any accumulated tool call — means tool use;
-      // "stop" (or anything else) means normal end_turn
 
       let stopReason: string;
       if (finishReason === "length") {
@@ -1024,6 +1093,12 @@ function classifyOpenAIError(err: unknown) {
   if (err instanceof LLMError) {
     return err;
   }
+  if (
+    err instanceof OpenAI.APIConnectionError ||
+    err instanceof OpenAI.APIUserAbortError
+  ) {
+    return new NetworkError(`Network error: ${err.message}`);
+  }
   if (err instanceof OpenAI.APIError) {
     if (
       err.status === OpenAIErrorCode.PromptTooLong ||
@@ -1047,6 +1122,15 @@ function classifyOpenAIError(err: unknown) {
       );
     }
 
+    if (err.status !== undefined && (err.status >= 500 || err.status === 408)) {
+      const headers: unknown = err.headers;
+      return new ServerError(
+        `OpenAI API error (${asString(err.status)}): ${err.message}`,
+        headers instanceof Headers
+          ? (headers.get("retry-after") ?? undefined)
+          : undefined,
+      );
+    }
     return new LLMError(
       `OpenAI API error (${asString(err.status)}): ${err.message}`,
     );

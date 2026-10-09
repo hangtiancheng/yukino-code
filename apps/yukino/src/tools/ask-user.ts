@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { safeParseAsync, z } from "zod";
 
 import type {
@@ -39,7 +17,7 @@ export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 
 const QuestionSchema = z.object({
   question: z.string(),
-  header: z.string(),
+  header: z.string().max(12),
   options: z.array(QuestionOptionSchema),
   multiSelect: z.boolean(),
 });
@@ -64,7 +42,7 @@ export class AskUserQuestionTool implements Tool {
   name = "AskUserQuestion";
 
   description = `
-  Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 1 to 4 options; an "Other" option for custom input is added automatically.
+  Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 2 to 4 options; an "Other" option for custom input is added automatically.
   Set multiSelect=true when the user may choose multiple options, or false for one mutually exclusive choice. Ask only for missing information that changes the task; do not re-request authorization already given.
   `;
 
@@ -90,6 +68,7 @@ export class AskUserQuestionTool implements Tool {
               header: {
                 type: "string" as const,
                 description: "Short label/category (<=12 chars)",
+                maxLength: 12,
               },
               options: {
                 type: "array" as const,
@@ -173,6 +152,12 @@ export class AskUserQuestionTool implements Tool {
     }
 
     const answer = await this.ask(questions);
+    if (Object.keys(answer).length === 0) {
+      return {
+        output: "User cancelled or did not answer the questions.",
+        isError: true,
+      };
+    }
     const parts = Object.entries(answer).map(([q, a]) => `"${q}" = "${a}"`);
 
     return {

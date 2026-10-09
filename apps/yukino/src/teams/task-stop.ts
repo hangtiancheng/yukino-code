@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { TeamManager } from "./index.js";
 
 import type { TaskManager } from "@/subagent/task-manager.js";
@@ -42,9 +20,37 @@ export class TaskStopTool implements Tool {
   constructor(
     private teamManager: TeamManager,
     private taskManager?: TaskManager,
-  ) {}
+    private leaderAccess = true,
+  ) {
+    if (!leaderAccess) {
+      this.category = "read";
+      this.description =
+        "Stop one of this agent's own background tasks (Agent, Bash, PowerShell). Pass task_id.";
+    }
+  }
+
+  forSubagent(): TaskStopTool {
+    return new TaskStopTool(this.teamManager, undefined, false);
+  }
 
   schema(): ToolSchema {
+    if (!this.leaderAccess) {
+      return {
+        name: this.name,
+        description: this.description,
+        input_schema: {
+          type: "object",
+          properties: {
+            task_id: {
+              type: "string",
+              description: "ID of this agent's background task",
+            },
+          },
+          required: ["task_id"],
+          additionalProperties: false,
+        },
+      };
+    }
     return {
       name: this.name,
       description: this.description,
@@ -79,15 +85,9 @@ export class TaskStopTool implements Tool {
     }
 
     if (taskId) {
-      // The task registry of the loop running this call takes precedence: a
-      // fork's background tasks live in its per-run manager, and task IDs are
-      // per-manager counters, so the same ID in the constructor-injected
-      // (host-level) manager may be a different task. Fall back to that
-      // injected manager so a fork can still stop tasks it saw in its
-      // pre-fork conversation snapshot.
-      const manager = ctx.taskManager?.get(taskId)
-        ? ctx.taskManager
-        : this.taskManager;
+      // A delegated loop must not cancel tasks belonging to its parent.
+      const manager =
+        ctx.taskManager !== undefined ? ctx.taskManager : this.taskManager;
       const task = manager?.get(taskId);
       if (!task) {
         return {
@@ -103,6 +103,10 @@ export class TaskStopTool implements Tool {
       }
       await manager?.stopAndWait(taskId);
       return { output: `Background task '${taskId}' stopped.`, isError: false };
+    }
+
+    if (!this.leaderAccess) {
+      return { output: "Only the leader can stop teammates.", isError: true };
     }
 
     // Teammate names may collide across teams; only stop within the team that actually has this member to avoid killing a namesake

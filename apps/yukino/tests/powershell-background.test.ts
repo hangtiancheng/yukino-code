@@ -1,38 +1,32 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync as createTempDir, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   formatAgentTaskNotification,
   TaskManager,
 } from "@/subagent/task-manager.js";
 import { PowerShellTool } from "@/tools/powershell.js";
+import { readOutputFile } from "@/tools/shell-background.js";
 import type { ToolContext } from "@/tools/types.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 function pwshAvailable(): boolean {
   if (process.platform === "win32") {
@@ -56,7 +50,7 @@ function pwshAvailable(): boolean {
 const describePwsh = pwshAvailable() ? describe : describe.skip;
 
 function makeContext(): ToolContext {
-  return { workDir: mkdtempSync(join(tmpdir(), "yukino-ps-bg-")) };
+  return { cwd: mkdtempSync(join(tmpdir(), "yukino-ps-bg-")) };
 }
 
 function makeTool(): { ps: PowerShellTool; tasks: TaskManager } {
@@ -71,8 +65,6 @@ function taskIdFrom(output: string): string {
   expect(match, `expected a task_id in: ${output}`).not.toBeNull();
   return match?.[1] ?? "";
 }
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describePwsh("PowerShell background execution", () => {
   it("gates run_in_background on the task manager", () => {
@@ -94,6 +86,32 @@ describePwsh("PowerShell background execution", () => {
     expect(result.output).toContain("PS> ");
     expect(result.output).toContain("ps-fg");
   }, 30_000);
+
+  it.each([0, 7])(
+    "preserves large foreground output and exit code %i without killing the command",
+    async (code) => {
+      const ctx = makeContext();
+      ctx.sessionId = "large-powershell-output";
+      const result = await new PowerShellTool().execute(ctx, {
+        command: `[Console]::Write(('x' * 12000000)); [System.Threading.Thread]::Sleep(1100); [Console]::Write('finished'); exit ${String(code)}`,
+        timeout: 20,
+      });
+      expect(result.isError).toBe(code !== 0);
+      if (code !== 0) {
+        expect(result.output).toContain(`Exit code ${String(code)}`);
+      }
+      expect(result.output).toContain("<persisted-output>");
+      expect(result.output.length).toBeLessThan(10_000);
+      const path = /Full content saved to:\n([^\n]+)/u.exec(result.output)?.[1];
+      expect(path).toBeDefined();
+      if (!path) {
+        throw new Error("Missing persisted output path");
+      }
+      expect(statSync(path).size).toBe(12_000_008);
+      expect(readOutputFile(path, 8, true).text).toBe("finished");
+    },
+    30_000,
+  );
 
   it("runs run_in_background commands as tasks and notifies with the output", async () => {
     const { ps, tasks } = makeTool();
@@ -133,7 +151,6 @@ describePwsh("PowerShell background execution", () => {
 
   it("moves a timed-out command to the background instead of killing it", async () => {
     const { ps, tasks } = makeTool();
-    // Not Start-Sleep: that first token is on the auto-background blocklist.
     const result = await ps.execute(makeContext(), {
       command: "[System.Threading.Thread]::Sleep(1500); Write-Output late-ps",
       timeout: 1,
@@ -148,15 +165,20 @@ describePwsh("PowerShell background execution", () => {
     expect(task?.output).toContain("late-ps");
   }, 30_000);
 
-  it("still kills a bare Start-Sleep on timeout (auto-background blocklist)", async () => {
+  it("also backgrounds a Start-Sleep command on timeout", async () => {
     const { ps, tasks } = makeTool();
     const result = await ps.execute(makeContext(), {
       command: "Start-Sleep 5",
       timeout: 1,
     });
-    expect(result.isError).toBe(true);
-    expect(result.output).toContain("command timed out after 1s");
-    expect(tasks.list()).toHaveLength(0);
+    const task = tasks.get(taskIdFrom(result.output));
+    try {
+      expect(result.isError).toBe(false);
+      expect(result.output).toContain("moved to the background");
+      expect(task?.status).toBe("running");
+    } finally {
+      await tasks.stopAll();
+    }
   }, 30_000);
 
   it("backgrounds running foreground commands on demand (Ctrl+B path)", async () => {
@@ -165,8 +187,9 @@ describePwsh("PowerShell background execution", () => {
       command: "Start-Sleep -Milliseconds 1500; Write-Output ps-manual",
       timeout: 30,
     });
-    await sleep(700);
-    expect(ps.hasForegroundTasks()).toBe(true);
+    await vi.waitFor(() => {
+      expect(ps.hasForegroundTasks()).toBe(true);
+    });
     expect(ps.backgroundForegroundTasks()).toBe(1);
     expect(ps.hasForegroundTasks()).toBe(false);
 

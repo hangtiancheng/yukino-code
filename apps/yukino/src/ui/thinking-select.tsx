@@ -1,39 +1,15 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import {
-  Box,
-  Text,
-  measureElement,
-  useBoxMetrics,
-  useInput,
-  useWindowSize,
-} from "ink";
+import { Box, Text, measureElement, useBoxMetrics, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { getListWindowStart } from "./list-window.js";
 import { SelectorFrame } from "./selector-frame.js";
+import { selectorChrome } from "./selector-layout.js";
 import { truncateToWidth, visibleWidth } from "./terminal-text.js";
+import {
+  useAvailableRows,
+  useTerminalDimensions,
+} from "./use-terminal-layout.js";
 
 import {
   THINKING_LEVELS,
@@ -69,7 +45,7 @@ export function ThinkingSelect({
   const selected = levels.at(cursor);
   const ref = useRef<DOMElement>(null);
   const metrics = useBoxMetrics(ref);
-  const { columns, rows } = useWindowSize();
+  const { columns } = useTerminalDimensions();
   const [top, setTop] = useState(0);
   useLayoutEffect(() => {
     if (ref.current) {
@@ -78,9 +54,14 @@ export function ThinkingSelect({
   });
   const width = Math.max(1, metrics.hasMeasured ? metrics.width : columns);
   const contentWidth = width - (width > 2 ? 2 : 0);
-  const availableRows = Math.max(0, rows - top - 2);
-  // Two rules, title, description, and hint; leave the footer outside the frame.
-  const count = Math.max(0, Math.min(levels.length, availableRows - 5));
+  const availableRows = useAvailableRows(2, top);
+  const count = Math.max(
+    0,
+    Math.min(
+      levels.length,
+      availableRows - selectorChrome(availableRows, true, true).height,
+    ),
+  );
   const start = getListWindowStart(levels.length, cursor, count);
 
   useInput((_input, key) => {
@@ -120,6 +101,7 @@ export function ThinkingSelect({
         subtitle={selected ? descriptions[selected] : "No levels available"}
         hint="↑↓/←→ navigate · Enter select · Esc cancel"
         width={width}
+        rows={availableRows}
       >
         {count === 0 && levels.length > 0 ? (
           <Text color={THEME.muted} wrap="truncate-end">

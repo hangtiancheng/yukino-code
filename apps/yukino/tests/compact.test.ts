@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { describe, it, expect } from "vitest";
 
 import {
@@ -51,6 +29,16 @@ function stubClient(summaryBody: string): {
       lastPrompt = contentToText(conversation.getMessages()[0]?.content ?? "");
       await Promise.resolve();
       yield { type: "text_delta", text: `<summary>${summaryBody}</summary>` };
+      yield {
+        type: "stream_end",
+        stopReason: "end_turn",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        },
+      };
     },
   };
   return { client, lastPrompt: () => lastPrompt };
@@ -62,13 +50,12 @@ const estChars = (chars: number) => Math.ceil(chars / 3.5);
 describe("currentContextTokens (real-usage anchoring)", () => {
   it("falls back to whole-transcript char estimation when there is no anchor (cold start)", () => {
     const conversation = new ConversationManager();
-    conversation.addUserMessage("a".repeat(35)); // 35 chars
-    conversation.addAssistantMessage("b".repeat(35)); // 35 chars
+    conversation.addUserMessage("a".repeat(35));
+    conversation.addAssistantFull("b".repeat(35), [], []);
 
-    // No anchor → identical to estimating the whole transcript.
     const got = currentContextTokens(conversation, undefined);
     expect(got).toBe(estimateTokens(conversation));
-    expect(got).toBe(estChars(70)); // 70 chars / 3.5 = 20
+    expect(got).toBe(estChars(70));
   });
 
   it("uses baseline + increment for messages appended after the anchor", () => {
@@ -76,18 +63,16 @@ describe("currentContextTokens (real-usage anchoring)", () => {
     // Two messages were already covered by the API usage that produced the
     // anchor; their characters must NOT be re-counted.
     conversation.addUserMessage("x".repeat(1000));
-    conversation.addAssistantMessage("y".repeat(1000));
+    conversation.addAssistantFull("y".repeat(1000), [], []);
 
     const anchor: UsageAnchor = {
       baselineTokens: 5000, // the real API-reported full context size
       anchorCount: 2, // it covered the first 2 messages
     };
 
-    // Nothing new yet → exactly the baseline, char count of old messages ignored.
     expect(currentContextTokens(conversation, anchor)).toBe(5000);
 
-    // Append a new message after the anchor → baseline + estimate of only that.
-    conversation.addUserMessage("z".repeat(70)); // 70 chars → ceil(70/3.5) = 20
+    conversation.addUserMessage("z".repeat(70));
     expect(currentContextTokens(conversation, anchor)).toBe(
       5000 + estChars(70),
     );
@@ -192,25 +177,26 @@ describe("computeKeepStartIndex (recent-history retention)", () => {
       if (i % 2 === 0) {
         conversation.addUserMessage(`u${String(i)}`);
       } else {
-        conversation.addAssistantMessage(`a${String(i)}`);
+        conversation.addAssistantFull(`a${String(i)}`, [], []);
       }
     }
-    conversation.addAssistantMessageWithTools("calling tool", [
-      { toolUseId: "tid-1", toolName: "Read", arguments: { path: "/x" } },
+    conversation.addAssistantFull(
+      "calling tool",
+      [],
+      [{ toolUseId: "tid-1", toolName: "Read", arguments: { path: "/x" } }],
+    );
+    conversation.addToolResultsMessage([
+      { toolUseId: "tid-1", content: "file contents", isError: false },
     ]);
-    conversation.addToolResultMessage("tid-1", "file contents", false);
     for (let i = 10; i < 14; i++) {
-      conversation.addAssistantMessage(`tail${String(i)}`);
+      conversation.addAssistantFull(`tail${String(i)}`, [], []);
     }
 
-    const messages = conversation.getMessages(); // length 14
+    const messages = conversation.getMessages();
     const keepStart = computeKeepStartIndex(messages);
 
-    // Count-floor of 5 would pick idx 9 (tool_result user); must back up to 8.
     expect(keepStart).toBe(8);
-    // The kept tail must start with the tool_use assistant, not the orphan.
     expect(messages[keepStart].toolUses?.[0]?.toolUseId).toBe("tid-1");
-    // And the matching tool_result is inside the kept slice (not orphaned out).
     const kept = messages.slice(keepStart);
     const hasUse = kept.some((m) =>
       m.toolUses?.some((t) => t.toolUseId === "tid-1"),
@@ -226,15 +212,14 @@ describe("computeKeepStartIndex (recent-history retention)", () => {
     // already satisfies the token-floor (KEEP_RECENT_TOKENS = 10k), so the scan
     // stops after keeping exactly 1 and never reaches the KEEP_MAX_TOKENS (40k)
     // upper-bound check.
-    const big = "z".repeat(49000); // ceil(49000/3.5) = 14000 tokens each
+    const big = "z".repeat(49000);
     const messages: Message[] = Array.from({ length: 6 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",
       content: big,
     }));
     const keepStart = computeKeepStartIndex(messages);
-    // token-floor (10k) is met by the very first kept message → keep exactly 1.
     expect(keepStart).toBe(messages.length - 1);
-    expect(keepStart).toBeGreaterThan(0); // not everything kept
+    expect(keepStart).toBeGreaterThan(0);
   });
 });
 
@@ -246,11 +231,11 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
       conversation.addUserMessage(
         `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
       );
-      conversation.addAssistantMessage(`old-reply-${String(i)}`);
+      conversation.addAssistantFull(`old-reply-${String(i)}`, [], []);
     }
     // ...and a recent tail we expect to survive untouched.
     conversation.addUserMessage("RECENT-QUESTION marker-recent-q");
-    conversation.addAssistantMessage("RECENT-ANSWER marker-recent-a");
+    conversation.addAssistantFull("RECENT-ANSWER marker-recent-a", [], []);
     conversation.addUserMessage("RECENT-FOLLOWUP marker-recent-f");
 
     const { client, lastPrompt } = stubClient("THE SUMMARY BODY");
@@ -283,42 +268,70 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     const after = conversation.getMessages();
     const joined = after.map((m) => contentToText(m.content)).join("\n");
 
-    // Recent original messages are still present verbatim (not just a summary).
     expect(joined).toContain("marker-recent-q");
     expect(joined).toContain("marker-recent-a");
     expect(joined).toContain("marker-recent-f");
-    // The summary is present with the framing wrapper...
     expect(joined).toContain("THE SUMMARY BODY");
     expect(joined).toContain(
       "The conversation history before this point was compacted",
     );
     expect(joined).toContain("Recent messages have been preserved verbatim");
-    // ...but the summary prompt only covered the prefix, NOT the kept tail.
     expect(lastPrompt()).toContain("OLD-PREFIX-0");
     expect(lastPrompt()).not.toContain("marker-recent-q");
-    // Transcript shrank (prefix collapsed) but kept tail + summary remain.
     // No assistant ack message — just summary + kept tail.
     expect(after.length).toBeLessThan(before);
-    expect(after.length).toBeGreaterThanOrEqual(2); // summary + >=1 kept (no ack)
+    expect(after.length).toBeGreaterThanOrEqual(2);
     expect(msg).toContain("kept");
+  });
+
+  it("persists the session transcript hint in the compact boundary", async () => {
+    const conversation = new ConversationManager();
+    for (let i = 0; i < 20; i++) {
+      conversation.addUserMessage(
+        `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
+      );
+      conversation.addAssistantFull(`old-reply-${String(i)}`, [], []);
+    }
+    conversation.addUserMessage("recent question");
+    conversation.addAssistantFull("recent answer", [], []);
+
+    const sessionPath = "/tmp/yukino-session-transcript.jsonl";
+    const { client } = stubClient("PERSISTED SUMMARY");
+    const { boundary } = await forceCompact(
+      conversation,
+      client,
+      null,
+      [],
+      [],
+      sessionPath,
+    );
+
+    expect(boundary?.summary).toContain("PERSISTED SUMMARY");
+    expect(boundary?.summary).toContain(
+      `use ReadFile to read the full session transcript: ${sessionPath}`,
+    );
   });
 
   it("does not split a tool_use/tool_result pair across the compaction boundary", async () => {
     const conversation = new ConversationManager();
     for (let i = 0; i < 20; i++) {
       conversation.addUserMessage(`prefix-${String(i)}-` + "p".repeat(1200));
-      conversation.addAssistantMessage(`reply-${String(i)}`);
+      conversation.addAssistantFull(`reply-${String(i)}`, [], []);
     }
     // Recent tail containing a tool pair near the boundary.
-    conversation.addAssistantMessageWithTools("running read", [
-      { toolUseId: "keep-tid", toolName: "Read", arguments: { path: "/a" } },
-    ]);
-    conversation.addToolResultMessage(
-      "keep-tid",
-      "RESULT-CONTENT-marker",
-      false,
+    conversation.addAssistantFull(
+      "running read",
+      [],
+      [{ toolUseId: "keep-tid", toolName: "Read", arguments: { path: "/a" } }],
     );
-    conversation.addAssistantMessage("done with tool");
+    conversation.addToolResultsMessage([
+      {
+        toolUseId: "keep-tid",
+        content: "RESULT-CONTENT-marker",
+        isError: false,
+      },
+    ]);
+    conversation.addAssistantFull("done with tool", [], []);
     conversation.addUserMessage("thanks");
 
     const { client } = stubClient("summary");
@@ -340,7 +353,7 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
   it("degenerates to no-op when there are too few messages to compact", async () => {
     const conversation = new ConversationManager();
     conversation.addUserMessage("only-q marker");
-    conversation.addAssistantMessage("only-a marker");
+    conversation.addAssistantFull("only-a marker", [], []);
 
     const { client } = stubClient("should-not-be-used");
     const before = conversation.getMessages();
@@ -356,7 +369,6 @@ describe("doCompact via forceCompact (keep recent verbatim)", () => {
     // Everything is inside the kept tail → compaction skipped, transcript intact.
     expect(after).toEqual(before);
     expect(msg.toLowerCase()).toContain("skip");
-    // The verbatim originals are untouched (no summary injected).
     const joined = after.map((m) => contentToText(m.content)).join("\n");
     expect(joined).toContain("only-q marker");
     expect(joined).not.toContain(

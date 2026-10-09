@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { isAbsolute, resolve } from "node:path";
 
 import { RequestError } from "@agentclientprotocol/sdk";
@@ -89,39 +67,44 @@ export function toolKind(toolName: string): ToolKind {
   if (/^(WriteFile|EditFile)$/u.test(toolName)) {
     return "edit";
   }
-  if (/^(Glob|Grep|ToolSearch)$/u.test(toolName)) {
+  if (/^(Glob|Grep|ToolSearch|LSP|WebSearch)$/u.test(toolName)) {
     return "search";
   }
   if (/^(Bash|PowerShell|ComputerUse)$/u.test(toolName)) {
     return "execute";
   }
   if (
-    /^(Agent|TaskCreate|TaskGet|TaskList|TaskUpdate|TaskStop)$/u.test(toolName)
+    /^(Agent|TaskCreate|TaskGet|TaskList|TaskUpdate|TaskStop|TaskOutput|TodoWrite)$/u.test(
+      toolName,
+    )
   ) {
     return "think";
   }
   if (toolName === "ExitPlanMode") {
     return "switch_mode";
   }
+  if (toolName === "WebFetch") {
+    return "fetch";
+  }
   return "other";
 }
 
 export function toolLocations(
   args: Record<string, unknown>,
-  workDir: string,
+  cwd: string,
 ): ToolCallLocation[] | undefined {
   const path = strArg(args, "file_path") || strArg(args, "path");
   if (!path) {
     return undefined;
   }
-  return [{ path: isAbsolute(path) ? path : resolve(workDir, path) }];
+  return [{ path: isAbsolute(path) ? path : resolve(cwd, path) }];
 }
 
 function toolCallUpdate(
   toolName: string,
   toolCallId: string,
   args: Record<string, unknown>,
-  workDir: string,
+  cwd: string,
 ): SessionUpdate {
   return {
     sessionUpdate: "tool_call",
@@ -130,7 +113,7 @@ function toolCallUpdate(
     kind: toolKind(toolName),
     status: "pending",
     rawInput: args,
-    locations: toolLocations(args, workDir),
+    locations: toolLocations(args, cwd),
   };
 }
 
@@ -157,7 +140,7 @@ function toolResultUpdate(
 
 export function agentEventToUpdate(
   event: AgentEvent,
-  workDir: string,
+  cwd: string,
   contextWindow: number,
 ): SessionUpdate | null {
   switch (event.type) {
@@ -172,7 +155,7 @@ export function agentEventToUpdate(
         content: { type: "text", text: event.text },
       };
     case "tool_use":
-      return toolCallUpdate(event.toolName, event.toolId, event.args, workDir);
+      return toolCallUpdate(event.toolName, event.toolId, event.args, cwd);
     case "tool_result":
       return toolResultUpdate(
         event.toolId,
@@ -243,7 +226,7 @@ export function stopReason(reason: string): StopReason {
 export function* historyNotifications(
   sessionId: string,
   messages: SessionMessage[],
-  workDir: string,
+  cwd: string,
 ): Generator<SessionNotification> {
   for (const message of messages) {
     if (
@@ -274,7 +257,7 @@ export function* historyNotifications(
           tool.tool_name,
           tool.tool_use_id,
           tool.arguments ?? {},
-          workDir,
+          cwd,
         ),
       };
     }

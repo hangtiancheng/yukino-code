@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
@@ -31,6 +9,7 @@ import {
   LLMError,
   NetworkError,
   RateLimitError,
+  ServerError,
 } from "@/llm/errors.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { OpenAIClient, OpenAICompatClient } from "@/llm/openai.js";
@@ -89,6 +68,183 @@ const usage = {
 };
 
 describe("Responses terminal events", () => {
+  it.each([
+    { call_id: "", name: "NoArgs" },
+    { call_id: "call_1", name: "" },
+  ])("rejects a function call without a valid identity", async (item) => {
+    mockStream([
+      {
+        type: "response.output_item.added",
+        sequence_number: 0,
+        output_index: 0,
+        item: {
+          type: "function_call",
+          id: "fc_1",
+          status: "in_progress",
+          arguments: "",
+          ...item,
+        },
+      },
+    ]);
+    const events: StreamEvent[] = [];
+
+    await expect(
+      collect(new OpenAIClient(config("openai"), "system"), events),
+    ).rejects.toBeInstanceOf(NetworkError);
+    expect(events.some((event) => event.type === "tool_call_start")).toBe(
+      false,
+    );
+  });
+
+  it("emits one reasoning block for multiple summary parts", async () => {
+    const item = {
+      type: "reasoning",
+      id: "rs_1",
+      status: "completed",
+      summary: [],
+    };
+    mockStream([
+      {
+        type: "response.output_item.added",
+        sequence_number: 0,
+        output_index: 0,
+        item: { ...item, status: "in_progress" },
+      },
+      {
+        type: "response.reasoning_summary_text.delta",
+        sequence_number: 1,
+        output_index: 0,
+        item_id: "rs_1",
+        summary_index: 0,
+        delta: "first ",
+      },
+      {
+        type: "response.reasoning_summary_text.done",
+        sequence_number: 2,
+        output_index: 0,
+        item_id: "rs_1",
+        summary_index: 0,
+        text: "first ",
+      },
+      {
+        type: "response.reasoning_summary_text.delta",
+        sequence_number: 3,
+        output_index: 0,
+        item_id: "rs_1",
+        summary_index: 1,
+        delta: "second",
+      },
+      {
+        type: "response.reasoning_summary_text.done",
+        sequence_number: 4,
+        output_index: 0,
+        item_id: "rs_1",
+        summary_index: 1,
+        text: "second",
+      },
+      {
+        type: "response.output_item.done",
+        sequence_number: 5,
+        output_index: 0,
+        item,
+      },
+      {
+        type: "response.completed",
+        sequence_number: 6,
+        response: { id: "resp_test", status: "completed", usage },
+      },
+    ]);
+
+    const events = await collect(new OpenAIClient(config("openai"), "system"));
+    expect(
+      events.filter((event) => event.type === "thinking_complete"),
+    ).toEqual([
+      {
+        type: "thinking_complete",
+        thinking: "first second",
+        signature: "rs_1",
+      },
+    ]);
+  });
+
+  it("rejects a computer call without a valid lifecycle", async () => {
+    mockStream([
+      {
+        type: "response.output_item.done",
+        sequence_number: 0,
+        output_index: 0,
+        item: {
+          type: "computer_call",
+          id: "item_1",
+          call_id: "call_1",
+          status: "completed",
+          actions: [],
+          pending_safety_checks: [],
+        },
+      },
+    ]);
+    const events: StreamEvent[] = [];
+
+    await expect(
+      collect(new OpenAIClient(config("openai"), "system"), events),
+    ).rejects.toBeInstanceOf(NetworkError);
+    expect(events.some((event) => event.type === "tool_call_complete")).toBe(
+      false,
+    );
+  });
+
+  it("marks malformed function-call JSON instead of treating it as empty arguments", async () => {
+    const item = {
+      type: "function_call",
+      id: "fc_1",
+      call_id: "call_1",
+      name: "NoArgs",
+      arguments: '{"broken":',
+      status: "completed",
+    };
+    mockStream([
+      {
+        type: "response.output_item.added",
+        sequence_number: 0,
+        output_index: 0,
+        item: { ...item, arguments: "", status: "in_progress" },
+      },
+      {
+        type: "response.function_call_arguments.delta",
+        sequence_number: 1,
+        output_index: 0,
+        item_id: "fc_1",
+        delta: '{"broken":',
+      },
+      {
+        type: "response.output_item.done",
+        sequence_number: 2,
+        output_index: 0,
+        item,
+      },
+      {
+        type: "response.completed",
+        sequence_number: 3,
+        response: { id: "resp_test", status: "completed", usage },
+      },
+    ]);
+
+    const events = await collect(new OpenAIClient(config("openai"), "system"));
+    const complete = events.find(
+      (event) =>
+        event.type === "tool_call_complete" && event.toolId === "call_1",
+    );
+    expect(complete).toMatchObject({
+      type: "tool_call_complete",
+      toolName: "NoArgs",
+      toolId: "call_1",
+      arguments: {},
+    });
+    expect(
+      complete?.type === "tool_call_complete" ? complete.parseError : "",
+    ).toContain("Invalid tool arguments JSON");
+  });
+
   it("emits native computer calls as ComputerUse invocations", async () => {
     const item = {
       type: "computer_call",
@@ -349,6 +505,97 @@ describe("Chat Completions terminal boundaries", () => {
     });
   });
 
+  it("marks malformed tool JSON and preserves the call pairing", async () => {
+    mockStream([
+      {
+        type: "chunk",
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_bad",
+                  function: { name: "NoArgs", arguments: '{"broken":' },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      {
+        type: "chunk",
+        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+      },
+    ]);
+
+    const events = await collect(
+      new OpenAICompatClient(config("openai-compat"), "system"),
+    );
+    const complete = events.find(
+      (event) =>
+        event.type === "tool_call_complete" && event.toolId === "call_bad",
+    );
+    expect(complete).toMatchObject({
+      type: "tool_call_complete",
+      toolName: "NoArgs",
+      toolId: "call_bad",
+      arguments: {},
+    });
+    expect(
+      complete?.type === "tool_call_complete" ? complete.parseError : "",
+    ).toContain("Invalid tool arguments JSON");
+  });
+
+  it.each([
+    { id: undefined, name: "NoArgs", missing: "id" },
+    { id: "call_1", name: undefined, missing: "name" },
+  ])(
+    "rejects a tool call missing $missing without emitting completion",
+    async ({ id, name }) => {
+      mockStream([
+        {
+          type: "chunk",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    ...(id ? { id } : {}),
+                    function: {
+                      ...(name ? { name } : {}),
+                      arguments: "{}",
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          type: "chunk",
+          choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+        },
+      ]);
+      const events: StreamEvent[] = [];
+
+      await expect(
+        collect(
+          new OpenAICompatClient(config("openai-compat"), "system"),
+          events,
+        ),
+      ).rejects.toBeInstanceOf(NetworkError);
+      expect(events.some((event) => event.type === "tool_call_complete")).toBe(
+        false,
+      );
+    },
+  );
+
   it("retains a trailing usage-only chunk after the finish reason", async () => {
     mockStream([
       {
@@ -384,6 +631,138 @@ describe("Chat Completions terminal boundaries", () => {
 });
 
 describe("Anthropic thinking replay", () => {
+  it.each([
+    { id: "", name: "NoArgs" },
+    { id: "tool_1", name: "" },
+  ])("rejects a tool call without a valid identity", async (contentBlock) => {
+    mockStream([
+      {
+        type: "message_start",
+        message: {
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          model: "test",
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 0 },
+        },
+      },
+      {
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "tool_use", input: {}, ...contentBlock },
+      },
+    ]);
+    const events: StreamEvent[] = [];
+
+    await expect(
+      collect(new AnthropicClient(config("anthropic"), "system"), events),
+    ).rejects.toBeInstanceOf(NetworkError);
+    expect(events.some((event) => event.type === "tool_call_start")).toBe(
+      false,
+    );
+  });
+
+  it("rejects a truncated stream without message_stop", async () => {
+    mockStream([
+      {
+        type: "message_start",
+        message: {
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          model: "test",
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 0 },
+        },
+      },
+      {
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "text", text: "" },
+      },
+      {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text: "partial" },
+      },
+      { type: "content_block_stop", index: 0 },
+      {
+        type: "message_delta",
+        delta: { stop_reason: "end_turn", stop_sequence: null },
+        usage: { output_tokens: 1 },
+      },
+    ]);
+    const events: StreamEvent[] = [];
+
+    await expect(
+      collect(new AnthropicClient(config("anthropic"), "system"), events),
+    ).rejects.toBeInstanceOf(NetworkError);
+    expect(events).toContainEqual({ type: "text_delta", text: "partial" });
+    expect(events.some((event) => event.type === "stream_end")).toBe(false);
+  });
+
+  it("marks malformed tool JSON instead of treating it as empty arguments", async () => {
+    mockStream([
+      {
+        type: "message_start",
+        message: {
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          model: "test",
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 0 },
+        },
+      },
+      {
+        type: "content_block_start",
+        index: 0,
+        content_block: {
+          type: "tool_use",
+          id: "tool_bad",
+          name: "NoArgs",
+          input: {},
+        },
+      },
+      {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "input_json_delta", partial_json: '{"broken":' },
+      },
+      { type: "content_block_stop", index: 0 },
+      {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use", stop_sequence: null },
+        usage: { output_tokens: 1 },
+      },
+      { type: "message_stop" },
+    ]);
+
+    const events = await collect(
+      new AnthropicClient(config("anthropic"), "system"),
+    );
+    const complete = events.find(
+      (event) =>
+        event.type === "tool_call_complete" && event.toolId === "tool_bad",
+    );
+    expect(complete).toMatchObject({
+      type: "tool_call_complete",
+      toolName: "NoArgs",
+      toolId: "tool_bad",
+      arguments: {},
+    });
+    expect(
+      complete?.type === "tool_call_complete" ? complete.parseError : "",
+    ).toContain("Invalid tool arguments JSON");
+  });
+
   it("maps the native computer tool name to ComputerUse", async () => {
     mockStream([
       {
@@ -497,6 +876,44 @@ describe("Anthropic thinking replay", () => {
 });
 
 describe("provider rate-limit headers", () => {
+  it.each(["anthropic", "openai", "openai-compat"] as const)(
+    "classifies transient HTTP errors and retains Retry-After for %s",
+    async (protocol) => {
+      for (const status of [408, 503]) {
+        vi.stubGlobal(
+          "fetch",
+          vi.fn(() =>
+            Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  error: { type: "api_error", message: "try again" },
+                }),
+                {
+                  status,
+                  headers: {
+                    "content-type": "application/json",
+                    "retry-after": "7",
+                    "x-should-retry": "false",
+                  },
+                },
+              ),
+            ),
+          ),
+        );
+        const client =
+          protocol === "anthropic"
+            ? new AnthropicClient(config(protocol), "system")
+            : protocol === "openai"
+              ? new OpenAIClient(config(protocol), "system")
+              : new OpenAICompatClient(config(protocol), "system");
+        await expect(collect(client)).rejects.toMatchObject({
+          name: ServerError.name,
+          retryAfter: "7",
+        });
+      }
+    },
+  );
+
   it.each(["anthropic", "openai", "openai-compat"] as const)(
     "preserves Retry-After for %s",
     async (protocol) => {

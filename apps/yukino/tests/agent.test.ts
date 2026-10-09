@@ -1,37 +1,21 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { HookEngine } from "@/hooks/index.js";
-import type { LLMClient } from "@/llm/client.js";
+import type { LLMClient, LLMStreamOptions } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { getOrCreatePlanPath } from "@/plan-file/index.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";
+import type { ProviderToolSchema } from "@/tools/types.js";
 import { contentToText } from "@/utils/index.js";
 
 const USAGE: UsageInfo = {
@@ -48,20 +32,23 @@ const end = (reason = "end_turn"): StreamEvent => ({
 
 class MockClient implements LLMClient {
   calls = 0;
-  maxTokensSet: number | null = null;
+  outputLimits: number[] = [];
   constructor(private scripts: StreamEvent[][]) {}
   setSystemPrompt(_prompt: string): void {
     /** noop */
   }
-  async *stream(): AsyncGenerator<StreamEvent> {
+  async *stream(
+    _conversation: ConversationManager,
+    _tools: ProviderToolSchema[],
+    _signal?: AbortSignal,
+    options?: LLMStreamOptions,
+  ): AsyncGenerator<StreamEvent> {
+    this.outputLimits.push(options?.maxOutputTokens ?? 8192);
     const script = this.scripts[this.calls++] ?? [end()];
     for (const ev of script) {
       await Promise.resolve();
       yield ev;
     }
-  }
-  setMaxOutputTokens(n: number): void {
-    this.maxTokensSet = n;
   }
 }
 
@@ -84,6 +71,8 @@ async function runAgent(
     hookEngine?: HookEngine;
     abortSignal?: AbortSignal;
     maxOutput?: number;
+    checker?: PermissionChecker;
+    cwd?: string;
   } = {},
 ): Promise<{ events: AgentEvent[]; conversation: ConversationManager }> {
   const conversation = new ConversationManager();
@@ -95,9 +84,10 @@ async function runAgent(
   const agent = new Agent({
     client,
     registry,
-    checker: new PermissionChecker(process.cwd(), "bypassPermissions"),
+    checker:
+      opts.checker ?? new PermissionChecker(process.cwd(), "bypassPermissions"),
     conversation: conversation,
-    workDir: process.cwd(),
+    cwd: opts.cwd ?? process.cwd(),
     hookEngine: opts.hookEngine,
     abortSignal: opts.abortSignal,
     maxOutput: opts.maxOutput,
@@ -127,6 +117,19 @@ describe("Agent loop", () => {
     expect(last?.content).toBe("hello");
   });
 
+  it("does not add an empty assistant message for an empty end turn", async () => {
+    const { conversation } = await runAgent(new MockClient([[end()]]));
+
+    expect(conversation.getMessages()).toHaveLength(1);
+    expect(conversation.getMessages()[0]?.role).toBe("user");
+  });
+
+  it("keeps the client default when no output ceiling is supplied by the host", async () => {
+    const client = new MockClient([[end()]]);
+    await runAgent(client);
+    expect(client.outputLimits).toEqual([8192]);
+  });
+
   it("executes a tool turn then completes", async () => {
     const client = new MockClient([
       [
@@ -152,6 +155,45 @@ describe("Agent loop", () => {
     expect(events.some((e) => e.type === "loop_complete")).toBe(true);
   });
 
+  it("pairs malformed no-arg tool calls with an error without invoking them", async () => {
+    const execute = vi.fn(() =>
+      Promise.resolve({ output: "should not run", isError: false }),
+    );
+    const noArgTool: Tool = {
+      ...echoTool,
+      name: "NoArgs",
+      execute,
+    };
+    const client = new MockClient([
+      [
+        {
+          type: "tool_call_complete",
+          toolId: "bad-json",
+          toolName: "NoArgs",
+          arguments: {},
+          parseError: "Invalid tool arguments JSON: unexpected end of input",
+        },
+        end("tool_use"),
+      ],
+      [{ type: "text_delta", text: "recovered" }, end()],
+    ]);
+
+    const { events } = await runAgent(client, { tool: noArgTool });
+    const result = events.find(
+      (event) => event.type === "tool_result" && event.toolId === "bad-json",
+    );
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      type: "tool_result",
+      toolId: "bad-json",
+      isError: true,
+    });
+    expect(result?.type === "tool_result" ? result.output : "").toContain(
+      "tool was not executed",
+    );
+  });
+
   it("escalates output ceiling and retries on max_tokens", async () => {
     const client = new MockClient([
       [{ type: "text_delta", text: "partial" }, end("max_tokens")],
@@ -162,8 +204,85 @@ describe("Agent loop", () => {
     expect(
       events.some((e) => e.type === "retry" && e.reason.includes("max_tokens")),
     ).toBe(true);
-    expect(client.maxTokensSet).toBe(64000);
+    expect(client.outputLimits).toEqual([8192, 64000]);
     expect(events.some((e) => e.type === "loop_complete")).toBe(true);
+  });
+
+  it("isolates output-limit recovery between concurrent agents sharing a client", async () => {
+    let defaultLimit = 8192;
+    const limits = new Map<ConversationManager, number[]>();
+    const client: LLMClient = {
+      setSystemPrompt: () => undefined,
+      setMaxOutputTokens: vi.fn((limit: number) => {
+        defaultLimit = limit;
+      }),
+      async *stream(
+        conversation,
+        _tools,
+        _signal,
+        options?: { maxOutputTokens?: number },
+      ) {
+        await Promise.resolve();
+        const requests = limits.get(conversation) ?? [];
+        requests.push(options?.maxOutputTokens ?? defaultLimit);
+        limits.set(conversation, requests);
+        yield end(requests.length === 1 ? "max_tokens" : "end_turn");
+      },
+    };
+    const makeAgent = () => {
+      const conversation = new ConversationManager();
+      conversation.addUserMessage("hi");
+      const iterator = new Agent({
+        client,
+        conversation,
+        cwd: process.cwd(),
+        registry: new ToolRegistry(),
+        checker: new PermissionChecker(process.cwd(), "bypassPermissions"),
+        maxOutput: 8192,
+      }).run();
+      return { conversation, iterator };
+    };
+    const pauseAtRetry = async (iterator: AsyncGenerator<AgentEvent>) => {
+      for (;;) {
+        const next = await iterator.next();
+        if (next.done) {
+          throw new Error("Expected output-limit recovery");
+        }
+        if (next.value.type === "retry") {
+          return;
+        }
+      }
+    };
+    const first = makeAgent();
+    const second = makeAgent();
+    try {
+      await pauseAtRetry(first.iterator);
+      await pauseAtRetry(second.iterator);
+      const firstEvents = [];
+      for await (const event of first.iterator) {
+        firstEvents.push(event);
+      }
+      const secondEvents = [];
+      for await (const event of second.iterator) {
+        secondEvents.push(event);
+      }
+      expect(firstEvents.at(-1)).toMatchObject({
+        type: "loop_complete",
+        stopReason: "end_turn",
+      });
+      expect(secondEvents.at(-1)).toMatchObject({
+        type: "loop_complete",
+        stopReason: "end_turn",
+      });
+      expect(limits.get(second.conversation)?.at(-1)).toBe(64000);
+      expect(limits.get(first.conversation)).toEqual([8192, 64000]);
+      expect(limits.get(second.conversation)).toEqual([8192, 64000]);
+      expect(client.setMaxOutputTokens).not.toHaveBeenCalled();
+      expect(defaultLimit).toBe(8192);
+    } finally {
+      await first.iterator.return(undefined);
+      await second.iterator.return(undefined);
+    }
   });
 
   it("returns an error result for unknown tools and keeps looping", async () => {
@@ -236,6 +355,7 @@ describe("Agent loop", () => {
           ctx.abortSignal?.addEventListener("abort", () => {
             resolve({ output: "Error: command interrupted", isError: true });
           });
+          controller.abort();
         }),
     };
     const client = new MockClient([
@@ -250,9 +370,6 @@ describe("Agent loop", () => {
       ],
       [{ type: "text_delta", text: "should never stream" }, end()],
     ]);
-    setTimeout(() => {
-      controller.abort();
-    }, 20);
     const { events, conversation } = await runAgent(client, {
       tool: interruptibleTool,
       abortSignal: controller.signal,
@@ -270,7 +387,6 @@ describe("Agent loop", () => {
 
   it("keeps looping when ExitPlanMode errors outside plan mode", async () => {
     const exitPlan = new ExitPlanModeTool();
-    exitPlan.isPlanMode = () => false;
     const client = new MockClient([
       [
         {
@@ -301,8 +417,12 @@ describe("Agent loop", () => {
 
   it("ends the loop when ExitPlanMode succeeds", async () => {
     const exitPlan = new ExitPlanModeTool();
-    exitPlan.isPlanMode = () => true;
-    exitPlan.planExists = () => true;
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-exit-plan-"));
+    const checker = new PermissionChecker(cwd, "plan");
+    writeFileSync(
+      getOrCreatePlanPath(checker),
+      "# Ready plan\nImplement and verify.",
+    );
     const client = new MockClient([
       [
         {
@@ -314,8 +434,13 @@ describe("Agent loop", () => {
         end("tool_use"),
       ],
     ]);
-    const { events, conversation } = await runAgent(client, { tool: exitPlan });
+    const { events, conversation } = await runAgent(client, {
+      tool: exitPlan,
+      checker,
+      cwd,
+    });
 
+    rmSync(cwd, { recursive: true, force: true });
     const tr = events.find((e) => e.type === "tool_result");
     expect(tr?.type === "tool_result" && tr.isError).toBe(false);
     expect(client.calls).toBe(1);

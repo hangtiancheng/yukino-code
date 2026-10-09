@@ -1,30 +1,9 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -44,6 +23,7 @@ import { MemoryExtractor } from "@/memory/extractor.js";
 import { MemoryPermissionChecker } from "@/memory/permissions.js";
 import { extractWrittenPaths } from "@/memory/written-paths.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { projectPath, yukinoPath } from "@/storage/paths.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
@@ -73,17 +53,26 @@ function mockClient(turns: StreamEvent[][]): LLMClient {
     },
   };
 }
-const workDir = () => mkdtempSync(join(tmpdir(), "yukino-data-"));
+const cwds = new Set<string>();
+const cwd = () => {
+  const directory = mkdtempSync(join(tmpdir(), "yukino-data-"));
+  cwds.add(directory);
+  return directory;
+};
 
 afterEach(() => {
+  for (const directory of cwds) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  cwds.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("file and memory execution", () => {
   it("reads, edits, and writes relative to the agent working directory", async () => {
-    const directory = workDir();
-    const ctx = { workDir: directory, fileStateCache: new FileStateCache() };
+    const directory = cwd();
+    const ctx = { cwd: directory, fileStateCache: new FileStateCache() };
     expect(
       (
         await new WriteFileTool().execute(ctx, {
@@ -100,8 +89,7 @@ describe("file and memory execution", () => {
       (
         await new EditFileTool().execute(ctx, {
           file_path: "nested/test.txt",
-          old_string: "before",
-          new_string: "after",
+          edits: [{ old_string: "before", new_string: "after" }],
         })
       ).isError,
     ).toBe(false);
@@ -111,8 +99,8 @@ describe("file and memory execution", () => {
   });
 
   it("records actual successful memory tool calls and rebuilds their index", async () => {
-    const directory = workDir();
-    const path = join(directory, ".yukino/memory/preference.md");
+    const directory = cwd();
+    const path = projectPath(directory, "memory", "preference.md");
     const client = mockClient([
       [
         {
@@ -133,9 +121,9 @@ describe("file and memory execution", () => {
       await new MemoryExtractor(client, directory).extract(
         "User explicitly requested a durable project preference.",
       ),
-    ).toEqual(["preference.md"]);
+    ).toEqual(["preference"]);
     expect(
-      readFileSync(join(directory, ".yukino/memory/MEMORY.md"), "utf-8"),
+      readFileSync(projectPath(directory, "memory", "MEMORY.md"), "utf-8"),
     ).toContain("preference.md");
   });
 
@@ -165,7 +153,7 @@ describe("file and memory execution", () => {
   });
 
   it("keeps multiline fallback memory bodies and rejects path traversal", async () => {
-    const directory = workDir();
+    const directory = cwd();
     const client = mockClient([
       [
         {
@@ -179,20 +167,20 @@ describe("file and memory execution", () => {
       await new MemoryExtractor(client, directory).extract("conversation"),
     ).toEqual(["useful"]);
     expect(
-      readFileSync(join(directory, ".yukino/memory/useful.md"), "utf-8"),
+      readFileSync(projectPath(directory, "memory", "useful.md"), "utf-8"),
     ).toContain("First line\nSecond line");
-    expect(existsSync(join(directory, ".yukino/escape.md"))).toBe(false);
+    expect(existsSync(yukinoPath("escape.md"))).toBe(false);
   });
 
   it("denies background writes through symlinks and outside memory storage", () => {
-    const directory = workDir();
-    mkdirSync(join(directory, ".yukino/memory"), { recursive: true });
-    symlinkSync(workDir(), join(directory, ".yukino/memory/escape"));
+    const directory = cwd();
+    mkdirSync(projectPath(directory, "memory"), { recursive: true });
+    symlinkSync(cwd(), projectPath(directory, "memory", "escape"));
     const checker = new MemoryPermissionChecker(directory, true);
     for (const path of [
       "source.ts",
-      ".yukino/memory/escape/file.md",
-      ".yukino/memory/lock",
+      projectPath(directory, "memory", "escape", "file.md"),
+      projectPath(directory, "memory", "lock"),
     ]) {
       expect(
         checker.check("WriteFile", "write", { file_path: path }).effect,
@@ -200,7 +188,7 @@ describe("file and memory execution", () => {
     }
     expect(
       checker.check("WriteFile", "write", {
-        file_path: ".yukino/memory/valid.md",
+        file_path: projectPath(directory, "memory", "valid.md"),
       }).effect,
     ).toBe("allow");
     expect(
@@ -213,11 +201,11 @@ describe("file and memory execution", () => {
 
 describe("fork and restored context", () => {
   it("honors fork worktree isolation and keeps parent permission rules", async () => {
-    const directory = workDir();
-    const isolated = workDir();
-    mkdirSync(join(directory, ".yukino"));
+    const directory = cwd();
+    const isolated = cwd();
+    mkdirSync(projectPath(directory), { recursive: true });
     writeFileSync(
-      join(directory, ".yukino/permissions.yaml"),
+      projectPath(directory, "permissions.yaml"),
       '- rule: "WriteFile(blocked*)"\n  effect: deny\n',
     );
     vi.spyOn(worktrees, "createAgentWorktree").mockResolvedValue({
@@ -234,7 +222,7 @@ describe("fork and restored context", () => {
         _model?: string,
         context?: ToolContext,
       ) => {
-        expect(context?.workDir).toBe(isolated);
+        expect(context?.cwd).toBe(isolated);
         expect(
           context?.permissionChecker?.check("WriteFile", "write", {
             file_path: "blocked.ts",
@@ -254,7 +242,7 @@ describe("fork and restored context", () => {
     );
     const result = await tool.execute(
       {
-        workDir: directory,
+        cwd: directory,
         permissionChecker: new PermissionChecker(directory, "acceptEdits"),
       },
       {
@@ -282,18 +270,18 @@ describe("fork and restored context", () => {
       if (Array.isArray(content)) {
         content[0].text = "child change";
       }
-      snapshot.addAssistantMessage("worker result");
+      snapshot.addAssistantFull("worker result", [], []);
       return Promise.resolve("verified worker result");
     });
     const tool = new AgentTool(
-      workDir(),
+      cwd(),
       new ToolRegistry(),
       () => Promise.resolve("unused"),
       parent,
       handler,
     );
     const result = await tool.execute(
-      { workDir: workDir() },
+      { cwd: cwd() },
       { description: "audit", prompt: "Inspect this" },
     );
     expect(result.output).toContain("verified worker result");
@@ -308,9 +296,9 @@ describe("fork and restored context", () => {
     const agent = new Agent({
       client,
       conversation,
-      workDir: workDir(),
+      cwd: cwd(),
       registry: new ToolRegistry(),
-      checker: new PermissionChecker(workDir()),
+      checker: new PermissionChecker(cwd()),
       instructions: "preserve prefix",
       memoryContent: "memory fact",
       skillSection: "available skill",

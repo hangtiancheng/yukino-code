@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -196,9 +174,16 @@ describe("config", () => {
     it.each(["deepseek-flash", "qwen3.8-flash", "arbitrary-model"])(
       "does not infer capabilities from %s",
       (model) => {
-        expect(getSupportedThinkingLevels({ ...base, model })).toEqual(
-          THINKING_LEVELS,
-        );
+        // Model names never influence the level set: every model gets the
+        // openai-protocol baseline (xhigh/max need an explicit
+        // thinking_level_map there, since they have no native effort).
+        expect(getSupportedThinkingLevels({ ...base, model })).toEqual([
+          "off",
+          "minimal",
+          "low",
+          "medium",
+          "high",
+        ]);
         expect(getThinkingLevel({ ...base, model })).toBe("high");
       },
     );
@@ -258,7 +243,6 @@ describe("config", () => {
       expect(getSupportedThinkingLevels(provider)).toEqual([
         "off",
         "medium",
-        "xhigh",
         "max",
       ]);
       expect(clampThinkingLevel(provider, "low")).toBe("off");
@@ -296,15 +280,23 @@ describe("config", () => {
     });
 
     it("falls back to env var", () => {
-      process.env.ANTHROPIC_API_KEY = "sk-from-env";
-      const p: ProviderConfig = {
-        name: "p",
-        base_url: "#",
-        protocol: "anthropic",
-        model: "m",
-      };
-      expect(resolveAPIKey(p)).toBe("sk-from-env");
-      delete process.env.ANTHROPIC_API_KEY;
+      const previous = process.env.ANTHROPIC_API_KEY;
+      try {
+        process.env.ANTHROPIC_API_KEY = "sk-from-env";
+        const p: ProviderConfig = {
+          name: "p",
+          base_url: "#",
+          protocol: "anthropic",
+          model: "m",
+        };
+        expect(resolveAPIKey(p)).toBe("sk-from-env");
+      } finally {
+        if (previous === undefined) {
+          delete process.env.ANTHROPIC_API_KEY;
+        } else {
+          process.env.ANTHROPIC_API_KEY = previous;
+        }
+      }
     });
   });
 
@@ -346,11 +338,11 @@ describe("config", () => {
     });
 
     it("disables for real when set to false", () => {
-      expect(memoryEnabled({ ...bare(), memory: false })).toBe(false);
-      expect(memoryEnabled({ ...bare(), memory: true })).toBe(true);
+      expect(memoryEnabled({ ...bare(), enable_memory: false })).toBe(false);
+      expect(memoryEnabled({ ...bare(), enable_memory: true })).toBe(true);
     });
 
-    it("parses memory from config.yaml", () => {
+    it("parses enable_memory from config.yaml", () => {
       const dir = mkdtempSync(join(tmpdir(), "yukino-memory-"));
       try {
         const path = join(dir, "config.yaml");
@@ -362,12 +354,12 @@ describe("config", () => {
             "    protocol: anthropic",
             "    base_url: https://provider.example.com",
             "    model: model",
-            "memory: false",
+            "enable_memory: false",
             "",
           ].join("\n"),
         );
         const cfg = loadConfig(path);
-        expect(cfg.memory).toBe(false);
+        expect(cfg.enable_memory).toBe(false);
         expect(memoryEnabled(cfg)).toBe(false);
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -559,55 +551,7 @@ describe("config", () => {
           "",
         ].join("\n"),
       );
-      expect(() => loadConfig(path)).toThrow(
-        /Invalid MCP server configuration/,
-      );
-    });
-
-    it("loads the sandbox-runtime backend", () => {
-      const path = join(dir, "config.yaml");
-      writeFileSync(
-        path,
-        [
-          "providers:",
-          "  - name: provider",
-          "    protocol: anthropic",
-          "    base_url: https://provider.example.com",
-          "    model: model",
-          "sandbox:",
-          "  enabled: true",
-          "  backend: sandbox-runtime",
-          "  auto_allow: true",
-          "  network_enabled: false",
-          "",
-        ].join("\n"),
-      );
-
-      expect(loadConfig(path).sandbox).toEqual({
-        enabled: true,
-        backend: "sandbox-runtime",
-        auto_allow: true,
-        network_enabled: false,
-      });
-    });
-
-    it("rejects unknown sandbox backends", () => {
-      const path = join(dir, "config.yaml");
-      writeFileSync(
-        path,
-        [
-          "providers:",
-          "  - name: provider",
-          "    protocol: anthropic",
-          "    base_url: https://provider.example.com",
-          "    model: model",
-          "sandbox:",
-          "  backend: unknown",
-          "",
-        ].join("\n"),
-      );
-
-      expect(() => loadConfig(path)).toThrow(/Invalid sandbox configuration/);
+      expect(() => loadConfig(path)).toThrow(/Invalid configuration/);
     });
   });
 });

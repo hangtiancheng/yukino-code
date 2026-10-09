@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,13 +16,13 @@ import { saveMessage } from "@/session/index.js";
 
 function fakeRuntime(
   sessionId: string,
-  workDir: string,
+  cwd: string,
   events: AgentEvent[] = [],
   onRun?: (callbacks: Parameters<AcpRuntime["run"]>[1]) => Promise<void>,
 ): AcpRuntime {
   return {
     sessionId,
-    workDir,
+    cwd,
     contextWindow: 200_000,
     conv: new ConversationManager(),
     async *run(text, callbacks) {
@@ -80,11 +58,11 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
 
 describe("Yukino ACP agent", () => {
   it("runs prompts, streams events and bridges permissions", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-acp-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-acp-"));
     const permissionResults: string[] = [];
     const runtime = fakeRuntime(
       "session-12345678",
-      workDir,
+      cwd,
       [
         { type: "stream_text", text: "done" },
         {
@@ -135,7 +113,7 @@ describe("Yukino ACP agent", () => {
       await client.connectWith(implementation.app, async (context) => {
         await initialize(context);
         const created = await context.request(acp.methods.agent.session.new, {
-          cwd: workDir,
+          cwd: cwd,
           mcpServers: [],
         });
         const response = await context.request(
@@ -147,29 +125,44 @@ describe("Yukino ACP agent", () => {
         );
         expect(response.stopReason).toBe("end_turn");
         expect(response.usage?.totalTokens).toBe(19);
+        const secondResponse = await context.request(
+          acp.methods.agent.session.prompt,
+          {
+            sessionId: created.sessionId,
+            prompt: [{ type: "text", text: "write another" }],
+          },
+        );
+        expect(secondResponse.usage?.totalTokens).toBe(19);
         await context.request(acp.methods.agent.session.close, {
           sessionId: created.sessionId,
         });
       });
 
-      expect(permissionIds).toEqual(["tool-1"]);
-      expect(permissionResults).toEqual(["allowAlways"]);
+      expect(permissionIds).toEqual(["tool-1", "tool-1"]);
+      expect(permissionResults).toEqual(["allowAlways", "allowAlways"]);
       expect(
         updates.map((notification) => notification.update.sessionUpdate),
-      ).toEqual(["agent_message_chunk", "tool_call_update", "usage_update"]);
+      ).toEqual([
+        "agent_message_chunk",
+        "tool_call_update",
+        "usage_update",
+        "agent_message_chunk",
+        "tool_call_update",
+        "usage_update",
+      ]);
       expect(dispose).toHaveBeenCalledOnce();
     } finally {
-      rmSync(workDir, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
     }
   });
 
   it("cancels a turn waiting for a permission response", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-acp-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-acp-"));
     const permissionStarted = deferred();
     const permissionResults: string[] = [];
     const runtime = fakeRuntime(
       "session-abcdef12",
-      workDir,
+      cwd,
       [{ type: "loop_complete", stopReason: "interrupted" }],
       async (callbacks) => {
         permissionStarted.resolve();
@@ -196,7 +189,7 @@ describe("Yukino ACP agent", () => {
       await client.connectWith(implementation.app, async (context) => {
         await initialize(context);
         const created = await context.request(acp.methods.agent.session.new, {
-          cwd: workDir,
+          cwd: cwd,
           mcpServers: [],
         });
         const prompt = context.request(acp.methods.agent.session.prompt, {
@@ -215,19 +208,19 @@ describe("Yukino ACP agent", () => {
       expect(abort).toHaveBeenCalled();
     } finally {
       await implementation.dispose();
-      rmSync(workDir, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
     }
   });
 
   it("lists, loads and replays persisted sessions", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-acp-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-acp-"));
     const sessionId = "saved-12345678";
-    saveMessage(workDir, sessionId, {
+    saveMessage(cwd, sessionId, {
       role: "user",
       content: "hello",
       timestamp: 1,
     });
-    saveMessage(workDir, sessionId, {
+    saveMessage(cwd, sessionId, {
       role: "assistant",
       content: "world",
       timestamp: 2,
@@ -250,14 +243,14 @@ describe("Yukino ACP agent", () => {
       await client.connectWith(implementation.app, async (context) => {
         await initialize(context);
         const listed = await context.request(acp.methods.agent.session.list, {
-          cwd: workDir,
+          cwd: cwd,
         });
         expect(listed.sessions).toMatchObject([
-          { sessionId, cwd: workDir, title: "hello" },
+          { sessionId, cwd: cwd, title: "hello" },
         ]);
 
         await context.request(acp.methods.agent.session.load, {
-          cwd: workDir,
+          cwd: cwd,
           sessionId,
           mcpServers: [],
         });
@@ -271,7 +264,7 @@ describe("Yukino ACP agent", () => {
       });
     } finally {
       await implementation.dispose();
-      rmSync(workDir, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
     }
   });
 });

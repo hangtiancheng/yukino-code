@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -53,13 +31,12 @@ function makeTempProject(): { base: string; projectDir: string } {
 
 describe("FileHistory rewind", () => {
   it("deletes a file created after the target snapshot", () => {
-    const { base, projectDir } = makeTempProject();
-    const fh = new FileHistory(base, "session-1");
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
 
-    // Round 1: no file changes, pure conversation, take a snapshot.
     fh.makeSnapshot(0, "Round 1");
 
-    // Round 2: create a new file. trackEdit is called before the write, when the file does not exist yet.
+    // trackEdit runs before the write, while the file does not exist yet.
     const newFile = join(projectDir, "new-file.ts");
     fh.trackEdit(newFile);
     writeFileSync(newFile, "export const x = 1;");
@@ -67,16 +44,90 @@ describe("FileHistory rewind", () => {
 
     expect(existsSync(newFile)).toBe(true);
 
-    // Rewind to the round-1 snapshot, i.e. the state before this file was created.
-    const changed = fh.rewind(0);
+    // Rewind after reloading to prove the absent baseline survives restart.
+    const resumed = new FileHistory("session-1");
+    const changed = resumed.rewind(0);
 
     expect(existsSync(newFile)).toBe(false);
     expect(changed).toContain(newFile);
   });
 
+  it("restores a pre-existing baseline first tracked after the target", () => {
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
+    fh.makeSnapshot(0, "before tracking");
+
+    const existing = join(projectDir, "late-edit.ts");
+    writeFileSync(existing, "original before tracking");
+    fh.trackEdit(existing);
+    writeFileSync(existing, "modified");
+    fh.makeSnapshot(1, "after tracking");
+
+    const resumed = new FileHistory("session-1");
+    const changed = resumed.rewind(0);
+
+    expect(readFileSync(existing, "utf-8")).toBe("original before tracking");
+    expect(changed).toContain(existing);
+  });
+
+  it("retains an existing baseline when restore fails so rewind can retry", () => {
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
+    fh.makeSnapshot(0, "before tracking");
+
+    const parent = join(projectDir, "nested");
+    const existing = join(parent, "late-edit.ts");
+    mkdirSync(parent);
+    writeFileSync(existing, "original before tracking");
+    fh.trackEdit(existing);
+    writeFileSync(existing, "modified");
+    fh.makeSnapshot(1, "after tracking");
+
+    const baselineName = `${createHash("sha256")
+      .update(existing)
+      .digest("hex")
+      .slice(0, 16)}@baseline`;
+    const baselinePath = join(fileHistoryDir("session-1"), baselineName);
+
+    rmSync(parent, { recursive: true });
+    writeFileSync(parent, "blocks directory creation");
+    expect(fh.rewind(0)).not.toContain(existing);
+    expect(existsSync(baselinePath)).toBe(true);
+
+    rmSync(parent);
+    mkdirSync(parent);
+    const resumed = new FileHistory("session-1");
+    const changed = resumed.rewind(0);
+
+    expect(readFileSync(existing, "utf-8")).toBe("original before tracking");
+    expect(changed).toContain(existing);
+    expect(existsSync(baselinePath)).toBe(false);
+  });
+
+  it("retains an absent baseline when deletion fails so rewind can retry", () => {
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
+    fh.makeSnapshot(0, "before tracking");
+
+    const newFile = join(projectDir, "late-file.ts");
+    fh.trackEdit(newFile);
+    mkdirSync(newFile);
+
+    expect(fh.rewind(0)).not.toContain(newFile);
+    expect(existsSync(newFile)).toBe(true);
+
+    rmSync(newFile, { recursive: true });
+    writeFileSync(newFile, "created after failed rewind");
+    const resumed = new FileHistory("session-1");
+    const changed = resumed.rewind(0);
+
+    expect(changed).toContain(newFile);
+    expect(existsSync(newFile)).toBe(false);
+  });
+
   it("restores an edit on an existing file", () => {
-    const { base, projectDir } = makeTempProject();
-    const fh = new FileHistory(base, "session-1");
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
 
     const existing = join(projectDir, "existing.ts");
     writeFileSync(existing, "original");
@@ -94,8 +145,8 @@ describe("FileHistory rewind", () => {
   });
 
   it("preserves a tracked file when its snapshot backup cannot be written", () => {
-    const { base, projectDir } = makeTempProject();
-    const fh = new FileHistory(base, "session-1");
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
     const file = join(projectDir, "file.ts");
     writeFileSync(file, "original");
     fh.trackEdit(file);
@@ -104,11 +155,11 @@ describe("FileHistory rewind", () => {
       .update(file)
       .digest("hex")
       .slice(0, 16)}@s0`;
-    mkdirSync(join(fileHistoryDir(base, "session-1"), backupName));
+    mkdirSync(join(fileHistoryDir("session-1"), backupName));
     fh.makeSnapshot(0, "backup fails");
     writeFileSync(file, "modified");
 
-    const resumed = new FileHistory(base, "session-1");
+    const resumed = new FileHistory("session-1");
     const changed = resumed.rewind(0);
 
     expect(existsSync(file)).toBe(true);
@@ -117,8 +168,8 @@ describe("FileHistory rewind", () => {
   });
 
   it("keeps the created file when rewinding to its own snapshot", () => {
-    const { base, projectDir } = makeTempProject();
-    const fh = new FileHistory(base, "session-1");
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
 
     fh.makeSnapshot(0, "Round 1");
 
@@ -136,8 +187,8 @@ describe("FileHistory rewind", () => {
   });
 
   it("restores a file whose parent directory was deleted after the snapshot", () => {
-    const { base, projectDir } = makeTempProject();
-    const fh = new FileHistory(base, "session-1");
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
 
     const nestedDir = join(projectDir, "src", "deep");
     const nested = join(nestedDir, "file.ts");
@@ -161,8 +212,8 @@ describe("FileHistory rewind", () => {
   });
 
   it("captures content at snapshot time, so rewinding to the latest snapshot keeps the latest edit", () => {
-    const { base, projectDir } = makeTempProject();
-    const fh = new FileHistory(base, "session-1");
+    const { projectDir } = makeTempProject();
+    const fh = new FileHistory("session-1");
 
     const file = join(projectDir, "file.ts");
     writeFileSync(file, "v1");
@@ -182,16 +233,16 @@ describe("FileHistory rewind", () => {
   });
 
   it("persists snapshots and reloads them in a new instance", () => {
-    const { base, projectDir } = makeTempProject();
+    const { projectDir } = makeTempProject();
     const existing = join(projectDir, "file.ts");
     writeFileSync(existing, "original");
 
-    const first = new FileHistory(base, "session-1");
+    const first = new FileHistory("session-1");
     first.trackEdit(existing);
     first.makeSnapshot(1, "checkpoint");
     writeFileSync(existing, "modified");
 
-    const second = new FileHistory(base, "session-1");
+    const second = new FileHistory("session-1");
     expect(second.hasSnapshots()).toBe(true);
     const changed = second.rewind(0);
 
@@ -243,7 +294,7 @@ describe("session log line coordinates", () => {
       timestamp: 2,
     });
 
-    const fh = new FileHistory(base, "s2");
+    const fh = new FileHistory("s2");
     const lines = sessionLineCount(getSessionFilePath(base, "s2"));
     expect(lines).toBeDefined();
     fh.makeSnapshot(2, "turn complete", lines);

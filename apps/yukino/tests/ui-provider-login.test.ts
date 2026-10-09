@@ -1,28 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { stripVTControlCharacters } from "node:util";
 
-import { render, renderToString, useInput, usePaste, useWindowSize } from "ink";
+import { render, renderToString, useInput, usePaste } from "ink";
 import type { Instance, Key } from "ink";
 import type * as Ink from "ink";
 import { act, createElement } from "react";
@@ -31,12 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
 import { ProviderLogin } from "@/ui/provider-login.js";
+import { cursorWindow, visibleWidth } from "@/ui/terminal-text.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),
   useInput: vi.fn(),
   usePaste: vi.fn(),
-  useWindowSize: vi.fn(),
 }));
 
 const noKey: Key = {
@@ -87,7 +65,7 @@ beforeEach(() => {
   fetchMock.mockResolvedValue(Response.json({ data: [] }));
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.mocked(useWindowSize).mockReturnValue({ columns: 80, rows: 24 });
+  process.stdout.columns = 80;
   outputChunks = [];
   vi.spyOn(process.stdout, "write").mockImplementation(
     (chunk: string | Uint8Array) => {
@@ -195,10 +173,60 @@ function mockModels(...ids: string[]): void {
 }
 
 describe("ProviderLogin", () => {
+  it.each([1, 2, 3, 4])(
+    "keeps a directly rendered truncated cursor within %s columns",
+    (width) => {
+      const window = cursorWindow("abcdefgh", 4, width);
+      const rendered =
+        (window.leadingEllipsis ? "…" : "") +
+        window.before +
+        window.current +
+        window.after +
+        (window.trailingEllipsis ? "…" : "");
+      expect(visibleWidth(rendered)).toBeLessThanOrEqual(width);
+      if (width === 3) {
+        expect(rendered).toBe("…e…");
+      }
+    },
+  );
+
+  it("keeps a middle cursor with both ellipses inside a narrow rendered field", () => {
+    const columns = 24;
+    process.stdout.columns = columns;
+    Object.defineProperty(process.stdout, "columns", {
+      configurable: true,
+      value: columns,
+    });
+    mount({ ...validProvider, name: "abcdefghijklmnopqrstuvwxyz" });
+    for (let index = 0; index < 12; index += 1) {
+      send("", { rightArrow: true });
+    }
+
+    expect(terminalOutput()).toMatch(/…[a-z]*…/u);
+    const lines = outputChunks.flatMap((chunk) =>
+      stripVTControlCharacters(chunk).split("\n"),
+    );
+    expect(lines.filter((line) => stringWidth(line) > columns)).toEqual([]);
+  });
+
+  it("shows cursor-key guidance for every editable field", () => {
+    mount();
+    const editableIndexes = new Set([0, 2, 3, 4, 6, 7]);
+    for (let index = 0; index < 8; index += 1) {
+      if (editableIndexes.has(index)) {
+        expect(terminalOutput()).toContain("Home/End · Ctrl+B/F move cursor");
+      }
+      if (index < 7) {
+        outputChunks = [];
+        send("", { tab: true });
+      }
+    }
+  });
+
   it.each([32, 48])(
     "renders defaults and masks the API key at %s columns",
     (columns) => {
-      vi.mocked(useWindowSize).mockReturnValue({ columns, rows: 24 });
+      process.stdout.columns = columns;
       let rendered = "";
       act(() => {
         rendered = stripVTControlCharacters(
@@ -217,6 +245,7 @@ describe("ProviderLogin", () => {
         rendered.split("\n").every((line) => stringWidth(line) <= columns),
       ).toBe(true);
       expect(rendered).toContain("type/paste any ID");
+      expect(rendered).toContain("Ctrl+B/F");
       expect(rendered).toContain("Provider login");
       expect(rendered).toContain("1000000");
       expect(rendered).toContain("128000");
@@ -242,7 +271,7 @@ describe("ProviderLogin", () => {
     });
   });
 
-  it("navigates with Tab and changes protocol and thinking with arrows", async () => {
+  it("navigates with Tab, changes protocol with arrows, and skips thinking levels without a native effort", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     mount(validProvider, onSubmit);
 
@@ -258,12 +287,14 @@ describe("ProviderLogin", () => {
       await Promise.resolve();
     });
 
-    // The protocol switch leaves thinking at its default (high); the right
-    // arrow then advances high -> xhigh.
+    // The protocol switch leaves thinking at its default (high). Under the
+    // openai protocol xhigh/max have no native reasoning effort and are not
+    // offered without an explicit thinking_level_map, so the arrow wraps
+    // high -> off instead of advancing to xhigh.
     expect(onSubmit).toHaveBeenCalledWith({
       ...validProvider,
       protocol: "openai",
-      thinking: "xhigh",
+      thinking: "off",
     });
   });
 
@@ -641,7 +672,7 @@ describe("ProviderLogin model discovery", () => {
   it.each([32, 48])(
     "keeps discovery and manual-input hints readable at %s columns",
     async (columns) => {
-      vi.mocked(useWindowSize).mockReturnValue({ columns, rows: 24 });
+      process.stdout.columns = columns;
       Object.defineProperty(process.stdout, "columns", {
         configurable: true,
         value: columns,

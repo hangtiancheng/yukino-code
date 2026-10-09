@@ -1,26 +1,5 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Box, Text, useInput } from "ink";
+import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
@@ -81,6 +60,7 @@ export function CodeReviewDialog({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const focusRef = useRef<DOMElement>(null);
   const formRef = useRef(form);
   const fieldRef = useRef(field);
   const submittingRef = useRef(false);
@@ -157,6 +137,7 @@ export function CodeReviewDialog({
 
   return (
     <SelectorFrame
+      focusRef={focusRef}
       hint="↑↓/Tab field · Shift+Enter newline · Enter run · Esc cancel"
       subtitle={
         submitting
@@ -171,23 +152,28 @@ export function CodeReviewDialog({
           const selected = key === field;
           return (
             <Box key={key} flexDirection="column" width="100%">
-              <Text color={selected ? THEME.accent : THEME.muted}>
+              <Text
+                color={selected ? THEME.accent : THEME.muted}
+                wrap="truncate-end"
+              >
                 {selected ? "› " : "  "}
                 {FIELD_LABELS[key]}
               </Text>
               {selected ? (
-                <TextField
-                  key={key}
-                  initialValue={form[key]}
-                  isActive={!submitting}
-                  indent={2}
-                  onChange={(value) => {
-                    updateField(key, value);
-                  }}
-                  onSubmit={(value) => {
-                    void submit(value);
-                  }}
-                />
+                <Box ref={focusRef} flexDirection="column">
+                  <TextField
+                    key={key}
+                    initialValue={form[key]}
+                    isActive={!submitting}
+                    indent={2}
+                    onChange={(value) => {
+                      updateField(key, value);
+                    }}
+                    onSubmit={(value) => {
+                      void submit(value);
+                    }}
+                  />
+                </Box>
               ) : (
                 <Text color={THEME.dim} wrap="truncate-end">
                   {`  ${displayValue(form[key])}`}
@@ -201,7 +187,7 @@ export function CodeReviewDialog({
             </Box>
           );
         })}
-        <Text color={THEME.dim}>
+        <Text color={THEME.dim} wrap="truncate-end">
           Separate exclude globs with semicolons or new lines.
         </Text>
       </Box>

@@ -1,36 +1,11 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Recovery budgets for the attachment block appended to the summary
 // message. Compaction collapses the working conversation into a summary;
 // without these snapshots the model would forget which files it just read.
-// Skill recovery does not flow through this class today: recordSkillInvocation
-// has no callers, so the "Active skills" section below is never populated.
 // Active skill SOPs are re-injected after compaction by Agent.restoreContext →
-// ConversationManager.injectLongTermMemory (agent/index.ts) instead.
+// ConversationManager.injectLongTermMemory (agent/index.ts), not through
+// this attachment.
 const RECOVERY_FILE_LIMIT = 5;
 const RECOVERY_TOKENS_PER_FILE = 5_000;
-const RECOVERY_SKILLS_BUDGET = 25_000;
-const RECOVERY_TOKENS_PER_SKILL = 5_000;
 const RECOVERY_CHARS_PER_TOKEN = 3.5;
 
 function approxTokens(s: string): number {
@@ -64,15 +39,8 @@ interface FileReadRecord {
   timestamp: number;
 }
 
-interface SkillInvocationRecord {
-  name: string;
-  body: string;
-  timestamp: number;
-}
-
 export class RecoveryState {
   private files = new Map<string, FileReadRecord>();
-  private skills = new Map<string, SkillInvocationRecord>();
 
   recordFileRead(path: string, content: string): void {
     this.files.delete(path);
@@ -90,22 +58,11 @@ export class RecoveryState {
     }
   }
 
-  // Currently uncalled — skill SOPs reach the post-compaction context via
-  // restoreContext → injectLongTermMemory, not through this attachment (see
-  // the file header).
-  recordSkillInvocation(name: string, body: string): void {
-    this.skills.set(name, { name, body, timestamp: Date.now() });
-  }
-
   snapshotFiles(limit = RECOVERY_FILE_LIMIT): FileReadRecord[] {
     const sorted = [...this.files.values()].sort(
       (a, b) => b.timestamp - a.timestamp,
     );
     return sorted.slice(0, limit);
-  }
-
-  snapshotSkills(): SkillInvocationRecord[] {
-    return [...this.skills.values()].sort((a, b) => b.timestamp - a.timestamp);
   }
 
   buildRecoveryAttachment(toolSchemaNames: string[]): string {
@@ -125,30 +82,6 @@ export class RecoveryState {
         sections.push(
           `### ${f.path}  (read ${ts})\n\n\`\`\`\n${content}${content.endsWith("\n") ? "" : "\n"}\`\`\``,
         );
-      }
-    }
-
-    const skills = this.snapshotSkills();
-    if (skills.length > 0) {
-      let used = 0;
-      const skillParts: string[] = [];
-      skillParts.push("## Active skills\n");
-      skillParts.push(
-        "These skills were invoked earlier in the session. Continue to follow each SOP when its triggering condition applies.\n",
-      );
-      let emitted = false;
-      for (const sk of skills) {
-        const body = truncateByTokens(sk.body, RECOVERY_TOKENS_PER_SKILL);
-        const tokens = approxTokens(body) + approxTokens(sk.name) + 8;
-        if (used + tokens > RECOVERY_SKILLS_BUDGET) {
-          break;
-        }
-        used += tokens;
-        skillParts.push(`### ${sk.name}\n\n${body}`);
-        emitted = true;
-      }
-      if (emitted) {
-        sections.push(skillParts.join("\n\n"));
       }
     }
 

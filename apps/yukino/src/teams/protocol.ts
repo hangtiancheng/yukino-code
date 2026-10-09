@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { randomBytes } from "node:crypto";
 
 import type { FileMailMessage } from "./file-mailbox.js";
@@ -40,20 +18,29 @@ export const MSG_PLAN_APPROVAL_REQUEST = "plan_approval_request";
 export const MSG_PLAN_APPROVAL_RESPONSE = "plan_approval_response";
 export const LEADER_NAME = "leader";
 
+// Team-internal coordination tools. Teammates run unattended — they have no
+// permission dialog of their own — so messaging and the shared task board
+// must never fall through to an "ask" decision on a teammate checker. These
+// are exempted on the checker itself (see PermissionChecker.teammate); the
+// "command" categories stay in place so the Leader's calls still go through
+// permission policy. Explicit deny/ask rules still take precedence.
+export const TEAMMATE_COORDINATION_TOOLS: ReadonlySet<string> = new Set([
+  "SendMessage",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+]);
+
 const teammateNamePattern = /^[a-zA-Z0-9_-]+$/;
 
 export function isValidTeammateName(name: string): boolean {
   return name !== LEADER_NAME && teammateNamePattern.test(name);
 }
 
-/** Text prefix for shutdown messages; teammates launched by older versions still recognize this prefix. */
+/** Text control form used by the leader's stop path and the agents dialog. */
 export const SHUTDOWN_PREFIX = "[shutdown]";
 
-/**
- * Generates a request identifier. Uses a random string rather than an auto-incrementing
- * sequence because requests may originate from teammates in different processes,
- * where an incrementing counter would collide across process boundaries.
- */
 export function newRequestId(): string {
   return `req-${randomBytes(8).toString("hex")}`;
 }
@@ -108,37 +95,23 @@ export function planApprovalRequest(
   return typed(from, MSG_PLAN_APPROVAL_REQUEST, newRequestId(), plan);
 }
 
-/** Approval result; on rejection, feedback explains what needs to change. */
+/** Records the runtime's automatic plan approval. */
 export function planApprovalResponse(
   from: string,
   requestId: string,
-  approve: boolean,
   feedback = "",
 ): FileMailMessage {
-  return typed(from, MSG_PLAN_APPROVAL_RESPONSE, requestId, feedback, approve);
+  return typed(from, MSG_PLAN_APPROVAL_RESPONSE, requestId, feedback, true);
 }
 
 /**
  * Determines whether a message is a shutdown request.
  *
- * In addition to checking the type field, the "[shutdown]" text prefix is also
- * recognized: pane teammates are independent processes that may have been launched
- * by an older version, and a user manually inserting a line into the mailbox
- * should also work.
+ * Both the typed protocol and the leader's plain-text stop control are accepted.
  */
 export function isShutdownRequest(m: FileMailMessage): boolean {
   if (m.type === MSG_SHUTDOWN_REQUEST) {
     return true;
   }
   return (m.text ?? "").trim().startsWith(SHUTDOWN_PREFIX);
-}
-
-/**
- * Whether the response constitutes approval. When the field is absent, it is
- * treated as not approved — silence is never interpreted as consent; the
- * requester follows the rejection path instead (for plan approval, the
- * teammate revises and resubmits).
- */
-export function approved(m: FileMailMessage): boolean {
-  return m.approve === true;
 }

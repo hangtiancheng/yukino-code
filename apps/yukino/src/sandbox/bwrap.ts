@@ -1,28 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { execFileSync } from "node:child_process";
 
-import type { Sandbox, SandboxConfig } from "./index.js";
+import type {
+  Sandbox,
+  SandboxConfig,
+  SandboxExecutionContext,
+} from "./index.js";
+
+import { resolveToolPath } from "@/utils/paths.js";
 
 /**
  * Linux bubblewrap (bwrap) sandbox implementation.
@@ -49,20 +33,26 @@ export class BwrapSandbox implements Sandbox {
   prepare(
     command: string,
     config: SandboxConfig,
+    context: SandboxExecutionContext,
   ): { executable: string; args: string[] } {
     const args = ["--unshare-user", "--unshare-pid"];
+    // If yukino dies without running its kill path (SIGKILL, crash), the
+    // sandboxed process group must not outlive the session as an orphan.
+    args.push("--die-with-parent");
 
-    // Mount the root filesystem as read-only
     args.push("--ro-bind", "/", "/");
 
-    // Grant write access via writable bind mounts for allowed paths
-    for (const path of config.allowWrite) {
+    for (const path of config.allowWrite.map((path) =>
+      resolveToolPath(context.cwd, path),
+    )) {
       args.push("--bind", path, path);
     }
 
     // Enforce read-only on denied paths; mounted after the allowWrite binds, so
     // they take precedence where the paths overlap
-    for (const path of config.denyWrite) {
+    for (const path of config.denyWrite.map((path) =>
+      resolveToolPath(context.cwd, path),
+    )) {
       args.push("--ro-bind", path, path);
     }
 

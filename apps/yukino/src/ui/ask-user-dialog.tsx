@@ -1,30 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Box, Text, useInput } from "ink";
-import { useReducer } from "react";
+import type { DOMElement } from "ink";
+import { useReducer, useRef } from "react";
+import type { RefObject } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
+import { truncateToWidth, visibleWidth } from "./terminal-text.js";
 import { TextField } from "./text-field.js";
+import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import type { Question } from "@/tools/ask-user.js";
 import { ICONS, THEME } from "@/ui/styles.js";
@@ -33,7 +15,6 @@ interface Props {
   questions: Question[];
   onComplete: (answers: Record<string, string>) => void;
 }
-// ── State management ──
 
 interface QuestionState {
   cursor: number;
@@ -52,7 +33,6 @@ interface State {
 type Action =
   | { type: "next" }
   | { type: "prev" }
-  | { type: "goto"; index: number }
   | { type: "update"; index: number; updates: Partial<QuestionState> }
   | { type: "set-submit-cursor"; cursor: number };
 
@@ -68,8 +48,6 @@ function reducer(state: State, action: Action): State {
       };
     case "prev":
       return { ...state, currentIndex: Math.max(state.currentIndex - 1, 0) };
-    case "goto":
-      return { ...state, currentIndex: action.index };
     case "update": {
       const qs = [...state.questionStates];
       qs[action.index] = { ...qs[action.index], ...action.updates };
@@ -81,8 +59,6 @@ function reducer(state: State, action: Action): State {
       return state;
   }
 }
-
-// ── Navigation bar ──
 
 function NavigationBar({
   questions,
@@ -98,6 +74,22 @@ function NavigationBar({
   const total = questions.length + (hideSubmit ? 0 : 1);
   const isFirst = currentIndex === 0;
   const isLast = currentIndex >= total - 1;
+  const { columns } = useTerminalDimensions();
+  const labels = questions.map((q) => q.header).join("  ");
+  if (visibleWidth(labels) + questions.length * 5 + 16 > columns - 2) {
+    const question = questions[currentIndex];
+    const label = question
+      ? `${states[currentIndex].answer !== undefined ? "☑" : "☐"} ${question.header}`
+      : "✓ Submit";
+    return (
+      <Text color={THEME.accent} wrap="truncate-end">
+        {truncateToWidth(
+          `← ${String(currentIndex + 1)}/${String(total)} · ${label} →`,
+          Math.max(1, columns - 2),
+        )}
+      </Text>
+    );
+  }
 
   return (
     <Box flexDirection="row" marginBottom={1}>
@@ -137,19 +129,20 @@ function NavigationBar({
   );
 }
 
-// ── Question view: compact vertical single/multi-select ──
 function QuestionContent({
   question,
   state,
   onTextChange,
   onTextSubmit,
   onTextEscape,
+  focusRef,
 }: {
   question: Question;
   state: QuestionState;
   onTextChange: (value: string) => void;
   onTextSubmit: (value: string) => void;
   onTextEscape: () => void;
+  focusRef: RefObject<DOMElement | null>;
 }) {
   const options = question.options;
   const otherIndex = options.length;
@@ -181,8 +174,12 @@ function QuestionContent({
             ? THEME.success
             : THEME.muted;
         return (
-          <Box key={opt.label} flexDirection="column">
-            <Text>
+          <Box
+            key={opt.label}
+            ref={isFocused ? focusRef : undefined}
+            flexDirection="column"
+          >
+            <Text wrap="truncate-end">
               <Text color={isFocused ? THEME.accent : THEME.dim}>
                 {pointer}
               </Text>
@@ -194,15 +191,21 @@ function QuestionContent({
             </Text>
             {opt.description && (
               <Box paddingLeft={maxIdxWidth + 5}>
-                <Text color={THEME.muted}>{opt.description}</Text>
+                <Text color={THEME.muted} wrap="truncate-end">
+                  {opt.description}
+                </Text>
               </Box>
             )}
           </Box>
         );
       })}
-      {/* "Other" option */}
-      <Box flexDirection="column">
-        <Text>
+      <Box
+        ref={
+          state.cursor === otherIndex && !state.otherMode ? focusRef : undefined
+        }
+        flexDirection="column"
+      >
+        <Text wrap="truncate-end">
           <Text color={state.cursor === otherIndex ? THEME.accent : THEME.dim}>
             {state.cursor === otherIndex ? ICONS.arrow : " "}
           </Text>
@@ -216,32 +219,34 @@ function QuestionContent({
         </Text>
       </Box>
       {state.otherMode && (
-        <TextField
-          isActive
-          indent={maxIdxWidth + 5}
-          prompt={`${ICONS.arrow} `}
-          initialValue={state.textInputValue}
-          onChange={onTextChange}
-          onSubmit={onTextSubmit}
-          onEscape={onTextEscape}
-        />
+        <Box ref={focusRef} flexDirection="column">
+          <TextField
+            isActive
+            indent={maxIdxWidth + 5}
+            prompt={`${ICONS.arrow} `}
+            initialValue={state.textInputValue}
+            onChange={onTextChange}
+            onSubmit={onTextSubmit}
+            onEscape={onTextEscape}
+          />
+        </Box>
       )}
     </Box>
   );
 }
-
-// ── Submit view ──
 
 function SubmitContent({
   questions,
   states,
   allAnswered,
   submitCursor,
+  focusRef,
 }: {
   questions: Question[];
   states: QuestionState[];
   allAnswered: boolean;
   submitCursor: number;
+  focusRef: RefObject<DOMElement | null>;
 }) {
   return (
     <Box flexDirection="column" paddingLeft={1}>
@@ -273,34 +278,37 @@ function SubmitContent({
         <Box flexDirection="column">
           <Text color={THEME.muted}>Ready to submit your answers?</Text>
           <Text> </Text>
-          <Text>
-            <Text color={submitCursor === 0 ? THEME.accent : THEME.dim}>
-              {submitCursor === 0 ? ICONS.arrow : " "}
+          <Box ref={submitCursor === 0 ? focusRef : undefined}>
+            <Text wrap="truncate-end">
+              <Text color={submitCursor === 0 ? THEME.accent : THEME.dim}>
+                {submitCursor === 0 ? ICONS.arrow : " "}
+              </Text>
+              <Text
+                color={submitCursor === 0 ? THEME.accent : THEME.dim}
+                bold={submitCursor === 0}
+              >
+                {" Submit answers"}
+              </Text>
             </Text>
-            <Text
-              color={submitCursor === 0 ? THEME.accent : THEME.dim}
-              bold={submitCursor === 0}
-            >
-              {" Submit answers"}
+          </Box>
+          <Box ref={submitCursor === 1 ? focusRef : undefined}>
+            <Text wrap="truncate-end">
+              <Text color={submitCursor === 1 ? THEME.accent : THEME.dim}>
+                {submitCursor === 1 ? ICONS.arrow : " "}
+              </Text>
+              <Text color={submitCursor === 1 ? THEME.accent : THEME.dim}>
+                {" Cancel"}
+              </Text>
             </Text>
-          </Text>
-          <Text>
-            <Text color={submitCursor === 1 ? THEME.accent : THEME.dim}>
-              {submitCursor === 1 ? ICONS.arrow : " "}
-            </Text>
-            <Text color={submitCursor === 1 ? THEME.accent : THEME.dim}>
-              {" Cancel"}
-            </Text>
-          </Text>
+          </Box>
         </Box>
       )}
     </Box>
   );
 }
 
-// ── Main component ──
-
 export function AskUserDialog({ questions, onComplete }: Props) {
+  const focusRef = useRef<DOMElement>(null);
   const hideSubmit = questions.length === 1 && !questions[0].multiSelect;
 
   const [state, dispatch] = useReducer(reducer, {
@@ -342,11 +350,6 @@ export function AskUserDialog({ questions, onComplete }: Props) {
   };
 
   useInput((input, key) => {
-    // Filter out SGR mouse events
-    if (input.includes("[<") && /\[<\d+;\d+;\d+[Mm]/.test(input)) {
-      return;
-    }
-
     // "Other" free-text input mode: the TextField owns every key here
     // (editing, Enter → onSubmit, Esc → onEscape); ink dispatches input to
     // all mounted useInput handlers, so the dialog must not act on any of them.
@@ -359,21 +362,28 @@ export function AskUserDialog({ questions, onComplete }: Props) {
       return;
     }
 
-    // Question navigation (←/→, Tab)
+    // Question navigation (←/→, Tab). In hideSubmit mode there is exactly one
+    // question and no submit step: advancing would push currentIndex past the
+    // only question and blank the panel, so all navigation is disabled.
     if (key.leftArrow && !isSubmitTab) {
-      dispatch({ type: "prev" });
+      if (!hideSubmit) {
+        dispatch({ type: "prev" });
+      }
       return;
     }
     if (key.rightArrow && !isSubmitTab) {
-      dispatch({ type: "next" });
+      if (!hideSubmit) {
+        dispatch({ type: "next" });
+      }
       return;
     }
     if (key.tab) {
-      dispatch({ type: key.shift ? "prev" : "next" });
+      if (!hideSubmit) {
+        dispatch({ type: key.shift ? "prev" : "next" });
+      }
       return;
     }
 
-    // Submit view
     if (isSubmitTab) {
       if (key.upArrow) {
         dispatch({ type: "set-submit-cursor", cursor: 0 });
@@ -406,14 +416,43 @@ export function AskUserDialog({ questions, onComplete }: Props) {
     }
     const optCount = q.options.length + 1; // +1 for Other
 
-    // Numeric key shortcuts
+    // Numeric key shortcuts carry full selection semantics (the common CLI
+    // convention), not just cursor moves: single-select questions answer
+    // immediately, multi-select questions toggle the option.
     const num = parseInt(input, 10);
-    if (num >= 1 && num <= optCount) {
-      dispatch({
-        type: "update",
-        index: currentIndex,
-        updates: { cursor: num - 1 },
-      });
+    if (Number.isInteger(num) && num >= 1 && num <= optCount) {
+      if (num === q.options.length + 1) {
+        // "Other" row: entering text is a separate mode, so this stays a
+        // cursor move.
+        dispatch({
+          type: "update",
+          index: currentIndex,
+          updates: { cursor: num - 1 },
+        });
+        return;
+      }
+      const label = q.options[num - 1]?.label;
+      if (label === undefined) {
+        return;
+      }
+      if (q.multiSelect) {
+        const current = Array.isArray(qs.selectedValue)
+          ? [...qs.selectedValue]
+          : [];
+        const idx = current.indexOf(label);
+        if (idx >= 0) {
+          current.splice(idx, 1);
+        } else {
+          current.push(label);
+        }
+        dispatch({
+          type: "update",
+          index: currentIndex,
+          updates: { cursor: num - 1, selectedValue: current },
+        });
+      } else {
+        commitAnswer(label);
+      }
       return;
     }
 
@@ -480,8 +519,9 @@ export function AskUserDialog({ questions, onComplete }: Props) {
     if (!isSubmitTab) {
       helpParts.push("Enter to select");
       helpParts.push("↑/↓ to navigate");
+      helpParts.push("number keys answer directly");
       if (questions.length > 1) {
-        helpParts.push("Tab/Arrow keys to switch questions");
+        helpParts.push("←/→ or Tab to switch questions");
       }
     }
     helpParts.push("Esc to cancel");
@@ -489,7 +529,7 @@ export function AskUserDialog({ questions, onComplete }: Props) {
   const helpText = helpParts.join(" · ");
 
   return (
-    <SelectorFrame hint={helpText} title="Answer questions">
+    <SelectorFrame focusRef={focusRef} hint={helpText} title="Answer questions">
       <NavigationBar
         questions={questions}
         currentIndex={currentIndex}
@@ -502,11 +542,13 @@ export function AskUserDialog({ questions, onComplete }: Props) {
           states={questionStates}
           allAnswered={allAnswered}
           submitCursor={submitCursor}
+          focusRef={focusRef}
         />
       ) : q && qs ? (
         <QuestionContent
           question={q}
           state={qs}
+          focusRef={focusRef}
           onTextChange={(value) => {
             dispatch({
               type: "update",
@@ -515,7 +557,16 @@ export function AskUserDialog({ questions, onComplete }: Props) {
             });
           }}
           onTextSubmit={(value) => {
-            commitAnswer(value.trim() || "(no answer)");
+            const selected =
+              q.multiSelect && Array.isArray(qs.selectedValue)
+                ? qs.selectedValue
+                : [];
+            const parts = [...selected];
+            const other = value.trim();
+            if (other) {
+              parts.push(other);
+            }
+            commitAnswer(parts.join(", ") || "(no answer)");
           }}
           onTextEscape={() => {
             dispatch({

@@ -1,46 +1,57 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { mkdtempSync, writeFileSync, mkdirSync } from "fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from "fs";
 import { homedir } from "node:os";
-import { tmpdir } from "os";
+import { tmpdir } from "node:os";
 import { join } from "path";
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 import { Agent } from "@/agent/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { PermissionChecker } from "@/permissions/index.js";
+import { PathSandbox, PermissionChecker } from "@/permissions/index.js";
+import { yukinoPath, projectPath } from "@/storage/paths.js";
+
+const tempDirs = new Set<string>();
+let originalHome: string | undefined;
+let originalUserProfile: string | undefined;
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), "yukino-test-"));
+  const directory = mkdtempSync(join(tmpdir(), "yukino-test-"));
+  tempDirs.add(directory);
+  return directory;
 }
+
+beforeEach(() => {
+  originalHome = process.env.HOME;
+  originalUserProfile = process.env.USERPROFILE;
+  const home = makeTmpDir();
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
+  if (originalUserProfile === undefined) {
+    delete process.env.USERPROFILE;
+  } else {
+    process.env.USERPROFILE = originalUserProfile;
+  }
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 function makeChecker(
   tmpDir: string,
   rules: { rule: string; effect: string }[],
 ) {
-  const rulesDir = join(tmpDir, ".yukino");
+  const rulesDir = yukinoPath();
   mkdirSync(rulesDir, { recursive: true });
   const rulesFile = join(rulesDir, "permissions.yaml");
   const yaml = rules
@@ -66,6 +77,26 @@ describe("sandbox auto-allow respects deny/ask rules", () => {
     expect(result.effect).toBe("deny");
   });
 
+  it.each([
+    ["a single ampersand", " & "],
+    ["a carriage return", "\r"],
+    ["a line feed", "\n"],
+  ])("splits on %s before applying deny and ask rules", (_label, separator) => {
+    const denied = makeChecker(makeTmpDir(), [
+      { rule: "Bash(rm -rf /)", effect: "deny" },
+    ]).check("Bash", "command", {
+      command: `echo ok${separator}rm -rf /`,
+    });
+    const asked = makeChecker(makeTmpDir(), [
+      { rule: "Bash(git push origin main)", effect: "ask" },
+    ]).check("Bash", "command", {
+      command: `echo ok${separator}git push origin main`,
+    });
+
+    expect(denied.effect).toBe("deny");
+    expect(asked.effect).toBe("ask");
+  });
+
   it("allows safe command with sandbox", () => {
     const dir = makeTmpDir();
     const checker = makeChecker(dir, [
@@ -76,6 +107,18 @@ describe("sandbox auto-allow respects deny/ask rules", () => {
     });
     expect(result.effect).toBe("allow");
   });
+
+  it.each([{}, { command: 42 }, { command: "   " }])(
+    "does not auto-allow an uninspectable Bash command: %j",
+    (args) => {
+      const checker = makeChecker(makeTmpDir(), []);
+
+      const result = checker.check("Bash", "command", args);
+
+      expect(result.effect).toBe("ask");
+      expect(result.reason).toContain("non-empty Bash command");
+    },
+  );
 
   it("respects ask rule even with sandbox", () => {
     const dir = makeTmpDir();
@@ -105,7 +148,7 @@ describe("extra allowed roots", () => {
   it("opens a path outside the project once declared", () => {
     const dir = makeTmpDir();
     // makeTmpDir() won't work here: the system temp directory is already in the sandbox default allow list, so pick a path genuinely outside the project
-    const outside = join(homedir(), ".extra-root");
+    const outside = join(originalHome ?? "/", ".extra-root");
     const checker = new PermissionChecker(dir, "default");
     const target = join(outside, "MEMORY.md");
 
@@ -119,14 +162,327 @@ describe("extra allowed roots", () => {
   });
 });
 
-describe("bypassPermissions mode", () => {
-  it("leaves ordinary files alone", () => {
-    const dir = makeTmpDir();
-    const checker = new PermissionChecker(dir, "bypassPermissions");
-    const result = checker.check("WriteFile", "write", {
-      file_path: join(dir, "a.txt"),
+describe.each(["main", "subagent", "teammate"] as const)(
+  "%s path sandbox",
+  (kind) => {
+    function forAgent(parent: PermissionChecker): PermissionChecker {
+      if (kind === "main") {
+        return parent;
+      }
+      const checker = parent.forSubagent(makeTmpDir());
+      checker.teammate = kind === "teammate";
+      return checker;
+    }
+
+    function outsideFile(): string {
+      return join(originalHome ?? "/", ".outside-project", "file.ts");
+    }
+
+    it.each(["default", "acceptEdits", "plan", "bypassPermissions"] as const)(
+      "skips path checks for read-only tools in %s",
+      (mode) => {
+        const checker = forAgent(new PermissionChecker(makeTmpDir(), mode));
+        const pathCheck = vi.spyOn(PathSandbox.prototype, "check");
+        for (const [tool, args] of [
+          ["ReadFile", { file_path: outsideFile() }],
+          ["Glob", { path: outsideFile(), pattern: "**/*" }],
+          ["Grep", { path: outsideFile(), pattern: "text" }],
+        ] as const) {
+          expect(checker.check(tool, "read", args).effect).toBe("allow");
+        }
+        expect(pathCheck).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["default", "acceptEdits"] as const)(
+      "still asks for outside-root writes in %s",
+      (mode) => {
+        const checker = forAgent(new PermissionChecker(makeTmpDir(), mode));
+        for (const tool of ["WriteFile", "EditFile"]) {
+          expect(
+            checker.check(tool, "write", { file_path: outsideFile() }),
+          ).toEqual({
+            effect: "ask",
+            reason: `Path ${outsideFile()} is outside allowed directories`,
+          });
+        }
+        expect(
+          checker.check("WriteProbe", "write", { path: outsideFile() }).effect,
+        ).toBe("ask");
+      },
+    );
+
+    it("does not run path checks for writes in bypassPermissions", () => {
+      const checker = forAgent(
+        new PermissionChecker(makeTmpDir(), "bypassPermissions"),
+      );
+      const pathCheck = vi.spyOn(PathSandbox.prototype, "check");
+      for (const tool of ["WriteFile", "EditFile"]) {
+        expect(
+          checker.check(tool, "write", { file_path: outsideFile() }).effect,
+        ).toBe("allow");
+      }
+      expect(
+        checker.check("WriteProbe", "write", { path: outsideFile() }).effect,
+      ).toBe("allow");
+      expect(pathCheck).not.toHaveBeenCalled();
     });
-    expect(result.effect).not.toBe("deny");
+
+    it("follows live parent mode changes including plan", () => {
+      const parent = new PermissionChecker(makeTmpDir(), "acceptEdits");
+      const checker = forAgent(parent);
+      const args = { file_path: outsideFile() };
+      expect(checker.check("WriteFile", "write", args).effect).toBe("ask");
+      parent.mode = "bypassPermissions";
+      expect(checker.check("WriteFile", "write", args).effect).toBe("allow");
+      parent.mode = "plan";
+      expect(checker.check("WriteFile", "write", args).effect).toBe("deny");
+      parent.mode = "default";
+      expect(checker.check("WriteFile", "write", args).effect).toBe("ask");
+      expect(checker.check("ReadFile", "read", args).effect).toBe("allow");
+    });
+
+    it.each(["deny", "ask"] as const)(
+      "preserves explicit %s rules for reads and bypassed writes",
+      (effect) => {
+        const parent = makeChecker(makeTmpDir(), [
+          { rule: "ReadFile(*)", effect },
+          { rule: "WriteFile(*)", effect },
+        ]);
+        const checker = forAgent(parent);
+        for (const mode of [
+          "default",
+          "acceptEdits",
+          "plan",
+          "bypassPermissions",
+        ] as const) {
+          parent.mode = mode;
+          expect(
+            checker.check("ReadFile", "read", { file_path: outsideFile() }),
+          ).toEqual({ effect, reason: `Permission rule: ${effect}` });
+          expect(
+            checker.check("WriteFile", "write", { file_path: outsideFile() }),
+          ).toEqual(
+            mode === "plan"
+              ? { effect: "deny", reason: "Plan mode forbids mutations" }
+              : { effect, reason: `Permission rule: ${effect}` },
+          );
+        }
+      },
+    );
+
+    it("allows explicitly approved outside-root writes", () => {
+      const checker = forAgent(
+        makeChecker(makeTmpDir(), [{ rule: "WriteFile(*)", effect: "allow" }]),
+      );
+      expect(
+        checker.check("WriteFile", "write", { file_path: outsideFile() }),
+      ).toEqual({ effect: "allow", reason: "Permission rule: allow" });
+    });
+  },
+);
+
+describe("plan mode and path sandbox", () => {
+  it.each(["default", "acceptEdits", "plan", "bypassPermissions"] as const)(
+    "applies the inherited or overridden mode to subagents and teammates in %s",
+    (mode) => {
+      const parent = new PermissionChecker(makeTmpDir(), mode);
+      const target = join(originalHome ?? "/", ".outside-project", "file.ts");
+      const pathCheck = vi.spyOn(PathSandbox.prototype, "check");
+      for (const teammate of [false, true]) {
+        const checker = parent.forSubagent(makeTmpDir(), "plan");
+        checker.teammate = teammate;
+        checker.planFilePath = `${target}.plan.md`;
+        expect(
+          checker.check("ReadFile", "read", { file_path: target }).effect,
+        ).toBe("allow");
+        expect(
+          checker.check("Grep", "read", { path: target, pattern: "text" })
+            .effect,
+        ).toBe("allow");
+        expect(
+          checker.check("WriteFile", "write", { file_path: target }).effect,
+        ).toBe(
+          mode === "default" || mode === "plan"
+            ? "deny"
+            : mode === "acceptEdits"
+              ? "ask"
+              : "allow",
+        );
+        expect(
+          checker.check("WriteFile", "write", {
+            file_path: checker.planFilePath,
+          }).effect,
+        ).toBe(mode === "acceptEdits" ? "ask" : "allow");
+        expect(checker.mode).toBe(mode === "default" ? "plan" : mode);
+      }
+      if (
+        mode === "default" ||
+        mode === "plan" ||
+        mode === "bypassPermissions"
+      ) {
+        expect(pathCheck).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("still checks symlink targets for non-bypassed writes", () => {
+    const dir = makeTmpDir();
+    symlinkSync(originalHome ?? "/", join(dir, "external"), "dir");
+    const parent = new PermissionChecker(dir, "acceptEdits");
+    const checkers = [parent, parent.forSubagent(dir), parent.forSubagent(dir)];
+    checkers[2].teammate = true;
+    const args = {
+      file_path: join(dir, "external", ".outside-project", "file.ts"),
+    };
+    for (const checker of checkers) {
+      expect(checker.check("WriteFile", "write", args).effect).toBe("ask");
+      expect(checker.check("ReadFile", "read", args).effect).toBe("allow");
+    }
+    parent.mode = "bypassPermissions";
+    for (const checker of checkers) {
+      expect(checker.check("WriteFile", "write", args).effect).toBe("allow");
+    }
+  });
+});
+
+describe("teammate coordination tools", () => {
+  it("auto-allows SendMessage and task-board tools for teammate checkers", () => {
+    const checker = new PermissionChecker(makeTmpDir(), "acceptEdits");
+    checker.teammate = true;
+
+    const message = checker.check("SendMessage", "command", {
+      to: "leader",
+      content: "done",
+    });
+    expect(message.effect).toBe("allow");
+    expect(message.reason).toBe("Teammate coordination tool");
+
+    expect(
+      checker.check("TaskCreate", "command", {
+        subject: "s",
+        description: "d",
+      }).effect,
+    ).toBe("allow");
+    expect(checker.check("TaskUpdate", "command", { taskId: "1" }).effect).toBe(
+      "allow",
+    );
+  });
+
+  it("keeps SendMessage behind approval for non-teammate checkers", () => {
+    const checker = new PermissionChecker(makeTmpDir(), "acceptEdits");
+
+    const result = checker.check("SendMessage", "command", {
+      to: "leader",
+      content: "done",
+    });
+    expect(result.effect).toBe("ask");
+  });
+
+  it("explicit deny rules still gate teammate coordination tools", () => {
+    const dir = makeTmpDir();
+    const checker = makeChecker(dir, [
+      { rule: "SendMessage(*)", effect: "deny" },
+    ]);
+    checker.teammate = true;
+
+    expect(
+      checker.check("SendMessage", "command", { to: "leader", content: "x" })
+        .effect,
+    ).toBe("deny");
+  });
+
+  it("forCwd preserves the teammate flag", () => {
+    const dir = makeTmpDir();
+    const checker = new PermissionChecker(dir, "acceptEdits");
+    checker.teammate = true;
+
+    expect(checker.forCwd(dir).teammate).toBe(true);
+  });
+});
+
+describe("delegated permission modes", () => {
+  const modes = [
+    "default",
+    "acceptEdits",
+    "plan",
+    "bypassPermissions",
+  ] as const;
+  it.each(modes)("inherits %s when no mode is configured", (mode) => {
+    const parent = new PermissionChecker(makeTmpDir(), mode);
+    const child = parent.forSubagent(makeTmpDir());
+    expect(child.mode).toBe(mode);
+    for (const next of modes) {
+      parent.mode = next;
+      expect(child.mode).toBe(next);
+    }
+  });
+  it.each(modes)(
+    "resolves every configured mode under parent %s",
+    (parentMode) => {
+      const parent = new PermissionChecker(makeTmpDir(), parentMode);
+      for (const configured of modes) {
+        const child = parent.forSubagent(makeTmpDir(), configured);
+        const expected =
+          parentMode === "acceptEdits" ||
+          parentMode === "bypassPermissions" ||
+          configured === "bypassPermissions"
+            ? parentMode
+            : configured;
+        expect(child.mode).toBe(expected);
+        expect(child.forCwd(makeTmpDir()).mode).toBe(expected);
+      }
+    },
+  );
+  it("keeps child transitions local and removes bypass when the parent exits it", () => {
+    const parent = new PermissionChecker(makeTmpDir());
+    const child = parent.forSubagent(makeTmpDir(), "plan");
+    const sibling = parent.forSubagent(makeTmpDir());
+    child.mode = "acceptEdits";
+    expect(parent.mode).toBe("default");
+    expect(sibling.mode).toBe("default");
+    child.mode = "bypassPermissions";
+    expect(child.mode).toBe("default");
+    parent.mode = "bypassPermissions";
+    expect(child.mode).toBe("bypassPermissions");
+    parent.mode = "plan";
+    expect(child.mode).toBe("plan");
+  });
+  it.each(["allow", "ask"])(
+    "plan rejects writes despite an explicit %s rule or sandbox auto-allow",
+    (effect) => {
+      const checker = makeChecker(makeTmpDir(), [
+        { rule: "WriteFile(*)", effect },
+        { rule: "Bash(*)", effect },
+      ]);
+      checker.mode = "plan";
+      expect(
+        checker.check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("deny");
+      expect(
+        checker.check("Bash", "command", { command: "touch a.ts" }).effect,
+      ).toBe("deny");
+    },
+  );
+  it("permits plan control tools and the exact plan file while preserving explicit deny", () => {
+    const checker = new PermissionChecker(makeTmpDir(), "plan");
+    checker.planFilePath = join(makeTmpDir(), "plan.md");
+    expect(checker.check("ExitPlanMode", "command", {}).effect).toBe("allow");
+    expect(checker.check("Agent", "command", {}).effect).toBe("allow");
+    expect(
+      checker.check("WriteFile", "write", { file_path: checker.planFilePath })
+        .effect,
+    ).toBe("allow");
+    expect(
+      checker.check("WriteFile", "write", {
+        file_path: `${checker.planFilePath}.other`,
+      }).effect,
+    ).toBe("deny");
+    const denied = makeChecker(makeTmpDir(), [
+      { rule: "ExitPlanMode(*)", effect: "deny" },
+    ]);
+    denied.mode = "plan";
+    expect(denied.check("ExitPlanMode", "command", {}).effect).toBe("deny");
   });
 });
 
@@ -142,12 +498,12 @@ function makeCheckerWithTiers(userRules: string, projectRules: string) {
   process.env.HOME = home;
   process.env.USERPROFILE = home;
   try {
-    mkdirSync(join(home, ".yukino"), { recursive: true });
-    writeFileSync(join(home, ".yukino", "permissions.yaml"), userRules);
-    const workDir = makeTmpDir();
-    mkdirSync(join(workDir, ".yukino"), { recursive: true });
-    writeFileSync(join(workDir, ".yukino", "permissions.yaml"), projectRules);
-    return new PermissionChecker(workDir, "default");
+    mkdirSync(yukinoPath(), { recursive: true });
+    writeFileSync(yukinoPath("permissions.yaml"), userRules);
+    const cwd = makeTmpDir();
+    mkdirSync(projectPath(cwd), { recursive: true });
+    writeFileSync(projectPath(cwd, "permissions.yaml"), projectRules);
+    return new PermissionChecker(cwd, "default");
   } finally {
     for (const [key, value] of Object.entries(saved)) {
       if (value === undefined) {
@@ -190,7 +546,7 @@ describe("rule merging across files", () => {
 
   it("picks up rule file changes without restart", () => {
     const dir = makeTmpDir();
-    const rulesDir = join(dir, ".yukino");
+    const rulesDir = yukinoPath();
     mkdirSync(rulesDir, { recursive: true });
     const rulesFile = join(rulesDir, "permissions.yaml");
 
@@ -201,7 +557,6 @@ describe("rule merging across files", () => {
         .effect,
     ).toBe("allow");
 
-    // Same checker instance: rule file edits take effect immediately
     writeFileSync(rulesFile, deny);
     expect(
       checker.check("Bash", "command", { command: "git push origin main" })
@@ -211,7 +566,7 @@ describe("rule merging across files", () => {
 
   it("deny beats allow regardless of order in the same file", () => {
     for (const body of [`${allow}\n${deny}`, `${deny}\n${allow}`]) {
-      const checker = makeCheckerWithTiers(makeTmpDir(), body);
+      const checker = makeCheckerWithTiers("", body);
       expect(
         checker.check("Bash", "command", { command: "git push origin main" })
           .effect,
@@ -242,7 +597,7 @@ describe("memory background agent sandbox", () => {
 
     try {
       const dir = makeTmpDir();
-      const memDir = join(dir, ".yukino", "memory");
+      const memDir = projectPath(dir, "memory");
       mkdirSync(memDir, { recursive: true });
 
       const fakeClient: LLMClient = {
@@ -254,7 +609,7 @@ describe("memory background agent sandbox", () => {
         },
       };
       const consolidator = new MemoryConsolidator(fakeClient, dir);
-      await consolidator.run(memDir, [], 0);
+      await consolidator.run(memDir, []);
 
       expect(captured.length).toBe(1);
       const checker = captured[0];
@@ -265,11 +620,11 @@ describe("memory background agent sandbox", () => {
       // memory-root scoping, not the path sandbox.
       checker.mode = "default";
 
-      const userMemFile = join(homedir(), ".yukino", "memory", "MEMORY.md");
+      const userMemFile = yukinoPath("memory", "MEMORY.md");
       const allowed = checker.check("WriteFile", "write", {
         file_path: userMemFile,
       });
-      expect(allowed.reason).not.toContain("outside allowed directories");
+      expect(allowed.effect).toBe("allow");
 
       // Paths outside the memory roots are unaffected and still denied by the override's scoping
       const unrelated = join(homedir(), "unrelated-dir", "x.txt");
@@ -291,7 +646,7 @@ describe("rule file caching", () => {
   it("reuses parsed rules when the file looks unchanged", async () => {
     const { utimesSync } = await import("node:fs");
     const dir = makeTmpDir();
-    const rulesDir = join(dir, ".yukino");
+    const rulesDir = yukinoPath();
     mkdirSync(rulesDir, { recursive: true });
     const rulesFile = join(rulesDir, "permissions.yaml");
 
@@ -323,7 +678,7 @@ describe("rule file caching", () => {
   it("re-parses when only the mtime moves", async () => {
     const { utimesSync } = await import("node:fs");
     const dir = makeTmpDir();
-    const rulesDir = join(dir, ".yukino");
+    const rulesDir = yukinoPath();
     mkdirSync(rulesDir, { recursive: true });
     const rulesFile = join(rulesDir, "permissions.yaml");
 
@@ -348,7 +703,7 @@ describe("rule file caching", () => {
   it("drops the cache when the file is removed", async () => {
     const { unlinkSync } = await import("node:fs");
     const dir = makeTmpDir();
-    const rulesDir = join(dir, ".yukino");
+    const rulesDir = yukinoPath();
     mkdirSync(rulesDir, { recursive: true });
     const rulesFile = join(rulesDir, "permissions.yaml");
 

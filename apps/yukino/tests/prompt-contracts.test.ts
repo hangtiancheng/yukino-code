@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   mkdirSync,
   mkdtempSync,
@@ -47,9 +25,14 @@ import {
   buildPlanModeReminder,
 } from "@/prompt/plan-mode.js";
 import type { EnvironmentContext } from "@/prompt/sections.js";
+import {
+  buildDeferredToolGuidance,
+  buildToolGuidance,
+} from "@/prompt/tools.js";
 import { buildSkillSection, SkillCatalog } from "@/skills/catalog.js";
 import { runFork, runInline } from "@/skills/executor.js";
 import type { Skill, SkillForkHost } from "@/skills/index.js";
+import { projectPath, yukinoPath } from "@/storage/paths.js";
 import {
   BASH_DESCRIPTION,
   EDIT_FILE_DESCRIPTION,
@@ -62,7 +45,7 @@ import {
 import type { ToolSchema } from "@/tools/types.js";
 
 const env: EnvironmentContext = {
-  workDir: "/project",
+  cwd: "/project",
   os: "linux",
   arch: "arm64",
   shell: "/bin/bash",
@@ -78,19 +61,44 @@ afterEach(() => {
 });
 
 describe("system prompt contracts", () => {
-  it("sorts stably, skips empty sections, deduplicates content, and does not mutate on build", () => {
+  it("only advertises deferred tools with available discovery and dispatch routes", () => {
+    const names = ["mcp__server__action", "Local"];
+    expect(buildDeferredToolGuidance(names, ["ReadFile"], true)).toBe("");
+    const local = buildDeferredToolGuidance(names, ["ToolSearch"], true);
+    expect(local).toContain("Local");
+    expect(local).not.toMatch(/mcp__server__action|McpCall/);
+    const dispatch = buildDeferredToolGuidance(
+      names,
+      ["ToolSearch", "McpCall"],
+      true,
+    );
+    expect(dispatch).toContain("mcp__server__action");
+    expect(dispatch).toContain("McpCall");
+    const native = buildDeferredToolGuidance(names, ["ToolSearch"], false);
+    expect(native).toContain("mcp__server__action");
+    expect(native).not.toContain("McpCall");
+    expect(
+      buildDeferredToolGuidance(
+        [...names].reverse(),
+        ["ToolSearch", "McpCall"],
+        true,
+      ),
+    ).toBe(dispatch);
+  });
+
+  it("preserves insertion order, skips empty sections, deduplicates content, and does not mutate on build", () => {
     const builder = new PromptBuilder();
     expect(builder.build()).toBe("");
     builder
-      .add({ name: "later", priority: 20, content: " second " })
-      .add({ name: "empty", priority: -1, content: "\n " })
-      .add({ name: "first", priority: 10, content: " first " })
-      .add({ name: "tie", priority: 20, content: "third" })
-      .add({ name: "duplicate", priority: 30, content: "second\n" });
-    expect(builder.build()).toBe("first\n\nsecond\n\nthird");
-    expect(builder.build()).toBe("first\n\nsecond\n\nthird");
-    builder.add({ name: "earlier", priority: 0, content: "zero" });
-    expect(builder.build()).toBe("zero\n\nfirst\n\nsecond\n\nthird");
+      .add({ name: "second", content: " second " })
+      .add({ name: "empty", content: "\n " })
+      .add({ name: "first", content: " first " })
+      .add({ name: "third", content: "third" })
+      .add({ name: "duplicate", content: "second\n" });
+    expect(builder.build()).toBe("second\n\nfirst\n\nthird");
+    expect(builder.build()).toBe("second\n\nfirst\n\nthird");
+    builder.add({ name: "last", content: "zero" });
+    expect(builder.build()).toBe("second\n\nfirst\n\nthird\n\nzero");
   });
 
   it("keeps concise product guidance and environment without loading project content", () => {
@@ -101,7 +109,7 @@ describe("system prompt contracts", () => {
       expect(prompt.split(heading)).toHaveLength(2);
     }
     for (const value of [
-      env.workDir,
+      env.cwd,
       "linux/arm64",
       env.shell,
       env.gitBranch,
@@ -124,7 +132,22 @@ describe("system prompt contracts", () => {
   });
 
   it("retains trust, file-state, scope, delegation and verification invariants", () => {
-    const prompt = buildSystemPrompt(env);
+    const prompt =
+      buildSystemPrompt(env) +
+      buildToolGuidance([
+        "ReadFile",
+        "EditFile",
+        "WriteFile",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "TeamCreate",
+        "SendMessage",
+        "TaskCreate",
+        "ToolSearch",
+        "McpCall",
+      ]);
     for (const constraint of [
       "<system-reminder>",
       "MCP responses",
@@ -142,7 +165,7 @@ describe("system prompt contracts", () => {
       "Never fabricate URLs",
       "actual UI",
       "unobserved success",
-      "task tools",
+      "Task tools",
       "TeamCreate",
       "team_name",
       "run_in_background",
@@ -157,9 +180,118 @@ describe("system prompt contracts", () => {
       /show your (analysis|reasoning)|think step.by.step/i,
     );
   });
+
+  it("keeps the stable system prefix independent of role-specific tools", () => {
+    expect(buildSystemPrompt(env)).not.toMatch(
+      /\b(ReadFile|Agent|TeamCreate|ToolSearch|McpCall)\b/,
+    );
+    const readOnly = buildToolGuidance(["Grep", "ReadFile", "ReadFile"]);
+    expect(readOnly).toContain('["Grep","ReadFile"]');
+    expect(readOnly).toContain("0-based");
+    expect(readOnly).not.toMatch(/EditFile|WriteFile|Agent|Bash|ToolSearch/);
+    expect(buildToolGuidance(["ReadFile", "Grep"])).toBe(readOnly);
+    expect(buildToolGuidance([])).toBe("");
+  });
+
+  it("adapts shell, delegation and discovery guidance to callable tools", () => {
+    expect(buildToolGuidance(["PowerShell"])).toContain(
+      "including narrow file searches",
+    );
+    expect(buildToolGuidance(["PowerShell", "Glob"])).not.toContain(
+      "including narrow file searches",
+    );
+    const agent = buildToolGuidance(["Agent"]);
+    expect(agent).toContain("run_in_background=true");
+    expect(agent).not.toMatch(/TeamCreate|SendMessage|team_name/);
+    const coordinator = buildToolGuidance(["Agent", "SendMessage"]);
+    expect(coordinator).toContain("create a team on demand");
+    expect(coordinator).not.toContain("TeamCreate");
+    expect(coordinator).toContain(
+      "automatically approves submitted teammate plans",
+    );
+    expect(buildToolGuidance(["ToolSearch"])).not.toContain("McpCall");
+    expect(buildToolGuidance(["ToolSearch", "McpCall"])).toContain(
+      "Dispatch-mode MCP",
+    );
+  });
 });
 
 describe("plan and coordinator contracts", () => {
+  it.each([1, 2])(
+    "does not tell a coordinator to await approval from itself (turn %i)",
+    (iteration) => {
+      const reminder = buildPlanModeReminder("/plan.md", true, iteration, {
+        canAskUser: false,
+        canExitPlanMode: false,
+        canSendMessage: true,
+        canWriteFile: false,
+        canEditFile: false,
+        canDelegate: true,
+        isCoordinator: true,
+      });
+      expect(reminder).toContain("user leaves plan mode with Shift+Tab");
+      expect(reminder).not.toMatch(
+        /ExitPlanMode|SendMessage|submit the plan to the leader/,
+      );
+      expect(reminder).toContain("Do not submit your own plan to a teammate");
+      if (iteration === 1) {
+        expect(reminder).toContain(
+          "do not inspect files or run commands yourself",
+        );
+      }
+    },
+  );
+
+  it.each([1, 2])(
+    "respects unavailable tools in full and sparse plan reminders (turn %i)",
+    (iteration) => {
+      const capabilities = {
+        canAskUser: false,
+        canExitPlanMode: false,
+        canSendMessage: false,
+        canWriteFile: false,
+        canEditFile: false,
+        canDelegate: false,
+      };
+      const readOnly = buildPlanModeReminder(
+        "/plan.md",
+        true,
+        iteration,
+        capabilities,
+      );
+      expect(readOnly).not.toMatch(
+        /AskUserQuestion|ExitPlanMode|SendMessage|WriteFile|EditFile|explore agents/,
+      );
+      expect(readOnly).toContain("cannot enter implementation mode");
+      expect(readOnly).toContain("Return the plan in your final response");
+      const teammate = buildPlanModeReminder("/plan.md", true, iteration, {
+        ...capabilities,
+        canSendMessage: true,
+        canWriteFile: true,
+        canEditFile: true,
+      });
+      expect(teammate).toContain("automatically approve the plan");
+      expect(teammate).not.toMatch(
+        /AskUserQuestion|ExitPlanMode|explore agents/,
+      );
+      const parent = buildPlanModeReminder("/plan.md", true, iteration, {
+        ...capabilities,
+        canExitPlanMode: true,
+      });
+      expect(parent).toContain("ExitPlanMode");
+      expect(parent).not.toContain("AskUserQuestion");
+    },
+  );
+
+  it("does not ask an edit-only role to create a missing plan file", () => {
+    const reminder = buildPlanModeReminder("/missing.md", false, 1, {
+      canWriteFile: false,
+      canEditFile: true,
+      canDelegate: false,
+    });
+    expect(reminder).toContain("Return the plan in your final response");
+    expect(reminder).not.toMatch(/WriteFile|EditFile|explore agents/);
+  });
   it("keeps the exact plan path and five-iteration cadence", () => {
     const path = "/project/plans/$&-$`-$'.md";
     const full = buildPlanModeReminder(path, true, 1);
@@ -198,6 +330,12 @@ describe("plan and coordinator contracts", () => {
     expect(buildPlanModeExitReminder(path, false)).not.toContain(path);
     expect(buildPlanModeExitReminder(path, true)).toContain(
       "current permissions",
+    );
+    expect(buildPlanModeExitReminder(path, true)).toContain(
+      "user's requested scope",
+    );
+    expect(buildPlanModeExitReminder(path, true)).not.toContain(
+      "approved scope",
     );
   });
 
@@ -308,19 +446,18 @@ describe("skill prompt contracts", () => {
     },
     sourceDir: "/skills/<demo>&",
     body: "Run the existing script; do not change it.",
-    isDirectory: true,
   };
 
   it("escapes metadata, keeps the catalog body-free, and emits nothing for no skills", () => {
     const catalog = new SkillCatalog();
-    expect(buildSkillSection(catalog, "/project")).toBe("");
+    expect(buildSkillSection(catalog)).toBe("");
     vi.spyOn(catalog, "list").mockReturnValue([skill.meta]);
-    const prompt = buildSkillSection(catalog, "/project/<x>&");
+    const prompt = buildSkillSection(catalog);
     expect(prompt).toContain("<name>demo&lt;&amp;&gt;</name>");
     expect(prompt).toContain(
       "<description>Read &lt;file&gt; &amp; inspect safely</description>",
     );
-    expect(prompt).toContain("/project/&lt;x&gt;&amp;");
+    expect(prompt).toContain(".yukino/skills");
     expect(prompt).toContain("<mode>fork</mode>");
     expect(prompt).toContain("/<skill-name>");
     expect(prompt).toContain("LoadSkill");
@@ -419,15 +556,15 @@ class RecordingClient implements LLMClient {
 
 describe("memory prompt contracts", () => {
   let root: string;
-  let workDir: string;
+  let cwd: string;
   let memDir: string;
   let home: string;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "yukino-prompt-contracts-"));
-    workDir = join(root, "project");
+    cwd = join(root, "project");
     home = join(root, "home");
-    memDir = join(workDir, ".yukino", "memory");
+    memDir = projectPath(cwd, "memory");
     mkdirSync(memDir, { recursive: true });
     mkdirSync(home);
     vi.stubEnv("HOME", home);
@@ -459,7 +596,7 @@ describe("memory prompt contracts", () => {
     async (response, selected) => {
       const path = seedMemory();
       const client = new RecordingClient(response);
-      const result = await new MemoryManager(workDir).findRelevantMemories(
+      const result = await new MemoryManager(cwd).findRelevantMemories(
         "build this",
         client,
         ["Bash"],
@@ -488,7 +625,7 @@ describe("memory prompt contracts", () => {
   );
 
   it("does not call the selector for empty or already surfaced candidates", async () => {
-    const manager = new MemoryManager(workDir);
+    const manager = new MemoryManager(cwd);
     const client = new RecordingClient();
     expect(manager.buildSystemReminder()).toBe("");
     expect(manager.renderReminder([])).toBe("");
@@ -504,9 +641,7 @@ describe("memory prompt contracts", () => {
     seedMemory();
     const client = new RecordingClient();
     expect(
-      await new MemoryExtractor(client, workDir).extract(
-        "Only this conversation",
-      ),
+      await new MemoryExtractor(client, cwd).extract("Only this conversation"),
     ).toEqual([]);
     expect(client.setSystemPrompt).not.toHaveBeenCalled();
     expect(client.requests[0]?.tools).toEqual([
@@ -538,7 +673,7 @@ describe("memory prompt contracts", () => {
       "MEMORY.md in the same directory",
       "build.md",
       memDir,
-      join(home, ".yukino", "memory"),
+      yukinoPath("memory"),
       "Only this conversation",
     ]) {
       expect(prompt).toContain(text);
@@ -548,11 +683,7 @@ describe("memory prompt contracts", () => {
 
   it("retains phased consolidation, index bounds, evidence and memory-only writes", async () => {
     const client = new RecordingClient();
-    await new MemoryConsolidator(client, workDir).run(
-      memDir,
-      ["session-one"],
-      0,
-    );
+    await new MemoryConsolidator(client, cwd).run(memDir, ["session-one"]);
     expect(client.setSystemPrompt).not.toHaveBeenCalled();
     expect(client.requests[0]?.tools).toEqual([
       "EditFile",
@@ -597,9 +728,7 @@ describe("memory prompt contracts", () => {
     expect(memoryFreshnessText(now - 86_400_000)).toBe("");
     const mtimeMs = now - 2 * 86_400_000;
     const path = seedMemory();
-    const reminder = new MemoryManager(workDir).renderReminder([
-      { path, mtimeMs },
-    ]);
+    const reminder = new MemoryManager(cwd).renderReminder([{ path, mtimeMs }]);
     expect(reminder).toContain("saved 2 days ago");
     expect(reminder).toContain("not current authorization");
     expect(reminder).toContain("not live state");

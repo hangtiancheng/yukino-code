@@ -1,26 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   parseComments,
@@ -48,7 +26,7 @@ import {
   formatDiffEntry,
   parseGroupingResponse,
 } from "@/code-review/grouping.js";
-import { stripMarkdownFences } from "@/code-review/prompts.js";
+import { renderTemplate, stripMarkdownFences } from "@/code-review/prompts.js";
 import { extractCodeBlock, relocateWithLlm } from "@/code-review/relocate.js";
 import {
   relocateAcrossFiles,
@@ -216,6 +194,72 @@ describe("diff-parser", () => {
     expect(unquoteGitPath('"src/a\\tb.ts"')).toBe("src/a\tb.ts");
     expect(unquoteGitPath("plain.ts")).toBe("plain.ts");
   });
+
+  it('parses unquoted paths containing a " b/" segment', async () => {
+    const path = "src/a b/feature.ts";
+    const diffs = await parseDiffText(
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`,
+    );
+    expect(diffs[0]?.oldPath).toBe(path);
+    expect(diffs[0]?.newPath).toBe(path);
+  });
+
+  it("parses quoted paths containing spaces", async () => {
+    const path = "src/a b.ts";
+    const diffs = await parseDiffText(
+      `diff --git "a/${path}" "b/${path}"\n--- "a/${path}"\n+++ "b/${path}"\n@@ -1 +1 @@\n-old\n+new\n`,
+    );
+    expect(diffs[0]?.oldPath).toBe(path);
+    expect(diffs[0]?.newPath).toBe(path);
+  });
+
+  it.each([
+    [
+      "a/src/plain.ts",
+      '"b/src/tab\\tname.ts"',
+      "src/plain.ts",
+      "src/tab\tname.ts",
+    ],
+    [
+      '"a/src/tab\\tname.ts"',
+      "b/src/plain.ts",
+      "src/tab\tname.ts",
+      "src/plain.ts",
+    ],
+  ])(
+    "keeps independently quoted rename paths in separate files: %s %s",
+    async (oldHeader, newHeader, oldPath, newPath) => {
+      const readNewFileContent = vi.fn(() => Promise.resolve("new"));
+      const diffs = await parseDiffText(
+        [
+          MODIFIED_DIFF,
+          `diff --git ${oldHeader} ${newHeader}`,
+          "similarity index 50%",
+          `rename from ${oldHeader.replace(/^("?)a\//, "$1")}`,
+          `rename to ${newHeader.replace(/^("?)b\//, "$1")}`,
+          "@@ -1 +1 @@",
+          "-old",
+          "+new",
+        ].join("\n"),
+        { readNewFileContent },
+      );
+      expect(diffs).toHaveLength(2);
+      expect(diffs[0]).toMatchObject({
+        newPath: "src/app.ts",
+        isRenamed: false,
+        insertions: 1,
+      });
+      expect(diffs[1]).toMatchObject({
+        oldPath,
+        newPath,
+        isRenamed: true,
+        insertions: 1,
+        deletions: 1,
+      });
+      expect(diffs[1]?.hunks).toHaveLength(1);
+      expect(readNewFileContent).toHaveBeenCalledWith(newPath);
+    },
+  );
 
   it("reads new file content through the injected reader", async () => {
     const diffs = await parseDiffText(MODIFIED_DIFF, {
@@ -397,7 +441,6 @@ describe("grouping", () => {
     expect(groups).toHaveLength(3);
     expect(groups[0]?.label).toBe("core");
     expect(groups[0]?.diffs).toHaveLength(2);
-    // Uncovered files become single-file groups.
     expect(groups[1]?.diffs).toHaveLength(1);
     expect(groups[2]?.diffs).toHaveLength(1);
   });
@@ -527,7 +570,10 @@ describe("comment-tool", () => {
     expect(parsed.comments[0]?.path).toBe("a.ts");
     expect(parsed.droppedEntries).toBe(2);
 
-    const allBad = parseComments({ comments: [{ path: "b.ts" }] }, "f.ts");
+    const allBad = parseComments(
+      { comments: [{ path: "b.ts", content: "missing anchor" }] },
+      "f.ts",
+    );
     expect(allBad.error).toContain("no valid comments");
   });
 
@@ -560,17 +606,21 @@ describe("comment-tool", () => {
 
   it("collector supports snapshot deltas and index removal", () => {
     const collector = new CommentCollector();
-    collector.add(makeComment({ content: "one" }));
+    collector.addAll([makeComment({ content: "one" })]);
     const mark = collector.snapshot();
-    collector.add(makeComment({ content: "two" }));
-    collector.add(makeComment({ content: "three" }));
+    collector.addAll([
+      makeComment({ content: "two" }),
+      makeComment({ content: "three" }),
+    ]);
     expect(collector.since(mark).map((c) => c.content)).toEqual([
       "two",
       "three",
     ]);
     collector.removeAt([mark + 1]);
     expect(collector.all().map((c) => c.content)).toEqual(["one", "two"]);
-    expect(collector.forPath("src/app.ts")).toHaveLength(2);
+    expect(collector.all().filter((c) => c.path === "src/app.ts")).toHaveLength(
+      2,
+    );
   });
 });
 
@@ -585,6 +635,19 @@ describe("format", () => {
   it("escapes the path attribute", () => {
     const xml = buildConcatenatedDiffs([makeFileDiff('weird"<>&.ts')]);
     expect(xml).toContain('<file path="weird&quot;&lt;&gt;&amp;.ts">');
+  });
+
+  it("includes an escaped old_path attribute for renamed diffs", () => {
+    const xml = buildConcatenatedDiffs([
+      makeFileDiff('src/after"<>&.ts', {
+        oldPath: 'src/before"<>&.ts',
+        isRenamed: true,
+      }),
+    ]);
+
+    expect(xml).toContain(
+      '<file path="src/after&quot;&lt;&gt;&amp;.ts" old_path="src/before&quot;&lt;&gt;&amp;.ts">',
+    );
   });
 
   it("excludes group members and binaries from the change-files list", async () => {
@@ -643,7 +706,19 @@ describe("prompts/relocate helpers", () => {
     expect(extractCodeBlock("text\n```ts\nconst a = 1;\n```\nmore")).toBe(
       "const a = 1;",
     );
+    expect(extractCodeBlock("````ts\nbefore\n```\nafter\n````")).toBe(
+      "before\n```\nafter",
+    );
     expect(extractCodeBlock("no fence here")).toBe("no fence here");
+  });
+
+  it("substitutes template placeholders in one pass", () => {
+    expect(
+      renderTemplate("{{first}} {{second}}", {
+        first: "{{second}}",
+        second: "done",
+      }),
+    ).toBe("{{second}} done");
   });
 });
 
@@ -757,8 +832,8 @@ describe("runner helpers", () => {
   it("registers only the bare /code-review command", () => {
     const registry = createDefaultRegistry();
     const command = registry.find("code-review");
-    expect(command?.handler({ workDir: ".", args: "" })).toBe("code-review");
-    expect(command?.handler({ workDir: ".", args: "focus" })).toBe(
+    expect(command?.handler({ cwd: ".", args: "" })).toBe("code-review");
+    expect(command?.handler({ cwd: ".", args: "focus" })).toBe(
       "code-review-usage",
     );
     expect(registry.find("review")).toBeUndefined();
@@ -812,18 +887,15 @@ describe("file-read-diff tool", () => {
     expect(tool.name).toBe("FileReadDiff");
     expect(tool.category).toBe("read");
 
-    const hit = await tool.execute({ workDir: "/tmp" }, { path: "src/app.ts" });
+    const hit = await tool.execute({ cwd: "/tmp" }, { path: "src/app.ts" });
     expect(hit.isError).toBe(false);
     expect(hit.output).toContain("diff --git a/src/app.ts");
 
-    const deleted = await tool.execute(
-      { workDir: "/tmp" },
-      { path: "src/old.ts" },
-    );
+    const deleted = await tool.execute({ cwd: "/tmp" }, { path: "src/old.ts" });
     expect(deleted.isError).toBe(false);
     expect(deleted.output).toContain("src/old.ts");
 
-    const miss = await tool.execute({ workDir: "/tmp" }, { path: "nope.ts" });
+    const miss = await tool.execute({ cwd: "/tmp" }, { path: "nope.ts" });
     expect(miss.isError).toBe(true);
   });
 });

@@ -1,36 +1,26 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 
 import yaml from "js-yaml";
 import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
+import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
+import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/protocol.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";
 import { isObject, isRecord, strArg } from "@/utils/index.js";
-import { canonicalPath, isPathWithin } from "@/utils/paths.js";
+import { canonicalPath, isPathWithin, resolveToolPath } from "@/utils/paths.js";
+
+export * as Request from "./request.js";
 
 const log = createChildLogger({ module: "permissions" });
 
@@ -63,188 +53,83 @@ export interface DangerousPattern {
 export const DANGEROUS_PATTERNS: DangerousPattern[] = [];
 
 export const SAFE_PREFIXES: (string | RegExp)[] = [
-  "basename",
+  "echo", // Output only, no dangerous flags
+  "printf", // xargs runs /usr/bin/printf (binary), not bash builtin — no -v support
+  "wc", // Read-only counting, no dangerous flags
+  "grep", // Read-only search, no dangerous flags
+  "head", // Read-only, no dangerous flags
+  "tail", // Read-only (including -f follow), no dangerous flags
+
+  // Cross-platform commands from shared validation
+  /docker\s+(?:ps|images)\b/,
+
+  // Unix/bash-specific read-only commands (not shared because they don't exist in PowerShell)
+
+  // Time and date
+  "cal",
+  "uptime",
+
+  // File content viewing (relative paths handled separately)
   "cat",
-  "cksum",
-  "cmp",
-  "column",
-  "comm",
-  "cut",
-  "df",
-  "dirname",
-  "du",
-  "echo",
-  "expr",
-  "false",
-  "fold",
-  "fmt",
-  "grep",
-  "groups",
   "head",
-  "id",
-  "jq",
-  "locate",
-  "ls",
-  "md5",
-  "md5sum",
-  "nl",
-  "od",
-  "paste",
-  "pgrep",
-  "printenv",
-  "printf",
-  "ps",
-  "pwd",
-  "readlink",
-  "realpath",
-  "sha1sum",
-  "sha224sum",
-  "sha256sum",
-  "sha384sum",
-  "sha512sum",
-  "shasum",
+  "tail",
+  "wc",
   "stat",
   "strings",
-  "tac",
-  "tail",
-  "tr",
-  "true",
-  "tty",
-  "type",
-  "uname",
-  "uptime",
-  "w",
-  "wc",
-  "whereis",
-  "which",
-  "who",
-  "whoami",
-  "ack",
-  "ag",
-  "alias",
-  "arch",
-  "base64",
-  "bat",
-  "bzcat",
-  "cal",
-  "col",
-  "cloc",
-  "diff",
-  "diff3",
-  "dig",
-  "dmesg",
-  "expand",
-  "factor",
-  "free",
-  "help",
   "hexdump",
-  "host",
-  "iconv",
-  "info",
+  "od",
+  "nl",
+
+  // System info
+  "id",
+  "uname",
+  "free",
+  "df",
+  "du",
   "locale",
-  "lscpu",
-  "lsblk",
-  "lsof",
-  "lspci",
-  "lsusb",
-  "man",
-  "mdfind",
-  "mdls",
-  "ncal",
-  "netstat",
+  "groups",
   "nproc",
-  "nslookup",
-  "objdump",
-  "otool",
-  "pbpaste",
-  "ping",
-  "readelf",
-  "rev",
-  "sdiff",
-  "seq",
-  "sum",
-  "sw_vers",
-  "tldr",
-  "traceroute",
-  "unexpand",
-  "vm_stat",
-  "whois",
-  "xxd",
-  "xzcat",
-  "zcat",
-  "zgrep",
-  "zipinfo",
-  /^command\s+(?:-v|-V)\s+\S+(?:\s+\S+)*$/,
-  /^date(?!.*\s(?:-s|--set)(?:=|\s|$))(?:\s.*)?$/,
-  /^file(?!.*(?:\s--compile(?:=|\s|$)|\s-[^-\s]*C))(?:\s.*)?$/,
-  /^find(?!.*\s(?:-delete|-exec(?:dir)?|-ok(?:dir)?|-fls|-fprint(?:0)?|-fprintf)(?:\s|$))(?:\s.*)?$/,
-  /^fd(?!.*\s(?:-x|-X|--exec|--exec-batch)(?:=|\s|$))(?:\s.*)?$/,
-  /^hostname(?:\s+(?:-[adfFiIsyVh]|--(?:alias|all-fqdns|all-ip-addresses|domain|fqdn|help|ip-address|long|nis|short|version|yp)))*$/,
-  /^rg(?!.*\s(?:--pre|--pre-glob|--hostname-bin)(?:=|\s|$))(?:\s.*)?$/,
-  /^sort(?!.*\s(?:-o|--output|--compress-program)(?:=|\s|$))(?:\s.*)?$/,
-  /^ss(?!.*\s(?:--kill|-[^-\s]*K)(?:\s|$))(?:\s.*)?$/,
-  /^tree(?!.*\s(?:-o|--output)(?:=|\s|$))(?:\s.*)?$/,
-  /^git\s+(?:--version|version)$/,
-  /^git\s+(?:blame|cat-file|count-objects|describe|for-each-ref|ls-files|ls-tree|merge-base|name-rev|rev-parse|shortlog|show-ref|status|verify-pack)(?:\s.*)?$/,
-  /^git\s+(?:diff|log|show)(?!.*\s(?:--ext-diff|--output)(?:=|\s|$))(?:\s.*)?$/,
-  /^git\s+branch$/,
-  /^git\s+branch(?=.*\s(?:-a|--all|-r|--remotes|--list|--show-current|--contains|--no-contains|--merged|--no-merged)(?:=|\s|$))(?!.*\s(?:-[dDmMcCf]|--(?:copy|create-reflog|delete|edit-description|move|set-upstream-to|unset-upstream))(?:=|\s|$))(?:\s.*)?$/,
-  /^git\s+config(?:\s+(?:--blob(?:=|\s)\S+|--file(?:=|\s)\S+|--fixed-value|--global|--local|--null|--show-names|--show-origin|--show-scope|--system|--worktree|-z))*\s+(?:--get|--get-all|--get-regexp|--get-urlmatch|--list|-l)(?:\s.*)?$/,
-  /^git\s+notes\s+(?:list|show)(?:\s.*)?$/,
-  /^git\s+reflog\s+show(?:\s.*)?$/,
-  /^git\s+remote(?:\s+-v)?$/,
-  /^git\s+remote\s+get-url(?:\s+(?:--all|--push))*\s+\S+$/,
-  /^git\s+remote\s+show(?:\s+-n)?(?:\s+\S+)?$/,
-  /^git\s+stash\s+(?:list|show)(?:\s.*)?$/,
-  /^git\s+submodule\s+(?:status|summary)(?:\s.*)?$/,
-  /^git\s+tag(?:\s+(?:-l|--list)(?:\s.*)?)?$/,
-  /^git\s+worktree\s+list(?:\s.*)?$/,
-  /^(?:bun|npm|pnpm|yarn)\s+(?:explain|help|info|list|ls|outdated|prefix|query|root|search|show|view|why)(?:\s.*)?$/,
-  /^(?:npm|pnpm|yarn)\s+config\s+(?:get|list)(?:\s.*)?$/,
-  /^npm\s+pkg\s+get(?:\s.*)?$/,
-  /^bun\s+pm\s+ls(?:\s.*)?$/,
-  /^(?:bun|cargo|clang|cmake|composer|deno|gcc|gem|node|npm|php|pip|pip3|pnpm|python|python3|ruby|rustc|swift|yarn)\s+(?:--version|-V)$/,
-  /^(?:go|helm|kubectl|podman|terraform)\s+version(?:\s.*)?$/,
-  /^(?:java|javac)\s+-version$/,
-  /^dotnet\s+(?:--info|--list-runtimes|--list-sdks|--version)$/,
-  /^(?:docker|podman)\s+(?:diff|events|images|info|inspect|logs|port|ps|stats|top|version)(?:\s.*)?$/,
-  /^(?:docker|podman)\s+(?:container|image|network|volume)\s+(?:inspect|ls)(?:\s.*)?$/,
-  /^docker\s+compose\s+(?:config|images|logs|ps|top|version)(?:\s.*)?$/,
-  /^kubectl\s+(?:api-resources|api-versions|cluster-info|describe|explain|get|logs|top|version)(?:\s.*)?$/,
-  /^kubectl\s+config\s+(?:current-context|get-contexts|view)(?:\s.*)?$/,
-  /^helm\s+(?:env|get|history|list|search|show|status|version)(?:\s.*)?$/,
-  /^terraform\s+(?:output|providers|show|version)(?:\s.*)?$/,
-  /^terraform\s+workspace\s+(?:list|show)(?:\s.*)?$/,
-  /^systemctl\s+(?:is-active|is-enabled|is-failed|list-dependencies|list-jobs|list-sockets|list-timers|list-unit-files|list-units|show|show-environment|status)(?:\s.*)?$/,
-  /^launchctl\s+(?:error|hostinfo|list|managername|managerpid|manageruid|print|print-cache|procinfo|variant|version)(?:\s.*)?$/,
-  /^journalctl(?!.*\s--(?:rotate|vacuum|flush|sync))(?:\s.*)?$/,
-  /^defaults\s+read(?:\s.*)?$/,
-  /^ifconfig$/,
-  /^ipconfig(?:\s+\/(?:all|allcompartments|displaydns))?\s*$/,
-  /^ip\s+(?:addr(?:ess)?|route)$/,
-  /^ip\s+(?:addr(?:ess)?|link|route|neigh(?:bor)?)\s+(?:show|list)\b(?:\s.*)?$/,
-  /^tar\s+(?:--list\b|-[a-zA-Z]*t[a-zA-Z]*)(?:\s.*)?$/,
-  /^unzip\s+-[a-zA-Z]*l(?:\s.*)?$/,
-  /^git\s+(?:grep|fsck|rev-list|whatchanged|help|diff-tree|diff-index|diff-files|ls-remote|verify-tag|verify-commit)(?:\s.*)?$/,
-  /^git\s+archive(?!.*\s(?:-o|--output)(?:=|\s|$))(?:\s.*)?$/,
-  /^svn\s+(?:status|stat|st|diff|di|log|info|list|ls|cat|blame|ann|annotate|proplist|propget|pg)(?:\s.*)?$/,
-  /^hg\s+(?:status|st|log|diff|summary|id|identify|branches|tags|manifest|cat|files|locate|heads|tip|parents|paths|root)(?:\s.*)?$/,
-  /^cargo\s+(?:tree|search|locate-project|verify-project|config\s+get)(?:\s.*)?$/,
-  /^gem\s+(?:list|search|info|env|dependency|contents|specification|sources\s+(?:-l|--list))(?:\s.*)?$/,
-  /^brew\s+(?:--version|-v|list|info|search|outdated|deps|uses|config|leaves|doctor)(?:\s.*)?$/,
-  /^choco\s+(?:--version|list|info|search|outdated)(?:\s.*)?$/,
-  /^apt(?:-get)?\s+list(?:\s.*)?$/,
-  /^apt-cache\s+(?:search|show|showpkg|policy|depends|rdepends|pkgnames)(?:\s.*)?$/,
-  /^dpkg\s+(?:-l|-L|-s|-S|--list|--listfiles|--status|--search)\b(?:\s.*)?$/,
-  /^rpm\s+-q[a-zA-Z]*(?:\s.*)?$/,
-  /^(?:aws|gh|gcloud|az)\s+--version$/,
-  /^aws\s+(?:\S+\s+)?(?:describe|list|get|wait)-\S+(?:\s.*)?$/,
-  /^aws\s+s3\s+ls(?:\s.*)?$/,
-  /^gcloud\s+\S+(?:\s+\S+)*\s+(?:list|describe)(?:\s.*)?$/,
-  /^az\s+\S+(?:\s+\S+)*\s+(?:list|show)(?:\s.*)?$/,
-  /^gh\s+(?:pr|issue|repo|run|release|gist)\s+(?:view|list|status|checks|diff)(?:\s.*)?$/,
-  /^(?:docker|podman)\s+(?:system\s+(?:df|info)|history|context\s+(?:ls|list|show|inspect))(?:\s.*)?$/,
-  /^(?:Get-(?:Acl|Alias|AuthenticodeSignature|ChildItem|CimInstance|Clipboard|Command|ComputerInfo|Content|Counter|Culture|Date|DnsClientCache|EventLog|ExecutionPolicy|FileHash|Help|History|Host|HotFix|Item|ItemProperty|Location|Member|Module|NetAdapter|NetIPAddress|NetNeighbor|NetIPConfiguration|NetRoute|NetTCPConnection|NetUDPEndpoint|Package|PackageProvider|PnpDevice|Printer|Process|PSDrive|PSProvider|PSRepository|PSSnapin|ScheduledTask|Service|TimeZone|UICulture|Variable|Verb|WinEvent|WmiObject)|Compare-Object|Format-(?:Custom|Hex|List|Table|Wide)|Group-Object|Measure-Object|Out-String|Resolve-Path|Select-Object|Select-String|Sort-Object|Test-Path|Where-Object|Write-(?:Debug|Error|Host|Information|Output|Progress|Verbose|Warning))(?:\s.*)?$/i,
+
+  // Path information
+  "basename",
+  "dirname",
+  "realpath",
+
+  // Text processing
+  "cut",
+  "paste",
+  "tr",
+  "column",
+  "tac", // Reverse cat — displays file contents in reverse line order
+  "rev", // Reverse characters in each line
+  "fold", // Wrap lines to specified width
+  "expand", // Convert tabs to spaces
+  "unexpand", // Convert spaces to tabs
+  "fmt", // Simple text formatter — output to stdout only
+  "comm", // Compare sorted files line by line
+  "cmp", // Byte-by-byte file comparison
+  "numfmt", // Number format conversion
+
+  // Path information (additional)
+  "readlink", // Resolve symlinks — displays target of symbolic link
+
+  // File comparison
+  "diff",
+
+  // true and false, used to silence or create errors
+  "true",
+  "false",
+
+  // Misc. safe commands
+  "sleep",
+  "which",
+  "type",
+  "expr", // Evaluate expressions (arithmetic, string matching)
+  "test", // Conditional evaluation (file checks, comparisons)
+  "getconf", // Get system configuration values
+  "seq", // Generate number sequences
+  "tsort", // Topological sort
+  "pr", // Paginate files for printing
 ];
 
 // Per-tool argument field treated as the "content" for safe/dangerous checks and rule matching
@@ -253,6 +138,10 @@ const CONTENT_FIELDS: Record<string, string> = {
   PowerShell: "command",
   ComputerUse: "action",
   ReadFile: "file_path",
+  LSP: "file_path",
+  WebFetch: "url",
+  WebSearch: "query",
+  TaskOutput: "task_id",
   WriteFile: "file_path",
   EditFile: "file_path",
   Glob: "pattern",
@@ -260,7 +149,17 @@ const CONTENT_FIELDS: Record<string, string> = {
   InstallSkill: "source",
 };
 
-const DEFAULT_DENY_WRITE: string[] = [];
+const PLAN_COORDINATION_TOOLS = new Set([
+  "AskUserQuestion",
+  "ExitPlanMode",
+  "Agent",
+  "Goal",
+  "TodoWrite",
+  "TaskStop",
+  "TeamCreate",
+  "TeamDelete",
+  ...TEAMMATE_COORDINATION_TOOLS,
+]);
 
 export function extractContent(
   toolName: string,
@@ -297,7 +196,6 @@ export function extractContent(
 
 export class PathSandbox {
   private allowedRoots: string[];
-  private denyWritePaths: string[];
   private projectDir: string;
 
   constructor(projectDir: string) {
@@ -305,41 +203,14 @@ export class PathSandbox {
     // is /var/folders/..., not /tmp.
     this.projectDir = resolve(projectDir);
     this.allowedRoots = [this.projectDir, tmpdir()];
-    this.denyWritePaths = DEFAULT_DENY_WRITE.map((p) =>
-      join(this.projectDir, p),
-    );
   }
 
   addRoot(root: string): void {
-    this.allowedRoots.push(resolve(root));
-  }
-  addDenyWrite(path: string): void {
-    this.denyWritePaths.push(resolve(path));
-  }
-
-  /**
-   * Check whether a path is in the deny-write list.
-   * denyWrite has the highest priority — even if the path is within an allowed root, writes are still denied.
-   */
-  checkDenyWrite(filePath: string): Decision | null {
-    const absolute = resolve(this.projectDir, filePath);
-    const canonical = canonicalPath(absolute);
-    for (const denied of this.denyWritePaths) {
-      if (
-        isPathWithin(denied, absolute) ||
-        isPathWithin(canonicalPath(denied), canonical)
-      ) {
-        return {
-          effect: "deny",
-          reason: `Path ${filePath} is in deny-write list`,
-        };
-      }
-    }
-    return null;
+    this.allowedRoots.push(resolveToolPath(this.projectDir, root));
   }
 
   check(filePath: string): Decision | null {
-    const absolute = canonicalPath(resolve(this.projectDir, filePath));
+    const absolute = canonicalPath(resolveToolPath(this.projectDir, filePath));
     for (const root of this.allowedRoots) {
       if (isPathWithin(canonicalPath(root), absolute)) {
         return null;
@@ -450,9 +321,9 @@ export function evaluateRules(
   return hit;
 }
 
-// Parse result for a single rules file. mtime + size together serve as the
-// change indicator — mtime alone is insufficient because consecutive writes
-// within the same millisecond may leave the timestamp unchanged.
+// Parse result for a single rules file. mtimeNs + size together serve as the
+// change indicator — either alone can miss a rewrite: filesystem timestamp
+// granularity can be coarse, and a rewrite can preserve the previous size.
 interface CachedRules {
   mtimeNs: bigint;
   size: bigint;
@@ -464,9 +335,9 @@ export class RuleEngine {
   private projectPath: string;
   private cache = new Map<string, CachedRules>();
 
-  constructor(workDir: string) {
-    this.userPath = join(homedir(), ".yukino", "permissions.yaml");
-    this.projectPath = join(workDir, ".yukino", "permissions.yaml");
+  constructor(cwd: string) {
+    this.userPath = yukinoPath("permissions.yaml");
+    this.projectPath = projectPath(cwd, "permissions.yaml");
   }
 
   // Read a single rules file; skips re-reading and parsing on cache hit.
@@ -499,40 +370,36 @@ export class RuleEngine {
     return [this.userPath, this.projectPath].flatMap((p) => this.rulesFor(p));
   }
 
-  // Take a snapshot then adjudicate: reuses the previous parse result when
-  // files are unchanged; a freshly written "allow always" rule takes effect
-  // immediately. Priority is deny > ask > allow regardless of which layer or
-  // line a rule resides on, so a deny cannot be overridden by an allow from
-  // another layer. Returns null when no rule matches.
-  evaluate(toolName: string, content: string): RuleEffect | null {
-    return evaluateRules(this.snapshot(), toolName, content);
-  }
-
   // Persists a rule to the project-level YAML file in the `Tool(pattern)`
   // format so "allow always" survives a restart.
   appendProjectRule(rule: Rule): void {
     mkdirSync(dirname(this.projectPath), { recursive: true });
-    const rules = loadRulesFile(this.projectPath);
-    // Deduplicate: skip if an identical {tool, pattern, effect} rule already
-    // exists. Without this, every "allow always" click on the same command
-    // appends a duplicate entry (the rule engine matches but allowAlways is
-    // still called in some flows, e.g. cross-session content variants).
-    const exists = rules.some(
-      (r) =>
-        r.tool === rule.tool &&
-        r.pattern === rule.pattern &&
-        r.effect === rule.effect,
-    );
-    if (exists) {
-      return;
-    }
+    withFileSyncLock(this.projectPath, () => {
+      const rules = loadRulesFile(this.projectPath);
+      const exists = rules.some(
+        (r) =>
+          r.tool === rule.tool &&
+          r.pattern === rule.pattern &&
+          r.effect === rule.effect,
+      );
+      if (exists) {
+        return;
+      }
 
-    rules.push(rule);
-    const entries = rules.map((r) => ({
-      rule: `${r.tool}(${r.pattern})`,
-      effect: r.effect,
-    }));
-    writeFileSync(this.projectPath, yaml.dump(entries), "utf-8");
+      rules.push(rule);
+      const entries = rules.map((r) => ({
+        rule: `${r.tool}(${r.pattern})`,
+        effect: r.effect,
+      }));
+      const tempPath = `${this.projectPath}.${String(process.pid)}.tmp`;
+      try {
+        writeFileSync(tempPath, yaml.dump(entries), "utf-8");
+        renameSync(tempPath, this.projectPath);
+        this.cache.delete(this.projectPath);
+      } finally {
+        rmSync(tempPath, { force: true });
+      }
+    });
   }
 }
 
@@ -576,7 +443,7 @@ function modeDecide(
     case "bypassPermissions":
       return "allow";
     case "plan":
-      return category === "read" ? "allow" : "ask";
+      return category === "read" ? "allow" : "deny";
     case "acceptEdits":
       return category === "command" ? "ask" : "allow";
     case "default":
@@ -586,8 +453,13 @@ function modeDecide(
 }
 
 export class PermissionChecker {
-  mode: PermissionMode;
+  private modeState: {
+    value?: PermissionMode;
+    listeners: Set<() => void>;
+  };
+  private parent?: PermissionChecker;
   planFilePath = "";
+  teammate = false;
   // Sandbox mode: when enabled, Bash commands run through OS sandbox isolation, with optional auto-allow
   sandboxEnabled = false;
   sandboxAutoAllow = false;
@@ -595,19 +467,65 @@ export class PermissionChecker {
   private ruleEngine: RuleEngine;
 
   constructor(
-    private readonly workDir: string,
+    private readonly cwd: string,
     mode: PermissionMode = "default",
   ) {
-    this.mode = mode;
-    this.sandbox = new PathSandbox(workDir);
-    this.ruleEngine = new RuleEngine(workDir);
+    this.modeState = {
+      value: mode,
+      listeners: new Set(),
+    };
+    this.sandbox = new PathSandbox(cwd);
+    this.ruleEngine = new RuleEngine(cwd);
   }
 
-  forWorkDir(workDir: string): PermissionChecker {
-    const checker = new PermissionChecker(workDir, this.mode);
+  get mode(): PermissionMode {
+    if (!this.parent) {
+      return this.modeState.value ?? "default";
+    }
+    const parentMode = this.parent.mode;
+    if (parentMode === "acceptEdits" || parentMode === "bypassPermissions") {
+      return parentMode;
+    }
+    const mode = this.modeState.value;
+    return mode === "bypassPermissions" ? parentMode : (mode ?? parentMode);
+  }
+
+  set mode(mode: PermissionMode) {
+    if (this.modeState.value === mode) {
+      return;
+    }
+    this.modeState.value = mode;
+    for (const listener of this.modeState.listeners) {
+      listener();
+    }
+  }
+
+  subscribeMode(listener: () => void): () => void {
+    this.modeState.listeners.add(listener);
+    return () => {
+      this.modeState.listeners.delete(listener);
+    };
+  }
+
+  forCwd(cwd: string): PermissionChecker {
+    const checker = new PermissionChecker(cwd, this.mode);
+    checker.modeState = this.modeState;
+    checker.parent = this.parent;
+    checker.planFilePath = this.planFilePath;
     checker.ruleEngine = this.ruleEngine;
+    checker.teammate = this.teammate;
     checker.sandboxEnabled = this.sandboxEnabled;
     checker.sandboxAutoAllow = this.sandboxAutoAllow;
+    return checker;
+  }
+
+  forSubagent(cwd: string, mode?: PermissionMode): PermissionChecker {
+    const checker = this.forCwd(cwd);
+    checker.parent = this;
+    checker.modeState = { value: mode, listeners: this.modeState.listeners };
+    if (!this.teammate) {
+      checker.planFilePath = "";
+    }
     return checker;
   }
 
@@ -617,13 +535,36 @@ export class PermissionChecker {
     args: Record<string, unknown>,
   ): Decision {
     const content = extractContent(toolName, args);
+    const coordination =
+      this.teammate && TEAMMATE_COORDINATION_TOOLS.has(toolName);
+    const filePath = strArg(args, "file_path", strArg(args, "path", ""));
+    const planControl =
+      this.mode === "plan" && PLAN_COORDINATION_TOOLS.has(toolName);
+    const planFileWrite =
+      this.mode === "plan" &&
+      (toolName === "WriteFile" || toolName === "EditFile") &&
+      !!this.planFilePath &&
+      canonicalPath(resolveToolPath(this.cwd, filePath)) ===
+        canonicalPath(resolveToolPath(this.cwd, this.planFilePath));
+    if (
+      this.mode === "plan" &&
+      category !== "read" &&
+      !coordination &&
+      !planControl &&
+      !planFileWrite &&
+      !(category === "command" && isSafeCommand(content))
+    ) {
+      return {
+        effect: "deny",
+        reason: "Plan mode forbids mutations",
+      };
+    }
 
     // Layer 1: explicit rules, evaluated first so a deny/ask also gates the
     // Layer-0 plan-file write exception. The snapshot is taken lazily and shared
-    // with the Layer-3.5 sub-command checks and Layer 5 (the Layer-4 override
-    // re-evaluates through the engine cache). Only deny/ask short-circuit here:
-    // an explicit allow deliberately falls through so the dangerous-command,
-    // deny-write and per-subcommand checks below can still take precedence, and
+    // with the Layer-3.5 sub-command checks. Only deny/ask short-circuit here:
+    // an explicit allow deliberately falls through so the dangerous-command
+    // and per-subcommand checks below can still take precedence, and
     // is returned at Layer 5 if none fires.
     let snapshot: Rule[] | null = null;
     const rules = (): Rule[] => (snapshot ??= this.ruleEngine.snapshot());
@@ -635,25 +576,24 @@ export class PermissionChecker {
       };
     }
 
+    if (planControl) {
+      return { effect: "allow", reason: "Plan coordination tool" };
+    }
+
+    // Layer 1.5: teammate coordination — internal team messaging and the
+    // shared task board. Explicit deny/ask rules above still gate them.
+    if (coordination) {
+      return { effect: "allow", reason: "Teammate coordination tool" };
+    }
+
     // Layer 0: plan-mode plan-file write exception.
     // Both WriteFile and EditFile targeting the plan file are allowed so the
     // model can create and update its plan.
-    if (
-      this.mode === "plan" &&
-      (toolName === "WriteFile" || toolName === "EditFile")
-    ) {
-      const path = strArg(args, "file_path", "");
-      if (
-        this.planFilePath &&
-        canonicalPath(resolve(this.workDir, path)) ===
-          canonicalPath(resolve(this.workDir, this.planFilePath)) &&
-        !this.sandbox.checkDenyWrite(path)
-      ) {
-        return {
-          effect: "allow",
-          reason: "Plan file write allowed in plan mode",
-        };
-      }
+    if (planFileWrite) {
+      return {
+        effect: "allow",
+        reason: "Plan file write allowed in plan mode",
+      };
     }
 
     // Layer 2: safe read-only command auto-allow (metaChar-guarded).
@@ -675,8 +615,21 @@ export class PermissionChecker {
     // Only Bash is wrapped by the configured OS sandbox; other command tools
     // (e.g. PowerShell) never inherit this auto-allow.
     if (this.sandboxEnabled && this.sandboxAutoAllow && toolName === "Bash") {
-      const subcommands = strArg(args, "command")
-        .split(/\s*(?:&&|\|\||[;|])\s*/)
+      const command = strArg(args, "command").trim();
+      if (!command) {
+        return {
+          effect: "ask",
+          reason: "Sandbox auto-allow requires a non-empty Bash command",
+        };
+      }
+      // Split on every chaining separator — single & (backgrounding still
+      // runs the next command), newlines, and the compound operators — so an
+      // anchored deny/ask rule cannot be dodged by hiding a subcommand in a
+      // segment the splitter kept whole. (isSafeCommand already rejects raw
+      // & / newline / ; / | commands upstream; this keeps the layers
+      // consistent regardless.)
+      const subcommands = command
+        .split(/\s*(?:&&|\|\||&|[;|\n\r])\s*/)
         .map((s) => s.trim())
         .filter(Boolean);
       let hasAsk = false;
@@ -701,35 +654,20 @@ export class PermissionChecker {
       };
     }
 
-    // Layer 4: path sandbox (read/write tools that pass a file_path/path arg).
-    const filePath = strArg(args, "file_path", strArg(args, "path", ""));
-    if ((category === "read" || category === "write") && filePath) {
-      // denyWrite check takes priority: sensitive paths always deny writes
-      if (category === "write") {
-        const denyDecision = this.sandbox.checkDenyWrite(filePath);
-        if (denyDecision) {
-          return denyDecision;
-        }
-      }
+    // Layer 4: only writes need path approval; reads and bypass mode skip it.
+    if (category === "write" && filePath && this.mode !== "bypassPermissions") {
       const sandboxDecision = this.sandbox.check(filePath);
-      if (sandboxDecision && this.mode !== "bypassPermissions") {
-        // An explicit rule (e.g. `ReadFile(/foo/*)` allow) overrides the
-        // sandbox ask; otherwise rules for outside paths could never apply.
-        const ruleEffect = this.ruleEngine.evaluate(toolName, content);
-        if (ruleEffect) {
-          return {
-            effect: ruleEffect,
-            reason: `Permission rule: ${ruleEffect}`,
-          };
-        }
+      if (sandboxDecision && explicitEffect !== "allow") {
         return { effect: "ask", reason: sandboxDecision.reason };
       }
     }
 
     // Layer 5: rule engine — per-tool content + glob match.
-    const ruleEffect = evaluateRules(rules(), toolName, content);
-    if (ruleEffect) {
-      return { effect: ruleEffect, reason: `Permission rule: ${ruleEffect}` };
+    if (explicitEffect) {
+      return {
+        effect: explicitEffect,
+        reason: `Permission rule: ${explicitEffect}`,
+      };
     }
 
     // Layer 6: mode matrix.
@@ -739,10 +677,7 @@ export class PermissionChecker {
     };
   }
 
-  // Allow an extra directory outside the sandbox baseline (project root +
-  // os.tmpdir()) for read/write. Hosts opt in explicitly per checker; no
-  // production caller exists today (only tests) — the memory subsystem
-  // enforces its own dedicated checker instead.
+  // Allow writes to an extra directory outside the project + os.tmpdir().
   allowExtraRoot(path: string): void {
     this.sandbox.addRoot(path);
   }
@@ -758,7 +693,7 @@ export class PermissionChecker {
       toolName === "EditFile";
     let pattern: string;
     if (isFilePath && content) {
-      const abs = resolve(this.workDir, content);
+      const abs = resolveToolPath(this.cwd, content);
       let isDir = false;
       try {
         isDir = statSync(abs).isDirectory();

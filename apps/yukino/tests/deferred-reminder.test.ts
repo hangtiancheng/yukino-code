@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Injection timing for the deferred-tool reminder, exercised through the real agent loop.
 //
 // The reminder is pushed into history and stays in context, so re-injecting identical
@@ -35,7 +13,9 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { McpCallTool } from "@/tools/mcp-call.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import { ToolSearchTool } from "@/tools/tool-search.js";
 import type { Tool } from "@/tools/types.js";
 import { contentToText } from "@/utils/index.js";
 
@@ -97,7 +77,6 @@ function deferredStub(name: string): Tool {
   };
 }
 
-// Script for a single tool-call turn
 const toolTurn = (id: string): StreamEvent[] => [
   { type: "tool_call_start", toolName: "Echo", toolId: id },
   { type: "tool_call_complete", toolId: id, toolName: "Echo", arguments: {} },
@@ -109,12 +88,17 @@ function makeAgent(
   registry: ToolRegistry,
   conv: ConversationManager,
 ): Agent {
+  registry.exposeToolSearch = true;
+  registry.exposeMcpCall = true;
+  registry.mcpLoadingMode = "dispatch";
+  registry.register(new ToolSearchTool(registry));
+  registry.register(new McpCallTool(registry));
   return new Agent({
     client,
     registry,
     checker: new PermissionChecker(process.cwd(), "bypassPermissions"),
     conversation: conv,
-    workDir: process.cwd(),
+    cwd: process.cwd(),
   });
 }
 
@@ -133,8 +117,17 @@ async function drain(agent: Agent): Promise<void> {
 }
 
 describe("deferred tool reminder", () => {
+  it("does not repeat an unchanged list across new agent runs", async () => {
+    const registry = new ToolRegistry();
+    registry.register(deferredStub("mcp__linear__create_issue"));
+    const conv = new ConversationManager();
+    for (let index = 0; index < 3; index++) {
+      await drain(makeAgent(new MockClient([[end()]]), registry, conv));
+    }
+    expect(count(conv)).toBe(1);
+  });
+
   it("is injected only once across four turns", async () => {
-    // Three tool-call turns + one final turn, four iterations total
     const client = new MockClient([
       toolTurn("t1"),
       toolTurn("t2"),

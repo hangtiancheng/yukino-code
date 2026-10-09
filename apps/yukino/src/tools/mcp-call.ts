@@ -1,26 +1,4 @@
 /**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-/**
  * Unified call entry point for MCP tools (dispatch mode only — see
  * mcp/strategy.ts for the eager/native modes, where MCP tools ship in tools[]
  * directly or stay there flagged with defer_loading).
@@ -179,14 +157,18 @@ export function coerceBySchema(value: unknown, schema: unknown): unknown {
 export function mcpCallPermissionContent(server: string, tool: string): string {
   if (tool.startsWith(MCP_TOOL_PREFIX)) {
     const rest = tool.slice(MCP_TOOL_PREFIX.length);
-    const idx = rest.indexOf(MCP_NAME_SEP);
-    if (idx >= 0) {
-      // The full name already carries the server segment; use it to avoid building linear__linear__x
-      return (
-        sanitizeSegment(rest.slice(0, idx)) +
-        MCP_NAME_SEP +
-        sanitizeSegment(rest.slice(idx + MCP_NAME_SEP.length))
-      );
+    const lengthMatch = /^(\d+)_/u.exec(rest);
+    if (lengthMatch) {
+      const serverStart = lengthMatch[0].length;
+      const serverLength = Number.parseInt(lengthMatch[1], 10);
+      const separatorStart = serverStart + serverLength;
+      if (rest.slice(separatorStart, separatorStart + 2) === MCP_NAME_SEP) {
+        return (
+          rest.slice(serverStart, separatorStart) +
+          MCP_NAME_SEP +
+          rest.slice(separatorStart + MCP_NAME_SEP.length)
+        );
+      }
     }
   }
   return sanitizeSegment(server) + MCP_NAME_SEP + sanitizeSegment(tool);
@@ -249,9 +231,7 @@ export class McpCallTool implements Tool {
       : buildMcpToolName(server, name);
     const target = this.registry.get(fullName);
     // The routed server must be the one that permission rules evaluated.
-    return target &&
-      isMcpToolLike(target) &&
-      sanitizeSegment(target.mcpServerName) === sanitizeSegment(server)
+    return target && isMcpToolLike(target) && target.mcpServerName === server
       ? target
       : undefined;
   }
@@ -262,6 +242,22 @@ export class McpCallTool implements Tool {
       .filter((t) => t.name.startsWith(MCP_TOOL_PREFIX))
       .map((t) => t.name)
       .sort();
+  }
+
+  prepareArguments(args: Record<string, unknown>): Record<string, unknown> {
+    const target = this.resolveTarget(args);
+    if (
+      !target ||
+      typeof args.arguments !== "object" ||
+      args.arguments === null ||
+      Array.isArray(args.arguments)
+    ) {
+      return args;
+    }
+    return {
+      ...args,
+      arguments: coerceBySchema(args.arguments, target.mcpInputSchema()),
+    };
   }
 
   async execute(
@@ -295,21 +291,7 @@ export class McpCallTool implements Tool {
         isError: true,
       };
     }
-    let inner = asRecord(args.arguments);
-
-    if (isMcpToolLike(target)) {
-      const schema = target.mcpInputSchema();
-      if (Object.keys(schema).length > 0) {
-        const fixed = coerceBySchema(inner, schema);
-        if (
-          typeof fixed === "object" &&
-          fixed !== null &&
-          !Array.isArray(fixed)
-        ) {
-          inner = asRecord(fixed);
-        }
-      }
-    }
+    const inner = asRecord(this.prepareArguments(args).arguments);
 
     ctx.abortSignal?.throwIfAborted();
     return target.execute(ctx, inner);

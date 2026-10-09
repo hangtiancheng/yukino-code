@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   buildCompactionSummaryMessage,
   buildSummaryInstructions,
@@ -31,10 +9,10 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError } from "@/llm/errors.js";
+import { llmRetryDelay, waitForLlmRetry } from "@/llm/retry.js";
 import {
   type CompactBoundaryPayload,
-  toolUsesToRecords,
-  toolResultsToRecords,
+  messageToKeptRecord,
 } from "@/session/index.js";
 import type {
   ProviderToolSchema,
@@ -111,8 +89,8 @@ export class AutoCompactTrackingState {
 export interface UsageAnchor {
   // input + cache_read + cache_creation + output from the last real API usage.
   baselineTokens: number;
-  // conversation.len() at the moment the anchor was recorded; only messages
-  // beyond this index are estimated incrementally.
+  // Message count at the moment the anchor was recorded; only messages beyond
+  // this index are estimated incrementally.
   anchorCount: number;
 }
 
@@ -464,7 +442,6 @@ function truncateHeadForPTL(
   return result;
 }
 
-/** Serialize prefix messages to text */
 function serializePrefixText(messages: Message[]): string {
   return messages
     .map((m) => {
@@ -490,7 +467,6 @@ function formatCompactSummary(raw: string): string {
   if (summaryMatch) {
     return summaryMatch[1].trim();
   }
-  // No <summary> tag: strip the <analysis> block and return the remainder
   const analysisMatch = /<analysis>[\s\S]*?<\/analysis>/.exec(raw);
   if (analysisMatch) {
     return raw.replace(analysisMatch[0], "").trim();
@@ -521,8 +497,29 @@ async function collectSummary(
   tools: ProviderToolSchema[],
   abortSignal?: AbortSignal,
 ): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await collectSummaryAttempt(client, conv, tools, abortSignal);
+    } catch (error) {
+      abortSignal?.throwIfAborted();
+      const waitMs = llmRetryDelay(error, attempt);
+      if (waitMs === undefined) {
+        throw error;
+      }
+      await waitForLlmRetry(waitMs, abortSignal);
+    }
+  }
+}
+
+async function collectSummaryAttempt(
+  client: LLMClient,
+  conv: ConversationManager,
+  tools: ProviderToolSchema[],
+  abortSignal?: AbortSignal,
+): Promise<string> {
   abortSignal?.throwIfAborted();
   let text = "";
+  let completed = false;
   for await (const event of client.stream(conv, tools, abortSignal)) {
     abortSignal?.throwIfAborted();
     if (
@@ -541,8 +538,16 @@ async function collectSummary(
     ) {
       throw new Error(`Compaction summary did not finish: ${event.stopReason}`);
     }
+    if (event.type === "stream_end") {
+      completed = true;
+    }
   }
   abortSignal?.throwIfAborted();
+  if (!completed) {
+    throw new Error(
+      "Compaction summary stream ended without a completion event",
+    );
+  }
   const summary = formatCompactSummary(text);
   if (
     !summary ||
@@ -612,9 +617,9 @@ async function doCompact(
   // payload, so the retention boundary is determined directly from them.
   const estimationMessages = conv.getMessages();
 
-  // Decide how much recent history to keep verbatim. Only messages[:keepStart]
-  // get summarized; messages[keepStart:] are carried over untouched so the
-  // model still sees the literal recent exchange.
+  // Decide how much recent history to keep verbatim. Only the messages before
+  // keepStart get summarized; the messages from keepStart onward are carried
+  // over untouched so the model still sees the literal recent exchange.
   const keepStart = computeKeepStartIndex(estimationMessages);
 
   // Degenerate cases: if (almost) everything is already inside the kept tail,
@@ -685,33 +690,29 @@ async function doCompact(
   // Build the boundary payload the session owner will persist. The kept tail
   // must be persisted together with its tool blocks so that the full call
   // chain is available when the session is restored; messages with neither
-  // text nor tool blocks are dropped. The summary here is the bare summary
-  // (no recovery attachment): recovery context is rebuilt fresh per process, so
-  // baking it into the persisted boundary would be stale on the next resume.
+  // text nor tool blocks are dropped. The summary here excludes the recovery
+  // attachment (rebuilt fresh per process, it would be stale on the next
+  // resume) but keeps the transcript hint: the session file outlives the
+  // process, so a resumed session must still know the full transcript is
+  // readable.
+  let persistedSummary = summary;
+  if (sessionFilePath) {
+    persistedSummary += `\n\nIf you need specific details from before compaction (code snippets, error messages, etc.), use ReadFile to read the full session transcript: ${sessionFilePath}`;
+  }
   const keep = toKeep
     .filter(
       (m) =>
         (m.role === "user" || m.role === "assistant") &&
         (m.content ||
           (m.toolUses?.length ?? 0) ||
-          (m.toolResults?.length ?? 0)),
+          (m.toolResults?.length ?? 0) ||
+          (m.thinkingBlocks?.length ?? 0)),
     )
-    .map((m) => ({
-      role: m.role,
-      content: m.content,
-      ...(m.toolUses?.length
-        ? { tool_uses: toolUsesToRecords(m.toolUses) }
-        : {}),
-      ...(m.toolResults?.length
-        ? {
-            tool_results: toolResultsToRecords(m.toolResults),
-          }
-        : {}),
-    }));
+    .map(messageToKeptRecord);
 
   return {
     compacted: true,
     message: `Compacted ${String(toSummarize.length)} messages into summary (${String(summary.length)} chars), kept ${String(toKeep.length)} recent messages verbatim`,
-    boundary: { summary, keep },
+    boundary: { summary: persistedSummary, keep },
   };
 }

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,6 +11,7 @@ import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError } from "@/llm/errors.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { yukinoPath, projectPath } from "@/storage/paths.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";
 
@@ -54,7 +33,7 @@ const call: StreamEvent = {
 };
 
 function fixture(overrides: Partial<AgentConfig> = {}) {
-  const workDir = mkdtempSync(join(tmpdir(), "yukino-harness-"));
+  const cwd = mkdtempSync(join(tmpdir(), "yukino-harness-"));
   const conversation = new ConversationManager();
   conversation.addUserMessage("task");
   const execute = vi.fn(() =>
@@ -85,11 +64,11 @@ function fixture(overrides: Partial<AgentConfig> = {}) {
     },
   };
   const config: AgentConfig = {
-    workDir,
+    cwd,
     conversation,
     client,
     registry,
-    checker: new PermissionChecker(workDir, "acceptEdits"),
+    checker: new PermissionChecker(cwd, "acceptEdits"),
     maxIterations: 3,
     ...overrides,
   };
@@ -166,9 +145,7 @@ describe("harness execution boundaries", () => {
     let calls = 0;
     config.client.stream = async function* () {
       calls++;
-      await Promise.resolve();
-      throw new ContextTooLongError("context too long");
-      yield end;
+      yield await Promise.reject(new ContextTooLongError("context too long"));
     };
     const events = await collect(config);
     expect(calls).toBe(1);
@@ -182,7 +159,7 @@ describe("harness execution boundaries", () => {
 });
 
 describe("permission path boundaries", () => {
-  it("resolves relative paths against the agent workDir and rejects sibling prefixes", () => {
+  it("resolves relative paths against the agent cwd and rejects sibling prefixes", () => {
     const { config } = fixture();
     expect(
       config.checker.check("WriteFile", "write", { file_path: "src/new.ts" })
@@ -207,20 +184,20 @@ describe("permission path boundaries", () => {
     // Symlink aliases resolve to their real target: a write through the
     // in-project skill-alias stays allowed, and a read through the external
     // symlink reaches the allowed tmpdir root.
-    mkdirSync(join(config.workDir, ".agents", "skills"), { recursive: true });
+    mkdirSync(join(config.cwd, ".agents", "skills"), { recursive: true });
     symlinkSync(
-      join(config.workDir, ".agents", "skills"),
-      join(config.workDir, "skill-alias"),
+      join(config.cwd, ".agents", "skills"),
+      join(config.cwd, "skill-alias"),
     );
     expect(
       config.checker.check("WriteFile", "write", {
-        file_path: join(config.workDir, "skill-alias", "new", "SKILL.md"),
+        file_path: join(config.cwd, "skill-alias", "new", "SKILL.md"),
       }).effect,
     ).toBe("allow");
-    symlinkSync(outside, join(config.workDir, "external"));
+    symlinkSync(outside, join(config.cwd, "external"));
     expect(
       config.checker.check("ReadFile", "read", {
-        file_path: join(config.workDir, "external", "file"),
+        file_path: join(config.cwd, "external", "file"),
       }).effect,
     ).toBe("allow");
   });
@@ -228,12 +205,7 @@ describe("permission path boundaries", () => {
   it("only applies the plan-write exception to the configured plan file", () => {
     const { config } = fixture();
     config.checker.mode = "plan";
-    config.checker.planFilePath = join(
-      config.workDir,
-      ".yukino",
-      "plans",
-      "current.md",
-    );
+    config.checker.planFilePath = yukinoPath("plans", "current.md");
     expect(
       config.checker.check("WriteFile", "write", {
         file_path: config.checker.planFilePath,
@@ -241,25 +213,26 @@ describe("permission path boundaries", () => {
     ).toBe("allow");
     expect(
       config.checker.check("WriteFile", "write", {
-        file_path: config.workDir + "/.yukino/plans/../../source.ts",
+        file_path: config.cwd + "/.yukino/plans/../../source.ts",
       }).effect,
-    ).toBe("ask");
+    ).toBe("deny");
     expect(
       config.checker.check("WriteFile", "write", {
         file_path: ".yukino/plans/other.md",
       }).effect,
-    ).toBe("ask");
+    ).toBe("deny");
   });
 
   it("honors explicit deny rules for commands with safe prefixes", () => {
     const { config } = fixture();
-    mkdirSync(join(config.workDir, ".yukino"));
+    mkdirSync(projectPath(config.cwd), { recursive: true });
     writeFileSync(
-      join(config.workDir, ".yukino/permissions.yaml"),
-      '- rule: "Bash(git status*)"\n  effect: deny\n',
+      projectPath(config.cwd, "permissions.yaml"),
+      '- rule: "Bash(cat*)"\n  effect: deny\n',
     );
     expect(
-      config.checker.check("Bash", "command", { command: "git status" }).effect,
+      config.checker.check("Bash", "command", { command: "cat source.ts" })
+        .effect,
     ).toBe("deny");
   });
 });

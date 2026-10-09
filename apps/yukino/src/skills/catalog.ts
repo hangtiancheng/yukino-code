@@ -1,26 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
+import {
+  readdirSync,
+  readFileSync,
+  existsSync,
+  statSync,
+  realpathSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -30,6 +14,7 @@ import { z } from "zod";
 import type { Skill, SkillMeta } from "./index.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import { yukinoPath } from "@/storage/paths.js";
 import { asRecord, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "skills" });
@@ -49,22 +34,20 @@ interface CatalogEntry {
 
 export class SkillCatalog {
   private entries = new Map<string, CatalogEntry>();
-  private workDir = "";
+  private cwd = "";
   private dirModTimes = new Map<string, number | null>();
 
-  load(workDir: string): void {
-    this.workDir = workDir;
+  load(cwd: string): void {
+    this.cwd = cwd;
     this.entries.clear();
     this.dirModTimes.clear();
 
-    // User-global ~/.agents/skills/, then project-level
-    // $workDir/.agents/skills/ (highest priority)
     for (const dir of this.skillDirPaths()) {
       if (!existsSync(dir)) {
         continue;
       }
 
-      this.scanDirectory(dir);
+      this.scanDirectory(dir, new Set());
     }
 
     this.snapshotDirModTimes();
@@ -92,7 +75,7 @@ export class SkillCatalog {
   }
 
   reload(): void {
-    this.load(this.workDir);
+    this.load(this.cwd);
   }
 
   private snapshotDirModTimes(): void {
@@ -111,15 +94,28 @@ export class SkillCatalog {
   }
 
   private skillDirPaths(): string[] {
-    return [homedir(), ...(this.workDir ? [this.workDir] : [])].flatMap(
-      (root) => [".agents"].map((ecosystem) => join(root, ecosystem, "skills")),
-    );
+    return [
+      join(homedir(), ".agents", "skills"),
+      yukinoPath("skills"),
+      ...(this.cwd ? [join(this.cwd, ".agents", "skills")] : []),
+    ];
   }
 
-  private scanDirectory(dir: string) {
+  private scanDirectory(dir: string, visited: Set<string>) {
     let dirEntries: string[];
     try {
-      dirEntries = readdirSync(dir);
+      const canonical = realpathSync(dir);
+      if (visited.has(canonical)) {
+        return;
+      }
+      visited.add(canonical);
+      this.dirModTimes.set(dir, statSync(dir).mtimeMs);
+      const skillFile = join(dir, "SKILL.md");
+      if (existsSync(skillFile)) {
+        this.loadSkill(skillFile, dir);
+        return;
+      }
+      dirEntries = readdirSync(dir).sort();
     } catch (err) {
       log.error({ err }, "skills operation failed");
       return;
@@ -127,14 +123,16 @@ export class SkillCatalog {
 
     for (const entry of dirEntries) {
       const fullPath = join(dir, entry);
+      if (
+        (entry.startsWith(".") || entry === "node_modules") &&
+        !existsSync(join(fullPath, "SKILL.md"))
+      ) {
+        continue;
+      }
       try {
         const stat = statSync(fullPath);
         if (stat.isDirectory()) {
-          this.dirModTimes.set(fullPath, stat.mtimeMs);
-          const skillFile = join(fullPath, "SKILL.md");
-          if (existsSync(skillFile)) {
-            this.loadSkill(skillFile, fullPath, true);
-          }
+          this.scanDirectory(fullPath, visited);
         }
       } catch (err) {
         // A broken symlink or a concurrently removed entry must not hide other skills.
@@ -142,7 +140,7 @@ export class SkillCatalog {
       }
     }
   }
-  private loadSkill(filePath: string, sourceDir: string, isDirectory: boolean) {
+  private loadSkill(filePath: string, sourceDir: string) {
     try {
       const raw = readFileSync(filePath, "utf-8");
       const parsed = parseSkillFile(raw);
@@ -154,7 +152,6 @@ export class SkillCatalog {
         meta: parsed.meta,
         body: parsed.body,
         sourceDir,
-        isDirectory,
       };
 
       let mtimeMs = 0;
@@ -205,7 +202,6 @@ export class SkillCatalog {
               meta: parsed.meta,
               body: parsed.body,
               sourceDir: entry.skill.sourceDir,
-              isDirectory: entry.skill.isDirectory,
             };
             entry.loadedMtimeMs = currentMtime;
           }
@@ -213,7 +209,6 @@ export class SkillCatalog {
         }
       } catch (err) {
         log.error({ err }, "skills operation failed");
-        // Retain the cached version if reading fails
       }
     }
 
@@ -291,15 +286,12 @@ export function escapeSkillXml(text: string): string {
 }
 
 /** Metadata-only conversation reminder; bodies load on demand without changing the system prefix. */
-export function buildSkillSection(
-  catalog: SkillCatalog,
-  workDir: string,
-): string {
+export function buildSkillSection(catalog: SkillCatalog): string {
   const metas = catalog.list();
   if (metas.length === 0) {
     return "";
   }
-  const skillsDir = join(workDir, ".agents", "skills");
+  const skillsDir = yukinoPath("skills");
   const lines = [
     "## Skills",
     'Load relevant instructions with LoadSkill {name: "<skill-name>"}, or user command /<skill-name>. Mode inline activates in this conversation; fork runs in a subagent when available, otherwise inline. Load resources only as needed, relative to the skill directory. Tool access remains host-controlled.',

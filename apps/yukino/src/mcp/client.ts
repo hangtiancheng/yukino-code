@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Note that because some servers are still using SSE, clients may need to support both transports during the migration period.
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -277,18 +255,34 @@ export class MCPClient {
     if (!this.client) {
       throw new Error("Not connected");
     }
-    const result = await this.client.listTools();
-    return result.tools.map(
-      ({
-        name,
-        description,
-        inputSchema: { properties, ...inputSchemaRest },
-      }) => ({
-        name,
-        description: description ?? "",
-        inputSchema: { ...inputSchemaRest, properties: properties ?? {} },
-      }),
-    );
+    const client = this.client;
+    const tools: MCPTool[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const result = await client.listTools(
+        cursor !== undefined ? { cursor } : undefined,
+      );
+      tools.push(
+        ...result.tools.map(
+          ({ name, description, inputSchema: { properties, ...rest } }) => ({
+            name,
+            description: description ?? "",
+            inputSchema: { ...rest, properties: properties ?? {} },
+          }),
+        ),
+      );
+      cursor = result.nextCursor;
+      if (cursor !== undefined) {
+        if (seenCursors.has(cursor)) {
+          throw new Error(
+            `MCP server '${this.name}' repeated tools cursor '${cursor}'`,
+          );
+        }
+        seenCursors.add(cursor);
+      }
+    } while (cursor !== undefined);
+    return tools;
   }
 
   /** Calls a tool and preserves both its text fallback and provider-native rich content. */
@@ -316,12 +310,23 @@ export class MCPClient {
   }
 
   async disconnect(): Promise<void> {
+    const client = this.client;
+    const transport = this.transport;
+    this.client = null;
+    this.transport = null;
+    let clientClosed = false;
     try {
-      await this.client?.close();
+      await client?.close();
+      clientClosed = true;
     } catch (err) {
       log.error({ err }, "mcp operation failed");
     }
-    this.client = null;
-    this.transport = null;
+    if (!clientClosed && transport) {
+      try {
+        await transport.close();
+      } catch (err) {
+        log.error({ err }, "mcp transport close failed");
+      }
+    }
   }
 }

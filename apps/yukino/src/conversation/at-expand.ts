@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
@@ -30,8 +8,10 @@ import {
 } from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
 
-const log = createChildLogger({ module: "terminal" });
+const log = createChildLogger({ module: "at-expand" });
 const MAX_INLINE_BYTES = 100_000;
+const MAX_INLINE_TOTAL_BYTES = 300_000;
+const MAX_AT_REFS = 32;
 // Files larger than this are never read, even for a narrow line range.
 const MAX_RANGE_FILE_BYTES = 10_000_000;
 
@@ -68,16 +48,29 @@ function collectAtRefs(text: string): string[] {
   // Clipboard images and paths containing spaces use quoted mentions.
   const pattern =
     /(?:^|\s)(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s]+))/g;
-  return [...text.matchAll(pattern)].map(
-    (match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5],
-  );
+  return [...text.matchAll(pattern)]
+    .slice(0, MAX_AT_REFS)
+    .map((match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5]);
+}
+
+function appendWithinLimit(
+  appendix: string,
+  block: string,
+): { appendix: string; appended: boolean } {
+  if (
+    Buffer.byteLength(appendix, "utf8") + Buffer.byteLength(block, "utf8") >
+    MAX_INLINE_TOTAL_BYTES
+  ) {
+    return { appendix, appended: false };
+  }
+  return { appendix: appendix + block, appended: true };
 }
 
 // Expand @path references in a user message by inlining the referenced files'
-// contents (resolved relative to workDir), or just the selected line range when
+// contents (resolved relative to cwd), or just the selected line range when
 // the ref carries an #L suffix. Tokens that don't resolve to a small readable
 // file are left untouched.
-export function expandAtRefs(text: string, workDir: string): string {
+export function expandAtRefs(text: string, cwd: string): string {
   const refs = collectAtRefs(text);
   if (refs.length === 0) {
     return text;
@@ -91,7 +84,7 @@ export function expandAtRefs(text: string, workDir: string): string {
     }
     seen.add(ref);
     const { path: refPath, lineStart, lineEnd } = parseRef(ref);
-    const p = isAbsolute(refPath) ? refPath : join(workDir, refPath);
+    const p = isAbsolute(refPath) ? refPath : join(cwd, refPath);
     try {
       const st = statSync(p);
       if (!st.isFile()) {
@@ -105,14 +98,20 @@ export function expandAtRefs(text: string, workDir: string): string {
             lineEnd,
           );
           if (snippet.length <= MAX_INLINE_BYTES) {
-            appendix += `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`;
+            appendix = appendWithinLimit(
+              appendix,
+              `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`,
+            ).appendix;
           }
         }
       } else if (st.size <= MAX_INLINE_BYTES) {
-        appendix += `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`;
+        appendix = appendWithinLimit(
+          appendix,
+          `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`,
+        ).appendix;
       }
     } catch (err) {
-      log.error({ err }, "UI operation failed");
+      log.error({ err }, "@-mention expansion failed");
       // not a readable file → leave the @token as literal text
     }
   }
@@ -128,7 +127,7 @@ export function expandAtRefs(text: string, workDir: string): string {
 // Returns a plain string when no image is referenced.
 export async function expandAtRefsWithImages(
   text: string,
-  workDir: string,
+  cwd: string,
 ): Promise<string | Record<string, unknown>[]> {
   const refs = collectAtRefs(text);
   if (refs.length === 0) {
@@ -144,7 +143,7 @@ export async function expandAtRefsWithImages(
     }
     seen.add(ref);
     const { path: refPath, lineStart, lineEnd } = parseRef(ref);
-    const p = isAbsolute(refPath) ? refPath : join(workDir, refPath);
+    const p = isAbsolute(refPath) ? refPath : join(cwd, refPath);
     try {
       const st = statSync(p);
       if (!st.isFile()) {
@@ -157,17 +156,24 @@ export async function expandAtRefsWithImages(
         }
         try {
           const attachment = await loadImageAttachment(p);
-          imageBlocks.push({
+          const imageBlock = {
             type: "image",
             source: {
               type: "base64",
               media_type: attachment.mediaType,
               data: attachment.data,
             },
-          });
-          appendix += `\n\n<image type="base64" media_type="${attachment.mediaType}" path="${refPath}" />`;
+          };
+          const next = appendWithinLimit(
+            appendix,
+            `\n\n<image type="base64" media_type="${attachment.mediaType}" path="${refPath}" />`,
+          );
+          if (next.appended) {
+            appendix = next.appendix;
+            imageBlocks.push(imageBlock);
+          }
         } catch (err) {
-          log.error({ err: err }, "UI operation failed");
+          log.error({ err: err }, "@-mention expansion failed");
         }
       } else if (lineStart !== undefined && lineEnd !== undefined) {
         if (st.size <= MAX_RANGE_FILE_BYTES) {
@@ -177,14 +183,20 @@ export async function expandAtRefsWithImages(
             lineEnd,
           );
           if (snippet.length <= MAX_INLINE_BYTES) {
-            appendix += `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`;
+            appendix = appendWithinLimit(
+              appendix,
+              `\n\n<file path="${refPath}" lines="${String(lineStart)}-${String(lineEnd)}">\n${snippet}\n</file>`,
+            ).appendix;
           }
         }
       } else if (st.size <= MAX_INLINE_BYTES) {
-        appendix += `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`;
+        appendix = appendWithinLimit(
+          appendix,
+          `\n\n<file path="${ref}">\n${readFileSync(p, "utf-8")}\n</file>`,
+        ).appendix;
       }
     } catch (err) {
-      log.error({ err }, "UI operation failed");
+      log.error({ err }, "@-mention expansion failed");
       // not a readable file → leave the @token as literal text
     }
   }

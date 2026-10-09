@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { SkillCatalog } from "./catalog.js";
 import { runFork, runInline } from "./executor.js";
 
@@ -39,7 +17,7 @@ import { asErrorString, strArg } from "@/utils/index.js";
 export class LoadSkillTool implements Tool {
   name = "LoadSkill";
   description =
-    "Activate a skill by name. Returns the full SOP body so you can follow its instructions.. Call this when the user's request matches one of the available " +
+    "Activate a skill by name. Returns the full SOP body so you can follow its instructions. Call this when the user's request matches one of the available " +
     "Skills listed in the available-skills section. Pass the Skill name without a leading slash.";
   category = "read" as const;
 
@@ -51,6 +29,10 @@ export class LoadSkillTool implements Tool {
     // to ensure the tool remains available.
     private forkHost?: SkillForkHost,
   ) {}
+
+  forDelegatedAgent(): LoadSkillTool {
+    return new LoadSkillTool(this.catalog, { activateSkill: () => undefined });
+  }
 
   schema(): ToolSchema {
     return {
@@ -87,14 +69,12 @@ export class LoadSkillTool implements Tool {
       };
     }
 
-    // Fork mode: the SOP body does not enter the main conversation; it is delegated to an
-    // isolated subagent for execution, and only the final result is returned. This ensures
-    // that model-initiated skill loading and user-invoked slash commands follow the same mode
-    // semantics — the declared isolation intent takes effect on both paths.
+    // Fork mode keeps the SOP body out of the main conversation: an isolated
+    // subagent executes it and only its final result is returned.
     if (skill.meta.mode === "fork" && this.forkHost) {
       try {
         return {
-          output: await runFork(skill, "", this.forkHost),
+          output: await runFork(skill, "", this.forkHost, ctx.abortSignal, ctx),
           isError: false,
         };
       } catch (err) {

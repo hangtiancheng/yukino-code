@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   mkdirSync,
   mkdtempSync,
@@ -42,7 +20,13 @@ import {
 
 const appRoot = join(import.meta.dirname, "..");
 const srcRoot = join(appRoot, "src");
-const dependencyNames = Object.keys(pkg.dependencies);
+// Full install-manifest set: optionalDependencies are part of the graph by
+// default (only their install failures are tolerated), so import-site
+// derivation must see them too.
+const dependencyNames = [
+  ...Object.keys(pkg.dependencies),
+  ...Object.keys(pkg.optionalDependencies ?? {}),
+].sort();
 
 /**
  * Recompute the ui-only set from the sources: a dependency is ui-only
@@ -106,18 +90,18 @@ const deriveUIOnlyDeps = (): string[] => {
     }
   };
 
-  // src/remote/fe is a standalone browser bundle with its own tsup build
-  // (`pnpm build:fe`), served as static assets by the remote server. It is
+  // src/remote/browser is a standalone browser bundle with its own tsup build
+  // (`pnpm build:browser`), served as static assets by the remote server. It is
   // never part of the CLI/library import graph, so its imports (react,
   // react-dom, dompurify, marked) must not count as import sites here.
-  const fePrefix = "src/remote/fe/";
+  const browserPrefix = "src/remote/browser/";
 
   const walk = (directory: string): void => {
     for (const entry of ts.sys.readDirectory(directory, [".ts", ".tsx"])) {
       const relativeEntry = entry
         .slice(appRoot.length + 1)
         .replaceAll("\\", "/");
-      if (relativeEntry.startsWith(fePrefix)) {
+      if (relativeEntry.startsWith(browserPrefix)) {
         continue;
       }
       visit(entry);
@@ -173,13 +157,13 @@ describe("library build ui-only dependency guard", () => {
     expect(uiOnlyDeps).toContain("react");
     expect(uiOnlyDeps).toContain("marked");
     // react-dom is imported only by the standalone browser bundle
-    // (src/remote/fe), never by the node graph — it is not part of the set.
+    // (src/remote/browser), never by the node graph — it is not part of the set.
     for (const specifier of [
       "react-dom",
       "react-dom/client",
       "zod",
       "@anthropic-ai/sdk",
-      "koa",
+      "express",
       "sharp",
       "ws",
     ]) {

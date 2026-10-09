@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -100,7 +78,7 @@ function readConfigRaw(path: string): Record<string, unknown> {
   return z.record(z.string(), z.unknown()).parse(raw ?? {});
 }
 
-/** Atomically write the global config, preserving 0600 permissions. */
+/** Atomically write the global config with 0600 permissions. */
 function writeConfigAtomic(path: string, raw: Record<string, unknown>): void {
   const directory = dirname(path);
   mkdirSync(directory, { recursive: true });
@@ -174,13 +152,14 @@ export function saveProvider(
 }
 
 /**
- * Persist a provider's thinking level to the global config. `base_url` is the
- * provider identity, so every entry for that endpoint is updated. Throws when
- * the endpoint is absent so callers can surface a clear error.
+ * Persist a single field of every provider entry matching `base_url`. The
+ * endpoint is the provider identity, so all entries for it change together.
+ * Throws when the endpoint is absent so callers can surface a clear error.
  */
-export function persistThinkingLevel(
+function persistProviderField(
   baseUrl: string,
-  level: ThinkingLevel,
+  field: "thinking" | "model",
+  value: string,
 ): void {
   const path = globalConfigPath();
   const config = readConfigRaw(path);
@@ -193,15 +172,27 @@ export function persistThinkingLevel(
       `Provider with base URL "${baseUrl}" not found in ${path}.`,
     );
   }
-  const changed = targets.filter((entry) => entry.thinking !== level);
+  const changed = targets.filter((entry) => entry[field] !== value);
   // Avoid rewriting (and reformatting) the file when nothing changes.
   if (changed.length === 0) {
     return;
   }
   for (const entry of changed) {
-    entry.thinking = level;
+    entry[field] = value;
   }
   writeConfigAtomic(path, { ...config, providers });
+}
+
+export function persistThinkingLevel(
+  baseUrl: string,
+  level: ThinkingLevel,
+): void {
+  persistProviderField(baseUrl, "thinking", level);
+}
+
+/** Persist the active model of a provider without touching any other field. */
+export function persistModel(baseUrl: string, model: string): void {
+  persistProviderField(baseUrl, "model", model);
 }
 
 /**

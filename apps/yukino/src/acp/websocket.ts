@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -30,9 +8,16 @@ import { WebSocketServer } from "ws";
 import { createYukinoAcpApp } from "./agent.js";
 
 import { parseRemoteAddress } from "@/remote/address.js";
+import {
+  addWebSocketToken,
+  authorizeWebSocketRequest,
+  createWebSocketAccessToken,
+  rejectWebSocketUpgrade,
+} from "@/websocket-security.js";
 
 const ACP_PATH = "/acp";
-const DEFAULT_ADDRESS = "127.0.0.1:18889";
+const ACP_WS_DEFAULT_PORT = 18889;
+const DEFAULT_ADDRESS = `127.0.0.1:${String(ACP_WS_DEFAULT_PORT)}`;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 export interface AcpWebSocketServerHandle {
@@ -44,7 +29,10 @@ export function parseAcpWebSocketAddress(address?: string): {
   host: string;
   port: number;
 } {
-  const parsed = parseRemoteAddress(address ?? DEFAULT_ADDRESS);
+  const parsed = parseRemoteAddress(address ?? DEFAULT_ADDRESS, {
+    defaultPort: ACP_WS_DEFAULT_PORT,
+    allowEphemeral: true,
+  });
   if (!LOOPBACK_HOSTS.has(parsed.host)) {
     throw new Error("ACP WebSocket must listen on a loopback address.");
   }
@@ -55,6 +43,7 @@ export async function startAcpWebSocketServer(
   address?: string,
 ): Promise<AcpWebSocketServerHandle> {
   const { host, port } = parseAcpWebSocketAddress(address);
+  const accessToken = createWebSocketAccessToken();
   const acpServer = new AcpServer({
     createAgent: () => createYukinoAcpApp().app,
   });
@@ -69,9 +58,13 @@ export async function startAcpWebSocketServer(
   });
 
   httpServer.on("upgrade", (request, socket, head) => {
-    const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-    if (pathname !== ACP_PATH) {
-      socket.destroy();
+    const authorization = authorizeWebSocketRequest(
+      request,
+      ACP_PATH,
+      accessToken,
+    );
+    if (!authorization.allowed) {
+      rejectWebSocketUpgrade(socket, authorization);
       return;
     }
     handleUpgrade(request, socket, head);
@@ -103,44 +96,70 @@ export async function startAcpWebSocketServer(
   let closed = false;
 
   return {
-    url: `ws://${displayHost}:${String(boundAddress.port)}${ACP_PATH}`,
+    url: addWebSocketToken(
+      `ws://${displayHost}:${String(boundAddress.port)}${ACP_PATH}`,
+      accessToken,
+    ),
     async close(): Promise<void> {
       if (closed) {
         return;
       }
       closed = true;
-      await acpServer.close();
-      await new Promise<void>((resolve, reject) => {
-        webSocketServer.close((error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
-        });
-      });
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
-        });
-      });
+      // Close every server even when an earlier one rejects: bailing out at
+      // the first failure (or guarding retries away with `closed`) would
+      // leave the remaining listeners holding their ports. The first error
+      // is rethrown once everything has been attempted.
+      let firstError: Error | undefined;
+      const record = (err: unknown): void => {
+        firstError =
+          firstError ?? (err instanceof Error ? err : new Error(String(err)));
+      };
+      try {
+        await acpServer.close();
+      } catch (err) {
+        record(err);
+      }
+      try {
+        await closeWithCallback(webSocketServer);
+      } catch (err) {
+        record(err);
+      }
+      try {
+        await closeWithCallback(httpServer);
+      } catch (err) {
+        record(err);
+      }
+      if (firstError !== undefined) {
+        throw firstError;
+      }
     },
   };
+}
+
+/** Resolves when the server is closed; rejects with the close callback's error. */
+function closeWithCallback(server: {
+  close(callback: (error?: Error | null) => void): unknown;
+}): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 export async function runAcpWebSocket(address?: string): Promise<void> {
   const server = await startAcpWebSocketServer(address);
   process.stderr.write(`ACP WebSocket listening at ${server.url}\n`);
 
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
     const shutdown = (): void => {
       process.off("SIGINT", shutdown);
       process.off("SIGTERM", shutdown);
-      void server.close().finally(resolve);
+      void server.close().then(resolve, reject);
     };
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);

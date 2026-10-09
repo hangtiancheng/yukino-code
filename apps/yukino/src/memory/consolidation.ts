@@ -1,35 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import {
-  existsSync,
-  statSync,
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  unlinkSync,
-  utimesSync,
-} from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
 
 import { MemoryPermissionChecker } from "./permissions.js";
@@ -40,6 +9,8 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import { listSessions } from "@/session/index.js";
+import { projectPath, yukinoPath, getSessionsDir } from "@/storage/paths.js";
+import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { GlobTool } from "@/tools/glob.js";
@@ -54,7 +25,6 @@ const DEFAULT_MIN_HOURS = 24;
 const DEFAULT_MIN_SESSIONS = 5;
 const SCAN_THROTTLE_MS = 10 * 60 * 1000;
 const LOCK_FILE = ".consolidate-lock";
-const HOLDER_STALE_MS = 60 * 60 * 1000;
 const MAX_ENTRYPOINT_LINES = 200;
 
 /**
@@ -66,7 +36,7 @@ const MAX_ENTRYPOINT_LINES = 200;
  */
 export class MemoryConsolidator {
   private client: LLMClient;
-  private workDir: string;
+  private cwd: string;
   private lastScanAt = 0;
   private minHours: number;
   private minSessions: number;
@@ -74,7 +44,7 @@ export class MemoryConsolidator {
 
   constructor(
     client: LLMClient,
-    workDir: string,
+    cwd: string,
     opts?: {
       minHours?: number;
       minSessions?: number;
@@ -82,7 +52,7 @@ export class MemoryConsolidator {
     },
   ) {
     this.client = client;
-    this.workDir = workDir;
+    this.cwd = cwd;
     this.minHours = opts?.minHours ?? DEFAULT_MIN_HOURS;
     this.minSessions = opts?.minSessions ?? DEFAULT_MIN_SESSIONS;
     this.appendSystem = opts?.appendSystem;
@@ -93,7 +63,7 @@ export class MemoryConsolidator {
    * Should be called when each agent loop completes.
    */
   maybeRun(): Promise<void> {
-    const memDir = join(this.workDir, ".yukino", "memory");
+    const memDir = projectPath(this.cwd, "memory");
     if (!existsSync(memDir)) {
       return Promise.resolve();
     }
@@ -110,31 +80,35 @@ export class MemoryConsolidator {
     }
     this.lastScanAt = now;
 
-    const sessionIDs = listSessionsSince(this.workDir, lastAt);
+    const sessionIDs = listSessionsSince(this.cwd, lastAt);
     if (sessionIDs.length < this.minSessions) {
       return Promise.resolve();
     }
 
-    const priorMtime = tryAcquireLock(memDir);
-    if (priorMtime === null) {
+    const releaseLock = tryAcquireFileSyncLock(
+      join(memDir, ".consolidate-running"),
+    );
+    if (!releaseLock) {
       return Promise.resolve();
     }
 
-    // Fire-and-forget: on failure the lock's prior mtime is restored so the
-    // time gate admits a retry instead of waiting out a full interval.
-    this.run(memDir, sessionIDs, priorMtime).catch(() => {
-      rollbackLock(memDir, priorMtime);
-    });
+    this.run(memDir, sessionIDs)
+      .then(() => {
+        markConsolidationSucceeded(memDir);
+      })
+      .catch((err: unknown) => {
+        log.error({ err }, "memory consolidation failed");
+      })
+      .finally(releaseLock)
+      .catch((err: unknown) => {
+        log.error({ err }, "failed to release consolidation lock");
+      });
     return Promise.resolve();
   }
 
-  async run(
-    memDir: string,
-    sessionIDs: string[],
-    _priorMtime: number,
-  ): Promise<void> {
-    const userMemDir = join(homedir(), ".yukino", "memory");
-    const transcriptDir = join(this.workDir, ".yukino", "sessions");
+  async run(memDir: string, sessionIDs: string[]): Promise<void> {
+    const userMemDir = yukinoPath("memory");
+    const transcriptDir = getSessionsDir(this.cwd);
     const prompt = buildConsolidationPrompt(
       memDir,
       userMemDir,
@@ -148,7 +122,7 @@ export class MemoryConsolidator {
     subRegistry.register(new EditFileTool());
     subRegistry.register(new GlobTool());
     subRegistry.register(new GrepTool());
-    const subChecker = new MemoryPermissionChecker(this.workDir, true);
+    const subChecker = new MemoryPermissionChecker(this.cwd, true);
 
     const conv = new ConversationManager();
     conv.addUserMessage(prompt);
@@ -158,7 +132,7 @@ export class MemoryConsolidator {
       registry: subRegistry,
       checker: subChecker,
       conversation: conv,
-      workDir: this.workDir,
+      cwd: this.cwd,
       fileStateCache: new FileStateCache(),
       maxIterations: 15,
     });
@@ -179,8 +153,6 @@ export class MemoryConsolidator {
   }
 }
 
-// --- Lock file management ---
-
 function lockPath(memDir: string): string {
   return join(memDir, LOCK_FILE);
 }
@@ -197,88 +169,19 @@ function readLastConsolidatedAt(memDir: string): number {
   }
 }
 
-/**
- * Acquires the consolidation lock. An existing lock is respected only while
- * it is fresher than HOLDER_STALE_MS and its recorded holder PID is still
- * running; locks that are stale, whose holder died, or whose PID is missing
- * or unreadable are taken over. Returns the lock's previous mtime on success
- * (0 when no lock existed or its mtime could not be read), or null when the
- * lock is held or the read-back check fails. The mtime doubles as the
- * last-consolidation timestamp (see readLastConsolidatedAt), which is why
- * callers can undo a failed pass by restoring it via rollbackLock.
- */
-function tryAcquireLock(memDir: string): number | null {
-  const path = lockPath(memDir);
-  let mtimeMs: number | undefined;
-  let holderPid: number | undefined;
-
-  if (existsSync(path)) {
-    try {
-      mtimeMs = statSync(path).mtimeMs;
-      const raw = readFileSync(path, "utf-8").trim();
-      const parsed = parseInt(raw, 10);
-      if (Number.isFinite(parsed)) {
-        holderPid = parsed;
-      }
-    } catch (err) {
-      log.error({ err }, "failed to read consolidation lock file");
-    }
-  }
-
-  if (mtimeMs !== undefined && Date.now() - mtimeMs < HOLDER_STALE_MS) {
-    if (holderPid !== undefined && isProcessRunning(holderPid)) {
-      return null;
-    }
-  }
-
-  mkdirSync(memDir, { recursive: true });
-  writeFileSync(path, String(process.pid));
-
+function markConsolidationSucceeded(memDir: string): void {
   try {
-    const verify = readFileSync(path, "utf-8").trim();
-    if (parseInt(verify, 10) !== process.pid) {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-
-  return mtimeMs ?? 0;
-}
-
-function rollbackLock(memDir: string, priorMtime: number): void {
-  const path = lockPath(memDir);
-  try {
-    if (priorMtime === 0) {
-      unlinkSync(path);
-      return;
-    }
-    writeFileSync(path, "");
-    const t = priorMtime / 1000;
-    utimesSync(path, t, t);
+    writeFileSync(lockPath(memDir), "");
   } catch (err) {
-    log.error({ err }, "failed to rollback consolidation lock");
+    log.error({ err }, "failed to update consolidation timestamp");
   }
 }
 
-function isProcessRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// --- Session listing ---
-
-function listSessionsSince(workDir: string, sinceMs: number): string[] {
-  const sessions = listSessions(workDir);
+function listSessionsSince(cwd: string, sinceMs: number): string[] {
+  const sessions = listSessions(cwd);
   const since = new Date(sinceMs);
   return sessions.filter((s) => s.modTime > since).map((s) => s.id);
 }
-
-// --- Prompt ---
 
 function buildConsolidationPrompt(
   memDir: string,

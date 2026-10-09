@@ -1,26 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { readFileSync, statSync } from "node:fs";
+import { open, readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 
 import sharp from "sharp";
@@ -59,6 +37,8 @@ interface ImageAttachment {
 // Hard limit is 5MB on the base64-encoded payload. base64 inflates by 4/3, so the raw-byte target that always fits is 5MB * 3/4 = 3.75MB.
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_IMAGE_BYTES_PASSTHROUGH = (MAX_IMAGE_BYTES * 3) / 4;
+// On-disk admission cap for loadImageAttachment (pre-read memory bound).
+const MAX_IMAGE_INPUT_BYTES = 50 * 1024 * 1024;
 
 export const MAX_DIMENSION_PX = 2000;
 
@@ -133,17 +113,41 @@ export function sniffMediaType(buf: Buffer): ImageMediaType | null {
   return null;
 }
 
+export async function sniffFileMediaType(
+  absPath: string,
+  signal?: AbortSignal,
+): Promise<ImageMediaType | null> {
+  signal?.throwIfAborted();
+  const file = await open(absPath, "r");
+  try {
+    signal?.throwIfAborted();
+    const header = Buffer.alloc(12);
+    const { bytesRead } = await file.read(header, 0, header.length, 0);
+    signal?.throwIfAborted();
+    return sniffMediaType(header.subarray(0, bytesRead));
+  } finally {
+    await file.close();
+  }
+}
+
 // Read an image file, validate its real format via magic bytes, and compress
 // it to fit API limits. Throws with context on any failure (caller decides
 // how to degrade).
 export async function loadImageAttachment(
   absPath: string,
+  signal?: AbortSignal,
 ): Promise<ImageAttachment> {
-  const st = statSync(absPath);
+  signal?.throwIfAborted();
+  const st = await stat(absPath);
   if (!st.isFile()) {
     throw new Error(`Not a file: ${absPath}`);
   }
-  const buf = readFileSync(absPath);
+  if (st.size > MAX_IMAGE_INPUT_BYTES) {
+    throw new ImageTooLargeError(
+      `Image file is ${formatMB(st.size)} on disk; files over ${formatMB(MAX_IMAGE_INPUT_BYTES)} are not read. Please provide a smaller image.`,
+    );
+  }
+  const buf = await readFile(absPath, { signal });
 
   const sniffed = sniffMediaType(buf);
   if (!sniffed) {
@@ -153,6 +157,7 @@ export async function loadImageAttachment(
   }
   // Magic bytes win over the extension when they disagree.
   const resized = await maybeResizeAndDownsampleImage(buf, sniffed);
+  signal?.throwIfAborted();
   return {
     mediaType: resized.mediaType,
     data: resized.data,
@@ -253,6 +258,6 @@ async function compressWithSharp(
   }
 
   throw new ImageTooLargeError(
-    `Unable to compress image (${formatMB(buf.length)} raw) under the ${formatMB(MAX_IMAGE_BYTES)} API limit. Please provide a smaller image.`,
+    `Unable to compress image (${formatMB(buf.length)} raw) under the ${formatMB(MAX_IMAGE_BYTES)} base64 API limit (raw bytes must be ≤${formatMB(MAX_IMAGE_BYTES_PASSTHROUGH)}). Please provide a smaller image.`,
   );
 }

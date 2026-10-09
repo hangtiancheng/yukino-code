@@ -1,38 +1,49 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+export interface ParseRemoteAddressOptions {
+  /**
+   * Port used when the address omits one (a bare host like "localhost" or an
+   * empty host like ":"). Each server mode passes its own default so a
+   * bare-host address does not silently fall back to the remote-mode port.
+   */
+  defaultPort?: number;
+  /**
+   * Allow port 0, which binds an ephemeral port chosen by the OS. Only modes
+   * that advertise their actual bound address after listening should enable
+   * this; otherwise the caller would bind an unreachable, unreported port.
+   */
+  allowEphemeral?: boolean;
+}
 
-export function parseRemoteAddress(address: string): {
+export function parseRemoteAddress(
+  address: string,
+  options: ParseRemoteAddressOptions = {},
+): {
   host: string;
   port: number;
 } {
+  const { defaultPort = 18888, allowEphemeral = false } = options;
   const value = address.trim();
-  const match = /^(?:\[([^\]]+)\]|([^:]*))(?::(\d+))?$/.exec(value);
-  if (!match) {
-    throw new Error("Invalid remote address; use host:port or [IPv6]:port");
+  let host: string;
+  let portText: string | undefined;
+  if (/^\d+$/.test(value)) {
+    // A bare number is a port, never a hostname: "9000" behaves like ":9000".
+    host = "";
+    portText = value;
+  } else {
+    const match = /^(?:\[([^\]]+)\]|([^:]*))(?::(\d+))?$/.exec(value);
+    if (!match) {
+      throw new Error(
+        "Invalid remote address; use port, host:port or [IPv6]:port",
+      );
+    }
+    host = match[1] ?? match[2] ?? "";
+    portText = match[3];
   }
-  const host = match[1] || match[2] || "127.0.0.1";
-  const port = Number(match[3] ?? "18888");
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("Remote port must be an integer between 1 and 65535");
+  const port = Number(portText ?? String(defaultPort));
+  const minPort = allowEphemeral ? 0 : 1;
+  if (!Number.isInteger(port) || port < minPort || port > 65535) {
+    throw new Error(
+      `Remote port must be an integer between ${String(minPort)} and 65535`,
+    );
   }
-  return { host, port };
+  return { host: host || "127.0.0.1", port };
 }

@@ -1,27 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// Submodule namespaces for library consumers (Telemetry.<Sub>.*).
+export * as Instrumentation from "./instrumentation.js";
+export * as Providers from "./providers.js";
+export * as Privacy from "./privacy.js";
 
 export type TelemetryMode =
-  "print" | "remote" | "teammate" | "terminal" | "unknown";
+  "a2a" | "acp" | "print" | "remote" | "terminal" | "unknown";
 export type TelemetryObservationKind = "agent" | "generation" | "tool";
 export type TelemetryMetricKind = "counter" | "histogram";
 export type TelemetryAttributes = Record<string, string | number | boolean>;
@@ -170,7 +153,15 @@ export async function shutdownTelemetry(): Promise<void> {
   return shutdown;
 }
 
-export function installRemoteTelemetrySignalHandlers(): void {
+/**
+ * Installs SIGINT/SIGTERM handlers for the remote server. When `onShutdown` is
+ * provided it runs first (server teardown: background tasks, teammates, MCP
+ * children) and receives the exit code so it can persist the real one; the
+ * telemetry flush and process exit follow once it settles.
+ */
+export function installRemoteTelemetrySignalHandlers(
+  onShutdown?: (exitCode: number) => void | Promise<void>,
+): void {
   if (remoteSignalHandlersInstalled) {
     return;
   }
@@ -179,9 +170,13 @@ export function installRemoteTelemetrySignalHandlers(): void {
   const install = (signal: NodeJS.Signals, exitCode: number): void => {
     const handler = (): void => {
       process.off(signal, handler);
-      void shutdownTelemetry().finally(() => {
-        process.exit(exitCode);
-      });
+      void Promise.resolve(onShutdown?.(exitCode))
+        .catch(() => undefined)
+        .finally(() => {
+          void shutdownTelemetry().finally(() => {
+            process.exit(exitCode);
+          });
+        });
     };
     process.once(signal, handler);
   };
@@ -189,7 +184,3 @@ export function installRemoteTelemetrySignalHandlers(): void {
   install("SIGINT", 130);
   install("SIGTERM", 143);
 }
-
-// Submodule namespaces for library consumers (Telemetry.<Sub>.*).
-export * as Instrumentation from "./instrumentation.js";
-export * as Providers from "./providers.js";

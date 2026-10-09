@@ -1,48 +1,42 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   chmodSync,
   existsSync,
-  mkdtempSync,
+  mkdtempSync as createTempDir,
   readFileSync,
   readdirSync,
+  rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Sandbox, SandboxConfig } from "@/sandbox/index.js";
+import { sessionPath } from "@/storage/paths.js";
 import {
   formatAgentTaskNotification,
   TaskManager,
 } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
+import { ToolRegistry } from "@/tools/registry.js";
+import {
+  attachBackgroundTaskManager,
+  backgroundAllForegroundTasks,
+  hasAnyForegroundTasks,
+} from "@/tools/shell-background.js";
 import type { ToolContext } from "@/tools/types.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
-    workDir: mkdtempSync(join(tmpdir(), "yukino-bash-bg-")),
+    cwd: mkdtempSync(join(tmpdir(), "yukino-bash-bg-")),
     ...overrides,
   };
 }
@@ -60,10 +54,12 @@ function taskIdFrom(output: string): string {
   return match?.[1] ?? "";
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 afterEach(() => {
   delete process.env.YUKINO_DISABLE_BACKGROUND_TASKS;
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
 });
 
 describe("bash background execution", () => {
@@ -144,27 +140,36 @@ describe("bash background execution", () => {
     expect(task?.output).toContain("late-done");
   }, 15_000);
 
-  it("still kills a bare sleep on timeout (auto-background blocklist)", async () => {
+  it("also backgrounds a sleep command on timeout", async () => {
     const { bash, tasks } = makeTool();
     const result = await bash.execute(makeContext(), {
       command: "sleep 5",
       timeout: 1,
     });
-    expect(result.isError).toBe(true);
-    expect(result.output).toContain("command timed out after 1s");
-    expect(tasks.list()).toHaveLength(0);
+    const task = tasks.get(taskIdFrom(result.output));
+    try {
+      expect(result.isError).toBe(false);
+      expect(result.output).toContain("moved to the background");
+      expect(task?.status).toBe("running");
+    } finally {
+      await tasks.stopAll();
+    }
   }, 10_000);
 
   it("backgrounds running foreground commands on demand (Ctrl+B path)", async () => {
     const { bash, tasks } = makeTool();
+    const registry = new ToolRegistry();
+    registry.register(bash);
+    attachBackgroundTaskManager(registry, tasks);
     const pending = bash.execute(makeContext(), {
       command: "node -e \"setTimeout(() => console.log('bg-manual'), 1200)\"",
       timeout: 30,
     });
-    await sleep(300);
-    expect(bash.hasForegroundTasks()).toBe(true);
-    expect(bash.backgroundForegroundTasks()).toBe(1);
-    expect(bash.hasForegroundTasks()).toBe(false);
+    await vi.waitFor(() => {
+      expect(hasAnyForegroundTasks(registry)).toBe(true);
+    });
+    expect(backgroundAllForegroundTasks(registry)).toBe(1);
+    expect(hasAnyForegroundTasks(registry)).toBe(false);
 
     const result = await pending;
     expect(result.isError).toBe(false);
@@ -175,7 +180,7 @@ describe("bash background execution", () => {
     await task?.done;
     expect(task?.status).toBe("completed");
     expect(task?.output).toContain("bg-manual");
-    expect(bash.backgroundForegroundTasks()).toBe(0);
+    expect(backgroundAllForegroundTasks(registry)).toBe(0);
   }, 15_000);
 
   it("kills the process tree when a background bash task is stopped", async () => {
@@ -213,13 +218,7 @@ describe("bash background execution", () => {
     const match = /Full content saved to:\n(\S+)/.exec(task?.output ?? "");
     expect(match).not.toBeNull();
     const outputPath = match?.[1] ?? "";
-    const expectedDir = join(
-      ctx.workDir,
-      ".yukino",
-      "sessions",
-      "bg-session",
-      "tool-results",
-    );
+    const expectedDir = sessionPath("bg-session", "tool-results");
     expect(outputPath.startsWith(expectedDir)).toBe(true);
     expect(existsSync(outputPath)).toBe(true);
     expect(readFileSync(outputPath, "utf-8")).toContain("x".repeat(100));
@@ -239,14 +238,16 @@ describe("bash background execution", () => {
 
   it("preserves the captured output when a background task is stopped", async () => {
     const { bash, tasks } = makeTool();
-    const result = await bash.execute(makeContext(), {
-      command: "printf partial-out; sleep 30",
+    const context = makeContext();
+    const result = await bash.execute(context, {
+      command: "printf partial-out; touch partial-ready; sleep 30",
       run_in_background: true,
     });
     const taskId = taskIdFrom(result.output);
     const task = tasks.get(taskId);
-    // Let the partial output reach the file, then stop the task.
-    await sleep(500);
+    await vi.waitFor(() => {
+      expect(existsSync(join(context.cwd, "partial-ready"))).toBe(true);
+    });
     expect(tasks.stop(taskId)).toBe(true);
     await task?.done;
     expect(task?.status).toBe("cancelled");
@@ -295,15 +296,18 @@ describe("bash background execution", () => {
     });
     const taskId = taskIdFrom(result.output);
 
-    // The actual output-file path (not just the session dir) is writable under
-    // a deny-default profile, and the file exists before prepare (bwrap --bind).
+    // The output-file DIRECTORY (stable per session) is what gets granted,
+    // not the random per-command file name. The directory is created before
+    // prepare, so a bind-based sandbox can mount it.
     expect(seen.config).not.toBeNull();
     const granted = seen.config?.allowWrite ?? [];
-    const outputPath = granted.find((p) =>
-      /shell-[0-9a-f]{16}\.output$/.test(p),
+    const outputDir = granted.find((p) => /[\\/]tool-results$/.test(p));
+    expect(outputDir).toBeDefined();
+    expect(existsSync(outputDir ?? "")).toBe(true);
+    const outputFiles = readdirSync(outputDir ?? "").filter((f) =>
+      /shell-[0-9a-f]{16}\.output$/.test(f),
     );
-    expect(outputPath).toBeDefined();
-    expect(existsSync(outputPath ?? "")).toBe(true);
+    expect(outputFiles.length).toBeGreaterThan(0);
 
     const task = tasks.get(taskId);
     await task?.done;
@@ -328,13 +332,7 @@ describe("bash background execution", () => {
     expect(result.isError).toBe(true);
     expect(result.output).toContain("Error executing command");
 
-    const dir = join(
-      ctx.workDir,
-      ".yukino",
-      "sessions",
-      "spawn-err",
-      "tool-results",
-    );
+    const dir = sessionPath("spawn-err", "tool-results");
     const leftovers = existsSync(dir)
       ? readdirSync(dir).filter((f) => f.endsWith(".output"))
       : [];
@@ -352,7 +350,7 @@ describe("bash background execution", () => {
     async () => {
       const { bash } = makeTool();
       const ctx = makeContext();
-      chmodSync(ctx.workDir, 0o500);
+      chmodSync(ctx.cwd, 0o500);
       try {
         const result = await bash.execute(ctx, {
           command: "printf fallback-ok",
@@ -360,7 +358,7 @@ describe("bash background execution", () => {
         expect(result.isError).toBe(false);
         expect(result.output).toContain("fallback-ok");
       } finally {
-        chmodSync(ctx.workDir, 0o700);
+        chmodSync(ctx.cwd, 0o700);
       }
     },
     10_000,

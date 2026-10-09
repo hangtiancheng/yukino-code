@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -38,6 +16,10 @@ import {
 } from "./provider-config.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import { LspServerConfigSchema } from "@/lsp/config.js";
+
+export * as ProviderConfig from "./provider-config.js";
+export * as ProviderLogin from "./provider-login.js";
 
 const log = createChildLogger({ module: "config" });
 
@@ -51,7 +33,6 @@ function isKeyofTypeofEnvKeyMap(k: string): k is keyof typeof ENV_KEY_MAP {
   return VALID_PROTOCOLS.has(k);
 }
 
-/** enum: "anthropic", "openai", "openai-compat" */
 const VALID_PROTOCOLS = new Set(Object.keys(ENV_KEY_MAP));
 
 export class ConfigError extends Error {
@@ -108,7 +89,6 @@ export type HookConfig = z.infer<typeof HookConfigSchema>;
 
 const SandboxYamlConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  backend: z.enum(["native", "sandbox-runtime"]).optional(),
   auto_allow: z.boolean().optional(),
   network_enabled: z.boolean().optional(),
 });
@@ -120,6 +100,14 @@ const AppConfigSchema = z.looseObject({
   providers: z.array(ProviderConfigSchema),
   permission_mode: z.string().optional(),
   mcp_servers: z.array(MCPServerConfigSchema).default([]),
+  lsp_servers: z
+    .array(LspServerConfigSchema)
+    .refine(
+      (servers) =>
+        new Set(servers.map((server) => server.name)).size === servers.length,
+      "LSP server names must be unique",
+    )
+    .optional(),
   hooks: z.array(HookConfigSchema).default([]),
   sandbox: SandboxYamlConfigSchema.optional(),
   enable_coordinator_mode: z.boolean().optional(),
@@ -133,11 +121,11 @@ const AppConfigSchema = z.looseObject({
    * Whether auto memory is enabled: gates index injection, recall, and
    * background extraction in the hosts that run them (interactive UI, remote,
    * ACP), and consolidation, which currently runs only in remote mode.
-   * Defaults to enabled; `memory: false` turns the whole automatic memory
-   * pipeline off. Left optional so "not set" and "explicitly false" stay
-   * distinguishable, mirroring enable_fork.
+   * Defaults to enabled; `enable_memory: false` turns the whole automatic
+   * memory pipeline off. Left optional so "not set" and "explicitly false"
+   * stay distinguishable, mirroring enable_fork.
    */
-  memory: z.boolean().optional(),
+  enable_memory: z.boolean().optional(),
 });
 
 /** Whether fork is available. Defaults to enabled when not specified in config. */
@@ -147,107 +135,24 @@ export function forkEnabled(cfg: AppConfig): boolean {
 
 /** Whether auto memory is enabled. Defaults to enabled when not specified in config. */
 export function memoryEnabled(cfg: AppConfig): boolean {
-  return cfg.memory !== false;
+  return cfg.enable_memory !== false;
 }
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 function loadSingleFile(path: string): AppConfig {
   const data = readFileSync(path, "utf-8");
   const raw: unknown = yaml.load(data);
-  if (!isRecord(raw)) {
-    log.error({ path }, "invalid yaml");
-    return { default_provider: 0, providers: [], mcp_servers: [], hooks: [] };
-  }
   const parsed = safeParse(AppConfigSchema, raw);
-  if (parsed.success) {
-    const data = parsed.data;
-    return {
-      ...data,
-      providers: data.providers.map(withProviderDefaults),
-    };
+  if (!parsed.success) {
+    throw new ConfigError(
+      `Invalid configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
+    );
   }
-  log.error({ error: parsed.error }, "config error");
-  let defaultProvider = 0;
-  let providers: ProviderConfig[] = [];
-  let permissionMode: string | undefined;
-  let mcpServers: MCPServerConfig[] = [];
-  let hooks: HookConfig[] = [];
-  let sandbox: SandboxYamlConfig | undefined = undefined;
-  let enableCoordinatorMode = false;
-  let enableFork = true;
-  let memory = true;
-
-  if ("default_provider" in raw) {
-    const parsed = safeParse(z.number(), raw.default_provider);
-    if (parsed.success) {
-      defaultProvider = parsed.data;
-    }
-  }
-  if ("providers" in raw) {
-    const parsed = safeParse(z.array(ProviderConfigSchema), raw.providers);
-    if (parsed.success) {
-      providers = parsed.data.map(withProviderDefaults);
-    } else {
-      // Providers are required for the app to function; surface schema errors
-      // (e.g. a removed legacy field) instead of silently dropping them.
-      throw new ConfigError(
-        `Invalid provider configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
-      );
-    }
-  }
-  if ("permission_mode" in raw && typeof raw.permission_mode === "string") {
-    permissionMode = raw.permission_mode;
-  }
-  if ("mcp_servers" in raw) {
-    const parsed = safeParse(z.array(MCPServerConfigSchema), raw.mcp_servers);
-    if (parsed.success) {
-      mcpServers = parsed.data;
-    } else {
-      throw new ConfigError(
-        `Invalid MCP server configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
-      );
-    }
-  }
-  if ("hooks" in raw) {
-    const parsed = safeParse(z.array(HookConfigSchema), raw.hooks);
-    if (parsed.success) {
-      hooks = parsed.data;
-    }
-  }
-  if ("sandbox" in raw) {
-    const parsed = safeParse(SandboxYamlConfigSchema, raw.sandbox);
-    if (parsed.success) {
-      sandbox = parsed.data;
-    } else {
-      throw new ConfigError(
-        `Invalid sandbox configuration in ${path}: ${getParseErrorMessage(parsed.error)}`,
-      );
-    }
-  }
-  if ("enable_coordinator_mode" in raw) {
-    enableCoordinatorMode = Boolean(raw.enable_coordinator_mode);
-  }
-  if ("enable_fork" in raw) {
-    enableFork = Boolean(raw.enable_fork);
-  }
-  if ("memory" in raw) {
-    memory = Boolean(raw.memory);
-  }
+  const config = parsed.data;
   return {
-    default_provider: defaultProvider,
-    providers,
-    permission_mode: permissionMode,
-    mcp_servers: mcpServers,
-    hooks,
-    sandbox,
-    enable_coordinator_mode: enableCoordinatorMode,
-    enable_fork: enableFork,
-    memory,
+    ...config,
+    providers: config.providers.map(withProviderDefaults),
   };
 }
 
@@ -373,13 +278,13 @@ function mcpServerFromJsonEntry(
 }
 
 /**
- * Reads project-level MCP servers from `<workDir>/.mcp.json`. A missing file
+ * Reads project-level MCP servers from `<cwd>/.mcp.json`. A missing file
  * yields [] silently and a malformed one yields [] with a log entry, so a
  * broken repo-side config does not prevent startup, and an entry that cannot
  * be mapped is skipped so one bad server does not hide its siblings.
  */
-export function loadProjectMcpServers(workDir: string): MCPServerConfig[] {
-  const path = join(workDir, PROJECT_MCP_FILENAME);
+export function loadProjectMcpServers(cwd: string): MCPServerConfig[] {
+  const path = join(cwd, PROJECT_MCP_FILENAME);
   if (!existsSync(path)) {
     return [];
   }
@@ -420,16 +325,16 @@ export function loadProjectMcpServers(workDir: string): MCPServerConfig[] {
 }
 
 /**
- * Returns a copy of `config` with the servers from `<workDir>/.mcp.json`
+ * Returns a copy of `config` with the servers from `<cwd>/.mcp.json`
  * appended. User-level (config.yaml) entries win on a name collision: the
  * project file ships with the repository and is less trusted than the user's
  * own config.
  */
 export function withProjectMcpServers(
   config: AppConfig,
-  workDir: string,
+  cwd: string,
 ): AppConfig {
-  const projectServers = loadProjectMcpServers(workDir);
+  const projectServers = loadProjectMcpServers(cwd);
   if (projectServers.length === 0) {
     return config;
   }
@@ -472,6 +377,3 @@ export function loadConfig(
   }
   return config;
 }
-
-export * as ProviderConfig from "./provider-config.js";
-export * as ProviderLogin from "./provider-login.js";

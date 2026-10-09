@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { randomBytes } from "node:crypto";
 import {
   closeSync,
@@ -34,12 +12,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import z from "zod";
+
 import { exitCodeHint } from "./exit-code-hints.js";
 import type { ToolRegistry } from "./registry.js";
 import { formatShellOutput, MAX_SHELL_OUTPUT_BYTES } from "./shell-output.js";
+import { TaskOutputTool } from "./task-output.js";
 import type { ToolResult } from "./types.js";
 
-import type { TaskManager } from "@/subagent/task-manager.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import {
   buildPersistedOutputPreview,
   spillDir,
@@ -51,16 +32,12 @@ import {
 // constants, result/notification formatting, and the host wiring helpers.
 
 /** Notification body budget: larger outputs stay on disk and only a preview travels in the notification. */
-export const BACKGROUND_NOTIFICATION_CHARS = 30_000;
-/**
- * A backgrounded command may fill up to 5GB before the size watchdog kills it:
- * with no JS in the write path, a stuck append loop could otherwise grow the
- * output file without bound. Foreground keeps the historical 10MB cap.
- */
-export const BACKGROUND_MAX_OUTPUT_BYTES = 5 * 1024 * 1024 * 1024;
+export const BACKGROUND_NOTIFICATION_BYTES = 30_000;
+const SHELL_OUTPUT_PREVIEW_BYTES = TOOL_RESULT_PREVIEW_CHARS;
+/** Disk cap for foreground and background commands, independent of display limits. */
+export const MAX_SHELL_OUTPUT_FILE_BYTES = 5 * 1024 * 1024 * 1024;
 export const SIZE_WATCHDOG_INTERVAL_MS = 500;
 
-/** Why a command moved to the background. */
 export type BackgroundReason = "explicit" | "user" | "timeout";
 
 /** Terminal facts about the child process, consumed to build results and notifications. */
@@ -74,6 +51,7 @@ export interface ShellExit {
 }
 
 export interface CommandHandle {
+  done: Promise<void>;
   /** Resolves the tool call: either the inline completion or an early "moved to background" message. */
   result: Promise<ToolResult>;
   /**
@@ -81,26 +59,6 @@ export interface CommandHandle {
    * or null when the command already finished or backgrounding is unavailable.
    */
   background: (reason: BackgroundReason) => string | null;
-}
-
-/**
- * Whether a command may be *automatically* backgrounded on timeout. Bare
- * sleeps are killed instead: backgrounding one would just hold a task slot
- * until session end. Explicit run_in_background and manual Ctrl+B are always
- * honored regardless of this gate. Only the first token is considered:
- * `sleep 60` should die on timeout, but `npm run build && sleep 1` is a real
- * workload worth keeping alive.
- */
-export function isAutobackgroundingAllowed(
-  command: string,
-  disallowed: ReadonlySet<string>,
-): boolean {
-  const first = /^\S+/.exec(command.trimStart())?.[0] ?? "";
-  const base = first
-    .replace(/^.*\//, "")
-    .replace(/^["']|["']$/g, "")
-    .toLowerCase();
-  return !disallowed.has(base);
 }
 
 export function backgroundTaskName(command: string): string {
@@ -141,6 +99,7 @@ export function sliceUtf8Safe(buf: Buffer, maxBytes: number): Buffer {
 export function readOutputFile(
   path: string,
   maxBytes: number,
+  tail = false,
 ): { text: string; size: number; truncated: boolean } {
   let fd: number;
   try {
@@ -150,8 +109,9 @@ export function readOutputFile(
   }
   try {
     const size = fstatSync(fd).size;
+    const offset = tail ? Math.max(0, size - maxBytes) : 0;
     // One lookahead byte lets sliceUtf8Safe detect a cut inside a code point.
-    const readLen = Math.min(size, maxBytes + 1);
+    const readLen = Math.min(size - offset, maxBytes + 1);
     const buf = Buffer.alloc(readLen);
     let bytesRead = 0;
     while (bytesRead < readLen) {
@@ -160,15 +120,21 @@ export function readOutputFile(
         buf,
         bytesRead,
         readLen - bytesRead,
-        bytesRead,
+        offset + bytesRead,
       );
       if (count === 0) {
         break;
       }
       bytesRead += count;
     }
+    let start = 0;
+    if (offset > 0) {
+      while (start < bytesRead && (buf[start] & 0xc0) === 0x80) {
+        start++;
+      }
+    }
     return {
-      text: sliceUtf8Safe(buf.subarray(0, bytesRead), maxBytes).toString(
+      text: sliceUtf8Safe(buf.subarray(start, bytesRead), maxBytes).toString(
         "utf-8",
       ),
       size,
@@ -213,24 +179,21 @@ export function openOutputFd(path: string): number {
 /**
  * Create the file that receives a command's stdout+stderr. Lives in the
  * session tool-results directory (the established spill location, readable by
- * the model for backgrounded commands); falls back to the OS temp dir when
+ * the model for large command outputs); falls back to the OS temp dir when
  * that directory cannot be created.
  */
-export function createShellOutputFile(
-  workDir: string,
-  sessionId: string,
-): {
+export function createShellOutputFile(sessionId: string): {
   path: string;
   fd: number;
 } {
   const fileName = `shell-${randomBytes(8).toString("hex")}.output`;
   const candidates: string[] = [];
   try {
-    const dir = spillDir(workDir, sessionId);
+    const dir = spillDir(sessionId);
     mkdirSync(dir, { recursive: true });
     candidates.push(join(dir, fileName));
   } catch {
-    // Session dir unusable (e.g. read-only workdir) — fall through to temp.
+    // Session storage unavailable — fall through to temp.
   }
   candidates.push(join(tmpdir(), fileName));
 
@@ -282,37 +245,39 @@ export function formatFinalResult(
   const exitCode = exit.code ?? 0;
   let output = formatShellOutput(prompt, command, merged, "", truncated);
 
-  if (!truncated) {
-    if (exitCode !== 0) {
-      const hint = exitCodeHint(command, exitCode);
-      output += hint
-        ? `\nExit code ${String(exitCode)} (${hint})`
-        : `\nExit code ${String(exitCode)}`;
-    }
-
-    if (exit.code === null) {
-      output += `\nProcess terminated${exit.signal ? ` by ${exit.signal}` : " unexpectedly"}`;
-    }
+  if (exitCode !== 0) {
+    const hint = exitCodeHint(command, exitCode);
+    output += hint
+      ? `\nExit code ${String(exitCode)} (${hint})`
+      : `\nExit code ${String(exitCode)}`;
   }
 
-  return { output, isError: truncated || exitCode !== 0 || exit.code === null };
+  if (exit.code === null) {
+    output += `\nProcess terminated${exit.signal ? ` by ${exit.signal}` : " unexpectedly"}`;
+  }
+  if (exit.sizeKilled) {
+    output += "\nCommand killed: output file exceeded 5GB";
+  }
+
+  return {
+    output,
+    isError: exitCode !== 0 || exit.code === null || exit.sizeKilled,
+  };
 }
 
 /**
- * Build the notification body for a finished background command from the
- * output file. Small outputs are inlined and the file is deleted; large
- * outputs keep the file on disk and the notification carries its path with a
- * 2000-char preview, so the full text stays readable via ReadFile without ever
- * loading it into JS here. `annotate` is the sandbox's stderr annotator
- * (sandbox-runtime violation notes); the foreground path applies it in
- * settleExit, and background notifications must report identically.
+ * Build a finished command's result from its output file. Small outputs are
+ * inlined and the file is deleted; large outputs stay on disk with a
+ * byte-bounded preview, so the full text stays readable via ReadFile without
+ * loading it into JS. `annotate` adds sandbox violation notes to captured output.
  */
-export function buildBackgroundBody(
+export function buildShellResult(
   prompt: string,
   command: string,
   exit: ShellExit,
   outputPath: string,
   timeout: number,
+  inlineLimit = MAX_SHELL_OUTPUT_BYTES,
   annotate?: (text: string) => string,
 ): ToolResult {
   let size = 0;
@@ -322,11 +287,13 @@ export function buildBackgroundBody(
     // File vanished; report with empty output below.
   }
 
-  let result: ToolResult;
-  if (size <= BACKGROUND_NOTIFICATION_CHARS) {
-    const read = readOutputFile(outputPath, MAX_SHELL_OUTPUT_BYTES);
+  const read = readOutputFile(
+    outputPath,
+    size > inlineLimit ? SHELL_OUTPUT_PREVIEW_BYTES : inlineLimit,
+  );
+  if (size <= inlineLimit && !read.truncated) {
     const merged = annotate ? annotate(read.text) : read.text;
-    result = formatFinalResult(
+    const result = formatFinalResult(
       prompt,
       command,
       exit,
@@ -335,44 +302,41 @@ export function buildBackgroundBody(
       timeout,
     );
     unlinkQuiet(outputPath);
-  } else {
-    const header = formatFinalResult(prompt, command, exit, "", false, timeout);
-    const preview = readOutputFile(outputPath, TOOL_RESULT_PREVIEW_CHARS).text;
-    result = {
-      output: `${header.output}\n${buildPersistedOutputPreview(size, annotate ? annotate(preview) : preview, outputPath)}`,
-      isError: header.isError,
-    };
+    return result;
   }
 
-  if (exit.sizeKilled) {
-    result.output += "\nBackground command killed: output file exceeded 5GB";
-    result.isError = true;
-  }
-  return result;
+  const header = formatFinalResult(prompt, command, exit, "", false, timeout);
+  const annotatedPreview = annotate ? annotate(read.text) : read.text;
+  const preview = sliceUtf8Safe(
+    Buffer.from(annotatedPreview, "utf-8"),
+    SHELL_OUTPUT_PREVIEW_BYTES,
+  ).toString("utf-8");
+  return {
+    output: `${header.output}\n${buildPersistedOutputPreview(read.size, preview, outputPath, "bytes")}`,
+    isError: header.isError,
+  };
 }
 
-/** The subset of a tool instance the host wiring below needs. */
-export interface BackgroundableTool {
-  taskManager: TaskManager | null;
-  backgroundEnabled(): boolean;
-  hasForegroundTasks(): boolean;
-  backgroundForegroundTasks(): number;
-}
+const BackgroundableToolShape = z.object({
+  taskManager: z.instanceof(TaskManager).nullable(),
+  backgroundEnabled: z.function({ input: [], output: z.boolean() }),
+  hasForegroundTasks: z.function({ input: [], output: z.boolean() }),
+  backgroundForegroundTasks: z.function({ input: [], output: z.number() }),
+});
+
+export type BackgroundableTool = z.infer<typeof BackgroundableToolShape>;
+
+// Preserve the original instance so manager injection and methods share its state.
+const BackgroundableToolSchema = z.custom<BackgroundableTool>(
+  (tool) => BackgroundableToolShape.safeParse(tool).success,
+);
 
 /** Tools that support background execution; Ctrl+B handling iterates this list. */
 export const BACKGROUNDABLE_TOOL_NAMES = ["Bash", "PowerShell"] as const;
 
 function asBackgroundable(tool: unknown): BackgroundableTool | null {
-  if (
-    typeof tool === "object" &&
-    tool !== null &&
-    "taskManager" in tool &&
-    "backgroundForegroundTasks" in tool
-  ) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return tool as BackgroundableTool;
-  }
-  return null;
+  const parsed = BackgroundableToolSchema.safeParse(tool);
+  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -384,6 +348,7 @@ export function attachBackgroundTaskManager(
   registry: ToolRegistry,
   manager: TaskManager,
 ): void {
+  registry.getInstanceOf("TaskOutput", TaskOutputTool)?.setTaskManager(manager);
   for (const name of BACKGROUNDABLE_TOOL_NAMES) {
     const tool = asBackgroundable(registry.get(name));
     if (tool) {

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 const GIT_GUIDANCE = `Git: commit or push only when requested. Destructive operations (push --force, reset --hard, checkout ., clean -f, branch -D), amending, or skipping hooks/signing require explicit authorization; never bypass permission/hook denials. Prefer new commits. When committing, include Co-Authored-By: Yukino <usr161043261@outlook.com>.`;
 
 export const BASH_DESCRIPTION = `Execute command in Bash; return stdout and stderr. Prefer PowerShell on Windows.
@@ -34,7 +12,7 @@ ${GIT_GUIDANCE}`;
  * run_in_background parameter and its guidance never advertise a capability
  * the current host cannot deliver.
  */
-export const BASH_BACKGROUND_DESCRIPTION = `- Set run_in_background to true to run the command in the background. The call returns a task ID immediately and the result arrives later as a task notification; do not poll or sleep waiting for it. Use this for long-running commands you do not need the result of right away. Use TaskStop with the task_id to kill a background command early. A foreground command that exceeds its timeout is moved to the background automatically instead of being killed, unless it is a bare sleep.`;
+export const BASH_BACKGROUND_DESCRIPTION = `- Set run_in_background to true to run the command in the background. The call returns a task ID immediately and the result arrives later as a task notification; do not poll or sleep waiting for it. Use this for long-running commands you do not need the result of right away. Use TaskStop with the task_id to kill a background command early. A foreground command that exceeds its timeout is moved to the background automatically instead of being killed.`;
 
 export const POWERSHELL_DESCRIPTION = `Execute command in PowerShell; return stdout and stderr. Recommended on Windows (powershell.exe); uses pwsh elsewhere.
 - timeout is in seconds: default 120, maximum 600. Each call starts a fresh, independent shell in the Agent's working directory; location, variables, and options do not persist.
@@ -46,16 +24,17 @@ ${GIT_GUIDANCE}`;
  * Appended to the PowerShell schema description only when background execution
  * is available; mirrors BASH_BACKGROUND_DESCRIPTION with PS-flavored wording.
  */
-export const POWERSHELL_BACKGROUND_DESCRIPTION = `- Set run_in_background to true to run the command in the background. The call returns a task ID immediately and the result arrives later as a task notification; do not poll or Start-Sleep waiting for it. Use this for long-running commands you do not need the result of right away. Use TaskStop with the task_id to kill a background command early. A foreground command that exceeds its timeout is moved to the background automatically instead of being killed, unless it is a bare Start-Sleep.`;
+export const POWERSHELL_BACKGROUND_DESCRIPTION = `- Set run_in_background to true to run the command in the background. The call returns a task ID immediately and the result arrives later as a task notification; do not poll or Start-Sleep waiting for it. Use this for long-running commands you do not need the result of right away. Use TaskStop with the task_id to kill a background command early. A foreground command that exceeds its timeout is moved to the background automatically instead of being killed.`;
 
 export const READ_FILE_DESCRIPTION = `Read text with 1-based display line numbers, or images (png, jpg, jpeg, gif, webp) as visual content; not directories.
 - file_path is absolute or relative to the Agent's working directory. offset skips lines (0-based, default 0); limit defaults to 2000 lines, with a 50KB text output cap. Displayed line 101 starts at offset=100. Follow continuation/readback instructions for partial output.
 - Images ignore offset/limit. A successful read refreshes the file-state cache used by EditFile/WriteFile; re-read after an external-change error.`;
 
-export const EDIT_FILE_DESCRIPTION = `Replace exact text in an existing file and return a diff. Prefer this over whole-file rewrites.
+export const EDIT_FILE_DESCRIPTION = `Replace exact text in an existing file and return a diff. Prefer this over whole-file rewrites; batch disjoint changes in one edits array to read and write the file once.
 - file_path is absolute or relative to the Agent's working directory. ReadFile is required first; stale file-state errors require a fresh read and revised edit.
-- old_string must be non-empty and unique unless replace_all=true (default false). Use enough context to disambiguate; preserve whitespace and exclude display line numbers.
-- new_string must differ from old_string; an empty string deletes the match.`;
+- Each edits entry contains old_string and new_string, with optional replace_all. All matches use the original file; overlapping edits are rejected before writing. Merge overlapping changes into one entry.
+- old_string must be non-empty and unique unless replace_all=true (default false). LF and CRLF line endings match equivalently. Use enough context to disambiguate; preserve all other whitespace and exclude display line numbers. If matching fails, stray carriage returns in both edit strings are removed before retrying.
+- new_string must differ from old_string; an empty string deletes the match. The file's line endings and unchanged text are preserved.`;
 
 export const WRITE_FILE_DESCRIPTION = `Write complete UTF-8 content to file_path, creating parent directories and overwriting existing content. Use for new files or complete rewrites; prefer EditFile for targeted changes.
 - file_path is absolute or relative to the Agent's working directory. Existing files require ReadFile first; re-read if the cached state is stale.

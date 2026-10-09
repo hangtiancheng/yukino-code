@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { exec } from "node:child_process";
 
 import type { HookConfig } from "@/config/index.js";
@@ -30,7 +8,9 @@ import { strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "hooks" });
 
 /** Async command execution for hooks — non-blocking, 30s timeout, so the
- *  event loop isn't frozen during hook commands. */
+ * event loop isn't frozen during hook commands. POSIX hooks intentionally use
+ * Bash; Windows keeps Node's platform default (ComSpec/cmd) because Bash is not
+ * guaranteed to be installed there. */
 function execHookAsync(
   command: string,
   opts: { env: NodeJS.ProcessEnv; cwd?: string; signal?: AbortSignal },
@@ -39,13 +19,13 @@ function execHookAsync(
     exec(
       command,
       {
-        shell: "bash",
         encoding: "utf-8",
         timeout: 30000,
         env: opts.env,
         cwd: opts.cwd,
         signal: opts.signal,
         maxBuffer: 10 * 1024 * 1024,
+        ...(process.platform === "win32" ? {} : { shell: "bash" }),
       },
       (err, stdout) => {
         if (err) {
@@ -84,7 +64,7 @@ export interface HookResult {
 }
 
 export interface HookRuntimeOptions {
-  workDir?: string;
+  cwd?: string;
   abortSignal?: AbortSignal;
 }
 
@@ -94,7 +74,8 @@ export class HookEngine {
   private notifications: string[] = [];
   // Executor for agent-type hooks, injected externally. Executing one without a
   // registered runner throws a clear error. No host registers one today (only
-  // tests do), so agent-type hooks currently always fail at runtime.
+  // tests do), and validate() rejects agent-type configs, so this path is
+  // unreachable outside tests.
   agentRunner?: (prompt: string, ctx: HookContext) => Promise<string>;
 
   constructor(hooks: HookConfig[]) {
@@ -134,13 +115,19 @@ export class HookEngine {
         continue;
       }
 
-      if (hook.once) {
-        const key =
-          hook.id === undefined ? `index:${String(index)}` : `id:${hook.id}`;
-        if (this.firedOnce.has(key)) {
+      // Once-slot key, computed once: claimed before execution and released
+      // again when execution fails (sync or async) — a once-hook that errored
+      // has not "fired", and the next matching event should retry it.
+      const onceKey = hook.once
+        ? hook.id === undefined
+          ? `index:${String(index)}`
+          : `id:${hook.id}`
+        : null;
+      if (onceKey !== null) {
+        if (this.firedOnce.has(onceKey)) {
           continue;
         }
-        this.firedOnce.add(key);
+        this.firedOnce.add(onceKey);
       }
 
       // Async hook: execute in the background without blocking the main flow
@@ -150,7 +137,17 @@ export class HookEngine {
             this.recordNotification(r.output);
           })
           .catch((err: unknown) => {
-            this.recordNotification(`Async hook error: ${asErrorString(err)}`);
+            log.error({ err }, "hooks operation failed");
+            if (onceKey !== null) {
+              this.firedOnce.delete(onceKey);
+            }
+            // Same on_error semantics as the sync path: "ignore" stays
+            // silent beyond the log; anything else surfaces the error.
+            if ((hook.on_error ?? "ignore") !== "ignore") {
+              this.recordNotification(
+                `Async hook error: ${asErrorString(err)}`,
+              );
+            }
           });
         continue;
       }
@@ -164,6 +161,9 @@ export class HookEngine {
         }
       } catch (err) {
         log.error({ err }, "hooks operation failed");
+        if (onceKey !== null) {
+          this.firedOnce.delete(onceKey);
+        }
         const onError = hook.on_error ?? "ignore";
         if (onError === "fail") {
           const msg = `Hook error: ${asErrorString(err)}`;
@@ -213,7 +213,7 @@ export class HookEngine {
         const command = hook.action.command ?? "";
         try {
           const output = await execHookAsync(command, {
-            cwd: options.workDir,
+            cwd: options.cwd,
             signal: options.abortSignal,
             env: {
               ...process.env,
@@ -298,107 +298,48 @@ export class HookEngine {
   }
 }
 
-function evaluateCondition(condition: string, ctx: HookContext): boolean {
-  // Keep operators inside quoted values intact, and give && precedence over ||.
-  const groups: string[][] = [[]];
-  let start = 0;
-  let quoted = false;
-  for (let i = 0; i < condition.length; i++) {
-    if (condition[i] === '"') {
-      quoted = !quoted;
-    }
-    const operator = condition.slice(i, i + 2);
-    if (!quoted && (operator === "&&" || operator === "||")) {
-      groups[groups.length - 1].push(condition.slice(start, i));
-      if (operator === "||") {
-        groups.push([]);
-      }
-      start = i + 2;
-      i++;
-    }
-  }
-  groups[groups.length - 1].push(condition.slice(start));
-  return (
-    !quoted &&
-    groups.some((group) =>
-      group.every((part) => evaluateSingleCondition(part, ctx)),
-    )
+type ConditionFn = (
+  event: string,
+  tool: string,
+  filePath: string,
+  message: string,
+  args: Record<string, unknown>,
+) => unknown;
+
+/**
+ * Compiles a condition into a JavaScript expression evaluated against the
+ * hook context. The config file already grants arbitrary shell execution
+ * through command actions, so evaluating expressions from the same source
+ * adds no new privilege.
+ */
+function compileCondition(condition: string): ConditionFn {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const fn = new Function(
+    "event",
+    "tool",
+    "filePath",
+    "message",
+    "args",
+    `"use strict"; return (${condition});`,
   );
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return fn as ConditionFn;
 }
 
-function evaluateSingleCondition(expr: string, ctx: HookContext): boolean {
-  const trimmed = expr.trim();
-  if (trimmed.startsWith("!")) {
-    return !evaluateSingleCondition(trimmed.slice(1), ctx);
-  }
-
-  const eqMatch = /^(\w+)\s*==\s*"([^"]*)"$/.exec(trimmed);
-  if (eqMatch) {
-    const value = getContextValue(eqMatch[1], ctx);
-    return value === eqMatch[2];
-  }
-
-  const neqMatch = /^(\w+)\s*!=\s*"([^"]*)"$/.exec(trimmed);
-  if (neqMatch) {
-    const value = getContextValue(neqMatch[1], ctx);
-    return value !== neqMatch[2];
-  }
-
-  const regexMatch = /^(\w+)\s*=~\s*"([^"]*)"$/.exec(trimmed);
-  if (regexMatch) {
-    const value = getContextValue(regexMatch[1], ctx);
-    try {
-      return new RegExp(regexMatch[2]).test(value);
-    } catch (err) {
-      log.error({ err }, "hooks operation failed");
-      return false;
-    }
-  }
-
-  const globMatch = /^(\w+)\s*=\*\s*"([^"]*)"$/.exec(trimmed);
-  if (globMatch) {
-    const value = getContextValue(globMatch[1], ctx);
-    const pattern = globMatch[2]
-      .split(/(\*\*\/|\*\*|\*|\?)/)
-      .map((part) => {
-        switch (part) {
-          case "**/":
-            return "(?:.*/)?";
-          case "**":
-            return ".*";
-          case "*":
-            return "[^/]*";
-          case "?":
-            return "[^/]";
-          default:
-            return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        }
-      })
-      .join("");
-    try {
-      return new RegExp(`^${pattern}$`).test(value);
-    } catch (err) {
-      log.error({ err }, "hooks operation failed");
-      return false;
-    }
-  }
-
-  // A bare tool name is the shorthand used by the example configuration.
-  return /^\w+$/.test(trimmed) && trimmed === ctx.toolName;
-}
-
-function getContextValue(key: string, ctx: HookContext): string {
-  switch (key) {
-    case "tool":
-      return ctx.toolName ?? "";
-    case "event":
-      return ctx.event;
-    case "file_path":
-      return ctx.filePath ?? "";
-    case "message":
-      return ctx.message ?? "";
-    default:
-      return strArg(ctx.args ?? {}, key, "");
+function evaluateCondition(condition: string, ctx: HookContext): boolean {
+  try {
+    return Boolean(
+      compileCondition(condition)(
+        ctx.event,
+        ctx.toolName ?? "",
+        ctx.filePath ?? "",
+        ctx.message ?? "",
+        ctx.args ?? {},
+      ),
+    );
+  } catch (err) {
+    log.error({ err, condition }, "hook condition evaluation failed");
+    return false;
   }
 }
 
@@ -463,6 +404,12 @@ export function validate(hooks: HookConfig[]): Error | null {
               `${label}: action.prompt (or action.command) must be non-empty for type "agent"`,
             );
           }
+          // No host registers an agent runner today; accepting the config
+          // would only defer the failure to runtime, where the default
+          // on_error:"ignore" swallows it. Reject it here instead.
+          errors.push(
+            `${label}: action.type "agent" is not supported yet — use "command" or "prompt" instead`,
+          );
           break;
       }
     }

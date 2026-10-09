@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { execSync } from "node:child_process";
 import { platform, arch } from "node:os";
 
@@ -47,15 +25,14 @@ export class PromptBuilder {
   }
 
   build(): string {
-    const sorted = [...this.sections].sort((a, b) => a.priority - b.priority);
-    const contents = sorted.map((s) => s.content.trim()).filter(Boolean);
+    const contents = this.sections.map((s) => s.content.trim()).filter(Boolean);
     return [...new Set(contents)].join("\n\n");
   }
 }
 
-export function detectEnvironment(workDir: string): EnvironmentContext {
+export function detectEnvironment(cwd: string): EnvironmentContext {
   const env: EnvironmentContext = {
-    workDir,
+    cwd,
     os: platform(),
     arch: arch(),
     shell: process.env.SHELL ?? "bash",
@@ -67,14 +44,14 @@ export function detectEnvironment(workDir: string): EnvironmentContext {
 
   try {
     const result = execSync("git rev-parse --is-inside-work-tree", {
-      cwd: workDir,
+      cwd: cwd,
       stdio: ["pipe", "pipe", "pipe"],
       encoding: "utf-8",
     }).trim();
     if (result === "true") {
       env.isGitRepo = true;
       env.gitBranch = execSync("git rev-parse --abbrev-ref HEAD", {
-        cwd: workDir,
+        cwd: cwd,
         stdio: ["pipe", "pipe", "pipe"],
         encoding: "utf-8",
       }).trim();

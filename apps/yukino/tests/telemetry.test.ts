@@ -1,28 +1,11 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Agent, type AgentConfig } from "@/agent/index.js";
+import { ConversationManager } from "@/conversation/index.js";
+import { HookEngine } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
+import { ContextTooLongError, RateLimitError } from "@/llm/errors.js";
+import { PermissionChecker } from "@/permissions/index.js";
 import * as telemetry from "@/telemetry/index.js";
 import type {
   TelemetryAttributes,
@@ -39,6 +22,7 @@ import {
   startAgentTelemetry,
 } from "@/telemetry/instrumentation.js";
 import { parseExporterTypes } from "@/telemetry/providers.js";
+import { ToolRegistry } from "@/tools/registry.js";
 
 class FakeObservation implements TelemetryObservation {
   readonly children: FakeObservation[] = [];
@@ -104,9 +88,40 @@ function fakeClient(): LLMClient {
     setSystemPrompt: vi.fn(),
     stream: async function* () {
       await Promise.resolve();
-      yield* [];
+      yield {
+        type: "stream_end",
+        stopReason: "end_turn",
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        },
+      };
     },
   };
+}
+
+function createAgent(
+  client: LLMClient,
+  overrides: Partial<AgentConfig> = {},
+): Agent {
+  const conversation = new ConversationManager();
+  conversation.addUserMessage("task");
+  return new Agent({
+    client,
+    conversation,
+    registry: new ToolRegistry(),
+    checker: new PermissionChecker(process.cwd(), "bypassPermissions"),
+    cwd: process.cwd(),
+    ...overrides,
+  });
+}
+
+async function drain(agent: Agent): Promise<void> {
+  for await (const _ of agent.run()) {
+    /* observe terminal lifecycle */
+  }
 }
 
 beforeEach(() => {
@@ -244,5 +259,92 @@ describe("telemetry instrumentation", () => {
     const generation = observations[0]?.children[0];
     expect(generation?.error).toBe(failure);
     expect(generation?.ended).toBe(true);
+  });
+
+  it.each([
+    new Error("provider failed"),
+    new ContextTooLongError("context too long"),
+    new RateLimitError("rate limited", "0"),
+  ])("marks a terminal agent failure as error: %s", async (error) => {
+    const { observations, recordMetric, runtime } = createFakeRuntime();
+    vi.spyOn(telemetry, "getTelemetryRuntime").mockReturnValue(runtime);
+    const client = fakeClient();
+    client.stream = async function* () {
+      yield await Promise.reject(error);
+    };
+    await drain(createAgent(client));
+    expect(observations[0].ended).toBe(true);
+    expect(observations[0].updates.at(-1)).toEqual({
+      metadata: { outcome: "error" },
+      level: "ERROR",
+    });
+    expect(recordMetric).toHaveBeenCalledWith(
+      "yukino.agent.duration",
+      "histogram",
+      expect.any(Number),
+      expect.objectContaining({ outcome: "error" }),
+    );
+  });
+
+  it("marks an iteration-limit failure as error", async () => {
+    const { observations, runtime } = createFakeRuntime();
+    vi.spyOn(telemetry, "getTelemetryRuntime").mockReturnValue(runtime);
+    const client = fakeClient();
+    client.stream = async function* () {
+      await Promise.resolve();
+      yield {
+        type: "tool_call_complete",
+        toolId: "call",
+        toolName: "Unknown",
+        arguments: {},
+      };
+    };
+    await drain(createAgent(client, { maxIterations: 1 }));
+    expect(observations[0].updates.at(-1)?.metadata?.outcome).toBe("error");
+  });
+
+  it("marks a completed run as completed", async () => {
+    const { observations, runtime } = createFakeRuntime();
+    vi.spyOn(telemetry, "getTelemetryRuntime").mockReturnValue(runtime);
+    await drain(createAgent(fakeClient()));
+    expect(observations[0].updates.at(-1)?.metadata?.outcome).toBe("completed");
+  });
+
+  it("marks consumer-closed runs as interrupted and closes their generation", async () => {
+    const { observations, runtime } = createFakeRuntime();
+    vi.spyOn(telemetry, "getTelemetryRuntime").mockReturnValue(runtime);
+    const client = fakeClient();
+    client.stream = async function* () {
+      await Promise.resolve();
+      yield { type: "text_delta", text: "partial" };
+    };
+    for await (const event of createAgent(client).run()) {
+      expect(event.type).toBe("stream_text");
+      break;
+    }
+    expect(observations[0].updates.at(-1)?.metadata?.outcome).toBe(
+      "interrupted",
+    );
+    expect(observations[0].ended).toBe(true);
+    expect(observations[0].children.every((child) => child.ended)).toBe(true);
+  });
+
+  it("ends telemetry and runs session cleanup when a startup lifecycle hook throws", async () => {
+    const { observations, runtime } = createFakeRuntime();
+    vi.spyOn(telemetry, "getTelemetryRuntime").mockReturnValue(runtime);
+    const hookEngine = new HookEngine([]);
+    const hooks = vi
+      .spyOn(hookEngine, "fire")
+      .mockRejectedValueOnce(new Error("startup failed"));
+    await expect(
+      drain(createAgent(fakeClient(), { hookEngine })),
+    ).rejects.toThrow("startup failed");
+    expect(hooks).toHaveBeenLastCalledWith(
+      "session_end",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(observations[0].updates.at(-1)?.metadata?.outcome).toBe("error");
+    expect(observations[0].ended).toBe(true);
   });
 });

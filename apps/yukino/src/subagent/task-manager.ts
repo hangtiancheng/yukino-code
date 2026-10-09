@@ -1,26 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
+import { createChildLogger } from "@/logger/index.js";
 import { asErrorString } from "@/utils/index.js";
+
+const log = createChildLogger({ module: "tasks" });
+
+// Finished tasks kept in memory (with their outputs) before the oldest are
+// evicted; see TaskManager.pruneCompleted.
+const MAX_RETAINED_FINISHED_TASKS = 200;
+let nextTaskId = 1;
 
 export type AgentTaskStatus = "running" | "completed" | "failed" | "cancelled";
 
@@ -67,7 +53,6 @@ export class TaskManager {
   private tasks = new Map<string, AgentTask>();
   private notifiedTaskIds = new Set<string>();
   private listeners = new Set<(tasks: AgentTask[]) => void>();
-  private nextId = 1;
   private pendingTaskIds = new Set<string>();
 
   create(
@@ -76,7 +61,7 @@ export class TaskManager {
     cancel: () => void,
     options: CreateTaskOptions = {},
   ): AgentTask {
-    const id = `${options.idPrefix ?? "agent"}-${String(this.nextId++)}`;
+    const id = `${options.idPrefix ?? "agent"}-${String(nextTaskId++)}`;
     const task: AgentTask = {
       id,
       name,
@@ -93,7 +78,7 @@ export class TaskManager {
     this.pendingTaskIds.add(id);
 
     task.done = Promise.resolve()
-      .then(() => runner(task))
+      .then(() => (task.status === "cancelled" ? task.output : runner(task)))
       .then((output) => {
         if (task.status === "running") {
           task.status = "completed";
@@ -128,6 +113,7 @@ export class TaskManager {
         }
       })
       .finally(() => {
+        task.cancel = () => undefined;
         this.pendingTaskIds.delete(id);
         this.emitChange();
       });
@@ -155,7 +141,11 @@ export class TaskManager {
   private emitChange(): void {
     const tasks = this.list();
     for (const listener of this.listeners) {
-      listener(tasks);
+      try {
+        listener(tasks);
+      } catch (error) {
+        log.error({ error }, "task subscriber failed");
+      }
     }
   }
 
@@ -170,8 +160,13 @@ export class TaskManager {
     }
     task.status = "cancelled";
     task.output = "Stopped by user";
-    task.cancel();
-    this.emitChange();
+    try {
+      task.cancel();
+    } catch (error) {
+      log.error({ error, taskId: id }, "task cancellation callback failed");
+    } finally {
+      this.emitChange();
+    }
     return true;
   }
 
@@ -186,13 +181,23 @@ export class TaskManager {
   }
 
   async stopAll(): Promise<void> {
-    const running = this.list().filter((task) =>
-      this.pendingTaskIds.has(task.id),
-    );
-    for (const task of running) {
-      this.stop(task.id);
+    // Loop instead of a one-shot snapshot: tasks can be created while earlier
+    // ones settle (e.g. a runner spawning follow-ups); each pass stops and
+    // awaits whatever is still pending until nothing new appears.
+    const stopped = new Set<string>();
+    while (true) {
+      const running = this.list().filter(
+        (task) => this.pendingTaskIds.has(task.id) && !stopped.has(task.id),
+      );
+      if (running.length === 0) {
+        break;
+      }
+      for (const task of running) {
+        stopped.add(task.id);
+        this.stop(task.id);
+      }
+      await Promise.allSettled(running.map((task) => task.done));
     }
-    await Promise.allSettled(running.map((task) => task.done));
   }
 
   /**
@@ -201,8 +206,66 @@ export class TaskManager {
    * run indefinitely and are stopped, not awaited, at exit).
    */
   async waitAll(filter?: (task: AgentTask) => boolean): Promise<void> {
-    const tasks = filter ? this.list().filter(filter) : this.list();
-    await Promise.allSettled(tasks.map((task) => task.done));
+    while (true) {
+      const tasks = this.list().filter(
+        (task) => this.pendingTaskIds.has(task.id) && (!filter || filter(task)),
+      );
+      if (tasks.length === 0) {
+        return;
+      }
+      await Promise.allSettled(tasks.map((task) => task.done));
+    }
+  }
+
+  async wait(
+    id: string,
+    options: { timeoutMs: number; abortSignal?: AbortSignal },
+  ): Promise<{ task: AgentTask; timedOut: boolean } | undefined> {
+    if (
+      !Number.isInteger(options.timeoutMs) ||
+      options.timeoutMs < 0 ||
+      options.timeoutMs > 60_000
+    ) {
+      throw new Error("Task wait timeout must be between 0 and 60000ms");
+    }
+    const task = this.get(id);
+    if (!task) {
+      return undefined;
+    }
+    options.abortSignal?.throwIfAborted();
+    if (!this.pendingTaskIds.has(id)) {
+      return { task, timedOut: false };
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let abort: (() => void) | undefined;
+    try {
+      const timeout = new Promise<boolean>((resolve, reject) => {
+        timer = setTimeout(() => {
+          resolve(true);
+        }, options.timeoutMs);
+        abort = () => {
+          const reason: unknown = options.abortSignal?.reason;
+          reject(
+            reason instanceof Error
+              ? reason
+              : new Error("Task wait interrupted"),
+          );
+        };
+        options.abortSignal?.addEventListener("abort", abort, { once: true });
+      });
+      const timedOut = await Promise.race([
+        task.done.then(() => false),
+        timeout,
+      ]);
+      return { task, timedOut };
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (abort) {
+        options.abortSignal?.removeEventListener("abort", abort);
+      }
+    }
   }
 
   hasNotifications(): boolean {
@@ -224,10 +287,41 @@ export class TaskManager {
     for (const task of completed) {
       this.notifiedTaskIds.add(task.id);
     }
+    this.pruneCompleted();
     return completed;
   }
 
+  /**
+   * Evicts the oldest finished tasks beyond the retention cap. Without this,
+   * a long session accumulates every task (with its full output) in memory
+   * forever; running tasks are never dropped.
+   */
+  private pruneCompleted(): void {
+    const finished = this.list().filter(
+      (task) =>
+        task.status !== "running" &&
+        !this.pendingTaskIds.has(task.id) &&
+        this.notifiedTaskIds.has(task.id),
+    );
+    let excess = finished.length - MAX_RETAINED_FINISHED_TASKS;
+    const changed = excess > 0;
+    for (const task of finished) {
+      if (excess <= 0) {
+        break;
+      }
+      this.tasks.delete(task.id);
+      this.notifiedTaskIds.delete(task.id);
+      excess--;
+    }
+    if (changed) {
+      this.emitChange();
+    }
+  }
+
   clear(): void {
+    if (this.pendingTaskIds.size > 0) {
+      throw new Error("Stop and await tasks before clearing their manager");
+    }
     this.tasks.clear();
     this.notifiedTaskIds.clear();
     this.emitChange();

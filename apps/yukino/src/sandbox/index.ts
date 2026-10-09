@@ -1,44 +1,15 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import os from "node:os";
 
 // Submodule namespaces for library consumers (Sandbox.<Sub>.*).
 export * as Bwrap from "./bwrap.js";
-export * as SandboxRuntime from "./sandbox-runtime.js";
 export * as Seatbelt from "./seatbelt.js";
 
-export type SandboxBackend = "native" | "sandbox-runtime";
-export type SandboxImplementation = "bwrap" | "sandbox-runtime" | "seatbelt";
+export type SandboxImplementation = "bwrap" | "seatbelt";
 
-/**
- * Sandbox configuration: controls file write permissions and network access.
- */
 export interface SandboxConfig {
-  /** Paths where write operations are permitted. */
   allowWrite: string[];
   /** Paths that are always read-only (takes precedence over allowWrite). */
   denyWrite: string[];
-  /** Whether network access is allowed. */
   networkEnabled: boolean;
 }
 
@@ -57,15 +28,12 @@ export interface PreparedSandboxCommand {
 }
 
 /**
- * Unified sandbox interface: seatbelt (macOS) and bubblewrap (Linux) for the
- * native backend, plus the cross-platform @anthropic-ai/sandbox-runtime.
+ * Unified sandbox interface: seatbelt on macOS, bubblewrap on Linux.
  */
 export interface Sandbox {
   readonly implementation: SandboxImplementation;
   readonly availabilityError?: string;
-  /** Checks whether the platform sandbox tooling is available. */
   available(): boolean | Promise<boolean>;
-  /** Prepares an executable and argv for sandboxed execution. */
   prepare(
     command: string,
     config: SandboxConfig,
@@ -76,20 +44,10 @@ export interface Sandbox {
 }
 
 /**
- * Creates the requested sandbox backend.
- *   native          seatbelt on macOS, bubblewrap on Linux (the default).
- *   sandbox-runtime the @anthropic-ai/sandbox-runtime backend.
- * The native backend returns null on platforms other than macOS and Linux;
- * sandbox-runtime is instantiated everywhere and reports support via available().
+ * Creates the platform sandbox: seatbelt on macOS, bubblewrap on Linux.
+ * Returns null on other platforms.
  */
-export async function createSandbox(
-  backend: SandboxBackend = "native",
-): Promise<Sandbox | null> {
-  if (backend === "sandbox-runtime") {
-    const { SandboxRuntimeSandbox } = await import("./sandbox-runtime.js");
-    return new SandboxRuntimeSandbox();
-  }
-
+export async function createSandbox(): Promise<Sandbox | null> {
   const platform = os.platform();
   if (platform === "darwin") {
     const { SeatbeltSandbox } = await import("./seatbelt.js");

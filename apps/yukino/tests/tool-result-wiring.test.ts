@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,13 +12,13 @@ import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { loadSession, rebuildFromSession } from "@/session/index.js";
+import { sessionPath, getSessionsDir } from "@/storage/paths.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolResultContentBlock } from "@/tools/types.js";
 import { asString, isRecord } from "@/utils/index.js";
 
-// Wiring test for the tool-result budget in the Agent main loop: drives the
-// full main loop and verifies single-result spill, aggregate spill, readback
-// exemption, and that what enters the conversation history is the final form.
+// Wiring tests for the tool-result budget: these drive the full Agent main
+// loop and assert the budgeted final form is what enters conversation history.
 
 const USAGE: UsageInfo = {
   inputTokens: 1,
@@ -88,7 +66,7 @@ function fixedTool(name: string, output: string): Tool {
 
 async function runAgent(
   client: LLMClient,
-  workDir: string,
+  cwd: string,
   tools: Tool[],
   recoveryState?: RecoveryState,
 ) {
@@ -101,9 +79,9 @@ async function runAgent(
   const agent = new Agent({
     client,
     registry,
-    checker: new PermissionChecker(workDir, "bypassPermissions"),
+    checker: new PermissionChecker(cwd, "bypassPermissions"),
     conversation: conv,
-    workDir,
+    cwd,
     sessionId: "wiring",
     recoveryState,
   });
@@ -121,12 +99,11 @@ function toolResultsMsg(conv: ConversationManager) {
   return msg;
 }
 
-const spillDirOf = (workDir: string) =>
-  join(workDir, ".yukino", "sessions", "wiring", "tool-results");
+const spillDirOf = () => sessionPath("wiring", "tool-results");
 
 describe("tool result budget wiring", () => {
   it("passes each concurrent tool its own call ID", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-wire-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-wire-"));
     const seen = new Map<string, string | undefined>();
     const contextTool = (name: string): Tool => ({
       name,
@@ -161,10 +138,7 @@ describe("tool result budget wiring", () => {
       [end()],
     ]);
 
-    await runAgent(client, workDir, [
-      contextTool("ToolA"),
-      contextTool("ToolB"),
-    ]);
+    await runAgent(client, cwd, [contextTool("ToolA"), contextTool("ToolB")]);
 
     expect(seen).toEqual(
       new Map([
@@ -175,7 +149,7 @@ describe("tool result budget wiring", () => {
   });
 
   it("spills a single oversized result at ingest", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-wire-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-wire-"));
     const client = new MockClient([
       [
         {
@@ -189,21 +163,19 @@ describe("tool result budget wiring", () => {
       [{ type: "text_delta", text: "done" }, end()],
     ]);
 
-    const conv = await runAgent(client, workDir, [
+    const conv = await runAgent(client, cwd, [
       fixedTool("BigTool", "x".repeat(60000)),
     ]);
 
-    // What enters history is the preview, not the original text
     const tr = toolResultsMsg(conv)?.toolResults?.[0];
     expect(tr?.content).toContain("<persisted-output>");
-    // The spill file stores the complete original text
-    const spilled = readFileSync(join(spillDirOf(workDir), "t1.txt"), "utf-8");
+    const spilled = readFileSync(join(spillDirOf(), "t1.txt"), "utf-8");
     expect(spilled.length).toBe(60000);
   });
 
   it("exempts readbacks of spill files", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-wire-"));
-    const readbackPath = join(spillDirOf(workDir), "toolu_old.txt");
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-wire-"));
+    const readbackPath = join(spillDirOf(), "toolu_old.txt");
     const client = new MockClient([
       [
         {
@@ -217,19 +189,18 @@ describe("tool result budget wiring", () => {
       [{ type: "text_delta", text: "done" }, end()],
     ]);
 
-    const conv = await runAgent(client, workDir, [
+    const conv = await runAgent(client, cwd, [
       fixedTool("ReadFile", "y".repeat(60000)),
     ]);
 
-    // Readback results are exempt from spilling: the original text enters history, and no new spill file is generated
     const tr = toolResultsMsg(conv)?.toolResults?.[0] ?? undefined;
     expect(tr?.content.length).toBe(60000);
-    expect(existsSync(join(spillDirOf(workDir), "t_rb.txt"))).toBe(false);
+    expect(existsSync(join(spillDirOf(), "t_rb.txt"))).toBe(false);
   });
 
-  it("records the bounded ReadFile result instead of rereading the entire file", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-wire-"));
-    const filePath = join(workDir, "large.txt");
+  it("records the ReadFile tool result in the recovery snapshot", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-wire-"));
+    const filePath = join(cwd, "large.txt");
     writeFileSync(filePath, "disk-content".repeat(20_000), "utf-8");
     const client = new MockClient([
       [
@@ -247,7 +218,7 @@ describe("tool result budget wiring", () => {
 
     await runAgent(
       client,
-      workDir,
+      cwd,
       [fixedTool("ReadFile", "returned-lines")],
       recovery,
     );
@@ -258,7 +229,7 @@ describe("tool result budget wiring", () => {
   });
 
   it("spills only the largest result when the aggregate exceeds the budget", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-wire-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-wire-"));
     const sizes: Record<string, number> = {
       T1: 45000,
       T2: 45000,
@@ -280,7 +251,7 @@ describe("tool result budget wiring", () => {
       fixedTool(name, "z".repeat(n)),
     );
 
-    const conv = await runAgent(client, workDir, toolsList);
+    const conv = await runAgent(client, cwd, toolsList);
 
     const msg = toolResultsMsg(conv);
     const total = msg?.toolResults?.reduce(
@@ -297,9 +268,6 @@ describe("tool result budget wiring", () => {
   });
 });
 
-// End-to-end wiring for image tool results: the text fallback and structured
-// blocks must both reach the conversation, while session JSONL stores the
-// base64 payload inline and resume restores it.
 describe("image tool result wiring", () => {
   const PNG_DATA = Buffer.from("not-a-real-png-but-that-is-fine").toString(
     "base64",
@@ -338,7 +306,7 @@ describe("image tool result wiring", () => {
   }
 
   it("keeps image blocks intact through history, persists them inline, and restores on resume", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-wire-img-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-wire-img-"));
     const client = new MockClient([
       [
         {
@@ -359,9 +327,9 @@ describe("image tool result wiring", () => {
     const agent = new Agent({
       client,
       registry,
-      checker: new PermissionChecker(workDir, "bypassPermissions"),
+      checker: new PermissionChecker(cwd, "bypassPermissions"),
       conversation: conv,
-      workDir,
+      cwd,
       sessionId: "wiring",
     });
     const events: AgentEvent[] = [];
@@ -391,13 +359,13 @@ describe("image tool result wiring", () => {
     expect(isRecord(historySource) ? historySource.data : null).toBe(PNG_DATA);
 
     const jsonl = readFileSync(
-      join(workDir, ".yukino", "sessions", "wiring.jsonl"),
+      join(getSessionsDir(cwd), "wiring.jsonl"),
       "utf-8",
     );
     expect(jsonl).toContain('"content_blocks"');
     expect(jsonl).toContain(PNG_DATA);
 
-    const saved = loadSession(workDir, "wiring");
+    const saved = loadSession(cwd, "wiring");
     const restored = rebuildFromSession(saved);
     const restoredTr = restored.find((message) => message.toolResults?.length)
       ?.toolResults?.[0];

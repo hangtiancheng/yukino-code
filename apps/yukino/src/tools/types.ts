@@ -1,31 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
 
 import type { FileStateCache } from "./file-state-cache.js";
 
 import type { FileHistory } from "@/file-history/index.js";
+import type { GoalManager } from "@/goal/index.js";
 import type { Decision, PermissionChecker } from "@/permissions/index.js";
 import type { TaskManager } from "@/subagent/task-manager.js";
 
@@ -212,15 +191,23 @@ export interface ToolResult {
   isError: boolean;
 }
 
+export interface PermissionRequestSource {
+  agentName: string;
+  cwd: string;
+}
+
 export type PermissionRequestHandler = (
   toolName: string,
   args: Record<string, unknown>,
   decision: Decision,
   toolCallId: string,
+  abortSignal?: AbortSignal,
+  source?: PermissionRequestSource,
 ) => Promise<"allow" | "deny" | "allowAlways">;
 
 export interface ToolContext {
-  workDir: string;
+  cwd: string;
+  goalManager?: GoalManager;
   toolCallId?: string;
   backgroundTaskId?: string;
   /**
@@ -239,10 +226,13 @@ export interface ToolContext {
    * backgrounded there could never deliver a notification).
    */
   taskManager?: TaskManager | null;
+  shellTimeoutDisabled?: boolean;
   abortSignal?: AbortSignal;
+  onOutput?: (output: string) => void;
   fileHistory?: FileHistory | undefined;
   fileStateCache?: FileStateCache | undefined;
   permissionChecker?: PermissionChecker;
+  approvedPermissionMode?: PermissionChecker["mode"];
   onPermissionRequest?: PermissionRequestHandler;
 }
 
@@ -327,25 +317,25 @@ export interface Tool {
    * judged by actual arguments rather than just the tool category.
    *
    * When not implemented, falls back to category: read-only tools may run
-   * concurrently, write and command tools may not. Currently Bash
-   * (argument-dependent: ls vs rm are both Bash but have very different safety
-   * profiles) and ComputerUse (always false — it drives a single physical
-   * screen/mouse/keyboard) implement this.
+   * concurrently, write and command tools may not. Agent calls allow independent
+   * delegation; Bash checks its command, and ComputerUse stays exclusive because
+   * it drives a single physical screen/mouse/keyboard.
    */
   isConcurrencySafe?(args: Record<string, unknown>): boolean;
 
   schema(): ToolSchema;
   execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult>;
+  dispose?(): Promise<void>;
 }
 
 export const SKIP_DIRS = new Set([
   ".agents",
-  ".git", // Git
-  ".yukino", // Yukino
-  ".next", // Next.js
-  ".venv", // Python venv
-  ".mypy_cache", // Python mypy
-  "__pycache__", // Python
-  "dist", // Webpack, Vite
-  "node_modules", // Node.js
+  ".git",
+  ".yukino",
+  ".next",
+  ".venv",
+  ".mypy_cache",
+  "__pycache__",
+  "dist",
+  "node_modules",
 ]);

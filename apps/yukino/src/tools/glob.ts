@@ -1,31 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { statSync } from "fs";
-import { join, resolve } from "path";
+import { join } from "path";
 
 import { globIterate } from "glob";
 
 import { GLOB_DESCRIPTION } from "./descriptions.js";
+import { SearchOutput } from "./search-output.js";
 import {
   SKIP_DIRS,
   type Tool,
@@ -37,6 +16,7 @@ import {
 
 import { createChildLogger } from "@/logger/index.js";
 import { asErrorString, strArg } from "@/utils/index.js";
+import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
 
@@ -82,6 +62,9 @@ export class GlobTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
+    if (ctx.abortSignal?.aborted) {
+      return { output: "Error: operation interrupted", isError: true };
+    }
     const pattern = strArg(args, "pattern");
     if (!pattern) {
       return {
@@ -90,16 +73,16 @@ export class GlobTool implements Tool {
       };
     }
 
-    const basePath = resolve(ctx.workDir, strArg(args, "path", ctx.workDir));
-    if (!statSync(basePath, { throwIfNoEntry: false })?.isDirectory()) {
-      return {
-        output: `Error: not a directory, scan '${basePath}'`,
-        isError: true,
-      };
-    }
+    const basePath = resolveToolPath(ctx.cwd, strArg(args, "path", ctx.cwd));
     const maxResults = 1000;
     try {
-      const matches: string[] = [];
+      if (!statSync(basePath, { throwIfNoEntry: false })?.isDirectory()) {
+        return {
+          output: `Error: not a directory, scan '${basePath}'`,
+          isError: true,
+        };
+      }
+      const results = new SearchOutput(maxResults);
       // matchBase: patterns without "/" match the basename at any depth,
       // patterns with "/" match the cwd-relative path. `follow` stays false,
       // so symlinked directories are never descended (cycle-safe).
@@ -111,12 +94,15 @@ export class GlobTool implements Tool {
         dot: true,
         matchBase: true,
         nodir: true,
+        signal: ctx.abortSignal,
       })) {
-        matches.push(match);
-        if (matches.length >= maxResults) {
+        ctx.abortSignal?.throwIfAborted();
+        if (!results.append(match)) {
           break;
         }
       }
+      ctx.abortSignal?.throwIfAborted();
+      const matches = results.lines;
 
       if (matches.length === 0) {
         return {
@@ -141,8 +127,11 @@ export class GlobTool implements Tool {
       );
 
       let output = matches.join("\n");
-      if (matches.length >= maxResults) {
+      if (results.limit === "matches") {
         output += `\n(Results limited to ${String(maxResults)} files. Use a more specific pattern.)`;
+      } else if (results.limit === "bytes") {
+        output +=
+          "\n(Results limited to 50KB. Use a more specific pattern or path.)";
       }
 
       return {
@@ -152,7 +141,9 @@ export class GlobTool implements Tool {
     } catch (err) {
       log.error({ err }, "tool operation failed");
       return {
-        output: `Error: ${asErrorString(err)}`,
+        output: ctx.abortSignal?.aborted
+          ? "Error: operation interrupted"
+          : `Error: ${asErrorString(err)}`,
         isError: true,
       };
     }

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   mkdirSync,
   mkdtempSync,
@@ -36,46 +14,37 @@ import { GlobTool } from "@/tools/glob.js";
 import { GrepTool } from "@/tools/grep.js";
 import type { ToolContext } from "@/tools/types.js";
 
-const workDir = mkdtempSync(join(tmpdir(), "yukino-search-tools-"));
-mkdirSync(join(workDir, "src", "js"), { recursive: true });
-mkdirSync(join(workDir, "src", "md"), { recursive: true });
-mkdirSync(join(workDir, "node_modules", "pkg"), { recursive: true });
-writeFileSync(join(workDir, "main.js"), "console.log('entry');\n");
+const cwd = mkdtempSync(join(tmpdir(), "yukino-search-tools-"));
+mkdirSync(join(cwd, "src", "js"), { recursive: true });
+mkdirSync(join(cwd, "src", "md"), { recursive: true });
+mkdirSync(join(cwd, "node_modules", "pkg"), { recursive: true });
+writeFileSync(join(cwd, "main.js"), "console.log('entry');\n");
 writeFileSync(
-  join(workDir, "src", "js", "promise.js"),
+  join(cwd, "src", "js", "promise.js"),
   "class PromiseV2 {}\nconst PENDING = 'pending';\n",
 );
+writeFileSync(join(cwd, "src", "js", "curry.js"), "function curry(fn) {}\n");
+writeFileSync(join(cwd, "src", "md", "notes.md"), "function notes() {}\n");
 writeFileSync(
-  join(workDir, "src", "js", "curry.js"),
-  "function curry(fn) {}\n",
-);
-writeFileSync(join(workDir, "src", "md", "notes.md"), "function notes() {}\n");
-writeFileSync(
-  join(workDir, "node_modules", "pkg", "index.js"),
+  join(cwd, "node_modules", "pkg", "index.js"),
   "function hidden() {}\n",
 );
 writeFileSync(
-  join(workDir, "unicode.txt"),
+  join(cwd, "unicode.txt"),
   "日本語注釈\nemoji 😁 line\n全角数字１２３\nmixed 変数名abc end\nplain ascii only\n",
 );
-writeFileSync(join(workDir, "legacy.txt"), "match foo{ here\n");
+writeFileSync(join(cwd, "legacy.txt"), "match foo{ here\n");
 writeFileSync(
-  join(workDir, "bin.dat"),
+  join(cwd, "bin.dat"),
   Buffer.from("BINARY_NEEDLE\0\x01\x02binary junk"),
 );
-mkdirSync(join(workDir, "links"));
-writeFileSync(
-  join(workDir, "links", "target.txt"),
-  "NEEDLE_LINK in real file\n",
-);
-symlinkSync(
-  join(workDir, "links", "target.txt"),
-  join(workDir, "links", "alias.txt"),
-);
+mkdirSync(join(cwd, "links"));
+writeFileSync(join(cwd, "links", "target.txt"), "NEEDLE_LINK in real file\n");
+symlinkSync(join(cwd, "links", "target.txt"), join(cwd, "links", "alias.txt"));
 // Directory symlink cycle back to the root: the walk must not descend it.
-symlinkSync(workDir, join(workDir, "links", "loop"));
+symlinkSync(cwd, join(cwd, "links", "loop"));
 
-const ctx: ToolContext = { workDir };
+const ctx: ToolContext = { cwd };
 
 const lines = (output: string | Record<string, unknown>[]): string[] => {
   if (typeof output !== "string") {
@@ -85,7 +54,7 @@ const lines = (output: string | Record<string, unknown>[]): string[] => {
 };
 
 afterAll(() => {
-  rmSync(workDir, { recursive: true, force: true });
+  rmSync(cwd, { recursive: true, force: true });
 });
 
 describe("GrepTool include filter", () => {
@@ -138,7 +107,7 @@ describe("GrepTool include filter", () => {
     expect(res.output).toContain("src/js/promise.js:1:class PromiseV2 {}");
   });
 
-  it("resolves relative path args against workDir", async () => {
+  it("resolves relative path args against cwd", async () => {
     const res = await grep.execute(ctx, { pattern: "curry", path: "src/js" });
     expect(res.output).toContain("src/js/curry.js:1:function curry(fn) {}");
   });
@@ -235,6 +204,40 @@ describe("GrepTool unicode", () => {
     expect(res.output).toContain("links/target.txt:1:NEEDLE_LINK in real file");
     expect(res.output).toContain("links/alias.txt:1:NEEDLE_LINK in real file");
     expect(res.output).not.toContain("loop/");
+  });
+});
+
+describe("GrepTool traversal limits", () => {
+  it("reports when the file traversal limit truncates a search", async () => {
+    const grep = new GrepTool({ maxEntries: 1, maxDepth: 25 });
+    const result = await grep.execute(ctx, { pattern: "never-present" });
+
+    expect(result.isError).toBe(false);
+    expect(result.output).toContain(
+      "search truncated after visiting 1 entries",
+    );
+  });
+
+  it("reports and skips directories beyond the depth limit", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "yukino-grep-depth-"));
+    try {
+      mkdirSync(join(dir, "one", "two"), { recursive: true });
+      writeFileSync(join(dir, "one", "two", "deep.txt"), "DEEP_NEEDLE\n");
+      const grep = new GrepTool({ maxEntries: 100, maxDepth: 1 });
+      const result = await grep.execute(
+        { cwd: dir },
+        {
+          pattern: "DEEP_NEEDLE",
+        },
+      );
+
+      expect(result.output).not.toContain("deep.txt");
+      expect(result.output).toContain(
+        "search truncated: directories deeper than 1 levels were skipped",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

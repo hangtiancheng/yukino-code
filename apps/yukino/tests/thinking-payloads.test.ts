@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -31,7 +9,7 @@ import {
 } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { AnthropicClient } from "@/llm/anthropic.js";
-import type { LLMClient } from "@/llm/client.js";
+import type { LLMClient, LLMStreamOptions } from "@/llm/client.js";
 import { OpenAIClient, OpenAICompatClient } from "@/llm/openai.js";
 import type { ToolSchema } from "@/tools/types.js";
 
@@ -124,6 +102,7 @@ async function request(
   client: LLMClient,
   protocol: ProviderConfig["protocol"],
   tools: ToolSchema[] = [],
+  options?: LLMStreamOptions,
 ): Promise<Record<string, unknown>> {
   const payloads: Record<string, unknown>[] = [];
   fetchMock.mockImplementation((_input, init) => {
@@ -145,7 +124,12 @@ async function request(
   const conversation = new ConversationManager();
   conversation.addUserMessage("hello");
   const events = [];
-  for await (const event of client.stream(conversation, tools)) {
+  for await (const event of client.stream(
+    conversation,
+    tools,
+    undefined,
+    options,
+  )) {
     events.push(event);
   }
   expect(events.some((event) => event.type === "stream_end")).toBe(true);
@@ -155,19 +139,74 @@ async function request(
 
 afterEach(() => vi.unstubAllGlobals());
 
+describe.each(protocols)("%s request output limits", (protocol) => {
+  it("applies request limits without changing the client default or thinking level", async () => {
+    const client = createClient(
+      provider(protocol, { max_output_tokens: 8192, thinking_mode: "budget" }),
+    );
+    const capField =
+      protocol === "anthropic"
+        ? "max_tokens"
+        : protocol === "openai"
+          ? "max_output_tokens"
+          : "max_completion_tokens";
+    const limited = await request(client, protocol, [], {
+      maxOutputTokens: 1024,
+    });
+    expect(limited[capField]).toBe(1024);
+    if (protocol === "anthropic") {
+      expect(limited.thinking).toEqual({ type: "disabled" });
+    }
+    expect(client.getThinkingLevel()).toBe("high");
+    const escalated = await request(client, protocol, [], {
+      maxOutputTokens: 64000,
+    });
+    expect(escalated[capField]).toBe(64000);
+    if (protocol === "anthropic") {
+      expect(escalated.thinking).toEqual({
+        type: "enabled",
+        budget_tokens: thinkingBudgetForLevel("high"),
+      });
+    }
+    const normal = await request(client, protocol);
+    expect(normal[capField]).toBe(8192);
+  });
+
+  it("clamps a request limit to the provider context window", async () => {
+    const client = createClient(
+      provider(protocol, { context_window: 4096, max_output_tokens: 2048 }),
+    );
+    const payload = await request(client, protocol, [], {
+      maxOutputTokens: 64000,
+    });
+    const capField =
+      protocol === "anthropic"
+        ? "max_tokens"
+        : protocol === "openai"
+          ? "max_output_tokens"
+          : "max_completion_tokens";
+    expect(payload[capField]).toBe(4096);
+  });
+});
+
 describe.each(openAIProtocols)("%s thinking payloads", (protocol) => {
   it.each(THINKING_LEVELS)(
     "sends the native effort for %s, including explicit none for off",
     async (level) => {
       const client = createClient(provider(protocol));
       expect(client.getThinkingLevel()).toBe("high");
-      expect(client.setThinkingLevel(level)).toBe(level);
-      expect(client.getThinkingLevel()).toBe(level);
+      // xhigh/max have no OpenAI-legal native effort and no explicit
+      // thinking_level_map entry here, so they clamp down to high instead of
+      // being sent verbatim (which the API rejects with a 400).
+      const expectedLevel =
+        level === "xhigh" || level === "max" ? "high" : level;
+      expect(client.setThinkingLevel(level)).toBe(expectedLevel);
+      expect(client.getThinkingLevel()).toBe(expectedLevel);
       const payload = await request(client, protocol);
-      const effort = level === "off" ? "none" : level;
+      const effort = expectedLevel === "off" ? "none" : expectedLevel;
       if (protocol === "openai") {
         expect(payload.reasoning).toEqual(
-          level === "off" ? { effort } : { effort, summary: "auto" },
+          expectedLevel === "off" ? { effort } : { effort, summary: "auto" },
         );
       } else {
         expect(payload.reasoning_effort).toBe(effort);

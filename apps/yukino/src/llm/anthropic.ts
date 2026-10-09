@@ -1,28 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import Anthropic from "@anthropic-ai/sdk";
 
-import type { LLMClient } from "./client.js";
+import type { LLMClient, LLMStreamOptions } from "./client.js";
 import {
   AuthenticationError,
   containsContextLengthError,
@@ -30,8 +8,9 @@ import {
   LLMError,
   NetworkError,
   RateLimitError,
+  ServerError,
 } from "./errors.js";
-import type { StreamEvent } from "./events.js";
+import { parseToolArguments, type StreamEvent } from "./events.js";
 
 import { resolveAPIKey } from "@/config/index.js";
 import {
@@ -61,10 +40,8 @@ import type {
 } from "@/tools/types.js";
 import {
   asErrorString,
-  asRecord,
   asString,
   contentToText,
-  isRecord,
   strArg,
 } from "@/utils/index.js";
 
@@ -142,9 +119,7 @@ enum AnthropicErrorCode {
    * 400 invalid_request_error, not 413.
    */
   PromptTooLong = 413,
-  /** 401 Unauthorized — The request lacks valid authentication credentials. */
   InvalidAPIKey = 401,
-  /** 429 Too Many Requests — The client has sent too many requests in a given amount of time, triggering rate limiting. */
   RateLimitError = 429,
   /** 400 Bad Request — invalid_request_error; carries "prompt is too long: N tokens > M maximum" on context overflow. */
   BadRequest = 400,
@@ -231,14 +206,8 @@ export function buildAnthropicMessages(
 
       result.push({ role: "user", content: blocks });
     } else {
-      // Collapse consecutive plain user messages into a single entry: after
-      // compaction the summary (user) may be followed by kept user messages
-      // with no intervening assistant turn, so they become one user entry
-      // with multiple text blocks. Only merge when the previous entry is a
-      // plain user message (string, or first block text/image), never into a
-      // tool_result user entry — a user message right after tool results
-      // (e.g. a reminder) still starts a new entry, so the output can
-      // contain consecutive user entries.
+      // Anthropic messages must alternate roles. Merge every consecutive user
+      // turn, including reminders or steering immediately after tool results.
       if (result.length === 0) {
         result.push({
           role: "user",
@@ -247,20 +216,9 @@ export function buildAnthropicMessages(
         continue;
       }
 
-      let canMerge = false;
       const prev = result[result.length - 1];
       let content = prev.content;
-      if (
-        prev.role === "user" &&
-        (typeof content === "string" ||
-          (Array.isArray(content) &&
-            content.length > 0 &&
-            (content[0].type === "text" || content[0].type === "image")))
-      ) {
-        canMerge = true;
-      }
-
-      if (canMerge) {
+      if (prev.role === "user") {
         if (typeof content === "string") {
           content = prev.content =
             content.trim().length > 0
@@ -294,7 +252,6 @@ export class AnthropicClient implements LLMClient {
    *  translated to a token budget or an adaptive effort per request. */
   private thinkingLevel: ThinkingLevel;
   private systemPrompt: string;
-  private maxOutputTokens: number;
   private config: ProviderConfig;
   private useExplicitCustomToolType: boolean;
 
@@ -317,14 +274,12 @@ export class AnthropicClient implements LLMClient {
     this.config = { ...config };
     this.thinkingLevel = getThinkingLevel(config);
     this.systemPrompt = systemPrompt;
-    this.maxOutputTokens = getMaxOutputTokens(config);
   }
   setSystemPrompt(prompt: string): void {
     this.systemPrompt = prompt;
   }
   setMaxOutputTokens(maxTokens: number): void {
     this.config = { ...this.config, max_output_tokens: maxTokens };
-    this.maxOutputTokens = getMaxOutputTokens(this.config);
     this.setThinkingLevel(this.thinkingLevel);
   }
   setThinkingLevel(level: ThinkingLevel): ThinkingLevel {
@@ -342,7 +297,13 @@ export class AnthropicClient implements LLMClient {
     conversation: ConversationManager,
     toolSchemas: ProviderToolSchema[],
     abortSignal?: AbortSignal,
+    options?: LLMStreamOptions,
   ): AsyncGenerator<StreamEvent> {
+    const requestConfig =
+      options?.maxOutputTokens === undefined
+        ? this.config
+        : { ...this.config, max_output_tokens: options.maxOutputTokens };
+    const maxOutputTokens = getMaxOutputTokens(requestConfig);
     // Reconcile tool-call/result pairing before sending the request: interruptions,
     // session restores, and concurrent interleaving can all leave dangling tool_use
     // entries, and a missing pairing causes the API to reject the request outright.
@@ -362,7 +323,7 @@ export class AnthropicClient implements LLMClient {
 
     const params: Anthropic.MessageCreateParamsStreaming = {
       model: this.model,
-      max_tokens: this.maxOutputTokens,
+      max_tokens: maxOutputTokens,
       stream: true,
       system: [
         {
@@ -380,12 +341,12 @@ export class AnthropicClient implements LLMClient {
         : {}),
     };
 
-    const level = this.getThinkingLevel();
-    if (this.config.reasoning !== false) {
+    const level = clampThinkingLevel(requestConfig, this.getThinkingLevel());
+    if (requestConfig.reasoning !== false) {
       if (level === "off") {
         params.thinking = { type: "disabled" };
-      } else if (this.config.thinking_mode === "adaptive") {
-        const effort = toAnthropicThinkingEffort(level, this.config);
+      } else if (requestConfig.thinking_mode === "adaptive") {
+        const effort = toAnthropicThinkingEffort(level, requestConfig);
         if (effort !== null) {
           params.thinking = { type: "adaptive" };
           params.output_config = { effort };
@@ -393,13 +354,13 @@ export class AnthropicClient implements LLMClient {
       } else {
         // Share the strict output ceiling and reserve answer room. Availability
         // already ensures that at least the minimum thinking budget fits.
-        const effort = toReasoningEffort(level, this.config);
+        const effort = toReasoningEffort(level, requestConfig);
         if (effort !== null && effort !== "none") {
           params.thinking = {
             type: "enabled",
             budget_tokens: Math.min(
               thinkingBudgetForLevel(effort),
-              this.maxOutputTokens - MIN_THINKING_ANSWER_TOKENS,
+              maxOutputTokens - MIN_THINKING_ANSWER_TOKENS,
             ),
           };
         }
@@ -415,6 +376,10 @@ export class AnthropicClient implements LLMClient {
     let thinkingAccumulate = "";
     let thinkingSignature = "";
     let inThinking = false;
+    // Terminal-event guard: a stream cut between message_start and
+    // message_stop (gateway dropping the SSE) must not be committed as a
+    // complete end_turn turn with near-zero usage.
+    let sawMessageStop = false;
 
     try {
       const betas = [...(sendToolSearchBeta ? [NATIVE_TOOL_USE_BETA] : [])];
@@ -438,6 +403,11 @@ export class AnthropicClient implements LLMClient {
               thinkingAccumulate = "";
               thinkingSignature = "";
             } else if (block.type === "tool_use") {
+              if (!block.id || !block.name) {
+                throw new NetworkError(
+                  "Anthropic tool call started without a valid id or name",
+                );
+              }
               currentToolId = block.id;
               currentToolName =
                 block.name === "computer" ? "ComputerUse" : block.name;
@@ -467,6 +437,11 @@ export class AnthropicClient implements LLMClient {
                 text: delta.text,
               };
             } else if (delta.type === "input_json_delta") {
+              if (!currentToolId || !currentToolName) {
+                throw new NetworkError(
+                  "Anthropic tool arguments arrived before a valid tool call",
+                );
+              }
               jsonAccumulate += delta.partial_json;
               yield {
                 type: "tool_call_delta",
@@ -487,22 +462,13 @@ export class AnthropicClient implements LLMClient {
             }
 
             if (currentToolName) {
-              let args: Record<string, unknown> = {};
-              if (jsonAccumulate) {
-                try {
-                  const parsed: unknown = JSON.parse(jsonAccumulate);
-                  args = isRecord(parsed) ? asRecord(parsed) : {};
-                } catch (err) {
-                  log.error({ err }, "llm operation failed");
-                  args = {};
-                }
-              }
-
+              const parsed = parseToolArguments(jsonAccumulate);
               yield {
                 type: "tool_call_complete",
                 toolId: currentToolId,
                 toolName: currentToolName,
-                arguments: args,
+                arguments: parsed.arguments,
+                ...(parsed.parseError ? { parseError: parsed.parseError } : {}),
               };
 
               currentToolName = "";
@@ -516,20 +482,28 @@ export class AnthropicClient implements LLMClient {
             if (event.delta.stop_reason) {
               stopReason = event.delta.stop_reason;
             }
-            if (event.usage.output_tokens) {
-              outputTokens = event.usage.output_tokens;
-
-              if (event.usage.input_tokens) {
-                inputTokens = event.usage.input_tokens;
-              }
-              if (event.usage.cache_read_input_tokens) {
-                cacheReadInputTokens = event.usage.cache_read_input_tokens;
-              }
-              if (event.usage.cache_creation_input_tokens) {
-                cacheCreationInputTokens =
-                  event.usage.cache_creation_input_tokens;
-              }
+            // Apply each usage field independently: a delta whose
+            // output_tokens is 0 but which carries input/cache fields must
+            // still update those. SDK types allow null for the optional
+            // fields, hence the typeof guards.
+            const deltaUsage = event.usage;
+            if (typeof deltaUsage.output_tokens === "number") {
+              outputTokens = deltaUsage.output_tokens;
             }
+            if (typeof deltaUsage.input_tokens === "number") {
+              inputTokens = deltaUsage.input_tokens;
+            }
+            if (typeof deltaUsage.cache_read_input_tokens === "number") {
+              cacheReadInputTokens = deltaUsage.cache_read_input_tokens;
+            }
+            if (typeof deltaUsage.cache_creation_input_tokens === "number") {
+              cacheCreationInputTokens = deltaUsage.cache_creation_input_tokens;
+            }
+            break;
+          }
+
+          case "message_stop": {
+            sawMessageStop = true;
             break;
           }
 
@@ -543,6 +517,15 @@ export class AnthropicClient implements LLMClient {
             break;
           }
         }
+      }
+
+      // Without message_stop the response is truncated, not complete: throw a
+      // NetworkError instead of yielding stream_end so the run surfaces an
+      // error rather than persisting a half response as a finished turn.
+      if (!sawMessageStop) {
+        throw new NetworkError(
+          "Anthropic stream ended without message_stop; response was truncated",
+        );
       }
 
       yield {
@@ -610,6 +593,15 @@ export function markLastUserTailForCache(
 }
 
 function classifyAnthropicError(err: unknown) {
+  if (err instanceof LLMError) {
+    return err;
+  }
+  if (
+    err instanceof Anthropic.APIConnectionError ||
+    err instanceof Anthropic.APIUserAbortError
+  ) {
+    return new NetworkError(`Network error: ${err.message}`);
+  }
   if (err instanceof Anthropic.APIError) {
     if (
       err.status === AnthropicErrorCode.PromptTooLong ||
@@ -645,6 +637,15 @@ function classifyAnthropicError(err: unknown) {
       );
     }
 
+    if (err.status !== undefined && (err.status >= 500 || err.status === 408)) {
+      const headers: unknown = err.headers;
+      return new ServerError(
+        `Anthropic API error (${asString(err.status)}): ${err.message}`,
+        headers instanceof Headers
+          ? (headers.get("retry-after") ?? undefined)
+          : undefined,
+      );
+    }
     return new LLMError(
       `Anthropic API error (${asString(err.status)}): ${err.message}`,
     );

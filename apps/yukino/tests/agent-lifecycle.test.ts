@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentEvent } from "@/agent/events.js";
@@ -27,10 +5,17 @@ import { Agent, type AgentConfig } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { HookEngine } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
-import { NetworkError, RateLimitError } from "@/llm/errors.js";
+import {
+  AuthenticationError,
+  LLMError,
+  NetworkError,
+  RateLimitError,
+  ServerError,
+} from "@/llm/errors.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import { WriteFileTool } from "@/tools/write-file.js";
 import { contentToText } from "@/utils/index.js";
 
 const end: StreamEvent = {
@@ -55,7 +40,7 @@ function fixture(
     conversation,
     registry: new ToolRegistry(),
     checker: new PermissionChecker(process.cwd(), "bypassPermissions"),
-    workDir: process.cwd(),
+    cwd: process.cwd(),
     ...options,
   };
   return config;
@@ -72,6 +57,137 @@ async function collect(config: AgentConfig): Promise<AgentEvent[]> {
 afterEach(() => vi.useRealTimers());
 
 describe("agent lifecycle and retry boundaries", () => {
+  it.each([new NetworkError("socket reset"), new ServerError("overloaded")])(
+    "retries $name before visible output and succeeds without changing history",
+    async (error) => {
+      vi.useFakeTimers();
+      let attempts = 0;
+      const config = fixture(async function* () {
+        await Promise.resolve();
+        if (attempts++ < 2) {
+          throw error;
+        }
+        yield { type: "text_delta", text: "Completed once" };
+        yield end;
+      });
+      const running = collect(config);
+      await vi.runAllTimersAsync();
+      const events = await running;
+      expect(attempts).toBe(3);
+      expect(
+        events
+          .filter((event) => event.type === "retry")
+          .map((event) => event.delay),
+      ).toEqual([1000, 2000]);
+      expect(config.conversation.getMessages()).toEqual([
+        { role: "user", content: "task" },
+        {
+          role: "assistant",
+          content: "Completed once",
+          thinkingBlocks: undefined,
+          toolUses: undefined,
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    new AuthenticationError("bad key"),
+    new LLMError("invalid request"),
+  ])("does not retry deterministic $name failures", async (error) => {
+    let attempts = 0;
+    const events = await collect(
+      fixture(async function* () {
+        attempts++;
+        await Promise.resolve();
+        yield* [];
+        throw error;
+      }),
+    );
+    expect(attempts).toBe(1);
+    expect(events.filter((event) => event.type === "retry")).toEqual([]);
+    expect(events.at(-1)).toMatchObject({ type: "error", error });
+  });
+
+  it("bounds persistent transport failures", async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const running = collect(
+      fixture(async function* () {
+        attempts++;
+        await Promise.resolve();
+        yield* [];
+        throw new NetworkError("offline");
+      }),
+    );
+    await vi.runAllTimersAsync();
+    const events = await running;
+    expect(attempts).toBe(4);
+    expect(events.filter((event) => event.type === "retry")).toHaveLength(3);
+    expect(events.at(-1)).toMatchObject({
+      type: "error",
+      error: { message: "offline" },
+    });
+  });
+
+  it.each<StreamEvent>([
+    { type: "text_delta", text: "Already delivered" },
+    { type: "thinking_delta", text: "Already thinking" },
+    {
+      type: "tool_call_complete",
+      toolId: "pending",
+      toolName: "WriteFile",
+      arguments: {},
+    },
+  ])(
+    "does not replay a rate-limited response after visible $type events",
+    async (event) => {
+      vi.useFakeTimers();
+      let attempts = 0;
+      const running = collect(
+        fixture(async function* () {
+          attempts++;
+          await Promise.resolve();
+          yield event;
+          throw new RateLimitError("partial response failure", "0");
+        }),
+      );
+      await vi.runAllTimersAsync();
+      const events = await running;
+      expect(attempts).toBe(1);
+      expect(events.filter((item) => item.type === "retry")).toEqual([]);
+      expect(events.at(-1)).toMatchObject({
+        type: "error",
+        error: { message: "partial response failure" },
+      });
+    },
+  );
+
+  it("interrupts transport retry waits immediately", async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const controller = new AbortController();
+    const running = collect(
+      fixture(
+        async function* () {
+          attempts++;
+          await Promise.resolve();
+          yield* [];
+          throw new NetworkError("offline");
+        },
+        { abortSignal: controller.signal },
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    controller.abort();
+    const events = await running;
+    expect(attempts).toBe(1);
+    expect(events.at(-1)).toEqual({
+      type: "loop_complete",
+      stopReason: "interrupted",
+    });
+  });
+
   it("keeps partial text after a broken stream without executing its pending tools", async () => {
     const config = fixture(async function* () {
       await Promise.resolve();
@@ -92,6 +208,37 @@ describe("agent lifecycle and retry boundaries", () => {
     expect(config.conversation.getMessages().at(-1)?.content).toBe(
       "Partial evidence",
     );
+    expect(config.conversation.getMessages().at(-1)?.toolUses ?? []).toEqual(
+      [],
+    );
+  });
+
+  it("rejects an unfinished response and never executes its pending tools", async () => {
+    const config = fixture(async function* () {
+      await Promise.resolve();
+      yield { type: "text_delta", text: "Partial evidence" };
+      yield {
+        type: "tool_call_complete",
+        toolId: "pending",
+        toolName: "WriteFile",
+        arguments: {},
+      };
+    });
+    const tool = new WriteFileTool();
+    const execute = vi
+      .spyOn(tool, "execute")
+      .mockResolvedValue({ output: "written", isError: false });
+    config.registry.register(tool);
+    const events = await collect(config);
+    expect(events.at(-1)).toMatchObject({
+      type: "error",
+      error: { name: LLMError.name },
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === "tool_result")).toBe(false);
+    expect(config.conversation.getMessages().at(-1)).toMatchObject({
+      content: "Partial evidence",
+    });
     expect(config.conversation.getMessages().at(-1)?.toolUses ?? []).toEqual(
       [],
     );
@@ -184,7 +331,7 @@ describe("agent lifecycle and retry boundaries", () => {
     const engine = new HookEngine([
       {
         event: "post_tool_use",
-        condition: 'file_path =* "src/**/*.ts"',
+        condition: 'filePath.endsWith(".ts")',
         action: { type: "prompt", prompt: "CHECK_TYPES" },
       },
     ]);

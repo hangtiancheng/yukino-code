@@ -1,36 +1,14 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, resolve, isAbsolute, relative } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
+import { yukinoPath } from "@/storage/paths.js";
 const log = createChildLogger({ module: "memory" });
 
 /** Maximum recursion depth for @include to prevent infinite nesting */
 const MAX_INCLUDE_DEPTH = 5;
 
-/** Loaded instruction file */
 export interface InstructionSource {
   path: string;
   content: string;
@@ -42,8 +20,8 @@ export interface InstructionSource {
  * Discovery order (later entries take higher precedence — the model attends
  * more to content appearing later):
  *  1. User-global: ~/.yukino/AGENTS.md
- *  2. Project: AGENTS.md, and .yukino/AGENTS.md in every
- *     directory from the git root down to workDir
+ *  2. Project: AGENTS.md in every
+ *     directory from the git root down to cwd
  *
  * Supports @include directives:
  *  - @./relative/path, @../relative/path, @~/home/path, @/absolute/path
@@ -51,8 +29,8 @@ export interface InstructionSource {
  *  - Ignored inside fenced code blocks
  *  - Cycle detection (the same absolute path is never included twice)
  */
-export function loadInstructions(workDir: string): string {
-  const sources = discoverInstructions(workDir);
+export function loadInstructions(cwd: string): string {
+  const sources = discoverInstructions(cwd);
   if (sources.length === 0) {
     return "";
   }
@@ -62,7 +40,7 @@ export function loadInstructions(workDir: string): string {
     // Prefer relative paths as labels for better readability
     let label = s.path;
     try {
-      const rel = relative(workDir, s.path);
+      const rel = relative(cwd, s.path);
       if (!rel.startsWith("..")) {
         label = rel;
       }
@@ -79,26 +57,23 @@ export function loadInstructions(workDir: string): string {
  * Returns all loaded instruction sources in priority order.
  * Lowest priority first (user-global), highest last (local override).
  */
-export function discoverInstructions(workDir: string): InstructionSource[] {
+export function discoverInstructions(cwd: string): InstructionSource[] {
   const sources: InstructionSource[] = [];
   const seen = new Set<string>();
 
   // 1. User-global instructions
   try {
-    const home = homedir();
-    addSource(sources, seen, join(home, ".yukino", "AGENTS.md"));
+    addSource(sources, seen, yukinoPath("AGENTS.md"));
   } catch (err) {
     log.error({ err }, "memory operation failed");
 
     // Skip if $HOME is unavailable
   }
 
-  // 2. Every directory from git root to workDir
-  const dirs = projectInstructionDirs(workDir);
+  // 2. Every directory from git root to cwd
+  const dirs = projectInstructionDirs(cwd);
   for (const dir of dirs) {
     addSource(sources, seen, join(dir, "AGENTS.md"));
-    // Same-named file under .yukino/: for projects that want instructions in .gitignore
-    addSource(sources, seen, join(dir, ".yukino", "AGENTS.md"));
   }
 
   return sources;
@@ -154,19 +129,32 @@ function expandIncludes(
 
   const lines = content.split("\n");
   const out: string[] = [];
-  let inCode = false;
+  let codeFence: { marker: "`" | "~"; length: number } | undefined;
 
   for (const line of lines) {
     const trimmed = line.trim();
-
-    // Detect fenced code block boundaries
-    if (trimmed.startsWith("```")) {
-      inCode = !inCode;
+    const fence = /^(`{3,}|~{3,})/u.exec(trimmed)?.[1];
+    if (!codeFence && fence) {
+      codeFence = {
+        marker: fence.startsWith("`") ? "`" : "~",
+        length: fence.length,
+      };
+      out.push(line);
+      continue;
+    }
+    if (
+      codeFence &&
+      new RegExp(
+        `^${codeFence.marker === "`" ? "`" : "~"}{${String(codeFence.length)},}\\s*$`,
+        "u",
+      ).test(trimmed)
+    ) {
+      codeFence = undefined;
       out.push(line);
       continue;
     }
 
-    if (!inCode) {
+    if (!codeFence) {
       const includePath = parseInclude(trimmed);
       if (includePath) {
         const resolved = resolveInclude(includePath, baseDir);
@@ -250,16 +238,16 @@ function resolveInclude(p: string, baseDir: string): string {
 }
 
 /**
- * Returns the list of directories from the git root to workDir.
- * If workDir is not inside a git repository, returns only [workDir].
+ * Returns the list of directories from the git root to cwd.
+ * If cwd is not inside a git repository, returns only [cwd].
  */
-function projectInstructionDirs(workDir: string): string[] {
+function projectInstructionDirs(cwd: string): string[] {
   let abs: string;
   try {
-    abs = resolve(workDir);
+    abs = resolve(cwd);
   } catch (err) {
     log.error({ err }, "memory operation failed");
-    return [workDir];
+    return [cwd];
   }
 
   const root = findGitRoot(abs);
@@ -295,7 +283,6 @@ function findGitRoot(start: string): string {
       }
     } catch (err) {
       log.error({ err }, "memory operation failed");
-      // ignore
     }
     const parent = dirname(cur);
     if (parent === cur) {

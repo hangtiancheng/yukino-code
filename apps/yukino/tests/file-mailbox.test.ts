@@ -1,31 +1,17 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { mkdtempSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
+import { tryAcquireFileSyncLock, withFileSyncLock } from "@/teams/file-lock.js";
 import { FileMailbox } from "@/teams/file-mailbox.js";
 
 describe("FileMailbox", () => {
@@ -35,7 +21,6 @@ describe("FileMailbox", () => {
 
     await mbox.send("leader", "first");
     expect((await mbox.receive()).map((m) => m.text)).toEqual(["first"]);
-    // Nothing new yet.
     expect(await mbox.receive()).toEqual([]);
 
     await mbox.send("leader", "second");
@@ -59,15 +44,67 @@ describe("FileMailbox", () => {
     expect(reader2.unreadCount()).toBe(1);
     expect((await reader2.receive()).map((m) => m.text)).toEqual(["c"]);
   });
+});
 
-  it("markAllRead consumes without returning", async () => {
+describe("FileMailbox lock ownership", () => {
+  it("fails fast on recursive acquisition in the same process", () => {
     const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
-    const mbox = new FileMailbox(dir, "carol");
-    await mbox.send("leader", "x");
-    await mbox.send("leader", "y");
-    mbox.markAllRead();
-    expect(mbox.unreadCount()).toBe(0);
-    expect(await mbox.receive()).toEqual([]);
+    const path = join(dir, "nested.json");
+
+    expect(() => {
+      withFileSyncLock(path, () => {
+        withFileSyncLock(path, () => 1);
+      });
+    }).toThrow("recursive acquisition");
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
+  it("does not acquire while another process is choosing a ticket", () => {
+    const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
+    const path = join(dir, "choosing.json");
+    const lockDir = `${path}.lock`;
+    mkdirSync(lockDir);
+    const choosing = join(lockDir, `choosing-${String(process.pid)}-other`);
+    writeFileSync(choosing, String(process.pid));
+
+    expect(tryAcquireFileSyncLock(path)).toBeNull();
+    expect(readdirSync(lockDir)).toEqual([basename(choosing)]);
+  });
+
+  it("does not preempt a stale ticket held by a live process", () => {
+    const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
+    const path = join(dir, "live-holder.json");
+    const lockDir = `${path}.lock`;
+    mkdirSync(lockDir);
+    const liveTicket = join(
+      lockDir,
+      `ticket-0000000000000001-${String(process.pid)}-live`,
+    );
+    writeFileSync(liveTicket, String(process.pid));
+    const stale = new Date(Date.now() - 60_000);
+    utimesSync(liveTicket, stale, stale);
+
+    expect(tryAcquireFileSyncLock(path)).toBeNull();
+    expect(existsSync(liveTicket)).toBe(true);
+    expect(readdirSync(lockDir)).toEqual([basename(liveTicket)]);
+  });
+
+  it("removes only the uniquely named stale ticket before acquiring", () => {
+    const dir = mkdtempSync(join(tmpdir(), "yukino-mbox-"));
+    const path = join(dir, "dead-holder.json");
+    const lockDir = `${path}.lock`;
+    mkdirSync(lockDir);
+    const deadTicket = join(lockDir, "ticket-0000000000000001-999999999-dead");
+    writeFileSync(deadTicket, "999999999");
+    const stale = new Date(Date.now() - 60_000);
+    utimesSync(deadTicket, stale, stale);
+
+    const release = tryAcquireFileSyncLock(path);
+    expect(release).toBeTypeOf("function");
+    expect(existsSync(deadTicket)).toBe(false);
+    expect(readdirSync(lockDir)).toHaveLength(1);
+    release?.();
+    expect(existsSync(lockDir)).toBe(false);
   });
 });
 

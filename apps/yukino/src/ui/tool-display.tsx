@@ -1,35 +1,16 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { Box, Text, useStdout } from "ink";
+import { Box, Text } from "ink";
 
 import { DiffLines } from "./diff-render.js";
 import {
   expandTabs,
+  plainTerminalLine,
+  plainTerminalText,
   truncateToWidth,
   visibleWidth,
   wrapToLines,
 } from "./terminal-text.js";
 import { formatToolOutputPreview } from "./tool-preview.js";
+import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import { isDiffTool } from "@/tools/is-diff-tool.js";
 import { THEME } from "@/ui/styles.js";
@@ -72,8 +53,7 @@ export function ToolCard({
   loading,
   expanded = false,
 }: ToolCardProps) {
-  const { stdout } = useStdout();
-  const width = Math.max(1, stdout.columns || 80);
+  const { columns: width } = useTerminalDimensions();
   const padding = width > 2 ? 1 : 0;
   const contentWidth = width - padding * 2;
   const resolvedStatus =
@@ -85,22 +65,29 @@ export function ToolCard({
         ? THEME.toolErrorBg
         : THEME.toolSuccessBg;
   const shell = /^(bash|powershell)$/iu.test(toolName);
-  const title = (
-    shell
-      ? `${toolName.toLowerCase() === "bash" ? "$" : ">"} ${argsSummary}`
-      : `${toolName}${argsSummary ? ` ${argsSummary}` : ""}`
-  ).replace(/[\r\n\t]+/g, " ");
+  const title = shell
+    ? expandTabs(
+        plainTerminalText(
+          `${toolName.toLowerCase() === "bash" ? "$" : ">"} ${argsSummary}`,
+        ),
+      )
+    : plainTerminalLine(`${toolName}${argsSummary ? ` ${argsSummary}` : ""}`);
   const statusLabel = resolvedStatus ?? "";
   const timing =
     elapsed !== undefined && elapsed > 0 ? `${elapsed.toFixed(1)}s` : "";
   const metadata = [statusLabel, timing].filter(Boolean).join(" · ");
-  const inlineMetadata = metadata && contentWidth >= visibleWidth(metadata) + 4;
+  const inlineMetadata =
+    metadata &&
+    contentWidth >= visibleWidth(metadata) + 4 &&
+    (!shell ||
+      (!title.includes("\n") &&
+        visibleWidth(title) + visibleWidth(metadata) + 2 <= contentWidth));
   const titleWidth = inlineMetadata
     ? contentWidth - visibleWidth(metadata) - 2
     : contentWidth;
   const preview = output
     ? expanded
-      ? expandTabs(output.trimEnd())
+      ? expandTabs(plainTerminalText(output).trimEnd())
       : formatToolOutputPreview(toolName, output, contentWidth)
     : "";
   // A wide grapheme cannot fit in a one-column terminal, even with hard wrapping.
@@ -131,17 +118,21 @@ export function ToolCard({
       paddingY={1}
       width={width}
     >
-      <Text wrap="truncate-end">
+      <Text wrap={shell ? "wrap" : "truncate-end"}>
         <Text bold color={THEME.toolTitle}>
-          {truncateToWidth(title, titleWidth)}
+          {shell
+            ? wrapToLines(title, titleWidth)
+                .map((line) => truncateToWidth(line, titleWidth))
+                .join("\n")
+            : truncateToWidth(title, titleWidth)}
         </Text>
         {inlineMetadata ? "  " : ""}
         {inlineMetadata ? metadataDetail : null}
       </Text>
       {metadata && !inlineMetadata ? metadataDetail : null}
       {progress ? (
-        <Text color={THEME.toolOutput}>
-          {wrapToLines(progress, contentWidth).join("\n")}
+        <Text color={THEME.toolOutput} wrap="truncate-end">
+          {truncateToWidth(plainTerminalLine(progress), contentWidth)}
         </Text>
       ) : null}
       {shown ? (
@@ -168,21 +159,5 @@ export function ToolBlock({
       argsSummary={formatToolArgs(tool.args)}
       expanded={expanded}
     />
-  );
-}
-
-export function ToolDisplay({
-  tools,
-  expanded = false,
-}: {
-  tools: ToolBlockInfo[];
-  expanded?: boolean;
-}) {
-  return (
-    <Box flexDirection="column">
-      {tools.map((tool) => (
-        <ToolBlock key={tool.toolId} tool={tool} expanded={expanded} />
-      ))}
-    </Box>
   );
 }

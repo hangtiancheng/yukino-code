@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { render, useInput } from "ink";
 import type { Instance, Key } from "ink";
 import type * as Ink from "ink";
@@ -149,6 +127,7 @@ describe("createInterruptHandlers (interrupt scope)", () => {
       abortControllerRef: { current: controller },
       permissionResolveRef: { current: permissionResolve },
       setPermissionRequest,
+      permissionQueue: { current: [] },
       askResolveRef: { current: askResolve },
       setAskRequest,
       backgroundTasks: { stopAll: stopBackgroundTasks },
@@ -183,6 +162,17 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     expect(h.stopTeams).not.toHaveBeenCalled();
   });
 
+  it("interruptForeground denies queued permission asks without presenting them", () => {
+    const h = mountHandlers();
+    const present = vi.fn();
+    const deny = vi.fn();
+    h.deps.permissionQueue.current.push({ present, deny });
+    h.handlers.interruptForeground();
+    expect(deny).toHaveBeenCalledTimes(1);
+    expect(present).not.toHaveBeenCalled();
+    expect(h.deps.permissionQueue.current).toHaveLength(0);
+  });
+
   it("interruptAll (TUI exit) additionally stops background tasks and teammates", () => {
     const h = mountHandlers();
     h.handlers.interruptAll();
@@ -205,13 +195,10 @@ describe("createInterruptHandlers (interrupt scope)", () => {
 });
 
 interface HarnessProps {
-  isStreaming: boolean;
   hasRunningWork: boolean;
   clearInputRef: RefObject<(() => void) | null>;
   onInterrupt: () => void;
   onExit: () => void;
-  teamsDialogOpen: boolean;
-  onToggleTeams: () => void;
   onBackgroundShells: () => void;
 }
 
@@ -223,7 +210,6 @@ function Harness(props: HarnessProps) {
 
 function mountControls(
   opts: {
-    isStreaming?: boolean;
     hasRunningWork?: boolean;
   } = {},
 ) {
@@ -233,13 +219,10 @@ function mountControls(
   act(() => {
     instance = render(
       createElement(Harness, {
-        isStreaming: opts.isStreaming ?? false,
         hasRunningWork: opts.hasRunningWork ?? false,
         clearInputRef: { current: clearInput },
         onInterrupt,
         onExit,
-        teamsDialogOpen: false,
-        onToggleTeams: vi.fn(),
         onBackgroundShells: vi.fn(),
       }),
       { patchConsole: false, interactive: false, debug: true },
@@ -250,12 +233,10 @@ function mountControls(
 
 /** Dispatch a keypress to the handlers registered by the latest render. */
 function send(input = "", key: Partial<Key> = {}): void {
-  // useTerminalControls registers four useInput handlers per render; the last
-  // four recorded calls are the freshest closures. Only the Ctrl+C handler
-  // reacts to the inputs used here, the others check for o/b/t.
+  // useTerminalControls registers three useInput handlers per render.
   const handlers = vi
     .mocked(useInput)
-    .mock.calls.slice(-4)
+    .mock.calls.slice(-3)
     .map((call) => call[0])
     .filter(
       (handler): handler is (input: string, key: Key) => void =>
@@ -277,8 +258,6 @@ describe("Ctrl+C dispatch (useTerminalControls)", () => {
     send("c", { ctrl: true });
     expect(onInterrupt).toHaveBeenCalledTimes(1);
     expect(onExit).not.toHaveBeenCalled();
-    // A second press keeps interrupting (the count never advances to exit
-    // while foreground work is running).
     send("c", { ctrl: true });
     expect(onInterrupt).toHaveBeenCalledTimes(2);
     expect(onExit).not.toHaveBeenCalled();

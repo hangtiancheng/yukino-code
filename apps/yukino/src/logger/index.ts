@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Root logger singleton: initLogger() / closeLogger(), plus the module-level
 // `logger` export and the createChildLogger() factory.
 //
@@ -28,16 +6,17 @@
 //   with tsup noExternal bundling. Writes are buffered asynchronously; the
 //   process exit handler calls closeLogger(), which flushSync()s the buffer.
 // - Writes to a file fd; stdout is only mirrored in remote mode via the
-//   `stdout` option (Ink owns stdout in UI mode; teammates use it for IPC).
+//   `stdout` option (Ink owns stdout in UI mode).
 // - Before initLogger(), a Proxy falls back to a silent pino logger so early
 //   log calls are safe no-ops (startup errors should use console.error).
 
-import { openSync, closeSync, mkdirSync, writeFileSync } from "node:fs";
+import { openSync, closeSync, mkdirSync } from "node:fs";
 import { readdir, stat, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, dirname, basename } from "node:path";
+import { join, dirname } from "node:path";
 
 import pino, { type Logger, type LoggerOptions } from "pino";
+
+import { yukinoPath } from "@/storage/paths.js";
 
 /** Execution mode, written into the base field of every log entry. */
 type LoggerMode = "terminal" | "remote" | "teammate";
@@ -48,18 +27,13 @@ interface InitLoggerOptions {
   sessionId: string;
   /** Execution mode. */
   mode: LoggerMode;
-  /**
-   * Working directory; defaults to process.cwd(). Logs go to
-   * <workDir>/.yukino/logs/ unless logDir is set.
-   */
-  workDir?: string;
-  /** Override log directory (teammates use ~/.yukino/teams/<team>/logs/). */
+  /** Override log directory (teammates use ~/.yukino/teams/<namespace>/<team>/logs/). */
   logDir?: string;
   /** Subprocess passes true to skip expired-log cleanup (avoid multi-process races). */
   skipCleanup?: boolean;
   /**
    * Mirror JSONL to stdout in addition to the log file. Only safe in remote
-   * mode (UI owns stdout; teammates use it for IPC). Lets users watch logs
+   * mode (UI owns stdout). Lets users watch logs
    * live or pipe them through pino-pretty.
    */
   stdout?: boolean;
@@ -69,33 +43,9 @@ let currentLogger: Logger | null = null;
 let currentDest: ReturnType<typeof pino.destination> | null = null;
 let currentFd: number | null = null;
 
-/** Compute the log file path. */
 function resolveLogPath(opts: InitLoggerOptions): string {
-  const dir =
-    opts.logDir ?? join(opts.workDir ?? process.cwd(), ".yukino", "logs");
+  const dir = opts.logDir ?? yukinoPath("logs");
   return join(dir, `${opts.sessionId}.jsonl`);
-}
-
-/**
- * Write a self-ignoring .gitignore ("*") into the nearest `.yukino` ancestor
- * of the log file, so the runtime directory never gets committed. Existing
- * files are left untouched; failures are non-fatal.
- */
-function ensureYukinoGitignore(logPath: string): void {
-  let dir = dirname(logPath);
-  while (basename(dir) !== ".yukino") {
-    const parent = dirname(dir);
-    if (parent === dir) {
-      return; // no .yukino ancestor (custom logDir outside .yukino)
-    }
-    dir = parent;
-  }
-  try {
-    // wx: create only if missing, so user edits are never clobbered.
-    writeFileSync(join(dir, ".gitignore"), "*\n", { flag: "wx" });
-  } catch {
-    // Already exists or unwritable — either way logging proceeds.
-  }
 }
 
 /** Sanitize a filename segment to prevent path traversal (member names, etc.). */
@@ -132,7 +82,6 @@ export function initLogger(opts: InitLoggerOptions): Logger {
 
   const logPath = resolveLogPath(opts);
   mkdirSync(dirname(logPath), { recursive: true });
-  ensureYukinoGitignore(logPath);
   // Append mode: multi-process safe, supports resume.
   const fd = openSync(logPath, "a");
   currentFd = fd;
@@ -160,8 +109,7 @@ export function initLogger(opts: InitLoggerOptions): Logger {
 
   // Main-process startup: clean expired logs.
   if (!opts.skipCleanup) {
-    const workDir = opts.workDir ?? process.cwd();
-    void cleanExpiredLogs(workDir).catch(() => {
+    void cleanExpiredLogs().catch(() => {
       // Cleanup failure is non-fatal.
     });
   }
@@ -169,7 +117,6 @@ export function initLogger(opts: InitLoggerOptions): Logger {
   return currentLogger;
 }
 
-/** Return the current logger instance, or null if not initialized. */
 function getLogger(): Logger | null {
   return currentLogger;
 }
@@ -281,7 +228,7 @@ export function createChildLogger(bindings: { module: string }): Logger {
 // Expired log cleanup. Mirrors session/index.ts cleanExpiredSessions: same
 // directory iteration and 30-day mtime check; unlike the session sweep, which
 // logs failures, cleanup errors here stay silent.
-// Scans <workDir>/.yukino/logs/ and ~/.yukino/teams/<team>/logs/.
+// Scans ~/.yukino/logs/ and teammate team log directories.
 // All fs operations are async to avoid blocking the event loop.
 
 /** Clean expired log files in a single directory. Returns count removed. Failures are silent. */
@@ -311,24 +258,32 @@ async function cleanDir(dir: string): Promise<number> {
 }
 
 /**
- * Clean expired logs. Scans the project .yukino/logs/ and all team-specific
- * ~/.yukino/teams/<team>/logs/ directories (team data lives under the home
- * directory — see teams/team-file.ts teamsBaseDir). Only called by the main
- * process (teammate subprocesses skip via skipCleanup).
+ * Clean expired logs. Scans ~/.yukino/logs/ and every
+ * ~/.yukino/teams/<namespace>/<team>/logs/ directory.
+ * Only called by the main process (teammate subprocesses skip via
+ * skipCleanup).
  */
-async function cleanExpiredLogs(workDir: string): Promise<number> {
+async function cleanExpiredLogs(): Promise<number> {
   let removed = 0;
-  removed += await cleanDir(join(workDir, ".yukino", "logs"));
+  removed += await cleanDir(yukinoPath("logs"));
 
-  const teamsDir = join(homedir(), ".yukino", "teams");
+  const teamsDir = yukinoPath("teams");
   let teams: string[];
   try {
     teams = await readdir(teamsDir);
   } catch {
     return removed; // no teams directory
   }
-  for (const team of teams) {
-    removed += await cleanDir(join(teamsDir, team, "logs"));
+  for (const namespace of teams) {
+    let teamNames: string[];
+    try {
+      teamNames = await readdir(join(teamsDir, namespace));
+    } catch {
+      continue;
+    }
+    for (const teamName of teamNames) {
+      removed += await cleanDir(join(teamsDir, namespace, teamName, "logs"));
+    }
   }
   return removed;
 }

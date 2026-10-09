@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // coordinatorPrompt is the orchestration guidance the Leader receives upon entering coordinator mode.
 // After the tool set is narrowed, the model still needs to know how to get work done with these
 // few tools — otherwise it will only discover it cannot read files, without realizing it should
@@ -31,6 +9,8 @@ Direct bounded research, implementation, and verification; synthesize evidence a
 - **Agent** — Delegate to general-purpose or another available agent definition.
 - **SendMessage** — Follow up with a persistent teammate by name.
 - **TaskStop** — Stop a running teammate.
+- **TaskCreate / TaskGet / TaskList / TaskUpdate** — Track shared work and dependencies. Create tasks before linking their IDs; assign with owner, and use pending → in_progress → completed. Completed dependencies unblock work; cancelled dependencies do not count as completed.
+- **TodoWrite** — Non-interactive private tracking; replaced by shared Task tools while a team exists.
 - **SyntheticOutput** — Return structured output.
 - **TeamDelete** — Tear down the team when finished.
 
@@ -39,6 +19,7 @@ Direct bounded research, implementation, and verification; synthesize evidence a
 - One-shot Agent calls return inline by default. With run_in_background=true they return a task ID immediately and report completion through a task notification.
 - Persistent async workers use TeamCreate plus Agent's team_name. In this restricted mode TeamCreate is unavailable; Agent with team_name can create the team on demand. Without team_name, expect a one-shot result.
 - Parallelize independent tasks. Assign one writer per shared file set and sequence dependent changes. Worktrees isolate changes but require explicit integration.
+- Teammates idle after each turn; reuse them with SendMessage. Task assignment notifies its owner. Stop unused teammates explicitly; unfinished tasks become unassigned/pending on exit.
 - Delegate Git operations only within user authorization. Never require unsolicited commits or pushes; preserve unrelated work and respect permission/hook denials.
 
 ## Results
@@ -50,7 +31,7 @@ After launching persistent work, give a brief user update and wait for notificat
 Require observed evidence: changed paths, checks run, results, and blockers. Implementation workers should run relevant tests; use independent review when warranted, not as a mandatory extra phase. Exercise actual behavior, investigate failures, and distinguish verified outcomes from worker claims. Report what remains unverified.`;
 
 /** Condensed version retaining only the hard constraints most easily forgotten by the model. */
-const coordinatorSparseReminder = `Coordinator mode: you cannot read files, run commands, or edit code. Tools: Agent, SendMessage, TaskStop, SyntheticOutput, TeamDelete. Foreground Agent calls return inline; background Agent calls return a task ID and report via task-notification; persistent team workers report via task-notification (from= name). Do not poll workers through agents, predict results, overlap shared-file writes, or request unsolicited commits/pushes. Synthesize and verify evidence before reporting.`;
+const coordinatorSparseReminder = `Coordinator mode: you cannot read files, run commands, or edit code. Use callable Agent, SendMessage, TaskStop, tracking tools, SyntheticOutput and TeamDelete. Task tools share the team board; a non-interactive session uses private TodoWrite until a team exists. Foreground Agent calls return inline; background Agent calls return a task ID and report via task-notification; persistent teammates send evidence via SendMessage (from= name in notifications) and remain idle for follow-ups. Stop unused teammates explicitly. Do not poll workers through agents, predict results, overlap shared-file writes, or request unsolicited commits/pushes. Synthesize and verify evidence before reporting.`;
 
 /** Re-inject the full text every few turns to prevent complete drift in long conversations. */
 const REMINDER_INTERVAL = 5;

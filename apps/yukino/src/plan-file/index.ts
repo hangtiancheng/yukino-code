@@ -1,91 +1,79 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
+import { yukinoPath } from "@/storage/paths.js";
 import { generateSlug } from "@/utils/slug";
 
 const log = createChildLogger({ module: "plan-file" });
 
-let currentPlanPath: string | null = null;
-
-function isPlanUnderWorkDir(planPath: string, workDir: string): boolean {
-  const plansDir = resolve(workDir, ".yukino", "plans");
-  const resolved = resolve(planPath);
-  return resolved.startsWith(plansDir + "/");
+export interface PlanOwner {
+  planFilePath?: string;
 }
 
-export function getOrCreatePlanPath(workDir: string): string {
-  if (currentPlanPath && existsSync(currentPlanPath)) {
-    if (!isPlanUnderWorkDir(currentPlanPath, workDir)) {
+function isPlanInStorage(planPath: string): boolean {
+  const plansDir = yukinoPath("plans");
+  // relative() is separator-agnostic: on Windows resolve() produces "\"
+  // paths, so a hardcoded "/" join would never match.
+  const rel = relative(plansDir, resolve(planPath));
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
+export function getOrCreatePlanPath(owner: PlanOwner): string {
+  if (owner.planFilePath && existsSync(owner.planFilePath)) {
+    if (!isPlanInStorage(owner.planFilePath)) {
       log.warn(
-        { planPath: currentPlanPath, workDir },
-        "current plan path is not under work dir",
+        { planPath: owner.planFilePath },
+        "current plan path is outside plan storage",
       );
     } else {
-      return currentPlanPath;
+      return owner.planFilePath;
     }
   }
 
-  const dir = join(workDir, ".yukino", "plans");
-  mkdirSync(dir, { recursive: true });
-  const slug = generateSlug();
-  currentPlanPath = join(dir, `${slug}.md`);
-  writeFileSync(currentPlanPath, "", "utf-8");
-  return currentPlanPath;
+  owner.planFilePath = createPlanPath();
+  return owner.planFilePath;
 }
 
-export function savePlan(workDir: string, content: string): void {
-  const path = getOrCreatePlanPath(workDir);
+export function createPlanPath(): string {
+  const dir = yukinoPath("plans");
+  mkdirSync(dir, { recursive: true });
+  const slug = generateSlug();
+  const path = join(dir, `${slug}.md`);
+  writeFileSync(path, "", { encoding: "utf-8", flag: "wx" });
+  return path;
+}
+
+export function savePlan(owner: PlanOwner, content: string): void {
+  const path = getOrCreatePlanPath(owner);
   writeFileSync(path, content, "utf-8");
 }
 
-export function loadPlan(): string | null {
-  if (!currentPlanPath || !existsSync(currentPlanPath)) {
+export function loadPlan(owner: PlanOwner): string | null {
+  if (!owner.planFilePath || !existsSync(owner.planFilePath)) {
     return null;
   }
-  return readFileSync(currentPlanPath, "utf-8");
+  return readFileSync(owner.planFilePath, "utf-8");
 }
 
-export function planExists(workDir: string): boolean {
-  if (!currentPlanPath || !existsSync(currentPlanPath)) {
+export function planExists(owner: PlanOwner): boolean {
+  if (!owner.planFilePath || !existsSync(owner.planFilePath)) {
     return false;
   }
-  if (!isPlanUnderWorkDir(currentPlanPath, workDir)) {
+  if (!isPlanInStorage(owner.planFilePath)) {
     log.warn(
-      { planPath: currentPlanPath, workDir },
-      "current plan path is not under work dir",
+      { planPath: owner.planFilePath },
+      "current plan path is outside plan storage",
     );
     return false;
   }
   return true;
 }
 
-export function resetPlanPath(): void {
-  currentPlanPath = null;
+export function resetPlanPath(owner: PlanOwner): void {
+  owner.planFilePath = "";
 }
 
-export function getCurrentPlanPath(): string | null {
-  return currentPlanPath;
+export function getCurrentPlanPath(owner: PlanOwner): string | null {
+  return owner.planFilePath || null;
 }

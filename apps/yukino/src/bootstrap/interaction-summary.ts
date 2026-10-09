@@ -1,28 +1,14 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 export interface InteractionSummary {
   agentActiveMs: number;
+  /** Prompt tokens written to the provider's cache. */
+  cacheCreationTokens: number;
+  /** Prompt tokens served from the provider's cache. */
+  cacheReadTokens: number;
   failedToolCalls: number;
+  /** Uncached prompt tokens; the cached prefix is counted separately. */
+  inputTokens: number;
+  latestVersion?: string;
+  outputTokens: number;
   sessionId: string;
   startedAt: number;
   successfulToolCalls: number;
@@ -39,12 +25,19 @@ function formatDuration(milliseconds: number): string {
   return `${String(minutes)}m ${String(remainder)}s`;
 }
 
-function percentage(value: number, total: number): string {
-  return `${(total > 0 ? (value / total) * 100 : 0).toFixed(1)}%`;
+function formatTokens(value: number): string {
+  const tokens = Math.max(0, Math.round(value));
+  if (tokens < 1000) {
+    return String(tokens);
+  }
+  if (tokens < 1_000_000) {
+    return `${(tokens / 1000).toFixed(tokens >= 10_000 ? 0 : 1)}k`;
+  }
+  return `${(tokens / 1_000_000).toFixed(1)}M`;
 }
 
-function field(label: string, value: string): string {
-  return ` ${`${label}:`.padEnd(28)}${value}`;
+function percentage(value: number, total: number): string {
+  return `${(total > 0 ? (value / total) * 100 : 0).toFixed(1)}%`;
 }
 
 export function formatInteractionSummary(
@@ -57,29 +50,20 @@ export function formatInteractionSummary(
     totalToolCalls > 0
       ? (summary.successfulToolCalls / totalToolCalls) * 100
       : 0;
+  const promptTokens =
+    summary.inputTokens + summary.cacheReadTokens + summary.cacheCreationTokens;
+  const cacheHitRate = percentage(summary.cacheReadTokens, promptTokens);
 
   return [
-    " Interaction Summary",
-    field("Session ID", summary.sessionId),
-    field(
-      "Tool Calls",
-      `${String(totalToolCalls)} ( ✓ ${String(summary.successfulToolCalls)} x ${String(summary.failedToolCalls)} )`,
-    ),
-    field("Success Rate", `${successRate.toFixed(1)}%`),
-    "",
-    " Performance",
-    field("Wall Time", formatDuration(endedAt - summary.startedAt)),
-
-    field("Agent Active", formatDuration(summary.agentActiveMs)),
-    field(
-      "  > API Time",
-      `${formatDuration(apiTimeMs)} (${percentage(apiTimeMs, summary.agentActiveMs)})`,
-    ),
-    field(
-      "  > Tool Time",
-      `${formatDuration(summary.toolTimeMs)} (${percentage(summary.toolTimeMs, summary.agentActiveMs)})`,
-    ),
-    "",
-    ` To resume this session: yukino --resume ${summary.sessionId}`,
+    `### Session \`${summary.sessionId}\``,
+    [
+      `**Tools** ${String(totalToolCalls)} calls · ✓ ${String(summary.successfulToolCalls)} · ✗ ${String(summary.failedToolCalls)} · ${successRate.toFixed(1)}% success`,
+      `**Time** ${formatDuration(endedAt - summary.startedAt)} wall · ${formatDuration(summary.agentActiveMs)} active`,
+      `**Breakdown** API ${formatDuration(apiTimeMs)} (${percentage(apiTimeMs, summary.agentActiveMs)}) · Tools ${formatDuration(summary.toolTimeMs)} (${percentage(summary.toolTimeMs, summary.agentActiveMs)})`,
+      `**Tokens** ↑ ${formatTokens(summary.inputTokens)} input · ↓ ${formatTokens(summary.outputTokens)} output`,
+      `**Cache** ${formatTokens(summary.cacheReadTokens)} read · ${formatTokens(summary.cacheCreationTokens)} write`,
+      `**Cache hit** ${cacheHitRate} (${formatTokens(summary.cacheReadTokens)} of ${formatTokens(promptTokens)} prompt)`,
+      `\`yukino --resume ${summary.sessionId}\``,
+    ].join("  \n"),
   ].join("\n");
 }

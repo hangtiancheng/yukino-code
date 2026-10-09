@@ -1,31 +1,11 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { writeFileSync, mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 import type { ToolResultBlock } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
+import { getSessionArtifactsDir } from "@/session/index.js";
 import { isObject } from "@/utils/index.js";
+import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tool-result" });
 // Aggregate cap across all tool results within a single message. The size of
@@ -37,30 +17,32 @@ const log = createChildLogger({ module: "tool-result" });
 const MESSAGE_AGGREGATE_LIMIT = 200000;
 export const TOOL_RESULT_PREVIEW_CHARS = 2000;
 
-export function spillDir(workDir: string, sessionId: string): string {
-  const id = sessionId || "default";
-  return join(workDir, ".yukino", "sessions", id, "tool-results");
+export function spillDir(sessionId: string): string {
+  if (!sessionId) {
+    throw new Error("Tool-result spilling requires a session ID");
+  }
+  return join(getSessionArtifactsDir(sessionId), "tool-results");
 }
 
 // Persist the full text of a tool result to disk. tool_use_id is unique per
 // invocation and its content is deterministic, so when the file already
 // exists we reuse it instead of writing again.
 function writeSpill(
-  workDir: string,
   sessionId: string,
   toolUseId: string,
   content: string,
 ): string {
-  const dir = spillDir(workDir, sessionId);
+  const dir = spillDir(sessionId);
   mkdirSync(dir, { recursive: true });
   const path = join(dir, toolUseId + ".txt");
   try {
     writeFileSync(path, content, { encoding: "utf-8", flag: "wx" });
   } catch (err: unknown) {
     log.error({ err }, "tool-result operation failed");
-    if (isObject(err) && "code" in err && err.code !== "EEXIST") {
-      throw err;
+    if (isObject(err) && "code" in err && err.code === "EEXIST") {
+      return path;
     }
+    throw err;
   }
   return path;
 }
@@ -89,21 +71,22 @@ export function replaceToolResultContent(
 }
 
 /**
- * The `<persisted-output>` wrapper text. buildSpillPreview derives the inputs
- * from an in-memory string; tool-level producers (e.g. a backgrounded Bash
- * command's live output file) build the same wrapper from a stat + partial
- * read without ever loading the full content into JS.
+ * The `<persisted-output>` wrapper text. buildSpillPreview reports in-memory
+ * strings in characters; file-backed producers report stat and preview sizes
+ * in bytes without ever loading the full content into JS.
  */
 export function buildPersistedOutputPreview(
-  totalChars: number,
+  totalSize: number,
   preview: string,
   spillPath: string,
+  sizeUnit: "characters" | "bytes" = "characters",
 ): string {
-  const sizeKB = Math.floor(totalChars / 1024);
+  const previewSize =
+    sizeUnit === "bytes" ? Buffer.byteLength(preview, "utf-8") : preview.length;
   let msg = `<persisted-output>\n`;
-  msg += `Output too large (${String(sizeKB)}KB). Full content saved to:\n${spillPath}\n\n`;
-  msg += `Preview (first 2KB):\n${preview}`;
-  if (totalChars > TOOL_RESULT_PREVIEW_CHARS) {
+  msg += `Output too large (${String(totalSize)} ${sizeUnit}). Full content saved to:\n${spillPath}\n\n`;
+  msg += `Preview (first ${String(previewSize)} ${sizeUnit}):\n${preview}`;
+  if (totalSize > previewSize) {
     msg += "\n...";
   }
   msg += "\n</persisted-output>";
@@ -131,7 +114,7 @@ function buildSpillPreview(content: string, spillPath: string): string {
 export function isSpillReadback(
   toolName: string,
   args: Record<string, unknown> | undefined,
-  workDir: string,
+  cwd: string,
   sessionId: string,
 ): boolean {
   if (toolName !== "ReadFile" || !args) {
@@ -141,7 +124,15 @@ export function isSpillReadback(
   if (typeof raw !== "string" || !raw) {
     return false;
   }
-  return resolve(raw).startsWith(resolve(spillDir(workDir, sessionId)));
+  if (!sessionId) {
+    return false;
+  }
+  // Resolve against cwd like ReadFileTool does — under remote/teammate
+  // process.cwd() differs — and match on a path-segment boundary so a
+  // sibling directory like "<spillDir>-extra" never counts as the spill dir.
+  const target = resolveToolPath(cwd, raw);
+  const spill = resolve(spillDir(sessionId));
+  return target === spill || target.startsWith(spill + sep);
 }
 /**
  * applyBudget runs the aggregate budget before a turn's tool results enter
@@ -159,7 +150,6 @@ export function isSpillReadback(
  */
 export function applyBudget(
   toolResults: ToolResultBlock[],
-  workDir: string,
   sessionId: string,
   exemptIds?: Set<string>,
 ): void {
@@ -191,7 +181,7 @@ export function applyBudget(
     }
     let spillPath: string;
     try {
-      spillPath = writeSpill(workDir, sessionId, r.toolUseId, content);
+      spillPath = writeSpill(sessionId, r.toolUseId, content);
     } catch {
       // On write failure, keep the original text. The message is finalized
       // into history right after, so there will be no retry
@@ -210,14 +200,13 @@ export function applyBudget(
  * truncation.
  */
 export function persistLargeResult(
-  workDir: string,
   sessionId: string,
   toolUseId: string,
   content: string,
 ): string {
   let path: string;
   try {
-    path = writeSpill(workDir, sessionId, toolUseId, content);
+    path = writeSpill(sessionId, toolUseId, content);
   } catch {
     return content;
   }

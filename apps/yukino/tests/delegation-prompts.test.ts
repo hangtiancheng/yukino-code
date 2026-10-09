@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,18 +9,20 @@ import type { ConversationManager } from "@/conversation/index.js";
 import * as clients from "@/llm/client.js";
 import type { LLMClient } from "@/llm/client.js";
 import { OpenAIClient } from "@/llm/openai.js";
+import { PermissionChecker } from "@/permissions/index.js";
 import {
   buildSubagentInstructions,
   buildTeammatePrompt,
 } from "@/prompt/delegation.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@/subagent/definition.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";
 
 const directories: string[] = [];
-function workDir(): string {
+function cwd(): string {
   const directory = mkdtempSync(join(tmpdir(), "yukino-delegation-"));
   directories.push(directory);
   return directory;
@@ -89,6 +69,152 @@ function stubClient(
 }
 
 describe("delegated prompt contracts", () => {
+  it.each(BUILTIN_AGENTS)(
+    "lets $name read outside-root files without an approval channel",
+    async (definition) => {
+      const dir = cwd();
+      const parent = new PermissionChecker(dir);
+      const modes = [
+        "default",
+        "acceptEdits",
+        "plan",
+        "bypassPermissions",
+      ] as const;
+      const executed: string[] = [];
+      const registry = new ToolRegistry();
+      const target = join(tmpdir(), "..", "yukino-outside-project", "file.ts");
+      registry.register({
+        name: "ReadFile",
+        description: "read",
+        category: "read",
+        schema: () => ({
+          name: "ReadFile",
+          description: "read",
+          input_schema: { type: "object", properties: {} },
+        }),
+        execute: () => {
+          executed.push(parent.mode);
+          return Promise.resolve({ output: "read", isError: false });
+        },
+      });
+      let request = 0;
+      const client = new OpenAIClient(provider, "system");
+      vi.spyOn(client, "stream").mockImplementation(async function* () {
+        await Promise.resolve();
+        const mode = modes[request++];
+        if (mode) {
+          parent.mode = mode;
+          yield {
+            type: "tool_call_complete",
+            toolId: `read-${request}`,
+            toolName: "ReadFile",
+            arguments: { file_path: target },
+          };
+        }
+        yield {
+          type: "stream_end",
+          stopReason: mode ? "tool_use" : "end_turn",
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+          },
+        };
+      });
+      vi.spyOn(clients, "createClient").mockResolvedValue(client);
+      await spawnSubagent(
+        definition,
+        "Read the outside file",
+        client,
+        registry,
+        provider,
+        dir,
+        undefined,
+        undefined,
+        undefined,
+        parent,
+      );
+      expect(executed).toEqual(modes);
+    },
+  );
+
+  it.each([false, true])(
+    "uses live parent permissions with configured mode overrides (%s)",
+    async (readOnly) => {
+      const dir = cwd();
+      const parent = new PermissionChecker(dir);
+      const executed: string[] = [];
+      const modes = [
+        "default",
+        "acceptEdits",
+        "plan",
+        "bypassPermissions",
+        "default",
+      ] as const;
+      let request = 0;
+      const registry = new ToolRegistry();
+      registry.register({
+        name: "WriteProbe",
+        description: "write",
+        category: "write",
+        schema: () => ({
+          name: "WriteProbe",
+          description: "write",
+          input_schema: { type: "object", properties: {} },
+        }),
+        execute: () => {
+          executed.push(parent.mode);
+          return Promise.resolve({ output: "written", isError: false });
+        },
+      });
+      const client: LLMClient = {
+        setSystemPrompt: vi.fn(),
+        async *stream() {
+          await Promise.resolve();
+          const mode = modes[request++];
+          if (mode) {
+            parent.mode = mode;
+            yield {
+              type: "tool_call_complete",
+              toolId: `write-${request}`,
+              toolName: "WriteProbe",
+              arguments: { file_path: "a.ts" },
+            };
+          }
+          yield {
+            type: "stream_end",
+            stopReason: mode ? "tool_use" : "end_turn",
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              cacheReadInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          };
+        },
+      };
+      await spawnSubagent(
+        {
+          name: "worker",
+          description: "work",
+          ...(readOnly ? { permissionMode: "plan" as const } : {}),
+        },
+        "work",
+        client,
+        registry,
+        provider,
+        dir,
+        undefined,
+        undefined,
+        undefined,
+        parent,
+      );
+      expect(executed).toEqual(["acceptEdits", "bypassPermissions"]);
+      expect(parent.mode).toBe("default");
+    },
+  );
+
   it("delivers custom agent instructions without modifying the parent's system prompt", async () => {
     const client = stubClient((conversation) => {
       const content = JSON.stringify(conversation.getMessages());
@@ -107,7 +233,7 @@ describe("delegated prompt contracts", () => {
       client,
       new ToolRegistry(),
       provider,
-      workDir(),
+      cwd(),
     );
     expect(output).toBe("Verified result");
     expect(setSystemPrompt).not.toHaveBeenCalled();
@@ -127,12 +253,50 @@ describe("delegated prompt contracts", () => {
       stubClient(() => undefined),
       new ToolRegistry(),
       provider,
-      workDir(),
+      cwd(),
     );
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ model: "child-model", thinking: "low" }),
       expect.any(String),
     );
+  });
+
+  it("inherits the configured parent model for the built-in explore role", async () => {
+    const directory = cwd();
+    const child = new OpenAIClient(provider, "system");
+    const scripted = stubClient(() => undefined);
+    vi.spyOn(child, "stream").mockImplementation(
+      (conversation, tools, signal) =>
+        scripted.stream(conversation, tools, signal),
+    );
+    const create = vi.spyOn(clients, "createClient").mockResolvedValue(child);
+    const tool = new AgentTool(
+      directory,
+      new ToolRegistry(),
+      (definition, prompt, background, modelOverride) =>
+        spawnSubagent(
+          definition,
+          prompt,
+          stubClient(() => undefined),
+          new ToolRegistry(),
+          provider,
+          directory,
+          undefined,
+          undefined,
+          modelOverride,
+          undefined,
+          { background },
+        ),
+    );
+    const result = await tool.execute(
+      { cwd: directory },
+      { description: "explore", prompt: "read only", subagent_type: "explore" },
+    );
+    expect(result.isError).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+    expect(
+      BUILTIN_AGENTS.find((agent) => agent.name === "explore")?.model,
+    ).toBeUndefined();
   });
 
   it("names teammate ownership and describes host-controlled lifecycle", () => {
@@ -155,9 +319,10 @@ describe("delegated prompt contracts", () => {
   });
 
   it("describes omitted roles according to the actual fork setting", () => {
-    const tool = new AgentTool(workDir(), new ToolRegistry(), () =>
+    const tool = new AgentTool(cwd(), new ToolRegistry(), () =>
       Promise.resolve("done"),
     );
+    expect(tool.category).toBe("command");
     expect(tool.schema().description).toContain("forks a snapshot");
     expect(
       JSON.stringify(tool.schema().input_schema.properties.name),
@@ -177,7 +342,7 @@ describe("delegated prompt contracts", () => {
     });
     const manager = new TaskManager();
     const spawn = vi.fn(() => pending);
-    const directory = workDir();
+    const directory = cwd();
     const tool = new AgentTool(
       directory,
       new ToolRegistry(),
@@ -188,7 +353,7 @@ describe("delegated prompt contracts", () => {
     );
 
     const result = await tool.execute(
-      { workDir: directory, toolCallId: "outer-agent" },
+      { cwd: directory, toolCallId: "outer-agent" },
       {
         description: "inspect",
         prompt: "inspect files",
@@ -197,24 +362,25 @@ describe("delegated prompt contracts", () => {
       },
     );
 
-    expect(result.output).toContain("task_id: agent-1");
-    expect(manager.get("agent-1")?.status).toBe("running");
+    const task = manager.list()[0];
+    expect(result.output).toContain(`task_id: ${task.id}`);
+    expect(task.status).toBe("running");
     await Promise.resolve();
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ name: "explore" }),
       "inspect files",
       true,
-      "",
+      undefined,
       undefined,
       expect.objectContaining({
         toolCallId: "outer-agent",
-        backgroundTaskId: "agent-1",
+        backgroundTaskId: task.id,
       }),
     );
 
     finish("background result");
     await manager.waitAll();
-    expect(manager.get("agent-1")?.status).toBe("completed");
+    expect(task.status).toBe("completed");
     expect(manager.drainNotifications()).toHaveLength(1);
     expect(manager.drainNotifications()).toEqual([]);
   });

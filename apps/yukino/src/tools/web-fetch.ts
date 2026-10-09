@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type TurndownService from "turndown";
 
 import { WEB_FETCH_DESCRIPTION } from "./descriptions.js";
@@ -32,7 +10,7 @@ import type {
 } from "./types.js";
 
 import { createChildLogger } from "@/logger/index.js";
-import { asErrorString, strArg } from "@/utils/index.js";
+import { asErrorString, isRecord, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "tools" });
 
@@ -76,6 +54,7 @@ function cacheSet(url: string, markdown: string, finalUrl: string): void {
     urlCacheBytes -= existing.size;
   }
   const size = Math.max(1, Buffer.byteLength(markdown));
+  urlCache.delete(url);
   urlCache.set(url, {
     markdown,
     finalUrl,
@@ -189,6 +168,9 @@ export class WebFetchTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
+    if (ctx.abortSignal?.aborted) {
+      return { output: "Error: fetch interrupted", isError: true };
+    }
     const url = strArg(args, "url");
     if (!url) {
       return { output: "Error: url is required", isError: true };
@@ -238,6 +220,7 @@ export class WebFetchTool implements Tool {
     }
 
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       return {
         output: `Error: HTTP ${String(response.status)} ${response.statusText} for ${url}`,
         isError: true,
@@ -249,6 +232,7 @@ export class WebFetchTool implements Tool {
       10,
     );
     if (!Number.isNaN(declaredBytes) && declaredBytes > MAX_CONTENT_BYTES) {
+      await response.body?.cancel().catch(() => undefined);
       return {
         output: `Error: response is ${String(declaredBytes)} bytes, over the ${String(MAX_CONTENT_BYTES)}-byte limit`,
         isError: true,
@@ -257,35 +241,63 @@ export class WebFetchTool implements Tool {
 
     const contentType = response.headers.get("content-type") ?? "";
     if (isBinaryContentType(contentType)) {
+      await response.body?.cancel().catch(() => undefined);
       return {
         output: `Error: binary content (${contentType}) is not supported; only text content can be fetched`,
         isError: true,
       };
     }
 
-    let body: ArrayBuffer;
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return {
+        output: "Error: response body is unavailable",
+        isError: true,
+      };
+    }
+    const chunks: Uint8Array[] = [];
+    let receivedBytes = 0;
     try {
-      body = await response.arrayBuffer();
+      while (true) {
+        const readResult: unknown = await reader.read();
+        signal.throwIfAborted();
+        if (!isRecord(readResult)) {
+          throw new Error("Invalid response stream result");
+        }
+        if (readResult.done === true) {
+          break;
+        }
+        const value = readResult.value;
+        if (!(value instanceof Uint8Array)) {
+          throw new Error("Invalid response stream chunk");
+        }
+        receivedBytes += value.byteLength;
+        if (receivedBytes > MAX_CONTENT_BYTES) {
+          await reader.cancel();
+          return {
+            output: `Error: response exceeds the ${String(MAX_CONTENT_BYTES)}-byte limit`,
+            isError: true,
+          };
+        }
+        chunks.push(value);
+      }
     } catch (err) {
       log.error({ err, url }, "reading response body failed");
       return {
         output: `Error: reading response body failed: ${asErrorString(err)}`,
         isError: true,
       };
+    } finally {
+      await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
     }
-    if (body.byteLength > MAX_CONTENT_BYTES) {
-      return {
-        output: `Error: response is ${String(body.byteLength)} bytes, over the ${String(MAX_CONTENT_BYTES)}-byte limit`,
-        isError: true,
-      };
-    }
-
-    const raw = Buffer.from(body).toString("utf-8");
+    const raw = Buffer.concat(chunks, receivedBytes).toString("utf-8");
     let markdown: string;
     try {
       markdown = contentType.includes("text/html")
         ? (await getTurndownService()).turndown(raw)
         : raw;
+      signal.throwIfAborted();
     } catch (err) {
       log.error({ err, url }, "HTML to Markdown conversion failed");
       return {

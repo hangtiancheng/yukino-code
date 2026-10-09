@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 export const MACOS_SNIPPET = String.raw`
 import AppKit
 import ApplicationServices
@@ -274,13 +252,20 @@ public static class YukinoComputer
 }
 `;
 
-export const WINDOWS_PWSH_INCLUDES_CSHARP_SNIPPET = `
+export const WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET = `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -TypeDefinition @'
 ${WINDOWS_CSHARP_SNIPPET}
-'@
+'@ -OutputAssembly $env:YUKINO_COMPUTER_ASSEMBLY
+`;
+
+export const WINDOWS_PWSH_ACTION_SNIPPET = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -Path $env:YUKINO_COMPUTER_ASSEMBLY
 
 $payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:YUKINO_COMPUTER_INPUT)) | ConvertFrom-Json
 function Resolve-Key([string]$name) {

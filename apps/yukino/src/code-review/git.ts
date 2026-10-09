@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { execFile } from "child_process";
 import { readFile } from "fs/promises";
 import { join } from "path";
@@ -51,24 +29,24 @@ const DIFF_FLAGS = [
 ];
 
 async function runGit(
-  workDir: string,
+  cwd: string,
   args: string[],
   abortSignal?: AbortSignal,
 ): Promise<{ stdout: string; stderr: string }> {
   return execFileAsync("git", args, {
-    cwd: workDir,
+    cwd: cwd,
     maxBuffer: 256 * 1024 * 1024,
     signal: abortSignal,
   });
 }
 
 async function tryGit(
-  workDir: string,
+  cwd: string,
   args: string[],
   abortSignal?: AbortSignal,
 ): Promise<string | null> {
   try {
-    const { stdout } = await runGit(workDir, args, abortSignal);
+    const { stdout } = await runGit(cwd, args, abortSignal);
     return stdout;
   } catch {
     return null;
@@ -80,20 +58,29 @@ function looksBinary(content: Buffer): boolean {
   return window.includes(0);
 }
 
+function quoteDiffPath(prefix: "a" | "b", path: string): string {
+  const value = `${prefix}/${path}`;
+  return /[\s"\\]/u.test(value) ? JSON.stringify(value) : value;
+}
+
 function untrackedBinaryDiff(path: string): string {
+  const oldPath = quoteDiffPath("a", path);
+  const newPath = quoteDiffPath("b", path);
   return (
-    `diff --git a/${path} b/${path}\n` +
+    `diff --git ${oldPath} ${newPath}\n` +
     `new file mode 100644\n` +
-    `Binary files /dev/null and b/${path} differ\n`
+    `Binary files /dev/null and ${newPath} differ\n`
   );
 }
 
 /** Synthesize a new-file diff for one untracked workspace file. */
 function untrackedFileDiff(relPath: string, content: Buffer): string {
+  const oldPath = quoteDiffPath("a", relPath);
+  const newPath = quoteDiffPath("b", relPath);
   const parts: string[] = [
-    `diff --git a/${relPath} b/${relPath}`,
+    `diff --git ${oldPath} ${newPath}`,
     "--- /dev/null",
-    `+++ b/${relPath}`,
+    `+++ ${newPath}`,
   ];
   let text = content.toString("utf8");
   let lines = text.split("\n");
@@ -109,14 +96,14 @@ function untrackedFileDiff(relPath: string, content: Buffer): string {
 }
 
 async function untrackedFileDiffs(
-  workDir: string,
+  cwd: string,
   abortSignal?: AbortSignal,
 ): Promise<string[]> {
   // -z delimits records with NUL: filenames may contain newlines, and
   // whitespace is a legal filename byte — splitting on "\n" or trimming
   // silently drops files.
   const list = await tryGit(
-    workDir,
+    cwd,
     [
       "-c",
       "core.quotepath=false",
@@ -135,7 +122,7 @@ async function untrackedFileDiffs(
   for (const f of files) {
     let content: Buffer;
     try {
-      content = await readFile(join(workDir, f));
+      content = await readFile(join(cwd, f));
     } catch {
       continue;
     }
@@ -149,7 +136,7 @@ async function untrackedFileDiffs(
 }
 
 export interface CollectDiffsOptions {
-  workDir: string;
+  cwd: string;
   mode: ReviewMode;
   from?: string;
   to?: string;
@@ -165,7 +152,7 @@ export interface CollectDiffsOptions {
 export async function collectDiffs(
   options: CollectDiffsOptions,
 ): Promise<FileDiff[]> {
-  const { workDir, mode, abortSignal } = options;
+  const { cwd, mode, abortSignal } = options;
   options.abortSignal?.throwIfAborted();
 
   let combined = "";
@@ -175,12 +162,12 @@ export async function collectDiffs(
   if (mode === "range") {
     const from = options.from ?? "";
     const to = options.to ?? "";
-    const base = await tryGit(workDir, ["merge-base", from, to], abortSignal);
+    const base = await tryGit(cwd, ["merge-base", from, to], abortSignal);
     if (!base?.trim()) {
       throw new Error(`Cannot find merge-base between ${from} and ${to}`);
     }
     const { stdout } = await runGit(
-      workDir,
+      cwd,
       [...DIFF_FLAGS, "--end-of-options", base.trim(), to, "--"],
       abortSignal,
     );
@@ -191,7 +178,7 @@ export async function collectDiffs(
     // --diff-merges=first-parent: plain `git show` emits a combined diff
     // ("diff --cc") for merge commits, which the parser cannot read.
     const { stdout } = await runGit(
-      workDir,
+      cwd,
       [
         "-c",
         "core.quotepath=false",
@@ -216,20 +203,20 @@ export async function collectDiffs(
     // commits HEAD fails, so fall back to the staged diff against the empty
     // tree — the only way to review a workspace before its first commit.
     let tracked = await tryGit(
-      workDir,
+      cwd,
       [...DIFF_FLAGS, "--end-of-options", "HEAD", "--"],
       abortSignal,
     );
     if (tracked === null) {
       const staged = await runGit(
-        workDir,
+        cwd,
         [...DIFF_FLAGS, "--staged", "--"],
         abortSignal,
       );
       tracked = staged.stdout;
     }
     combined = tracked;
-    const untracked = await untrackedFileDiffs(workDir, abortSignal);
+    const untracked = await untrackedFileDiffs(cwd, abortSignal);
     for (const ud of untracked) {
       combined += `${ud}\n`;
     }
@@ -240,7 +227,7 @@ export async function collectDiffs(
   return parseDiffText(combined, {
     readNewFileContent: async (newPath: string) => {
       if (ref) {
-        const out = await tryGit(workDir, [
+        const out = await tryGit(cwd, [
           "-c",
           "core.quotepath=false",
           "show",
@@ -250,7 +237,7 @@ export async function collectDiffs(
         return out ?? undefined;
       }
       try {
-        return await readFile(join(workDir, newPath), "utf8");
+        return await readFile(join(cwd, newPath), "utf8");
       } catch {
         return undefined;
       }

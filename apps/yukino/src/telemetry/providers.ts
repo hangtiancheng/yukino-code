@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { LangfuseSpanProcessor } from "@langfuse/otel";
 import {
   setLangfuseTracerProvider,
@@ -60,6 +38,8 @@ import {
 } from "@opentelemetry/semantic-conventions";
 import type * as Sentry from "@sentry/node";
 
+import { scrubTelemetryPayload } from "./privacy.js";
+
 import type {
   TelemetryAttributes,
   TelemetryMetricKind,
@@ -70,7 +50,10 @@ import type {
   TelemetryRuntime,
 } from "./index.js";
 
+import { createChildLogger } from "@/logger/index.js";
 import { version } from "@/version.js";
+
+const log = createChildLogger({ module: "telemetry" });
 
 type OtlpProtocol = "grpc" | "http/json" | "http/protobuf";
 type SentryModule = typeof Sentry;
@@ -323,16 +306,28 @@ async function initializeSentry(): Promise<SentryModule | null> {
     registerEsmLoaderHooks: false,
     release: process.env.SENTRY_RELEASE ?? version,
     sendDefaultPii: false,
+    beforeSend(event) {
+      if (event.request) {
+        delete event.request.data;
+        delete event.request.cookies;
+      }
+      scrubTelemetryPayload(event);
+      return event;
+    },
     skipOpenTelemetrySetup: true,
     tracesSampleRate: 0,
   });
   return sentry;
 }
 
-async function safely<T>(operation: () => Promise<T>): Promise<T | null> {
+async function safely<T>(
+  label: string,
+  operation: () => Promise<T>,
+): Promise<T | null> {
   try {
     return await operation();
-  } catch {
+  } catch (err) {
+    log.error({ err, label }, "telemetry initialization failed");
     return null;
   }
 }
@@ -473,6 +468,9 @@ class ProviderRuntime implements TelemetryRuntime {
   ) {}
 
   captureError(error: unknown, context: string): void {
+    if (error instanceof Error && error.name === "AbortError") {
+      return;
+    }
     this.sentry?.captureException(error, {
       tags: { context, mode: this.mode },
     });
@@ -593,13 +591,15 @@ export async function createTelemetryRuntime(): Promise<TelemetryRuntime> {
   const [tracerProvider, loggerProvider, metricReaders, sentry] =
     await Promise.all([
       otelEnabled
-        ? safely(() => createTracerProvider(resource))
+        ? safely("traces", () => createTracerProvider(resource))
         : Promise.resolve(null),
       otelEnabled
-        ? safely(() => createLoggerProvider(resource))
+        ? safely("logs", () => createLoggerProvider(resource))
         : Promise.resolve(null),
-      otelEnabled ? safely(createMetricReaders) : Promise.resolve(null),
-      safely(initializeSentry),
+      otelEnabled
+        ? safely("metrics", createMetricReaders)
+        : Promise.resolve(null),
+      safely("sentry", initializeSentry),
     ]);
 
   const meterProvider =

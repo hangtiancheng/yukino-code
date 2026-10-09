@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { posix } from "node:path";
 
 import type {
@@ -137,7 +115,8 @@ export function parseComments(
       continue;
     }
     const content = strArg(item, "content").trim();
-    if (!content) {
+    const existingCode = strArg(item, "existing_code").trim();
+    if (!content || !existingCode) {
       droppedEntries++;
       continue;
     }
@@ -150,7 +129,7 @@ export function parseComments(
     comments.push({
       path,
       content,
-      existingCode: strArg(item, "existing_code"),
+      existingCode,
       suggestionCode: suggestionCode ? suggestionCode : undefined,
       startLine: 0,
       endLine: 0,
@@ -179,20 +158,12 @@ export function parseComments(
 export class CommentCollector {
   private comments: ReviewComment[] = [];
 
-  add(cm: ReviewComment): void {
-    this.comments.push(cm);
-  }
-
   addAll(cms: ReviewComment[]): void {
     this.comments.push(...cms);
   }
 
   all(): ReviewComment[] {
     return [...this.comments];
-  }
-
-  forPath(path: string): ReviewComment[] {
-    return this.comments.filter((c) => c.path === path);
   }
 
   /** Total count, usable as a cursor for since(). */
@@ -208,22 +179,18 @@ export class CommentCollector {
     const drop = new Set(indices);
     this.comments = this.comments.filter((_, i) => !drop.has(i));
   }
-
-  count(): number {
-    return this.comments.length;
-  }
 }
 
 export interface CodeCommentToolDeps {
   collector: CommentCollector;
   /** Diffs of the group this tool instance serves (default-path source). */
   groupDiffs: FileDiff[];
-  /** All retained diffs, for cross-file relocation. */
-  allDiffs: () => FileDiff[];
   /**
    * Positioning pipeline applied to each parsed comment before collection:
    * hunk match → file content → cross-file → LLM re-location. Injected by
-   * the runner so the tool stays free of LLM dependencies.
+   * the runner so the tool stays free of LLM dependencies. The runner's
+   * resolve closure owns the cross-file pool; the tool itself never reads
+   * all diffs directly.
    */
   resolve: (comments: ReviewComment[]) => Promise<void>;
   groupLabel: string;

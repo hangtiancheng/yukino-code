@@ -1,35 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Records process lifecycle events (start, exit, crash) for post-mortem analysis.
 
 import { appendFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 
+import { runExitCleanups } from "./bootstrap/exit-cleanup.js";
 import { closeLogger, logger } from "./logger/index.js";
 import { captureTelemetryError, shutdownTelemetry } from "./telemetry/index.js";
 
-const LOG_DIR = ".yukino";
-const LOG_PATH = join(LOG_DIR, "crash.log");
+import { getYukinoDir, yukinoPath } from "@/storage/paths.js";
 
 /**
  * Appends a timestamped entry to the crash log.
@@ -37,8 +14,12 @@ const LOG_PATH = join(LOG_DIR, "crash.log");
  */
 export function record(text: string): void {
   try {
-    mkdirSync(LOG_DIR, { recursive: true });
-    appendFileSync(LOG_PATH, `[${new Date().toISOString()}] ${text}\n`, "utf8");
+    mkdirSync(getYukinoDir(), { recursive: true });
+    appendFileSync(
+      yukinoPath("crash.log"),
+      `[${new Date().toISOString()}] ${text}\n`,
+      "utf8",
+    );
   } catch {
     // Intentionally empty: a failing diagnostic write must not crash the process.
   }
@@ -80,9 +61,10 @@ function exitForTerminalGone(context: string, error: unknown): never {
     record(`terminal closed [${context}] ${detail}`);
   }
   // No terminal is left to render into or read from: exit immediately, before
-  // the next frame fails the same way. process.exit skips child-resource
-  // cleanup, so spawned children (background shells, MCP subprocesses) are
-  // left running as orphans.
+  // the next frame fails the same way. process.exit() skips async child
+  // teardown, so sweep the sync cleanup registry first — detached background
+  // shells must not outlive the session as orphans.
+  runExitCleanups();
   process.exit(0);
 }
 
@@ -144,12 +126,14 @@ export function recover(): void {
     // Once a handler is registered the runtime no longer prints the error itself; log it explicitly
     logger.fatal({ err }, "uncaught exception");
     captureTelemetryError(err, "uncaught exception");
+    // Sync sweep before the async telemetry flush: the process is going down,
+    // and detached children must not survive it as orphans.
+    runExitCleanups();
     void shutdownTelemetry().finally(() => {
       process.exit(1);
     });
   });
 
-  // Catch async errors that escape the main loop.
   process.on("unhandledRejection", (reason) => {
     if (isTerminalGone(reason)) {
       exitForTerminalGone("unhandled rejection", reason);
@@ -157,13 +141,17 @@ export function recover(): void {
     recordError("unhandled rejection", reason);
     logger.fatal({ err: reason }, "unhandled rejection");
     captureTelemetryError(reason, "unhandled rejection");
+    runExitCleanups();
     void shutdownTelemetry().finally(() => {
       process.exit(1);
     });
   });
 
-  // Flush logs and record the exit marker.
+  // Flush logs and record the exit marker. The cleanup sweep is a last
+  // resort: graceful paths stop children themselves, and every kill is
+  // guarded, so a repeated sweep is a no-op.
   process.on("exit", (code) => {
+    runExitCleanups();
     closeLogger();
     recordExit(code);
   });

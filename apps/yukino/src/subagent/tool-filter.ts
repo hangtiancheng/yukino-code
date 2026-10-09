@@ -1,28 +1,32 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+import { AgentTool } from "./agent-tool.js";
 
-import type { AgentTool } from "./agent-tool.js";
-
+import { LoadSkillTool } from "@/skills/load-skill-tool.js";
+import { TaskStopTool } from "@/teams/task-stop.js";
+import { TaskList } from "@/todo/index.js";
+import { isLocalTaskTool } from "@/todo/tools.js";
+import { McpCallTool } from "@/tools/mcp-call.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import { ToolSearchTool } from "@/tools/tool-search.js";
+import type { Tool } from "@/tools/types.js";
+
+function registerScopedTool(
+  registry: ToolRegistry,
+  tool: Tool,
+  tasks: TaskList,
+): void {
+  const scoped = isLocalTaskTool(tool)
+    ? tool.forList(tasks)
+    : tool instanceof ToolSearchTool
+      ? new ToolSearchTool(registry)
+      : tool instanceof McpCallTool
+        ? new McpCallTool(registry)
+        : tool instanceof LoadSkillTool
+          ? tool.forDelegatedAgent()
+          : tool instanceof TaskStopTool
+            ? tool.forSubagent()
+            : tool;
+  registry[scoped === tool ? "registerBorrowed" : "register"](scoped);
+}
 
 type AllTools =
   | "InstallSkill"
@@ -33,15 +37,15 @@ type AllTools =
   | "TaskGet"
   | "TaskList"
   | "TaskUpdate"
-
-  // === team run agent ===
+  | "TodoWrite"
+  | "TaskOutput"
+  | "LSP"
+  | "WebSearch"
   | "TeamCreate"
-  | "SpawnTeammate"
   | "SendMessage"
   | "ListTeams"
   | "TeamDelete"
   | "SyntheticOutput"
-  // === end team run agent ===
   | "AskUserQuestion"
   | "Bash"
   | "PowerShell"
@@ -54,6 +58,7 @@ type AllTools =
   | "ToolSearch"
   | "WriteFile"
   | "Glob"
+  | "Goal"
   | "Grep"
   | "WebFetch"
   | "McpCall";
@@ -71,43 +76,34 @@ export const MAIN_AGENT_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "ComputerUse",
   "AskUserQuestion",
   "ExitPlanMode",
+  "Goal",
 ] satisfies readonly AllTools[]);
 
 // Global list of tools disallowed for subagents — MAIN_AGENT_ONLY_TOOLS plus
-// delegation-policy restrictions (recursive Agent spawning, leader-only TaskStop).
-// Forks keep Agent (as a tagged clone) and TaskStop; only MAIN_AGENT_ONLY_TOOLS
-// is stripped from them.
+// delegation-policy restrictions (recursive Agent spawning and team authority).
+// Forks keep Agent (as a tagged clone). TaskStop only controls owned tasks;
+// delegated agents never inherit leader messaging or team lifecycle authority.
 const SUBAGENT_EXTRA_TOOLS = [
-  "Agent", // Prevents recursive spawning of subagents
-  "TaskStop",
+  "Agent",
+  "TeamCreate",
+  "TeamDelete",
+  "SendMessage",
 ] satisfies readonly AllTools[];
 export const SUBAGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
   ...MAIN_AGENT_ONLY_TOOLS,
   ...SUBAGENT_EXTRA_TOOLS,
 ]);
 
-// Additional tools blocked for teammates beyond the global subagent list.
-// Team creation and dissolution are the Leader's responsibility; teammates
-// only execute work and coordinate with peers.
-export const TEAMMATE_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
-  "TeamCreate",
-  "TeamDelete",
-] satisfies readonly AllTools[]);
-
-// Reserved list for additional restrictions on custom Agents (loaded from
-// .yukino/agents/), applied by filterToolsForAgent's Layer 3 — but no caller
-// currently passes isCustom=true, so the layer is inert. It is also a subset of
-// the global list (same except ComputerUse, which Layer 2 already strips), so
-// enabling it would change nothing today; maintained for future extensibility.
-export const CUSTOM_AGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
-  "ExitPlanMode",
-  "Agent",
-  "AskUserQuestion",
-  "TaskStop",
-] satisfies readonly AllTools[]);
-
-// Asynchronous (background) Agents are restricted to only these tools
 export const ASYNC_AGENT_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+  "TodoWrite",
+  "TaskOutput",
+  "TaskStop",
+  "LSP",
+  "WebSearch",
   "ReadFile",
   "WebFetch",
   "Grep",
@@ -132,89 +128,93 @@ function isMCPTool(name: string): boolean {
 
 /**
  * Multi-layer tool filtering, applied in order:
- * 1. MCP tools (mcp__*) — exempt from layers 2-4, but still subject to
- *    definition-level disallowedTools/tools (layers 5-6)
+ * 1. MCP tools (mcp__*) — exempt from layers 2-3, but still subject to
+ *    definition-level disallowedTools/tools (layers 4-5)
  * 2. SUBAGENT_DISALLOWED_TOOLS — Globally disallowed (prevents recursion)
- * 3. CUSTOM_AGENT_DISALLOWED_TOOLS — Additional restrictions for custom Agents
- * 4. ASYNC_AGENT_ALLOWED_TOOLS — Whitelist for background Agents
- * 5. Definition-level disallowedTools — Blacklist
- * 6. Definition-level tools — Whitelist intersection ("*" disables this layer)
+ * 3. ASYNC_AGENT_ALLOWED_TOOLS — Whitelist for background Agents
+ * 4. Definition-level disallowedTools — Blacklist
+ * 5. Definition-level tools — Whitelist intersection ("*" disables this layer)
  */
 export function filterToolsForAgent(
   registry: ToolRegistry,
   allowedTools: string[] | undefined,
   disallowedTools: string[] | undefined,
   isAsync: boolean,
-  isCustom = false,
 ): ToolRegistry {
   const disallowed = new Set(disallowedTools ?? []);
   const allowed = new Set(allowedTools ?? []);
-  // Enable whitelist intersection if a tools list is defined and is not the wildcard "*"
-  const hasWhitelist =
-    allowed.size > 0 && !(allowed.size === 1 && allowed.has("*"));
+  const hasWhitelist = allowed.size > 0 && !allowed.has("*");
 
   const filtered = new ToolRegistry();
-  filtered.mcpLoadingMode = registry.mcpLoadingMode;
+  const tasks = new TaskList();
+  filtered.copyLoadingStateFrom(registry);
 
   for (const tool of registry.listTools()) {
     const name = tool.name;
 
-    // Layer 1: MCP tools skip layers 2-4; definition-level lists still apply
     if (isMCPTool(name)) {
       if (!disallowed.has(name) && (!hasWhitelist || allowed.has(name))) {
-        filtered.register(tool);
+        registerScopedTool(filtered, tool, tasks);
       }
       continue;
     }
 
-    // Layer 2: Global disallow — no subagent can use these
     if (SUBAGENT_DISALLOWED_TOOLS.has(name)) {
       continue;
     }
 
-    // Layer 3: Additional restrictions for custom Agents
-    if (isCustom && CUSTOM_AGENT_DISALLOWED_TOOLS.has(name)) {
-      continue;
-    }
-
-    // Layer 4: Whitelist filtering for asynchronous Agents
     if (isAsync && !ASYNC_AGENT_ALLOWED_TOOLS.has(name)) {
       continue;
     }
 
-    // Layer 5: Definition-level blacklist
     if (disallowed.has(name)) {
       continue;
     }
 
-    // Layer 6: Definition-level whitelist intersection
     if (hasWhitelist && !allowed.has(name)) {
       continue;
     }
 
-    filtered.register(tool);
+    registerScopedTool(filtered, tool, tasks);
   }
 
   return filtered;
 }
 export const FORK_QUERY_SOURCE = "agent:builtin:fork";
+
+/**
+ * Clone the Leader's registry for an in-process teammate: globally disallowed
+ * subagent tools and Leader-only team management tools are stripped. Team-level
+ * task tools and the teammate-named SendMessage are added by the caller.
+ */
+export function cloneRegistryForTeammate(registry: ToolRegistry): ToolRegistry {
+  const teammate = new ToolRegistry();
+  const tasks = new TaskList();
+  teammate.copyLoadingStateFrom(registry);
+  for (const tool of registry.listTools()) {
+    if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name) || tool.name === "TaskStop") {
+      continue;
+    }
+    registerScopedTool(teammate, tool, tasks);
+  }
+  return teammate;
+}
+
 export function cloneRegistryForFork(registry: ToolRegistry): ToolRegistry {
   const forked = new ToolRegistry();
-  forked.mcpLoadingMode = registry.mcpLoadingMode;
+  const tasks = new TaskList();
+  forked.copyLoadingStateFrom(registry);
   for (const tool of registry.listTools()) {
     if (MAIN_AGENT_ONLY_TOOLS.has(tool.name)) {
       continue;
     }
-    if (tool.name === "Agent" && "querySource" in tool) {
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const clone = Object.create(
-        Reflect.getPrototypeOf(tool),
-        Object.getOwnPropertyDescriptors(tool),
-      ) as AgentTool;
-      clone.querySource = FORK_QUERY_SOURCE;
-      forked.register(clone);
+    if (["TeamCreate", "TeamDelete", "SendMessage"].includes(tool.name)) {
+      continue;
+    }
+    if (tool instanceof AgentTool) {
+      forked.register(tool.forFork(forked));
     } else {
-      forked.register(tool);
+      registerScopedTool(forked, tool, tasks);
     }
   }
   return forked;

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
@@ -40,7 +18,6 @@ import type {
   PromptResponse,
   ResumeSessionRequest,
   SessionNotification,
-  Usage,
 } from "@agentclientprotocol/sdk";
 
 import {
@@ -61,6 +38,7 @@ import {
   memoryEnabled,
   withProjectMcpServers,
 } from "@/config/index.js";
+import { resolveDefaultProvider } from "@/config/provider-config.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import { createRemoteAgent } from "@/remote/server.js";
 import {
@@ -68,7 +46,6 @@ import {
   listSessions,
   loadSession,
   rebuildFromSession,
-  saveCompactBoundary,
   saveMessage,
 } from "@/session/index.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
@@ -78,7 +55,7 @@ const SESSION_ID_PATTERN = /^[a-z0-9]+-[a-f0-9]{8}$/u;
 
 export interface AcpRuntime {
   sessionId: string;
-  workDir: string;
+  cwd: string;
   contextWindow: number;
   conv: ConversationManager;
   run(
@@ -90,7 +67,7 @@ export interface AcpRuntime {
 }
 
 export type AcpRuntimeFactory = (
-  workDir: string,
+  cwd: string,
   sessionId?: string,
 ) => Promise<AcpRuntime>;
 
@@ -100,7 +77,6 @@ interface AcpSession {
   tail: Promise<void>;
   turnAbort: AbortController | null;
   closed: boolean;
-  usage: Usage;
 }
 
 export interface YukinoAcpApp {
@@ -109,19 +85,24 @@ export interface YukinoAcpApp {
 }
 
 async function createRuntime(
-  workDir: string,
+  cwd: string,
   sessionId?: string,
 ): Promise<AcpRuntime> {
-  const config = withProjectMcpServers(loadConfig(), workDir);
-  const provider = config.providers[0];
+  const config = withProjectMcpServers(loadConfig(), cwd);
+  const provider = resolveDefaultProvider(
+    config.providers,
+    config.default_provider,
+  );
   if (!provider) {
     throw acp.RequestError.internalError(undefined, "No provider configured.");
   }
   const runtime = await createRemoteAgent({
     provider,
-    workDir,
+    cwd,
     hooks: config.hooks,
     mcpServers: config.mcp_servers,
+    lspServers: config.lsp_servers,
+    sandboxConfig: config.sandbox,
     enableCoordinatorMode: config.enable_coordinator_mode ?? false,
     forkDisabled: !forkEnabled(config),
     memoryEnabled: memoryEnabled(config),
@@ -129,7 +110,7 @@ async function createRuntime(
   });
   return {
     sessionId: runtime.sessionId,
-    workDir: runtime.workDir,
+    cwd: runtime.cwd,
     contextWindow: runtime.contextWindow,
     conv: runtime.conv,
     run: runtime.run.bind(runtime),
@@ -138,16 +119,19 @@ async function createRuntime(
     },
     dispose: async () => {
       runtime.abort();
-      await Promise.all([
+      await Promise.allSettled([
         runtime.backgroundTaskManager.stopAll(),
-        runtime.teamManager.stopAll(),
+        runtime.teamManager.dispose(),
+      ]);
+      await Promise.allSettled([
         runtime.mcpManager?.disconnectAll() ?? Promise.resolve(),
+        runtime.registry.dispose(),
       ]);
     },
   };
 }
 
-function validateWorkDir(cwd: string): void {
+function validateCwd(cwd: string): void {
   if (!isAbsolute(cwd)) {
     throw acp.RequestError.invalidParams(
       undefined,
@@ -167,7 +151,7 @@ function validateWorkspaceInputs(params: {
   mcpServers?: unknown[];
   additionalDirectories?: string[];
 }): void {
-  validateWorkDir(params.cwd);
+  validateCwd(params.cwd);
   if ((params.mcpServers?.length ?? 0) > 0) {
     throw acp.RequestError.invalidParams(
       undefined,
@@ -221,7 +205,6 @@ export class YukinoAcpAgent {
       tail: Promise.resolve(),
       turnAbort: null,
       closed: false,
-      usage: emptyUsage(),
     };
     this.sessions.set(runtime.sessionId, session);
     return session;
@@ -243,7 +226,7 @@ export class YukinoAcpAgent {
     validateSessionId(params.sessionId);
 
     let session = this.sessions.get(params.sessionId);
-    if (session && session.runtime.workDir !== params.cwd) {
+    if (session && session.runtime.cwd !== params.cwd) {
       throw acp.RequestError.invalidParams(
         undefined,
         "Session cwd does not match.",
@@ -287,7 +270,7 @@ export class YukinoAcpAgent {
       );
     }
     const cwd = params.cwd ?? process.cwd();
-    validateWorkDir(cwd);
+    validateCwd(cwd);
     return {
       sessions: listSessions(cwd).map((session) => ({
         sessionId: session.id,
@@ -410,7 +393,7 @@ export class YukinoAcpAgent {
     context: AgentRequestContext<PromptRequest>,
     signal: AbortSignal,
   ): Promise<PromptResponse> {
-    saveMessage(session.runtime.workDir, sessionId, {
+    saveMessage(session.runtime.cwd, sessionId, {
       role: "user",
       content: text,
       timestamp: Math.floor(Date.now() / 1000),
@@ -418,26 +401,38 @@ export class YukinoAcpAgent {
 
     let reason: PromptResponse["stopReason"] = "end_turn";
     let sawUsage = false;
+    let usage = emptyUsage();
 
     for await (const event of session.runtime.run(text, {
-      onPermissionRequest: async (toolName, args, decision, toolCallId) => {
+      onPermissionRequest: async (
+        toolName,
+        args,
+        decision,
+        toolCallId,
+        requestSignal,
+        source,
+      ) => {
+        const permissionSignal = requestSignal ?? signal;
         const permission = context.client.request(
           acp.methods.client.session.requestPermission,
           {
             sessionId,
             toolCall: {
               toolCallId,
-              title: `${toolName}: ${decision.reason}`,
+              title: `${source ? `${source.agentName} · ${source.cwd} · ` : ""}${toolName}: ${decision.reason}`,
               kind: toolKind(toolName),
               status: "pending",
               rawInput: args,
-              locations: toolLocations(args, session.runtime.workDir),
+              locations: toolLocations(
+                args,
+                source?.cwd ?? session.runtime.cwd,
+              ),
             },
             options: [
               { optionId: "allow", name: "Allow once", kind: "allow_once" },
               {
                 optionId: "allowAlways",
-                name: "Always allow",
+                name: "Allow pattern for all project agents",
                 kind: "allow_always",
               },
               { optionId: "deny", name: "Reject", kind: "reject_once" },
@@ -449,16 +444,20 @@ export class YukinoAcpAgent {
           cancelPermission = (): void => {
             resolve(null);
           };
-          if (signal.aborted) {
+          if (permissionSignal.aborted) {
             cancelPermission();
           } else {
-            signal.addEventListener("abort", cancelPermission, { once: true });
+            permissionSignal.addEventListener("abort", cancelPermission, {
+              once: true,
+            });
           }
         });
         const response = await Promise.race([permission, cancelled]);
-        signal.removeEventListener("abort", cancelPermission);
+        permissionSignal.removeEventListener("abort", cancelPermission);
         if (!response || response.outcome.outcome === "cancelled") {
-          session.runtime.abort();
+          if (signal.aborted || !permissionSignal.aborted) {
+            session.runtime.abort();
+          }
           return "deny";
         }
         if (response.outcome.optionId === "allowAlways") {
@@ -467,9 +466,6 @@ export class YukinoAcpAgent {
         return response.outcome.optionId === "allow" ? "allow" : "deny";
       },
     })) {
-      if (event.type === "compact" && event.boundary) {
-        saveCompactBoundary(session.runtime.workDir, sessionId, event.boundary);
-      }
       if (event.type === "error") {
         throw acp.RequestError.internalError(undefined, event.error.message);
       }
@@ -477,12 +473,12 @@ export class YukinoAcpAgent {
         reason = stopReason(event.stopReason);
       }
       if (event.type === "usage") {
-        session.usage = addUsage(session.usage, event);
+        usage = addUsage(usage, event);
         sawUsage = true;
       }
       const update = agentEventToUpdate(
         event,
-        session.runtime.workDir,
+        session.runtime.cwd,
         session.runtime.contextWindow,
       );
       if (update) {
@@ -496,7 +492,7 @@ export class YukinoAcpAgent {
 
     return {
       stopReason: reason,
-      ...(sawUsage ? { usage: session.usage } : {}),
+      ...(sawUsage ? { usage } : {}),
     };
   }
 }

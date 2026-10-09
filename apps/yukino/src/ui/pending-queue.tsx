@@ -1,26 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Box, Text } from "ink";
+
+import { plainTerminalLine } from "./terminal-text.js";
+import {
+  useAvailableRows,
+  useTerminalDimensions,
+} from "./use-terminal-layout.js";
 
 import { THEME } from "@/ui/styles.js";
 
@@ -31,33 +15,48 @@ interface PendingQueueProps {
 }
 
 export function PendingQueue({ messages, steering = [] }: PendingQueueProps) {
+  const { columns, rows } = useTerminalDimensions();
+  const availableRows = useAvailableRows();
+  const limit = Math.min(rows < 12 ? 1 : 3, Math.max(1, availableRows - 4));
+  const steeringLimit = Math.min(
+    steering.length,
+    messages.length > 0 ? Math.ceil(limit / 2) : limit,
+  );
+  const followUpLimit = Math.min(messages.length, limit - steeringLimit);
+  const total = messages.length + steering.length;
   if (messages.length === 0 && steering.length === 0) {
     return null;
   }
 
   return (
-    <Box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-      {steering.map((message, index) => (
+    <Box flexDirection="column" flexShrink={0} paddingX={columns > 2 ? 1 : 0}>
+      {steering.slice(steering.length - steeringLimit).map((message, index) => (
         <Text
           key={`steering-${String(index)}-${message}`}
           color={THEME.dim}
           wrap="truncate-end"
         >
-          {`Steering: ${message.replaceAll("\n", " ")}`}
+          {`Steering: ${plainTerminalLine(message)}`}
         </Text>
       ))}
-      {messages.map((message, index) => (
+      {messages.slice(messages.length - followUpLimit).map((message, index) => (
         <Text
           key={`${String(index)}-${message}`}
           color={THEME.dim}
           wrap="truncate-end"
         >
-          Follow-up: {message.replaceAll("\n", " ")}
+          Follow-up: {plainTerminalLine(message)}
         </Text>
       ))}
-      <Text color={THEME.dim}>
-        Steering injects at the next turn boundary · Follow-up waits until the
-        agent finishes · ↑ on empty input edits the latest
+      {total > limit && (
+        <Text color={THEME.dim} wrap="truncate-end">
+          {total} queued messages
+        </Text>
+      )}
+      <Text color={THEME.dim} wrap="truncate-end">
+        {columns >= 100
+          ? "Steering injects at the next turn boundary · Follow-up waits until the agent finishes · ↑ on empty input edits the latest"
+          : "↑ on empty input edits the latest queued message"}
       </Text>
     </Box>
   );

@@ -1,26 +1,4 @@
 /**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-/**
  * Decides how MCP tools enter the context. Three modes, chosen right after MCP
  * connects (once per session; the interactive UI additionally re-decides when the
  * active provider changes):
@@ -43,6 +21,7 @@
 
 import { MCP_TOOL_PREFIX } from "./tool-wrapper.js";
 
+import type { ProviderConfig } from "@/config/provider-config.js";
 import { isMcpToolLike } from "@/tools/mcp-call.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type { McpLoadingMode } from "@/tools/types.js";
@@ -65,7 +44,8 @@ const ENV_OVERRIDE = "YUKINO_MCP_LOADING";
 /**
  * An empty baseUrl means the SDK default address, i.e. the official one.
  * Base-url-only by construction: the provider protocol is not consulted, so a
- * non-Anthropic provider with an empty base_url also counts as official.
+ * non-Anthropic provider with an empty base_url also counts as official —
+ * decideMode combines this with the protocol before choosing native mode.
  */
 export function isOfficialAnthropicEndpoint(baseUrl: string): boolean {
   if (!baseUrl) {
@@ -84,6 +64,7 @@ export function estimateSchemaTokens(schemaChars: number): number {
 
 export function decideMode(
   baseUrl: string,
+  protocol: ProviderConfig["protocol"],
   contextWindow: number,
   mcpSchemaChars: number,
   thresholdPercent = DEFAULT_EAGER_THRESHOLD_PERCENT,
@@ -94,7 +75,11 @@ export function decideMode(
     override === "native" ||
     override === "dispatch"
   ) {
-    return override;
+    // Native deferred loading is part of the Anthropic wire protocol. Even an
+    // explicit override must not hide every deferred tool from other clients.
+    return override === "native" && protocol !== "anthropic"
+      ? "dispatch"
+      : override;
   }
 
   // No MCP tools, any mode would behave the same, and eager is the simplest
@@ -107,7 +92,14 @@ export function decideMode(
     return "eager";
   }
 
-  return isOfficialAnthropicEndpoint(baseUrl) ? "native" : "dispatch";
+  // Native deferred loading (defer_loading / tool_reference) is an Anthropic
+  // protocol feature: OpenAI-protocol clients drop tool_reference and hide
+  // McpCall, so under those protocols a native decision makes every deferred
+  // MCP tool unreachable. Only the Anthropic protocol on an official endpoint
+  // qualifies.
+  const canNative =
+    protocol === "anthropic" && isOfficialAnthropicEndpoint(baseUrl);
+  return canNative ? "native" : "dispatch";
 }
 
 /** Character count of the serialized MCP tool schemas, for comparing against the threshold. */
@@ -155,9 +147,15 @@ export function applyMode(registry: ToolRegistry, mode: McpLoadingMode): void {
 export function decideAndApply(
   registry: ToolRegistry,
   baseUrl: string,
+  protocol: ProviderConfig["protocol"],
   contextWindow: number,
 ): McpLoadingMode {
-  const mode = decideMode(baseUrl, contextWindow, measureSchemaChars(registry));
+  const mode = decideMode(
+    baseUrl,
+    protocol,
+    contextWindow,
+    measureSchemaChars(registry),
+  );
   applyMode(registry, mode);
   return mode;
 }

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { randomUUID } from "node:crypto";
 
 import { CommentCollector, CodeCommentTool } from "./comment-tool.js";
@@ -145,7 +123,7 @@ export async function runCodeReview(
   options: CodeReviewOptions,
   deps: RunCodeReviewDeps,
 ): Promise<CodeReviewResult> {
-  const { workDir, abortSignal } = options;
+  const { cwd, abortSignal } = options;
   const progress = options.onProgress ?? noopProgress;
   const maxConcurrency = options.maxConcurrency ?? DEFAULT_CONCURRENCY;
   const maxRounds = options.maxRounds ?? DEFAULT_MAX_ROUNDS;
@@ -173,7 +151,7 @@ export async function runCodeReview(
   // Step 1: collect and parse diffs.
   progress({ phase: "diff", message: "Collecting git diffs…" });
   const diffs = await collectDiffs({
-    workDir,
+    cwd,
     mode,
     from: options.from,
     to: options.to,
@@ -274,7 +252,7 @@ export async function runCodeReview(
     const collector = new CommentCollector();
     try {
       await executeGroupSubtask(g, {
-        workDir,
+        cwd,
         provider: deps.provider,
         utilClient,
         collector,
@@ -326,7 +304,11 @@ export async function runCodeReview(
           if (!g) {
             return;
           }
-          abortSignal?.throwIfAborted();
+          // Exit the loop instead of throwing: a rejected worker would fail
+          // Promise.all and discard the findings already collected.
+          if (abortSignal?.aborted) {
+            return;
+          }
           await executeGroup(g);
         }
       })(),
@@ -353,7 +335,7 @@ export async function runCodeReview(
 }
 
 interface GroupSubtaskDeps {
-  workDir: string;
+  cwd: string;
   provider: ProviderConfig;
   utilClient: LLMClient;
   collector: CommentCollector;
@@ -458,10 +440,17 @@ async function executeGroupSubtask(
         "filter",
         `Fact-checking ${String(newComments.length)} finding(s)…`,
       );
-      const removeIdx = await filterComments(g.diffs, newComments, {
-        client: deps.utilClient,
-        abortSignal,
-      });
+      const removeIdx = await filterComments(
+        // Evidence must cover the comments, not just the group: a comment
+        // relocated to a file outside this group is judged against its own
+        // diff instead of being declared evidence-free.
+        evidenceForComments(g.diffs, newComments, deps.diffByPath),
+        newComments,
+        {
+          client: deps.utilClient,
+          abortSignal,
+        },
+      );
       if (removeIdx.size > 0) {
         deps.collector.removeAt([...removeIdx].map((i) => baseline + i));
         deps.onFiltered(removeIdx.size);
@@ -478,6 +467,37 @@ async function executeGroupSubtask(
       break;
     }
   }
+}
+
+/**
+ * Filter evidence: the group's diffs plus the diffs backing any comment that
+ * points outside the group (relocation can move a finding to another file).
+ * The filter judges comments against the diff of the file they name, so an
+ * out-of-group comment without its own diff in the evidence reads as
+ * evidence-free and survives only via the default-approve fallback.
+ */
+function evidenceForComments(
+  groupDiffs: FileDiff[],
+  comments: ReviewComment[],
+  diffByPath: Map<string, FileDiff>,
+): FileDiff[] {
+  const covered = new Set<string>();
+  for (const d of groupDiffs) {
+    covered.add(d.oldPath);
+    covered.add(d.newPath);
+  }
+  const out = [...groupDiffs];
+  for (const cm of comments) {
+    if (covered.has(cm.path)) {
+      continue;
+    }
+    const d = diffByPath.get(cm.path);
+    if (d && !out.includes(d)) {
+      out.push(d);
+      covered.add(cm.path);
+    }
+  }
+  return out;
 }
 
 interface RunGroupAgentOptions {
@@ -501,16 +521,15 @@ async function runGroupAgent(
     new CodeCommentTool({
       collector: deps.collector,
       groupDiffs: g.diffs,
-      allDiffs: deps.allDiffs,
       groupLabel: g.label,
       resolve: async (comments) => {
         for (const cm of comments) {
           const d = deps.diffByPath.get(cm.path);
           let located = d ? resolveComment(cm, d) : false;
-          // Cross-file search precedes the LLM step: a successful
-          // re-location overwrites existing_code and marks the comment
-          // located in the file it was filed against, short-circuiting the
-          // deterministic cross-file probe.
+          // Cross-file search precedes the LLM step: relocateWithLlm
+          // overwrites existing_code (the evidence the filter judges
+          // later), so the deterministic cross-file probe gets first
+          // chance to locate the comment without that side effect.
           if (!located) {
             located = relocateAcrossFiles(cm, deps.allDiffs()) !== null;
           }
@@ -535,9 +554,9 @@ async function runGroupAgent(
     // All review tools are category "read", so "default" mode auto-allows
     // everything an unattended review can do while write/command attempts
     // (which have no permission handler here) are simply not executed.
-    checker: new PermissionChecker(deps.workDir, "default"),
+    checker: new PermissionChecker(deps.cwd, "default"),
     conversation,
-    workDir: deps.workDir,
+    cwd: deps.cwd,
     maxIterations: MAX_AGENT_ITERATIONS,
     abortSignal: deps.abortSignal,
     fileStateCache: new FileStateCache(),

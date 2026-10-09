@@ -1,33 +1,14 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { randomBytes } from "node:crypto";
+
+import z from "zod";
 
 import type { AgentDefinition } from "./definition.js";
 import { loadAgentDefinitions } from "./loader.js";
-import { TaskManager } from "./task-manager.js";
+import { TaskFailure, TaskManager } from "./task-manager.js";
 import {
-  SUBAGENT_DISALLOWED_TOOLS,
-  TEAMMATE_DISALLOWED_TOOLS,
+  cloneRegistryForTeammate,
+  filterToolsForAgent,
+  FORK_QUERY_SOURCE,
 } from "./tool-filter.js";
 
 import type { ConversationManager } from "@/conversation/index.js";
@@ -42,7 +23,7 @@ import {
   TeamTaskUpdateTool,
 } from "@/teams/task-tools.js";
 import { SendMessageTool } from "@/teams/tools.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import type { ToolRegistry } from "@/tools/registry.js";
 import type {
   Tool,
   ToolResult,
@@ -63,18 +44,27 @@ function newAgentSlug(): string {
 
 // Leading marker for forked child Agents — used for nested fork detection
 const FORK_BOILERPLATE_TAG = "<fork_boilerplate>";
-const FORK_QUERY_SOURCE = "agent:builtin:fork";
-
 // System instructions injected into forked child Agents
 const FORK_BOILERPLATE = `${FORK_BOILERPLATE_TAG}
 You are a forked Yukino worker, not the parent agent. The inherited conversation is background context; work only on the assignment that follows.
 Do not fork again or ask the user for confirmation. Respect current permissions and report blockers to the parent. Return a concise account of findings or changes, relevant paths, checks actually run, and remaining work.
 </fork_boilerplate>`;
 
+export interface TeammateRunOptions {
+  agentName: string;
+  definition: AgentDefinition;
+  modelOverride?: string;
+  onPermissionRequest?: ToolContext["onPermissionRequest"];
+}
+
 export class AgentTool implements Tool {
   name = "Agent";
   description = "Launch a subagent to handle complex, multi-step tasks.";
-  category = "read" as const;
+  category = "command" as const;
+
+  isConcurrencySafe(): boolean {
+    return true;
+  }
 
   private definitions: AgentDefinition[];
   private registry: ToolRegistry;
@@ -87,7 +77,7 @@ export class AgentTool implements Tool {
 
   /** Optional: Team manager, enables the team_name parameter. */
   private teamManager?: TeamManager;
-  private workDir: string;
+  private cwd: string;
   /**
    * When fork is disabled, omitting subagent_type no longer forks but falls back to the
    * general-purpose agent. The "disabled" semantics (rather than "enabled") are used so
@@ -103,16 +93,16 @@ export class AgentTool implements Tool {
   private teamRunAgentFactory?: (
     registry: ToolRegistry,
     checker?: PermissionChecker,
-    workDir?: string,
+    cwd?: string,
+    options?: TeammateRunOptions,
   ) => RunAgent;
-  private teamProviderBaseUrl?: string;
 
   private spawnHandler: (
     definition: AgentDefinition,
     prompt: string,
     background: boolean,
     modelOverride?: string,
-    workDirOverride?: string,
+    cwdOverride?: string,
     context?: ToolContext,
   ) => Promise<string>;
 
@@ -125,14 +115,14 @@ export class AgentTool implements Tool {
   ) => Promise<string>;
 
   constructor(
-    workDir: string,
+    cwd: string,
     registry: ToolRegistry,
     spawnHandler: (
       def: AgentDefinition,
       prompt: string,
       bg: boolean,
       modelOverride?: string,
-      workDirOverride?: string,
+      cwdOverride?: string,
       context?: ToolContext,
     ) => Promise<string>,
     conversation?: ConversationManager,
@@ -145,8 +135,8 @@ export class AgentTool implements Tool {
     ) => Promise<string>,
     taskManager = new TaskManager(),
   ) {
-    this.definitions = loadAgentDefinitions(workDir);
-    this.workDir = workDir;
+    this.definitions = loadAgentDefinitions();
+    this.cwd = cwd;
     this.registry = registry;
     this.spawnHandler = spawnHandler;
     this.conversation = conversation;
@@ -163,13 +153,25 @@ export class AgentTool implements Tool {
     runAgentFactory: (
       registry: ToolRegistry,
       checker?: PermissionChecker,
-      workDir?: string,
+      cwd?: string,
+      options?: TeammateRunOptions,
     ) => RunAgent,
-    providerBaseUrl?: string,
   ): void {
     this.teamManager = mgr;
     this.teamRunAgentFactory = runAgentFactory;
-    this.teamProviderBaseUrl = providerBaseUrl;
+  }
+
+  forFork(registry: ToolRegistry): AgentTool {
+    const agent = new AgentTool(
+      this.cwd,
+      registry,
+      this.spawnHandler,
+      this.conversation,
+      this.forkHandler,
+    );
+    agent.querySource = FORK_QUERY_SOURCE;
+    agent.forkDisabled = this.forkDisabled;
+    return agent;
   }
 
   schema(): ToolSchema {
@@ -220,11 +222,10 @@ export class AgentTool implements Tool {
           plan_mode_required: {
             type: "boolean",
             description:
-              "Only meaningful together with team_name. When true, the teammate starts in " +
-              "plan mode: it can read and investigate but cannot modify anything until it " +
-              "submits a plan and you approve it via SendMessage with " +
-              "type='plan_approval_response'. Use it for risky or ambiguous tasks where a " +
-              "wrong direction would cost a lot of rework.",
+              "Only meaningful together with team_name. Requests plan mode, subject to parent " +
+              "acceptEdits/bypassPermissions overrides. In plan mode, the teammate investigates " +
+              "and writes its plan; the runtime automatically approves the submitted plan and " +
+              "resumes execution under the current tool permissions.",
           },
           team_name: {
             type: "string",
@@ -261,6 +262,9 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
+    if (ctx.abortSignal?.aborted) {
+      return { output: "Error: operation interrupted", isError: true };
+    }
     const description = strArg(args, "description");
     const prompt = strArg(args, "prompt");
     if (!description || !prompt) {
@@ -278,8 +282,18 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
     const subagentType =
       strArg(args, "subagent_type") ||
       (this.forkDisabled ? GENERAL_PURPOSE_AGENT_TYPE : "");
-    const modelOverride = strArg(args, "model");
-    const background = boolArg(args, "run_in_background");
+    const modelOverride = strArg(args, "model") || undefined;
+    const backgroundArg = z
+      .boolean()
+      .optional()
+      .safeParse(args.run_in_background);
+    if (!backgroundArg.success) {
+      return {
+        output: "Error: run_in_background must be a boolean",
+        isError: true,
+      };
+    }
+    const background = backgroundArg.data ?? false;
     const teamName = strArg(args, "team_name");
     const teammateName = strArg(args, "name");
     const isolation = strArg(args, "isolation");
@@ -287,18 +301,35 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
     // Team-member path: team_name takes precedence over fork/subagent. Runs the agent as a
     // persistent teammate and notifies the leader via SendMessage / mailbox upon completion.
     if (teamName && this.teamManager && this.teamRunAgentFactory) {
+      const definition = this.definitions.find(
+        (d) => d.name === (subagentType || GENERAL_PURPOSE_AGENT_TYPE),
+      );
+      if (!definition) {
+        return {
+          output: `Error: unknown agent type '${subagentType}'.`,
+          isError: true,
+        };
+      }
       return await this.runAsTeammate(
         teamName,
         teammateName,
         description,
         prompt,
-        args.plan_mode_required === true,
-        isolation === "worktree",
-        ctx.toolCallId,
+        boolArg(args, "plan_mode_required"),
+        isolation === "worktree" || definition.isolation === "worktree",
+        ctx,
+        definition,
+        modelOverride,
       );
     }
+    if (teamName) {
+      return {
+        output:
+          "Error: teammate execution is unavailable; no team was created.",
+        isError: true,
+      };
+    }
 
-    // Fork path: Inherits parent conversation context when subagent_type is not specified
     if (!subagentType) {
       if (background && this.conversation && this.forkHandler) {
         const snapshot = this.conversation.fork();
@@ -310,6 +341,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
             backgroundContext,
             isolation === "worktree",
             snapshot,
+            true,
           ),
         );
       }
@@ -322,7 +354,6 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
       );
     }
 
-    // Definition path: Look up Agent definition by subagent_type
     const definition = this.definitions.find((d) => d.name === subagentType);
     if (!definition) {
       return {
@@ -330,16 +361,22 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
         isError: true,
       };
     }
+    const runInBackground =
+      backgroundArg.data ?? definition.background ?? false;
 
     // Worktree isolation: provision a separate working copy for the child agent; its changes
     // land on its own branch and cannot collide with the parent or other parallel child agents.
     let effectivePrompt = prompt;
-    let workDirOverride: string | undefined;
+    let cwdOverride: string | undefined;
     if (isolation === "worktree" || definition.isolation === "worktree") {
       try {
-        const wt = await createAgentWorktree(newAgentSlug());
-        workDirOverride = wt.path;
-        effectivePrompt = `${buildWorktreeNotice(this.workDir, wt.path)}
+        const wt = await createAgentWorktree(
+          newAgentSlug(),
+          undefined,
+          ctx.cwd,
+        );
+        cwdOverride = wt.path;
+        effectivePrompt = `${buildWorktreeNotice(this.cwd, wt.path)}
 
 ${prompt}`;
       } catch (e) {
@@ -355,26 +392,29 @@ ${prompt}`;
         const output = await this.spawnHandler(
           definition,
           effectivePrompt,
-          background || !!definition.background,
+          runInBackground,
           modelOverride,
-          workDirOverride,
+          cwdOverride ??
+            (runContext.cwd !== this.cwd ? runContext.cwd : undefined),
           runContext,
         );
         return {
-          output: workDirOverride
-            ? `${output}\n\nWorktree retained at: ${workDirOverride}`
+          output: cwdOverride
+            ? `${output}\n\nWorktree retained at: ${cwdOverride}`
             : output,
           isError: false,
         };
       } catch (err) {
         return {
-          output: `Agent error: ${asErrorString(err)}${workDirOverride ? `\nWorktree retained at: ${workDirOverride}` : ""}`,
+          output: `Agent error: ${asErrorString(err)}${cwdOverride ? `\nWorktree retained at: ${cwdOverride}` : ""}`,
           isError: true,
         };
       }
     };
 
-    return background ? this.startBackground(description, ctx, run) : run(ctx);
+    return runInBackground
+      ? this.startBackground(description, ctx, run)
+      : run(ctx);
   }
 
   private startBackground(
@@ -383,7 +423,7 @@ ${prompt}`;
     runner: (context: ToolContext) => Promise<ToolResult>,
   ): ToolResult {
     const controller = new AbortController();
-    const task = this.taskManager.create(
+    const task = (ctx.taskManager ?? this.taskManager).create(
       description,
       async (backgroundTask) => {
         const result = await runner({
@@ -392,7 +432,10 @@ ${prompt}`;
           abortSignal: controller.signal,
         });
         if (result.isError) {
-          throw new Error(result.output);
+          if (controller.signal.aborted) {
+            throw new Error(result.output);
+          }
+          throw new TaskFailure(result.output);
         }
         return result.output;
       },
@@ -409,8 +452,7 @@ ${prompt}`;
 
   /**
    * Team-member mode: Spawns a persistent teammate in the specified team.
-   * Delegates to Team.spawnTeammate(), which dispatches by team backend mode
-   * (in-process idle-poll loop, or an external pane/tab process).
+   * Runs persistently within this process.
    */
   private async runAsTeammate(
     teamName: string,
@@ -419,7 +461,9 @@ ${prompt}`;
     prompt: string,
     planModeRequired: boolean,
     worktreeIsolation: boolean,
-    originToolCallId?: string,
+    ctx: ToolContext,
+    definition: AgentDefinition,
+    modelOverride?: string,
   ): Promise<ToolResult> {
     if (!this.teamManager) {
       return {
@@ -435,19 +479,35 @@ ${prompt}`;
         isError: true,
       };
     }
-    // If the team does not exist, create one on the fly: in coordinator mode TeamCreate is not
-    // in the allowlist, so requiring the leader to create a team first would block at step one.
-    // Single-team invariant: creating a team sweeps every other team first,
-    // matching TeamCreate semantics.
+    // Auto-creation must not tear down another team's running workers.
     let team = this.teamManager.get(teamName);
     if (!team) {
-      await this.teamManager.deleteAll();
-      team = this.teamManager.create(teamName, undefined, {
+      if (this.teamManager.list().length) {
+        return {
+          output:
+            "Error: another team already exists. Use its team_name or explicitly delete it before creating a different team.",
+          isError: true,
+        };
+      }
+      team = this.teamManager.create(teamName, {
         leaderAgentId: LEADER_NAME,
         description,
       });
     }
 
+    const previousMember = requestedName
+      ? team.getMember(requestedName)
+      : undefined;
+    if (
+      previousMember &&
+      !previousMember.active &&
+      !previousMember.cancel &&
+      !previousMember.done &&
+      previousMember.uiState &&
+      ["completed", "failed", "stopped"].includes(previousMember.uiState.status)
+    ) {
+      team.removeMember(requestedName);
+    }
     if (requestedName && team.getMember(requestedName)) {
       return {
         output: `Error: teammate '${requestedName}' already exists in team '${teamName}'.`,
@@ -466,52 +526,48 @@ ${prompt}`;
     while (memberName === LEADER_NAME || team.getMember(memberName)) {
       memberName = `${base}-${String(suffix++)}`;
     }
+    team.addMember(memberName);
 
     // Build a teammate-scoped tool registry: clone the parent registry, then
     // inject team-level task tools and a named SendMessage (overriding the
     // inherited leader-named version so the teammate sends under its own name).
-    // Two categories are excluded during cloning: tools no subagent should
-    // have, and team membership management tools reserved for the Leader.
-    const teammateRegistry = new ToolRegistry();
-    teammateRegistry.mcpLoadingMode = this.registry.mcpLoadingMode;
-    for (const tool of this.registry.listTools()) {
-      if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-
-      if (TEAMMATE_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-      teammateRegistry.register(tool);
-    }
+    const teammateRegistry = filterToolsForAgent(
+      cloneRegistryForTeammate(this.registry),
+      definition.tools,
+      definition.disallowedTools,
+      false,
+    );
     teammateRegistry.register(
       new SendMessageTool(this.teamManager, memberName),
     );
+    teammateRegistry.unregister("TodoWrite");
     teammateRegistry.register(
       new TeamTaskCreateTool(this.teamManager, teamName, memberName),
     );
     teammateRegistry.register(new TeamTaskGetTool(this.teamManager, teamName));
     teammateRegistry.register(new TeamTaskListTool(this.teamManager, teamName));
     teammateRegistry.register(
-      new TeamTaskUpdateTool(this.teamManager, teamName),
+      new TeamTaskUpdateTool(this.teamManager, teamName, memberName),
     );
-    // The plan-mode teammate requires the checker to be created here: after team-level approval
-    // passes, the mode must be switched back to default in place. If the checker were created
-    // only inside spawnSubagent, no one would have a handle to modify it.
-
     // Worktree isolation: the teammate works on its own branch; changes are NOT
     // merged automatically — the worktree path is recorded in member metadata
     // (setMemberMeta below) for the Leader/user to merge manually.
     let teammatePrompt = prompt;
-    let memberWorkDir = this.workDir;
+    let memberCwd = ctx.cwd;
     if (worktreeIsolation) {
       try {
-        const wt = await createAgentWorktree(newAgentSlug());
-        memberWorkDir = wt.path;
-        teammatePrompt = `${buildWorktreeNotice(this.workDir, wt.path)}
+        const wt = await createAgentWorktree(
+          newAgentSlug(),
+          undefined,
+          ctx.cwd,
+        );
+        memberCwd = wt.path;
+        teammatePrompt = `${buildWorktreeNotice(this.cwd, wt.path)}
 
 ${prompt}`;
       } catch (e) {
+        team.removeMember(memberName);
+        await teammateRegistry.dispose();
         return {
           output: `Error creating teammate worktree: ${asErrorString(e)}`,
           isError: true,
@@ -519,33 +575,65 @@ ${prompt}`;
       }
     }
 
-    const checker = planModeRequired
-      ? new PermissionChecker(memberWorkDir, "plan")
-      : undefined;
-    const runAgent = this.teamRunAgentFactory?.(
-      teammateRegistry,
-      checker,
-      memberWorkDir,
+    const parentChecker =
+      ctx.permissionChecker ?? new PermissionChecker(this.cwd);
+    this.teamManager.setPermissionChecker(parentChecker);
+    const checker = parentChecker.forSubagent(
+      memberCwd,
+      planModeRequired ? "plan" : definition.permissionMode,
     );
-
-    if (runAgent) {
-      team.spawnTeammate(
-        memberName,
-        teammatePrompt,
-        runAgent,
+    checker.teammate = true;
+    try {
+      const runAgent = this.teamRunAgentFactory?.(
+        teammateRegistry,
         checker,
-        this.teamProviderBaseUrl,
-        originToolCallId,
+        memberCwd,
+        {
+          agentName: memberName,
+          definition,
+          modelOverride,
+          onPermissionRequest: ctx.onPermissionRequest,
+        },
       );
-      if (worktreeIsolation) {
-        team.setMemberMeta(memberName, { worktreePath: memberWorkDir });
-      }
-    }
 
-    return {
-      output: `Teammate '${memberName}' spawned in team '${teamName}' (mode: ${team.mode})${planModeRequired ? ", starting in plan mode" : ""}`,
-      isError: false,
-    };
+      if (runAgent) {
+        team.spawnTeammate(
+          memberName,
+          teammatePrompt,
+          runAgent,
+          checker,
+          ctx.toolCallId,
+          memberCwd,
+          {
+            agentType: definition.name,
+            model: modelOverride || definition.model,
+            planApprovalRequired: planModeRequired,
+            cleanup: () => teammateRegistry.dispose(),
+          },
+        );
+        return {
+          output: `Teammate '${memberName}' spawned in team '${teamName}' (in-process)${checker.mode === "plan" ? ", starting in plan mode" : ""}`,
+          isError: false,
+        };
+      }
+
+      team.removeMember(memberName);
+      await teammateRegistry.dispose();
+      return {
+        output: "Error: teammate runner is unavailable.",
+        isError: true,
+      };
+    } catch (error) {
+      if (team.getMember(memberName)?.active) {
+        await team.stopMember(memberName);
+      }
+      team.removeMember(memberName);
+      await teammateRegistry.dispose();
+      return {
+        output: `Error spawning teammate: ${asErrorString(error)}${memberCwd !== this.cwd ? `\nWorktree retained at: ${memberCwd}` : ""}`,
+        isError: true,
+      };
+    }
   }
 
   /**
@@ -556,10 +644,11 @@ ${prompt}`;
   private async runFork(
     prompt: string,
     description: string,
-    modelOverride: string,
+    modelOverride: string | undefined,
     ctx: ToolContext,
     isolate: boolean,
     conversationSnapshot?: ConversationManager,
+    isAsync = false,
   ): Promise<ToolResult> {
     if (!this.conversation || !this.forkHandler) {
       return {
@@ -592,20 +681,28 @@ ${prompt}`;
     }
 
     let worktreePath: string | undefined;
+    let forkedRegistry: ToolRegistry | undefined;
     try {
       if (isolate) {
         ctx.abortSignal?.throwIfAborted();
-        const worktree = await createAgentWorktree(newAgentSlug());
+        const worktree = await createAgentWorktree(
+          newAgentSlug(),
+          undefined,
+          ctx.cwd,
+        );
         worktreePath = worktree.path;
-        prompt = `${buildWorktreeNotice(ctx.workDir, worktree.path)}\n\n${prompt}`;
+        prompt = `${buildWorktreeNotice(ctx.cwd, worktree.path)}\n\n${prompt}`;
         ctx = {
           ...ctx,
-          workDir: worktree.path,
-          permissionChecker: ctx.permissionChecker?.forWorkDir(worktree.path),
+          cwd: worktree.path,
+          permissionChecker: ctx.permissionChecker?.forCwd(worktree.path),
         };
       }
       const { cloneRegistryForFork } = await import("./tool-filter.js");
-      const forkedRegistry = cloneRegistryForFork(this.registry);
+      const clonedRegistry = cloneRegistryForFork(this.registry);
+      forkedRegistry = isAsync
+        ? filterToolsForAgent(clonedRegistry, undefined, undefined, true)
+        : clonedRegistry;
       const snapshot = conversationSnapshot ?? this.conversation.fork();
       const output = await this.forkHandler(
         `${FORK_BOILERPLATE}\n\nYour task:\n${prompt}`,
@@ -624,6 +721,8 @@ ${prompt}`;
         output: `Fork error: ${asErrorString(err)}${worktreePath ? `\nWorktree retained at: ${worktreePath}` : ""}`,
         isError: true,
       };
+    } finally {
+      await forkedRegistry?.dispose();
     }
   }
 }

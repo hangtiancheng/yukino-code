@@ -1,27 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Box, Text, useInput } from "ink";
-import { useState } from "react";
+import type { DOMElement } from "ink";
+import { useRef, useState } from "react";
 
 import { SelectorFrame } from "./selector-frame.js";
 
@@ -49,6 +28,7 @@ const RESTORE_OPTIONS = [
 
 function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
   const [phase, setPhase] = useState<0 | 1>(0);
+  const focusRef = useRef<DOMElement>(null);
   const [cursor, setCursor] = useState(Math.max(0, snapshots.length - 1));
   const [optionCursor, setOptionCursor] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -102,6 +82,7 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
   if (phase === 0) {
     return (
       <SelectorFrame
+        focusRef={focusRef}
         hint="↑↓ navigate · Enter select · Escape cancel"
         title="Rewind to checkpoint"
       >
@@ -110,17 +91,21 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
           return (
             <Box
               key={snapshot.timestamp}
+              ref={selected ? focusRef : undefined}
               backgroundColor={selected ? THEME.selectedBg : undefined}
               paddingLeft={1}
               paddingRight={1}
               width="100%"
             >
-              <Text color={selected ? THEME.accent : THEME.text}>
+              <Text
+                color={selected ? THEME.accent : THEME.text}
+                wrap="truncate-end"
+              >
                 {selected ? "› " : "  "}
                 {snapshot.userText || "(empty)"}
-              </Text>
-              <Text color={THEME.muted} wrap="truncate-end">
-                {` · ${formatAgo(snapshot.timestamp)} · ${String(Object.keys(snapshot.backups).length)} files`}
+                <Text color={THEME.muted}>
+                  {` · ${formatAgo(snapshot.timestamp)} · ${String(Object.keys(snapshot.backups).length)} files`}
+                </Text>
               </Text>
             </Box>
           );
@@ -132,6 +117,7 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
   const snapshot = snapshots[selectedIndex];
   return (
     <SelectorFrame
+      focusRef={focusRef}
       hint="↑↓ navigate · Enter select · Escape back"
       subtitle={snapshot?.userText || "(empty)"}
       title="Choose rewind scope"
@@ -141,12 +127,16 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
         return (
           <Box
             key={option}
+            ref={selected ? focusRef : undefined}
             backgroundColor={selected ? THEME.selectedBg : undefined}
             paddingLeft={1}
             paddingRight={1}
             width="100%"
           >
-            <Text color={selected ? THEME.accent : THEME.muted}>
+            <Text
+              color={selected ? THEME.accent : THEME.muted}
+              wrap="truncate-end"
+            >
               {selected ? `${ICONS.arrow} ` : "  "}
               {option}
             </Text>

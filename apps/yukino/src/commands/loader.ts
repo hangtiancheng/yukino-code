@@ -1,27 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import yaml from "js-yaml";
@@ -29,22 +6,17 @@ import { z, parse } from "zod";
 
 import type { Command } from "./commands.js";
 
-// Loads user-defined slash commands from .yukino/commands/*.md (user then
-// project, so project wins on a name collision). Subdirectories namespace the
-// command name: sub/dir/foo.md → "sub:dir:foo".
-export function loadUserCommands(workDir: string): Command[] {
+import { yukinoPath } from "@/storage/paths.js";
+
+// Subdirectories namespace command names: sub/dir/foo.md → "sub:dir:foo".
+export function loadUserCommands(): Command[] {
+  const base = yukinoPath("prompts");
+  if (!existsSync(base)) {
+    return [];
+  }
   const byName = new Map<string, Command>();
-  const bases = [
-    join(homedir(), ".yukino", "commands"),
-    join(workDir, ".yukino", "commands"),
-  ];
-  for (const base of bases) {
-    if (!existsSync(base)) {
-      continue;
-    }
-    for (const cmd of walkDir(base, base)) {
-      byName.set(cmd.name, cmd);
-    }
+  for (const cmd of walkDir(base, base)) {
+    byName.set(cmd.name, cmd);
   }
   return [...byName.values()];
 }
@@ -61,7 +33,7 @@ function walkDir(base: string, dir: string): Command[] {
     const full = join(dir, entry);
     let st;
     try {
-      st = statSync(full);
+      st = lstatSync(full);
     } catch {
       continue;
     }
@@ -93,7 +65,7 @@ const YamlFrontmatterSchema = z.object({
 function parseCommandFile(base: string, full: string): Command | null {
   let raw: string;
   try {
-    raw = readFileSync(full, "utf-8");
+    raw = readFileSync(full, "utf-8").replace(/^\uFEFF/u, "");
   } catch {
     return null;
   }
@@ -102,20 +74,19 @@ function parseCommandFile(base: string, full: string): Command | null {
   let argumentHint = "";
   let body = raw;
 
-  if (raw.startsWith("---")) {
-    const end = raw.indexOf("---", 3);
-    if (end !== -1) {
-      const frontmatter = raw.slice(3, end).trim();
-      body = raw.slice(end + 3).trim();
-      try {
-        const p: unknown = yaml.load(frontmatter);
-        const data = parse(YamlFrontmatterSchema, p);
-        description = data.description ?? "";
-        argumentHint = data["argument-hint"] ?? "";
-      } catch {
-        // Ignore frontmatter parse errors; keep the body text that follows the
-        // frontmatter block.
-      }
+  const frontmatterMatch =
+    /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u.exec(raw);
+  if (frontmatterMatch) {
+    const frontmatter = frontmatterMatch[1].trim();
+    body = raw.slice(frontmatterMatch[0].length).trim();
+    try {
+      const p: unknown = yaml.load(frontmatter);
+      const data = parse(YamlFrontmatterSchema, p);
+      description = data.description ?? "";
+      argumentHint = data["argument-hint"] ?? "";
+    } catch {
+      // Ignore frontmatter parse errors; keep the body text that follows the
+      // frontmatter block.
     }
   }
 
@@ -127,23 +98,98 @@ function parseCommandFile(base: string, full: string): Command | null {
   return {
     name,
     type: "prompt",
-    description:
+    description: `${
       description ||
       (argumentHint
         ? `custom command (args: ${argumentHint})`
-        : "custom command"),
+        : "custom command")
+    } [custom]`,
     handler: (ctx) => renderBody(body, ctx.args),
   };
 }
 
-// Render a command body, substituting $ARGUMENTS; if there is no placeholder and
-// args were given, append them.
-export function renderBody(body: string, args: string): string {
-  if (body.includes("$ARGUMENTS")) {
-    return body.replaceAll("$ARGUMENTS", () => args);
+export function parseCommandArgs(input: string): string[] {
+  const args: string[] = [];
+  let current = "";
+  let quote: string | undefined;
+  let started = false;
+  for (let index = 0; index < input.length; index++) {
+    const char = input[index];
+    if (
+      char === "\\" &&
+      quote !== "'" &&
+      index + 1 < input.length &&
+      (!quote || ["\\", '"'].includes(input[index + 1]))
+    ) {
+      current += input[++index];
+      started = true;
+    } else if (quote) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current += char;
+      }
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      started = true;
+    } else if (/\s/u.test(char)) {
+      if (started) {
+        args.push(current);
+        current = "";
+        started = false;
+      }
+    } else {
+      current += char;
+      started = true;
+    }
   }
-  if (args) {
+  if (started) {
+    args.push(current);
+  }
+  return args;
+}
+
+export function renderBody(body: string, args: string): string {
+  const positional = parseCommandArgs(args);
+  let substituted = false;
+  const rendered = body.replace(
+    /\$\{(\d+|ARGUMENTS|@):-([^}]*)\}|\$\{@:(\d+)(?::(\d+))?\}|\$(ARGUMENTS|@|\d+)/gu,
+    (
+      _match,
+      target: string | undefined,
+      fallback: string | undefined,
+      start: string | undefined,
+      length: string | undefined,
+      simple: string | undefined,
+    ) => {
+      substituted = true;
+      if (target) {
+        const value =
+          target === "ARGUMENTS"
+            ? args
+            : target === "@"
+              ? positional.join(" ")
+              : positional[Number(target) - 1];
+        return value || fallback || "";
+      }
+      if (start) {
+        const offset = Math.max(0, Number(start) - 1);
+        return positional
+          .slice(
+            offset,
+            length === undefined ? undefined : offset + Number(length),
+          )
+          .join(" ");
+      }
+      return simple === "ARGUMENTS"
+        ? args
+        : simple === "@"
+          ? positional.join(" ")
+          : (positional[Number(simple) - 1] ?? "");
+    },
+  );
+  if (!substituted && args) {
     return `${body}\n\n${args}`;
   }
-  return body;
+  return rendered;
 }

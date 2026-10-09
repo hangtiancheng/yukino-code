@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -33,8 +11,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
 
+import { yukinoPath, projectKey } from "@/storage/paths.js";
 import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
 import {
   createAgentWorktree,
@@ -43,6 +22,20 @@ import {
 } from "@/worktree/index.js";
 
 const temporaryDirectories: string[] = [];
+
+// Hide the machine's global git config so hook-path assertions observe only
+// repository and worktree configuration created by each test.
+const originalGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL;
+beforeAll(() => {
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+});
+afterAll(() => {
+  if (originalGitConfigGlobal === undefined) {
+    delete process.env.GIT_CONFIG_GLOBAL;
+  } else {
+    process.env.GIT_CONFIG_GLOBAL = originalGitConfigGlobal;
+  }
+});
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -58,6 +51,14 @@ function git(repo: string, ...args: string[]): string {
   }).trim();
 }
 
+function optionalGit(repo: string, ...args: string[]): string {
+  try {
+    return git(repo, ...args);
+  } catch {
+    return "";
+  }
+}
+
 function initRepo(name = "repo"): string {
   const parent = realpathSync(
     mkdtempSync(join(tmpdir(), "yukino-worktree-safety-")),
@@ -68,7 +69,6 @@ function initRepo(name = "repo"): string {
   git(repo, "init", "-q", "-b", "main");
   git(repo, "config", "user.name", "Worktree Test");
   git(repo, "config", "user.email", "worktree@example.invalid");
-  git(repo, "config", "core.hooksPath", join(parent, "disabled-hooks"));
   writeFileSync(join(repo, "tracked.txt"), "initial\n");
   writeFileSync(join(repo, ".gitignore"), ".yukino/\n");
   git(repo, "add", "tracked.txt", ".gitignore");
@@ -82,7 +82,7 @@ function exit(
   head?: string,
 ) {
   return new ExitWorktreeTool().execute(
-    { workDir: repo },
+    { cwd: repo },
     {
       path: worktree.path,
       branch: worktree.branch,
@@ -99,13 +99,16 @@ describe("worktree creation safety", () => {
   ])("treats special characters in %s as literal paths", async (name) => {
     const repo = initRepo(name);
     const worktree = await createAgentWorktree("literal", repo);
-    expect(worktree.path).toBe(join(repo, ".yukino", "worktrees", "literal"));
+    expect(worktree.path).toBe(
+      yukinoPath("worktrees", projectKey(repo), "literal"),
+    );
     expect(readFileSync(join(worktree.path, "tracked.txt"), "utf-8")).toBe(
       "initial\n",
     );
-    expect(git(worktree.path, "config", "core.hooksPath")).toBe(
-      join(repo, ".git", "hooks"),
-    );
+    expect(
+      optionalGit(worktree.path, "config", "--get", "core.hooksPath"),
+    ).toBe("");
+    expect(optionalGit(repo, "config", "--get", "core.hooksPath")).toBe("");
     expect(await hasWorktreeChanges(worktree.path, worktree.headCommit)).toBe(
       false,
     );
@@ -118,9 +121,43 @@ describe("worktree creation safety", () => {
     expect(existsSync(join(repo, "injected-backtick"))).toBe(false);
   });
 
+  it("leaves a user-configured core.hooksPath untouched", async () => {
+    const repo = initRepo();
+    const custom = join(repo, "custom-hooks");
+    git(repo, "config", "core.hooksPath", custom);
+    await createAgentWorktree("hooks-preserved", repo);
+    expect(git(repo, "config", "core.hooksPath")).toBe(custom);
+  });
+
+  it("configures Husky only in the new worktree", async () => {
+    const repo = initRepo();
+    const huskyPath = join(repo, ".husky");
+    mkdirSync(huskyPath);
+
+    const worktree = await createAgentWorktree("husky", repo);
+
+    expect(
+      git(worktree.path, "config", "--worktree", "--get", "core.hooksPath"),
+    ).toBe(huskyPath);
+    expect(optionalGit(repo, "config", "--get", "core.hooksPath")).toBe("");
+    expect(
+      optionalGit(
+        repo,
+        "config",
+        "--file",
+        join(repo, ".git", "config"),
+        "--get",
+        "core.hooksPath",
+      ),
+    ).toBe("");
+    expect(git(repo, "config", "--get", "extensions.worktreeConfig")).toBe(
+      "true",
+    );
+  });
+
   it("rejects an existing ordinary directory and preserves its contents", async () => {
     const repo = initRepo();
-    const directory = join(repo, ".yukino", "worktrees", "ordinary");
+    const directory = yukinoPath("worktrees", projectKey(repo), "ordinary");
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, "keep.txt"), "existing data\n");
     const head = git(repo, "rev-parse", "HEAD");

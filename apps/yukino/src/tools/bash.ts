@@ -1,42 +1,21 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
+import { dirname } from "node:path";
 
 import {
   BASH_BACKGROUND_DESCRIPTION,
   BASH_DESCRIPTION,
 } from "./descriptions.js";
+import { withCommandExecution } from "./execution-coordinator.js";
 import {
-  BACKGROUND_MAX_OUTPUT_BYTES,
+  BACKGROUND_NOTIFICATION_BYTES,
+  MAX_SHELL_OUTPUT_FILE_BYTES,
   SIZE_WATCHDOG_INTERVAL_MS,
   backgroundMessage,
   backgroundTaskName,
-  buildBackgroundBody,
+  buildShellResult,
   createShellOutputFile,
   discardFd,
-  formatFinalResult,
-  isAutobackgroundingAllowed,
   readOutputFile,
   unlinkQuiet,
   type BackgroundReason,
@@ -52,6 +31,8 @@ import {
   type ToolSchema,
 } from "./types.js";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
+import { createChildLogger } from "@/logger/index.js";
 import { isSafeCommand } from "@/permissions/index.js";
 import type {
   PreparedSandboxCommand,
@@ -62,13 +43,15 @@ import { TaskFailure, type TaskManager } from "@/subagent/task-manager.js";
 import { asErrorString, boolArg, intArg, strArg } from "@/utils/index.js";
 
 const MAX_TIMEOUT = 600;
+const log = createChildLogger({ module: "bash" });
 // Grace period between SIGTERM and the SIGKILL escalation when terminating a command.
 const KILL_GRACE_MS = 3000;
-// Bare sleeps are killed on timeout instead of auto-backgrounded: backgrounding one
-// would just hold a task slot until session end.
-const DISALLOWED_AUTO_BACKGROUND_COMMANDS = new Set(["sleep"]);
 
 export class BashTool implements Tool {
+  async dispose(): Promise<void> {
+    await this.sandbox?.dispose?.();
+    this.sandbox = null;
+  }
   // Use a hardcoded string instead of BashTool.name.replace("Tool", "")
   // because class names are not stable after minification — bundlers like
   // Terser/esbuild may rename or mangle them, producing incorrect tool names at runtime.
@@ -180,9 +163,23 @@ export class BashTool implements Tool {
     };
   }
 
-  async execute(
+  execute(
     ctx: ToolContext,
     args: Record<string, unknown>,
+  ): Promise<ToolResult> {
+    return withCommandExecution(
+      ctx,
+      this.name,
+      args,
+      strArg(args, "command"),
+      (started) => this.executeCommand(ctx, args, started),
+    );
+  }
+
+  private async executeCommand(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+    started: (done: Promise<void>) => void,
   ): Promise<ToolResult> {
     const command = strArg(args, "command");
     if (!command) {
@@ -215,7 +212,7 @@ export class BashTool implements Tool {
 
     let outputFile: { path: string; fd: number };
     try {
-      outputFile = createShellOutputFile(ctx.workDir, ctx.sessionId ?? "");
+      outputFile = createShellOutputFile(ctx.sessionId ?? "");
     } catch (error) {
       return {
         output: `Error creating output file: ${asErrorString(error)}`,
@@ -252,12 +249,17 @@ export class BashTool implements Tool {
           command,
           {
             ...this.sandboxConfig,
-            // The child writes its output file directly; grant write access to
-            // that path even under a strict allowWrite config.
-            allowWrite: [...this.sandboxConfig.allowWrite, outputFile.path],
+            // The child writes its output file directly; grant write access
+            // to the output DIRECTORY (stable per session) rather than the
+            // per-command file (random name that does not exist yet), so a
+            // bind-based sandbox can mount it.
+            allowWrite: [
+              ...this.sandboxConfig.allowWrite,
+              dirname(outputFile.path),
+            ],
           },
           {
-            cwd: ctx.workDir,
+            cwd: ctx.cwd,
             abortSignal: ctx.abortSignal,
             commandId: ctx.toolCallId,
           },
@@ -292,6 +294,7 @@ export class BashTool implements Tool {
       outputFile,
       manager,
     );
+    started(handle.done);
     if (runInBackground) {
       const taskId = handle.background("explicit");
       if (taskId !== null) {
@@ -331,6 +334,10 @@ export class BashTool implements Tool {
     // loop and making Esc appear dead. `detached` puts the child in its own
     // process group so the whole tree can be killed, with SIGKILL escalation
     // for processes that ignore SIGTERM.
+    let finishProcess: () => void = () => undefined;
+    const processDone = new Promise<void>((resolve) => {
+      finishProcess = resolve;
+    });
     let backgroundFn: ((reason: BackgroundReason) => string | null) | undefined;
     const result = new Promise<ToolResult>((resolve) => {
       let aborted = false;
@@ -338,12 +345,13 @@ export class BashTool implements Tool {
       let settled = false;
       let backgrounded = false;
       let sizeKilled = false;
+      let lastOutputSize = 0;
       let escalateTimer: NodeJS.Timeout | null = null;
 
       let child: ReturnType<typeof spawn>;
       try {
         child = spawn(prepared.executable, prepared.args, {
-          cwd: ctx.workDir,
+          cwd: ctx.cwd,
           detached: true,
           env: prepared.env,
           // stdout and stderr share one output fd, opened O_APPEND on POSIX so
@@ -352,6 +360,7 @@ export class BashTool implements Tool {
           stdio: ["ignore", outputFile.fd, outputFile.fd],
         });
       } catch (error) {
+        finishProcess();
         discardFd(outputFile.fd);
         unlinkQuiet(outputFile.path);
         resolve({
@@ -373,8 +382,12 @@ export class BashTool implements Tool {
 
       // Kill the child's whole process group; fall back to the direct child
       // when the group is already gone (or group kill is unsupported).
+      // `exited` guards against pid reuse: once the child is reaped its pid
+      // may belong to an unrelated process, and killing by stale pid (or
+      // stale negative-pid group) could take down someone else's process.
+      let exited = false;
       const killTree = (signal: NodeJS.Signals) => {
-        if (typeof child.pid !== "number") {
+        if (typeof child.pid !== "number" || exited) {
           return;
         }
         try {
@@ -400,9 +413,7 @@ export class BashTool implements Tool {
         escalateTimer.unref();
       };
 
-      // The child writes directly to the output file with no JS in the write
-      // path, so size is enforced by polling stat(): foreground keeps the
-      // historical 10MB cap, backgrounded commands get the 5GB ceiling.
+      // Direct file writes bypass JS, so poll size to enforce the disk cap.
       const watchdog = setInterval(() => {
         let size = 0;
         try {
@@ -410,11 +421,16 @@ export class BashTool implements Tool {
         } catch {
           return;
         }
-        const cap = backgrounded
-          ? BACKGROUND_MAX_OUTPUT_BYTES
-          : MAX_SHELL_OUTPUT_BYTES;
-        if (size > cap) {
-          sizeKilled = backgrounded;
+        if (!backgrounded && ctx.onOutput && size !== lastOutputSize) {
+          lastOutputSize = size;
+          try {
+            ctx.onOutput(readOutputFile(outputFile.path, 50 * 1024, true).text);
+          } catch (error) {
+            log.error({ error }, "shell output observer failed");
+          }
+        }
+        if (size > MAX_SHELL_OUTPUT_FILE_BYTES) {
+          sizeKilled = true;
           clearInterval(watchdog);
           terminate();
         }
@@ -428,25 +444,17 @@ export class BashTool implements Tool {
 
       const backgroundAvailableHere =
         manager !== null && process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1";
-      // The sleep blocklist gates *automatic* backgrounding only; explicit
-      // run_in_background and manual Ctrl+B are always honored.
-      const autoBackgroundAllowed =
-        backgroundAvailableHere &&
-        isAutobackgroundingAllowed(
-          command,
-          DISALLOWED_AUTO_BACKGROUND_COMMANDS,
-        );
-
       let timedOut = false;
-      const timeoutTimer = setTimeout(() => {
-        // Auto-background on timeout when allowed; otherwise hard-kill.
-        if (autoBackgroundAllowed && backgroundExecution("timeout") !== null) {
-          return;
-        }
-        timedOut = true;
-        terminate();
-      }, timeout * 1000);
-      timeoutTimer.unref();
+      const timeoutTimer = ctx.shellTimeoutDisabled
+        ? undefined
+        : setTimeout(() => {
+            if (backgroundExecution("timeout") !== null) {
+              return;
+            }
+            timedOut = true;
+            terminate();
+          }, timeout * 1000);
+      timeoutTimer?.unref();
 
       ctx.abortSignal?.addEventListener("abort", onAbort, { once: true });
       if (ctx.abortSignal?.aborted) {
@@ -489,23 +497,21 @@ export class BashTool implements Tool {
         );
       };
 
-      // Foreground completion: read the output back (capped), inline it, and
-      // delete the now-redundant file.
       const settleExit = (exit: ShellExit) => {
         if (backgrounded) {
           return;
         }
-        const read = readOutputFile(outputFile.path, MAX_SHELL_OUTPUT_BYTES);
-        const merged = prepared.annotateStderr?.(read.text) ?? read.text;
-        const finalResult = formatFinalResult(
+        const finalResult = buildShellResult(
           "$ ",
           command,
           exit,
-          merged,
-          read.truncated,
+          outputFile.path,
           timeout,
+          MAX_SHELL_OUTPUT_BYTES,
+          prepared.annotateStderr
+            ? (text) => prepared.annotateStderr?.(text) ?? text
+            : undefined,
         );
-        unlinkQuiet(outputFile.path);
         settle(finalResult);
       };
 
@@ -525,12 +531,17 @@ export class BashTool implements Tool {
         backgrounded = true;
         settled = true;
         // The command now outlives both its foreground timeout and the
-        // caller's abort signal: only TaskStop or session shutdown can kill
-        // it. (A termination already underway is excluded by the
+        // caller's abort signal: only TaskStop, session shutdown, or the
+        // background output cap (watchdog keeps running at the 5GB ceiling)
+        // can kill it. (A termination already underway is excluded by the
         // `terminating` guard above, so no escalate timer can be pending here.)
         clearTimeout(timeoutTimer);
         ctx.abortSignal?.removeEventListener("abort", onAbort);
         this.foreground.delete(foregroundKey);
+        // Release the workspace mutation lock now: the command has left the
+        // foreground, so it must not keep serializing every other command in
+        // this cwd for the rest of its (possibly unbounded) background life.
+        finishProcess();
 
         const task = manager.create(
           backgroundTaskName(command),
@@ -547,12 +558,13 @@ export class BashTool implements Tool {
               ? (text: string): string =>
                   prepared.annotateStderr?.(text) ?? text
               : undefined;
-            const body = buildBackgroundBody(
+            const body = buildShellResult(
               "$ ",
               command,
               exit,
               outputFile.path,
               timeout,
+              BACKGROUND_NOTIFICATION_BYTES,
               annotate,
             );
             if (body.isError) {
@@ -568,6 +580,13 @@ export class BashTool implements Tool {
           },
           { originToolCallId: ctx.toolCallId, idPrefix: "bash", kind: "shell" },
         );
+        // Crash-path orphan prevention: process.exit() (terminal gone,
+        // uncaught exception) never reaches the task manager's stop, so the
+        // recover.ts sweep kills this detached group synchronously instead.
+        const unregisterCleanup = registerExitCleanup(() => {
+          killTree("SIGKILL");
+        });
+        void task.done.finally(unregisterCleanup);
         resolve({
           output: backgroundMessage(reason, task.id, timeout),
           isError: false,
@@ -593,6 +612,8 @@ export class BashTool implements Tool {
 
       // Spawn-level failure (e.g. bash not found): no close event guaranteed.
       child.on("error", (error) => {
+        finishProcess();
+        exited = true;
         stopTimers();
         const exit: ShellExit = {
           code: null,
@@ -610,6 +631,8 @@ export class BashTool implements Tool {
       // the shell itself exits; grandchildren that inherit the output fd (e.g.
       // `cmd &`) no longer hold the result hostage.
       child.on("close", (code, signal) => {
+        finishProcess();
+        exited = true;
         stopTimers();
         const exit: ShellExit = { code, signal, aborted, timedOut, sizeKilled };
         doneResolve?.(exit);
@@ -620,6 +643,7 @@ export class BashTool implements Tool {
     });
 
     return {
+      done: processDone,
       result,
       background: (reason) => backgroundFn?.(reason) ?? null,
     };

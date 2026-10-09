@@ -1,78 +1,68 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+interface PlanCapabilities {
+  canAskUser?: boolean;
+  canExitPlanMode?: boolean;
+  canSendMessage?: boolean;
+  canWriteFile?: boolean;
+  canEditFile?: boolean;
+  canDelegate?: boolean;
+  isCoordinator?: boolean;
+}
 
-// Full Plan Mode reminder text; buildPlanModeReminder decides when it is shown.
-const planModeFullReminder = `# Plan mode
-Read-only except the declared plan file. You MUST NOT make any edits elsewhere, run mutating tools, change configs, or commit. Do not begin implementation before the runtime approval gate allows it.
-
-%PLAN_FILE_INFO%
-
-## Context
-Inspect relevant code and reusable patterns. Clarify material unknowns with AskUserQuestion. Delegate bounded read-only research only when useful; at most 3 independent explore agents, with no mandatory plan agent.
-
-## Approach
-Write only the recommended approach in the plan file, starting with Context. Include the files to change, constraints, and a Verification section with concrete checks. Keep the plan proportional to the task and refine it as evidence arrives.
-
-## Approval
-When the plan is ready, call ExitPlanMode for approval. End with AskUserQuestion only for needed clarification, or ExitPlanMode for the handoff. Never request approval through prose or AskUserQuestion; wait for the runtime to exit plan mode.`;
-
-// Sparse Plan Mode reminder text used on intermediate iterations.
-const planModeSparseReminder = `Plan mode still active. Read-only except plan file (%PLAN_PATH%). Keep Context, Approach, files, and Verification current. Use AskUserQuestion for clarification; call ExitPlanMode for approval, never prose or AskUserQuestion. Do not implement before the runtime approval gate allows it.`;
-
-// Prompt for exiting Plan Mode
-const planModeExitTemplate = `## Exited Plan Mode
-
-Plan mode has ended. Proceed within the approved scope and current permissions.%EXTRA%`;
-
-// Prompt for re-entering Plan Mode: reminds the model that a plan file already exists and can be continued
-const planModeReentryTemplate = `Plan mode is active again. Review the existing plan at %PLAN_PATH%; refine or replace it as needed. Stay read-only except that file, and use ExitPlanMode for approval before implementation.`;
-
-// How many iterations before repeating the full reminder
-const reminderInterval = 5;
-
-/**
- * Builds the Plan Mode reminder, switching between full and sparse reminders based on the iteration count.
- * Shows the full reminder on the first iteration and every `reminderInterval` iterations thereafter;
- * returns the sparse reminder for other iterations to save tokens.
- */
 export function buildPlanModeReminder(
   planPath: string,
   planExist: boolean,
   iteration: number,
+  capabilities: PlanCapabilities = {},
 ): string {
-  let planFileInfo = `Plan file: ${planPath}`;
-  if (planExist) {
-    planFileInfo += `\nA plan file already exists at ${planPath}. You can read it and make incremental edits using the EditFile tool.`;
-  } else {
-    planFileInfo += `\nNo plan file exists yet. You should create your plan at ${planPath} using the WriteFile tool.`;
+  const {
+    canAskUser = true,
+    canExitPlanMode = true,
+    canSendMessage = false,
+    canWriteFile = true,
+    canEditFile = true,
+    canDelegate = true,
+    isCoordinator = false,
+  } = capabilities;
+  const writable = canWriteFile || (planExist && canEditFile);
+  const constraint = writable
+    ? "Read-only except the declared plan file."
+    : "Read-only. Return the plan in your final response; do not create or edit files.";
+  const clarification = isCoordinator
+    ? "State material unknowns in your user-facing response; teammate messages are not user clarification or approval."
+    : canAskUser
+      ? "Use AskUserQuestion only for needed clarification, never approval."
+      : canSendMessage
+        ? "Report material unknowns to the leader with SendMessage."
+        : "Return material unknowns to the parent in your final response.";
+  const approval = isCoordinator
+    ? "Return the synthesized plan to the user. Stay read-only until the user leaves plan mode with Shift+Tab. Do not submit your own plan to a teammate or treat a worker report as approval."
+    : canExitPlanMode
+      ? "When the plan is ready, call ExitPlanMode for approval; never request approval through prose. Wait for the runtime approval gate before implementation."
+      : canSendMessage
+        ? "When the plan is ready, finish the turn. The runtime will submit and automatically approve the plan, then resume execution under the current tool permissions. Do not ask the leader to approve it through SendMessage."
+        : "When the plan is ready, return it to the parent. This read-only run cannot enter implementation mode.";
+  if (iteration > 1 && (iteration - 1) % 5 !== 0) {
+    return `Plan mode still active. ${constraint} Plan file: ${planPath}. Keep Context, Approach, files, and Verification current. ${clarification} ${approval}`;
   }
-
-  // Resending the full reminder every iteration is too token-expensive, but
-  // sending it only once causes gradual drift; periodic repetition balances the two.
-  if ((iteration - 1) % reminderInterval === 0) {
-    return planModeFullReminder.replace("%PLAN_FILE_INFO%", () => planFileInfo);
+  const fileInfo = [`Plan file: ${planPath}`];
+  fileInfo.push(
+    planExist ? "A plan file already exists." : "No plan file exists yet.",
+  );
+  if (writable) {
+    fileInfo.push(
+      planExist && canEditFile
+        ? "Read it before updating it with EditFile."
+        : "Write the recommended plan there with WriteFile.",
+    );
   }
-
-  return planModeSparseReminder.replace("%PLAN_PATH%", () => planPath);
+  return [
+    "# Plan mode",
+    `${constraint} Do not run mutating tools, change configs, or commit. Do not begin implementation before the runtime approval gate allows it.`,
+    fileInfo.join("\n"),
+    `## Context\n${isCoordinator ? "Synthesize code evidence from workers; do not inspect files or run commands yourself." : "Inspect relevant code and reusable patterns."} ${clarification}${canDelegate ? " Delegate bounded read-only research only when useful; at most 3 independent explore agents, with no mandatory plan agent." : ""}`,
+    `## Approach\n${writable ? "Write" : "Return"} only the recommended approach, starting with Context. Include files to change, constraints, and a Verification section with concrete checks. Keep the plan proportional to the task; refine it as evidence arrives.`,
+    `## Approval\n${approval}`,
+  ].join("\n\n");
 }
 
 /**
@@ -83,11 +73,7 @@ export function buildPlanModeExitReminder(
   planPath: string,
   planExists: boolean,
 ): string {
-  let extra = "";
-  if (planExists) {
-    extra = ` The plan file is located at ${planPath} if you need to reference it.`;
-  }
-  return planModeExitTemplate.replace("%EXTRA%", () => extra);
+  return `## Exited Plan Mode\n\nPlan mode has ended. Proceed within the user's requested scope and current permissions.${planExists ? ` The plan file is located at ${planPath} if you need to reference it.` : ""}`;
 }
 
 /**
@@ -101,5 +87,5 @@ export function buildPlanModeReentryReminder(
   if (!planFileExists) {
     return "";
   }
-  return planModeReentryTemplate.replace("%PLAN_PATH%", () => planPath);
+  return `Plan mode is active again. Review the existing plan at ${planPath}; refine or replace it as needed. Stay read-only except that file, and use the current runtime approval gate before implementation.`;
 }

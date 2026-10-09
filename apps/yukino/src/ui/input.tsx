@@ -1,33 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { readdirSync, statSync } from "fs";
 import { join, relative } from "path";
 
 import Fuse from "fuse.js";
-import { Box, Text, useInput, usePaste, useStdout } from "ink";
+import { Box, Text, useInput, usePaste } from "ink";
 import type { Key } from "ink";
 import { useState, useMemo, useRef, useEffect } from "react";
 
+import { CursorText } from "./cursor-text.js";
 import { useInputDraft } from "./input-draft.js";
 import type { InputDraft } from "./input-draft.js";
 import {
@@ -44,6 +23,11 @@ import {
 import { getListWindowStart } from "./list-window.js";
 import { StatusBorder } from "./status-border.js";
 import { truncateToWidth, visibleWidth } from "./terminal-text.js";
+import {
+  useAvailableRows,
+  useTerminalDimensions,
+} from "./use-terminal-layout.js";
+import { parseUserBashCommand } from "./use-user-bash.js";
 
 import type { Command } from "@/commands/commands.js";
 import type { CommandUsageTracker } from "@/commands/usage-tracker.js";
@@ -57,11 +41,12 @@ import type { PermissionMode } from "@/permissions/index.js";
 import { SKIP_DIRS } from "@/tools/types.js";
 import { ICONS, THEME } from "@/ui/styles.js";
 
-const log = createChildLogger({ module: "terminal" });
+const log = createChildLogger({ module: "input" });
 
-// Suffix the command dropdown strips from a skill-backed command description
-// and re-renders in a muted style (detected via endsWith below).
-const SKILL_TAG = "[skill]";
+const COMMAND_TAGS = ["[skill]", "[custom]"];
+// @-mention cache lifetime: covers edits made outside the app (user editor,
+// git) that produce no fileFactsVersion bump.
+const FILE_CACHE_TTL_MS = 30_000;
 const SPINNER_FRAMES = [
   "⠋",
   "⠙",
@@ -75,7 +60,7 @@ const SPINNER_FRAMES = [
   "⠏",
 ] as const;
 
-function scanWorkdirFiles(root: string, max = 2000): string[] {
+function scanCwdFiles(root: string, max = 2000): string[] {
   const out: string[] = [];
   const walk = (dir: string, rel: string): void => {
     if (out.length >= max) {
@@ -85,7 +70,7 @@ function scanWorkdirFiles(root: string, max = 2000): string[] {
     try {
       names = readdirSync(dir);
     } catch (err) {
-      log.error({ err }, "terminal operation failed");
+      log.error({ err }, "cwd scan failed");
       return;
     }
     for (const name of names) {
@@ -101,7 +86,7 @@ function scanWorkdirFiles(root: string, max = 2000): string[] {
       try {
         isDir = statSync(full).isDirectory();
       } catch (err) {
-        log.error({ err }, "terminal operation failed");
+        log.error({ err }, "cwd scan failed");
         continue;
       }
       if (isDir) {
@@ -117,22 +102,18 @@ function scanWorkdirFiles(root: string, max = 2000): string[] {
 
 export type { InputDraft } from "./input-draft.js";
 
-const MODEL_CYCLE: PermissionMode[] = [
+const PERMISSION_MODE_CYCLE: Exclude<PermissionMode, "plan">[] = [
   "default",
   "acceptEdits",
-  "plan",
   "bypassPermissions",
 ];
 
 interface InputBoxProps {
-  onSubmit: (text: string) => void;
+  onSubmit: ((text: string) => void) | ((text: string) => boolean);
   /** Atomically pop the latest queued message, only when Up starts on a clean draft. */
   onRecallQueuedMessage?: () => string | undefined;
+  onOpenAgents?: () => void;
   disabled?: boolean;
-  /** Blocks Enter-to-send while still allowing typing/editing. No production
-   *  caller sets this: while the agent streams, plain text is steered into the
-   *  in-flight run instead (handleSubmit in app.tsx). */
-  submitDisabled?: boolean;
   history?: string[];
   commands?: Command[];
   thinkingLevels?: readonly ThinkingLevel[];
@@ -142,9 +123,13 @@ interface InputBoxProps {
   statusLabel?: string;
   usageTracker?: CommandUsageTracker;
   permMode?: PermissionMode;
-  onModeChange?: (mode: PermissionMode) => void;
-  workDir?: string;
+  onModeChange?: (mode: Exclude<PermissionMode, "plan">) => void;
+  cwd?: string;
   sessionId?: string;
+  /** Bumped by the parent when workspace file facts change (file writes, agent
+   *  run end); the @-mention cache rebuilds when it moves. A short TTL covers
+   *  external edits (user editor, git) that produce no bump. */
+  fileFactsVersion?: number;
   /** Receives an insert-at-cursor function so the parent can inject text
    *  (e.g. IDE at-mentions) into the input programmatically. */
   insertTextRef?: { current: ((text: string) => void) | null };
@@ -159,8 +144,8 @@ export function InputBox(props: InputBoxProps) {
   const {
     onSubmit,
     onRecallQueuedMessage,
+    onOpenAgents,
     disabled,
-    submitDisabled,
     history = [],
     commands = [],
     thinkingLevels = THINKING_LEVELS,
@@ -171,14 +156,15 @@ export function InputBox(props: InputBoxProps) {
     usageTracker,
     permMode = "default",
     onModeChange,
-    workDir = ".",
+    cwd = ".",
     sessionId = "default",
+    fileFactsVersion = 0,
     insertTextRef,
     clearRef,
     draftRef,
   } = props;
-  const { stdout } = useStdout();
-  const borderWidth = Math.max(1, stdout.columns || 80);
+  const { columns: borderWidth, rows: terminalRows } = useTerminalDimensions();
+  const availableRows = useAvailableRows(2);
   const horizontalPadding = borderWidth > 2 ? 1 : 0;
   const rowWidth = borderWidth - horizontalPadding * 2;
   const preferredColumnRef = useRef<{ width: number; column: number } | null>(
@@ -206,6 +192,7 @@ export function InputBox(props: InputBoxProps) {
   const pasteImageInflightRef = useRef(false);
   const pasteGenerationRef = useRef(0);
   const [isPastingImage, setIsPastingImage] = useState(false);
+  const [cwdFiles, setCwdFiles] = useState<string[]>([]);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -257,8 +244,8 @@ export function InputBox(props: InputBoxProps) {
       return;
     }
     clearRef.current = () => {
-      // While disabled (dialog overlay) the draft is hidden; leave it intact
-      // so it reappears unchanged when the input re-enables.
+      // While disabled (provider switching) the draft is hidden; leave it
+      // intact so it reappears unchanged when the input re-enables.
       if (disabled) {
         return;
       }
@@ -367,7 +354,29 @@ export function InputBox(props: InputBoxProps) {
     return { filteredCmds: result, recentCount: 0 };
   }, [lines, commands, isMultiline, usageTracker, thinkingLevels]);
 
+  const borderRows = Math.min(2, Math.max(0, availableRows - 1));
+  const maxVisibleLines = Math.max(
+    1,
+    Math.min(Math.floor(terminalRows * 0.3), availableRows - borderRows),
+  );
+  const inputRows = useMemo(
+    () => layoutInputRows(lines, rowWidth, pastes),
+    [lines, rowWidth, pastes],
+  );
+  const completionRows = Math.max(
+    0,
+    Math.min(
+      8,
+      availableRows -
+        borderRows -
+        Math.min(inputRows.length, maxVisibleLines) -
+        1 -
+        Number(!!pasteError || isPastingImage),
+    ),
+  );
   const showDropdown =
+    !disabled &&
+    completionRows > 0 &&
     filteredCmds.length > 0 &&
     lines[0].startsWith("/") &&
     !isMultiline &&
@@ -376,19 +385,25 @@ export function InputBox(props: InputBoxProps) {
   const commandWindowStart = getListWindowStart(
     filteredCmds.length,
     dropdownIndex,
-    8,
+    completionRows,
   );
   const visibleCommands = filteredCmds.slice(
     commandWindowStart,
-    commandWindowStart + 8,
+    commandWindowStart + completionRows,
   );
 
-  // @-file-mention autocomplete: active when the text before the caret ends with an
-  // @<partial> token (and we're not typing a slash command).
-  const fileCacheRef = useRef<string[] | null>(null);
+  // @-file-mention autocomplete is disabled for slash commands and literal shell input.
+  const fileCacheRef = useRef<{
+    key: string;
+    files: string[];
+    scannedAt: number;
+  } | null>(null);
 
   const atQuery = useMemo(() => {
-    if (lines[0].startsWith("/")) {
+    if (
+      lines[0].startsWith("/") ||
+      parseUserBashCommand(lines.join("\n")) !== null
+    ) {
       return null;
     }
     const line = (lines[cursorLine] ?? "").slice(0, cursorCol);
@@ -396,31 +411,62 @@ export function InputBox(props: InputBoxProps) {
     return m ? m[1] : null;
   }, [lines, cursorLine, cursorCol]);
 
+  const atCompletionActive = atQuery !== null;
+  useEffect(() => {
+    if (!atCompletionActive) {
+      setCwdFiles([]);
+      return;
+    }
+    const key = `${cwd}::${String(fileFactsVersion)}`;
+    const cache = fileCacheRef.current;
+    if (
+      cache?.key === key &&
+      Date.now() - cache.scannedAt < FILE_CACHE_TTL_MS
+    ) {
+      setCwdFiles(cache.files);
+      return;
+    }
+    const handle = setImmediate(() => {
+      const files = scanCwdFiles(cwd);
+      fileCacheRef.current = { key, files, scannedAt: Date.now() };
+      setCwdFiles(files);
+    });
+    return () => {
+      clearImmediate(handle);
+    };
+  }, [atCompletionActive, fileFactsVersion, cwd]);
+
   const filteredFiles = useMemo(() => {
     if (atQuery === null) {
       return [];
     }
-
-    fileCacheRef.current ??= scanWorkdirFiles(workDir);
-
-    const files = fileCacheRef.current;
     const q = atQuery.toLowerCase();
     if (!q) {
-      return files.slice(0, 8);
+      return cwdFiles.slice(0, 8);
     }
-    const pre = files.filter((f) => f.toLowerCase().startsWith(q));
-    const sub = files.filter(
+    const pre = cwdFiles.filter((f) => f.toLowerCase().startsWith(q));
+    const sub = cwdFiles.filter(
       (f) => !f.toLowerCase().startsWith(q) && f.toLowerCase().includes(q),
     );
     return [...pre, ...sub].slice(0, 8);
-  }, [atQuery, workDir]);
+  }, [atQuery, cwdFiles]);
 
   const showAtDropdown =
     !disabled &&
+    completionRows > 0 &&
     !dropdownDismissed &&
     !showDropdown &&
     atQuery !== null &&
     filteredFiles.length > 0;
+  const fileWindowStart = getListWindowStart(
+    filteredFiles.length,
+    dropdownIndex,
+    completionRows,
+  );
+  const visibleFiles = filteredFiles.slice(
+    fileWindowStart,
+    fileWindowStart + completionRows,
+  );
 
   const completeAt = (path: string) => {
     const line = lines[cursorLine] ?? "";
@@ -480,7 +526,7 @@ export function InputBox(props: InputBoxProps) {
   };
 
   // Save the clipboard image under the session's file-history dir and insert
-  // a workDir-relative @ mention; on submit, at-expansion inlines it as an
+  // a cwd-relative @ mention; on submit, at-expansion inlines it as an
   // image content block like any other @image reference.
   const pasteImageFromClipboard = async () => {
     if (disabled || pasteImageInflightRef.current) {
@@ -491,12 +537,12 @@ export function InputBox(props: InputBoxProps) {
     setIsPastingImage(true);
     setPasteError("");
     try {
-      const result = await saveClipboardImage(workDir, sessionId);
+      const result = await saveClipboardImage(sessionId);
       if (!mountedRef.current || generation !== pasteGenerationRef.current) {
         return;
       }
       if (result.ok) {
-        insertPastedText(`'@${relative(workDir, result.value)}'`, true);
+        insertPastedText(`'@${relative(cwd, result.value)}'`, true);
       } else {
         setPasteError(result.reason);
       }
@@ -526,13 +572,10 @@ export function InputBox(props: InputBoxProps) {
   );
 
   const handleInput = (input: string, key: Key) => {
-    // Ink can deliver another key before React commits the preceding paste.
+    // Ink can deliver another key before React commits the preceding edit.
     const { lines, cursorLine, cursorCol, historyIndex, historyDraft, pastes } =
       getDraft();
     const isMultiline = lines.length > 1;
-    if (input.includes("[<") && /\[<\d+;\d+;\d+[Mm]/.test(input)) {
-      return;
-    }
     if (!key.upArrow && !key.downArrow) {
       preferredColumnRef.current = null;
     }
@@ -621,13 +664,14 @@ export function InputBox(props: InputBoxProps) {
       updated[cursorLine] = finalLine;
       const finalValue = expandPastes(updated.join("\n"), pastes).trim();
       if (finalValue) {
-        // Sending is locked (submitDisabled, or a clipboard-image read still
-        // in flight): keep the draft instead of submitting, so nothing is
-        // silently dropped.
-        if (submitDisabled || pasteImageInflightRef.current) {
+        // A clipboard-image read is still in flight: keep the draft instead
+        // of submitting, so nothing is silently dropped.
+        if (pasteImageInflightRef.current) {
           return;
         }
-        onSubmit(finalValue);
+        if (onSubmit(finalValue) === false) {
+          return;
+        }
         setLines([""]);
         setCursorLine(0);
         setCursorCol(0);
@@ -642,8 +686,10 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if ((input === "\x1b[Z" || (key.tab && key.shift)) && onModeChange) {
-      const idx = MODEL_CYCLE.indexOf(permMode);
-      const next = MODEL_CYCLE[(idx + 1) % MODEL_CYCLE.length];
+      const idx =
+        permMode === "plan" ? -1 : PERMISSION_MODE_CYCLE.indexOf(permMode);
+      const next =
+        PERMISSION_MODE_CYCLE[(idx + 1) % PERMISSION_MODE_CYCLE.length];
       onModeChange(next);
       return;
     }
@@ -665,11 +711,11 @@ export function InputBox(props: InputBoxProps) {
       return;
     }
 
-    if (key.ctrl && input === "a") {
+    if (key.home || (key.ctrl && input === "a")) {
       setCursorCol(0);
       return;
     }
-    if (key.ctrl && input === "e") {
+    if (key.end || (key.ctrl && input === "e")) {
       setCursorCol((lines[cursorLine] ?? "").length);
       return;
     }
@@ -700,6 +746,7 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if (key.backspace || key.delete) {
+      setDropdownIndex(0);
       const line = lines[cursorLine] ?? "";
       if (key.delete && cursorCol < line.length) {
         const nextCol = inputBoundary(line, cursorCol, "next", pastes);
@@ -819,37 +866,37 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if (key.downArrow) {
-      if (!isMultiline || historyIndex >= 0) {
-        if (historyIndex >= 0) {
-          preferredColumnRef.current = null;
+      if (historyIndex === -1) {
+        onOpenAgents?.();
+        return;
+      }
+      preferredColumnRef.current = null;
+      if (historyIndex > 0) {
+        const nextIdx = historyIndex - 1;
+        setHistoryIndex(nextIdx);
+        const entry = history[history.length - 1 - nextIdx] ?? "";
+        const entryLines = entry.split("\n");
+        setLines(entryLines);
+        if (pastes) {
+          setPastes(undefined);
         }
-        if (historyIndex > 0) {
-          const nextIdx = historyIndex - 1;
-          setHistoryIndex(nextIdx);
-          const entry = history[history.length - 1 - nextIdx] ?? "";
-          const entryLines = entry.split("\n");
-          setLines(entryLines);
-          if (pastes) {
-            setPastes(undefined);
+        setCursorLine(0);
+        setCursorCol(entryLines[0].length);
+      } else {
+        setHistoryIndex(-1);
+        const draft = historyDraft;
+        setHistoryDraft(null);
+        if (draft) {
+          setLines(draft.lines);
+          setCursorLine(draft.cursorLine);
+          setCursorCol(draft.cursorCol);
+          if (draft.pastes || pastes) {
+            setPastes(draft.pastes);
           }
+        } else {
+          setLines([""]);
           setCursorLine(0);
-          setCursorCol(entryLines[0].length);
-        } else if (historyIndex === 0) {
-          setHistoryIndex(-1);
-          const draft = historyDraft;
-          setHistoryDraft(null);
-          if (draft) {
-            setLines(draft.lines);
-            setCursorLine(draft.cursorLine);
-            setCursorCol(draft.cursorCol);
-            if (draft.pastes || pastes) {
-              setPastes(draft.pastes);
-            }
-          } else {
-            setLines([""]);
-            setCursorLine(0);
-            setCursorCol(0);
-          }
+          setCursorCol(0);
         }
       }
       return;
@@ -871,18 +918,15 @@ export function InputBox(props: InputBoxProps) {
   useInput(handleInput, { isActive: !disabled });
 
   const borderColor =
-    requestedBorderColor ??
-    (inputState === "error"
-      ? THEME.error
-      : inputState === "idle"
-        ? THEME.borderMuted
-        : THEME.thinkingHigh);
-  const inputRows = useMemo(
-    () => layoutInputRows(lines, rowWidth, pastes),
-    [lines, rowWidth, pastes],
-  );
+    inputState !== "error" && lines[0].startsWith("!")
+      ? THEME.bashMode
+      : (requestedBorderColor ??
+        (inputState === "error"
+          ? THEME.error
+          : inputState === "idle"
+            ? THEME.borderMuted
+            : THEME.thinkingHigh));
   const visualCursor = locateInputCursor(inputRows, cursorLine, cursorCol);
-  const maxVisibleLines = Math.max(5, Math.floor((stdout.rows || 24) * 0.3));
   const visibleStart = Math.max(
     0,
     Math.min(
@@ -919,13 +963,15 @@ export function InputBox(props: InputBoxProps) {
 
   return (
     <Box flexDirection="column" width={borderWidth}>
-      <StatusBorder
-        width={borderWidth}
-        color={borderColor}
-        statusLabel={statusLabel}
-        spinner={inputState === "error" ? "!" : spinner}
-        hiddenLineCount={hiddenAbove}
-      />
+      {borderRows === 2 && (
+        <StatusBorder
+          width={borderWidth}
+          color={borderColor}
+          statusLabel={statusLabel}
+          spinner={inputState === "error" ? "!" : spinner}
+          hiddenLineCount={hiddenAbove}
+        />
+      )}
       <Box
         flexDirection="column"
         paddingLeft={horizontalPadding}
@@ -956,34 +1002,48 @@ export function InputBox(props: InputBoxProps) {
               .join("");
             const atEnd = caret.offset === (lines[row.line] ?? "").length;
             return (
-              <Text key={rowIndex} wrap="truncate-end">
-                {before}
-                <Text inverse>{caret.text}</Text>
-                {after}
-                {atEnd && row.line === 0 && ghostText ? (
-                  <Text color={THEME.dim}>
-                    {truncateToWidth(ghostText, rowWidth - row.width)}
-                  </Text>
-                ) : null}
-              </Text>
+              <CursorText
+                key={rowIndex}
+                before={before}
+                current={caret.text}
+                after={
+                  <>
+                    {after}
+                    {atEnd &&
+                    row.line === 0 &&
+                    ghostText &&
+                    cursorCol === lines[0].length ? (
+                      <Text color={THEME.dim}>
+                        {truncateToWidth(ghostText, rowWidth - row.width)}
+                      </Text>
+                    ) : null}
+                  </>
+                }
+              />
             );
           })
         )}
       </Box>
-      <StatusBorder
-        width={borderWidth}
-        color={borderColor}
-        hiddenLineCount={hiddenBelow}
-        direction="down"
-      />
+      {borderRows > 0 && (
+        <StatusBorder
+          width={borderWidth}
+          color={borderColor}
+          hiddenLineCount={hiddenBelow}
+          direction="down"
+        />
+      )}
       {!disabled && isPastingImage && (
-        <Box paddingLeft={2}>
-          <Text color={THEME.muted}>Reading clipboard image…</Text>
+        <Box paddingLeft={horizontalPadding}>
+          <Text color={THEME.muted} wrap="truncate-end">
+            Reading clipboard image…
+          </Text>
         </Box>
       )}
       {!disabled && pasteError && (
-        <Box paddingLeft={2}>
-          <Text color={THEME.error}>Error: {pasteError}</Text>
+        <Box paddingLeft={horizontalPadding}>
+          <Text color={THEME.error} wrap="truncate-end">
+            Error: {pasteError}
+          </Text>
         </Box>
       )}
       {showDropdown && (
@@ -992,7 +1052,7 @@ export function InputBox(props: InputBoxProps) {
             {recentCount > 0 && commandWindowStart === 0
               ? "RECENTLY USED"
               : "COMMANDS"}
-            {filteredCmds.length > 8
+            {filteredCmds.length > completionRows
               ? ` (${String(dropdownIndex + 1)}/${String(filteredCmds.length)})`
               : ""}
           </Text>
@@ -1000,10 +1060,8 @@ export function InputBox(props: InputBoxProps) {
             const selected =
               commandWindowStart + visibleIndex === dropdownIndex;
             const desc = cmd.description.replace(/\s+/g, " ").trim();
-            const isSkill = desc.endsWith(SKILL_TAG);
-            const body = isSkill
-              ? desc.slice(0, -SKILL_TAG.length).trimEnd()
-              : desc;
+            const tag = COMMAND_TAGS.find((tag) => desc.endsWith(tag));
+            const body = tag ? desc.slice(0, -tag.length).trimEnd() : desc;
             const label = truncateToWidth(
               `${selected ? ICONS.arrow : " "} /${cmd.name}`,
               rowWidth,
@@ -1012,7 +1070,7 @@ export function InputBox(props: InputBoxProps) {
               rowWidth -
               visibleWidth(label) -
               1 -
-              (isSkill ? visibleWidth(SKILL_TAG) + 1 : 0);
+              (tag ? visibleWidth(tag) + 1 : 0);
             const showDescription = borderWidth >= 60 && descriptionWidth >= 10;
             return (
               <Box
@@ -1029,10 +1087,10 @@ export function InputBox(props: InputBoxProps) {
                   {label}
                   {showDescription &&
                     ` ${truncateToWidth(body, descriptionWidth)}`}
-                  {showDescription && isSkill && (
+                  {showDescription && tag && (
                     <Text color={selected ? THEME.accent : THEME.dim}>
                       {" "}
-                      {SKILL_TAG}
+                      {tag}
                     </Text>
                   )}
                 </Text>
@@ -1046,22 +1104,28 @@ export function InputBox(props: InputBoxProps) {
           <Text color={THEME.dim} wrap="truncate-end">
             {"FILES"}
           </Text>
-          {filteredFiles.map((file, i) => (
+          {visibleFiles.map((file, i) => (
             <Box
               key={file}
               backgroundColor={
-                i === dropdownIndex ? THEME.selectedBg : undefined
+                fileWindowStart + i === dropdownIndex
+                  ? THEME.selectedBg
+                  : undefined
               }
               paddingLeft={horizontalPadding}
               paddingRight={horizontalPadding}
               width="100%"
             >
               <Text
-                color={i === dropdownIndex ? THEME.accent : THEME.muted}
+                color={
+                  fileWindowStart + i === dropdownIndex
+                    ? THEME.accent
+                    : THEME.muted
+                }
                 wrap="truncate-end"
               >
                 {truncateToWidth(
-                  `${i === dropdownIndex ? ICONS.arrow : " "} @${file}`,
+                  `${fileWindowStart + i === dropdownIndex ? ICONS.arrow : " "} @${file}`,
                   rowWidth,
                 )}
               </Text>

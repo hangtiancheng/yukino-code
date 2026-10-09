@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -73,7 +51,7 @@ class MockClient implements LLMClient {
   }
 }
 
-function makeWorkDir(): string {
+function makeCwd(): string {
   return mkdtempSync(join(tmpdir(), "yukino-bash-route-"));
 }
 
@@ -85,7 +63,7 @@ describe("background bash routing for subagent loops", () => {
     bash.taskManager = instanceManager;
 
     const result = await bash.execute(
-      { workDir: makeWorkDir(), taskManager: ctxManager },
+      { cwd: makeCwd(), taskManager: ctxManager },
       { command: "printf routed", run_in_background: true },
     );
     const match = /task_id: (bash-\d+)\)/.exec(result.output);
@@ -135,9 +113,9 @@ describe("background bash routing for subagent loops", () => {
     const agent = new Agent({
       client,
       registry,
-      checker: new PermissionChecker(makeWorkDir(), "bypassPermissions"),
+      checker: new PermissionChecker(makeCwd(), "bypassPermissions"),
       conversation,
-      workDir: makeWorkDir(),
+      cwd: makeCwd(),
       taskManager: subManager,
     });
     const events: AgentEvent[] = [];
@@ -156,7 +134,7 @@ describe("background bash routing for subagent loops", () => {
     const registry = new ToolRegistry();
     registry.register(bash);
 
-    const workDir = makeWorkDir();
+    const cwd = makeCwd();
     const conversation = new ConversationManager();
     conversation.addUserMessage("run it");
 
@@ -187,9 +165,9 @@ describe("background bash routing for subagent loops", () => {
     const agent = new Agent({
       client,
       registry,
-      checker: new PermissionChecker(workDir, "bypassPermissions"),
+      checker: new PermissionChecker(cwd, "bypassPermissions"),
       conversation,
-      workDir,
+      cwd,
       taskManager: subManager,
       notificationFn: () =>
         subManager.drainNotifications().map(formatAgentTaskNotification),
@@ -204,9 +182,10 @@ describe("background bash routing for subagent loops", () => {
     const backgrounded = events.find(
       (e) => e.type === "tool_result" && e.toolId === "b1",
     );
+    const taskId = subManager.list()[0]?.id;
     expect(
       backgrounded?.type === "tool_result" && backgrounded.output,
-    ).toContain("task_id: bash-1");
+    ).toContain(`task_id: ${taskId}`);
 
     // ...and its completion reached this loop (not some other drain) as a
     // system reminder on the following turn.
@@ -215,7 +194,7 @@ describe("background bash routing for subagent loops", () => {
       .map((m) => contentToText(m.content))
       .join("\n");
     expect(allText).toContain(
-      '<task-notification task_id="bash-1" status="completed">',
+      `<task-notification task_id="${taskId}" status="completed">`,
     );
     expect(allText).toContain("routed-agent");
     // Nothing left undrained for whoever might ask later.
@@ -284,7 +263,7 @@ describe("background bash routing for subagent loops", () => {
         model: "parent-model",
         thinking: "high",
       } satisfies ProviderConfig,
-      makeWorkDir(),
+      makeCwd(),
       undefined,
       undefined,
       undefined,

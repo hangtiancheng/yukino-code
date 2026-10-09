@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type * as fs from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 
@@ -27,9 +5,10 @@ import chalk from "chalk";
 import { render, renderToString } from "ink";
 import type { Instance, Key } from "ink";
 import type * as Ink from "ink";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MockInstance } from "vitest";
 
 import type { Command } from "@/commands/commands.js";
 import { saveClipboardImage } from "@/images/clipboard.js";
@@ -39,11 +18,7 @@ import type { InputDraft } from "@/ui/input.js";
 import { InteractionDock } from "@/ui/interaction-dock.js";
 import { StatusBorder } from "@/ui/status-border.js";
 import { ICONS, THEME } from "@/ui/styles.js";
-import {
-  truncateToWidth,
-  visibleWidth,
-  wrapToLines,
-} from "@/ui/terminal-text.js";
+import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
 
 const terminal = vi.hoisted(() => {
   const input: { current: ((text: string, key: Key) => void) | null } = {
@@ -58,10 +33,18 @@ const terminal = vi.hoisted(() => {
 vi.mock("ink", async (importOriginal) => {
   const ink = await importOriginal<typeof Ink>();
   const { useEffect } = await import("react");
+  const stdout = {
+    get columns() {
+      return terminal.columns;
+    },
+    get rows() {
+      return terminal.rows;
+    },
+  };
   return {
     ...ink,
     useStdout: () => ({
-      stdout: { columns: terminal.columns, rows: terminal.rows },
+      stdout,
     }),
     useInput: (
       handler: (text: string, key: Key) => void,
@@ -126,11 +109,12 @@ const footerProps: ComponentProps<typeof Footer> = {
   permissionMode: "plan",
   provider: "very-long-provider-name",
   sessionId: "01234567-89ab-cdef-0123-456789abcdef",
-  workDir: "/workspace/project",
+  cwd: "/workspace/project",
 };
 const stats = "↑1.3k ↓230 20.0%/200k";
 const initialColorLevel = chalk.level;
 let instance: Instance | undefined;
+let stdoutWrite: MockInstance<NodeJS.WriteStream["write"]>;
 
 function draftRef(
   lines = [""],
@@ -198,7 +182,10 @@ function footer(
   );
 }
 
-function mount(props: Partial<ComponentProps<typeof InputBox>> = {}) {
+function mount(
+  props: Partial<ComponentProps<typeof InputBox>> = {},
+  debug = false,
+) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   act(() => {
     instance = render(
@@ -206,6 +193,7 @@ function mount(props: Partial<ComponentProps<typeof InputBox>> = {}) {
       {
         interactive: false,
         patchConsole: false,
+        debug,
       },
     );
   });
@@ -229,6 +217,16 @@ function press(text = "", overrides: Partial<Key> = {}) {
   });
 }
 
+function flushCwdScan() {
+  act(() => {
+    vi.runOnlyPendingTimers();
+  });
+}
+
+function lastTerminalFrame(): string {
+  return String(stdoutWrite.mock.calls.at(-1)?.[0] ?? "");
+}
+
 beforeEach(() => {
   terminal.columns = 80;
   terminal.rows = 24;
@@ -238,7 +236,9 @@ beforeEach(() => {
   chalk.level = 0;
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", false);
-  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  stdoutWrite = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation(() => true);
 });
 
 afterEach(() => {
@@ -250,6 +250,45 @@ afterEach(() => {
 });
 
 describe("composer status borders", () => {
+  it("supports Home and End without modifying a Unicode draft", () => {
+    const ref = draftRef(["あ😁z"]);
+    mount({ draftRef: ref });
+    press("", { home: true });
+    expect(ref.current?.cursorCol).toBe(0);
+    press("", { end: true });
+    expect(ref.current?.cursorCol).toBe("あ😁z".length);
+    expect(ref.current?.lines).toEqual(["あ😁z"]);
+  });
+
+  it("keeps completion lists bounded on short terminals and the selected item visible", () => {
+    terminal.rows = 12;
+    const ref = draftRef(["/"]);
+    const manyCommands = Array.from({ length: 20 }, (_, index) => ({
+      ...commands[0],
+      name: `command-${String(index).padStart(2, "0")}`,
+    }));
+    mount({ draftRef: ref, commands: manyCommands }, true);
+    const first = stripVTControlCharacters(lastTerminalFrame());
+    expect(first.split("\n").length).toBeLessThanOrEqual(terminal.rows - 2);
+    expect(first).not.toContain("command-08");
+    for (let index = 0; index < 5; index++) {
+      press("", { downArrow: true });
+    }
+    expect(stripVTControlCharacters(lastTerminalFrame())).toContain(
+      `${ICONS.arrow} /command-05`,
+    );
+    press("", { tab: true });
+    expect(ref.current?.lines).toEqual(["/command-05 "]);
+  });
+
+  it("does not show end-of-line slash ghost text while editing in the middle", () => {
+    const output = composer(40, {
+      commands,
+      draftRef: draftRef(["/he"], 0, 1),
+    });
+    expect(stripVTControlCharacters(output).split("\n")[1]).not.toContain("lp");
+  });
+
   it("keeps a useful truncated status on narrow terminals", () => {
     const output = renderToString(
       createElement(StatusBorder, {
@@ -356,10 +395,10 @@ describe("composer status borders", () => {
     },
   );
 
-  it("preserves the inverse cursor in the input body", () => {
+  it("preserves the character under the native cursor without inverse video", () => {
     chalk.level = 3;
     const output = composer(30, { draftRef: draftRef(["abc"], 0, 1) });
-    expect(output).toContain("\x1b[7mb\x1b[27m");
+    expect(output).not.toContain("\x1b[7m");
     expect(stripVTControlCharacters(output)).toContain("abc");
   });
 });
@@ -369,6 +408,7 @@ describe("composer completion rows", () => {
     const ref = draftRef(["check @one"]);
     const onEscape = vi.fn();
     mount({ draftRef: ref, onEscape });
+    flushCwdScan();
     press("", { escape: true });
     expect(ref.current?.lines).toEqual(["check @one"]);
     expect(ref.current?.cursorCol).toBe(10);
@@ -382,6 +422,7 @@ describe("composer completion rows", () => {
   it("completes the @ token at the caret and preserves the rest of the line", () => {
     const ref = draftRef(["check @one please"], 0, 10);
     mount({ draftRef: ref });
+    flushCwdScan();
     press("", { tab: true });
     expect(ref.current?.lines).toEqual(["check @one.ts please"]);
     expect(ref.current?.cursorCol).toBe(14);
@@ -391,20 +432,100 @@ describe("composer completion rows", () => {
     const ref = draftRef(["@one"]);
     const onSubmit = vi.fn();
     mount({ draftRef: ref, onSubmit });
+    flushCwdScan();
     press("", { escape: true });
     press("", { return: true });
     expect(onSubmit).toHaveBeenCalledWith("@one");
   });
-  it("hides descriptions and skill tags on narrow slash lists", () => {
-    const narrow = composer(30, { commands, draftRef: draftRef(["/"]) });
-    expect(narrow).toContain(`${ICONS.arrow} /help`);
-    expect(narrow).toContain("/model");
-    expect(narrow).not.toContain("Show all");
-    expect(narrow).not.toContain("[skill]");
-    const wide = composer(80, { commands, draftRef: draftRef(["/"]) });
-    expect(wide).toContain("Show all available commands");
-    expect(wide).toContain("Choose the active model [skill]");
+
+  it.each(["!", "!!"])(
+    "submits %s shell input literally without @-mention completion",
+    (prefix) => {
+      const ref = draftRef([`${prefix} printf @one`]);
+      const onSubmit = vi.fn();
+      mount({ draftRef: ref, onSubmit });
+      flushCwdScan();
+      press("", { return: true });
+      expect(onSubmit).toHaveBeenCalledExactlyOnceWith(`${prefix} printf @one`);
+      expect(ref.current?.lines).toEqual([""]);
+    },
+  );
+
+  it("keeps a rejected !! command editable, including collapsed pastes", () => {
+    const ref = draftRef(["!! "]);
+    const onSubmit = vi.fn().mockReturnValue(false);
+    mount({ draftRef: ref, onSubmit });
+    const script = "printf line\\n\n".repeat(12);
+    act(() => {
+      terminal.paste.current?.(script);
+    });
+    const draft = structuredClone(ref.current);
+    press("", { return: true });
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(`!! ${script}`.trim());
+    expect(ref.current).toEqual(draft);
+    onSubmit.mockReturnValue(true);
+    press("", { return: true });
+    expect(ref.current?.lines).toEqual([""]);
+    expect(ref.current?.pastes).toBeUndefined();
   });
+
+  it.each(["!", "!!"])(
+    "keeps a bare %s prefix in the editor when submission is rejected",
+    (prefix) => {
+      const ref = draftRef([prefix]);
+      const onSubmit = vi.fn().mockReturnValue(false);
+      mount({ draftRef: ref, onSubmit });
+      press("", { return: true });
+      expect(onSubmit).toHaveBeenCalledExactlyOnceWith(prefix);
+      expect(ref.current?.lines).toEqual([prefix]);
+      expect(ref.current?.cursorCol).toBe(prefix.length);
+    },
+  );
+  it.each(["[skill]", "[custom]"])(
+    "hides descriptions and %s tags on narrow slash lists",
+    (tag) => {
+      const taggedCommands = [
+        commands[0],
+        { ...commands[1], description: `Choose the active model ${tag}` },
+      ];
+      const narrow = composer(30, {
+        commands: taggedCommands,
+        draftRef: draftRef(["/"]),
+      });
+      expect(narrow).toContain(`${ICONS.arrow} /help`);
+      expect(narrow).toContain("/model");
+      expect(narrow).not.toContain("Show all");
+      expect(narrow).not.toContain(tag);
+      const wide = composer(80, {
+        commands: taggedCommands,
+        draftRef: draftRef(["/"]),
+      });
+      expect(wide).toContain("Show all available commands");
+      expect(wide).toContain(`Choose the active model ${tag}`);
+    },
+  );
+
+  it.each(["[skill]", "[custom]"])(
+    "preserves %s when truncating long slash-command descriptions",
+    (tag) => {
+      const output = composer(80, {
+        commands: [
+          {
+            ...commands[0],
+            name: "commit-push",
+            description: `${"提交全部改动并推送到远程仓库".repeat(10)} ${tag}`,
+          },
+        ],
+        draftRef: draftRef(["/"]),
+      });
+      const row = output
+        .split("\n")
+        .find((line) => line.includes("/commit-push"));
+      expect(row).toContain("…");
+      expect(row?.trimEnd().endsWith(tag)).toBe(true);
+      expect(visibleWidth(row ?? "")).toBeLessThanOrEqual(80);
+    },
+  );
 
   it("keeps long wide-character command names in a single row", () => {
     const longCommand: Command = {
@@ -424,10 +545,16 @@ describe("composer completion rows", () => {
 
   it("paints a full-width selected @file row and aligns its arrow with slash rows", () => {
     chalk.level = 3;
-    const output = composer(30, {
-      workDir: "/virtual",
-      draftRef: draftRef(["@"]),
-    });
+    terminal.columns = 30;
+    mount(
+      {
+        cwd: "/virtual",
+        draftRef: draftRef(["@"]),
+      },
+      true,
+    );
+    flushCwdScan();
+    const output = lastTerminalFrame();
     const row =
       output.split("\n").find((line) => line.includes("@one.ts")) ?? "";
     expect(
@@ -441,10 +568,16 @@ describe("composer completion rows", () => {
 
   it("clips long @file suggestions to one row", () => {
     terminal.files = ["とても長いファイルパス/".repeat(8) + "file.ts"];
-    const output = composer(20, {
-      workDir: "/virtual",
-      draftRef: draftRef(["@"]),
-    });
+    terminal.columns = 20;
+    mount(
+      {
+        cwd: "/virtual",
+        draftRef: draftRef(["@"]),
+      },
+      true,
+    );
+    flushCwdScan();
+    const output = lastTerminalFrame();
     expect(output.split("\n")).toHaveLength(5);
     expect(output.split("\n").every((line) => visibleWidth(line) <= 20)).toBe(
       true,
@@ -453,6 +586,62 @@ describe("composer completion rows", () => {
 });
 
 describe("composer queue recall and visual navigation", () => {
+  it.each(["focused", "agent"] as const)(
+    "opens agents from the last input line while %s without changing the draft",
+    (inputState) => {
+      const ref = draftRef(["first", "last"], 1, 2);
+      const onOpenAgents = vi.fn();
+      mount({ draftRef: ref, onOpenAgents, inputState });
+      press("", { downArrow: true });
+      expect(onOpenAgents).toHaveBeenCalledOnce();
+      expect(ref.current).toEqual(draftRef(["first", "last"], 1, 2).current);
+    },
+  );
+
+  it("moves through wrapped rows and logical lines before opening agents", () => {
+    terminal.columns = 16;
+    const ref = draftRef(["abcdefghijklmnop", "last"], 0, 0);
+    const onOpenAgents = vi.fn();
+    mount({ draftRef: ref, onOpenAgents });
+    press("", { downArrow: true });
+    expect(ref.current?.cursorLine).toBe(0);
+    expect(ref.current?.cursorCol).toBeGreaterThan(0);
+    expect(onOpenAgents).not.toHaveBeenCalled();
+    press("", { downArrow: true });
+    expect(ref.current?.cursorLine).toBe(1);
+    expect(onOpenAgents).not.toHaveBeenCalled();
+    press("", { downArrow: true });
+    expect(onOpenAgents).toHaveBeenCalledOnce();
+  });
+
+  it.each(["/", "@"])(
+    "keeps %s completion navigation ahead of the agents shortcut",
+    (text) => {
+      const ref = draftRef([text]);
+      const onOpenAgents = vi.fn();
+      mount({ draftRef: ref, commands, onOpenAgents, cwd: "/virtual" });
+      flushCwdScan();
+      press("", { downArrow: true });
+      expect(onOpenAgents).not.toHaveBeenCalled();
+      press("", { escape: true });
+      press("", { downArrow: true });
+      expect(onOpenAgents).toHaveBeenCalledOnce();
+      expect(ref.current?.lines).toEqual([text]);
+    },
+  );
+
+  it("restores the history draft before a subsequent Down opens agents", () => {
+    const ref = draftRef(["draft"], 0, 3);
+    const onOpenAgents = vi.fn();
+    mount({ draftRef: ref, history: ["previous"], onOpenAgents });
+    press("", { upArrow: true });
+    press("", { downArrow: true });
+    expect(onOpenAgents).not.toHaveBeenCalled();
+    expect(ref.current).toEqual(draftRef(["draft"], 0, 3).current);
+    press("", { downArrow: true });
+    expect(onOpenAgents).toHaveBeenCalledOnce();
+  });
+
   it("falls back to history when the queue is empty and restores the clean draft", () => {
     const ref = draftRef();
     const onRecallQueuedMessage = vi.fn(() => undefined);
@@ -580,7 +769,7 @@ describe("composer queue recall and visual navigation", () => {
       draftRef: ref,
       onSubmit,
       onRecallQueuedMessage: () => "queued",
-      workDir: "/virtual",
+      cwd: "/virtual",
     });
     act(() => {
       terminal.paste.current?.("");
@@ -635,6 +824,7 @@ describe("composer queue recall and visual navigation", () => {
     const ref = draftRef(["first", "@"], 1);
     const onRecallQueuedMessage = vi.fn(() => "queued");
     mount({ draftRef: ref, onRecallQueuedMessage });
+    flushCwdScan();
     press("", { upArrow: true });
     expect(ref.current?.cursorLine).toBe(1);
     expect(ref.current?.cursorCol).toBe(1);
@@ -741,19 +931,19 @@ describe("composer queue recall and visual navigation", () => {
   });
 
   it.each([1, 20, 40, 80])(
-    "bounds the visual viewport and inverse caret at width %i",
+    "bounds the visual viewport and native caret at width %i",
     (width) => {
       chalk.level = 3;
-      const line = "あ👩‍💻é".repeat(200);
-      const ref = draftRef([line], 0, "あ👩‍💻é".repeat(100).length);
+      const line = "あ😁é".repeat(200);
+      const ref = draftRef([line], 0, "あ😁é".repeat(100).length);
       const output = composer(width, { draftRef: ref });
       const rows = output.split("\n");
       expect(rows).toHaveLength(9);
       expect(rows.every((row) => visibleWidth(row) <= width)).toBe(true);
-      expect(output).toContain("\x1b[7m");
+      expect(output).not.toContain("\x1b[7m");
       expect(ref.current?.lines).toEqual([line]);
       if (width > 1) {
-        expect(output).toContain("\x1b[7mあ\x1b[27m");
+        expect(stripVTControlCharacters(output)).toContain("あ");
         expect(rows[0]).toContain("more");
         expect(rows.at(-1)).toContain("more");
       }
@@ -762,6 +952,17 @@ describe("composer queue recall and visual navigation", () => {
 });
 
 describe("footer priorities", () => {
+  it("renders terminal metadata as plain single-line text", () => {
+    const output = footer(150, {
+      provider: "provider\x1b[31mred\x1b[0m\nnext",
+      model: "model\r\nname\twide\x07",
+      cwd: "/project\nfolder",
+    });
+    expect(output).toContain("providerred next/model name wide");
+    expect(output).toContain("/project folder");
+    expect(output.split("\n")).toHaveLength(2);
+  });
+
   it("shows provider, model, mode and the cycle hint when there is room", () => {
     const output = footer(150);
     expect(output.split("\n")).toHaveLength(2);
@@ -789,25 +990,18 @@ describe("footer priorities", () => {
   });
 
   it("only truncates cwd and keeps the complete session ID on the first row when possible", () => {
-    const output = footer(70, { workDir: "/作業ディレクトリ/".repeat(20) });
+    const output = footer(70, { cwd: "/作業ディレクトリ/".repeat(20) });
     const first = output.split("\n")[0];
     expect(first).toContain("…");
     expect(first.trimEnd().endsWith(footerProps.sessionId)).toBe(true);
     expect(visibleWidth(first)).toBeLessThanOrEqual(70);
   });
 
-  it("gives the complete session ID its own wrapped rows on tiny terminals", () => {
+  it("abbreviates the session ID to keep a tiny footer within three rows", () => {
     const output = footer(16).split("\n");
-    const sessionRows = wrapToLines(footerProps.sessionId, 14);
-    expect(
-      output.slice(1, sessionRows.length + 1).map((line) => line.trim()),
-    ).toEqual(sessionRows);
-    expect(
-      output
-        .slice(1, sessionRows.length + 1)
-        .map((line) => line.trim())
-        .join(""),
-    ).toBe(footerProps.sessionId);
+    expect(output).toHaveLength(3);
+    expect(output.join("\n")).not.toContain(footerProps.sessionId);
+    expect(output.join("\n")).toContain("compact-model");
     expect(output.join("\n")).toContain("Plan");
   });
 
@@ -817,7 +1011,7 @@ describe("footer priorities", () => {
       const output = footer(width, {
         model: "モデル-".repeat(30),
         permissionMode: "acceptEdits",
-        workDir: "/作業ディレクトリ/プロジェクト/".repeat(10),
+        cwd: "/作業ディレクトリ/プロジェクト/".repeat(10),
       });
       expect(
         output.split("\n").every((line) => visibleWidth(line) <= width),
@@ -848,6 +1042,91 @@ describe("footer priorities", () => {
 });
 
 describe("persistent composer drafts and input behavior", () => {
+  it("resets the permission cursor for consecutive approvals even when the arguments are identical", () => {
+    const onComplete = vi.fn();
+    const view = (requestId: string) =>
+      createElement(InteractionDock, {
+        composer: { onSubmit: vi.fn() },
+        permission: {
+          requestId,
+          toolName: "WriteFile",
+          argsSummary: "same.ts",
+          reason: "approve",
+          onComplete,
+        },
+      });
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    act(() => {
+      instance = render(view("first"), {
+        interactive: false,
+        patchConsole: false,
+      });
+    });
+    press("", { downArrow: true });
+    press("", { return: true });
+    expect(onComplete).toHaveBeenLastCalledWith("allowAlways");
+    act(() => {
+      instance?.rerender(view("second"));
+    });
+    press("", { return: true });
+    expect(onComplete).toHaveBeenLastCalledWith("allow");
+  });
+
+  it("opens the background-only agents dock during streaming and restores the draft on Escape", () => {
+    const onSubmit = vi.fn();
+    function AgentsDock() {
+      const [open, setOpen] = useState(false);
+      return createElement(InteractionDock, {
+        composer: {
+          onSubmit,
+          inputState: "agent",
+          onOpenAgents: () => {
+            setOpen(true);
+          },
+        },
+        agents: open
+          ? {
+              teammates: [],
+              subagents: [],
+              backgroundTasks: [
+                {
+                  id: "agent-1",
+                  name: "background review",
+                  status: "running",
+                  output: "",
+                  cancel: vi.fn(),
+                  done: Promise.resolve(),
+                },
+              ],
+              onClose: () => {
+                setOpen(false);
+              },
+            }
+          : undefined,
+      });
+    }
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    act(() => {
+      instance = render(createElement(AgentsDock), {
+        interactive: false,
+        patchConsole: false,
+        debug: true,
+      });
+    });
+    press("draft");
+    press("", { leftArrow: true });
+    press("", { downArrow: true });
+    expect(terminal.paste.current).toBeNull();
+    expect(stripVTControlCharacters(lastTerminalFrame())).toContain(
+      "agent-1: background review",
+    );
+    press("", { escape: true });
+    expect(terminal.paste.current).not.toBeNull();
+    press("!");
+    press("\r", { return: true });
+    expect(onSubmit).toHaveBeenCalledWith("draf!t");
+  });
+
   it("restores the dock-owned draft and caret after a provider selector closes", () => {
     const onSubmit = vi.fn();
     const onCancel = vi.fn();
@@ -907,13 +1186,13 @@ describe("persistent composer drafts and input behavior", () => {
   });
 
   it("moves and deletes complete grapheme clusters", () => {
-    const ref = draftRef(["a👩‍💻éb"]);
+    const ref = draftRef(["a😁éb"]);
     mount({ draftRef: ref });
 
     press("", { leftArrow: true });
-    expect(ref.current?.cursorCol).toBe("a👩‍💻é".length);
+    expect(ref.current?.cursorCol).toBe("a😁é".length);
     press("", { leftArrow: true });
-    expect(ref.current?.cursorCol).toBe("a👩‍💻".length);
+    expect(ref.current?.cursorCol).toBe("a😁".length);
     press("", { backspace: true });
     expect(ref.current?.lines).toEqual(["aéb"]);
     expect(ref.current?.cursorCol).toBe(1);
@@ -1012,7 +1291,7 @@ describe("persistent composer drafts and input behavior", () => {
     mount({
       draftRef: ref,
       onSubmit,
-      workDir: "/virtual",
+      cwd: "/virtual",
       sessionId: "session",
     });
     await act(async () => {
@@ -1020,7 +1299,7 @@ describe("persistent composer drafts and input behavior", () => {
       await Promise.resolve();
     });
     expect(ref.current?.lines).toEqual(["hello [Image #1] "]);
-    expect(saveClipboardImage).toHaveBeenLastCalledWith("/virtual", "session");
+    expect(saveClipboardImage).toHaveBeenLastCalledWith("session");
     press("\r", { return: true });
     expect(onSubmit).toHaveBeenCalledWith("hello '@image.png'");
   });
@@ -1131,7 +1410,7 @@ describe("persistent composer drafts and input behavior", () => {
     const ref = draftRef();
     const onSubmit = vi.fn();
     const clearRef: { current: (() => void) | null } = { current: null };
-    mount({ draftRef: ref, onSubmit, clearRef, workDir: "/virtual" });
+    mount({ draftRef: ref, onSubmit, clearRef, cwd: "/virtual" });
     act(() => {
       terminal.paste.current?.("x".repeat(1001));
     });
@@ -1147,7 +1426,7 @@ describe("persistent composer drafts and input behavior", () => {
       "[paste #1 1001 chars] [Image #1] [Image #2] ",
     ]);
     unmount();
-    mount({ draftRef: ref, onSubmit, clearRef, workDir: "/virtual" });
+    mount({ draftRef: ref, onSubmit, clearRef, cwd: "/virtual" });
     press("", { leftArrow: true });
     press("", { backspace: true });
     expect(ref.current?.lines[0]).not.toContain("[Image #2]");
@@ -1172,12 +1451,12 @@ describe("persistent composer drafts and input behavior", () => {
     });
     vi.mocked(saveClipboardImage).mockReturnValue(pending);
     const ref = draftRef(["draft"]);
-    mount({ draftRef: ref, workDir: "/virtual" });
+    mount({ draftRef: ref, cwd: "/virtual" });
     act(() => {
       terminal.paste.current?.("");
     });
     unmount();
-    mount({ draftRef: ref, workDir: "/virtual" });
+    mount({ draftRef: ref, cwd: "/virtual" });
     press("!");
     await act(async () => {
       resolve?.({ ok: true, value: "/virtual/image.png" });
@@ -1195,7 +1474,7 @@ describe("persistent composer drafts and input behavior", () => {
     vi.mocked(saveClipboardImage).mockReturnValue(pending);
     const ref = draftRef(["draft"]);
     const clearRef: { current: (() => void) | null } = { current: null };
-    mount({ draftRef: ref, clearRef, workDir: "/virtual" });
+    mount({ draftRef: ref, clearRef, cwd: "/virtual" });
     act(() => {
       terminal.paste.current?.("");
     });
@@ -1220,7 +1499,7 @@ describe("persistent composer drafts and input behavior", () => {
     vi.mocked(saveClipboardImage).mockReturnValue(pending);
     const ref = draftRef(["Describe"]);
     const onSubmit = vi.fn();
-    mount({ draftRef: ref, onSubmit, workDir: "/virtual" });
+    mount({ draftRef: ref, onSubmit, cwd: "/virtual" });
     act(() => {
       terminal.paste.current?.("");
     });
@@ -1252,7 +1531,7 @@ describe("persistent composer drafts and input behavior", () => {
   it("keeps Enter-to-complete separate from Enter-to-submit for slash and @file", () => {
     const ref = draftRef();
     const onSubmit = vi.fn();
-    mount({ draftRef: ref, onSubmit, commands, workDir: "/virtual" });
+    mount({ draftRef: ref, onSubmit, commands, cwd: "/virtual" });
     press("/");
     press("", { downArrow: true });
     press("", { return: true });
@@ -1262,6 +1541,7 @@ describe("persistent composer drafts and input behavior", () => {
     expect(onSubmit).toHaveBeenLastCalledWith("/model");
     expect(ref.current).toEqual(draftRef().current);
     press("@");
+    flushCwdScan();
     press("", { return: true });
     expect(ref.current?.lines).toEqual(["@one.ts "]);
     expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -1302,42 +1582,53 @@ describe("persistent composer drafts and input behavior", () => {
     },
   );
 
-  it("retains Tab completion and Shift+Tab mode cycling", () => {
-    const ref = draftRef();
-    const onModeChange = vi.fn();
-    mount({ draftRef: ref, commands, onModeChange, workDir: "/virtual" });
-    press("/h");
-    press("", { tab: true });
-    expect(ref.current?.lines).toEqual(["/help "]);
-    press("", { tab: true, shift: true });
-    expect(onModeChange).toHaveBeenCalledWith("acceptEdits");
-    expect(ref.current?.lines).toEqual(["/help "]);
-  });
+  it.each([
+    ["default", "acceptEdits"],
+    ["acceptEdits", "bypassPermissions"],
+    ["bypassPermissions", "default"],
+    ["plan", "default"],
+  ] as const)(
+    "retains Tab completion while Shift+Tab switches %s to %s without entering plan",
+    (permMode, nextMode) => {
+      const ref = draftRef();
+      const onModeChange = vi.fn();
+      mount({
+        draftRef: ref,
+        commands,
+        permMode,
+        onModeChange,
+        cwd: "/virtual",
+      });
+      press("/h");
+      press("", { tab: true });
+      expect(ref.current?.lines).toEqual(["/help "]);
+      press("", { tab: true, shift: true });
+      expect(onModeChange).toHaveBeenLastCalledWith(nextMode);
+      press("\x1b[Z");
+      expect(onModeChange).toHaveBeenLastCalledWith(nextMode);
+      expect(onModeChange).toHaveBeenCalledTimes(2);
+      expect(ref.current?.lines).toEqual(["/help "]);
+    },
+  );
 
   it("dismisses autocomplete before delegating Escape", () => {
     const onEscape = vi.fn();
     const ref = draftRef();
-    mount({ draftRef: ref, commands, onEscape, workDir: "/virtual" });
+    mount({ draftRef: ref, commands, onEscape, cwd: "/virtual" });
     press("/");
     press("", { escape: true });
     expect(onEscape).not.toHaveBeenCalled();
     press("\x1b");
     expect(onEscape).toHaveBeenCalledTimes(1);
     unmount();
-    mount({ draftRef: draftRef(["text @one"]), onEscape, workDir: "/virtual" });
+    mount({ draftRef: draftRef(["text @one"]), onEscape, cwd: "/virtual" });
+    flushCwdScan();
     press("", { escape: true });
     expect(onEscape).toHaveBeenCalledTimes(1);
   });
 
-  it("allows edits with submission locked but does not register hidden input while disabled", () => {
+  it("does not register hidden input while disabled and preserves the draft on clear", () => {
     const ref = draftRef(["draft"]);
-    const onSubmit = vi.fn();
-    mount({ draftRef: ref, submitDisabled: true, onSubmit });
-    press("!");
-    press("", { return: true });
-    expect(ref.current?.lines).toEqual(["draft!"]);
-    expect(onSubmit).not.toHaveBeenCalled();
-    unmount();
     const clearRef: { current: (() => void) | null } = { current: null };
     mount({ draftRef: ref, disabled: true, clearRef });
     expect(terminal.input.current).toBeNull();
@@ -1345,7 +1636,7 @@ describe("persistent composer drafts and input behavior", () => {
     act(() => {
       clearRef.current?.();
     });
-    expect(ref.current?.lines).toEqual(["draft!"]);
+    expect(ref.current?.lines).toEqual(["draft"]);
   });
 
   it("clears submitted drafts even if onSubmit immediately unmounts the input", () => {

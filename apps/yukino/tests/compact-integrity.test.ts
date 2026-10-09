@@ -1,26 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { computeKeepStartIndex, forceCompact } from "@/compact/compact.js";
 import {
@@ -29,25 +7,49 @@ import {
 } from "@/compact/prompts.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
-import { ContextTooLongError } from "@/llm/errors.js";
+import { ContextTooLongError, NetworkError } from "@/llm/errors.js";
+import type { StreamEvent } from "@/llm/events.js";
+
+const end: StreamEvent = {
+  type: "stream_end",
+  stopReason: "end_turn",
+  usage: {
+    inputTokens: 1,
+    outputTokens: 1,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  },
+};
+afterEach(() => vi.useRealTimers());
 
 function history() {
   const conv = new ConversationManager();
   for (let index = 0; index < 20; index++) {
     conv.addUserMessage(`task ${String(index)} ` + "context ".repeat(200));
-    conv.addAssistantMessage("answer");
+    conv.addAssistantFull("answer", [], []);
   }
-  conv.addAssistantMessageWithTools("read image", [
+  conv.addAssistantFull(
+    "read image",
+    [],
+    [
+      {
+        toolUseId: "read",
+        toolName: "ReadFile",
+        arguments: { file_path: "a.png" },
+      },
+    ],
+  );
+  conv.addToolResultsMessage([
     {
       toolUseId: "read",
-      toolName: "ReadFile",
-      arguments: { file_path: "a.png" },
-    },
-  ]);
-  conv.addToolResultMessage("read", "image read", false, [
-    {
-      type: "image",
-      source: { type: "base64", media_type: "image/png", data: "QUJD" },
+      content: "image read",
+      isError: false,
+      contentBlocks: [
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/png", data: "QUJD" },
+        },
+      ],
     },
   ]);
   conv.addSystemReminder("Keep the latest user constraints");
@@ -55,6 +57,83 @@ function history() {
 }
 
 describe("compaction integrity", () => {
+  it.each(["plain partial checkpoint", "<summary>looks complete</summary>"])(
+    "rejects an unterminated summary stream: %s",
+    async (text) => {
+      const conv = history();
+      const before = conv.getMessages();
+      const client: LLMClient = {
+        setSystemPrompt: vi.fn(),
+        async *stream() {
+          await Promise.resolve();
+          yield { type: "text_delta", text };
+        },
+      };
+      await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow(
+        "without a completion event",
+      );
+      expect(conv.getMessages()).toEqual(before);
+    },
+  );
+
+  it("retries transient summary failures without retaining partial summary text", async () => {
+    vi.useFakeTimers();
+    const conv = history();
+    let attempts = 0;
+    const client: LLMClient = {
+      setSystemPrompt: vi.fn(),
+      async *stream() {
+        await Promise.resolve();
+        if (attempts++ === 0) {
+          yield { type: "text_delta", text: "<summary>discard this partial" };
+          throw new NetworkError("connection reset");
+        }
+        yield {
+          type: "text_delta",
+          text: "<summary>Verified checkpoint</summary>",
+        };
+        yield end;
+      },
+    };
+    const running = forceCompact(conv, client, null, [], []);
+    await vi.runAllTimersAsync();
+    expect((await running).boundary?.summary).toBe("Verified checkpoint");
+    expect(attempts).toBe(2);
+    expect(conv.getMessages()[0].content).not.toContain("discard");
+  });
+
+  it("cancels a pending summary retry without changing conversation history", async () => {
+    vi.useFakeTimers();
+    const conv = history();
+    const before = conv.getMessages();
+    const controller = new AbortController();
+    let attempts = 0;
+    const client: LLMClient = {
+      setSystemPrompt: vi.fn(),
+      async *stream() {
+        attempts++;
+        await Promise.resolve();
+        yield* [];
+        throw new NetworkError("connection reset");
+      },
+    };
+    const running = forceCompact(
+      conv,
+      client,
+      null,
+      [],
+      [],
+      "",
+      controller.signal,
+    );
+    const rejected = expect(running).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(1);
+    controller.abort();
+    await rejected;
+    expect(attempts).toBe(1);
+    expect(conv.getMessages()).toEqual(before);
+  });
+
   it("propagates cancellation and retains the original history", async () => {
     const conv = history();
     const before = structuredClone(conv.getMessages());
@@ -82,6 +161,7 @@ describe("compaction integrity", () => {
         conv.addUserMessage("A newer task");
         await Promise.resolve();
         yield { type: "text_delta", text: "<summary>older task</summary>" };
+        yield end;
       },
     };
     await expect(forceCompact(conv, client, null, [], [])).rejects.toThrow(
@@ -104,6 +184,7 @@ describe("compaction integrity", () => {
           type: "text_delta",
           text: "<summary>Retained context</summary>",
         };
+        yield end;
       },
     };
     const setSystemPrompt = vi.spyOn(client, "setSystemPrompt");
@@ -151,6 +232,7 @@ describe("compaction integrity", () => {
           type: "text_delta",
           text: "<summary>Retained context</summary>",
         };
+        yield end;
       },
     };
     expect((await forceCompact(conv, client, null, [], [])).compacted).toBe(
@@ -175,6 +257,7 @@ describe("compaction integrity", () => {
           throw new ContextTooLongError("context too long");
         }
         yield { type: "text_delta", text: "<summary>Checkpoint</summary>" };
+        yield end;
       },
     };
     await forceCompact(

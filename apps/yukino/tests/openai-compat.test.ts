@@ -1,30 +1,138 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { describe, it, expect } from "vitest";
 import z, { parse, safeParse } from "zod";
 
 import type { Message } from "@/conversation/index.js";
 import { buildChatCompletionMessages, buildOpenAIInput } from "@/llm/openai.js";
+
+describe("OpenAI Responses computer action replay", () => {
+  function replayActions(actions: unknown) {
+    const items = buildOpenAIInput([
+      {
+        role: "assistant",
+        content: "",
+        toolUses: [
+          {
+            toolUseId: "computer-call",
+            toolName: "ComputerUse",
+            arguments: { actions },
+          },
+        ],
+      },
+    ]);
+    const call = items.find(
+      (item) => "type" in item && item.type === "computer_call",
+    );
+    return call && "actions" in call ? call.actions : undefined;
+  }
+
+  it("replays all native action variants in order with the SDK field names and required nullable fields", () => {
+    const actions = [
+      { type: "click", x: 10, y: 20, button: "right", keys: ["SHIFT"] },
+      { type: "double_click", x: 30, y: 40 },
+      {
+        type: "drag",
+        path: [
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+        ],
+        keys: ["CTRL"],
+      },
+      { type: "keypress", keys: ["META", "A"] },
+      { type: "move", x: 50, y: 60, keys: null },
+      { type: "screenshot" },
+      {
+        type: "scroll",
+        x: 50,
+        y: 60,
+        scrollX: -100,
+        scrollY: 200,
+        keys: ["SHIFT"],
+      },
+      { type: "type", text: "日本語😁" },
+      { type: "wait" },
+    ];
+    expect(replayActions(actions)).toEqual([
+      actions[0],
+      { ...actions[1], keys: null },
+      actions[2],
+      actions[3],
+      actions[4],
+      actions[5],
+      {
+        type: "scroll",
+        x: 50,
+        y: 60,
+        scroll_x: -100,
+        scroll_y: 200,
+        keys: ["SHIFT"],
+      },
+      actions[7],
+      actions[8],
+    ]);
+  });
+
+  it("omits malformed actions without coercing their fields or disturbing valid neighbors", () => {
+    const malformed = [
+      null,
+      "click",
+      {},
+      { type: "unknown" },
+      { type: "click", x: "10", y: 20 },
+      { type: "click", x: 10, y: 20, button: "middle" },
+      { type: "double_click", x: 10, y: 20, keys: [3] },
+      { type: "drag", path: [{ x: 1, y: "2" }] },
+      { type: "keypress", keys: "CTRL" },
+      { type: "move", x: Number.POSITIVE_INFINITY, y: 20 },
+      { type: "scroll", x: 10, y: 20, scrollX: "100", scrollY: 0 },
+      { type: "scroll", x: 10, y: 20, scrollY: Number.NaN },
+      { type: "type", text: 42 },
+    ];
+    expect(
+      replayActions([{ type: "wait" }, ...malformed, { type: "screenshot" }]),
+    ).toEqual([{ type: "wait" }, { type: "screenshot" }]);
+  });
+
+  it("uses execution defaults for omitted click buttons and scroll distances and removes unrelated fields", () => {
+    expect(
+      replayActions([
+        { type: "click", x: 10, y: 20, debug: "internal" },
+        { type: "scroll", x: 10, y: 20, scrollY: -100 },
+        { type: "wait", text: "internal" },
+      ]),
+    ).toEqual([
+      { type: "click", x: 10, y: 20, button: "left" },
+      { type: "scroll", x: 10, y: 20, scroll_x: 0, scroll_y: -100 },
+      { type: "wait" },
+    ]);
+  });
+});
+
+describe("OpenAI Responses reasoning replay", () => {
+  it("includes only native rs_ reasoning IDs", () => {
+    const items = buildOpenAIInput([
+      {
+        role: "assistant",
+        content: "answer",
+        thinkingBlocks: [
+          { thinking: "native", signature: "rs_123" },
+          { thinking: "foreign", signature: "anthropic-signature" },
+          { thinking: "compat", signature: "" },
+        ],
+      },
+    ]);
+    const reasoning = items.filter(
+      (item) => "type" in item && item.type === "reasoning",
+    );
+
+    expect(reasoning).toEqual([
+      {
+        type: "reasoning",
+        id: "rs_123",
+        summary: [{ type: "summary_text", text: "native" }],
+      },
+    ]);
+  });
+});
 
 describe("openai-compat chat message building", () => {
   it("attaches reasoning_content to the assistant message alongside tool_calls", () => {
@@ -111,7 +219,6 @@ describe("openai-compat chat message building", () => {
     expect(data2?.tool_call_id).toBe("c1");
     expect(data2?.content).toBe("a.txt");
 
-    // The plain user + final assistant turns survive too.
     expect(
       msgs.some((m) => m.role === "user" && m.content === "list files"),
     ).toBe(true);

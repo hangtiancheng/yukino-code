@@ -1,33 +1,22 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { Box, Text, measureElement, useBoxMetrics, useWindowSize } from "ink";
+import { Box, Text, measureElement, useBoxMetrics } from "ink";
 import type { DOMElement } from "ink";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { CursorText } from "./cursor-text.js";
 import { getListWindowStart } from "./list-window.js";
 import { SelectorFrame } from "./selector-frame.js";
-import { truncateToWidth, visibleWidth } from "./terminal-text.js";
+import { selectorChrome } from "./selector-layout.js";
+import { cursorWindow } from "./terminal-text.js";
+import {
+  plainTerminalLine,
+  truncateToWidth,
+  visibleWidth,
+} from "./terminal-text.js";
+import {
+  useAvailableRows,
+  useTerminalDimensions,
+} from "./use-terminal-layout.js";
 
 import { ICONS, THEME } from "@/ui/styles.js";
 
@@ -42,6 +31,7 @@ interface SelectorListProps {
   title: string;
   totalCount: number;
   reservedRows?: number;
+  searchActive?: boolean;
 }
 
 // Presentation only: each dialog keeps ownership of its input and selection semantics.
@@ -56,10 +46,11 @@ export function SelectorList({
   title,
   totalCount,
   reservedRows = 2,
+  searchActive = true,
 }: SelectorListProps) {
   const ref = useRef<DOMElement>(null);
   const metrics = useBoxMetrics(ref);
-  const { columns, rows } = useWindowSize();
+  const { columns } = useTerminalDimensions();
   const [top, setTop] = useState(0);
   useLayoutEffect(() => {
     if (ref.current) {
@@ -69,10 +60,13 @@ export function SelectorList({
 
   const width = Math.max(1, metrics.hasMeasured ? metrics.width : columns);
   const contentWidth = width - (width > 2 ? 2 : 0);
-  const availableRows = Math.max(0, rows - top - reservedRows);
+  const availableRows = useAvailableRows(reservedRows, top);
   // Two rules, title, hint, search, and (when space permits) one blank line.
   const compact = availableRows < 6 + itemHeight;
-  const listRows = Math.max(0, availableRows - (compact ? 5 : 6));
+  const listRows = Math.max(
+    0,
+    availableRows - selectorChrome(availableRows, false, compact).height - 1,
+  );
   const visibleCount = Math.min(10, Math.floor(listRows / itemHeight));
   const windowStart = getListWindowStart(itemCount, cursor, visibleCount);
   const position = `${String(itemCount ? cursor + 1 : 0)}/${String(itemCount)}`;
@@ -80,6 +74,12 @@ export function SelectorList({
     ? `${position} · ${String(totalCount)} total`
     : position;
   const searchWidth = Math.max(0, contentWidth - visibleWidth(status) - 1);
+  const searchPrefix = searchWidth >= 9 ? "Search: " : "";
+  const search = cursorWindow(
+    query,
+    query.length,
+    Math.max(1, searchWidth - visibleWidth(searchPrefix)),
+  );
 
   return (
     <Box
@@ -89,15 +89,34 @@ export function SelectorList({
       overflow="hidden"
       width="100%"
     >
-      <SelectorFrame compact={compact} hint={hint} title={title} width={width}>
+      <SelectorFrame
+        compact={compact}
+        hint={hint}
+        title={title}
+        width={width}
+        rows={availableRows}
+      >
         <Box width="100%">
           <Box flexGrow={1} minWidth={0}>
-            <Text color={query ? THEME.text : THEME.dim} wrap="truncate-end">
-              {truncateToWidth(
-                query ? `Search: ${query}` : "Search: type to filter",
-                searchWidth,
-              )}
-            </Text>
+            {searchWidth > 0 ? (
+              <CursorText
+                active={searchActive}
+                before={`${searchPrefix}${search.leadingEllipsis ? "…" : ""}${search.before}`}
+                current={query ? search.current : searchPrefix ? "t" : " "}
+                after={
+                  query
+                    ? search.after + (search.trailingEllipsis ? "…" : "")
+                    : searchPrefix
+                      ? truncateToWidth("ype to filter", searchWidth - 9)
+                      : ""
+                }
+                color={query ? THEME.text : THEME.dim}
+              />
+            ) : (
+              <Text color={THEME.dim}>
+                {truncateToWidth(query, searchWidth)}
+              </Text>
+            )}
           </Box>
           <Text color={THEME.dim} wrap="truncate-end">
             {truncateToWidth(status, contentWidth)}
@@ -144,12 +163,12 @@ export function SelectorListRow({
     0,
     rowWidth - visibleWidth(pointer) - visibleWidth(marker),
   );
-  const singleLineLabel = label.replace(/[\r\n\t]+/g, " ");
+  const singleLineLabel = plainTerminalLine(label);
   const remainingWidth = labelWidth - visibleWidth(singleLineLabel) - 2;
   // Preserve the name and current marker before spending columns on metadata.
   const descriptionText =
     description && remainingWidth >= 12
-      ? `  ${truncateToWidth(description.replace(/[\r\n\t]+/g, " "), remainingWidth)}`
+      ? `  ${truncateToWidth(plainTerminalLine(description), remainingWidth)}`
       : "";
 
   return (
@@ -169,7 +188,7 @@ export function SelectorListRow({
       </Text>
       {detail !== undefined ? (
         <Text color={THEME.dim} wrap="truncate-end">
-          {truncateToWidth(`  ${detail.replace(/[\r\n\t]+/g, " ")}`, rowWidth)}
+          {truncateToWidth(`  ${plainTerminalLine(detail)}`, rowWidth)}
         </Text>
       ) : null}
     </Box>

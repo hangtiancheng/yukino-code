@@ -1,35 +1,15 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
+import { randomBytes } from "node:crypto";
 import {
   readFileSync,
   readdirSync,
+  renameSync,
+  rmSync,
   unlinkSync,
   existsSync,
   mkdirSync,
   writeFileSync,
   statSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import { join, relative, basename } from "node:path";
 
 import yaml from "js-yaml";
@@ -40,6 +20,8 @@ import { memoryAge, memoryFreshnessText } from "./memory-age.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
+import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "memory" });
 
@@ -146,9 +128,9 @@ export class MemoryManager {
   private projectDir: string;
   private malformedFingerprints = new Map<string, string>();
 
-  constructor(workDir: string) {
-    this.userDir = join(homedir(), ".yukino", "memory");
-    this.projectDir = join(workDir, ".yukino", "memory");
+  constructor(cwd: string) {
+    this.userDir = yukinoPath("memory");
+    this.projectDir = projectPath(cwd, "memory");
   }
 
   private readMemory(
@@ -206,7 +188,9 @@ export class MemoryManager {
 
   loadAll(): MemoryFile[] {
     const memories = this.scanAllMemories();
-    this.writeIndex(memories);
+    if (memories.length > 0) {
+      this.writeIndex(memories);
+    }
     return memories;
   }
 
@@ -282,8 +266,6 @@ export class MemoryManager {
     }
   }
 
-  // ── Feature 1: MEMORY.md index generation ──────────────────────────
-
   /**
    * Scans both userDir and projectDir for .md files (excluding MEMORY.md),
    * parses each file's frontmatter for name + description, and writes a
@@ -315,20 +297,26 @@ export class MemoryManager {
       capEntrypoint(lines.slice(0, MAX_ENTRYPOINT_LINES).join("\n")) + "\n";
     const indexPath = join(this.projectDir, MEMORY_INDEX_NAME);
 
-    mkdirSync(this.projectDir, { recursive: true });
-    if (existsSync(indexPath)) {
-      try {
-        if (readFileSync(indexPath, "utf-8") === content) {
-          return;
+    withFileSyncLock(indexPath, () => {
+      mkdirSync(this.projectDir, { recursive: true });
+      if (existsSync(indexPath)) {
+        try {
+          if (readFileSync(indexPath, "utf-8") === content) {
+            return;
+          }
+        } catch {
+          // Rewrite an unreadable index from the successfully scanned memories.
         }
-      } catch {
-        // Rewrite an unreadable index from the successfully scanned memories.
       }
-    }
-    writeFileSync(indexPath, content, "utf-8");
+      const temporary = `${indexPath}.${String(process.pid)}.${randomBytes(8).toString("hex")}.tmp`;
+      try {
+        writeFileSync(temporary, content, "utf-8");
+        renameSync(temporary, indexPath);
+      } finally {
+        rmSync(temporary, { force: true });
+      }
+    });
   }
-
-  // ── Feature 2: findRelevantMemories ────────────────────────────────
 
   /**
    * Scans all memory headers from both dirs, asks the LLM to select the
@@ -341,6 +329,7 @@ export class MemoryManager {
     client: LLMClient,
     recentTools: string[] = [],
     alreadySurfaced = new Set<string>(),
+    abortSignal?: AbortSignal,
   ): Promise<RelevantMemory[]> {
     // 1. Scan both dirs for memory headers
     const allHeaders: MemoryHeader[] = [];
@@ -369,6 +358,7 @@ export class MemoryManager {
     const userMessage = `# Input\nQuery: ${query}\n\nAvailable memories:\n${manifest}${toolsSection}`;
 
     let rawResponse = "";
+    let completed = false;
     try {
       const conversation = new ConversationManager();
       // The selector runs on the shared client, whose system prompt belongs
@@ -378,10 +368,14 @@ export class MemoryManager {
         SELECT_MEMORIES_SYSTEM_PROMPT + "\n\n" + userMessage,
       );
 
-      const stream = client.stream(conversation, []);
+      const stream = client.stream(conversation, [], abortSignal);
       for await (const event of stream) {
         if (event.type === "text_delta") {
           rawResponse += event.text;
+        }
+        if (event.type === "stream_end") {
+          completed =
+            event.stopReason === "end_turn" || event.stopReason === "stop";
         }
       }
     } catch (err) {
@@ -389,6 +383,9 @@ export class MemoryManager {
       return [];
     }
 
+    if (!completed || abortSignal?.aborted) {
+      return [];
+    }
     // 3. Parse the selector response
     const jsonStr = extractJSONObject(rawResponse);
     if (!jsonStr) {
@@ -416,12 +413,17 @@ export class MemoryManager {
 
     // 4. Resolve selected filenames to RelevantMemory objects
     const selected: RelevantMemory[] = [];
+    const seen = new Set<string>();
     for (const fn of parsed.selected_memories) {
       const h = byKey.get(fn);
-      if (!h) {
+      if (!h || seen.has(h.filePath)) {
         continue;
       }
       selected.push({ path: h.filePath, mtimeMs: h.mtimeMs });
+      seen.add(h.filePath);
+      if (selected.length >= 5) {
+        break;
+      }
     }
 
     return selected;
@@ -485,7 +487,7 @@ export class MemoryManager {
       }
       parts.push(content + "\n\n---\n");
     }
-    return parts.join("\n");
+    return capEntrypoint(parts.join("\n"));
   }
 }
 

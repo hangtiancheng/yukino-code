@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // CoordinatorMode narrows the Leader's toolset to pure orchestration.
 //
 // The dividing line is not "read" vs. "write" — it is whether a tool would flood
@@ -31,10 +9,7 @@
 // when code needs to be inspected, delegate to a teammate who brings back conclusions.
 // The Leader digests those conclusions and writes the next specification.
 //
-// Task assignment to teammates is expressed through the Agent prompt rather than a
-// shared task board, so TaskCreate / TaskGet / TaskList / TaskUpdate are also
-// withheld from the Leader — those are for inter-teammate coordination. The Leader
-// tracks progress via <task-notification> messages returned when teammates finish.
+// Shared task metadata is orchestration, not workspace investigation.
 //
 // TeamDelete is retained for teardown: teammates are attached to the Team, and once
 // work is done there must be a way to stop them and clean up the team directory.
@@ -42,14 +17,19 @@
 // specified Team if it does not exist — the Leader simply dispatches teammates
 // without a separate team-creation step.
 const COORDINATOR_ALLOWED_TOOLS = new Set([
+  "Goal",
   "Agent",
   "SendMessage",
   "TaskStop",
   "SyntheticOutput",
   "TeamDelete",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+  "TodoWrite",
 ]);
 
-/** Check if a tool is allowed in Coordinator Mode. */
 export function isCoordinatorTool(name: string): boolean {
   return COORDINATOR_ALLOWED_TOOLS.has(name);
 }

@@ -1,37 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { SkillCatalog } from "@/skills/catalog.js";
-import {
-  SUBAGENT_DISALLOWED_TOOLS,
-  TEAMMATE_DISALLOWED_TOOLS,
-} from "@/subagent/tool-filter.js";
-import { buildTeammateRegistry, parseTeammateFlags } from "@/teammate.js";
+import { cloneRegistryForTeammate } from "@/subagent/tool-filter.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";
 
@@ -40,124 +13,34 @@ import type { Tool } from "@/tools/types.js";
 // os.homedir() reads USERPROFILE on Windows and HOME elsewhere; set both.
 let __origHome: string | undefined;
 let __origUserProfile: string | undefined;
-let workDir: string;
+let cwd: string;
 
 beforeEach(() => {
   __origHome = process.env.HOME;
   __origUserProfile = process.env.USERPROFILE;
-  workDir = mkdtempSync(join(tmpdir(), "yukino-teammate-"));
-  process.env.HOME = workDir;
-  process.env.USERPROFILE = workDir;
+  cwd = mkdtempSync(join(tmpdir(), "yukino-teammate-"));
+  process.env.HOME = cwd;
+  process.env.USERPROFILE = cwd;
 });
 
 afterEach(() => {
-  process.env.HOME = __origHome;
-  process.env.USERPROFILE = __origUserProfile;
-});
-
-describe("teammate worker tool registry", () => {
-  // The teammate process assembles its own registry independently from the
-  // in-process member path, so pin the expected tool set here: collaboration
-  // tools must be present; team management and subagent tools must not.
-  it("includes collaboration tools, excludes team management and subagent tools", async () => {
-    const catalog = new SkillCatalog();
-    const registry = await buildTeammateRegistry({
-      workDir,
-      teamName: "alpha",
-      memberName: "ann",
-      catalog,
-      skillHost: {
-        activateSkill: () => {
-          /** noop */
-        },
-      },
-      mcpServers: [],
-    });
-    const names = new Set(registry.listTools().map((t) => t.name));
-
-    // Core file/command tools, general utilities, and inter-teammate
-    // collaboration tools (messaging and shared task board)
-    for (const name of [
-      "ReadFile",
-      "WriteFile",
-      "EditFile",
-      "Bash",
-      "Glob",
-      "Grep",
-      "ToolSearch",
-      "SyntheticOutput",
-      "EnterWorktree",
-      "ExitWorktree",
-      "SendMessage",
-      "TaskCreate",
-      "TaskGet",
-      "TaskList",
-      "TaskUpdate",
-    ]) {
-      expect(names.has(name)).toBe(true);
-    }
-
-    // Agent is blocked to prevent recursive spawning, ComputerUse is a
-    // main-thread-only device tool, and team lifecycle is Leader-only
-    for (const name of ["Agent", "ComputerUse", "TeamCreate", "TeamDelete"]) {
-      expect(names.has(name)).toBe(false);
-    }
-  });
-
-  // The task board resolves by team name, so the team name must be passed
-  // into the worker process at spawn time.
-  it("parses --team-name", () => {
-    const args = parseTeammateFlags([
-      "--teammate",
-      "--team-dir",
-      join(workDir, "alpha"),
-      "--team-name",
-      "alpha",
-      "--member-name",
-      "ann",
-      "--task",
-      "do work",
-    ]);
-    expect(args?.teamName).toBe("alpha");
-    expect(args?.memberName).toBe("ann");
-  });
-
-  it("uses the provider base URL as the teammate provider identity", () => {
-    const args = parseTeammateFlags([
-      "--teammate",
-      "--team-dir",
-      join(workDir, "alpha"),
-      "--member-name",
-      "ann",
-      "--task",
-      "do work",
-      "--provider-base-url",
-      "https://provider.example.com",
-    ]);
-    expect(args?.providerBaseUrl).toBe("https://provider.example.com");
-  });
-
-  // Legacy invocations without --team-name fall back to deriving the team
-  // name from the --team-dir path: its basename, or the parent directory's
-  // name when the path ends in "inboxes" (the production mailbox layout).
-  it("derives team name from directory when --team-name is absent", () => {
-    const args = parseTeammateFlags([
-      "--teammate",
-      "--team-dir",
-      join(workDir, "beta"),
-      "--member-name",
-      "bob",
-      "--task",
-      "do work",
-    ]);
-    expect(args?.teamName).toBe("beta");
-  });
+  if (__origHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = __origHome;
+  }
+  if (__origUserProfile === undefined) {
+    delete process.env.USERPROFILE;
+  } else {
+    process.env.USERPROFILE = __origUserProfile;
+  }
+  rmSync(cwd, { recursive: true, force: true });
 });
 
 describe("in-process teammate tool filtering", () => {
-  // In-process teammates clone the Leader's registry; two categories must be
-  // excluded during cloning: globally disallowed subagent tools and team
-  // membership management tools.
+  // In-process teammates clone the Leader's registry through the production
+  // cloneRegistryForTeammate: globally disallowed subagent tools and
+  // Leader-only team membership management tools must be stripped.
   it("excludes subagent and team management tools", () => {
     const stub = (name: string): Tool => ({
       name,
@@ -187,17 +70,7 @@ describe("in-process teammate tool filtering", () => {
       parent.register(stub(n));
     }
 
-    // Replicate the cloning logic from runAsTeammate
-    const teammate = new ToolRegistry();
-    for (const tool of parent.listTools()) {
-      if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-      if (TEAMMATE_DISALLOWED_TOOLS.has(tool.name)) {
-        continue;
-      }
-      teammate.register(tool);
-    }
+    const teammate = cloneRegistryForTeammate(parent);
     const names = new Set(teammate.listTools().map((t) => t.name));
 
     for (const n of ["Agent", "ComputerUse", "TeamCreate", "TeamDelete"]) {

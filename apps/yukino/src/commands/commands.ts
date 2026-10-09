@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   isValidThinkingLevel,
   THINKING_LEVELS,
@@ -29,21 +7,16 @@ import {
 export type CommandType = "local" | "local_ui" | "prompt" | "skill_fork";
 
 export interface CommandContext {
-  workDir: string;
+  cwd: string;
   args: string;
   conversation?: unknown;
   registry?: unknown;
-  /** Returns the current permission mode */
   permissionMode?: () => string;
   /** Returns token usage [input, output] */
   tokenCount?: () => [number, number];
   /** Returns the number of currently enabled tools */
   toolCount?: () => number;
-  /** Returns the list of memories */
   memoryList?: () => string[];
-  /** Clears all memories */
-  memoryClear?: () => void;
-  /** Current model name */
   model?: string;
   /** Returns the current effective thinking level */
   thinkingLevel?: () => ThinkingLevel;
@@ -62,35 +35,23 @@ export interface Command {
   handler: (ctx: CommandContext) => string;
   /** Skill-derived commands; excluded from the /help listing (see /skills). */
   isSkill?: boolean;
+  /** Handler returns markdown to render richly (e.g. a table), not plain text. */
+  markdown?: boolean;
 }
 
 export class CommandRegistry {
   private commands = new Map<string, Command>();
-  /**
-   * Registers a command. The name must not conflict with an existing command
-   * name; throws on a conflict.
-   */
+  /** Throws when the name conflicts with an existing command. */
   register(cmd: Command): void {
-    if (this.commands.has(cmd.name)) {
+    const key = cmd.name.toLowerCase();
+    if (this.commands.has(key)) {
       throw new Error(`Command '${cmd.name}' already registered`);
     }
-    this.commands.set(cmd.name, cmd);
-  }
-
-  /**
-   * Checks if a command would conflict with already registered commands.
-   * `register` throws on a conflict; use this to pre-filter candidate
-   * commands when a throw is not desired.
-   */
-  hasConflict(cmd: Command): boolean {
-    if (this.find(cmd.name)) {
-      return true;
-    }
-    return false;
+    this.commands.set(key, cmd);
   }
 
   find(name: string): Command | undefined {
-    return this.commands.get(name);
+    return this.commands.get(name.toLowerCase());
   }
 
   complete(prefix: string): Command[] {
@@ -144,28 +105,40 @@ export function createDefaultRegistry(): CommandRegistry {
   });
 
   registry.register({
+    name: "model",
+    type: "local_ui",
+    description: "Switch the model of the current provider",
+    handler: () => "model",
+  });
+
+  registry.register({
     name: "help",
     type: "local",
     description: "Show available commands",
+    markdown: true,
     handler: (ctx) => {
-      // Support /help <cmd> to view details of a single command
       if (ctx.args) {
         const cmd = registry.find(ctx.args);
         if (!cmd) {
           return `Unknown command: ${ctx.args}`;
         }
-        return `/${cmd.name} — ${cmd.description}\n`;
+        return `\`/${cmd.name}\` — ${cmd.description}`;
       }
       // List all commands; skills are discoverable via /skills instead.
       const cmds = registry.listCommands().filter((c) => !c.isSkill);
-      let output = "Available commands:\n\n";
-      output += cmds
-        .map((c) => {
-          return `  /${c.name}\n    ${c.description}`;
-        })
-        .join("\n");
-      output += "\n\nType /help <command> for details.";
-      return output;
+      const escapeCell = (value: string) => value.replace(/\|/g, "\\|");
+      const rows = cmds.map(
+        (c) => `| \`/${c.name}\` | ${escapeCell(c.description)} |`,
+      );
+      return [
+        "**Available commands**",
+        "",
+        "| Command | Description |",
+        "| --- | --- |",
+        ...rows,
+        "",
+        "Type `/help <command>` for details.",
+      ].join("\n");
     },
   });
 
@@ -213,7 +186,7 @@ export function createDefaultRegistry(): CommandRegistry {
         lines.push(`  Model:     ${ctx.model}`);
       }
 
-      lines.push(`  Directory: ${ctx.workDir}`);
+      lines.push(`  Directory: ${ctx.cwd}`);
 
       return lines.join("\n");
     },
@@ -231,6 +204,13 @@ export function createDefaultRegistry(): CommandRegistry {
     type: "local_ui",
     description: "Enter plan mode",
     handler: () => "plan",
+  });
+  registry.register({
+    name: "goal",
+    type: "prompt",
+    description:
+      "Set or view a persistent goal that drives auto-continuation across turns; status, pause, resume, continue, complete, clear, replace; --budget <tokens>",
+    handler: (ctx) => `/goal ${ctx.args}`.trim(),
   });
 
   registry.register({
@@ -251,6 +231,8 @@ export function createDefaultRegistry(): CommandRegistry {
     name: "memory",
     type: "local",
     description: "Show memory status",
+    // Placeholder token: the TUI and remote server intercept /memory by name
+    // and render the real status themselves.
     handler: () => "memory",
   });
 
@@ -287,6 +269,8 @@ export function createDefaultRegistry(): CommandRegistry {
     type: "local",
     description:
       "Show MCP server status; /mcp reload re-reads the config and reconnects",
+    // Placeholder token: the TUI and remote server intercept /mcp by name and
+    // render the real status themselves.
     handler: () => "mcp",
   });
 

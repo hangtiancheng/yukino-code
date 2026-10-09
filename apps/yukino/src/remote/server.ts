@@ -1,34 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-// Remote server: Koa.js HTTP + WebSocket bridge for browser-based access.
-// Serves the React frontend (fe/dist/) and bridges Agent events to WS.
+// Remote server: Express HTTP + WebSocket bridge for browser-based access.
+// Serves the React browser bundle (browser/dist/) and bridges Agent events to WS.
 
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, extname, normalize } from "node:path";
 import { cwd } from "node:process";
 
-import Koa from "koa";
+import express, { type Express } from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import z from "zod";
 
@@ -38,7 +16,11 @@ import { restoreRemoteSession } from "./session-state.js";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
-import { countMcpTools } from "@/bootstrap/tool-registry.js";
+import { configureBashSandbox } from "@/bootstrap/sandbox.js";
+import {
+  countMcpTools,
+  createToolRegistry,
+} from "@/bootstrap/tool-registry.js";
 import { formatReviewReport } from "@/code-review/report.js";
 import { runCodeReview, validateReviewInput } from "@/code-review/runner.js";
 import {
@@ -50,6 +32,7 @@ import {
 import { loadUserCommands } from "@/commands/loader.js";
 import { forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
+import type { SandboxYamlConfig } from "@/config/index.js";
 import type { HookConfig, MCPServerConfig } from "@/config/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import {
@@ -57,13 +40,16 @@ import {
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
+  resolveDefaultProvider,
 } from "@/config/provider-config.js";
 import { persistThinkingLevel } from "@/config/provider-login.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
+import { GoalManager, handleGoalCommand } from "@/goal/index.js";
 import { HookEngine, validate as validateHooks } from "@/hooks/index.js";
 import { createClient, type LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
+import type { LspServerConfig } from "@/lsp/config.js";
 import { syncMcpInstructions as announceMcpInstructions } from "@/mcp/instructions.js";
 import { MCPManager } from "@/mcp/manager.js";
 import { decideAndApply } from "@/mcp/strategy.js";
@@ -90,19 +76,22 @@ import {
   listSessions,
   loadSession,
   getSessionFilePath,
+  touchSession,
 } from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
 import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
+import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/definition.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
+import {
+  spawnSubagent,
+  SUBAGENT_INTERRUPTED_MARKER,
+} from "@/subagent/spawn.js";
 import {
   TaskManager,
   formatAgentTaskNotification,
 } from "@/subagent/task-manager.js";
-import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,
@@ -117,39 +106,43 @@ import {
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
 import {
-  TaskCreateTool,
-  TaskGetTool,
-  TaskListTool,
-  TaskUpdateTool,
-} from "@/todo/tools.js";
-import {
   AskUserQuestionTool,
   type Question,
   type Asker,
 } from "@/tools/ask-user.js";
 import { BashTool } from "@/tools/bash.js";
-import { ComputerUseTool } from "@/tools/computer-use.js";
-import { EditFileTool } from "@/tools/edit-file.js";
-import { EnterWorktreeTool } from "@/tools/enter-worktree.js";
-import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
-import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
-import { GlobTool } from "@/tools/glob.js";
-import { GrepTool } from "@/tools/grep.js";
-import { McpCallTool } from "@/tools/mcp-call.js";
-import { PowerShellTool } from "@/tools/powershell.js";
-import { ReadFileTool } from "@/tools/read-file.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import type { ToolRegistry } from "@/tools/registry.js";
 import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
-import { ToolSearchTool } from "@/tools/tool-search.js";
+import type { ToolContext } from "@/tools/types.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
-import { WriteFileTool } from "@/tools/write-file.js";
 import { contentToText, strArg } from "@/utils/index.js";
+import {
+  authorizeWebSocketRequest,
+  createWebSocketAccessToken,
+  rejectWebSocketUpgrade,
+} from "@/websocket-security.js";
 
 const log = createChildLogger({ module: "remote" });
 
-// -- WS inbound/outbound types and Zod schemas --------------------------------
+// Monotonic request-id counter: Date.now() alone collides when two requests
+// land in the same millisecond (e.g. concurrent subagents), which would
+// overwrite the first request's resolver and hang its run forever.
+let requestCounter = 0;
+function nextRequestId(prefix: string): string {
+  requestCounter += 1;
+  return `${prefix}_${Date.now().toString(36)}_${String(requestCounter)}`;
+}
+
+// Permission/ask requests with no client response settle after this long, so
+// a closed browser tab cannot pin the streaming slot (and the run) forever.
+const PENDING_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const PENDING_REQUEST_TIMEOUT_MINUTES = 10;
+// WS heartbeat: ping interval and the no-pong threshold that terminates a
+// half-open connection.
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const HEARTBEAT_STALE_MS = 75_000;
 
 interface WsOutbound {
   type: string;
@@ -188,9 +181,10 @@ const CodeReviewStartSchema = z.object({
   excludePatterns: z.array(z.string()).optional(),
 });
 
-// -- Static file serving -------------------------------------------------------
-
-const FE_DIST = join(import.meta.dirname, "fe", "dist");
+const BROWSER_DIST = [
+  join(import.meta.dirname, "browser", "dist"),
+  join(import.meta.dirname, "..", "browser", "dist"),
+].find((directory) => existsSync(directory));
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -203,14 +197,17 @@ const MIME_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-/** Serves a static file from fe/dist/. Returns null if not found. */
+/** Serves a static file from browser/dist/. Returns null if not found. */
 function serveStatic(path: string): { body: Buffer; mime: string } | null {
+  if (!BROWSER_DIST) {
+    return null;
+  }
   // Normalize and prevent path traversal
   const cleanPath = normalize(path).replace(/^(\.\.[/\\])+/, "");
-  const fullPath = join(FE_DIST, cleanPath);
+  const fullPath = join(BROWSER_DIST, cleanPath);
 
-  // Ensure the resolved path is still under FE_DIST
-  if (!fullPath.startsWith(FE_DIST)) {
+  // Ensure the resolved path is still under BROWSER_DIST
+  if (!fullPath.startsWith(BROWSER_DIST)) {
     return null;
   }
 
@@ -223,8 +220,6 @@ function serveStatic(path: string): { body: Buffer; mime: string } | null {
   return { body, mime };
 }
 
-// -- RemoteAgentHandle interface -----------------------------------------------
-
 /** Callback injected into each agent run for the permission-request flow. */
 export interface RunCallbacks {
   onPermissionRequest: PermissionRequestHandler;
@@ -232,6 +227,8 @@ export interface RunCallbacks {
 
 /** Encapsulates ALL agent state needed by the remote server. */
 export interface RemoteAgentHandle {
+  goalManager?: GoalManager;
+  planFilePath?: string;
   client: LLMClient;
   conv: ConversationManager;
   registry: ToolRegistry;
@@ -250,15 +247,17 @@ export interface RemoteAgentHandle {
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
   memoryManager: MemoryManager;
-  /** Auto memory switch from config.yaml (`memory:`); gates injection, extraction, and consolidation. */
+  /** Auto memory switch from config.yaml (`enable_memory:`); gates injection, extraction, and consolidation. */
   memoryEnabled: boolean;
   contextWindow: number;
   longTermMemoryInstructions: string;
   longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
-  workDir: string;
+  cwd: string;
   /** Current permission mode; plan mode is enforced through the run() checker. */
   permissionMode: PermissionMode;
+  /** Shared task board; /clear and /resume swap its store to the target session. */
+  taskList: TaskList;
 
   /** Runs the agent loop: adds the user message, creates Agent, and yields events. */
   run(text: string, callbacks: RunCallbacks): AsyncGenerator<AgentEvent>;
@@ -274,11 +273,36 @@ export interface RemoteAgentHandle {
 
   /** Takes steering messages queued too late for in-run delivery. */
   takeSteeringLeftovers(): string[];
+
+  /**
+   * Resets the conversation for /clear. The manager is reset in place —
+   * AgentTool captured it for its fork path, so swapping the instance would
+   * strand the fork on the discarded history — and every piece of
+   * session-scoped state (session id, file history, task board, recovery
+   * state, MCP announcements) rotates with it.
+   */
+  clearConversation(): void;
 }
 
-// -- Agent handle implementation -----------------------------------------------
+function composeAgentToolFilter(
+  enableCoordinatorMode: boolean,
+  handleFilter: ((name: string) => boolean) | null,
+): (name: string) => boolean {
+  const coordinatorFilter = coordinatorToolFilter(enableCoordinatorMode);
+  return (name) => coordinatorFilter(name) && (handleFilter?.(name) ?? true);
+}
 
 class AgentHandleImpl implements RemoteAgentHandle {
+  private sessionGoal?: GoalManager;
+  get goalManager(): GoalManager {
+    if (this.sessionGoal?.sessionId !== this.sessionId) {
+      this.sessionGoal = new GoalManager(this.cwd, this.sessionId);
+    }
+    return this.sessionGoal;
+  }
+  set goalManager(manager: GoalManager) {
+    this.sessionGoal = manager;
+  }
   client: LLMClient;
   conv: ConversationManager;
   registry: ToolRegistry;
@@ -302,8 +326,22 @@ class AgentHandleImpl implements RemoteAgentHandle {
   longTermMemoryInstructions: string;
   longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
-  workDir: string;
-  permissionMode: PermissionMode = "default";
+  cwd: string;
+  checker: PermissionChecker;
+  get planFilePath(): string {
+    return this.checker.planFilePath;
+  }
+  set planFilePath(path: string) {
+    this.checker.planFilePath = path;
+  }
+  get permissionMode(): PermissionMode {
+    return this.checker.mode;
+  }
+  set permissionMode(mode: PermissionMode) {
+    this.checker.mode = mode;
+  }
+  /** Shared task board; /clear and /resume swap its store to the target session. */
+  taskList: TaskList;
 
   // Servers whose instructions this conversation has already been told about. The
   // remote handle connects MCP once and never reloads it, so nothing is ever
@@ -311,8 +349,12 @@ class AgentHandleImpl implements RemoteAgentHandle {
   // history decides whether it has to be replayed (compaction, session restore).
   private mcpAnnounced = new Set<string>();
 
+  // One consolidator per handle: a fresh instance per loop would reset the
+  // lastScanAt throttle, hammering the lock on every loop_complete.
+  private memoryConsolidator: MemoryConsolidator | null = null;
+
   private abortController: AbortController | null = null;
-  /** The agent of the current run, if any; used for mid-run steering. */
+  /** Agent of the current or most recent run; used for mid-run steering and post-run leftover draining. */
   private currentAgent: Agent | null = null;
 
   constructor(
@@ -323,7 +365,11 @@ class AgentHandleImpl implements RemoteAgentHandle {
       | "abort"
       | "steer"
       | "takeSteeringLeftovers"
+      | "clearConversation"
       | "permissionMode"
+      | "checker"
+      | "goalManager"
+      | "planFilePath"
     >,
   ) {
     this.client = agentHandleImpl.client;
@@ -351,7 +397,12 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.longTermMemoryMemoryContent =
       agentHandleImpl.longTermMemoryMemoryContent;
     this.provider = agentHandleImpl.provider;
-    this.workDir = agentHandleImpl.workDir;
+    this.cwd = agentHandleImpl.cwd;
+    this.checker = new PermissionChecker(this.cwd);
+    this.checker.sandboxEnabled =
+      this.registry.getInstanceOf("Bash", BashTool)?.sandboxRequired ?? false;
+    this.teamManager.setPermissionChecker(this.checker);
+    this.taskList = agentHandleImpl.taskList;
     this.abortController = null;
   }
 
@@ -359,6 +410,17 @@ class AgentHandleImpl implements RemoteAgentHandle {
     text: string,
     callbacks: RunCallbacks,
   ): AsyncGenerator<AgentEvent> {
+    const command = parseCommand(text);
+    if (command?.name === "goal") {
+      const result = handleGoalCommand(this.goalManager, command.args);
+      yield { type: "stream_text", text: result.message + "\n" };
+      if (!result.prompt) {
+        yield { type: "loop_complete", stopReason: "end_turn" };
+        return;
+      }
+      yield { type: "turn_complete" };
+      text = result.prompt;
+    }
     this.conv.addUserMessage(text);
 
     // Announce the instructions of every connected MCP server this conversation has
@@ -371,14 +433,15 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.abortController = new AbortController();
 
     try {
-      const checker = new PermissionChecker(this.workDir, this.permissionMode);
+      const checker = this.checker;
       const agent = new Agent({
         client: this.client,
         registry: this.registry,
         checker,
         conversation: this.conv,
-        workDir: this.workDir,
+        cwd: this.cwd,
         sessionId: this.sessionId,
+        goalManager: this.goalManager,
         hookEngine: this.hookEngine ?? undefined,
         fileHistory: this.fileHistory ?? undefined,
         fileStateCache: this.fileStateCache,
@@ -387,25 +450,22 @@ class AgentHandleImpl implements RemoteAgentHandle {
         maxOutput: getMaxOutputTokens(this.provider),
         recoveryState: this.recoveryState,
         activeSkills: this.activeSkills,
-        toolFilter: (name: string) => {
-          // Coordinator narrowing must pass, and any handle-level tool filter must
-          // pass as well; either one blocking is sufficient to deny. The handle's
-          // filter is currently never set (always null), but keep the gate here.
-          if (!coordinatorToolFilter(this.enableCoordinatorMode)(name)) {
-            return false;
-          }
-          return this.toolFilter ? this.toolFilter(name) : true;
-        },
+        // Coordinator narrowing and any handle-level restriction compose into
+        // one predicate shared with manual compaction's tool attachment.
+        toolFilter: composeAgentToolFilter(
+          this.enableCoordinatorMode,
+          this.toolFilter,
+        ),
         coordinatorActiveFn: () =>
           coordinatorActive(this.enableCoordinatorMode),
         instructions: this.longTermMemoryInstructions,
         memoryContent: this.longTermMemoryMemoryContent,
         skillSection: this.skillCatalog
-          ? buildSkillSection(this.skillCatalog, this.workDir)
+          ? buildSkillSection(this.skillCatalog)
           : "",
         skillDeltaFn: () => {
           const section = this.skillCatalog
-            ? buildSkillSection(this.skillCatalog, this.workDir)
+            ? buildSkillSection(this.skillCatalog)
             : "";
           return section && !this.conv.hasReminderContaining(section)
             ? section
@@ -419,7 +479,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
         ],
         onPermissionRequest: callbacks.onPermissionRequest,
         onLoopComplete: (conv) => {
-          // memory: false disables the whole background memory pipeline
+          // enable_memory: false disables the whole background memory pipeline
           if (!this.memoryEnabled) {
             return;
           }
@@ -430,22 +490,25 @@ class AgentHandleImpl implements RemoteAgentHandle {
             .map((m) => `[${m.role}]: ${contentToText(m.content)}`)
             .filter((s) => s.length > 12)
             .join("\n");
-          new MemoryExtractor(this.client, this.workDir)
+          new MemoryExtractor(this.client, this.cwd)
             .extract(summary)
             .catch(() => {
               /* non-fatal */
             });
 
           // Background memory consolidation (fire-and-forget)
-          new MemoryConsolidator(this.client, this.workDir, {
-            appendSystem: (msg) => {
-              conv.addSystemReminder(msg);
+          this.memoryConsolidator ??= new MemoryConsolidator(
+            this.client,
+            this.cwd,
+            {
+              appendSystem: (msg) => {
+                this.conv.addSystemReminder(msg);
+              },
             },
-          })
-            .maybeRun()
-            .catch(() => {
-              /* non-fatal */
-            });
+          );
+          this.memoryConsolidator.maybeRun().catch(() => {
+            /* non-fatal */
+          });
         },
       });
 
@@ -453,6 +516,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
       yield* agent.run();
     } finally {
       this.abortController = null;
+      this.currentAgent = null;
     }
   }
 
@@ -473,18 +537,33 @@ class AgentHandleImpl implements RemoteAgentHandle {
   takeSteeringLeftovers(): string[] {
     return this.currentAgent?.drainSteering() ?? [];
   }
+
+  clearConversation(): void {
+    // Reset in place: AgentTool holds this manager for its fork path, so
+    // replacing the instance would leave forks inheriting cleared history.
+    this.conv.reset();
+    this.activeSkills.clear();
+    this.sessionId = newSessionId();
+    this.planFilePath = "";
+    this.fileHistory = new FileHistory(this.sessionId);
+    this.fileStateCache = new FileStateCache();
+    this.taskList.useStore(new TaskStore(this.sessionId));
+    this.recoveryState = new RecoveryState();
+    this.mcpAnnounced.clear();
+  }
 }
 
-// -- createRemoteAgent factory -------------------------------------------------
-
 export interface CreateRemoteAgentOptions {
+  interactionMode?: "interactive" | "non-interactive";
+  sandboxConfig?: SandboxYamlConfig;
   provider: ProviderConfig;
-  workDir: string;
+  cwd: string;
   hooks?: HookConfig[];
   mcpServers?: MCPServerConfig[];
+  lspServers?: LspServerConfig[];
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
-  /** Auto memory switch from config.yaml (`memory:`); defaults to true. */
+  /** Auto memory switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   askUser?: Asker;
   sessionId?: string;
@@ -499,7 +578,7 @@ export async function createRemoteAgent(
 ): Promise<RemoteAgentHandle> {
   const {
     provider,
-    workDir,
+    cwd,
     hooks: hookConfigs,
     mcpServers: mcpConfigs,
     enableCoordinatorMode,
@@ -509,49 +588,48 @@ export async function createRemoteAgent(
     sessionId = newSessionId(),
   } = opts;
 
-  // 1. Create the per-session file history and file-state cache
-  // (the session id itself is chosen above; the session file is written lazily)
-  const fileHistory = new FileHistory(workDir, sessionId);
+  const hookErr = validateHooks(hookConfigs ?? []);
+  if (hookErr) {
+    throw hookErr;
+  }
+
+  // The session id itself is chosen above; the session file is written lazily.
+  const fileHistory = new FileHistory(sessionId);
   const fileStateCache = new FileStateCache();
 
-  // 2. Build tool registry with all built-in tools
-  const registry = buildToolRegistry(workDir, sessionId);
+  const taskList = new TaskList(new TaskStore(sessionId));
+  const teamManager = new TeamManager(cwd);
+  const registry = createToolRegistry(cwd, taskList, {
+    interactionMode: opts.interactionMode ?? "interactive",
+    teamManager,
+    lspServers: opts.lspServers,
+  });
+  await configureBashSandbox(registry, cwd, opts.sandboxConfig);
 
-  // 3. Build system prompt
-  const env = detectEnvironment(workDir);
+  const env = detectEnvironment(cwd);
   env.model = provider.model;
   const systemPrompt = buildSystemPrompt(env);
 
-  // 4. Create LLM client
   const client = await createClient(provider, systemPrompt);
 
-  // 5. Create conversation manager
   const conv = new ConversationManager();
 
   const contextWindow = getContextWindow(provider);
 
-  // 6. Load instructions and memory, inject into conversation
-  const instructions = loadInstructions(workDir);
-  const memoryManager = new MemoryManager(workDir);
-  // memory: false keeps the index out of the conversation and nothing is
-  // injected, extracted, or consolidated automatically; /memory only reports
-  // that auto memory is disabled (the manager object is kept so the handle
-  // shape is uniform).
+  const instructions = loadInstructions(cwd);
+  const memoryManager = new MemoryManager(cwd);
+  // enable_memory: false keeps the index out of the conversation and nothing
+  // is injected, extracted, or consolidated automatically; /memory only
+  // reports that auto memory is disabled (the manager object is kept so the
+  // handle shape is uniform).
   const memReminder = memoryEnabled ? memoryManager.buildSystemReminder() : "";
   conv.injectLongTermMemory(instructions, memReminder);
 
-  // 7. Initialize hooks
-  const hookErr = validateHooks(hookConfigs ?? []);
-  if (hookErr) {
-    log.warn({ message: hookErr.message }, "hook validation warning");
-  }
   const hookEngine = new HookEngine(hookConfigs ?? []);
 
-  // 8. Load skills
   const catalog = new SkillCatalog();
-  catalog.load(workDir);
+  catalog.load(cwd);
 
-  // 9. SkillHost interface
   const activeSkills = new Map<string, string>();
   const skillHost: SkillHost = {
     activateSkill: (name, body) => {
@@ -567,67 +645,38 @@ export async function createRemoteAgent(
     // an arrow function closing over `activeSkills`, so the bind itself is a no-op.
     activateSkill: skillHost.activateSkill.bind(skillHost),
     snapshotParentMessages: (count: number) => {
-      const msgs = conv?.getMessages() ?? [];
+      const msgs = conv.getMessages();
       return msgs
         .slice(-count)
         .map((m) => `${m.role}: ${contentToText(m.content)}`)
         .join("\n");
     },
-    runSubagent: async (prompt: string) => {
-      if (!client) {
-        throw new Error("no llm client (provider not initialized)");
-      }
-      const { PermissionChecker: PC } = await import("../permissions/index.js");
-      const { Agent: AgentClass } = await import("../agent/index.js");
-
-      // Sub-agent uses an independent conversation to avoid polluting the main context
-      const subConv = new ConversationManager();
-      subConv.addUserMessage(prompt);
-
-      // Per-run background task registry (parity with subagent/spawn.ts): the
-      // forked registry shares tool instances with the host, so without this
-      // the fork's backgrounded commands would register in the host-level
-      // manager — the fork would never see their notifications, the main
-      // thread would be notified for commands it never issued, and nothing
-      // would kill the fork's shells when it exits.
-      const taskManager = new TaskManager();
-
-      const subAgent = new AgentClass({
+    runSubagent: (
+      prompt: string,
+      abortSignal?: AbortSignal,
+      context?: ToolContext,
+    ) =>
+      spawnSubagent(
+        BUILTIN_AGENTS[0],
+        prompt,
         client,
-        registry: filterToolsForAgent(registry, undefined, undefined, false),
-        checker: new PC(workDir, "acceptEdits"),
-        conversation: subConv,
-        workDir,
-        maxIterations: 200,
-        taskManager,
-        notificationFn: () =>
-          taskManager.drainNotifications().map(formatAgentTaskNotification),
-      });
-
-      let output = "";
-      try {
-        for await (const event of subAgent.run()) {
-          switch (event.type) {
-            case "stream_text":
-              output += event.text;
-              break;
-            case "loop_complete":
-              return output || "[No output]";
-            case "error":
-              throw event.error;
-          }
-        }
-        return output || "[No output]";
-      } finally {
-        await taskManager.stopAll();
-      }
-    },
+        registry,
+        provider,
+        cwd,
+        undefined,
+        undefined,
+        undefined,
+        context?.permissionChecker?.forCwd(cwd) ?? handle.checker.forCwd(cwd),
+        {
+          abortSignal,
+          background: false,
+          onPermissionRequest: context?.onPermissionRequest,
+        },
+      ),
   };
 
-  // 10. Register LoadSkill tool
   registry.register(new LoadSkillTool(catalog, skillHost, skillForkHost));
 
-  // 11. Register AskUserQuestion tool when the host supports interactive questions
   if (askUser) {
     registry.register(new AskUserQuestionTool(askUser));
   }
@@ -635,29 +684,37 @@ export async function createRemoteAgent(
   // Register team-related tools. teamRunAgentFactory receives a teammate-scoped
   // registry (with shared task-board tools injected) and returns the callback
   // that runs the teammate agent's main loop.
-  const teamRunAgentFactory =
-    (
-      registry: ToolRegistry,
-      teamChecker?: PermissionChecker,
-      memberWorkDir = workDir,
-    ): RunAgent =>
-    (task, onEvent, abortSignal) =>
+  const teamRunAgentFactory = (
+    registry: ToolRegistry,
+    teamChecker?: PermissionChecker,
+    memberCwd = cwd,
+    options?: TeammateRunOptions,
+  ): RunAgent => {
+    const conversation = new ConversationManager();
+    return (task, onEvent, abortSignal) =>
       spawnSubagent(
-        BUILTIN_AGENTS[0],
+        options?.definition ?? BUILTIN_AGENTS[0],
         task,
         client,
         registry,
         provider,
-        memberWorkDir,
+        memberCwd,
         undefined,
         onEvent,
-        undefined,
+        options?.modelOverride,
         teamChecker,
         // Teammates stay purely foreground: see SubagentRunOptions.backgroundTasks.
-        { abortSignal, backgroundTasks: false },
+        {
+          abortSignal,
+          backgroundTasks: false,
+          agentName: options?.agentName,
+          conversation,
+          onPermissionRequest: options?.onPermissionRequest,
+        },
       );
-  // 12. Register team tools (plus SyntheticOutput)
-  const teamManager = new TeamManager(workDir);
+  };
+  // Restore pending notifications and reclaim interrupted teammates' work.
+  teamManager.restoreFromDisk();
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here
   // (Bash/PowerShell) so run_in_background and timeout auto-background deliver
@@ -669,30 +726,22 @@ export async function createRemoteAgent(
   registry.register(new TaskStopTool(teamManager, backgroundTaskManager));
   registry.register(new SyntheticOutputTool());
 
-  // 13. Register AgentTool (with both spawn and fork paths)
   const agentTool = new AgentTool(
-    workDir,
+    cwd,
     registry,
-    async (
-      def,
-      prompt,
-      background,
-      modelOverride?,
-      workDirOverride?,
-      context?,
-    ) => {
+    async (def, prompt, background, modelOverride?, cwdOverride?, context?) => {
       return spawnSubagent(
         def,
         prompt,
         client,
         registry,
         provider,
-        workDirOverride ?? workDir,
+        cwdOverride ?? cwd,
         undefined,
         undefined,
         modelOverride,
-        workDirOverride
-          ? context?.permissionChecker?.forWorkDir(workDirOverride)
+        cwdOverride
+          ? context?.permissionChecker?.forCwd(cwdOverride)
           : context?.permissionChecker,
         {
           abortSignal: context?.abortSignal,
@@ -704,10 +753,9 @@ export async function createRemoteAgent(
     },
     conv,
     async (prompt, forkConv, forkRegistry, modelOverride?, context?) => {
-      const forkWorkDir = context?.workDir ?? workDir;
-      // Fork path: create an isolated agent on the forked conversation
+      const forkCwd = context?.cwd ?? cwd;
       const resolvedModel = modelOverride ?? provider.model;
-      const forkEnv = detectEnvironment(forkWorkDir);
+      const forkEnv = detectEnvironment(forkCwd);
       forkEnv.model = resolvedModel;
       const forkSystemPrompt = buildSystemPrompt(forkEnv);
       const forkClient = modelOverride
@@ -717,9 +765,9 @@ export async function createRemoteAgent(
           )
         : client;
 
-      const checker =
-        context?.permissionChecker ??
-        new PermissionChecker(forkWorkDir, "acceptEdits");
+      const checker = (
+        context?.permissionChecker ?? handle.checker
+      ).forSubagent(forkCwd);
       forkConv.addUserMessage(prompt);
 
       // Per-run background task registry (parity with subagent/spawn.ts): the
@@ -730,16 +778,19 @@ export async function createRemoteAgent(
       const forkTaskManager = new TaskManager();
 
       const agent = new Agent({
+        agentName: "fork",
         client: forkClient,
         registry: forkRegistry,
         checker,
         conversation: forkConv,
-        workDir: forkWorkDir,
+        cwd: forkCwd,
         maxIterations: 200,
         abortSignal: context?.abortSignal,
         onPermissionRequest: context?.onPermissionRequest,
         fileStateCache: new FileStateCache(),
-        instructions,
+        instructions: loadInstructions(forkCwd),
+        contextWindow: getContextWindow(provider),
+        maxOutput: getMaxOutputTokens(provider),
         memoryContent: memReminder,
         taskManager: forkTaskManager,
         notificationFn: () =>
@@ -754,11 +805,12 @@ export async function createRemoteAgent(
               output += event.text;
               break;
             case "loop_complete":
+              if (event.stopReason === "interrupted") {
+                return `${output}${output ? "\n\n" : ""}${SUBAGENT_INTERRUPTED_MARKER}`;
+              }
               return output || "[No output]";
             case "error":
-              return output
-                ? `${output}\n\n[Error: ${event.error.message}]`
-                : `Error: ${event.error.message}`;
+              throw event.error;
           }
         }
         return output || "[No output]";
@@ -768,14 +820,14 @@ export async function createRemoteAgent(
     },
     backgroundTaskManager,
   );
-  // Wire the team manager into AgentTool so the team_name teammate path takes effect (teammates receive shared team task-board tools)
   agentTool.forkDisabled = forkDisabled ?? false;
-  agentTool.setTeamManager(teamManager, teamRunAgentFactory, provider.base_url);
+  // Wire the team manager into AgentTool so the team_name teammate path takes
+  // effect (teammates receive shared team task-board tools).
+  agentTool.setTeamManager(teamManager, teamRunAgentFactory);
   registry.register(agentTool);
 
-  // 14. Load user-defined slash commands
   const cmdRegistry = createCommandRegistry();
-  for (const cmd of loadUserCommands(workDir)) {
+  for (const cmd of loadUserCommands()) {
     try {
       cmdRegistry.register(cmd);
     } catch {
@@ -783,10 +835,8 @@ export async function createRemoteAgent(
     }
   }
 
-  // 15. Wire skills to slash commands
   wireSkillsToCommands(catalog, skillHost, cmdRegistry);
 
-  // 16. Initialize MCP servers
   let mcpManager: MCPManager | null = null;
 
   if (mcpConfigs && mcpConfigs.length > 0) {
@@ -795,7 +845,6 @@ export async function createRemoteAgent(
 
     const result = await mgr.connectAll(mcpConfigs);
 
-    // Register all MCP tools
     for (const { serverName, tool } of result.tools) {
       const mcpClient = mgr.getClient(serverName);
       if (mcpClient) {
@@ -809,11 +858,15 @@ export async function createRemoteAgent(
 
     // Only decide the load mode after all tools are registered: it compares total schema size against the context window
     if (result.tools.length > 0) {
-      decideAndApply(registry, provider.base_url, getContextWindow(provider));
+      decideAndApply(
+        registry,
+        provider.base_url,
+        provider.protocol,
+        getContextWindow(provider),
+      );
     }
   }
 
-  // 17. Construct the handle
   const handle = new AgentHandleImpl({
     client,
     conv,
@@ -838,46 +891,12 @@ export async function createRemoteAgent(
     longTermMemoryInstructions: instructions,
     longTermMemoryMemoryContent: memReminder,
     provider,
-    workDir,
+    cwd,
+    taskList,
   });
 
-  // ExitPlanMode gates on the live permission mode and requires a plan file,
-  // mirroring the terminal UI wiring.
-  const exitPlan = registry.getInstanceOf("ExitPlanMode", ExitPlanModeTool);
-  if (exitPlan) {
-    exitPlan.isPlanMode = () => handle.permissionMode === "plan";
-    exitPlan.planExists = () => planExists(workDir);
-  }
-
+  handle.checker.sandboxAutoAllow = opts.sandboxConfig?.auto_allow ?? false;
   return handle;
-}
-
-// -- Helper functions for agent initialization ---------------------------------
-
-/** Creates the tool registry and registers all 17 built-in tools. */
-function buildToolRegistry(workDir: string, sessionId: string): ToolRegistry {
-  const store = new TaskStore(workDir, sessionId);
-  const taskList = new TaskList(store);
-
-  const registry = new ToolRegistry();
-  registry.register(new ReadFileTool());
-  registry.register(new BashTool());
-  registry.register(new PowerShellTool());
-  registry.register(new ComputerUseTool());
-  registry.register(new GlobTool());
-  registry.register(new GrepTool());
-  registry.register(new WriteFileTool());
-  registry.register(new EditFileTool());
-  registry.register(new ToolSearchTool(registry));
-  registry.register(new McpCallTool(registry));
-  registry.register(new EnterWorktreeTool());
-  registry.register(new ExitWorktreeTool());
-  registry.register(new ExitPlanModeTool());
-  registry.register(new TaskCreateTool(taskList));
-  registry.register(new TaskGetTool(taskList));
-  registry.register(new TaskListTool(taskList));
-  registry.register(new TaskUpdateTool(taskList));
-  return registry;
 }
 
 /** Registers loaded skills as slash commands (inline mode -> prompt type, fork mode -> skill_fork). */
@@ -912,11 +931,8 @@ function wireSkillsToCommands(
   }
 }
 
-// -- Permission description formatter ------------------------------------------
-
 /** Formats a permission request description for the WS client permission dialog. */
 function formatPermissionDesc(
-  toolName: string,
   args: Record<string, unknown>,
   decision: Decision,
 ): string {
@@ -932,32 +948,43 @@ function formatPermissionDesc(
   return parts.join("\n");
 }
 
-// -- RemoteServer --------------------------------------------------------------
-
 interface RemoteServerOptions {
+  sandboxConfig?: SandboxYamlConfig;
   providers: ProviderConfig[];
+  /** Index of the provider the server starts with; defaults to 0. */
+  defaultProvider?: number;
   mcpServers?: MCPServerConfig[];
+  lspServers?: LspServerConfig[];
   hookConfigs?: HookConfig[];
   addr: string;
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
-  /** Auto memory switch from config.yaml (`memory:`); defaults to true. */
+  /** Auto memory switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
+  /** Agent constructor used for eager and lazy initialization. */
+  agentFactory?: typeof createRemoteAgent;
 }
 
 export class RemoteServer {
-  private app: Koa;
+  private app: Express;
   private server: ReturnType<typeof createServer>;
   private wss: WebSocketServer;
   private clients = new Set<WebSocket>();
   private opts: RemoteServerOptions;
 
   private agentHandle: RemoteAgentHandle | null = null;
+  private agentInitPromise: Promise<RemoteAgentHandle | null> | null = null;
   private streaming = false;
   private compactController: AbortController | null = null;
   private reviewController: AbortController | null = null;
   private turnCount = 0;
   private readonly eventLogger = new AgentEventLogger(log);
+  /** Resolves run() once stop() has completed; run() blocks on it. */
+  private stoppedResolve: (() => void) | null = null;
+  /** Last pong timestamp per client; drives the heartbeat sweep. */
+  private lastPongAt = new Map<WebSocket, number>();
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private readonly accessToken = createWebSocketAccessToken();
 
   // Plan-mode state (parity with the terminal UI approval flow).
   private prePlanMode: PermissionMode = "default";
@@ -967,8 +994,9 @@ export class RemoteServer {
   private runCanceled = false;
   /** Whether a plan approval request is awaiting a client response. */
   private planApprovalPending = false;
+  private planApprovalTimer: NodeJS.Timeout | null = null;
+  private pendingPlanExecution: string | null = null;
 
-  // Pending permission/ask-user requests waiting for WS client responses
   private pendingPermissions = new Map<
     string,
     (response: "allow" | "deny" | "allowAlways") => void
@@ -980,45 +1008,55 @@ export class RemoteServer {
 
   constructor(opts: RemoteServerOptions) {
     this.opts = opts;
-    this.app = new Koa();
-    this.server = createServer((req, res) => {
-      void this.app.callback()(req, res);
-    });
-    this.wss = new WebSocketServer({ server: this.server });
+    this.app = express();
+    this.server = createServer(this.app);
+    this.wss = new WebSocketServer({ noServer: true });
     this.setupRoutes();
+    this.setupWebSocketUpgrade();
     this.setupWebSocket();
   }
 
-  /** Configures Koa middleware: static file serving + health check. */
-  private setupRoutes(): void {
-    this.app.use(async (ctx, next) => {
-      if (ctx.path === "/health") {
-        ctx.body = { status: "ok", remote: true, clients: this.clients.size };
+  private setupWebSocketUpgrade(): void {
+    this.server.on("upgrade", (request, socket, head) => {
+      const authorization = authorizeWebSocketRequest(
+        request,
+        "/ws",
+        this.accessToken,
+      );
+      if (!authorization.allowed) {
+        rejectWebSocketUpgrade(socket, authorization);
         return;
       }
-      await next();
+      this.wss.handleUpgrade(request, socket, head, (ws) => {
+        this.wss.emit("connection", ws, request);
+      });
+    });
+  }
+
+  /** Configures Express routes: static file serving + health check. */
+  private setupRoutes(): void {
+    this.app.all("/health", (_req, res) => {
+      res.json({ status: "ok", remote: true, clients: this.clients.size });
     });
 
-    // Static file serving for fe/dist/
-    this.app.use((ctx) => {
-      const filePath = ctx.path === "/" ? "/index.html" : ctx.path;
+    this.app.use((req, res) => {
+      const filePath = req.path === "/" ? "/index.html" : req.path;
       const result = serveStatic(filePath);
       if (result) {
-        ctx.type = result.mime;
-        ctx.body = result.body;
+        res.type(result.mime);
+        res.send(result.body);
         return;
       }
 
       // Fallback: serve index.html for client-side routing (SPA)
       const indexResult = serveStatic("/index.html");
       if (indexResult) {
-        ctx.type = indexResult.mime;
-        ctx.body = indexResult.body;
+        res.type(indexResult.mime);
+        res.send(indexResult.body);
         return;
       }
 
-      ctx.status = 404;
-      ctx.body = "Not found";
+      res.status(404).send("Not found");
     });
   }
 
@@ -1026,6 +1064,7 @@ export class RemoteServer {
   private setupWebSocket(): void {
     this.wss.on("connection", (ws: WebSocket) => {
       this.clients.add(ws);
+      this.lastPongAt.set(ws, Date.now());
 
       // Send initial connected message to the newly connected client only.
       // Deferred until the agent exists so the session id is never empty;
@@ -1033,7 +1072,11 @@ export class RemoteServer {
       if (this.agentHandle) {
         this.send(ws, {
           type: "connected",
-          data: { session: this.agentHandle.sessionId, cwd: cwd() },
+          data: {
+            session: this.agentHandle.sessionId,
+            cwd: cwd(),
+            streaming: this.streaming,
+          },
         });
         const status = this.statusPayload();
         if (status) {
@@ -1042,6 +1085,9 @@ export class RemoteServer {
       }
 
       this.send(ws, { type: "commands", data: this.buildCommandList() });
+      if (this.planApprovalPending) {
+        this.sendPlanApprovalRequest(ws);
+      }
 
       ws.on("message", (data: Buffer) => {
         let raw: unknown;
@@ -1056,21 +1102,54 @@ export class RemoteServer {
           log.warn("received malformed WS message");
           return;
         }
-        void this.handleWsMessage(parsed.data);
+        void this.handleWsMessage(ws, parsed.data);
+      });
+
+      ws.on("pong", () => {
+        this.lastPongAt.set(ws, Date.now());
       });
 
       ws.on("close", () => {
         this.clients.delete(ws);
+        this.lastPongAt.delete(ws);
       });
 
       ws.on("error", () => {
         this.clients.delete(ws);
+        this.lastPongAt.delete(ws);
       });
     });
   }
 
+  /**
+   * Ping/sweep loop for half-open connections: a browser tab killed without a
+   * close frame stays in the clients set forever without this, receiving
+   * broadcasts into a dead socket.
+   */
+  private startHeartbeat(): void {
+    this.heartbeatTimer = setInterval(() => {
+      const now = Date.now();
+      for (const ws of [...this.clients]) {
+        const last = this.lastPongAt.get(ws) ?? now;
+        if (now - last > HEARTBEAT_STALE_MS) {
+          ws.terminate();
+          this.clients.delete(ws);
+          this.lastPongAt.delete(ws);
+          continue;
+        }
+        try {
+          ws.ping();
+        } catch {
+          // Dead socket: the sweep will remove it.
+        }
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref();
+  }
+
   /** Handles incoming WebSocket messages from the Web UI. */
   private async handleWsMessage(
+    ws: WebSocket,
     msg: z.infer<typeof WsInboundSchema>,
   ): Promise<void> {
     switch (msg.type) {
@@ -1082,6 +1161,8 @@ export class RemoteServer {
           } else {
             await this.handleUserMessage(parsed.data.content);
           }
+        } else {
+          log.warn("dropping malformed user_message");
         }
         break;
       }
@@ -1092,6 +1173,8 @@ export class RemoteServer {
             parsed.data.choice,
             parsed.data.feedback,
           );
+        } else {
+          log.warn({ issues: parsed.error.issues }, "malformed plan approval");
         }
         break;
       }
@@ -1099,6 +1182,11 @@ export class RemoteServer {
         const parsed = CodeReviewStartSchema.safeParse(msg.data);
         if (parsed.success) {
           await this.handleCodeReviewStart(parsed.data);
+        } else {
+          log.warn(
+            { issues: parsed.error.issues },
+            "malformed code review request",
+          );
         }
         break;
       }
@@ -1129,12 +1217,24 @@ export class RemoteServer {
         break;
       }
       case "ping": {
-        this.broadcast({ type: "pong", data: null });
+        // Reply to the sender only: pong is a keepalive, not a broadcast.
+        this.send(ws, { type: "pong", data: null });
         break;
       }
       default:
         log.warn({ type: msg.type }, "unknown WS message type");
     }
+  }
+
+  /**
+   * The provider the server runs with: the `default_provider` entry, falling
+   * back to the first one when the recorded index is out of range.
+   */
+  private startProvider(): ProviderConfig {
+    return resolveDefaultProvider(
+      this.opts.providers,
+      this.opts.defaultProvider ?? 0,
+    );
   }
 
   /**
@@ -1145,32 +1245,56 @@ export class RemoteServer {
     if (this.agentHandle) {
       return this.agentHandle;
     }
+    if (this.agentInitPromise) {
+      return this.agentInitPromise;
+    }
+
+    const factory = this.opts.agentFactory ?? createRemoteAgent;
+    const initPromise = (async (): Promise<RemoteAgentHandle | null> => {
+      try {
+        const handle = await factory({
+          provider: this.startProvider(),
+          cwd: cwd(),
+          hooks: this.opts.hookConfigs,
+          mcpServers: this.opts.mcpServers,
+          lspServers: this.opts.lspServers,
+          sandboxConfig: this.opts.sandboxConfig,
+          askUser: this.createAskUserCallback(),
+          enableCoordinatorMode: this.opts.enableCoordinatorMode,
+          forkDisabled: this.opts.forkDisabled,
+          memoryEnabled: this.opts.memoryEnabled !== false,
+        });
+        this.agentHandle = handle;
+        this.broadcast({
+          type: "connected",
+          data: {
+            session: handle.sessionId,
+            cwd: cwd(),
+            streaming: this.streaming,
+          },
+        });
+        this.broadcastStatus();
+        this.broadcast({ type: "commands", data: this.buildCommandList() });
+        return handle;
+      } catch (err) {
+        log.error({ err }, "failed to initialize agent");
+        this.broadcast({
+          type: "error",
+          data: {
+            message: `Failed to initialize agent: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        });
+        return null;
+      }
+    })();
+    this.agentInitPromise = initPromise;
+
     try {
-      this.agentHandle = await createRemoteAgent({
-        provider: this.opts.providers[0],
-        workDir: cwd(),
-        hooks: this.opts.hookConfigs,
-        mcpServers: this.opts.mcpServers,
-        askUser: this.createAskUserCallback(),
-        enableCoordinatorMode: this.opts.enableCoordinatorMode,
-        forkDisabled: this.opts.forkDisabled,
-        memoryEnabled: this.opts.memoryEnabled !== false,
-      });
-      this.broadcast({
-        type: "connected",
-        data: { session: this.agentHandle.sessionId, cwd: cwd() },
-      });
-      this.broadcastStatus();
-      return this.agentHandle;
-    } catch (err) {
-      log.error({ err }, "failed to initialize agent");
-      this.broadcast({
-        type: "error",
-        data: {
-          message: `Failed to initialize agent: ${err instanceof Error ? err.message : String(err)}`,
-        },
-      });
-      return null;
+      return await initPromise;
+    } finally {
+      if (this.agentInitPromise === initPromise) {
+        this.agentInitPromise = null;
+      }
     }
   }
 
@@ -1180,69 +1304,60 @@ export class RemoteServer {
     if (!text || this.streaming) {
       return;
     }
-
-    const handle = await this.ensureAgent();
-    if (!handle) {
-      return;
-    }
-
-    this.broadcast({ type: "replay_user", data: { content: text } });
-
-    // Slash command handling. Path-like inputs (e.g. /path/to/somewhere) are
-    // not commands and fall through as normal user messages.
-    if (text.startsWith("/") && parseCommand(text) !== null) {
-      await this.handleSlashCommand(text);
-      return;
-    }
-
+    // Claim the streaming slot synchronously, BEFORE any await: ensureAgent()
+    // performs real I/O on cold start, and a second message arriving during
+    // that await would otherwise pass the guard and run two agents on the
+    // same conversation concurrently.
     this.streaming = true;
     this.exitPlanSucceeded = false;
     this.runCanceled = false;
-    const startTime = Date.now();
-    const workDir = handle.workDir;
-    const sessionId = handle.sessionId;
-
-    saveMessage(workDir, sessionId, {
-      role: "user",
-      content: text,
-      timestamp: Math.floor(Date.now() / 1000),
-    });
-
+    // totalTurns in loop_complete describes THIS run, not the process.
+    this.turnCount = 0;
+    let handle: RemoteAgentHandle | null = null;
     try {
-      const callbacks: RunCallbacks = {
-        onPermissionRequest: async (
-          toolName: string,
-          args: Record<string, unknown>,
-          decision: Decision,
-        ): Promise<"allow" | "deny" | "allowAlways"> => {
-          const id = `perm_${Date.now().toString(36)}`;
-          const desc = formatPermissionDesc(toolName, args, decision);
-          this.broadcast({
-            type: "permission_request",
-            data: { id, toolName, description: desc },
-          });
-          return new Promise((resolve) => {
-            this.pendingPermissions.set(id, resolve);
-          });
-        },
-      };
+      handle = await this.ensureAgent();
+      if (!handle) {
+        return;
+      }
 
-      let streamBuf = "";
-      for await (const ev of handle.run(text, callbacks)) {
-        // Flush accumulated stream text BEFORE tool_result/turn_complete/loop_complete
-        if (
-          ev.type === "tool_result" ||
-          ev.type === "turn_complete" ||
-          ev.type === "loop_complete"
-        ) {
-          if (streamBuf) {
-            this.broadcast({ type: "stream_end", data: { text: streamBuf } });
-            streamBuf = "";
-          }
-        }
-        this.bridgeEvent(ev, startTime, workDir, sessionId, (t) => {
-          streamBuf += t;
+      this.broadcast({ type: "replay_user", data: { content: text } });
+
+      if (text.startsWith("/") && parseCommand(text) !== null) {
+        // Slash commands (including prompt-type skills and /plan turns) run
+        // through their own handler; leftover replay below covers them too.
+        await this.handleSlashCommand(text);
+      } else {
+        const startTime = Date.now();
+        const cwd = handle.cwd;
+        const sessionId = handle.sessionId;
+
+        saveMessage(cwd, sessionId, {
+          role: "user",
+          content: text,
+          timestamp: Math.floor(Date.now() / 1000),
         });
+
+        const callbacks: RunCallbacks = {
+          onPermissionRequest: this.createPermissionCallback(),
+        };
+
+        let streamBuf = "";
+        for await (const ev of handle.run(text, callbacks)) {
+          // Flush accumulated stream text BEFORE tool_result/turn_complete/loop_complete
+          if (
+            ev.type === "tool_result" ||
+            ev.type === "turn_complete" ||
+            ev.type === "loop_complete"
+          ) {
+            if (streamBuf) {
+              this.broadcast({ type: "stream_end", data: { text: streamBuf } });
+              streamBuf = "";
+            }
+          }
+          this.bridgeEvent(ev, startTime, (t) => {
+            streamBuf += t;
+          });
+        }
       }
     } catch (err) {
       log.error({ err }, "agent stream error");
@@ -1254,11 +1369,26 @@ export class RemoteServer {
       this.streaming = false;
     }
 
+    if (this.pendingPlanExecution) {
+      const plan = this.pendingPlanExecution;
+      this.pendingPlanExecution = null;
+      await this.handleUserMessage(plan);
+    }
+
+    if (!handle) {
+      return;
+    }
     // Steering queued too late for in-run delivery becomes follow-up turns
-    // (parity with the terminal UI), unless the run was canceled.
+    // (parity with the terminal UI), unless the run was canceled. A new run
+    // may have started between the reset above and this replay; steer the
+    // leftover into it instead of silently dropping the message.
     if (!this.runCanceled) {
       for (const leftover of handle.takeSteeringLeftovers()) {
-        await this.handleUserMessage(leftover);
+        if (this.streaming) {
+          this.handleSteeringMessage(leftover);
+        } else {
+          await this.handleUserMessage(leftover);
+        }
       }
     }
   }
@@ -1269,11 +1399,26 @@ export class RemoteServer {
     if (!text) {
       return;
     }
-    // Slash commands need a full turn; they cannot be steered mid-run.
+    const goalControl = /^\/goal(?:\s+(status|pause|clear|complete))?$/u.exec(
+      text,
+    );
+    if (goalControl && this.agentHandle?.goalManager) {
+      const result = handleGoalCommand(
+        this.agentHandle.goalManager,
+        goalControl[1] ?? "",
+      );
+      this.broadcast({ type: "system", data: { message: result.message } });
+      return;
+    }
+    // Slash commands need a full turn; they cannot be steered mid-run, and
+    // they are not queued either — the client is told to resend afterwards.
     if (text.startsWith("/") && parseCommand(text) !== null) {
       this.broadcast({
         type: "system",
-        data: { message: "Commands run after the current turn finishes." },
+        data: {
+          message:
+            "Commands cannot run mid-turn. Wait for the turn to finish, then resend.",
+        },
       });
       return;
     }
@@ -1287,12 +1432,10 @@ export class RemoteServer {
     this.broadcast({ type: "steering_queued", data: { text } });
   }
 
-  /** Bridges an AgentEvent to the corresponding WS message; compact events also persist their boundary to the session. */
+  /** Bridges an AgentEvent to the corresponding WS message. */
   private bridgeEvent(
     ev: AgentEvent,
     startTime: number,
-    workDir: string,
-    sessionId: string,
     appendStream: (text: string) => void,
   ): void {
     // Unified structured event log; only noteworthy events emit a JSONL line (see log.ts).
@@ -1390,9 +1533,6 @@ export class RemoteServer {
 
       case "compact":
         this.broadcast({ type: "compact", data: { message: ev.message } });
-        if (ev.boundary) {
-          saveCompactBoundary(workDir, sessionId, ev.boundary);
-        }
         break;
 
       case "retry":
@@ -1407,8 +1547,6 @@ export class RemoteServer {
         break;
     }
   }
-
-  // -- Slash command handling ---------------------------------------------------
 
   /** Handles slash command input: parse, dispatch to handler by type. */
   private async handleSlashCommand(input: string): Promise<void> {
@@ -1457,7 +1595,10 @@ export class RemoteServer {
           });
         } else {
           const result = cmd.handler(ctx);
-          this.broadcast({ type: "system", data: { message: result } });
+          this.broadcast({
+            type: "system",
+            data: { message: result, markdown: cmd.markdown },
+          });
         }
         if (name === "thinking") {
           this.broadcastStatus();
@@ -1476,11 +1617,11 @@ export class RemoteServer {
 
         this.streaming = true;
         this.exitPlanSucceeded = false;
-        const workDir = handle.workDir;
+        const cwd = handle.cwd;
         const sessionId = handle.sessionId;
 
         // Persist the display text (not the handler output)
-        saveMessage(workDir, sessionId, {
+        saveMessage(cwd, sessionId, {
           role: "user",
           content: displayText,
           timestamp: Math.floor(Date.now() / 1000),
@@ -1508,7 +1649,7 @@ export class RemoteServer {
                 streamBuf = "";
               }
             }
-            this.bridgeEvent(ev, startTime, workDir, sessionId, (t) => {
+            this.bridgeEvent(ev, startTime, (t) => {
               streamBuf += t;
             });
           }
@@ -1528,7 +1669,8 @@ export class RemoteServer {
         this.broadcast({
           type: "system",
           data: {
-            message: "Fork-mode skills are not yet supported in remote mode.",
+            message:
+              "Fork-mode skill commands are not available in remote mode. The agent can still run such skills — mention the skill in your message and it will activate them via the LoadSkill tool.",
           },
         });
         this.broadcast({ type: "command_done", data: null });
@@ -1548,9 +1690,19 @@ export class RemoteServer {
 
     switch (name) {
       case "clear":
-        this.agentHandle.conv = new ConversationManager();
-        this.agentHandle.activeSkills.clear();
+        // Reset in place (AgentTool captured the conversation manager) and
+        // rotate the session so /resume and the JSONL no longer see the
+        // pre-clear history.
+        this.agentHandle.clearConversation();
         this.agentHandle.toolFilter = null;
+        this.broadcast({
+          type: "connected",
+          data: {
+            session: this.agentHandle.sessionId,
+            cwd: cwd(),
+            streaming: this.streaming,
+          },
+        });
         this.broadcast({ type: "clear", data: null });
         this.broadcast({ type: "command_done", data: null });
         break;
@@ -1569,6 +1721,17 @@ export class RemoteServer {
           data: {
             message:
               "Provider login is only available in terminal mode. The remote server uses the provider it was started with.",
+          },
+        });
+        this.broadcast({ type: "command_done", data: null });
+        break;
+
+      case "model":
+        this.broadcast({
+          type: "system",
+          data: {
+            message:
+              "Model selection is only available in terminal mode. The remote server keeps the model it was started with.",
           },
         });
         this.broadcast({ type: "command_done", data: null });
@@ -1667,12 +1830,12 @@ export class RemoteServer {
   private buildCommandContext(args: string): CommandContext {
     const handle = this.agentHandle;
     if (!handle) {
-      return { workDir: cwd(), args, model: "" };
+      return { cwd: cwd(), args, model: "" };
     }
     return {
-      workDir: handle.workDir,
+      cwd: handle.cwd,
       args,
-      permissionMode: () => "default",
+      permissionMode: () => handle.permissionMode,
       tokenCount: () => [0, 0] as const,
       toolCount: () => handle.registry.listTools().length,
       memoryList: () =>
@@ -1716,16 +1879,23 @@ export class RemoteServer {
     });
 
     try {
-      const toolNames = handle.registry.listTools().map((t) => t.name);
-      const toolSchemas = handle.registry.getAllSchemas();
+      const protocol = handle.client.protocol ?? "anthropic";
+      const toolFilter = composeAgentToolFilter(
+        handle.enableCoordinatorMode,
+        handle.toolFilter,
+      );
+      const toolNames = handle.registry.listVisibleToolNames(
+        protocol,
+        toolFilter,
+      );
+      const toolSchemas = handle.registry.getAllSchemas(protocol, toolFilter);
       const result = await forceCompact(
         handle.conv,
         handle.client,
         handle.recoveryState,
         toolNames,
-
         toolSchemas,
-        getSessionFilePath(handle.workDir, handle.sessionId),
+        getSessionFilePath(handle.cwd, handle.sessionId),
         controller.signal,
         customInstructions,
       );
@@ -1734,7 +1904,7 @@ export class RemoteServer {
         data: { message: `Compacted: ${result.message}` },
       });
       if (result.boundary) {
-        saveCompactBoundary(handle.workDir, handle.sessionId, result.boundary);
+        saveCompactBoundary(handle.cwd, handle.sessionId, result.boundary);
       }
     } catch (err) {
       this.broadcast({
@@ -1754,8 +1924,8 @@ export class RemoteServer {
       return;
     }
     const handle = this.agentHandle;
-    const workDir = handle.workDir;
-    const planPath = getOrCreatePlanPath(workDir);
+    const cwd = handle.cwd;
+    const planPath = getOrCreatePlanPath(handle);
 
     if (handle.permissionMode !== "plan") {
       this.prePlanMode = handle.permissionMode;
@@ -1773,7 +1943,7 @@ export class RemoteServer {
 
     // Re-enter plan mode: if a plan file already exists, rebuild the reminder
     // (parity with the terminal UI).
-    if (this.hasExitedPlanMode && planExists(workDir)) {
+    if (this.hasExitedPlanMode && planExists(handle)) {
       const reentryMsg = buildPlanModeReentryReminder(planPath, true);
       if (reentryMsg) {
         handle.conv.addSystemReminder(reentryMsg);
@@ -1783,11 +1953,10 @@ export class RemoteServer {
     }
 
     if (args) {
-      // With arguments: send to agent loop
       this.streaming = true;
       this.exitPlanSucceeded = false;
       this.runCanceled = false;
-      saveMessage(workDir, handle.sessionId, {
+      saveMessage(cwd, handle.sessionId, {
         role: "user",
         content: `/plan ${args}`,
         timestamp: Math.floor(Date.now() / 1000),
@@ -1811,7 +1980,7 @@ export class RemoteServer {
               streamBuf = "";
             }
           }
-          this.bridgeEvent(ev, startTime, workDir, handle.sessionId, (t) => {
+          this.bridgeEvent(ev, startTime, (t) => {
             streamBuf += t;
           });
         }
@@ -1828,8 +1997,6 @@ export class RemoteServer {
       this.broadcast({ type: "command_done", data: null });
     }
   }
-
-  // -- Plan approval ------------------------------------------------------------
 
   /** Builds the status snapshot message, or null before the agent exists. */
   private statusPayload(): WsOutbound | null {
@@ -1858,13 +2025,15 @@ export class RemoteServer {
     }
   }
 
-  /** Sends the plan approval request with the current plan file content. */
-  private broadcastPlanApprovalRequest(): void {
+  private planApprovalMessage(): WsOutbound {
     const handle = this.agentHandle;
     if (!handle) {
-      return;
+      return {
+        type: "plan_approval_request",
+        data: { planPath: "", planContent: "" },
+      };
     }
-    const planPath = getOrCreatePlanPath(handle.workDir);
+    const planPath = getOrCreatePlanPath(handle);
     let planContent = "";
     try {
       if (existsSync(planPath)) {
@@ -1873,11 +2042,34 @@ export class RemoteServer {
     } catch {
       /** noop */
     }
-    this.planApprovalPending = true;
-    this.broadcast({
+    return {
       type: "plan_approval_request",
       data: { planPath, planContent },
-    });
+    };
+  }
+
+  private sendPlanApprovalRequest(ws: WebSocket): void {
+    this.send(ws, this.planApprovalMessage());
+  }
+
+  /** Sends the plan approval request with the current plan file content. */
+  private broadcastPlanApprovalRequest(): void {
+    this.planApprovalPending = true;
+    this.broadcast(this.planApprovalMessage());
+    if (this.planApprovalTimer) {
+      clearTimeout(this.planApprovalTimer);
+    }
+    this.planApprovalTimer = setTimeout(() => {
+      this.planApprovalPending = false;
+      this.planApprovalTimer = null;
+      this.broadcast({
+        type: "system",
+        data: {
+          message: `Plan approval expired after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes.`,
+        },
+      });
+    }, PENDING_REQUEST_TIMEOUT_MS);
+    this.planApprovalTimer.unref();
   }
 
   /**
@@ -1893,6 +2085,10 @@ export class RemoteServer {
       return;
     }
     this.planApprovalPending = false;
+    if (this.planApprovalTimer) {
+      clearTimeout(this.planApprovalTimer);
+      this.planApprovalTimer = null;
+    }
 
     if (choice === "feedback") {
       const text = feedback?.trim() ?? "";
@@ -1902,8 +2098,7 @@ export class RemoteServer {
       return;
     }
 
-    const workDir = handle.workDir;
-    const planPath = getOrCreatePlanPath(workDir);
+    const planPath = getOrCreatePlanPath(handle);
     let planContent = "";
     try {
       if (existsSync(planPath)) {
@@ -1930,11 +2125,14 @@ export class RemoteServer {
       },
     });
     if (planContent) {
-      await this.handleUserMessage(`Execute this plan:\n\n${planContent}`);
+      const execution = `Execute this plan:\n\n${planContent}`;
+      if (this.streaming) {
+        this.pendingPlanExecution = execution;
+      } else {
+        await this.handleUserMessage(execution);
+      }
     }
   }
-
-  // -- Code review ----------------------------------------------------------------
 
   /** Runs a code review configured through the browser form. */
   private async handleCodeReviewStart(
@@ -1945,10 +2143,6 @@ export class RemoteServer {
         type: "system",
         data: { message: "A run is already in progress." },
       });
-      return;
-    }
-    const handle = await this.ensureAgent();
-    if (!handle) {
       return;
     }
 
@@ -1971,20 +2165,27 @@ export class RemoteServer {
       return;
     }
 
+    // Claim the shared foreground slot before cold initialization yields. This
+    // prevents a second review or chat run from entering the same conversation.
     const controller = new AbortController();
     this.reviewController = controller;
     this.streaming = true;
     this.runCanceled = false;
-    const startTime = Date.now();
-    this.broadcast({
-      type: "code_review_progress",
-      data: { phase: "diff", message: "Starting code review…" },
-    });
 
     try {
+      const handle = await this.ensureAgent();
+      if (!handle) {
+        return;
+      }
+
+      const startTime = Date.now();
+      this.broadcast({
+        type: "code_review_progress",
+        data: { phase: "diff", message: "Starting code review…" },
+      });
       const result = await runCodeReview(
         {
-          workDir: handle.workDir,
+          cwd: handle.cwd,
           background: options.background?.trim() || undefined,
           from,
           to,
@@ -2057,8 +2258,6 @@ export class RemoteServer {
     }
   }
 
-  // -- Local status commands and session resume --------------------------------------
-
   /** Renders /memory output (parity with the terminal UI). */
   private buildMemoryStatus(args: string): string {
     const handle = this.agentHandle;
@@ -2066,7 +2265,7 @@ export class RemoteServer {
       return "Memory is not available yet.";
     }
     if (!handle.memoryEnabled) {
-      return "Auto memory is disabled (memory: false in config.yaml).";
+      return "Auto memory is disabled (enable_memory: false in config.yaml).";
     }
     const sub = args.trim().split(/\s+/u)[0];
     if (sub === "clear") {
@@ -2113,8 +2312,8 @@ export class RemoteServer {
       return;
     }
     const handle = this.agentHandle;
-    const workDir = handle.workDir;
-    const sessions = listSessions(workDir);
+    const cwd = handle.cwd;
+    const sessions = listSessions(cwd);
 
     if (!args) {
       // No arguments: send the structured session list for the browser picker.
@@ -2142,7 +2341,6 @@ export class RemoteServer {
       return;
     }
 
-    // Resolve target session (by index or session ID)
     let targetId = args.trim();
     const idx = /^\d+$/.test(targetId) ? Number(targetId) : NaN;
     if (!Number.isNaN(idx) && idx >= 1 && idx <= sessions.length) {
@@ -2150,7 +2348,7 @@ export class RemoteServer {
     }
 
     const saved = sessions.some((session) => session.id === targetId)
-      ? loadSession(workDir, targetId)
+      ? loadSession(cwd, targetId)
       : [];
     if (saved.length === 0) {
       this.broadcast({
@@ -2162,15 +2360,18 @@ export class RemoteServer {
     }
 
     const replay = restoreRemoteSession(handle, targetId, saved);
+    touchSession(cwd, targetId);
 
-    // Clear UI and replay messages
+    this.broadcast({
+      type: "connected",
+      data: { session: targetId, cwd, streaming: false },
+    });
     this.broadcast({ type: "clear", data: null });
     for (const msg of replay) {
-      // Messages carrying only tool results have no text content; skip pushing them to the frontend
-      if (!msg.content) {
+      const displayContent = contentToText(msg.content);
+      if (!displayContent) {
         continue;
       }
-      const displayContent = contentToText(msg.content);
       if (msg.role === "user") {
         this.broadcast({
           type: "replay_user",
@@ -2193,15 +2394,32 @@ export class RemoteServer {
     this.broadcast({ type: "command_done", data: null });
   }
 
-  // -- Helper methods -----------------------------------------------------------
-
   /** Creates the askUser callback closure for createRemoteAgent. */
   private createAskUserCallback(): Asker {
     return async (questions: Question[]): Promise<Record<string, string>> => {
-      const id = `ask_${Date.now().toString(36)}`;
+      const id = nextRequestId("ask");
       this.broadcast({ type: "ask_user", data: { id, questions } });
       return new Promise((resolve) => {
-        this.pendingAsks.set(id, resolve);
+        const timer = setTimeout(() => {
+          if (this.pendingAsks.delete(id)) {
+            this.broadcast({
+              type: "system",
+              data: {
+                message: `Question timed out after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes with no answer; continuing with empty answers.`,
+              },
+            });
+            this.broadcast({
+              type: "request_expired",
+              data: { id, kind: "ask" },
+            });
+            resolve({});
+          }
+        }, PENDING_REQUEST_TIMEOUT_MS);
+        timer.unref();
+        this.pendingAsks.set(id, (answers) => {
+          clearTimeout(timer);
+          resolve(answers);
+        });
       });
     };
   }
@@ -2212,15 +2430,59 @@ export class RemoteServer {
       toolName: string,
       args: Record<string, unknown>,
       decision: Decision,
+      _toolCallId: string,
+      signal?: AbortSignal,
+      source?: { agentName: string; cwd: string },
     ): Promise<"allow" | "deny" | "allowAlways"> => {
-      const id = `perm_${Date.now().toString(36)}`;
-      const desc = formatPermissionDesc(toolName, args, decision);
+      const id = nextRequestId("perm");
+      const desc = [
+        source ? `${source.agentName} · ${source.cwd}` : "",
+        formatPermissionDesc(args, decision),
+      ]
+        .filter(Boolean)
+        .join("\n");
       this.broadcast({
         type: "permission_request",
         data: { id, toolName, description: desc },
       });
       return new Promise((resolve) => {
-        this.pendingPermissions.set(id, resolve);
+        const cancel = () => {
+          const pending = this.pendingPermissions.get(id);
+          if (pending) {
+            this.pendingPermissions.delete(id);
+            this.broadcast({
+              type: "request_expired",
+              data: { id, kind: "permission" },
+            });
+            pending("deny");
+          }
+        };
+        const timer = setTimeout(() => {
+          if (this.pendingPermissions.delete(id)) {
+            this.broadcast({
+              type: "system",
+              data: {
+                message: `Permission request timed out after ${String(PENDING_REQUEST_TIMEOUT_MINUTES)} minutes with no response; denying automatically.`,
+              },
+            });
+            this.broadcast({
+              type: "request_expired",
+              data: { id, kind: "permission" },
+            });
+            resolve("deny");
+            signal?.removeEventListener("abort", cancel);
+          }
+        }, PENDING_REQUEST_TIMEOUT_MS);
+        timer.unref();
+        this.pendingPermissions.set(id, (response) => {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", cancel);
+          resolve(response);
+        });
+        signal?.addEventListener("abort", cancel, { once: true });
+        if (signal?.aborted) {
+          cancel();
+        }
       });
     };
   }
@@ -2270,17 +2532,26 @@ export class RemoteServer {
   }
 
   /**
-   * Starts the Koa HTTP + WebSocket server.
-   * Initializes the agent handle eagerly; falls back to lazy init on first message.
+   * Starts the Express HTTP + WebSocket server and blocks until stop() is called.
+   * Initializing the agent handle happens eagerly; failures fall back to lazy
+   * init on first message. The actual bound address is announced once listening
+   * so an ephemeral (port 0) binding reports a reachable URL. Blocking here
+   * (instead of resolving once listening) keeps the caller's exit bookkeeping
+   * after the server is actually down.
    */
   async run(): Promise<void> {
-    const { host, port } = parseRemoteAddress(this.opts.addr);
+    const { host, port } = parseRemoteAddress(this.opts.addr, {
+      allowEphemeral: true,
+    });
     try {
-      this.agentHandle = await createRemoteAgent({
-        provider: this.opts.providers[0],
-        workDir: cwd(),
+      const factory = this.opts.agentFactory ?? createRemoteAgent;
+      this.agentHandle = await factory({
+        provider: this.startProvider(),
+        cwd: cwd(),
         hooks: this.opts.hookConfigs,
         mcpServers: this.opts.mcpServers,
+        lspServers: this.opts.lspServers,
+        sandboxConfig: this.opts.sandboxConfig,
         askUser: this.createAskUserCallback(),
         enableCoordinatorMode: this.opts.enableCoordinatorMode,
         forkDisabled: this.opts.forkDisabled,
@@ -2291,23 +2562,93 @@ export class RemoteServer {
       this.agentHandle = null;
     }
 
-    return new Promise((resolve, reject) => {
+    const stopped = new Promise<void>((resolve) => {
+      this.stoppedResolve = resolve;
+    });
+    await new Promise<void>((resolve, reject) => {
       this.server.on("error", reject);
       this.server.listen(port, host, () => {
+        this.startHeartbeat();
+        this.announceListening();
         resolve();
       });
     });
+    await stopped;
   }
 
-  /** Stops the server and cleans up all connections. */
-  stop(): void {
+  /**
+   * Reports the actual bound address. Essential for port 0 (ephemeral)
+   * bindings, where the OS-assigned port is only known after listen() succeeds.
+   * Written to stderr to match --a2a / --acp-ws and to keep the stdout-mirrored
+   * JSONL log stream clean.
+   */
+  private announceListening(): void {
+    const bound = this.server.address();
+    if (!bound || typeof bound === "string") {
+      return;
+    }
+    const displayHost =
+      bound.family === "IPv6" ? `[${bound.address}]` : bound.address;
+    process.stderr.write(
+      `Remote server listening at http://${displayHost}:${String(bound.port)}/#token=${encodeURIComponent(this.accessToken)}\n`,
+    );
+  }
+
+  /**
+   * Stops the server and cleans up every child resource: closes WS/HTTP,
+   * cancels the active run, and — unlike the fire-and-forget abort() — awaits
+   * the background-task and team stopAlls plus the MCP disconnects, so
+   * detached shells, teammates, and stdio server children do not outlive the
+   * process.
+   */
+  async stop(): Promise<void> {
     this.cancelActiveRun();
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     for (const ws of this.clients) {
       ws.close();
     }
     this.clients.clear();
-    this.wss.close();
-    this.server.close();
+    await new Promise<void>((resolve) => {
+      this.wss.close(() => {
+        resolve();
+      });
+    });
+    await new Promise<void>((resolve) => {
+      this.server.close(() => {
+        resolve();
+      });
+    });
+    if (this.agentHandle) {
+      try {
+        await this.agentHandle.backgroundTaskManager.stopAll();
+      } catch {
+        // best-effort
+      }
+      try {
+        await this.agentHandle.teamManager.dispose();
+      } catch {
+        // best-effort
+      }
+      const mcp = this.agentHandle.mcpManager;
+      if (mcp) {
+        try {
+          await mcp.disconnectAll();
+        } catch {
+          // best-effort
+        }
+      }
+      try {
+        await this.agentHandle.registry.dispose();
+      } catch (error) {
+        log.error({ error }, "remote tool cleanup failed");
+      }
+    }
+    const resolveStopped = this.stoppedResolve;
+    this.stoppedResolve = null;
+    resolveStopped?.();
   }
 
   private cancelActiveRun(): void {

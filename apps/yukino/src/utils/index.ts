@@ -1,37 +1,15 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { createChildLogger } from "@/logger/index.js";
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
 export * as Paths from "./paths.js";
+export * as PublicHttp from "./public-http.js";
 export * as Slug from "./slug.js";
-export * as Verbs from "./verbs.js";
 
 const log = createChildLogger({ module: "utils" });
 
 /**
  * Convert message content blocks to a plain-text fallback; non-text blocks
- * become placeholders (no base64 payloads).
+ * are reduced to text-only summaries (no base64 payloads).
  */
 export function contentToText(
   content: string | Record<string, unknown>[],
@@ -184,13 +162,29 @@ export function boolArg(
   if (typeof v === "boolean") {
     return v;
   }
-
-  return fallback ?? Boolean(v);
+  if (typeof v === "string") {
+    const normalized = v.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "0") {
+      return false;
+    }
+  }
+  if (typeof v === "number") {
+    if (v === 1) {
+      return true;
+    }
+    if (v === 0) {
+      return false;
+    }
+  }
+  return fallback ?? false;
 }
 
 export function formatToolArgs(args: Record<string, unknown>): string {
   if (args.command) {
-    return truncate(strArg(args, "command"), 80);
+    return strArg(args, "command");
   }
   if (args.file_path) {
     return truncate(strArg(args, "file_path"), 80);

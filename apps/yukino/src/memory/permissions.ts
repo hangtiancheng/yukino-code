@@ -1,29 +1,7 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { homedir } from "node:os";
-import { extname, join, resolve } from "node:path";
+import { extname, resolve } from "node:path";
 
 import { PermissionChecker, type Decision } from "@/permissions/index.js";
+import { projectPath, yukinoPath } from "@/storage/paths.js";
 import type { ToolCategory } from "@/tools/types.js";
 import { canonicalPath, isPathWithin } from "@/utils/paths.js";
 
@@ -31,14 +9,11 @@ export class MemoryPermissionChecker extends PermissionChecker {
   private memoryRoots: string[];
 
   constructor(
-    private memoryWorkDir: string,
+    private memoryCwd: string,
     private allowProjectReads = false,
   ) {
-    super(memoryWorkDir, "default");
-    this.memoryRoots = [
-      join(memoryWorkDir, ".yukino", "memory"),
-      join(homedir(), ".yukino", "memory"),
-    ];
+    super(memoryCwd, "default");
+    this.memoryRoots = [projectPath(memoryCwd, "memory"), yukinoPath("memory")];
   }
 
   override check(
@@ -46,14 +21,14 @@ export class MemoryPermissionChecker extends PermissionChecker {
     category: ToolCategory,
     args: Record<string, unknown>,
   ): Decision {
-    const requested = args.file_path ?? args.path ?? this.memoryWorkDir;
+    const requested = args.file_path ?? args.path ?? this.memoryCwd;
     if (category === "command" || typeof requested !== "string") {
       return {
         effect: "deny",
         reason: "Background memory tasks only support scoped file operations",
       };
     }
-    const path = canonicalPath(resolve(this.memoryWorkDir, requested));
+    const path = canonicalPath(resolve(this.memoryCwd, requested));
     const insideMemory = this.memoryRoots.some((root) =>
       isPathWithin(canonicalPath(root), path),
     );
@@ -68,7 +43,7 @@ export class MemoryPermissionChecker extends PermissionChecker {
     }
     return insideMemory ||
       (this.allowProjectReads &&
-        isPathWithin(canonicalPath(this.memoryWorkDir), path))
+        isPathWithin(canonicalPath(this.memoryCwd), path))
       ? { effect: "allow", reason: "Memory task read" }
       : { effect: "deny", reason: "Read outside the memory task's scope" };
   }

@@ -1,32 +1,12 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import type { Stats } from "node:fs";
-import { lstat, readdir, readFile, stat } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import type { Dir, Stats } from "node:fs";
+import { lstat, open, opendir, stat } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 
 import { Minimatch } from "minimatch";
 
 import { GREP_DESCRIPTION } from "./descriptions.js";
+import { SearchOutput } from "./search-output.js";
+import { takeUtf8Prefix } from "./shell-output.js";
 import {
   SKIP_DIRS,
   type Tool,
@@ -38,10 +18,24 @@ import {
 
 import { createChildLogger } from "@/logger/index.js";
 import { asErrorString, strArg } from "@/utils/index.js";
+import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
 
 const MAX_RESULTS = 500;
+const MAX_MATCH_LINE_BYTES = 2000;
+const BINARY_SNIFF_BYTES = 8 * 1024;
+const DEFAULT_MAX_TRAVERSED_ENTRIES = 10_000;
+const DEFAULT_MAX_TRAVERSAL_DEPTH = 25;
+// Files above this size are skipped rather than buffered whole: reading a
+// multi-GB file into memory would spike it and block the loop, and the 500-
+// match cap means huge files rarely contribute anything the model needs.
+const MAX_GREP_FILE_BYTES = 25 * 1024 * 1024;
+
+export interface GrepTraversalLimits {
+  maxEntries: number;
+  maxDepth: number;
+}
 
 // JS regexes keep \w/\b/\d ASCII-only even in u-mode, unlike ripgrep whose
 // defaults are Unicode-aware. Rewrite them to property-escape equivalents
@@ -105,6 +99,13 @@ export class GrepTool implements Tool {
 
   category: ToolCategory = "read";
 
+  constructor(
+    private readonly traversalLimits: GrepTraversalLimits = {
+      maxEntries: DEFAULT_MAX_TRAVERSED_ENTRIES,
+      maxDepth: DEFAULT_MAX_TRAVERSAL_DEPTH,
+    },
+  ) {}
+
   schema(): ToolSchema {
     const inputSchema = {
       type: "object" as const,
@@ -140,6 +141,9 @@ export class GrepTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
+    if (ctx.abortSignal?.aborted) {
+      return { output: "Error: operation interrupted", isError: true };
+    }
     const pattern = strArg(args, "pattern");
     if (!pattern) {
       return {
@@ -148,7 +152,7 @@ export class GrepTool implements Tool {
       };
     }
 
-    const searchPath = resolve(ctx.workDir, strArg(args, "path", ctx.workDir));
+    const searchPath = resolveToolPath(ctx.cwd, strArg(args, "path", ctx.cwd));
     const include = strArg(args, "include");
 
     let regex: RegExp;
@@ -172,110 +176,189 @@ export class GrepTool implements Tool {
     // dot:true — the walker below surfaces hidden files, so the include
     // filter must match them too (e.g. include "*.yaml" on .github files).
     // matchBase: bare patterns ("*.ts") match the basename at any depth;
-    // patterns with "/" match the workDir-relative path (gitignore/ripgrep
+    // patterns with "/" match the cwd-relative path (gitignore/ripgrep
     // semantics, same form as printed results).
     const includeMatcher = include
       ? new Minimatch(include, { dot: true, matchBase: true })
       : null;
     const matchesInclude = (fullPath: string): boolean =>
       includeMatcher === null ||
-      includeMatcher.match(
-        relative(ctx.workDir, fullPath).split(sep).join("/"),
-      );
-    const results: string[] = [];
+      includeMatcher.match(relative(ctx.cwd, fullPath).split(sep).join("/"));
+    const results = new SearchOutput(MAX_RESULTS);
+    let shortenedLines = 0;
+    let skippedLargeFiles = 0;
+    let traversedEntries = 0;
+    let entryLimitReached = false;
+    let depthLimitReached = false;
 
-    const walk = async (dir: string): Promise<void> => {
-      if (results.length >= MAX_RESULTS) {
-        return;
-      }
-
-      let entries: string[];
+    const searchFile = async (
+      filePath: string,
+      knownStat?: Stats,
+    ): Promise<void> => {
+      ctx.abortSignal?.throwIfAborted();
       try {
-        entries = await readdir(dir);
-      } catch (err) {
-        log.error({ err }, "tool operation failed");
-        return;
-      }
-
-      for (const entry of entries) {
-        if (results.length >= MAX_RESULTS) {
+        const fileStat = knownStat ?? (await stat(filePath));
+        if (fileStat.size > MAX_GREP_FILE_BYTES) {
+          skippedLargeFiles++;
           return;
         }
-        if (SKIP_DIRS.has(entry)) {
-          continue;
-        }
-        const fullPath = join(dir, entry);
-        let fileStat: Stats;
+
+        const file = await open(filePath, "r");
         try {
-          fileStat = await lstat(fullPath);
-          if (fileStat.isSymbolicLink()) {
-            // Follow file symlinks (old behavior), but never descend into
-            // symlinked directories — that is what makes cycles harmless.
-            fileStat = await stat(fullPath);
-            if (!fileStat.isFile()) {
-              continue;
+          ctx.abortSignal?.throwIfAborted();
+          // Sniff before buffering the full file. A NUL byte in the first 8 KiB
+          // marks it as binary (ripgrep's heuristic), avoiding a needless large
+          // allocation for binary files that are still under the 25 MiB gate.
+          const sniffLength = Math.min(fileStat.size, BINARY_SNIFF_BYTES);
+          const sniff = Buffer.alloc(sniffLength);
+          const { bytesRead } = await file.read(sniff, 0, sniffLength, 0);
+          if (sniff.subarray(0, bytesRead).includes(0)) {
+            return;
+          }
+
+          const buf = await file.readFile({ signal: ctx.abortSignal });
+          ctx.abortSignal?.throwIfAborted();
+          const lines = buf.toString("utf-8").split("\n");
+          const rel = relative(ctx.cwd, filePath);
+
+          for (let i = 0; i < lines.length; i++) {
+            if (regex.test(lines[i])) {
+              const preview = takeUtf8Prefix(lines[i], MAX_MATCH_LINE_BYTES);
+              const shortened = preview.length < lines[i].length;
+              if (
+                !results.append(
+                  `${rel}:${String(i + 1)}:${preview}${shortened ? "…" : ""}`,
+                )
+              ) {
+                break;
+              }
+              shortenedLines += Number(shortened);
             }
           }
-        } catch (err) {
-          log.error({ err }, "tool operation failed");
-          continue;
+        } finally {
+          await file.close();
         }
-
-        if (fileStat.isDirectory()) {
-          await walk(fullPath);
-        } else if (fileStat.isFile()) {
-          if (!matchesInclude(fullPath)) {
-            continue;
-          }
-          await searchFile(fullPath);
-        }
+      } catch (err) {
+        ctx.abortSignal?.throwIfAborted();
+        log.error({ err }, "tool operation failed");
+        // skip unreadable files
       }
     };
 
-    const searchFile = async (filePath: string): Promise<void> => {
-      try {
-        const buf = await readFile(filePath);
-        // NUL byte in the first 8KB → binary (ripgrep's heuristic); scanning
-        // it as UTF-8 would only produce replacement-char garbage matches.
-        if (buf.subarray(0, 8192).includes(0)) {
-          return;
-        }
-        const lines = buf.toString("utf-8").split("\n");
-        const rel = relative(ctx.workDir, filePath);
+    const walk = async (dir: string, depth: number): Promise<void> => {
+      ctx.abortSignal?.throwIfAborted();
+      if (results.limit || entryLimitReached) {
+        return;
+      }
 
-        for (let i = 0; i < lines.length && results.length < MAX_RESULTS; i++) {
-          if (regex.test(lines[i])) {
-            results.push(`${rel}:${String(i + 1)}:${lines[i]}`);
+      let entries: Dir;
+      try {
+        entries = await opendir(dir);
+      } catch (err) {
+        ctx.abortSignal?.throwIfAborted();
+        log.error({ err }, "tool operation failed");
+        return;
+      }
+
+      try {
+        for await (const entry of entries) {
+          ctx.abortSignal?.throwIfAborted();
+          if (results.limit || entryLimitReached) {
+            return;
+          }
+          if (traversedEntries >= this.traversalLimits.maxEntries) {
+            entryLimitReached = true;
+            return;
+          }
+          traversedEntries++;
+          if (SKIP_DIRS.has(entry.name)) {
+            continue;
+          }
+          const fullPath = join(dir, entry.name);
+          let fileStat: Stats;
+          try {
+            fileStat = await lstat(fullPath);
+            if (fileStat.isSymbolicLink()) {
+              // Follow file symlinks, but never descend into symlinked
+              // directories — that is what makes cycles harmless.
+              fileStat = await stat(fullPath);
+              if (!fileStat.isFile()) {
+                continue;
+              }
+            }
+          } catch (err) {
+            log.error({ err }, "tool operation failed");
+            continue;
+          }
+
+          if (fileStat.isDirectory()) {
+            if (depth >= this.traversalLimits.maxDepth) {
+              depthLimitReached = true;
+              continue;
+            }
+            await walk(fullPath, depth + 1);
+          } else if (fileStat.isFile() && matchesInclude(fullPath)) {
+            await searchFile(fullPath, fileStat);
           }
         }
       } catch (err) {
+        ctx.abortSignal?.throwIfAborted();
         log.error({ err }, "tool operation failed");
-        // skip unreadable files
       }
     };
 
     try {
       const pathStat = await stat(searchPath);
       if (pathStat.isFile()) {
-        await searchFile(searchPath);
+        await searchFile(searchPath, pathStat);
       } else {
-        await walk(searchPath);
+        await walk(searchPath, 0);
       }
+      ctx.abortSignal?.throwIfAborted();
     } catch (err) {
       log.error({ err }, "tool operation failed");
       return {
-        output: `Error: ${asErrorString(err)}`,
+        output: ctx.abortSignal?.aborted
+          ? "Error: operation interrupted"
+          : `Error: ${asErrorString(err)}`,
         isError: true,
       };
     }
 
-    if (results.length === 0) {
-      return { output: "No matches found.", isError: false };
+    const notices: string[] = [];
+    if (results.limit === "matches") {
+      notices.push(`results truncated at ${String(MAX_RESULTS)} matches`);
+    }
+    if (results.limit === "bytes") {
+      notices.push(
+        "results truncated at 50KB; narrow the path, pattern or include filter",
+      );
+    }
+    if (shortenedLines > 0) {
+      notices.push(
+        `${String(shortenedLines)} long matching line(s) shortened to 2000 bytes; use ReadFile for full lines`,
+      );
+    }
+    if (entryLimitReached) {
+      notices.push(
+        `search truncated after visiting ${String(this.traversalLimits.maxEntries)} entries`,
+      );
+    }
+    if (depthLimitReached) {
+      notices.push(
+        `search truncated: directories deeper than ${String(this.traversalLimits.maxDepth)} levels were skipped`,
+      );
+    }
+    if (skippedLargeFiles > 0) {
+      notices.push(
+        `${String(skippedLargeFiles)} file(s) over 25MB were skipped`,
+      );
     }
 
-    let output = results.join("\n");
-    if (results.length >= MAX_RESULTS) {
-      output += `\n\n(results truncated at ${String(MAX_RESULTS)} matches)`;
+    let output =
+      results.lines.length > 0 ? results.lines.join("\n") : "No matches found.";
+    if (notices.length > 0) {
+      output += `\n\n${notices.map((notice) => `(${notice})`).join("\n")}`;
     }
     return { output, isError: false };
   }

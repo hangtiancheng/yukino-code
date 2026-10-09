@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -92,7 +70,7 @@ describe("SharedTaskStore", () => {
     expect(t1.id).toBe("1");
     expect(t2.id).toBe("2");
     expect(t1.status).toBe("pending");
-    expect(t2.assignee).toBe("alice");
+    expect(t2.owner).toBe("alice");
   });
 
   test("get and list with filters", () => {
@@ -110,14 +88,15 @@ describe("SharedTaskStore", () => {
   test("update changes fields and dedups dependencies", () => {
     const store = new SharedTaskStore(join(tempDir(), "tasks.json"));
     const t = store.create("task", "", "", [], [], "");
+    const blockerTarget = store.create("dependent");
     const updated = store.update(t.id, {
       status: "in_progress",
-      assignee: "carol",
-      addBlocks: ["2"],
+      owner: "carol",
+      addBlocks: [blockerTarget.id],
     });
     expect(updated?.status).toBe("in_progress");
     expect(updated?.blocks).toEqual(["2"]);
-    const again = store.update(t.id, { addBlocks: ["2"] });
+    const again = store.update(t.id, { addBlocks: [blockerTarget.id] });
     expect(again?.blocks).toEqual(["2"]);
     expect(store.update("nope", { status: "completed" })).toBeUndefined();
   });
@@ -129,7 +108,7 @@ describe("SharedTaskStore", () => {
     const s2 = new SharedTaskStore(path);
     expect(s2.listTasks().length).toBe(1);
     s2.create("from-teammate", "", "", [], [], "bob");
-    expect(s1.get("2")?.title).toBe("from-teammate");
+    expect(s1.get("2")?.subject).toBe("from-teammate");
   });
 
   test("initEmpty clears and resets ids", () => {
@@ -159,41 +138,96 @@ describe("team task tools", () => {
     const list = new TeamTaskListTool(mgr, "my-team");
     const update = new TeamTaskUpdateTool(mgr, "my-team");
     const get = new TeamTaskGetTool(mgr, "my-team");
-    const ctx = { workDir: process.cwd() };
+    const ctx = { cwd: process.cwd() };
 
     const created = await create.execute(ctx, {
-      title: "build parser",
-      assignee: "alice",
+      subject: "build parser",
+      description: "implement parser",
     });
     expect(created.isError).toBe(false);
-    expect(created.output).toContain("ID: 1");
+    expect(created.output).toContain("Task #1");
+    mgr.get("my-team")?.addMember("alice");
+    await update.execute(ctx, { taskId: "1", owner: "alice" });
 
-    const listed = await list.execute(ctx, {});
-    expect(listed.output).toContain("[1] build parser");
-    expect(listed.output).toContain("[alice]");
+    const listed = await list.execute();
+    expect(listed.output).toContain("build parser");
+    expect(listed.output).toContain("(alice)");
 
     const updated = await update.execute(ctx, {
-      task_id: "1",
+      taskId: "1",
       status: "completed",
     });
-    expect(updated.output).toContain("status → completed");
+    expect(updated.output).toContain("completed");
 
-    const got = await get.execute(ctx, { task_id: "1" });
-    expect(got.output).toContain("Status:     completed");
+    const got = await get.execute(ctx, { taskId: "1" });
+    expect(JSON.parse(got.output)).toMatchObject({
+      status: "completed",
+      owner: "alice",
+    });
 
-    const pending = await list.execute(ctx, { status: "pending" });
-    expect(pending.output).toContain("No tasks found");
+    expect(list.schema().input_schema).toMatchObject({ properties: {} });
   });
 
   test("update rejects invalid status", async () => {
-    const ctx = { workDir: process.cwd() };
-    await new TeamTaskCreateTool(mgr, "my-team").execute(ctx, { title: "t" });
+    const ctx = { cwd: process.cwd() };
+    await new TeamTaskCreateTool(mgr, "my-team").execute(ctx, {
+      subject: "t",
+      description: "",
+    });
     const r = await new TeamTaskUpdateTool(mgr, "my-team").execute(ctx, {
-      task_id: "1",
+      taskId: "1",
       status: "done",
     });
     expect(r.isError).toBe(true);
-    expect(r.output).toContain("Invalid status");
+    expect(r.output).toContain("status");
+  });
+
+  test("tools reject invalid dependency input atomically and support cancelled/deleted", async () => {
+    const ctx = { cwd: process.cwd() };
+    const create = new TeamTaskCreateTool(mgr, "my-team");
+    const update = new TeamTaskUpdateTool(mgr, "my-team");
+    const list = new TeamTaskListTool(mgr, "my-team");
+    expect(
+      (
+        await create.execute(ctx, {
+          subject: "future",
+          description: "",
+          blocks: ["2"],
+        })
+      ).isError,
+    ).toBe(true);
+    expect(mgr.getTaskStore("my-team").listTasks()).toEqual([]);
+    expect(
+      (await create.execute(ctx, { subject: "first", description: "" }))
+        .isError,
+    ).toBe(false);
+    expect(
+      (await create.execute(ctx, { subject: "second", description: "" }))
+        .isError,
+    ).toBe(false);
+    expect(
+      (await update.execute(ctx, { taskId: "2", addBlockedBy: ["1"] })).isError,
+    ).toBe(false);
+    for (const dependencies of [["missing"], [42], ["2"]]) {
+      expect(
+        (
+          await update.execute(ctx, {
+            taskId: "1",
+            status: "completed",
+            addBlockedBy: dependencies,
+          })
+        ).isError,
+      ).toBe(true);
+      expect(mgr.getTaskStore("my-team").get("1")?.status).toBe("pending");
+    }
+    expect(
+      (await update.execute(ctx, { taskId: "2", status: "cancelled" })).isError,
+    ).toBe(false);
+    expect((await list.execute()).output).toContain("[cancelled]");
+    expect(
+      (await update.execute(ctx, { taskId: "2", status: "deleted" })).isError,
+    ).toBe(false);
+    expect(mgr.getTaskStore("my-team").get("1")?.blocks).toEqual([]);
   });
 
   test("delete team unregisters members", async () => {

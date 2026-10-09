@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry, parse } from "@/commands/commands.js";
@@ -35,7 +13,7 @@ describe("/thinking command", () => {
 
   it("shows the current level when called without args", () => {
     const output = command?.handler({
-      workDir: "/tmp",
+      cwd: "/tmp",
       args: "",
       thinkingLevel: () => "medium",
     });
@@ -45,7 +23,7 @@ describe("/thinking command", () => {
   it("sets a valid level", () => {
     const setThinkingLevel = vi.fn();
     const output = command?.handler({
-      workDir: "/tmp",
+      cwd: "/tmp",
       args: "max",
       setThinkingLevel,
     });
@@ -56,7 +34,7 @@ describe("/thinking command", () => {
   it("rejects an unknown level", () => {
     const setThinkingLevel = vi.fn();
     const output = command?.handler({
-      workDir: "/tmp",
+      cwd: "/tmp",
       args: "bogus",
       setThinkingLevel,
     });
@@ -68,7 +46,7 @@ describe("/thinking command", () => {
     const setThinkingLevel = vi.fn();
     const persistThinkingLevel = vi.fn();
     const output = command?.handler({
-      workDir: "/tmp",
+      cwd: "/tmp",
       args: "low",
       setThinkingLevel,
       persistThinkingLevel,
@@ -84,7 +62,7 @@ describe("/thinking command", () => {
       throw new Error("boom");
     });
     const output = command?.handler({
-      workDir: "/tmp",
+      cwd: "/tmp",
       args: "low",
       setThinkingLevel,
       persistThinkingLevel,
@@ -99,7 +77,7 @@ describe("/thinking command", () => {
       const setThinkingLevel = vi.fn();
       const persistThinkingLevel = vi.fn();
       const output = command?.handler({
-        workDir: "/tmp",
+        cwd: "/tmp",
         args,
         thinkingLevel: () => "off",
         availableThinkingLevels: () => ["off", "low"],
@@ -119,11 +97,10 @@ describe("/thinking command", () => {
     "does not save after a runtime setter failure: %s",
     (error) => {
       const persistThinkingLevel = vi.fn();
-      const level: ThinkingLevel = "high";
       const output = command?.handler({
-        workDir: "/tmp",
+        cwd: "/tmp",
         args: "low",
-        thinkingLevel: () => level,
+        thinkingLevel: () => "high",
         setThinkingLevel: () => {
           throw error;
         },
@@ -134,7 +111,6 @@ describe("/thinking command", () => {
       expect(output).toContain("Try /thinking");
       expect(output).not.toContain("Thinking level set to");
       expect(persistThinkingLevel).not.toHaveBeenCalled();
-      expect(level).toBe("high");
     },
   );
 
@@ -142,7 +118,7 @@ describe("/thinking command", () => {
     let level: ThinkingLevel = "high";
     const persistThinkingLevel = vi.fn();
     const output = command?.handler({
-      workDir: "/tmp",
+      cwd: "/tmp",
       args: "max",
       thinkingLevel: () => level,
       setThinkingLevel: () => {
@@ -159,7 +135,7 @@ describe("/thinking command", () => {
   it("keeps the effective runtime level when saving fails", () => {
     let level: ThinkingLevel = "high";
     const output = command?.handler({
-      workDir: "/tmp",
+      cwd: "/tmp",
       args: "max",
       thinkingLevel: () => level,
       setThinkingLevel: () => {
@@ -177,7 +153,7 @@ describe("/thinking command", () => {
   it("reports unavailable runtime control without attempting to save", () => {
     const persistThinkingLevel = vi.fn();
     expect(
-      command?.handler({ workDir: "/tmp", args: "low", persistThinkingLevel }),
+      command?.handler({ cwd: "/tmp", args: "low", persistThinkingLevel }),
     ).toContain("control is not available");
     expect(persistThinkingLevel).not.toHaveBeenCalled();
   });
@@ -189,7 +165,7 @@ describe("/thinking command", () => {
       expect(parsed?.args.toLowerCase()).toBe("low");
       const setThinkingLevel = vi.fn();
       registry.find(parsed?.name ?? "")?.handler({
-        workDir: "/tmp",
+        cwd: "/tmp",
         args: parsed?.args ?? "",
         setThinkingLevel,
       });

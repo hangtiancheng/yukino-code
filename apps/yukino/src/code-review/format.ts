@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { formatDiffEntry } from "./grouping.js";
 import {
   MAIN_USER,
@@ -28,8 +6,6 @@ import {
   stripEmptyPlanBlock,
 } from "./prompts.js";
 import type { FileDiff, ReviewComment } from "./types.js";
-
-/** Prompt assembly helpers. */
 
 /** Escape text used inside a double-quoted XML attribute. */
 function escapeXmlAttr(s: string): string {
@@ -43,10 +19,15 @@ function escapeXmlAttr(s: string): string {
 /** Render group diffs as per-file XML elements. */
 export function buildConcatenatedDiffs(diffs: FileDiff[]): string {
   return diffs
-    .map(
-      (d) =>
-        `<file path="${escapeXmlAttr(d.newPath)}">\n${d.diffText}\n</file>`,
-    )
+    .map((d) => {
+      // Renames: the comment may cite either side of the rename, so both
+      // paths must be discoverable on the element.
+      const renameAttr =
+        d.oldPath !== d.newPath
+          ? ` old_path="${escapeXmlAttr(d.oldPath)}"`
+          : "";
+      return `<file path="${escapeXmlAttr(d.newPath)}"${renameAttr}>\n${d.diffText}\n</file>`;
+    })
     .join("\n\n");
 }
 

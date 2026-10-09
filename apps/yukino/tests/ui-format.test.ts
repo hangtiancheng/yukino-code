@@ -1,30 +1,28 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+import { stripVTControlCharacters } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { visibleWidth, plainTerminalText } from "@/ui/terminal-text.js";
 import { formatToolOutputPreview } from "@/ui/tool-preview.js";
 
 describe("UI v2 tool previews", () => {
+  it("removes raw terminal controls and expands tabs before wrapping", () => {
+    const source =
+      "\x1b[2J\x1b]52;c;clipboard\x07\x1b[31mhello\x1b[0m\0\tworld\r\nnext";
+    const preview = stripVTControlCharacters(
+      formatToolOutputPreview("ReadFile", source, 10),
+    );
+    expect(preview).not.toContain("clipboard");
+    expect(preview).not.toContain("\x1b");
+    expect(preview).not.toContain("\0");
+    expect(preview).not.toContain("\t");
+    expect(preview).toContain("hello");
+    expect(preview.split("\n").every((line) => visibleWidth(line) <= 10)).toBe(
+      true,
+    );
+    expect(plainTerminalText(source)).toBe("hello\tworld\nnext");
+  });
+
   it("shows the tail of shell output", () => {
     const output = Array.from(
       { length: 8 },

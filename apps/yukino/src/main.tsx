@@ -1,33 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-/* eslint-disable no-console -- process entry point: pre-init errors and crash handlers need stderr output */
-
 import { render } from "ink";
 
-import {
-  formatInteractionSummary,
-  type InteractionSummary,
-} from "./bootstrap/interaction-summary.js";
+import type { InteractionSummary } from "./bootstrap/interaction-summary.js";
 import {
   forkEnabled,
   loadConfig,
@@ -38,7 +11,6 @@ import { initLogger, logger } from "./logger/index.js";
 import { parsePrintFlags, runPrintMode } from "./print-mode.js";
 import { recover, recordError, recordExit } from "./recover.js";
 import { newSessionId } from "./session/index.js";
-import { parseTeammateFlags, runTeammate } from "./teammate.js";
 import {
   captureTelemetryError,
   initializeTelemetry,
@@ -47,44 +19,58 @@ import {
   shutdownTelemetry,
 } from "./telemetry/index.js";
 import { App } from "./ui/app.js";
+import { renderInteractionSummary } from "./ui/interaction-summary.js";
+import { parseResumeArgument } from "./ui/resume-argument.js";
 import { setThemeMode } from "./ui/styles.js";
-import { installSyncOutput } from "./ui/sync-output.js";
 import { TerminalInput } from "./ui/terminal-input.js";
+import { installTerminalOutput } from "./ui/terminal-output.js";
 import { detectTerminalTheme } from "./ui/terminal-theme.js";
-import { parseResumeArgument } from "./ui/ui-selection.js";
 import { asErrorString } from "./utils/index.js";
 
 async function main() {
   recover();
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+  const printArgs = parsePrintFlags(rawArgs);
+  const endOfOptions = rawArgs.indexOf("--");
+  const printIndex = rawArgs.indexOf("-p");
+  const args = rawArgs
+    .slice(0, endOfOptions === -1 ? undefined : endOfOptions)
+    .filter((_arg, index) => !printArgs || index !== printIndex + 1);
 
   if (args.includes("--acp") || args.includes("--acp-ws")) {
+    await initializeTelemetry();
+    setTelemetryMode("acp");
     const { runAcp } = await import("./acp/index.js");
-    await runAcp(args);
-    return;
-  }
-
-  await initializeTelemetry();
-  const teammateArgs = parseTeammateFlags(args);
-  if (teammateArgs) {
-    setTelemetryMode("teammate");
     try {
-      await runTeammate(teammateArgs);
-    } catch (err) {
-      captureTelemetryError(err, "teammate");
-      console.error(`teammate: ${asErrorString(err)}`);
-      process.exitCode = 1;
+      await runAcp(args);
     } finally {
       await shutdownTelemetry();
     }
     return;
   }
 
-  // Parse --remote and its optional listen address (defaults to ":18888").
+  if (args.includes("--a2a")) {
+    await initializeTelemetry();
+    setTelemetryMode("a2a");
+    const { runA2a } = await import("./a2a/index.js");
+    try {
+      await runA2a(args);
+    } finally {
+      await shutdownTelemetry();
+    }
+    return;
+  }
+
+  await initializeTelemetry();
+  if (args.includes("--remote") && args.includes("-p")) {
+    throw new Error("--remote cannot be combined with -p.");
+  }
+
+  // Parse --remote and its optional listen address (defaults to port 18888).
   let remoteAddr = "";
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--remote") {
-      remoteAddr = ":18888";
+      remoteAddr = "18888";
       if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
         remoteAddr = args[i + 1];
         i++;
@@ -92,7 +78,6 @@ async function main() {
     }
   }
 
-  const printArgs = parsePrintFlags(args);
   if (printArgs) {
     setTelemetryMode("print");
     try {
@@ -123,19 +108,33 @@ async function main() {
 
   if (args.includes("--remote") && remoteAddr) {
     setTelemetryMode("remote");
-    installRemoteTelemetrySignalHandlers();
     const { RemoteServer } = await import("./remote/server.js");
     initLogger({ sessionId: newSessionId(), mode: "remote", stdout: true });
     const srv = new RemoteServer({
       providers: cfg.providers,
+      defaultProvider: cfg.default_provider,
       mcpServers: cfg.mcp_servers,
+      lspServers: cfg.lsp_servers,
       hookConfigs: cfg.hooks,
+      sandboxConfig: cfg.sandbox,
       addr: remoteAddr,
       enableCoordinatorMode: cfg.enable_coordinator_mode ?? false,
       forkDisabled: !forkEnabled(cfg),
       memoryEnabled: memoryEnabled(cfg),
     });
+    // Graceful shutdown on Ctrl+C/SIGTERM: stop the server (closes WS/HTTP,
+    // kills detached background shells and teammates, disconnects MCP
+    // children) and persist the real exit code before telemetry flushes.
+    installRemoteTelemetrySignalHandlers(async (exitCode) => {
+      try {
+        await srv.stop();
+      } catch {
+        // best-effort — exiting regardless
+      }
+      recordExit(exitCode);
+    });
     try {
+      // Resolves only once the server has stopped (see RemoteServer.stop).
       await srv.run();
     } catch (err) {
       captureTelemetryError(err, "remote");
@@ -151,12 +150,16 @@ async function main() {
   initLogger({ sessionId: newSessionId(), mode: "terminal" });
   const terminalInput = new TerminalInput(process.stdin);
   setThemeMode(await detectTerminalTheme(terminalInput));
-  installSyncOutput();
+  const restoreTerminalOutput = installTerminalOutput();
+  if (process.stdout.isTTY) {
+    process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+  }
   let interactionSummary: InteractionSummary | undefined;
   const appProps = {
     providers: cfg.providers,
     permissionMode: cfg.permission_mode,
     mcpServers: cfg.mcp_servers,
+    lspServers: cfg.lsp_servers,
     hooks: cfg.hooks,
     sandboxConfig: cfg.sandbox,
     enableCoordinatorMode: cfg.enable_coordinator_mode,
@@ -180,22 +183,24 @@ async function main() {
     });
     await instance.waitUntilExit();
   } finally {
+    restoreTerminalOutput();
     terminalInput.dispose();
   }
   if (interactionSummary) {
-    process.stdout.write(`\n${formatInteractionSummary(interactionSummary)}\n`);
+    process.stdout.write(`\n${renderInteractionSummary(interactionSummary)}\n`);
   }
   await shutdownTelemetry();
 }
 
-main()
-  .then(() => {
+export async function runCli(): Promise<void> {
+  try {
+    await main();
     recordExit(process.exitCode ?? 0);
-  })
-  .catch(async (err: unknown) => {
+  } catch (err: unknown) {
     captureTelemetryError(err, "main");
     recordError("main", err);
     logger.fatal({ err }, "main() unhandled error");
     await shutdownTelemetry();
     process.exit(-1);
-  });
+  }
+}

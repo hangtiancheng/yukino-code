@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { MCPServerConfig } from "@/config/index.js";
@@ -138,5 +116,88 @@ describe("MCPManager", () => {
     await Promise.all([startup, reload]);
     expect(connect).toHaveBeenCalledTimes(2);
     expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  test("connects independent servers concurrently but publishes in config order", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started: string[] = [];
+    vi.spyOn(MCPClient.prototype, "connect").mockImplementation(async function (
+      this: MCPClient,
+    ) {
+      started.push(this.name);
+      if (this.name === "slow") {
+        await gate;
+      }
+    });
+    vi.spyOn(MCPClient.prototype, "listTools").mockImplementation(function (
+      this: MCPClient,
+    ) {
+      return Promise.resolve([
+        {
+          name: this.name,
+          description: "",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ]);
+    });
+    const mgr = new MCPManager();
+    const startup = mgr.connectAll([{ name: "slow" }, { name: "fast" }]);
+    try {
+      await Promise.resolve();
+      expect(started).toEqual(["slow", "fast"]);
+    } finally {
+      release();
+    }
+    const result = await startup;
+    expect(result.servers).toEqual(["slow", "fast"]);
+    expect(result.tools.map(({ tool }) => tool.name)).toEqual(["slow", "fast"]);
+    expect(mgr.connectedServers()).toEqual(["slow", "fast"]);
+  });
+
+  test("keeps successful parallel connections when another tool listing fails", async () => {
+    vi.spyOn(MCPClient.prototype, "connect").mockResolvedValue();
+    vi.spyOn(MCPClient.prototype, "listTools").mockImplementation(function (
+      this: MCPClient,
+    ) {
+      if (this.name === "broken") {
+        return Promise.reject(new Error("listing failed"));
+      }
+      return Promise.resolve([]);
+    });
+    const disconnect = vi
+      .spyOn(MCPClient.prototype, "disconnect")
+      .mockResolvedValue();
+    const mgr = new MCPManager();
+    const result = await mgr.connectAll([
+      { name: "first" },
+      { name: "broken" },
+      { name: "last" },
+    ]);
+    expect(result.servers).toEqual(["first", "last"]);
+    expect(result.errors).toEqual([
+      { serverName: "broken", error: "listing failed" },
+    ]);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(mgr.getClient("broken")).toBeUndefined();
+  });
+
+  test("deduplicates same-named configs before opening concurrent connections", async () => {
+    const configure = vi
+      .spyOn(MCPClient.prototype, "connect")
+      .mockResolvedValue();
+    vi.spyOn(MCPClient.prototype, "listTools").mockResolvedValue([]);
+    const mgr = new MCPManager();
+    const result = await mgr.connectAll([
+      { name: "same", command: "old" },
+      { name: "same", command: "new" },
+    ]);
+    expect(configure).toHaveBeenCalledTimes(1);
+    expect(result.servers).toEqual(["same"]);
+    expect(
+      (await mgr.reconcile([{ name: "same", command: "new" }])).unchanged,
+    ).toEqual(["same"]);
   });
 });

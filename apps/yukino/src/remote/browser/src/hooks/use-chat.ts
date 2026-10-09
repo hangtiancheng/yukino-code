@@ -1,0 +1,632 @@
+import type {
+  ChatItem,
+  ConnectionStatus,
+  PermissionResponse,
+  PlanApprovalPayload,
+  ReviewItem,
+  ServerMessage,
+  SessionSummary,
+  SlashCommand,
+  ThinkingItem,
+  ToolItem,
+  UsagePayload,
+} from "@browser/types";
+import { toolKey } from "@browser/types";
+import { useCallback, useReducer } from "react";
+
+/** Monotonic id generator for newly created chat items. */
+let idCounter = 0;
+const MAX_CHAT_ITEMS = 1000;
+
+function nextId(prefix: string): string {
+  idCounter += 1;
+  return `${prefix}_${String(idCounter)}`;
+}
+
+function trimChatItems(state: ChatState): ChatState {
+  if (state.items.length <= MAX_CHAT_ITEMS) {
+    return state;
+  }
+  const items = state.items.slice(-MAX_CHAT_ITEMS);
+  const ids = new Set(items.map((item) => item.id));
+  return {
+    ...state,
+    items,
+    currentAssistantId:
+      state.currentAssistantId && ids.has(state.currentAssistantId)
+        ? state.currentAssistantId
+        : null,
+    currentThinkingId:
+      state.currentThinkingId && ids.has(state.currentThinkingId)
+        ? state.currentThinkingId
+        : null,
+  };
+}
+
+export interface ChatState {
+  items: ChatItem[];
+  connection: ConnectionStatus;
+  session: string;
+  cwd: string;
+  commands: SlashCommand[];
+  usage: UsagePayload | null;
+  streaming: boolean;
+  /** Live status snapshot (model / permission mode / thinking level). */
+  model: string;
+  permissionMode: string;
+  thinkingLevel: string;
+  /** Steering messages queued for the in-flight run, not yet delivered. */
+  steering: string[];
+  /** Open plan approval request, if any. */
+  planApproval: PlanApprovalPayload | null;
+  /** Open session picker list, if any. */
+  sessions: SessionSummary[] | null;
+  /** Whether the code review form dialog is open. */
+  codeReviewOpen: boolean;
+  /** id of the assistant item currently receiving stream_text, if any. */
+  currentAssistantId: string | null;
+  /** id of the thinking item currently receiving thinking_text, if any. */
+  currentThinkingId: string | null;
+}
+
+export const initialState: ChatState = {
+  items: [],
+  connection: "connecting",
+  session: "",
+  cwd: "",
+  commands: [],
+  usage: null,
+  streaming: false,
+  model: "",
+  permissionMode: "",
+  thinkingLevel: "",
+  steering: [],
+  planApproval: null,
+  sessions: null,
+  codeReviewOpen: false,
+  currentAssistantId: null,
+  currentThinkingId: null,
+};
+
+type Action =
+  | { kind: "message"; message: ServerMessage }
+  | { kind: "connection"; status: ConnectionStatus }
+  | { kind: "respondPermission"; id: string; response: PermissionResponse }
+  | { kind: "markAskAnswered"; id: string }
+  | { kind: "closePlanApproval" }
+  | { kind: "closeSessions" }
+  | { kind: "closeCodeReview" };
+
+function finalizeCurrentThinking(state: ChatState): ChatState {
+  if (state.currentThinkingId === null) {
+    return state;
+  }
+  const id = state.currentThinkingId;
+  return {
+    ...state,
+    currentThinkingId: null,
+    items: state.items.map((it) =>
+      it.kind === "thinking" && it.id === id ? { ...it, done: true } : it,
+    ),
+  };
+}
+
+function finalizeAssistant(state: ChatState): ChatState {
+  if (state.currentAssistantId === null) {
+    return state;
+  }
+  const id = state.currentAssistantId;
+  return {
+    ...state,
+    currentAssistantId: null,
+    items: state.items.map((it) =>
+      it.kind === "assistant" && it.id === id
+        ? { ...it, streaming: false }
+        : it,
+    ),
+  };
+}
+
+/** Marks any open review progress card as finished. */
+function finalizeReviews(state: ChatState): ChatState {
+  if (!state.items.some((it) => it.kind === "review" && !it.done)) {
+    return state;
+  }
+  return {
+    ...state,
+    items: state.items.map((it) =>
+      it.kind === "review" && !it.done ? { ...it, done: true } : it,
+    ),
+  };
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled reducer value: ${JSON.stringify(value)}`);
+}
+
+function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
+  switch (msg.type) {
+    case "connected": {
+      // Defensive: the server defers "connected" until the agent exists, so
+      // session is normally non-empty; keep the guard for empty payloads.
+      if (!msg.data.session) {
+        return {
+          ...state,
+          cwd: msg.data.cwd || state.cwd,
+          streaming: msg.data.streaming,
+        };
+      }
+      return {
+        ...state,
+        session: msg.data.session,
+        cwd: msg.data.cwd,
+        streaming: msg.data.streaming,
+      };
+    }
+
+    case "commands":
+      return { ...state, commands: msg.data ?? [] };
+
+    case "status":
+      return {
+        ...state,
+        model: msg.data.model,
+        permissionMode: msg.data.permissionMode,
+        thinkingLevel: msg.data.thinkingLevel,
+      };
+
+    case "session_list":
+      return { ...state, sessions: msg.data.sessions };
+
+    case "plan_approval_request":
+      return { ...state, planApproval: msg.data };
+
+    case "code_review_form":
+      return { ...state, codeReviewOpen: true };
+
+    case "code_review_progress": {
+      const open = state.items.findLast(
+        (it): it is ReviewItem => it.kind === "review" && !it.done,
+      );
+      if (open) {
+        return {
+          ...state,
+          streaming: true,
+          items: state.items.map((it) =>
+            it.kind === "review" && it.id === open.id
+              ? {
+                  ...it,
+                  phase: msg.data.phase,
+                  message: msg.data.message,
+                  progress: msg.data.progress ?? null,
+                }
+              : it,
+          ),
+        };
+      }
+      const item: ReviewItem = {
+        kind: "review",
+        id: nextId("rev"),
+        phase: msg.data.phase,
+        message: msg.data.message,
+        progress: msg.data.progress ?? null,
+        done: false,
+      };
+      return { ...state, streaming: true, items: [...state.items, item] };
+    }
+
+    case "steering_queued":
+      return { ...state, steering: [...state.steering, msg.data.text] };
+
+    case "steering_delivered": {
+      const index = state.steering.indexOf(msg.data.text);
+      const steering =
+        index === -1
+          ? state.steering
+          : state.steering.filter((_, i) => i !== index);
+      return {
+        ...state,
+        steering,
+        items: [
+          ...state.items,
+          { kind: "user", id: nextId("usr"), content: msg.data.text },
+        ],
+      };
+    }
+
+    case "system":
+      return {
+        ...state,
+        items: [
+          ...state.items,
+          {
+            kind: "system",
+            id: nextId("sys"),
+            content: msg.data.message,
+            markdown: msg.data.markdown,
+          },
+        ],
+      };
+
+    case "clear":
+      return {
+        ...state,
+        currentAssistantId: null,
+        currentThinkingId: null,
+        steering: [],
+        planApproval: null,
+        sessions: null,
+        codeReviewOpen: false,
+        items: [
+          {
+            kind: "system",
+            id: nextId("sys"),
+            content: "Conversation cleared.",
+          },
+        ],
+      };
+
+    case "command_done":
+      return finalizeReviews({ ...state, streaming: false });
+
+    case "replay_user":
+      return {
+        ...state,
+        streaming: true,
+        items: [
+          ...state.items,
+          { kind: "user", id: nextId("usr"), content: msg.data.content },
+        ],
+      };
+
+    case "replay_assistant":
+      return {
+        ...state,
+        items: [
+          ...state.items,
+          {
+            kind: "assistant",
+            id: nextId("ast"),
+            content: msg.data.content,
+            streaming: false,
+          },
+        ],
+      };
+
+    case "thinking_text": {
+      if (state.currentThinkingId === null) {
+        const id = nextId("thk");
+        const item: ThinkingItem = {
+          kind: "thinking",
+          id,
+          content: msg.data.text,
+          done: false,
+        };
+        return {
+          ...state,
+          currentThinkingId: id,
+          items: [...state.items, item],
+        };
+      }
+      const id = state.currentThinkingId;
+      return {
+        ...state,
+        items: state.items.map((it) =>
+          it.kind === "thinking" && it.id === id
+            ? { ...it, content: it.content + msg.data.text }
+            : it,
+        ),
+      };
+    }
+
+    case "stream_text": {
+      let next = finalizeCurrentThinking(state);
+      if (next.currentAssistantId === null) {
+        const id = nextId("ast");
+        next = {
+          ...next,
+          currentAssistantId: id,
+          items: [
+            ...next.items,
+            { kind: "assistant", id, content: msg.data.text, streaming: true },
+          ],
+        };
+      } else {
+        const id = next.currentAssistantId;
+        next = {
+          ...next,
+          items: next.items.map((it) =>
+            it.kind === "assistant" && it.id === id
+              ? { ...it, content: it.content + msg.data.text }
+              : it,
+          ),
+        };
+      }
+      return next;
+    }
+
+    case "stream_end":
+      return finalizeAssistant(state);
+
+    case "tool_use": {
+      let next = finalizeCurrentThinking(state);
+      next = finalizeAssistant(next);
+      const key = toolKey(msg.data.toolName, msg.data.toolId);
+      const exists = next.items.some(
+        (it) => it.kind === "tool" && toolKey(it.toolName, it.toolId) === key,
+      );
+      if (exists) {
+        return next;
+      }
+      const item: ToolItem = {
+        kind: "tool",
+        id: nextId("tool"),
+        toolId: msg.data.toolId,
+        toolName: msg.data.toolName,
+        args: msg.data.args,
+        status: "running",
+        output: "",
+        isError: false,
+        elapsed: 0,
+      };
+      return { ...next, items: [...next.items, item] };
+    }
+
+    case "tool_result": {
+      const key = toolKey(msg.data.toolName, msg.data.toolId);
+      let updated = false;
+      const items = state.items.map((it) => {
+        if (it.kind === "tool" && toolKey(it.toolName, it.toolId) === key) {
+          updated = true;
+          return {
+            ...it,
+            status: msg.data.isError ? ("err" as const) : ("ok" as const),
+            output: msg.data.output,
+            isError: msg.data.isError,
+            elapsed: msg.data.elapsed,
+          };
+        }
+        return it;
+      });
+      if (updated) {
+        return { ...state, items };
+      }
+      const item: ToolItem = {
+        kind: "tool",
+        id: nextId("tool"),
+        toolId: msg.data.toolId,
+        toolName: msg.data.toolName,
+        args: null,
+        status: msg.data.isError ? "err" : "ok",
+        output: msg.data.output,
+        isError: msg.data.isError,
+        elapsed: msg.data.elapsed,
+      };
+      return { ...state, items: [...state.items, item] };
+    }
+
+    case "permission_request":
+      return {
+        ...state,
+        items: [
+          ...state.items,
+          {
+            kind: "permission",
+            id: msg.data.id,
+            toolName: msg.data.toolName,
+            description: msg.data.description,
+            responded: false,
+            response: null,
+          },
+        ],
+      };
+
+    case "ask_user":
+      return {
+        ...state,
+        items: [
+          ...state.items,
+          {
+            kind: "askUser",
+            id: msg.data.id,
+            questions: msg.data.questions,
+            answered: false,
+          },
+        ],
+      };
+
+    case "request_expired":
+      return {
+        ...state,
+        items: state.items.map((item) => {
+          if (
+            msg.data.kind === "permission" &&
+            item.kind === "permission" &&
+            item.id === msg.data.id
+          ) {
+            return {
+              ...item,
+              responded: true,
+              response: "deny" as const,
+            };
+          }
+          if (
+            msg.data.kind === "ask" &&
+            item.kind === "askUser" &&
+            item.id === msg.data.id
+          ) {
+            return { ...item, answered: true };
+          }
+          return item;
+        }),
+      };
+
+    case "turn_complete":
+      return state;
+
+    case "loop_complete": {
+      let next = finalizeAssistant(state);
+      next = finalizeCurrentThinking(next);
+      next = finalizeReviews(next);
+      return {
+        ...next,
+        streaming: false,
+        items: [
+          ...next.items,
+          { kind: "done", id: nextId("done"), elapsed: msg.data.elapsed },
+        ],
+      };
+    }
+
+    case "usage":
+      return { ...state, usage: msg.data };
+
+    case "error": {
+      // Mirror loop_complete: the run is over, so close the streaming
+      // assistant/thinking/review items instead of leaving the cursor
+      // blinking and currentAssistantId appending future text into them.
+      let next = finalizeAssistant(state);
+      next = finalizeCurrentThinking(next);
+      next = finalizeReviews(next);
+      return {
+        ...next,
+        streaming: false,
+        items: [
+          ...next.items,
+          { kind: "error", id: nextId("err"), content: msg.data.message },
+        ],
+      };
+    }
+
+    case "compact":
+      return {
+        ...state,
+        items: [
+          ...state.items,
+          {
+            kind: "system",
+            id: nextId("sys"),
+            content: `⟳ ${msg.data.message}`,
+          },
+        ],
+      };
+
+    case "retry":
+      return {
+        ...state,
+        items: [
+          ...state.items,
+          {
+            kind: "system",
+            id: nextId("sys"),
+            content: `↻ Retrying: ${msg.data.reason}`,
+          },
+        ],
+      };
+
+    case "pong":
+      return state;
+
+    default:
+      return assertNever(msg);
+  }
+}
+
+function reducer(state: ChatState, action: Action): ChatState {
+  switch (action.kind) {
+    case "connection":
+      return { ...state, connection: action.status };
+
+    case "message":
+      return trimChatItems(applyMessage(state, action.message));
+
+    case "respondPermission":
+      return {
+        ...state,
+        items: state.items.map((it) =>
+          it.kind === "permission" && it.id === action.id
+            ? { ...it, responded: true, response: action.response }
+            : it,
+        ),
+      };
+
+    case "markAskAnswered":
+      return {
+        ...state,
+        items: state.items.map((it) =>
+          it.kind === "askUser" && it.id === action.id
+            ? { ...it, answered: true }
+            : it,
+        ),
+      };
+
+    case "closePlanApproval":
+      return { ...state, planApproval: null };
+
+    case "closeSessions":
+      return { ...state, sessions: null };
+
+    case "closeCodeReview":
+      return { ...state, codeReviewOpen: false };
+
+    default:
+      return assertNever(action);
+  }
+}
+
+export interface ChatApi {
+  state: ChatState;
+  dispatchMessage: (message: ServerMessage) => void;
+  setConnection: (status: ConnectionStatus) => void;
+  respondPermission: (id: string, response: PermissionResponse) => void;
+  markAskAnswered: (id: string) => void;
+  closePlanApproval: () => void;
+  closeSessions: () => void;
+  closeCodeReview: () => void;
+}
+
+export function useChat(): ChatApi {
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  const dispatchMessage = useCallback((message: ServerMessage) => {
+    dispatch({ kind: "message", message });
+  }, []);
+
+  const setConnection = useCallback((status: ConnectionStatus) => {
+    dispatch({ kind: "connection", status });
+  }, []);
+
+  const respondPermission = useCallback(
+    (id: string, response: PermissionResponse) => {
+      dispatch({ kind: "respondPermission", id, response });
+    },
+    [],
+  );
+
+  const markAskAnswered = useCallback((id: string) => {
+    dispatch({ kind: "markAskAnswered", id });
+  }, []);
+
+  const closePlanApproval = useCallback(() => {
+    dispatch({ kind: "closePlanApproval" });
+  }, []);
+
+  const closeSessions = useCallback(() => {
+    dispatch({ kind: "closeSessions" });
+  }, []);
+
+  const closeCodeReview = useCallback(() => {
+    dispatch({ kind: "closeCodeReview" });
+  }, []);
+
+  return {
+    state,
+    dispatchMessage,
+    setConnection,
+    respondPermission,
+    markAskAnswered,
+    closePlanApproval,
+    closeSessions,
+    closeCodeReview,
+  };
+}

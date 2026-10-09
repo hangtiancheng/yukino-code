@@ -1,29 +1,9 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { dirname, resolve } from "path";
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 
 import { WRITE_FILE_DESCRIPTION } from "./descriptions.js";
+import { withWorkspaceMutation } from "./execution-coordinator.js";
 import { withFileMutationQueue } from "./file-mutation-queue.js";
 import {
   type Tool,
@@ -36,6 +16,7 @@ import {
 import { createChildLogger } from "@/logger/index.js";
 import { asErrorString } from "@/utils/index.js";
 import { strArg } from "@/utils/index.js";
+import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
 
@@ -78,6 +59,15 @@ export class WriteFileTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
+    return withWorkspaceMutation(ctx, this.name, args, () =>
+      this.executeMutation(ctx, args),
+    );
+  }
+
+  private async executeMutation(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
     const requestedPath = strArg(args, "file_path");
     if (!requestedPath) {
       return Promise.resolve({
@@ -93,13 +83,13 @@ export class WriteFileTool implements Tool {
     }
     const content = args.content;
 
-    const filePath = resolve(ctx.workDir, requestedPath);
-    return withFileMutationQueue<ToolResult>(filePath, () => {
+    const filePath = resolveToolPath(ctx.cwd, requestedPath);
+    return withFileMutationQueue<ToolResult>(filePath, async () => {
       if (ctx.abortSignal?.aborted) {
-        return Promise.resolve({
+        return {
           output: "Error: operation interrupted",
           isError: true,
-        });
+        };
       }
       // Gate: read-before-write enforcement (skip for genuinely new files).
       if (
@@ -108,26 +98,43 @@ export class WriteFileTool implements Tool {
       ) {
         const gate = ctx.fileStateCache.check(filePath);
         if (!gate.ok) {
-          return Promise.resolve({ output: gate.error, isError: true });
+          return { output: gate.error, isError: true };
         }
       }
 
       try {
+        await mkdir(dirname(filePath), { recursive: true });
+        if (ctx.abortSignal?.aborted) {
+          return { output: "Error: operation interrupted", isError: true };
+        }
+        if (
+          ctx.fileStateCache &&
+          (existsSync(filePath) || ctx.fileStateCache.has(filePath))
+        ) {
+          const gate = ctx.fileStateCache.check(filePath);
+          if (!gate.ok) {
+            return { output: gate.error, isError: true };
+          }
+        }
         ctx.fileHistory?.trackEdit(filePath);
-        mkdirSync(dirname(filePath), { recursive: true });
-        writeFileSync(filePath, content, "utf-8");
+        await writeFile(filePath, content, "utf-8");
         ctx.fileStateCache?.update(filePath);
-        const lineCount = content.split("\n").length;
-        return Promise.resolve({
+        const lineCount =
+          content.length === 0
+            ? 0
+            : content.endsWith("\n")
+              ? content.slice(0, -1).split("\n").length
+              : content.split("\n").length;
+        return {
           output: `Successfully wrote to ${filePath} (${String(lineCount)} lines)`,
           isError: false,
-        });
+        };
       } catch (err) {
         log.error({ err }, "tool operation failed");
-        return Promise.resolve({
+        return {
           output: `Error writing file: ${asErrorString(err)}`,
           isError: true,
-        });
+        };
       }
     });
   }

@@ -1,26 +1,5 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,8 +10,9 @@ import { safeParse, z } from "zod";
 
 import {
   MACOS_SNIPPET,
+  WINDOWS_PWSH_ACTION_SNIPPET,
+  WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
   WINDOWS_PWSH_SNIPPET,
-  WINDOWS_PWSH_INCLUDES_CSHARP_SNIPPET,
 } from "./snippets.js";
 import type {
   Tool,
@@ -43,7 +23,9 @@ import type {
   ToolSchema,
 } from "./types.js";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import { maybeResizeAndDownsampleImage } from "@/images/index.js";
+import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
 import { asErrorString } from "@/utils/index.js";
 
 const ACTIONS = [
@@ -193,10 +175,6 @@ type CommandRunner = (
 ) => Promise<CommandResult>;
 
 export interface ComputerUseToolOptions {
-  displayHeightPx?: number;
-  displayNumber?: number;
-  displayWidthPx?: number;
-  enableZoom?: boolean;
   environment?: ComputerUseEnvironment;
   platform?: NodeJS.Platform;
   runCommand?: CommandRunner;
@@ -227,6 +205,7 @@ function runCommand(
 
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(command, [...args], {
+      detached: process.platform !== "win32",
       env: options.env ?? process.env,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -246,8 +225,27 @@ function runCommand(
       options.signal?.removeEventListener("abort", onAbort);
       callback();
     };
+    const terminate = (): void => {
+      if (child.pid === undefined) {
+        child.kill("SIGKILL");
+        return;
+      }
+      if (process.platform === "win32") {
+        spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+        }).unref();
+        return;
+      }
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        child.kill("SIGKILL");
+      }
+    };
     const fail = (message: string): void => {
-      child.kill();
+      terminate();
       finish(() => {
         rejectPromise(new Error(message));
       });
@@ -536,22 +534,15 @@ export class ComputerUseTool implements Tool {
   category: ToolCategory = "command";
   deferred = false;
 
-  private readonly displayHeightPx: number;
-  private readonly displayNumber?: number;
-  private readonly displayWidthPx: number;
-  private readonly enableZoom: boolean;
   private readonly environment: ComputerUseEnvironment;
   private readonly platform: NodeJS.Platform;
   private readonly run: CommandRunner;
   private coordinateScaleX = 1;
   private coordinateScaleY = 1;
   private macHelperPromise?: Promise<string>;
+  private windowsHelperPromise?: Promise<string>;
 
   constructor(options: ComputerUseToolOptions = {}) {
-    this.displayHeightPx = options.displayHeightPx ?? MAX_SCREENSHOT_HEIGHT;
-    this.displayNumber = options.displayNumber;
-    this.displayWidthPx = options.displayWidthPx ?? MAX_SCREENSHOT_WIDTH;
-    this.enableZoom = options.enableZoom ?? true;
     this.platform = options.platform ?? process.platform;
     this.environment = options.environment ?? defaultEnvironment(this.platform);
     this.run = options.runCommand ?? runCommand;
@@ -786,6 +777,17 @@ export class ComputerUseTool implements Tool {
       };
     }
 
+    const release = tryAcquireFileSyncLock(
+      join(tmpdir(), "yukino-computer-use"),
+    );
+    if (!release) {
+      return {
+        output:
+          "Error: the computer is being controlled by another Yukino call. Retry after it finishes.",
+        isError: true,
+      };
+    }
+    const unregister = registerExitCleanup(release);
     try {
       ctx.abortSignal?.throwIfAborted();
       if (batch.length > 0) {
@@ -794,6 +796,9 @@ export class ComputerUseTool implements Tool {
       return await this.runSingle(ctx, input);
     } catch (err) {
       return { output: `Error: ${asErrorString(err)}`, isError: true };
+    } finally {
+      unregister();
+      release();
     }
   }
 
@@ -832,10 +837,10 @@ export class ComputerUseTool implements Tool {
 
   /**
    * Execute an OpenAI-style ordered action batch. Per the OpenAI computer
-   * output contract, the result always carries a screenshot — the batch's last
-   * screenshot action if it included one, otherwise a follow-up capture taken
-   * after the loop — and status / safety checks are echoed so the model can
-   * continue.
+   * output contract, the result carries a screenshot — the batch's last
+   * screenshot action if it included one, otherwise a best-effort follow-up
+   * capture taken after the loop (a failed capture degrades to a text-only
+   * result) — and status / safety checks are echoed so the model can continue.
    */
   private async executeBatch(
     ctx: ToolContext,
@@ -851,13 +856,13 @@ export class ComputerUseTool implements Tool {
         result = await this.runSingle(ctx, openaiActionToFlat(item));
       } catch (err) {
         return {
-          output: `Error at actions[${String(index)}] (${item.type}): ${asErrorString(err)}`,
+          output: `Error at actions[${String(index)}] (${item.type}): ${asErrorString(err)} Actions already executed before the failure (${String(executed.length)}): ${executed.join(", ") || "none"}.`,
           isError: true,
         };
       }
       if (result.isError) {
         return {
-          output: `Error at actions[${String(index)}] (${item.type}): ${result.output}`,
+          output: `Error at actions[${String(index)}] (${item.type}): ${result.output} Actions already executed before the failure (${String(executed.length)}): ${executed.join(", ") || "none"}.`,
           contentBlocks: result.contentBlocks,
           isError: true,
         };
@@ -967,6 +972,16 @@ export class ComputerUseTool implements Tool {
 
   private async compileMacHelper(signal?: AbortSignal): Promise<string> {
     const directory = await mkdtemp(join(tmpdir(), "yukino-computer-helper-"));
+    // The binary is compiled once and held for the process lifetime; without
+    // a cleanup hook every session that used ComputerUse would leave its
+    // helper directory behind.
+    const unregisterCleanup = registerExitCleanup(() => {
+      try {
+        rmSync(directory, { recursive: true, force: true });
+      } catch {
+        // best-effort
+      }
+    });
     const sourcePath = join(directory, "main.swift");
     const executablePath = join(directory, "computer-helper");
     try {
@@ -981,6 +996,59 @@ export class ComputerUseTool implements Tool {
       }
       return executablePath;
     } catch (err) {
+      unregisterCleanup();
+      await rm(directory, { recursive: true, force: true });
+      throw err;
+    }
+  }
+
+  private async getWindowsHelper(signal?: AbortSignal): Promise<string> {
+    this.windowsHelperPromise ??= this.compileWindowsHelper(signal);
+    try {
+      return await this.windowsHelperPromise;
+    } catch (err) {
+      this.windowsHelperPromise = undefined;
+      throw err;
+    }
+  }
+
+  private async compileWindowsHelper(signal?: AbortSignal): Promise<string> {
+    const directory = await mkdtemp(
+      join(tmpdir(), "yukino-windows-computer-helper-"),
+    );
+    const assemblyPath = join(directory, "YukinoComputer.dll");
+    const unregisterCleanup = registerExitCleanup(() => {
+      try {
+        rmSync(directory, { recursive: true, force: true });
+      } catch {
+        // best-effort
+      }
+    });
+    try {
+      const result = await this.run(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Sta",
+          "-Command",
+          WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+        ],
+        {
+          env: {
+            ...process.env,
+            YUKINO_COMPUTER_ASSEMBLY: assemblyPath,
+          },
+          signal,
+          timeoutMs: 120_000,
+        },
+      );
+      if (result.code !== 0) {
+        throw commandError("powershell.exe", result);
+      }
+      return assemblyPath;
+    } catch (err) {
+      unregisterCleanup();
       await rm(directory, { recursive: true, force: true });
       throw err;
     }
@@ -990,6 +1058,7 @@ export class ComputerUseTool implements Tool {
     action: NativeInput,
     signal?: AbortSignal,
   ): Promise<string> {
+    const assemblyPath = await this.getWindowsHelper(signal);
     const result = await this.run(
       "powershell.exe",
       [
@@ -997,11 +1066,12 @@ export class ComputerUseTool implements Tool {
         "-NonInteractive",
         "-Sta",
         "-Command",
-        WINDOWS_PWSH_INCLUDES_CSHARP_SNIPPET,
+        WINDOWS_PWSH_ACTION_SNIPPET,
       ],
       {
         env: {
           ...process.env,
+          YUKINO_COMPUTER_ASSEMBLY: assemblyPath,
           YUKINO_COMPUTER_INPUT: Buffer.from(JSON.stringify(action)).toString(
             "base64",
           ),
@@ -1026,8 +1096,13 @@ export class ComputerUseTool implements Tool {
     action: NativeInput,
     signal?: AbortSignal,
   ): Promise<string> {
-    const runXdotool = async (args: readonly string[]): Promise<string> => {
-      const result = await this.run("xdotool", args, { signal });
+    const runXdotool = async (
+      args: readonly string[],
+      cleanup = false,
+    ): Promise<string> => {
+      const result = await this.run("xdotool", args, {
+        signal: cleanup ? undefined : signal,
+      });
       if (result.code !== 0) {
         throw commandError("xdotool", result);
       }
@@ -1036,17 +1111,17 @@ export class ComputerUseTool implements Tool {
     const keys = action.keys ?? [];
     const keyDown = async (): Promise<void> => {
       for (const key of keys) {
-        await runXdotool(["keydown", key]);
+        await runXdotool(["keydown", "--", key]);
       }
     };
     const keyUp = async (): Promise<void> => {
       for (const key of [...keys].reverse()) {
-        await runXdotool(["keyup", key]);
+        await runXdotool(["keyup", "--", key], true);
       }
     };
     const withKeys = async (operation: () => Promise<void>): Promise<void> => {
-      await keyDown();
       try {
+        await keyDown();
         await operation();
       } finally {
         await keyUp();
@@ -1129,7 +1204,7 @@ export class ComputerUseTool implements Tool {
               ]);
             }
           } finally {
-            await runXdotool(["mouseup", "1"]);
+            await runXdotool(["mouseup", "1"], true);
           }
         });
         return "";
@@ -1155,11 +1230,11 @@ export class ComputerUseTool implements Tool {
         return "";
       }
       case "key":
-        await runXdotool(["key", keys.join("+")]);
+        await runXdotool(["key", "--", keys.join("+")]);
         return "";
       case "hold_key":
-        await keyDown();
         try {
+          await keyDown();
           await delay((action.duration ?? 0) * 1000, undefined, { signal });
         } finally {
           await keyUp();

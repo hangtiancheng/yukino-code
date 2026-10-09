@@ -1,31 +1,16 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { Box, Text, useInput, usePaste, useWindowSize } from "ink";
+import { Box, Text, useInput, usePaste } from "ink";
+import type { DOMElement } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
 
+import { CursorText } from "./cursor-text.js";
 import { SelectorFrame } from "./selector-frame.js";
-import { truncateToWidth } from "./terminal-text.js";
+import {
+  cursorWindow,
+  nextGraphemeBoundary,
+  previousGraphemeBoundary,
+  truncateToWidth,
+} from "./terminal-text.js";
+import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import {
   DEFAULT_CONTEXT_WINDOW,
@@ -175,42 +160,15 @@ function displayValue(form: FormState, field: FieldKey): string {
   return form[field];
 }
 
-function cursorValue(
-  value: string,
-  cursor: number,
-  maxWidth: number,
-): ReactNode {
-  const position = Math.min(cursor, value.length);
-  if (value.length + 1 <= maxWidth) {
-    return (
-      <>
-        {value.slice(0, position)}
-        <Text inverse>{value[position] ?? " "}</Text>
-        {value.slice(position + 1)}
-      </>
-    );
-  }
-
-  const contentWidth = Math.max(1, maxWidth - 1);
-  const start = Math.max(
-    0,
-    Math.min(
-      position - Math.floor(contentWidth / 2),
-      value.length - contentWidth,
-    ),
-  );
-  const end = Math.min(value.length, start + contentWidth);
-  const before = value.slice(start, position);
-  const current = value[position] ?? " ";
-  const after = value.slice(position + 1, end);
+function cursorValue(value: string, cursor: number, maxWidth: number) {
+  const window = cursorWindow(value, cursor, maxWidth);
   return (
-    <>
-      {start > 0 ? "…" : null}
-      {before}
-      <Text inverse>{current}</Text>
-      {after}
-      {end < value.length ? "…" : null}
-    </>
+    <CursorText
+      before={`${window.leadingEllipsis ? "…" : ""}${window.before}`}
+      current={window.current}
+      after={`${window.after}${window.trailingEllipsis ? "…" : ""}`}
+      color={THEME.text}
+    />
   );
 }
 
@@ -219,7 +177,7 @@ export function ProviderLogin({
   onSubmit,
   onCancel,
 }: ProviderLoginProps) {
-  const { columns } = useWindowSize();
+  const { columns } = useTerminalDimensions();
   const [form, setForm] = useState<FormState>(() =>
     createInitialForm(initialValues),
   );
@@ -228,6 +186,7 @@ export function ProviderLogin({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const focusRef = useRef<DOMElement>(null);
   const [discovery, setDiscovery] = useState<ModelDiscoveryState>({
     status: "idle",
     models: [],
@@ -424,6 +383,9 @@ export function ProviderLogin({
     if (submittingRef.current) {
       return;
     }
+    if (/\[<\d+;\d+;\d+[Mm]/u.test(input)) {
+      return;
+    }
     if (key.escape || input === "\x1b") {
       onCancel();
       return;
@@ -503,30 +465,26 @@ export function ProviderLogin({
     } else if (key.ctrl && input === "u") {
       updateText("", 0);
     } else if (key.leftArrow || (key.ctrl && input === "b")) {
-      const next = Math.max(0, position - 1);
+      const next = previousGraphemeBoundary(value, position);
       setCursor(next);
       cursorRef.current = next;
     } else if (key.rightArrow || (key.ctrl && input === "f")) {
-      const next = Math.min(value.length, position + 1);
+      const next = nextGraphemeBoundary(value, position);
       setCursor(next);
       cursorRef.current = next;
-    } else if (key.home) {
+    } else if (key.home || (key.ctrl && input === "a")) {
       setCursor(0);
       cursorRef.current = 0;
-    } else if (key.end) {
+    } else if (key.end || (key.ctrl && input === "e")) {
       setCursor(value.length);
       cursorRef.current = value.length;
     } else if (key.backspace || key.delete) {
       if (key.backspace && position > 0) {
-        updateText(
-          value.slice(0, position - 1) + value.slice(position),
-          position - 1,
-        );
+        const previous = previousGraphemeBoundary(value, position);
+        updateText(value.slice(0, previous) + value.slice(position), previous);
       } else if (key.delete && position < value.length) {
-        updateText(
-          value.slice(0, position) + value.slice(position + 1),
-          position,
-        );
+        const next = nextGraphemeBoundary(value, position);
+        updateText(value.slice(0, position) + value.slice(next), position);
       }
     } else if (input && !key.ctrl && !key.meta) {
       insertText(input);
@@ -553,7 +511,8 @@ export function ProviderLogin({
 
   return (
     <SelectorFrame
-      hint="↑↓/Tab field · ←→ choose · Enter submit · Esc cancel"
+      focusRef={focusRef}
+      hint="↑↓/Tab field · ←→ choose in protocol/thinking/model-list fields · Enter submit · Esc cancel"
       subtitle={
         submitting
           ? "Saving provider…"
@@ -578,7 +537,12 @@ export function ProviderLogin({
                   ? cursorValue(rawValue, cursor, valueWidth)
                   : truncateToWidth(rawValue || "(empty)", valueWidth);
           return (
-            <Box key={key} flexDirection="column" width="100%">
+            <Box
+              key={key}
+              ref={selected ? focusRef : undefined}
+              flexDirection="column"
+              width="100%"
+            >
               <Box
                 backgroundColor={selected ? THEME.selectedBg : undefined}
                 paddingRight={contentWidth > labelWidth ? 1 : 0}
@@ -595,12 +559,16 @@ export function ProviderLogin({
                     )}
                   </Text>
                 </Box>
-                <Text
-                  color={selected ? THEME.text : THEME.muted}
-                  wrap="truncate-end"
-                >
-                  {value}
-                </Text>
+                {selected && key !== "protocol" && key !== "thinking" ? (
+                  value
+                ) : (
+                  <Text
+                    color={selected ? THEME.text : THEME.muted}
+                    wrap="truncate-end"
+                  >
+                    {value}
+                  </Text>
+                )}
               </Box>
               {fieldErrors[key] ? (
                 <Text color={THEME.error} wrap="truncate-end">
@@ -610,13 +578,15 @@ export function ProviderLogin({
             </Box>
           );
         })}
-        <Text color={THEME.muted}>{discoveryHelp[discovery.status]}</Text>
-        <Text color={THEME.dim}>Model: type/paste any ID; Ctrl+U clears.</Text>
-        {discovery.models.length > 0 ? (
-          <Text color={THEME.dim}>
-            Home/End or Ctrl+B/F move the model cursor.
-          </Text>
-        ) : null}
+        <Text color={THEME.muted} wrap="truncate-end">
+          {discoveryHelp[discovery.status]}
+        </Text>
+        <Text color={THEME.dim} wrap="truncate-end">
+          type/paste any ID · Ctrl+U clear
+        </Text>
+        <Text color={THEME.dim} wrap="truncate-end">
+          Home/End · Ctrl+B/F move cursor
+        </Text>
       </Box>
     </SelectorFrame>
   );

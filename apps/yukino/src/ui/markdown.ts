@@ -1,34 +1,16 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import chalk from "chalk";
-import { supportsLanguage } from "cli-highlight";
 import { Marked } from "marked";
 import type { TokenizerExtension } from "marked";
 
-import { visibleWidth, wrapToLines } from "./terminal-text.js";
+import {
+  plainTerminalText,
+  visibleWidth,
+  wrapToLines,
+} from "./terminal-text.js";
 
 import { markedTerminal } from "@/ui/marked-terminal.js";
 import { THEME } from "@/ui/styles.js";
+import { isLanguageSupported } from "@/ui/syntax-highlight.js";
 
 chalk.level = 3;
 
@@ -67,61 +49,37 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
       : kind === "user"
         ? THEME.userMessageText
         : THEME.text;
-  const terminal = markedTerminal(
-    {
-      blockquote: (value) =>
-        value
-          .trimEnd()
-          .split("\n")
-          .map(
-            (line) =>
-              `${chalk.hex(THEME.mdQuoteBorder)("│")} ${chalk.italic.hex(THEME.mdQuote)(line.trimStart())}`,
-          )
-          .join("\n"),
-      code: chalk.hex(THEME.mdCodeBlock),
-      codespan: chalk.hex(THEME.mdCode),
-      del: chalk.strikethrough.hex(THEME.dim),
-      em: chalk.italic,
-      firstHeading: chalk.bold.underline.hex(THEME.mdHeading),
-      heading: chalk.bold.hex(THEME.mdHeading),
-      hr: chalk.hex(THEME.mdHr),
-      href: chalk.underline.hex(THEME.mdLinkUrl),
-      link: chalk.hex(THEME.mdLink),
-      listitem: chalk.hex(textColor),
-      paragraph: chalk.hex(textColor),
-      reflowText: true,
-      sanitize: true,
-      emoji: false,
-      showSectionPrefix: false,
-      strong: chalk.bold,
-      tab: 2,
-      table: chalk.hex(textColor),
-      text: chalk.hex(textColor),
-      width,
-    },
-    {
-      language: "plaintext",
-      theme: {
-        addition: chalk.hex(THEME.toolDiffAdded),
-        attr: chalk.hex(THEME.syntaxVariable),
-        built_in: chalk.hex(THEME.syntaxType),
-        class: chalk.hex(THEME.syntaxType),
-        comment: chalk.hex(THEME.syntaxComment),
-        default: chalk.hex(THEME.syntaxOperator),
-        deletion: chalk.hex(THEME.toolDiffRemoved),
-        function: chalk.hex(THEME.syntaxFunction),
-        keyword: chalk.hex(THEME.syntaxKeyword),
-        literal: chalk.hex(THEME.syntaxNumber),
-        name: chalk.hex(THEME.syntaxFunction),
-        number: chalk.hex(THEME.syntaxNumber),
-        params: chalk.hex(THEME.syntaxVariable),
-        string: chalk.hex(THEME.syntaxString),
-        title: chalk.hex(THEME.syntaxFunction),
-        type: chalk.hex(THEME.syntaxType),
-        variable: chalk.hex(THEME.syntaxVariable),
-      },
-    },
-  );
+  const terminal = markedTerminal({
+    blockquote: (value) =>
+      value
+        .trimEnd()
+        .split("\n")
+        .map(
+          (line) =>
+            `${chalk.hex(THEME.mdQuoteBorder)("│")} ${chalk.italic.hex(THEME.mdQuote)(line.trimStart())}`,
+        )
+        .join("\n"),
+    code: chalk.hex(THEME.mdCodeBlock),
+    codespan: chalk.hex(THEME.mdCode),
+    del: chalk.strikethrough.hex(THEME.dim),
+    em: chalk.italic,
+    firstHeading: chalk.bold.underline.hex(THEME.mdHeading),
+    heading: chalk.bold.hex(THEME.mdHeading),
+    hr: chalk.hex(THEME.mdHr),
+    href: chalk.underline.hex(THEME.mdLinkUrl),
+    link: chalk.hex(THEME.mdLink),
+    listitem: chalk.hex(textColor),
+    paragraph: chalk.hex(textColor),
+    reflowText: true,
+    sanitize: true,
+    emoji: false,
+    showSectionPrefix: false,
+    strong: chalk.bold,
+    tab: 2,
+    table: chalk.hex(textColor),
+    text: chalk.hex(textColor),
+    width,
+  });
   const markdown = new Marked({ breaks: false, gfm: true });
   markdown.use(terminal);
   markdown.use({ extensions: [scpStyleRemote] });
@@ -148,7 +106,7 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
           .split("\n")
           .map((line) => "  " + chalk.hex(THEME.mdCodeBlock)(line))
           .join("\n");
-        if (language && supportsLanguage(language)) {
+        if (language && isLanguageSupported(language)) {
           const highlighted = terminal.renderer?.code?.call(this, {
             ...token,
             lang: language,
@@ -216,7 +174,9 @@ export function renderMarkdown(
   width: number,
   kind: MarkdownKind = "assistant",
 ): string {
-  const rendered = createMarkdown(width, kind).parse(text, { async: false });
+  const rendered = createMarkdown(width, kind).parse(plainTerminalText(text), {
+    async: false,
+  });
   const wrapped = wrapToLines(rendered.trimEnd(), width).join("\n");
   return kind === "thinking" ? chalk.italic(wrapped) : wrapped;
 }
@@ -233,7 +193,7 @@ export function renderStreamingMarkdown(
   width: number,
   cache: MarkdownCache,
 ): string {
-  const normalized = text.replace(/\r\n?/gu, "\n");
+  const normalized = plainTerminalText(text);
   const markdown = createMarkdown(width, "assistant", true);
   const tokens = markdown.lexer(normalized);
   // Reference definitions can restyle earlier blocks, so they cannot use a prefix cache.

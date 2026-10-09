@@ -1,27 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import yaml from "js-yaml";
@@ -30,26 +7,15 @@ import z, { parse } from "zod";
 import { BUILTIN_AGENTS, type AgentDefinition } from "./definition.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import { yukinoPath } from "@/storage/paths.js";
 
 const log = createChildLogger({ module: "subagent" });
 
-/**
- * Loads Agent definitions in order: built-in → user-level (~/.yukino/agents/) → project-level (.yukino/agents/).
- * Later definitions with the same name override earlier ones. Priority: project > user > built-in.
- */
-export function loadAgentDefinitions(workDir: string): AgentDefinition[] {
+/** User definitions override built-in agents. */
+export function loadAgentDefinitions(): AgentDefinition[] {
   const definitions = [...BUILTIN_AGENTS];
 
-  const home = homedir();
-  if (home) {
-    loadDir(join(home, ".yukino", "agents"), definitions);
-  }
-
-  const dirs = [join(workDir, ".yukino", "agents")];
-  for (const dir of dirs) {
-    loadDir(dir, definitions);
-  }
-
+  loadDir(yukinoPath("agents"), definitions);
   return definitions;
 }
 
@@ -80,28 +46,31 @@ function loadDir(dir: string, definitions: AgentDefinition[]): void {
 }
 
 const YamlFrontmatterSchema = z.looseObject({
-  name: z.string(),
+  name: z.string().trim().min(1),
   description: z.string().optional(),
   tools: z.array(z.string()).optional(),
   disallowed_tools: z.array(z.string()).optional(),
   system_prompt: z.string().optional(),
-  max_turns: z.number().optional(),
+  max_turns: z.number().int().positive().optional(),
   model: z.string().optional(),
+  permission_mode: z
+    .enum(["default", "acceptEdits", "plan", "bypassPermissions"])
+    .optional(),
   background: z.boolean().optional(),
   isolation: z.literal("worktree").optional(),
 });
 
 function parseAgentDefinition(content: string): AgentDefinition | null {
-  if (!content.startsWith("---")) {
-    return null;
-  }
-  const endIdx = content.indexOf("---", 3);
-  if (endIdx === -1) {
+  content = content.replace(/^\uFEFF/u, "");
+  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u.exec(
+    content,
+  );
+  if (!match) {
     return null;
   }
 
-  const frontmatter = content.slice(3, endIdx).trim();
-  const body = content.slice(endIdx + 3).trim();
+  const frontmatter = match[1].trim();
+  const body = content.slice(match[0].length).trim();
 
   try {
     const raw: unknown = yaml.load(frontmatter);
@@ -115,6 +84,7 @@ function parseAgentDefinition(content: string): AgentDefinition | null {
       systemPromptOverride: parsed.system_prompt,
       maxTurns: parsed.max_turns,
       model: parsed.model,
+      permissionMode: parsed.permission_mode,
       background: parsed.background,
       isolation: parsed.isolation,
       initialPrompt: body,

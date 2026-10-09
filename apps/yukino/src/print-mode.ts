@@ -1,29 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-/* eslint-disable no-console -- non-interactive output mode: console.log is the program output channel */
+import { rmSync } from "node:fs";
 
 import type { AgentEvent } from "./agent/events.js";
 import { Agent } from "./agent/index.js";
+import { configureBashSandbox } from "./bootstrap/sandbox.js";
+import { createToolRegistry } from "./bootstrap/tool-registry.js";
+import { parse as parseCommand } from "./commands/commands.js";
 import {
   forkEnabled,
   loadConfig,
@@ -32,8 +13,10 @@ import {
 import {
   getContextWindow,
   getMaxOutputTokens,
+  resolveDefaultProvider,
 } from "./config/provider-config.js";
 import { ConversationManager } from "./conversation/index.js";
+import { GoalManager, handleGoalCommand } from "./goal/index.js";
 import { createClient } from "./llm/client.js";
 import { MCPManager } from "./mcp/manager.js";
 import { decideAndApply } from "./mcp/strategy.js";
@@ -41,6 +24,7 @@ import { MCPToolWrapper } from "./mcp/tool-wrapper.js";
 import { loadInstructions } from "./memory/instructions.js";
 import { PermissionChecker } from "./permissions/index.js";
 import { buildSystemPrompt, detectEnvironment } from "./prompt/builder.js";
+import { getSessionArtifactsDir, newSessionId } from "./session/index.js";
 import { AgentTool } from "./subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "./subagent/definition.js";
 import { spawnSubagent } from "./subagent/spawn.js";
@@ -59,59 +43,50 @@ import {
   SendMessageTool,
   TeamDeleteTool,
 } from "./teams/tools.js";
-import { BashTool } from "./tools/bash.js";
-import { ComputerUseTool } from "./tools/computer-use.js";
-import { EditFileTool } from "./tools/edit-file.js";
+import { TaskList } from "./todo/index.js";
 import { FileStateCache } from "./tools/file-state-cache.js";
-import { GlobTool } from "./tools/glob.js";
-import { GrepTool } from "./tools/grep.js";
-import { McpCallTool } from "./tools/mcp-call.js";
-import { PowerShellTool } from "./tools/powershell.js";
-import { ReadFileTool } from "./tools/read-file.js";
-import { ToolRegistry } from "./tools/registry.js";
 import { attachBackgroundTaskManager } from "./tools/shell-background.js";
 import { SyntheticOutputTool } from "./tools/synthetic-output.js";
-import { ToolSearchTool } from "./tools/tool-search.js";
-import { WriteFileTool } from "./tools/write-file.js";
 
-/** Supported output formats for -p (print) mode. */
 type OutputFormat = "text" | "stream-json";
 
-/** Parsed arguments for -p mode. */
 export interface PrintArgs {
   prompt: string;
   outputFormat: OutputFormat;
 }
 
-/**
- * Parses -p related command-line flags.
- * Returns null when -p mode is not active.
- */
+/** Returns null when -p mode is not active. */
 export function parsePrintFlags(args: string[]): PrintArgs | null {
-  const idx = args.indexOf("-p");
+  const endOfOptions = args.indexOf("--");
+  const options = args.slice(0, endOfOptions === -1 ? undefined : endOfOptions);
+  const idx = options.indexOf("-p");
   if (idx === -1) {
     return null;
   }
 
-  const prompt = args[idx + 1];
-  if (!prompt) {
-    console.error("Error: -p requires a prompt argument");
+  const separator = args[idx + 1] === "--";
+  const prompt = args[idx + (separator ? 2 : 1)];
+  if (!prompt || (!separator && prompt.startsWith("-"))) {
+    console.error(
+      "Error: -p requires a prompt argument immediately after it; use '-p -- <prompt>' when the prompt starts with '-'",
+    );
     process.exit(1);
   }
 
-  // Parse --output-format (defaults to "text")
   let outputFormat: OutputFormat = "text";
-  const fmtIdx = args.indexOf("--output-format");
-  if (fmtIdx !== -1 && args[fmtIdx + 1]) {
-    const fmt = args[fmtIdx + 1];
-    if (fmt === "stream-json") {
-      outputFormat = "stream-json";
-    } else if (fmt !== "text") {
+  const fmtIdx = options.findIndex(
+    (arg, index) => arg === "--output-format" && index !== idx + 1,
+  );
+  if (fmtIdx !== -1) {
+    const fmt = options[fmtIdx + 1];
+    if (fmt !== "text" && fmt !== "stream-json") {
+      // Also catches a missing value at the end of the argument list.
       console.error(
-        `Error: unknown output format '${fmt}', expected 'text' or 'stream-json'`,
+        `Error: --output-format requires 'text' or 'stream-json' (got '${fmt ?? "nothing"}')`,
       );
       process.exit(1);
     }
+    outputFormat = fmt;
   }
 
   return { prompt, outputFormat };
@@ -121,43 +96,97 @@ export function parsePrintFlags(args: string[]): PrintArgs | null {
  * Runs the Agent non-interactively and writes the result to stdout.
  * - text mode: emits the model's streamed text, followed by background
  *   task notifications
- * - stream-json mode: emits one JSON line per supported event (tool_use,
- *   tool_result, usage, error), plus task notifications and a final result
- *   summary
+ * - stream-json mode: emits incremental text/thinking, tool lifecycle, usage,
+ *   recovery and completion events, plus task notifications and a final result
  */
 export async function runPrintMode(args: PrintArgs): Promise<void> {
   const startTime = Date.now();
-  const workDir = process.cwd();
+  const cwd = process.cwd();
+  const sessionId = newSessionId();
+  const abortController = new AbortController();
+  const onInterrupt = (code: number) => {
+    process.exitCode = code;
+    abortController.abort();
+    for (const task of backgroundTaskManager.list()) {
+      backgroundTaskManager.stop(task.id);
+    }
+  };
+  const onSigint = () => {
+    onInterrupt(130);
+  };
+  const onSigterm = () => {
+    onInterrupt(143);
+  };
 
-  const cfg = withProjectMcpServers(loadConfig(), workDir);
-  const provider = cfg.providers[0];
+  const cfg = withProjectMcpServers(loadConfig(), cwd);
+  const provider = resolveDefaultProvider(cfg.providers, cfg.default_provider);
+  let prompt = args.prompt;
+  const goalManager = new GoalManager(cwd, sessionId);
+  const command = parseCommand(prompt);
+  if (command?.name === "goal") {
+    const result = handleGoalCommand(goalManager, command.args);
+    if (args.outputFormat === "stream-json") {
+      console.log(
+        JSON.stringify({
+          type: "goal",
+          message: result.message,
+          goal: goalManager.get(),
+        }),
+      );
+    } else {
+      console.log(result.message);
+    }
+    if (!result.prompt) {
+      if (result.isError) {
+        process.exitCode = 1;
+      }
+      if (args.outputFormat === "stream-json") {
+        console.log(
+          JSON.stringify({
+            type: "result",
+            result: result.message,
+            duration_ms: Date.now() - startTime,
+            num_turns: 0,
+            tool_calls: [],
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          }),
+        );
+      }
+      return;
+    }
+    prompt = result.prompt;
+  }
 
-  const env = detectEnvironment(workDir);
+  const env = detectEnvironment(cwd);
   env.model = provider.model;
   const systemPrompt = buildSystemPrompt(env);
 
   const client = await createClient(provider, systemPrompt);
 
   const conv = new ConversationManager();
-  conv.addUserMessage(args.prompt);
+  conv.addUserMessage(prompt);
 
   // Print mode intentionally bypasses permission prompts.
-  const checker = new PermissionChecker(workDir, "bypassPermissions");
+  const checker = new PermissionChecker(cwd, "bypassPermissions");
 
-  const registry = new ToolRegistry();
-  registry.register(new ReadFileTool());
-  registry.register(new BashTool());
-  registry.register(new PowerShellTool());
-  registry.register(new ComputerUseTool());
-  registry.register(new GlobTool());
-  registry.register(new GrepTool());
-  registry.register(new WriteFileTool());
-  registry.register(new EditFileTool());
-  registry.register(new ToolSearchTool(registry));
+  const taskList = new TaskList();
+  const teamManager = new TeamManager(cwd);
+  const registry = createToolRegistry(cwd, taskList, {
+    interactionMode: "non-interactive",
+    teamManager,
+    lspServers: cfg.lsp_servers,
+  });
+  await configureBashSandbox(registry, cwd, cfg.sandbox, checker);
 
   // Team tools are also available in -p mode, allowing the Leader to assemble
   // a team and delegate tasks within a single non-interactive execution.
-  const teamManager = new TeamManager(workDir);
+  // Teams are not restored here; print mode manages only its own team runtimes.
+  teamManager.setPermissionChecker(checker);
   const backgroundTaskManager = new TaskManager();
   // Share the background task registry with the command tools registered here
   // (Bash/PowerShell) so run_in_background and timeout auto-background deliver
@@ -168,24 +197,23 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   registry.register(new TeamDeleteTool(teamManager));
   registry.register(new TaskStopTool(teamManager, backgroundTaskManager));
   registry.register(new SyntheticOutputTool());
-  registry.register(new McpCallTool(registry));
 
   const agentTool = new AgentTool(
-    workDir,
+    cwd,
     registry,
-    (def, prompt, background, modelOverride, workDirOverride, context) =>
+    (def, prompt, background, modelOverride, cwdOverride, context) =>
       spawnSubagent(
         def,
         prompt,
         client,
         registry,
         provider,
-        workDirOverride ?? workDir,
+        cwdOverride ?? cwd,
         undefined,
         undefined,
         modelOverride,
-        workDirOverride
-          ? context?.permissionChecker?.forWorkDir(workDirOverride)
+        cwdOverride
+          ? context?.permissionChecker?.forCwd(cwdOverride)
           : context?.permissionChecker,
         {
           abortSignal: context?.abortSignal,
@@ -202,12 +230,13 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         client,
         forkRegistry,
         provider,
-        context?.workDir ?? workDir,
+        context?.cwd ?? cwd,
         undefined,
         undefined,
         modelOverride,
         context?.permissionChecker,
         {
+          agentName: "fork",
           conversation,
           abortSignal: context?.abortSignal,
           onPermissionRequest: context?.onPermissionRequest,
@@ -218,23 +247,30 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   agentTool.forkDisabled = !forkEnabled(cfg);
   agentTool.setTeamManager(
     teamManager,
-    (teamRegistry, teamChecker, memberWorkDir = workDir) =>
-      (task, onEvent, abortSignal) =>
+    (teamRegistry, teamChecker, memberCwd = cwd, options) => {
+      const conversation = new ConversationManager();
+      return (task, onEvent, abortSignal) =>
         spawnSubagent(
-          BUILTIN_AGENTS[0],
+          options?.definition ?? BUILTIN_AGENTS[0],
           task,
           client,
           teamRegistry,
           provider,
-          memberWorkDir,
+          memberCwd,
           undefined,
           onEvent,
-          undefined,
+          options?.modelOverride,
           teamChecker,
           // Teammates stay purely foreground: see SubagentRunOptions.backgroundTasks.
-          { abortSignal, backgroundTasks: false },
-        ),
-    provider.base_url,
+          {
+            abortSignal,
+            backgroundTasks: false,
+            conversation,
+            agentName: options?.agentName,
+            onPermissionRequest: options?.onPermissionRequest,
+          },
+        );
+    },
   );
   registry.register(agentTool);
 
@@ -242,6 +278,8 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   // load mode compares total schema size against the context window, so it only
   // computes accurately once all tools are in place.
   let mcpManager: MCPManager | undefined;
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
   try {
     if (cfg.mcp_servers && cfg.mcp_servers.length > 0) {
       mcpManager = new MCPManager();
@@ -256,7 +294,12 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         process.stderr.write(`MCP warning: ${e.serverName}: ${e.error}
 `);
       }
-      decideAndApply(registry, provider.base_url, getContextWindow(provider));
+      decideAndApply(
+        registry,
+        provider.base_url,
+        provider.protocol,
+        getContextWindow(provider),
+      );
     }
 
     const agent = new Agent({
@@ -264,11 +307,14 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       registry,
       checker,
       conversation: conv,
-      workDir,
+      cwd,
+      sessionId,
+      goalManager,
+      abortSignal: abortController.signal,
       fileStateCache: new FileStateCache(),
       contextWindow: getContextWindow(provider),
       maxOutput: getMaxOutputTokens(provider),
-      instructions: loadInstructions(workDir),
+      instructions: loadInstructions(cwd),
       // Completion reports are drained each turn as system reminders delivered to the Leader.
       notificationFn: () => [
         ...teamManager.drainLeaderMailbox(),
@@ -281,17 +327,21 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         coordinatorActive(cfg.enable_coordinator_mode ?? false),
     });
 
-    // Statistics
     let resultText = "";
     let numTurns = 0;
-    const toolCalls: { tool: string; elapsed: number }[] = [];
-    const totalUsage = { inputTokens: 0, outputTokens: 0 };
+    const toolCalls: { tool: string; tool_id: string; elapsed: number }[] = [];
+    const callsById = new Map<string, (typeof toolCalls)[number]>();
+    const totalUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    };
 
     for await (const event of agent.run()) {
       if (args.outputFormat === "stream-json") {
         emitStreamJson(event);
       } else {
-        // text mode: emit only streamed text
         if (event.type === "stream_text") {
           process.stdout.write(event.text);
         }
@@ -302,36 +352,46 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         case "stream_text":
           resultText += event.text;
           break;
-        case "tool_use":
-          toolCalls.push({ tool: event.toolName, elapsed: 0 });
+        case "tool_use": {
+          const call = {
+            tool: event.toolName,
+            tool_id: event.toolId,
+            elapsed: 0,
+          };
+          toolCalls.push(call);
+          callsById.set(event.toolId, call);
           break;
-        case "tool_result":
-          // Update elapsed time for the most recent matching tool call
-          for (let i = toolCalls.length - 1; i >= 0; i--) {
-            if (
-              toolCalls[i].tool === event.toolName &&
-              toolCalls[i].elapsed === 0
-            ) {
-              toolCalls[i].elapsed = event.elapsed;
-              break;
-            }
+        }
+        case "tool_result": {
+          const call = callsById.get(event.toolId);
+          if (call) {
+            call.elapsed = event.elapsed;
           }
           break;
+        }
         case "turn_complete":
           numTurns++;
           break;
         case "usage":
           totalUsage.inputTokens += event.usage.inputTokens;
           totalUsage.outputTokens += event.usage.outputTokens;
+          totalUsage.cacheReadInputTokens += event.usage.cacheReadInputTokens;
+          totalUsage.cacheCreationInputTokens +=
+            event.usage.cacheCreationInputTokens;
           break;
         case "error":
-          process.exitCode = 1;
+          if (!abortController.signal.aborted) {
+            process.exitCode = 1;
+          }
           if (args.outputFormat === "text") {
             console.error(`\nError: ${event.error.message}`);
           }
           break;
         case "loop_complete":
-          if (event.stopReason === "interrupted") {
+          if (
+            event.stopReason === "interrupted" &&
+            !abortController.signal.aborted
+          ) {
             process.exitCode = 1;
           }
           break;
@@ -349,7 +409,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     const backgroundNotifications = backgroundTaskManager.drainNotifications();
     const durationMs = Date.now() - startTime;
 
-    // text mode: ensure trailing newline
     if (
       args.outputFormat === "text" &&
       resultText &&
@@ -381,9 +440,14 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       console.log(JSON.stringify(resultLine));
     }
   } finally {
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
     // Child agents otherwise outlive the single-shot Leader and shared MCP connections.
-    await backgroundTaskManager.stopAll();
-    await teamManager.stopAll();
+    await Promise.allSettled([
+      backgroundTaskManager.stopAll(),
+      teamManager.dispose(),
+    ]);
+    await Promise.allSettled([registry.dispose()]);
     if (mcpManager) {
       try {
         await mcpManager.disconnectAll();
@@ -391,6 +455,10 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         // Cleanup must not mask an execution error or change the printed result.
       }
     }
+    rmSync(getSessionArtifactsDir(sessionId), {
+      recursive: true,
+      force: true,
+    });
   }
 }
 
@@ -415,6 +483,7 @@ function emitStreamJson(event: AgentEvent): void {
         JSON.stringify({
           type: "tool_result",
           tool_name: event.toolName,
+          tool_id: event.toolId,
           output: event.output,
           is_error: event.isError,
           elapsed: event.elapsed,
@@ -428,6 +497,8 @@ function emitStreamJson(event: AgentEvent): void {
           type: "usage",
           input_tokens: event.usage.inputTokens,
           output_tokens: event.usage.outputTokens,
+          cache_read_input_tokens: event.usage.cacheReadInputTokens,
+          cache_creation_input_tokens: event.usage.cacheCreationInputTokens,
         }),
       );
       break;
@@ -441,8 +512,19 @@ function emitStreamJson(event: AgentEvent): void {
       );
       break;
 
-    // stream_text, thinking_text, etc. are not emitted in stream-json mode
-    // (text content is aggregated into the final result summary)
+    case "stream_text":
+    case "thinking_text":
+    case "turn_complete":
+    case "loop_complete":
+    case "steering_delivered":
+    case "retry":
+      console.log(JSON.stringify(event));
+      break;
+
+    case "compact":
+      console.log(JSON.stringify({ type: "compact", message: event.message }));
+      break;
+
     default:
       break;
   }

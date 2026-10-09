@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { render, type Instance } from "ink";
 import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +69,127 @@ afterEach(() => {
 });
 
 describe("agent output hook", () => {
+  it.each([false, true])(
+    "commits question results immediately with isError=%s while retaining unfinished tools",
+    (isError) => {
+      const send = startLoop();
+      send(
+        { type: "thinking_text", text: "Checking the project" },
+        { type: "stream_text", text: "Choose the configuration" },
+        {
+          type: "tool_use",
+          toolName: "ReadFile",
+          toolId: "read",
+          args: { file_path: "config.yml" },
+        },
+        {
+          type: "tool_result",
+          toolName: "ReadFile",
+          toolId: "read",
+          output: "Configuration",
+          isError: false,
+          elapsed: 1,
+        },
+        {
+          type: "tool_use",
+          toolName: "AskUserQuestion",
+          toolId: "question",
+          args: { questions: [] },
+        },
+        {
+          type: "tool_use",
+          toolName: "Bash",
+          toolId: "parallel",
+          args: { command: "collect diagnostics" },
+        },
+        {
+          type: "tool_result",
+          toolName: "AskUserQuestion",
+          toolId: "question",
+          output: isError ? "User cancelled" : '"Database?" = "MySQL"',
+          isError,
+          elapsed: 2,
+        },
+      );
+      const committed = state().messages.slice();
+      expect(committed.map((message) => message.content)).toEqual([
+        "Checking the project",
+        "Choose the configuration",
+        "",
+      ]);
+      expect(
+        committed.at(-1)?.toolSummary?.map((tool) => tool.toolName),
+      ).toEqual(["ReadFile", "AskUserQuestion"]);
+      expect(committed.at(-1)?.toolSummary?.[1].isError).toBe(isError);
+      expect(state().output.activeTools).toEqual([
+        expect.objectContaining({ toolId: "parallel", loading: true }),
+      ]);
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(state().output.streamingText).toBe("");
+      expect(state().output.streamingThinking).toBe("");
+      expect(state().output.streamingTextRef.current).toBe("");
+      send(
+        {
+          type: "tool_result",
+          toolName: "Bash",
+          toolId: "parallel",
+          output: "Diagnostics complete",
+          isError: false,
+          elapsed: 3,
+        },
+        { type: "turn_complete" },
+        { type: "stream_text", text: "Continuing with your answer" },
+        { type: "loop_complete", stopReason: "end_turn" },
+      );
+      expect(state().messages.slice(0, committed.length)).toEqual(committed);
+      expect(state().messages.at(-2)?.toolSummary).toEqual([
+        expect.objectContaining({
+          toolName: "Bash",
+          argsSummary: "collect diagnostics",
+          output: "Diagnostics complete",
+        }),
+      ]);
+      expect(state().messages.at(-1)?.content).toBe(
+        "Continuing with your answer",
+      );
+      expect(
+        state()
+          .messages.flatMap((message) => message.toolSummary ?? [])
+          .filter((tool) => tool.toolName === "AskUserQuestion"),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("batches thinking deltas with text and clears pending flushes before a new request", () => {
+    const send = startLoop();
+    for (let index = 0; index < 100; index++) {
+      send({ type: "thinking_text", text: "x" });
+    }
+    expect(state().output.streamingThinking).toBe("");
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().output.streamingThinking).toBe("x".repeat(100));
+    send({ type: "stream_text", text: "old request" });
+    act(() => {
+      state().output.prepareTurn();
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().output.streamingText).toBe("");
+    expect(state().output.streamingTextRef.current).toBe("");
+    expect(state().output.streamingThinking).toBe("");
+    const next = startLoop();
+    next(
+      { type: "stream_text", text: "new request" },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(state().messages).toEqual([
+      { role: "assistant", content: "new request" },
+    ]);
+  });
+
   it("batches stream updates and commits once at turn and loop boundaries", () => {
     const send = startLoop();
     send(
@@ -194,7 +293,7 @@ describe("agent output hook", () => {
     });
   });
 
-  it("keeps successful teammate Agent cards dynamic instead of committing them", () => {
+  it("commits teammate Agent cards to history instead of pinning them across turns", () => {
     const send = startLoop();
     send({
       type: "tool_use",
@@ -202,7 +301,7 @@ describe("agent output hook", () => {
       toolId: "team-agent",
       args: { description: "reviewer", team_name: "squad" },
     });
-    expect(state().output.persistentAgentTools).toEqual([
+    expect(state().output.activeTools).toEqual([
       expect.objectContaining({ toolId: "team-agent", loading: true }),
     ]);
 
@@ -219,21 +318,23 @@ describe("agent output hook", () => {
     );
 
     expect(state().output.activeTools).toEqual([]);
-    expect(state().output.persistentAgentTools).toEqual([
-      expect.objectContaining({
-        toolId: "team-agent",
-        output: "Teammate spawned",
-        loading: false,
-      }),
-    ]);
     expect(
       state().messages.flatMap((message) => message.toolSummary ?? []),
-    ).toEqual([]);
+    ).toEqual([
+      expect.objectContaining({
+        toolName: "Agent",
+        output: "Teammate spawned",
+        isError: false,
+      }),
+    ]);
 
     act(() => {
-      state().output.resetUsage();
+      state().output.prepareTurn();
     });
-    expect(state().output.persistentAgentTools).toEqual([]);
+    expect(state().output.activeTools).toEqual([]);
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toHaveLength(1);
   });
 
   it("commits background Agent cards to history like plain tool calls", () => {
@@ -260,10 +361,7 @@ describe("agent output hook", () => {
       { type: "turn_complete" },
     );
 
-    // One-shot background calls must not stay pinned to the bottom: their
-    // card scrolls away with the transcript like any other tool card, and
-    // the result reaches the user as a task notification.
-    expect(state().output.persistentAgentTools).toEqual([]);
+    expect(state().output.activeTools).toEqual([]);
     expect(
       state().messages.flatMap((message) => message.toolSummary ?? []),
     ).toEqual([
@@ -337,7 +435,7 @@ describe("agent output hook", () => {
     );
 
     // The interrupted card must not look like a success: status drives the
-    // red "stopped" styling, matching the persistent background cards.
+    // red "stopped" styling.
     const stopped = state().output.activeTools.find(
       (tool) => tool.toolId === "agent-stop",
     );
@@ -377,7 +475,7 @@ describe("agent output hook", () => {
     expect(summary[2]?.progress).toBeUndefined();
   });
 
-  it("removes every persistent card for a deleted team", () => {
+  it("keeps teammate spawn history after deleting the team", () => {
     const send = startLoop();
     for (const [toolId, teamName] of [
       ["a-1", "alpha"],
@@ -417,14 +515,18 @@ describe("agent output hook", () => {
         isError: false,
         elapsed: 0.1,
       },
+      { type: "turn_complete" },
     );
 
+    expect(state().output.activeTools).toEqual([]);
     expect(
-      state().output.persistentAgentTools.map((tool) => tool.toolId),
-    ).toEqual(["b-1"]);
+      state()
+        .messages.flatMap((message) => message.toolSummary ?? [])
+        .map((tool) => tool.toolName),
+    ).toEqual(["Agent", "Agent", "Agent", "TeamDelete"]);
   });
 
-  it("clears every pinned teammate card when TeamCreate succeeds", () => {
+  it("keeps previous teammate spawn history when TeamCreate replaces a team", () => {
     const send = startLoop();
     for (const toolId of ["a-1", "a-2"]) {
       send(
@@ -444,11 +546,6 @@ describe("agent output hook", () => {
         },
       );
     }
-    expect(
-      state().output.persistentAgentTools.map((tool) => tool.toolId),
-    ).toEqual(["a-1", "a-2"]);
-
-    // TeamCreate deletes every existing team, so all pinned cards are stale.
     send(
       {
         type: "tool_use",
@@ -466,7 +563,6 @@ describe("agent output hook", () => {
       },
     );
 
-    expect(state().output.persistentAgentTools).toEqual([]);
     // The TeamCreate call itself still commits to history like a normal tool.
     expect(
       state().messages.flatMap((message) => message.toolSummary ?? []),
@@ -476,7 +572,8 @@ describe("agent output hook", () => {
       state()
         .messages.flatMap((message) => message.toolSummary ?? [])
         .map((tool) => tool.toolName),
-    ).toEqual(["TeamCreate"]);
+    ).toEqual(["Agent", "Agent", "TeamCreate"]);
+    expect(state().output.activeTools).toEqual([]);
   });
 
   it("keeps retry, compaction, and token accounting without dropping pending text", () => {
@@ -490,8 +587,8 @@ describe("agent output hook", () => {
         usage: {
           inputTokens: 10,
           outputTokens: 4,
-          cacheReadInputTokens: 0,
-          cacheCreationInputTokens: 0,
+          cacheReadInputTokens: 100,
+          cacheCreationInputTokens: 50,
         },
       },
       {
@@ -499,7 +596,7 @@ describe("agent output hook", () => {
         usage: {
           inputTokens: 20,
           outputTokens: 6,
-          cacheReadInputTokens: 0,
+          cacheReadInputTokens: 200,
           cacheCreationInputTokens: 0,
         },
       },
@@ -512,11 +609,23 @@ describe("agent output hook", () => {
     ]);
     expect(state().output.inputTokens).toBe(30);
     expect(state().output.outputTokens).toBe(10);
+    expect(state().output.usageTotalsRef.current).toEqual({
+      cacheCreationTokens: 50,
+      cacheReadTokens: 300,
+      inputTokens: 30,
+      outputTokens: 10,
+    });
     act(() => {
       state().output.resetUsage();
     });
     expect(state().output.inputTokens).toBe(0);
     expect(state().output.outputTokens).toBe(0);
+    expect(state().output.usageTotalsRef.current).toEqual({
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
   });
 
   it("retains partial text for abort/error handling and cancels late flushes", () => {
@@ -557,13 +666,15 @@ describe("agent output hook", () => {
   });
 
   it("cancels a scheduled stream flush when unmounted", () => {
+    const setTimeout = vi.spyOn(globalThis, "setTimeout");
     const send = startLoop();
     send({ type: "stream_text", text: "pending" });
+    const scheduled: unknown = setTimeout.mock.results.at(-1)?.value;
     const clearTimeout = vi.spyOn(globalThis, "clearTimeout");
     act(() => {
       instance?.unmount();
     });
-    expect(clearTimeout).toHaveBeenCalled();
+    expect(clearTimeout).toHaveBeenCalledWith(scheduled);
   });
 
   it("commits thinking and completed tools once when a loop ends without turn_complete", () => {

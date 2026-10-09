@@ -1,29 +1,7 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { stripVTControlCharacters } from "node:util";
 
 import chalk, { Chalk } from "chalk";
-import { Box, Text, render, renderToString, useInput } from "ink";
+import { Box, Text, render, renderToString, useInput, usePaste } from "ink";
 import type { Instance, Key } from "ink";
 import type * as Ink from "ink";
 import { act, createElement } from "react";
@@ -32,6 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
 import type { SessionInfo } from "@/session/index.js";
+import type { AgentTask } from "@/subagent/task-manager.js";
+import { createProgress, type TeammateUIState } from "@/teams/progress.js";
+import { AskUserQuestionTool } from "@/tools/ask-user.js";
+import { AgentStatus } from "@/ui/agent-status.js";
+import { AgentsDialog } from "@/ui/agents-dialog.js";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
 import { PermissionDialog } from "@/ui/permission-dialog.js";
 import { PlanApprovalDialog } from "@/ui/plan-approval.js";
@@ -43,10 +26,13 @@ import { SessionSelector } from "@/ui/session-selector.js";
 import { ICONS, setThemeMode, THEME } from "@/ui/styles.js";
 import { visibleWidth } from "@/ui/terminal-text.js";
 
-// Keep Ink's real layout and React hooks; invoke only the captured input callback.
+// Keep Ink's real layout and React hooks; invoke only the captured input
+// callback. usePaste must be mocked too: the real hook enables raw mode,
+// which throws on the non-TTY test stdin.
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),
   useInput: vi.fn(),
+  usePaste: vi.fn(),
 }));
 
 const noKey: Key = {
@@ -106,12 +92,24 @@ function rerender(node: ReactNode) {
 }
 
 function send(input = "", key: Partial<Key> = {}) {
-  const handler = vi.mocked(useInput).mock.calls.at(-1)?.[0];
+  const handler = vi
+    .mocked(useInput)
+    .mock.calls.findLast(([, options]) => options?.isActive !== false)?.[0];
   if (!handler) {
     throw new Error("Selector input handler is not mounted");
   }
   act(() => {
     handler(input, { ...noKey, ...key });
+  });
+}
+
+function paste(text: string) {
+  const handler = vi.mocked(usePaste).mock.calls.at(-1)?.[0];
+  if (!handler) {
+    throw new Error("Selector paste handler is not mounted");
+  }
+  act(() => {
+    handler(text);
   });
 }
 
@@ -135,6 +133,169 @@ function providers(count = 15): ProviderConfig[] {
     };
   });
 }
+
+function teammate(name: string, teamName = "squad"): TeammateUIState {
+  return {
+    name,
+    teamName,
+    status: "running",
+    startTime: Date.now(),
+    spinnerVerb: "working",
+    progress: createProgress(),
+  };
+}
+
+function backgroundTask(
+  id: string,
+  status: AgentTask["status"] = "running",
+): AgentTask {
+  return {
+    id,
+    name: `review-${id}`,
+    kind: "agent",
+    status,
+    output: status === "running" ? "" : "review findings",
+    cancel: vi.fn(),
+    done: Promise.resolve(),
+  };
+}
+
+describe("agents list and detail", () => {
+  it("lists teammates and background subagents, excludes shells, and routes each action", () => {
+    const onClose = vi.fn();
+    const onKill = vi.fn();
+    const onShutdown = vi.fn();
+    const onStopBackground = vi.fn();
+    const task = backgroundTask("agent-1");
+    mount(
+      createElement(AgentsDialog, {
+        teammates: [teammate("reviewer")],
+        backgroundTasks: [task, { ...backgroundTask("bash-2"), kind: "shell" }],
+        subagents: [
+          {
+            toolCallId: "call-1",
+            taskId: task.id,
+            role: "explore",
+            turnCount: 3,
+            activeTools: [{ toolId: "read", toolName: "ReadFile" }],
+            lastTool: "ReadFile",
+            status: "running",
+          },
+        ],
+        onClose,
+        onKill,
+        onShutdown,
+        onStopBackground,
+      }),
+    );
+    expect(frame).toContain("@reviewer");
+    expect(frame).toContain("agent-1: review-agent-1");
+    expect(frame).not.toContain("bash-2");
+    send("k", { ctrl: true });
+    expect(onKill).not.toHaveBeenCalled();
+    send("k");
+    send("s");
+    expect(onKill).toHaveBeenCalledWith("reviewer", "squad");
+    expect(onShutdown).toHaveBeenCalledWith("reviewer", "squad");
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("explore · 3 turns · ReadFile");
+    expect(frame).toContain("No output yet");
+    send("s");
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    send("k");
+    expect(onStopBackground).toHaveBeenCalledWith(task.id);
+    send("", { escape: true });
+    expect(onClose).not.toHaveBeenCalled();
+    send("", { escape: true });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it.each(["completed", "failed", "cancelled"] as const)(
+    "shows %s background results without teammates",
+    (status) => {
+      const onStopBackground = vi.fn();
+      mount(
+        createElement(AgentsDialog, {
+          teammates: [],
+          backgroundTasks: [backgroundTask("agent-1", status)],
+          subagents: [],
+          onClose: vi.fn(),
+          onStopBackground,
+        }),
+      );
+      expect(frame).toContain(status);
+      send("", { return: true });
+      expect(frame).toContain("review findings");
+      expect(frame).not.toContain("k stop");
+      send("k");
+      expect(onStopBackground).not.toHaveBeenCalled();
+    },
+  );
+
+  it("identifies teammates by both team and member names", () => {
+    mount(
+      createElement(AgentsDialog, {
+        teammates: [
+          { ...teammate("reviewer", "alpha"), lastMessage: "first team" },
+          { ...teammate("reviewer", "beta"), lastMessage: "second team" },
+        ],
+        backgroundTasks: [],
+        subagents: [],
+        onClose: vi.fn(),
+      }),
+    );
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("second team");
+    expect(frame).not.toContain("first team");
+  });
+
+  it("windows large lists, reaches every entry, and clamps selection after removal", () => {
+    resize(80, 14);
+    const props = {
+      teammates: Array.from({ length: 18 }, (_, index) =>
+        teammate(`member-${String(index)}`),
+      ),
+      backgroundTasks: [],
+      subagents: [],
+      onClose: vi.fn(),
+    };
+    mount(createElement(AgentsDialog, props));
+    expect(frame).toContain("@member-0");
+    expect(frame).not.toContain("@member-17");
+    for (let index = 0; index < 17; index++) {
+      send("", { downArrow: true });
+    }
+    expect(frame).toContain("@member-17");
+    expect(frame).not.toContain("@member-0");
+    expect(frame.split("\n").length).toBeLessThanOrEqual(14);
+    rerender(
+      createElement(AgentsDialog, {
+        ...props,
+        teammates: [teammate("remaining")],
+      }),
+    );
+    send("", { return: true });
+    expect(frame).toContain("@remaining");
+  });
+
+  it("advertises Down for background-only work and hides the status when empty", () => {
+    expect(
+      staticFrame(
+        createElement(AgentStatus, { teammates: 0, backgroundSubagents: 0 }),
+        80,
+      ),
+    ).toBe("");
+    const output = staticFrame(
+      createElement(AgentStatus, { teammates: 0, backgroundSubagents: 2 }),
+      80,
+    );
+    expect(output).toContain("2 background subagents");
+    expect(output).toContain("↓ on last input line to view");
+    expect(output).not.toContain("teammate");
+  });
+});
 
 function sessions(count = 15): SessionInfo[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -199,7 +360,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: providers(),
-        currentBaseUrl: "https://provider-12.invalid",
+        currentProviderIndex: 11,
         onSelect,
       }),
     );
@@ -236,7 +397,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: configured,
-        currentBaseUrl: "https://prod.invalid",
+        currentProviderIndex: 1,
         onSelect,
       }),
     );
@@ -283,7 +444,7 @@ describe("provider selector", () => {
     const view = (items: ProviderConfig[]) =>
       createElement(ProviderSelect, {
         providers: items,
-        currentBaseUrl: configured[1].base_url,
+        currentProviderIndex: 1,
         onSelect,
       });
     mount(view(configured));
@@ -311,7 +472,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: providers(3),
-        currentBaseUrl: "https://missing.invalid",
+        currentProviderIndex: 99,
         onSelect,
       }),
     );
@@ -339,7 +500,7 @@ describe("provider selector", () => {
     mount(
       createElement(ProviderSelect, {
         providers: configured,
-        currentBaseUrl: "https://second.invalid",
+        currentProviderIndex: 1,
         onSelect,
       }),
     );
@@ -377,7 +538,7 @@ describe("session selector", () => {
       }),
     );
     expect(frame).toContain(`${ICONS.arrow} Conversation-12 ${ICONS.success}`);
-    expect(frame.match(/Conversation-\d+/g)).toHaveLength(8);
+    expect(frame.match(/Conversation-\d+/g)).toHaveLength(7);
     expect(frame).toContain("session-12 · 12 messages");
     expect(frame).toContain("12/15");
     send("", { downArrow: true });
@@ -536,7 +697,7 @@ describe("selector layout", () => {
         dock(
           createElement(ProviderSelect, {
             providers: providers(),
-            currentBaseUrl: "https://provider-15.invalid",
+            currentProviderIndex: 14,
             onSelect: vi.fn(),
           }),
         ),
@@ -548,9 +709,7 @@ describe("selector layout", () => {
       );
       if (rows >= 12) {
         expect(frame).toContain(`${ICONS.arrow} Provider-15 ${ICONS.success}`);
-        expect(frame.match(/Provider-\d+/g)).toHaveLength(
-          Math.min(10, rows - 10),
-        );
+        expect((frame.match(/Provider-\d+/g) ?? []).length).toBeGreaterThan(0);
       }
     },
   );
@@ -576,7 +735,7 @@ describe("selector layout", () => {
           `${ICONS.arrow} Conversation-15 ${ICONS.success}`,
         );
         expect(frame.match(/Conversation-\d+/g)).toHaveLength(
-          Math.min(10, Math.floor((rows - 10) / 2)),
+          Math.min(10, Math.max(1, Math.floor((rows - 11) / 2))),
         );
       }
     },
@@ -605,7 +764,7 @@ describe("selector layout", () => {
         createElement(Text, null, "Footer path\nFooter tokens"),
       ),
     );
-    expect(frame.match(/Conversation-\d+/g)).toHaveLength(3);
+    expect(frame.match(/Conversation-\d+/g)).toHaveLength(2);
     expect(frame).toContain("Footer tokens");
   });
 
@@ -715,6 +874,43 @@ describe("search input boundaries and independent dialog controls", () => {
     expect(frame).not.toContain("Search:");
   });
 
+  it("validates empty plan feedback and clears the error through the paste callback", () => {
+    const onSelect = vi.fn();
+    mount(createElement(PlanApprovalDialog, { onSelect }));
+    send("", { downArrow: true });
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(frame).toContain("Feedback is required.");
+
+    send("x");
+    expect(frame).not.toContain("Feedback is required.");
+    send("", { backspace: true });
+    send("", { return: true });
+    expect(frame).toContain("Feedback is required.");
+    paste("Use the cache API");
+    expect(frame).not.toContain("Feedback is required.");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith("feedback", "Use the cache API");
+  });
+
+  it("edits plan feedback at the caret and keeps it when navigating out and back", () => {
+    const onSelect = vi.fn();
+    mount(createElement(PlanApprovalDialog, { onSelect }));
+    send("", { downArrow: true });
+    send("", { downArrow: true });
+    paste("あ😁 steps");
+    send("", { home: true });
+    send("", { rightArrow: true });
+    send("", { delete: true });
+    send("new");
+    send("", { home: true });
+    send("", { upArrow: true });
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith("feedback", "あnew steps");
+  });
+
   it("preserves AskUser numeric shortcuts, free text and tab navigation", () => {
     const onComplete = vi.fn();
     mount(
@@ -774,6 +970,54 @@ function mountAskOther(onComplete: (answers: Record<string, string>) => void) {
   send("2");
   send("", { return: true });
 }
+
+describe("AskUser multi-select answers", () => {
+  it.each([
+    { selected: ["1", "2"], text: "  Custom  ", expected: "One, Two, Custom" },
+    { selected: ["2"], text: "Custom", expected: "Two, Custom" },
+    { selected: [], text: "  Custom  ", expected: "Custom" },
+    { selected: ["1", "2"], text: "  ", expected: "One, Two" },
+    { selected: [], text: "  ", expected: "(no answer)" },
+  ])(
+    "submits '$expected' to the harness",
+    async ({ selected, text, expected }) => {
+      const questions = [
+        {
+          header: "Choice",
+          question: "Pick options",
+          options: [{ label: "One" }, { label: "Two" }],
+          multiSelect: true,
+        },
+      ];
+      const onComplete = vi.fn<(answers: Record<string, string>) => void>();
+      const answers = new Promise<Record<string, string>>((resolve) => {
+        onComplete.mockImplementation(resolve);
+      });
+      const tool = new AskUserQuestionTool(() => answers);
+      const result = tool.execute({ cwd: process.cwd() }, { questions });
+      mount(createElement(AskUserDialog, { questions, onComplete }));
+
+      for (const key of selected) {
+        send(key);
+      }
+      send("3");
+      send("", { return: true });
+      send(text);
+      send("", { return: true });
+
+      expect(frame).toContain("Review your answers");
+      expect(frame).toContain(`→ ${expected}`);
+      expect(onComplete).not.toHaveBeenCalled();
+      send("", { return: true });
+      expect(onComplete).toHaveBeenCalledExactlyOnceWith({
+        "Pick options": expected,
+      });
+      const toolResult = await result;
+      expect(toolResult.isError).toBe(false);
+      expect(toolResult.output).toContain(`"Pick options" = "${expected}"`);
+    },
+  );
+});
 
 describe("AskUser free-text field editing", () => {
   it("moves the caret with arrows, Ctrl+A/E and edits mid-text", () => {

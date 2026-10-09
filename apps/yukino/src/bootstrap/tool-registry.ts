@@ -1,36 +1,18 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { Command, CommandRegistry } from "@/commands/commands.js";
+import type { LspServerConfig } from "@/lsp/config.js";
 import { MCP_TOOL_PREFIX } from "@/mcp/tool-wrapper.js";
 import type { SkillCatalog } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
 import type { SkillHost } from "@/skills/index.js";
+import type { TeamManager } from "@/teams/index.js";
+import { registerLeaderTaskTools } from "@/teams/task-tools.js";
 import type { TaskList } from "@/todo/index.js";
 import {
   TaskCreateTool,
   TaskGetTool,
   TaskListTool,
   TaskUpdateTool,
+  TodoWriteTool,
 } from "@/todo/tools.js";
 import { BashTool } from "@/tools/bash.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
@@ -39,13 +21,17 @@ import { EnterWorktreeTool } from "@/tools/enter-worktree.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
 import { GlobTool } from "@/tools/glob.js";
+import { GoalTool } from "@/tools/goal.js";
 import { GrepTool } from "@/tools/grep.js";
+import { LspTool } from "@/tools/lsp.js";
 import { McpCallTool } from "@/tools/mcp-call.js";
 import { PowerShellTool } from "@/tools/powershell.js";
 import { ReadFileTool } from "@/tools/read-file.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import { TaskOutputTool } from "@/tools/task-output.js";
 import { ToolSearchTool } from "@/tools/tool-search.js";
 import { WebFetchTool } from "@/tools/web-fetch.js";
+import { WebSearchTool } from "@/tools/web-search.js";
 import { WriteFileTool } from "@/tools/write-file.js";
 
 export function countMcpTools(registry: ToolRegistry): number {
@@ -77,14 +63,35 @@ export function removeMcpTools(
 }
 
 export function createToolRegistry(
-  workDir: string,
+  cwd: string,
   taskList: TaskList,
+  options: {
+    interactionMode?: "interactive" | "non-interactive";
+    lspServers?: readonly LspServerConfig[];
+    teamManager?: TeamManager;
+  } = {},
 ): ToolRegistry {
   const registry = new ToolRegistry();
-  registry.register(new TaskCreateTool(taskList));
-  registry.register(new TaskGetTool(taskList));
-  registry.register(new TaskListTool(taskList));
-  registry.register(new TaskUpdateTool(taskList));
+  registry.register(new GoalTool());
+  const trackingMode =
+    options.interactionMode === "non-interactive" ? "todos" : "tasks";
+  if (options.teamManager) {
+    registerLeaderTaskTools(
+      registry,
+      options.teamManager,
+      taskList,
+      trackingMode,
+    );
+  } else if (trackingMode === "todos") {
+    registry.register(new TodoWriteTool(taskList));
+  } else {
+    registry.register(new TaskCreateTool(taskList));
+    registry.register(new TaskGetTool(taskList));
+    registry.register(new TaskListTool(taskList));
+    registry.register(new TaskUpdateTool(taskList));
+  }
+  registry.register(new TaskOutputTool());
+  registry.register(new LspTool(options.lspServers ?? []));
   registry.register(new BashTool());
   registry.register(new PowerShellTool());
   registry.register(new ComputerUseTool());
@@ -99,6 +106,7 @@ export function createToolRegistry(
   registry.register(new GlobTool());
   registry.register(new GrepTool());
   registry.register(new WebFetchTool());
+  registry.register(new WebSearchTool());
   return registry;
 }
 

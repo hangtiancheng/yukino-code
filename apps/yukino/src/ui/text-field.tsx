@@ -1,28 +1,9 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+import { Box, Text, useBoxMetrics, useInput, usePaste } from "ink";
+import type { DOMElement } from "ink";
+import { useMemo, useRef } from "react";
+import type { SetStateAction } from "react";
 
-import { Box, Text, useInput, useStdout } from "ink";
-import { useEffect, useMemo, useRef } from "react";
-
+import { CursorText } from "./cursor-text.js";
 import { useInputDraft } from "./input-draft.js";
 import type { InputDraft } from "./input-draft.js";
 import {
@@ -33,6 +14,10 @@ import {
 import { inputBoundary } from "./input-paste.js";
 import { THEME } from "./styles.js";
 import { visibleWidth } from "./terminal-text.js";
+import {
+  useAvailableRows,
+  useTerminalDimensions,
+} from "./use-terminal-layout.js";
 
 interface TextFieldProps {
   /** Draft restored when the field mounts (e.g. re-entering "Other" mode). */
@@ -41,15 +26,19 @@ interface TextFieldProps {
   isActive?: boolean;
   /** Columns consumed to the left of the text (dialog indentation). */
   indent?: number;
+  /** Whether line breaks can be inserted. */
+  multiline?: boolean;
   /** Prefix rendered before the first visual row, e.g. "→ ". */
   prompt?: string;
   /** Called with the joined draft after every edit so the parent can persist
-   *  it across unmounts (the field itself is unmounted when inactive). */
+   *  it across unmounts (callers mount the field conditionally). */
   onChange?: (value: string) => void;
   /** Enter submits the current draft. */
   onSubmit: (value: string) => void;
   /** Escape bubbles to the parent (e.g. leave free-text mode). */
   onEscape?: () => void;
+  onBoundary?: (direction: -1 | 1) => void;
+  onTab?: (value: string, shift: boolean) => void;
 }
 
 /**
@@ -63,12 +52,18 @@ export function TextField({
   initialValue = "",
   isActive = true,
   indent = 0,
+  multiline = true,
   prompt = "",
   onChange,
   onSubmit,
   onEscape,
+  onBoundary,
+  onTab,
 }: TextFieldProps) {
-  const { stdout } = useStdout();
+  const { columns, rows: terminalRows } = useTerminalDimensions();
+  const availableRows = useAvailableRows();
+  const ref = useRef<DOMElement>(null);
+  const metrics = useBoxMetrics(ref);
   const initialDraft = useRef<InputDraft | null>(null);
   if (initialDraft.current === null) {
     const initialLines = initialValue.split("\n");
@@ -82,7 +77,7 @@ export function TextField({
   }
   const {
     lines,
-    setLines,
+    setLines: updateLines,
     cursorLine,
     setCursorLine,
     cursorCol,
@@ -93,17 +88,19 @@ export function TextField({
     null,
   );
 
-  // SelectorFrame paddingX(1) + QuestionContent paddingLeft(1) eat 3 columns.
   const rowWidth = Math.max(
     1,
-    (stdout.columns || 80) - indent - visibleWidth(prompt) - 3,
+    (metrics.hasMeasured ? metrics.width : columns - 3) -
+      indent -
+      visibleWidth(prompt),
   );
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  useEffect(() => {
-    onChangeRef.current?.(lines.join("\n"));
-  }, [lines]);
+  const setLines = (value: SetStateAction<string[]>) => {
+    updateLines(value);
+    onChangeRef.current?.(getDraft().lines.join("\n"));
+  };
 
   const insertText = (text: string) => {
     preferredColumnRef.current = null;
@@ -126,12 +123,16 @@ export function TextField({
     setCursorCol(segments.length === 1 ? col + lastLen : lastLen);
   };
 
+  usePaste(
+    (text) => {
+      const normalized = text.replace(/\r\n?/g, "\n");
+      insertText(multiline ? normalized : normalized.replace(/\n/g, " "));
+    },
+    { isActive },
+  );
+
   useInput(
     (input, key) => {
-      // Filter out SGR mouse events
-      if (input.includes("[<") && /\[<\d+;\d+;\d+[Mm]/.test(input)) {
-        return;
-      }
       // Ink can deliver another key before React commits the previous edit.
       const { lines, cursorLine, cursorCol } = getDraft();
       const isMultiline = lines.length > 1;
@@ -147,6 +148,7 @@ export function TextField({
 
       // Tab belongs to the surrounding dialog (question/field navigation).
       if (key.tab) {
+        onTab?.(lines.join("\n"), key.shift);
         return;
       }
 
@@ -158,12 +160,17 @@ export function TextField({
       // Enter press (Enter arrives as a lone "\r", "\n", or "\r\n").
       const isLoneEnter = input === "\r" || input === "\n" || input === "\r\n";
       if (hasLineBreak && !isLoneEnter) {
-        insertText(input.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
+        const pasted = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        insertText(multiline ? pasted : pasted.replace(/\n/g, " "));
         return;
       }
 
       // Shift+Enter or Ctrl+J → newline
-      if (hasReturn && (key.shift || (key.ctrl && input === "\n"))) {
+      if (
+        multiline &&
+        hasReturn &&
+        (key.shift || (key.ctrl && input === "\n"))
+      ) {
         const line = lines[cursorLine] ?? "";
         setLines((prev) => {
           const updated = [...prev];
@@ -181,16 +188,16 @@ export function TextField({
         return;
       }
 
-      if (key.ctrl && input === "a") {
+      if (key.home || (key.ctrl && input === "a")) {
         setCursorCol(0);
         return;
       }
-      if (key.ctrl && input === "e") {
+      if (key.end || (key.ctrl && input === "e")) {
         setCursorCol((lines[cursorLine] ?? "").length);
         return;
       }
 
-      if (key.leftArrow) {
+      if (key.leftArrow || (key.ctrl && input === "b")) {
         if (cursorCol > 0) {
           setCursorCol(
             inputBoundary(lines[cursorLine] ?? "", cursorCol, "previous"),
@@ -202,7 +209,7 @@ export function TextField({
         return;
       }
 
-      if (key.rightArrow) {
+      if (key.rightArrow || (key.ctrl && input === "f")) {
         const lineLen = (lines[cursorLine] ?? "").length;
         if (cursorCol < lineLen) {
           setCursorCol(
@@ -275,6 +282,8 @@ export function TextField({
           };
           setCursorLine(position.cursorLine);
           setCursorCol(position.cursorCol);
+        } else {
+          onBoundary?.(direction);
         }
         return;
       }
@@ -291,10 +300,28 @@ export function TextField({
     [lines, rowWidth],
   );
   const visualCursor = locateInputCursor(inputRows, cursorLine, cursorCol);
+  const maxRows = Math.max(
+    1,
+    Math.min(Math.floor(terminalRows * 0.3), availableRows - 2),
+  );
+  const start = Math.max(
+    0,
+    Math.min(
+      visualCursor.row - Math.floor(maxRows / 2),
+      inputRows.length - maxRows,
+    ),
+  );
+  const visibleRows = inputRows.slice(start, start + maxRows);
 
   return (
-    <Box flexDirection="column" paddingLeft={indent}>
-      {inputRows.map((row, rowIndex) => {
+    <Box ref={ref} flexDirection="column" paddingLeft={indent} width="100%">
+      {start > 0 && availableRows >= 3 ? (
+        <Text color={THEME.dim} wrap="truncate-end">
+          ↑ {start} more lines
+        </Text>
+      ) : null}
+      {visibleRows.map((row, index) => {
+        const rowIndex = start + index;
         const head =
           rowIndex === 0 ? <Text color={THEME.dim}>{prompt}</Text> : undefined;
         if (rowIndex !== visualCursor.row) {
@@ -315,14 +342,25 @@ export function TextField({
           .map((cell) => cell.text)
           .join("");
         return (
-          <Text key={rowIndex} wrap="truncate-end">
-            {head}
-            {before}
-            <Text inverse>{caret.text}</Text>
-            {after}
-          </Text>
+          <CursorText
+            key={rowIndex}
+            active={isActive}
+            before={
+              <>
+                {head}
+                {before}
+              </>
+            }
+            current={caret.text}
+            after={after}
+          />
         );
       })}
+      {start + visibleRows.length < inputRows.length && availableRows >= 3 ? (
+        <Text color={THEME.dim} wrap="truncate-end">
+          ↓ {inputRows.length - start - visibleRows.length} more lines
+        </Text>
+      ) : null}
     </Box>
   );
 }

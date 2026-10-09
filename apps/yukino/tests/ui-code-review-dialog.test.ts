@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { stripVTControlCharacters } from "node:util";
 
 import { render, renderToString, useInput, useWindowSize } from "ink";
@@ -30,11 +8,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CodeReviewDialog } from "@/ui/code-review-dialog.js";
 
-vi.mock("ink", async (importOriginal) => ({
-  ...(await importOriginal<typeof Ink>()),
-  useInput: vi.fn(),
-  useWindowSize: vi.fn(),
-}));
+const inputHandlers = vi.hoisted(
+  () => new Set<(text: string, key: Key) => void>(),
+);
+vi.mock("ink", async (importOriginal) => {
+  const { useEffect } = await import("react");
+  return {
+    ...(await importOriginal<typeof Ink>()),
+    useInput: vi.fn(
+      (
+        handler: (text: string, key: Key) => void,
+        options?: { isActive?: boolean },
+      ) => {
+        useEffect(() => {
+          if (options?.isActive === false) {
+            return;
+          }
+          inputHandlers.add(handler);
+          return () => {
+            inputHandlers.delete(handler);
+          };
+        }, [handler, options?.isActive]);
+      },
+    ),
+    usePaste: vi.fn(),
+    useWindowSize: vi.fn(),
+  };
+});
 
 const noKey: Key = {
   upArrow: false,
@@ -64,6 +64,7 @@ let outputChunks: string[] = [];
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.mocked(useInput).mockClear();
   vi.mocked(useWindowSize).mockReturnValue({ columns: 80, rows: 24 });
   outputChunks = [];
   vi.spyOn(process.stdout, "write").mockImplementation(
@@ -96,15 +97,13 @@ function mount(onSubmit = vi.fn(), onCancel = vi.fn()) {
 }
 
 function send(input = "", key: Partial<Key> = {}): void {
-  const handlers = vi.mocked(useInput).mock.calls.slice(-2);
+  const handlers = [...inputHandlers];
   if (handlers.length !== 2) {
     throw new Error("CodeReviewDialog input handlers are not mounted");
   }
   act(() => {
-    for (const [handler, options] of handlers) {
-      if (options?.isActive !== false) {
-        handler(input, { ...noKey, ...key });
-      }
+    for (const handler of handlers) {
+      handler(input, { ...noKey, ...key });
     }
   });
 }
@@ -121,6 +120,18 @@ async function submit(): Promise<void> {
 }
 
 describe("CodeReviewDialog", () => {
+  it("persists an edit before field navigation in the same input batch", async () => {
+    const { onSubmit } = mount();
+    act(() => {
+      send("quick focus");
+      send("", { tab: true });
+    });
+    await submit();
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ background: "quick focus" }),
+    );
+  });
+
   it("renders the review scope fields", () => {
     let rendered = "";
     act(() => {

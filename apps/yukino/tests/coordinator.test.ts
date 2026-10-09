@@ -1,26 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -44,12 +22,14 @@ import { asString } from "@/utils/index.js";
 // platforms, so set both.
 let realHome: string | undefined;
 let realUserProfile: string | undefined;
+let homeDir = "";
+const cwds = new Set<string>();
 beforeEach(() => {
   realHome = process.env.HOME;
   realUserProfile = process.env.USERPROFILE;
-  const tmp = mkdtempSync(join(tmpdir(), "yukino-home-"));
-  process.env.HOME = tmp;
-  process.env.USERPROFILE = tmp;
+  homeDir = mkdtempSync(join(tmpdir(), "yukino-home-"));
+  process.env.HOME = homeDir;
+  process.env.USERPROFILE = homeDir;
 });
 afterEach(() => {
   if (realHome === undefined) {
@@ -62,10 +42,19 @@ afterEach(() => {
   } else {
     process.env.USERPROFILE = realUserProfile;
   }
+  rmSync(homeDir, { recursive: true, force: true });
+  for (const directory of cwds) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  cwds.clear();
 });
 
-const workDir = () => mkdtempSync(join(tmpdir(), "yukino-coord-"));
-const ctx = { workDir: process.cwd() };
+const cwd = () => {
+  const directory = mkdtempSync(join(tmpdir(), "yukino-coord-"));
+  cwds.add(directory);
+  return directory;
+};
+const ctx = { cwd: process.cwd() };
 
 describe("coordinator tool set", () => {
   it("blocks tools that would flood the Leader's context with code", () => {
@@ -81,9 +70,15 @@ describe("coordinator tool set", () => {
     }
   });
 
-  it("blocks the shared task board, which belongs to teammates", () => {
-    for (const name of ["TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]) {
-      expect(isCoordinatorTool(name)).toBe(false);
+  it("allows the leader to manage the shared board and private checklist", () => {
+    for (const name of [
+      "TaskCreate",
+      "TaskGet",
+      "TaskList",
+      "TaskUpdate",
+      "TodoWrite",
+    ]) {
+      expect(isCoordinatorTool(name)).toBe(true);
     }
   });
 
@@ -100,8 +95,9 @@ describe("coordinator tool set", () => {
 
   // TeamDelete is the only entry point for tearing down a Team and stopping
   // its members, so the Leader must keep it for cleanup. (Coordinator mode
-  // itself is decided by config alone, not by whether a team exists.)
-  it("keeps TeamDelete so the Leader can leave coordinator mode", () => {
+  // itself is decided by config alone and lasts the whole session; TeamDelete
+  // only performs teardown.)
+  it("keeps TeamDelete for team teardown", () => {
     expect(isCoordinatorTool("TeamDelete")).toBe(true);
   });
 
@@ -135,15 +131,14 @@ describe("coordinator tool set", () => {
   });
 
   // In coordinator mode TeamCreate is not on the whitelist; the Agent tool creates the team itself
-  it("does not need TeamCreate, but keeps TeamDelete for teardown", () => {
+  it("does not need TeamCreate", () => {
     expect(isCoordinatorTool("TeamCreate")).toBe(false);
-    expect(isCoordinatorTool("TeamDelete")).toBe(true);
   });
 });
 
 describe("TaskStop", () => {
   it("stops a running teammate", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     const team = mgr.create("squad");
     let cancelled = false;
     const member = team.addMember("scout");
@@ -159,7 +154,7 @@ describe("TaskStop", () => {
   });
 
   it("stops a background Agent by task ID", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     const tasks = new TaskManager();
     let resolveTask!: (output: string) => void;
     let cancelled = false;
@@ -186,7 +181,7 @@ describe("TaskStop", () => {
   });
 
   it("resolves task_id against the calling loop's manager before the shared one", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     const shared = new TaskManager();
     const perRun = new TaskManager();
     const resolvers: ((output: string) => void)[] = [];
@@ -204,8 +199,7 @@ describe("TaskStop", () => {
     const sharedTask = makePending(shared, "shared-work");
     const perRunTask = makePending(perRun, "fork-work");
     await Promise.resolve();
-    // Task IDs are per-manager counters: both loops' first tasks collide.
-    expect(sharedTask.id).toBe(perRunTask.id);
+    expect(sharedTask.id).not.toBe(perRunTask.id);
 
     const stop = new TaskStopTool(mgr, shared);
     const res = await stop.execute(
@@ -213,21 +207,19 @@ describe("TaskStop", () => {
       { task_id: perRunTask.id },
     );
     expect(res.isError).toBe(false);
-    // The calling loop's own task stopped; the shared manager's namesake — a
-    // different task — is untouched.
+    // Only the selected loop's task is stopped.
     expect(perRunTask.status).toBe("cancelled");
     expect(sharedTask.status).toBe("running");
 
-    // An ID the calling loop's manager doesn't know falls back to the shared
-    // manager (a fork can still stop tasks it saw in its pre-fork snapshot).
+    // A scoped manager is authoritative: inherited IDs do not grant control of parent tasks.
     const sharedOnly = makePending(shared, "shared-only");
     await Promise.resolve();
     const res2 = await stop.execute(
       { ...ctx, taskManager: perRun },
       { task_id: sharedOnly.id },
     );
-    expect(res2.isError).toBe(false);
-    expect(sharedOnly.status).toBe("cancelled");
+    expect(res2.isError).toBe(true);
+    expect(sharedOnly.status).toBe("running");
     expect(perRunTask.status).toBe("cancelled");
 
     for (const resolve of resolvers.splice(0)) {
@@ -236,7 +228,7 @@ describe("TaskStop", () => {
   });
 
   it("errors on an unknown teammate", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     mgr.create("squad");
     const res = await new TaskStopTool(mgr).execute(ctx, { teammate: "ghost" });
     expect(res.isError).toBe(true);
@@ -244,7 +236,7 @@ describe("TaskStop", () => {
 
   // Stopping an already-stopped teammate again should not raise an error, to avoid the model retrying repeatedly on the error
   it("is not an error to stop an idle teammate", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     const team = mgr.create("squad");
     team.addMember("scout");
     const res = await new TaskStopTool(mgr).execute(ctx, { teammate: "scout" });
@@ -334,13 +326,7 @@ describe("coordinator prompt", () => {
     ]) {
       expect(section).toContain(`**${name}**`);
     }
-    for (const name of [
-      "ReadFile",
-      "Bash",
-      "Grep",
-      "TaskCreate",
-      "TeamCreate",
-    ]) {
+    for (const name of ["ReadFile", "Bash", "Grep", "TeamCreate"]) {
       expect(section).not.toContain(`**${name}**`);
     }
   });

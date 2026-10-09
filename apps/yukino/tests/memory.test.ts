@@ -1,38 +1,41 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { writeFileSync } from "fs";
-import { mkdtempSync, existsSync, readFileSync, mkdirSync } from "node:fs";
+import {
+  mkdtempSync as createTempDir,
+  existsSync,
+  readFileSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
+import type { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { MemoryManager } from "@/memory/manager.js";
+import { projectPath } from "@/storage/paths.js";
+
+const tempDirs = new Set<string>();
+
+function mkdtempSync(prefix: string): string {
+  const directory = createTempDir(prefix);
+  tempDirs.add(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of tempDirs) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  tempDirs.clear();
+});
 
 class MockClient implements LLMClient {
+  lastPrompt = "";
+
   constructor(private text: string) {}
   setSystemPrompt(_prompt: string): void {
     /** noop */
@@ -40,7 +43,11 @@ class MockClient implements LLMClient {
   setMaxOutputTokens?(_maxTokens: number): void {
     /** noop */
   }
-  async *stream(): AsyncGenerator<StreamEvent> {
+  async *stream(
+    conversation: ConversationManager,
+  ): AsyncGenerator<StreamEvent> {
+    const prompt = conversation.getMessages()[0]?.content;
+    this.lastPrompt = typeof prompt === "string" ? prompt : "";
     await Promise.resolve();
     yield { type: "text_delta", text: this.text };
     yield {
@@ -58,7 +65,7 @@ class MockClient implements LLMClient {
 
 describe("MemoryExtractor", () => {
   it("parses memory blocks and routes project/reference memories to the project dir", async () => {
-    // Only project-scoped types so the test writes into the temp workDir,
+    // Only project-scoped types so the test writes into the temp cwd,
     // never the real home directory.
     const response = [
       "MEMORY_NAME: build-cmd",
@@ -73,15 +80,15 @@ describe("MemoryExtractor", () => {
       "---",
     ].join("\n");
 
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-mem-"));
     const saved = await new MemoryExtractor(
       new MockClient(response),
-      workDir,
+      cwd,
     ).extract("conversation");
 
     expect(saved.sort()).toEqual(["api-docs", "build-cmd"]);
 
-    const memDir = join(workDir, ".yukino", "memory");
+    const memDir = projectPath(cwd, "memory");
     expect(existsSync(join(memDir, "build-cmd.md"))).toBe(true);
     const file = readFileSync(join(memDir, "build-cmd.md"), "utf-8");
     expect(file).toContain('name: "build-cmd"');
@@ -97,26 +104,139 @@ describe("MemoryExtractor", () => {
       `MEMORY_DESC: ${description}`,
       "MEMORY_BODY: body",
     ].join("\n");
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-mem-"));
 
-    await new MemoryExtractor(new MockClient(response), workDir).extract(
+    await new MemoryExtractor(new MockClient(response), cwd).extract(
       "conversation",
     );
 
-    const memory = new MemoryManager(workDir)
+    const memory = new MemoryManager(cwd)
       .loadAll()
       .find(
-        (entry) =>
-          entry.path === join(workDir, ".yukino", "memory", "yaml-safe.md"),
+        (entry) => entry.path === projectPath(cwd, "memory", "yaml-safe.md"),
       );
     expect(memory?.description).toBe(description);
   });
 
+  it("only reads complete type and description lines into the manifest", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+    const memoryDir = projectPath(cwd, "memory");
+    mkdirSync(memoryDir, { recursive: true });
+    writeFileSync(
+      join(memoryDir, "misleading.md"),
+      [
+        "---",
+        "name: misleading",
+        "metadata: {}",
+        "---",
+        "",
+        "Implementation prototype: feedback",
+        "Narrative description: body impostor",
+      ].join("\n"),
+      "utf-8",
+    );
+    writeFileSync(
+      join(memoryDir, "valid.md"),
+      [
+        "---",
+        "name: valid",
+        'description: "real description"',
+        "metadata:",
+        '  type: "project"',
+        "---",
+        "body",
+      ].join("\n"),
+      "utf-8",
+    );
+    const client = new MockClient("NONE");
+
+    await new MemoryExtractor(client, cwd).extract("conversation");
+
+    expect(client.lastPrompt).toContain("- [reference] misleading.md:");
+    expect(client.lastPrompt).not.toContain("[feedback] misleading.md");
+    expect(client.lastPrompt).not.toContain("body impostor");
+    expect(client.lastPrompt).toContain(
+      "- [project] valid.md: real description",
+    );
+  });
+
+  it("resets accumulated fields when MEMORY_NAME repeats", async () => {
+    const response = [
+      "MEMORY_NAME: stale",
+      "MEMORY_TYPE: project",
+      "MEMORY_DESC: stale description",
+      "MEMORY_BODY: stale body",
+      "stale continuation",
+      "MEMORY_NAME: final",
+      "MEMORY_BODY: fresh body",
+    ].join("\n");
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+
+    const saved = await new MemoryExtractor(
+      new MockClient(response),
+      cwd,
+    ).extract("conversation");
+
+    expect(saved).toEqual(["final"]);
+    expect(existsSync(projectPath(cwd, "memory", "stale.md"))).toBe(false);
+    const file = readFileSync(projectPath(cwd, "memory", "final.md"), "utf-8");
+    expect(file).toContain('type: "reference"');
+    expect(file).toContain('description: ""');
+    expect(file).toContain("fresh body");
+    expect(file).not.toContain("stale description");
+    expect(file).not.toContain("stale body");
+    expect(file).not.toContain("stale continuation");
+
+    const bodyLeakDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+    const bodyLeakResponse = [
+      "MEMORY_NAME: stale-body",
+      "MEMORY_TYPE: project",
+      "MEMORY_BODY: must not leak",
+      "nor may this continuation",
+      "MEMORY_NAME: bodyless-final",
+      "MEMORY_TYPE: project",
+      "MEMORY_DESC: final description",
+    ].join("\n");
+    const bodyLeakSaved = await new MemoryExtractor(
+      new MockClient(bodyLeakResponse),
+      bodyLeakDir,
+    ).extract("conversation");
+
+    expect(bodyLeakSaved).toEqual([]);
+    expect(
+      existsSync(projectPath(bodyLeakDir, "memory", "bodyless-final.md")),
+    ).toBe(false);
+  });
+
+  it("replaces prior continuation content when MEMORY_BODY repeats", async () => {
+    const response = [
+      "MEMORY_NAME: replaced-body",
+      "MEMORY_TYPE: project",
+      "MEMORY_BODY: obsolete body",
+      "obsolete continuation",
+      "MEMORY_BODY: replacement body",
+      "replacement continuation",
+    ].join("\n");
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+
+    await new MemoryExtractor(new MockClient(response), cwd).extract(
+      "conversation",
+    );
+
+    const file = readFileSync(
+      projectPath(cwd, "memory", "replaced-body.md"),
+      "utf-8",
+    );
+    expect(file).toContain("replacement body\nreplacement continuation");
+    expect(file).not.toContain("obsolete body");
+    expect(file).not.toContain("obsolete continuation");
+  });
+
   it("returns nothing when the model says NONE", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-mem-"));
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-mem-"));
     const saved = await new MemoryExtractor(
       new MockClient("NONE"),
-      workDir,
+      cwd,
     ).extract("conversation");
     expect(saved).toEqual([]);
   });
@@ -124,8 +244,8 @@ describe("MemoryExtractor", () => {
 
 describe("MemoryManager malformed files", () => {
   it("skips malformed frontmatter from load, index, and recall", async () => {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-malformed-"));
-    const dir = join(workDir, ".yukino", "memory");
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-malformed-"));
+    const dir = projectPath(cwd, "memory");
     mkdirSync(dir, { recursive: true });
     const badPath = join(dir, "bad.md");
     writeFileSync(
@@ -133,14 +253,12 @@ describe("MemoryManager malformed files", () => {
       "---\nname: bad\ndescription: package: cannot publish\ntype: project\n---\n\nbody\n",
       "utf-8",
     );
-    const manager = new MemoryManager(workDir);
+    const manager = new MemoryManager(cwd);
 
     expect(manager.loadAll().some((memory) => memory.path === badPath)).toBe(
       false,
     );
-    expect(readFileSync(join(dir, "MEMORY.md"), "utf-8")).not.toContain(
-      "bad.md",
-    );
+    expect(existsSync(join(dir, "MEMORY.md"))).toBe(false);
     await expect(
       manager.findRelevantMemories(
         "query",
@@ -152,8 +270,8 @@ describe("MemoryManager malformed files", () => {
 
 describe("MemoryManager index truncation", () => {
   function seed(count: number, descLen: number, filler = "a"): string {
-    const workDir = mkdtempSync(join(tmpdir(), "yukino-cap-"));
-    const dir = join(workDir, ".yukino", "memory");
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-cap-"));
+    const dir = projectPath(cwd, "memory");
     mkdirSync(dir, { recursive: true });
     for (let i = 0; i < count; i++) {
       const name = `mem${String(i).padStart(4, "0")}`;
@@ -163,7 +281,7 @@ describe("MemoryManager index truncation", () => {
         "utf-8",
       );
     }
-    return workDir;
+    return cwd;
   }
 
   it("injects entries verbatim without a warning when there are few of them", () => {

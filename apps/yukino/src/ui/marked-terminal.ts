@@ -1,31 +1,6 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import ansiEscapes from "ansi-escapes";
 import ansiRegex from "ansi-regex";
 import chalk from "chalk";
-import { highlight as highlightCli } from "cli-highlight";
-import type { HighlightOptions } from "cli-highlight";
-import Table from "cli-table3";
 import type {
   MarkedExtension,
   MarkedOptions,
@@ -34,15 +9,15 @@ import type {
   Parser,
 } from "marked";
 import * as emoji from "node-emoji";
+import sliceAnsi from "slice-ansi";
+import stringWidth from "string-width";
 import supportsHyperlinks from "supports-hyperlinks";
 
-import { fitTableToWidth } from "./table-layout.js";
-
-// === Type Definitions ===
+import { THEME } from "./styles.js";
+import { highlightCode } from "./syntax-highlight.js";
+import { fitTableToWidth, renderTable } from "./table-layout.js";
 
 type StyleFn = (...text: string[]) => string;
-
-type TableCtorOptions = Table.TableConstructorOptions;
 
 export interface TerminalRendererOptions {
   code: StyleFn;
@@ -69,11 +44,8 @@ export interface TerminalRendererOptions {
   showSectionPrefix: boolean;
   reflowText: boolean;
   tab: number | string;
-  tableOptions: TableCtorOptions;
   sanitize: boolean;
 }
-
-// === Constants ===
 
 const COLON_REPLACER = "*#COLON|*";
 const COLON_REPLACER_REGEXP = new RegExp(escapeRegExp(COLON_REPLACER), "g");
@@ -81,6 +53,10 @@ const COLON_REPLACER_REGEXP = new RegExp(escapeRegExp(COLON_REPLACER), "g");
 const TAB_ALLOWED_CHARACTERS = ["\t"];
 
 const ANSI_REGEXP: RegExp = ansiRegex();
+const ANSI_SPLIT_REGEXP = new RegExp(`(${ANSI_REGEXP.source})`, "gu");
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
 
 const HARD_RETURN = "\r";
 const HARD_RETURN_RE = new RegExp(HARD_RETURN);
@@ -107,60 +83,55 @@ function asTabNumber(tab: number | string) {
   return asTabNumber(tabN);
 }
 
-// === Default Options ===
+const DEFAULT_TAB = 4;
 
-const defaultOptions: TerminalRendererOptions = {
-  code: chalk.yellow,
-  blockquote: chalk.gray.italic,
-  html: chalk.gray,
-  heading: chalk.green.bold,
-  firstHeading: chalk.magenta.underline.bold,
-  hr: chalk.reset,
-  listitem: chalk.reset,
-  list: list,
-  table: chalk.reset,
-  paragraph: chalk.reset,
-  strong: chalk.bold,
-  em: chalk.italic,
-  codespan: chalk.yellow,
-  del: chalk.dim.gray.strikethrough,
-  link: chalk.blue,
-  href: chalk.blue.underline,
-  text: identity,
-  unescape: true,
-  emoji: true,
-  width: 80,
-  showSectionPrefix: true,
-  reflowText: false,
-  tab: 4,
-  tableOptions: {},
-  sanitize: false,
-};
-
-// === Renderer Class ===
+// Built per renderer so THEME is only read at render time: evaluating these
+// chalk styles at module load would freeze the palette before startup's
+// setThemeMode applies the detected terminal theme.
+function buildDefaultOptions(): TerminalRendererOptions {
+  return {
+    code: chalk.hex(THEME.mdCodeBlock),
+    blockquote: chalk.italic.hex(THEME.mdQuote),
+    html: chalk.hex(THEME.muted),
+    heading: chalk.bold.hex(THEME.mdHeading),
+    firstHeading: chalk.bold.underline.hex(THEME.mdHeading),
+    hr: chalk.reset,
+    listitem: chalk.reset,
+    list: list,
+    table: chalk.reset,
+    paragraph: chalk.reset,
+    strong: chalk.bold,
+    em: chalk.italic,
+    codespan: chalk.hex(THEME.mdCode),
+    del: chalk.strikethrough.hex(THEME.dim),
+    link: chalk.hex(THEME.mdLink),
+    href: chalk.underline.hex(THEME.mdLinkUrl),
+    text: identity,
+    unescape: true,
+    emoji: true,
+    width: 80,
+    showSectionPrefix: true,
+    reflowText: false,
+    tab: DEFAULT_TAB,
+    sanitize: false,
+  };
+}
 
 class Renderer {
   private readonly config: TerminalRendererOptions;
   private readonly tabStr: string;
-  private readonly tableSettings: TableCtorOptions;
   private readonly emojiFn: StyleFn;
   private readonly unescapeFn: StyleFn;
-  private readonly highlightOptions: HighlightOptions;
   private readonly transform: StyleFn;
 
   private parser: Parser | undefined;
   markedOptions: MarkedOptions | undefined;
 
-  constructor(
-    options?: Partial<TerminalRendererOptions>,
-    highlightOptions?: HighlightOptions,
-  ) {
-    this.config = { ...defaultOptions, ...options };
-    this.tabStr = sanitizeTab(this.config.tab, asTabNumber(defaultOptions.tab));
-    this.tableSettings = this.config.tableOptions;
+  constructor(options?: Partial<TerminalRendererOptions>) {
+    this.config = { ...buildDefaultOptions(), ...options };
+    this.tabStr = sanitizeTab(this.config.tab, asTabNumber(DEFAULT_TAB));
     this.emojiFn = this.config.emoji ? insertEmojis : identity;
     this.unescapeFn = this.config.unescape ? unescapeEntities : identity;
-    this.highlightOptions = highlightOptions ?? {};
     this.transform = compose(undoColon, this.unescapeFn, this.emojiFn);
   }
 
@@ -197,10 +168,6 @@ class Renderer {
     );
   }
 
-  textLength(str: string): number {
-    return textLength(str);
-  }
-
   space(_token: Tokens.Space): "" {
     return "";
   }
@@ -214,10 +181,7 @@ class Renderer {
 
   code(token: Tokens.Code): string {
     return section(
-      identify(
-        this.tabStr,
-        highlight(token.text, token.lang, this.config, this.highlightOptions),
-      ),
+      identify(this.tabStr, highlight(token.text, token.lang, this.config)),
     );
   }
 
@@ -346,27 +310,17 @@ class Renderer {
       ),
     );
 
-    // cli-table3 sizes its columns to the unwrapped cells, so a table with wide
-    // cells overflows the terminal. Wrap the cells into the configured width
-    // first, unless the caller pinned the columns itself.
-    const fitted =
-      this.tableSettings.colWidths && this.tableSettings.colWidths.length > 0
-        ? undefined
-        : fitTableToWidth(rows, token.header.length, this.config.width);
+    const fitted = fitTableToWidth(
+      rows,
+      token.header.length,
+      this.config.width,
+    );
 
-    const table = new Table({
-      ...this.tableSettings,
-      head: (fitted?.rows ?? rows)[0],
-      // The fitted cells arrive pre-wrapped, so cli-table3 must not wrap them
-      // again: it breaks long words and wide characters past the column width.
-      ...(fitted ? { colWidths: fitted.columnWidths, wordWrap: false } : {}),
-    });
-
-    for (const row of (fitted?.rows ?? rows).slice(1)) {
-      table.push(row);
-    }
-
-    return section(this.config.table(table.toString()));
+    return section(
+      this.config.table(
+        renderTable(fitted?.rows ?? rows, fitted?.columnWidths),
+      ),
+    );
   }
 
   strong(token: Tokens.Strong): string {
@@ -458,15 +412,10 @@ class Renderer {
   }
 }
 
-// === Export ===
-
-export default Renderer;
-
 export function markedTerminal(
   options?: Partial<TerminalRendererOptions>,
-  highlightOptions?: HighlightOptions,
 ): MarkedExtension {
-  const r = new Renderer(options, highlightOptions);
+  const r = new Renderer(options);
 
   const renderer: RendererObject = {
     space() {
@@ -554,10 +503,11 @@ export function markedTerminal(
   return { renderer };
 }
 
-// === Helper Functions ===
-
 function textLength(str: string): number {
-  return str.replace(ANSI_REGEXP, "").length;
+  // Column count, not UTF-16 length: CJK characters occupy two columns and
+  // some emoji even more, so wrapping arithmetic must agree with what the
+  // terminal actually renders.
+  return stringWidth(str.replace(ANSI_REGEXP, ""));
 }
 
 function fixHardReturn(text: string, reflow: boolean): string {
@@ -570,8 +520,7 @@ function reflowText(text: string, width: number, gfm: boolean): string {
   const reflowed: string[] = [];
 
   for (const sectionStr of sections) {
-    // eslint-disable-next-line no-control-regex
-    const fragments = sectionStr.split(/(\x1b\[(?:\d{1,3})(?:;\d{1,3})*m)/g);
+    const fragments = sectionStr.split(ANSI_SPLIT_REGEXP);
     let column = 0;
     let currentLine = "";
     let lastWasEscapeChar = false;
@@ -596,37 +545,38 @@ function reflowText(text: string, width: number, gfm: boolean): string {
 
       for (const word of words) {
         const addSpace = column !== 0 && !lastWasEscapeChar;
+        const wordWidth = stringWidth(word);
 
-        if (column + word.length + (addSpace ? 1 : 0) > width) {
-          if (word.length <= width) {
+        if (column + wordWidth + (addSpace ? 1 : 0) > width) {
+          if (wordWidth <= width) {
             reflowed.push(currentLine);
             currentLine = word;
-            column = word.length;
+            column = wordWidth;
           } else {
-            const available = width - column - (addSpace ? 1 : 0);
-            const head = word.substring(0, available);
             if (addSpace) {
               currentLine += " ";
+              column++;
             }
-            currentLine += head;
-            reflowed.push(currentLine);
-            currentLine = "";
-            column = 0;
-
-            let remaining = word.substring(head.length);
+            let remaining = word;
             while (remaining.length > 0) {
-              const chunk = remaining.substring(0, width);
+              const available = width - column;
+              if (available <= 0) {
+                reflowed.push(currentLine);
+                currentLine = "";
+                column = 0;
+                continue;
+              }
+              const chunk = takeColumns(remaining, available);
               if (chunk.length === 0) {
                 break;
               }
-
-              if (chunk.length < width) {
-                currentLine = chunk;
-                column = chunk.length;
-                break;
-              } else {
-                reflowed.push(chunk);
-                remaining = remaining.substring(width);
+              currentLine += chunk;
+              column += stringWidth(chunk);
+              remaining = remaining.slice(chunk.length);
+              if (remaining.length > 0) {
+                reflowed.push(currentLine);
+                currentLine = "";
+                column = 0;
               }
             }
           }
@@ -636,7 +586,7 @@ function reflowText(text: string, width: number, gfm: boolean): string {
             column++;
           }
           currentLine += word;
-          column += word.length;
+          column += wordWidth;
         }
 
         lastWasEscapeChar = false;
@@ -651,6 +601,17 @@ function reflowText(text: string, width: number, gfm: boolean): string {
   }
 
   return reflowed.join("\n");
+}
+
+function takeColumns(text: string, width: number): string {
+  const sliced = sliceAnsi(text, 0, width);
+  if (sliced) {
+    return sliced;
+  }
+  return (
+    GRAPHEME_SEGMENTER.segment(text)[Symbol.iterator]().next().value?.segment ??
+    ""
+  );
 }
 
 function indentLines(indent: string, text: string): string {
@@ -749,24 +710,13 @@ function highlight(
   code: string,
   language: string | undefined,
   opts: TerminalRendererOptions,
-  highlightOpts: HighlightOptions,
 ): string {
   if (chalk.level === 0) {
     return code;
   }
 
-  const style = opts.code;
   code = fixHardReturn(code, opts.reflowText);
-
-  try {
-    const cliOpts: HighlightOptions = { ...highlightOpts };
-    if (language !== undefined) {
-      cliOpts.language = language;
-    }
-    return highlightCli(code, cliOpts);
-  } catch {
-    return style(code);
-  }
+  return highlightCode(code, language) ?? opts.code(code);
 }
 
 function insertEmojis(text: string): string {
@@ -781,7 +731,9 @@ function insertEmojis(text: string): string {
 
 function hr(inputHrStr: string, length: number | false): string {
   const cols = length || process.stdout.columns || 80;
-  return new Array(cols).join(inputHrStr);
+  // Array(cols + 1): join inserts cols separators between the elements, so
+  // an off-by-one here used to render one column fewer than requested.
+  return new Array(cols + 1).join(inputHrStr);
 }
 
 function undoColon(str: string): string {

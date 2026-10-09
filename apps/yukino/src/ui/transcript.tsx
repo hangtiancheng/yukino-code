@@ -1,28 +1,10 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { Box, Static, Text } from "ink";
+import { Box, Static, Text, useIsScreenReaderEnabled, useStdout } from "ink";
+import { memo, useInsertionEffect } from "react";
 
 import { CommittedMessage, type ChatMessage } from "./chat.js";
+import { expectStaticTerminalOutput } from "./terminal-output.js";
+import { plainTerminalLine, truncateToWidth } from "./terminal-text.js";
+import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import { THEME } from "@/ui/styles.js";
 import { compactPath } from "@/utils/paths.js";
@@ -31,42 +13,42 @@ import { version } from "@/version.js";
 interface Props {
   messages: ChatMessage[];
   sessionId: string;
-  termWidth: number;
   expanded: boolean;
   model: string;
-  workDir: string;
+  cwd: string;
   provider: string;
+  revision?: number;
 }
 
-export function Transcript({
+export const Transcript = memo(function Transcript({
   messages,
   sessionId,
-  termWidth,
   expanded,
   model,
-  workDir,
+  cwd,
   provider,
+  revision = 0,
 }: Props) {
+  const { stdout } = useStdout();
+  const screenReader = useIsScreenReaderEnabled();
+  const identity = `${sessionId}-${String(revision)}-${String(expanded)}`;
+  useInsertionEffect(() => {
+    expectStaticTerminalOutput(stdout, screenReader, identity);
+  }, [stdout, screenReader, identity, messages.length]);
+  const { columns: termWidth } = useTerminalDimensions();
+  const padding = termWidth > 2 ? 1 : 0;
+  const width = Math.max(1, termWidth - padding * 2);
   return (
-    <Static
-      key={`transcript-${sessionId}-${String(termWidth)}-${String(expanded)}`}
-      items={[
-        { type: "brand" as const, key: "brand" },
-        ...messages.map((message, index) => ({
-          type: "message" as const,
-          key: `message-${String(index)}`,
-          message,
-        })),
-      ]}
-    >
-      {(item) =>
-        item.type === "brand" ? (
+    <Static key={identity} items={[null, ...messages]}>
+      {(message, index) =>
+        message ? (
+          <CommittedMessage key={index} message={message} expanded={expanded} />
+        ) : (
           <Box
-            key={item.key}
+            key="header"
             flexDirection="column"
-            marginBottom={1}
             marginTop={1}
-            paddingLeft={1}
+            paddingX={padding}
           >
             <Text>
               <Text bold color={THEME.accent}>
@@ -74,22 +56,25 @@ export function Transcript({
               </Text>
               <Text color={THEME.dim}> v{version}</Text>
             </Text>
-            <Text color={THEME.muted}>
-              Esc interrupt · Ctrl+C clear/exit · /commands · Ctrl+O details ·
-              Ctrl+T teams
+            <Text color={THEME.muted} wrap="truncate-end">
+              {truncateToWidth(
+                termWidth >= 80
+                  ? "Esc interrupt · /commands · Ctrl+O details"
+                  : termWidth >= 40
+                    ? "/help · Esc interrupt · Ctrl+O details"
+                    : "/help · Esc interrupt",
+                width,
+              )}
             </Text>
             <Text color={THEME.dim} wrap="truncate-end">
-              {provider}/{model} · {compactPath(workDir)}
+              {truncateToWidth(
+                plainTerminalLine(`${provider}/${model} · ${compactPath(cwd)}`),
+                width,
+              )}
             </Text>
           </Box>
-        ) : (
-          <CommittedMessage
-            key={item.key}
-            message={item.message}
-            expanded={expanded}
-          />
         )
       }
     </Static>
   );
-}
+});

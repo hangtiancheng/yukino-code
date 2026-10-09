@@ -1,32 +1,11 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync as createTempDir, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type * as teamBackend from "@/teams/backend.js";
+import { PermissionChecker } from "@/permissions/index.js";
+import { AgentTool } from "@/subagent/agent-tool.js";
 import { TeamManager } from "@/teams/index.js";
 import {
   createProgress,
@@ -35,25 +14,14 @@ import {
   recordToolStart,
   recordTurnComplete,
 } from "@/teams/progress.js";
-import { listTeamNames } from "@/teams/team-file.js";
+import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
 import {
-  TeamCreateTool,
-  SpawnTeammateTool,
-  SendMessageTool,
   ListTeamsTool,
+  SendMessageTool,
+  TeamCreateTool,
+  TeamDeleteTool,
 } from "@/teams/tools.js";
-
-const spawnTeammateMock = vi.hoisted(() =>
-  vi.fn((_config: teamBackend.SpawnConfig) => ({
-    cancel: vi.fn(),
-    paneId: "test-pane",
-  })),
-);
-
-vi.mock("@/teams/backend.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof teamBackend>()),
-  spawnTeammate: spawnTeammateMock,
-}));
+import { ToolRegistry } from "@/tools/registry.js";
 
 // The teams directory lives at <home>/.yukino/teams, so the tests redirect the
 // entire home directory to a temp dir to avoid leaving residue in the real
@@ -61,13 +29,14 @@ vi.mock("@/teams/backend.js", async (importOriginal) => ({
 // platforms, so set both.
 let realHome: string | undefined;
 let realUserProfile: string | undefined;
+let homeDir = "";
+const cwds = new Set<string>();
 beforeEach(() => {
-  spawnTeammateMock.mockClear();
   realHome = process.env.HOME;
   realUserProfile = process.env.USERPROFILE;
-  const tmp = mkdtempSync(join(tmpdir(), "yukino-home-"));
-  process.env.HOME = tmp;
-  process.env.USERPROFILE = tmp;
+  homeDir = createTempDir(join(tmpdir(), "yukino-home-"));
+  process.env.HOME = homeDir;
+  process.env.USERPROFILE = homeDir;
 });
 afterEach(() => {
   if (realHome === undefined) {
@@ -80,9 +49,17 @@ afterEach(() => {
   } else {
     process.env.USERPROFILE = realUserProfile;
   }
+  rmSync(homeDir, { recursive: true, force: true });
+  for (const directory of cwds) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  cwds.clear();
 });
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const workDir = () => mkdtempSync(join(tmpdir(), "yukino-team-"));
+const cwd = () => {
+  const directory = createTempDir(join(tmpdir(), "yukino-team-"));
+  cwds.add(directory);
+  return directory;
+};
 
 describe("teammate progress", () => {
   it("tracks active tools, turns, and cumulative tokens", () => {
@@ -106,33 +83,13 @@ describe("teammate progress", () => {
 });
 
 describe("teams orchestration", () => {
-  it("passes node a script entrypoint for external teammates", async () => {
-    const mgr = new TeamManager(workDir());
-    const team = mgr.create("external-squad", "tmux");
-    const entry = process.argv[1] ?? "src/main.tsx";
-
-    team.spawnTeammate("external-scout", "find X", () =>
-      Promise.resolve("unused"),
-    );
-
-    expect(spawnTeammateMock).toHaveBeenCalledOnce();
-    const config = spawnTeammateMock.mock.calls[0]?.[0];
-    expect(config?.command).toBe("node");
-    expect(config?.args[0]).toBe(entry);
-    expect(config?.args).not.toContain("run");
-    expect(config?.args).not.toContain("--input-type=module");
-
-    await mgr.deleteAll();
-  });
-
   it("spawnTeammate runs the task and posts its result to the leader mailbox", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     const team = mgr.create("squad");
     team.spawnTeammate(
       "scout",
       "find X",
       (task) => Promise.resolve(`did: ${task}`),
-      undefined,
       undefined,
       "agent-tool-call",
     );
@@ -140,33 +97,38 @@ describe("teams orchestration", () => {
       "agent-tool-call",
     );
 
-    await wait(200);
+    await vi.waitFor(() => {
+      expect(mgr.hasLeaderNotifications()).toBe(true);
+    });
     expect(mgr.hasLeaderNotifications()).toBe(true);
     const drained = mgr.drainLeaderMailbox();
     // The teammate sends an [idle] notification with its name after finishing
     expect(
       drained.some((d) => d.includes("scout") && d.includes("[idle]")),
     ).toBe(true);
-    // Drained messages are consumed.
     expect(mgr.hasLeaderNotifications()).toBe(false);
     expect(mgr.drainLeaderMailbox()).toEqual([]);
   });
 
   it("a failing teammate reports the error to the leader", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     mgr
       .create("squad")
       .spawnTeammate("flaky", "boom", () =>
         Promise.reject(new Error("kaboom")),
       );
-    await wait(200);
+    await vi.waitFor(() => {
+      expect(mgr.get("squad")?.getMember("flaky")?.uiState?.status).toBe(
+        "failed",
+      );
+    });
     expect(mgr.drainLeaderMailbox().some((d) => d.includes("failed"))).toBe(
       true,
     );
   });
 
   it("TaskStop aborts an active in-process teammate and waits for it to settle", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     let resolveStarted!: (signal: AbortSignal) => void;
     let cancelled = false;
     const started = new Promise<AbortSignal>((resolve) => {
@@ -215,7 +177,7 @@ describe("teams orchestration", () => {
   });
 
   it("cancels every teammate before waiting for shutdown", async () => {
-    const team = new TeamManager(workDir()).create("squad");
+    const team = new TeamManager(cwd()).create("squad");
     const cancelled: string[] = [];
     let finishFirst!: () => void;
     let finishSecond!: () => void;
@@ -244,40 +206,36 @@ describe("teams orchestration", () => {
   });
 
   it("coordination tools create, spawn, message, and list", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
 
     expect(
       (
         await new TeamCreateTool(mgr).execute(
           {
-            workDir: workDir(),
+            cwd: cwd(),
           },
           { team_name: "t1" },
         )
       ).output,
     ).toContain("created");
 
-    const spawn = new SpawnTeammateTool(mgr, (task) =>
-      Promise.resolve(`done:${task}`),
-    );
-    const r = await spawn.execute(
-      {
-        workDir: workDir(),
-      },
-      { team: "t1", name: "w1", task: "task A" },
-    );
-    expect(r.isError).toBe(false);
-    await wait(200);
+    mgr
+      .get("t1")
+      ?.spawnTeammate("w1", "task A", (task: string) =>
+        Promise.resolve(`done:${task}`),
+      );
+    await vi.waitFor(() => {
+      expect(mgr.hasLeaderNotifications()).toBe(true);
+    });
     expect(
       mgr
         .drainLeaderMailbox()
         .some((d) => d.includes("w1") && d.includes("[idle]")),
     ).toBe(true);
 
-    // SendMessage to an existing member lands in that member's mailbox.
     const send = await new SendMessageTool(mgr).execute(
       {
-        workDir: workDir(),
+        cwd: cwd(),
       },
       { to: "w1", content: "hi" },
     );
@@ -295,8 +253,115 @@ describe("teams orchestration", () => {
     expect(list.output).toContain("w1");
   });
 
+  it("requires approval for mutating coordination tools", () => {
+    const project = cwd();
+    const mgr = new TeamManager(project);
+    const checker = new PermissionChecker(project);
+    const mutatingTools = [
+      new TeamCreateTool(mgr),
+      new SendMessageTool(mgr),
+      new TeamDeleteTool(mgr),
+    ];
+
+    for (const tool of mutatingTools) {
+      expect(tool.category).toBe("command");
+      expect(checker.check(tool.name, tool.category, {}).effect).toBe("ask");
+    }
+    expect(new ListTeamsTool(mgr).category).toBe("read");
+  });
+
+  it("gives spawned teammates a coordination-capable checker", async () => {
+    const project = cwd();
+    const mgr = new TeamManager(project);
+    const captured: PermissionChecker[] = [];
+    const tool = new AgentTool(project, new ToolRegistry(), () =>
+      Promise.resolve("unused"),
+    );
+    tool.setTeamManager(mgr, (_registry, checker) => {
+      if (checker) {
+        captured.push(checker);
+      }
+      return (task) => Promise.resolve(`done:${task}`);
+    });
+
+    const result = await tool.execute(
+      { cwd: project },
+      {
+        team_name: "squad",
+        name: "w1",
+        description: "worker",
+        prompt: "task A",
+      },
+    );
+    expect(result.isError).toBe(false);
+
+    // The teammate checker must exempt coordination tools: teammates have no
+    // approval dialog, so an "ask" decision would auto-deny SendMessage and
+    // mute the teammate entirely.
+    expect(captured).toHaveLength(1);
+    expect(captured[0].teammate).toBe(true);
+    expect(captured[0].mode).toBe("default");
+    expect(
+      captured[0].check("SendMessage", "command", {
+        to: "leader",
+        content: "x",
+      }).effect,
+    ).toBe("allow");
+
+    await vi.waitFor(() => {
+      expect(mgr.hasLeaderNotifications()).toBe(true);
+    });
+    await mgr.deleteAll();
+  });
+
+  it("inherits the parent's live permission mode, including plan", async () => {
+    const project = cwd();
+    const mgr = new TeamManager(project);
+    mgr.create("squad");
+    const parent = new PermissionChecker(project, "bypassPermissions");
+    parent.mode = "plan";
+    const captured: PermissionChecker[] = [];
+    const tool = new AgentTool(project, new ToolRegistry(), () =>
+      Promise.resolve("unused"),
+    );
+    tool.setTeamManager(mgr, (_registry, checker) => {
+      if (checker) {
+        captured.push(checker);
+      }
+      return () => Promise.resolve("done");
+    });
+    await tool.execute(
+      { cwd: project, permissionChecker: parent },
+      {
+        team_name: "squad",
+        name: "w1",
+        description: "worker",
+        prompt: "task",
+      },
+    );
+    try {
+      expect(captured[0].mode).toBe("plan");
+      expect(
+        captured[0].check("Bash", "command", { command: "pnpm test" }).effect,
+      ).toBe("deny");
+      parent.mode = "default";
+      expect(
+        captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("ask");
+      parent.mode = "acceptEdits";
+      expect(
+        captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,
+      ).toBe("allow");
+      parent.mode = "plan";
+      expect(captured[0].mode).toBe("plan");
+      expect(readTeamFile(project, "squad")?.permissionMode).toBe("plan");
+    } finally {
+      await mgr.deleteAll();
+    }
+  });
+
   it("SendMessage delivers plain text from a teammate to the leader mailbox", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     mgr.create("t2").addMember("w2");
     const tool = new SendMessageTool(mgr, "w2");
 
@@ -307,7 +372,7 @@ describe("teams orchestration", () => {
     // The leader is not a registered member, so the plain-text path must route
     // to the dedicated leader mailbox instead of throwing "Member 'leader' not found".
     const send = await tool.execute(
-      { workDir: workDir() },
+      { cwd: cwd() },
       { to: "leader", content: "findings: X confirmed" },
     );
     expect(send.isError).toBe(false);
@@ -321,81 +386,57 @@ describe("teams orchestration", () => {
     ).toBe(true);
 
     const rejected = await tool.execute(
-      { workDir: workDir() },
+      { cwd: cwd() },
       { to: "Yukino", content: "misaddressed report" },
     );
     expect(rejected.isError).toBe(true);
     expect(mgr.drainLeaderMailbox()).toEqual([]);
   });
 
-  it("rejects invalid, reserved, and duplicate explicit teammate names", async () => {
-    const mgr = new TeamManager(workDir());
-    const spawn = new SpawnTeammateTool(mgr, () => Promise.resolve("done"));
-
-    for (const name of ["api/reviewer", "leader"]) {
-      const result = await spawn.execute(
-        { workDir: workDir() },
-        { team: "squad", name, task: "inspect" },
-      );
-      expect(result.isError).toBe(true);
-    }
-    expect(mgr.list()).toEqual([]);
-
-    const first = await spawn.execute(
-      { workDir: workDir() },
-      { team: "squad", name: "reviewer", task: "inspect" },
-    );
-    const duplicate = await spawn.execute(
-      { workDir: workDir() },
-      { team: "squad", name: "reviewer", task: "inspect again" },
-    );
-    expect(first.isError).toBe(false);
-    expect(duplicate.isError).toBe(true);
-    expect(duplicate.output).toContain("already exists");
-
-    await mgr.stopAll();
+  it("rejects duplicate teammate reservations", () => {
+    const mgr = new TeamManager(cwd());
+    const team = mgr.create("squad");
+    team.addMember("reviewer");
+    expect(() => team.addMember("reviewer")).toThrow("already exists");
   });
 
   it("TeamCreate sweeps other teams so at most one exists", async () => {
-    const mgr = new TeamManager(workDir());
+    const project = cwd();
+    const mgr = new TeamManager(project);
 
     // A live team with a spawned teammate.
-    await new TeamCreateTool(mgr).execute(
-      { workDir: workDir() },
-      { team_name: "old" },
-    );
-    const spawn = new SpawnTeammateTool(mgr, (task) =>
-      Promise.resolve(`done:${task}`),
-    );
-    await spawn.execute(
-      { workDir: workDir() },
-      { team: "old", name: "w1", task: "task A" },
-    );
-    await wait(200);
+    await new TeamCreateTool(mgr).execute({ cwd: cwd() }, { team_name: "old" });
+    mgr
+      .get("old")
+      ?.spawnTeammate("w1", "task A", (task: string) =>
+        Promise.resolve(`done:${task}`),
+      );
+    await vi.waitFor(() => {
+      expect(mgr.get("old")?.getMember("w1")?.uiState?.status).toBe("idle");
+    });
 
     // A disk-only leftover from a previous session, unknown to this manager.
-    new TeamManager(workDir()).create("stale");
-    expect(listTeamNames().sort()).toEqual(["old", "stale"]);
+    new TeamManager(project).create("stale");
+    expect(listTeamNames(project).sort()).toEqual(["old", "stale"]);
 
     const result = await new TeamCreateTool(mgr).execute(
-      { workDir: workDir() },
+      { cwd: cwd() },
       { team_name: "fresh" },
     );
 
     expect(result.isError).toBe(false);
     expect(result.output).toContain("fresh");
-    // Exactly one team remains — in memory and on disk.
     expect(mgr.list().map((team) => team.name)).toEqual(["fresh"]);
-    expect(listTeamNames()).toEqual(["fresh"]);
+    expect(listTeamNames(project)).toEqual(["fresh"]);
   });
 
   it("validates required args", async () => {
-    const mgr = new TeamManager(workDir());
+    const mgr = new TeamManager(cwd());
     expect(
       (
         await new TeamCreateTool(mgr).execute(
           {
-            workDir: workDir(),
+            cwd: cwd(),
           },
           {},
         )
@@ -403,19 +444,9 @@ describe("teams orchestration", () => {
     ).toBe(true);
     expect(
       (
-        await new SpawnTeammateTool(mgr, () => Promise.resolve("x")).execute(
-          {
-            workDir: workDir(),
-          },
-          { team: "t" },
-        )
-      ).isError,
-    ).toBe(true);
-    expect(
-      (
         await new SendMessageTool(mgr).execute(
           {
-            workDir: workDir(),
+            cwd: cwd(),
           },
           { to: "a", content: "m" },
         )

@@ -1,26 +1,4 @@
 /**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-/**
  * Prompt templates for yukino's tool names (CodeComment / FileReadDiff /
  * ReadFile / Grep / Glob) and loop semantics (a turn without tool calls ends
  * the agent — no task_done tool).
@@ -30,11 +8,9 @@ export function renderTemplate(
   template: string,
   vars: Record<string, string>,
 ): string {
-  let out = template;
-  for (const [key, value] of Object.entries(vars)) {
-    out = out.replaceAll(`{{${key}}}`, value);
-  }
-  return out;
+  return template.replace(/\{\{([^{}]+)\}\}/gu, (placeholder, key: string) =>
+    Object.hasOwn(vars, key) ? vars[key] : placeholder,
+  );
 }
 
 export const GROUPING_SYSTEM = `You are a file grouping assistant for code review. Group changed files into semantically related clusters that should be reviewed together.
@@ -113,7 +89,7 @@ You are a code review assistant. You are responsible for producing professional 
 Please keep your responses concise and objective.
 
 ## Capabilities
-- Think step by step progressively.
+- Check behavior against the requirements and existing invariants. Distinguish intentional design from confirmed defects; support findings with code paths and concrete impact, not hypothetical assumptions.
 - First understand the code changes to be reviewed. Code changes are provided in Unified Diff format, where lines starting with \`-\` indicate deleted code, lines starting with \`+\` indicate added code, consecutive \`-\` and \`+\` lines represent modified code, and other lines represent unchanged code.
 - Be objective and neutral, make judgments based on facts and logic, avoid subjective assumptions. When the context is unclear, use tools (ReadFile, Grep, Glob, FileReadDiff) to obtain contextual information rather than judging based on assumptions.
 - Cross-file checks against other changed files must go through \`FileReadDiff\`, which shows the reviewed version of the change — not the working-tree copy.
@@ -176,7 +152,7 @@ export const FILTER_USER = `### Task
 
 Below are the diffs of one or more related files, and a set of review comments about them. Identify only the comments that these diffs **prove** to be wrong.
 
-Every comment carries a \`path\`. The \`<file>\` element with that same path is the comment's subject; the other files are context. They can supply the evidence a cross-file comment rests on, but they never stand in for the subject file — code present somewhere in the group is not present in the file the comment was filed against.
+Every comment carries a \`path\`. The \`<file>\` element whose \`path\` — or, for a renamed file, whose \`old_path\` — equals it is the comment's subject; the other files are context. They can supply the evidence a cross-file comment rests on, but they never stand in for the subject file — code present somewhere in the group is not present in the file the comment was filed against.
 
 Your default answer is to approve everything. On most reviews that is the correct answer.
 

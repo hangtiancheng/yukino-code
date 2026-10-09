@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type {
   AnthropicToolSchema,
   McpLoadingMode,
@@ -33,6 +11,9 @@ import type {
 
 export class ToolRegistry {
   private tools = new Map<string, Tool>();
+  private owned = new Set<Tool>();
+  private disposal?: Promise<void>;
+  private cleanup = new Set<() => void>();
   private discovered = new Set<string>();
 
   /**
@@ -55,8 +36,68 @@ export class ToolRegistry {
   exposeToolSearch = false;
   exposeMcpCall = false;
 
+  copyLoadingStateFrom(registry: ToolRegistry): void {
+    this.mcpLoadingMode = registry.mcpLoadingMode;
+    this.exposeToolSearch = registry.exposeToolSearch;
+    this.exposeMcpCall = registry.exposeMcpCall;
+    this.discovered = new Set(registry.discovered);
+  }
+
   register(tool: Tool): void {
+    if (this.disposal) {
+      throw new Error("Cannot register tools on a disposed registry");
+    }
     this.tools.set(tool.name, tool);
+    this.owned.add(tool);
+  }
+
+  registerBorrowed(tool: Tool): void {
+    if (this.disposal) {
+      throw new Error("Cannot register tools on a disposed registry");
+    }
+    this.tools.set(tool.name, tool);
+  }
+
+  takeOwnershipFrom(source: ToolRegistry): void {
+    if (this.disposal || source.disposal) {
+      throw new Error("Cannot transfer tools from or to a disposed registry");
+    }
+    for (const tool of this.listTools()) {
+      if (source.owned.delete(tool)) {
+        this.owned.add(tool);
+      }
+    }
+  }
+
+  addCleanup(cleanup: () => void): void {
+    if (this.disposal) {
+      throw new Error("Cannot add cleanup to a disposed registry");
+    }
+    this.cleanup.add(cleanup);
+  }
+
+  dispose(): Promise<void> {
+    this.disposal ??= (async () => {
+      const owned = [...this.owned];
+      const results = await Promise.allSettled([
+        ...[...this.cleanup].map((cleanup) => Promise.resolve().then(cleanup)),
+        ...owned.map(async (tool) => tool.dispose?.()),
+      ]);
+      this.cleanup.clear();
+      this.tools.clear();
+      this.owned.clear();
+      this.discovered.clear();
+      const errors: unknown[] = [];
+      for (const result of results) {
+        if (result.status === "rejected") {
+          errors.push(result.reason);
+        }
+      }
+      if (errors.length) {
+        throw new AggregateError(errors, "Tool cleanup failed");
+      }
+    })();
+    return this.disposal;
   }
 
   /**
@@ -73,7 +114,6 @@ export class ToolRegistry {
     return this.tools.get(name);
   }
 
-  /** Look up a tool and narrow it to a concrete class via instanceof. */
   getInstanceOf<T extends Tool>(
     name: string,
     ctor: abstract new (...args: never[]) => T,
@@ -120,23 +160,11 @@ export class ToolRegistry {
 
     const schemas: ProviderToolSchema[] = [];
     for (const tool of this.tools.values()) {
-      if (filter && !filter(tool.name)) {
-        continue;
-      }
-      // Only expose search and dispatch in modes where they're useful. In eager
-      // mode there are no deferred tools to search and no need to dispatch; sending
-      // both would only waste tokens and might tempt the model into a detour.
-      if (
-        (tool.name === "ToolSearch" && !this.exposeToolSearch) ||
-        (tool.name === "McpCall" && !this.exposeMcpCall)
-      ) {
+      if (!this.isToolVisible(tool, native, filter)) {
         continue;
       }
       const deferred =
         Boolean(tool.deferred) && !this.discovered.has(tool.name);
-      if (deferred && !native) {
-        continue;
-      }
       const s = tool.schema();
       if (resolvedProtocol === "openai") {
         schemas.push({
@@ -165,6 +193,55 @@ export class ToolRegistry {
       }
     }
     return schemas;
+  }
+
+  /**
+   * Shared visibility predicate for getAllSchemas and listVisibleToolNames:
+   * the caller's filter, the search/dispatch exposure rules, and deferred
+   * hiding must agree everywhere tools are advertised.
+   */
+  private isToolVisible(
+    tool: Tool,
+    native: boolean,
+    filter?: (name: string) => boolean,
+  ): boolean {
+    if (filter && !filter(tool.name)) {
+      return false;
+    }
+    // Only expose search and dispatch in modes where they're useful. In eager
+    // mode there are no deferred tools to search and no need to dispatch; sending
+    // both would only waste tokens and might tempt the model into a detour.
+    if (
+      (tool.name === "ToolSearch" && !this.exposeToolSearch) ||
+      (tool.name === "McpCall" && !this.exposeMcpCall)
+    ) {
+      return false;
+    }
+    const deferred = Boolean(tool.deferred) && !this.discovered.has(tool.name);
+    return !deferred || native;
+  }
+
+  /**
+   * Names of the tools getAllSchemas would emit for the same protocol and
+   * filter — identical visibility rules, so anything that advertises
+   * "available tools" (e.g. the compaction recovery attachment) matches what
+   * the run can actually call.
+   */
+  listVisibleToolNames(
+    protocol?: ToolProtocol,
+    filter?: (name: string) => boolean,
+  ): string[] {
+    const resolvedProtocol = protocol ?? "anthropic";
+    const isOpenAI =
+      resolvedProtocol === "openai" || resolvedProtocol === "openai-compat";
+    const native = this.mcpLoadingMode === "native" && !isOpenAI;
+    const names: string[] = [];
+    for (const tool of this.tools.values()) {
+      if (this.isToolVisible(tool, native, filter)) {
+        names.push(tool.name);
+      }
+    }
+    return names;
   }
 
   /**

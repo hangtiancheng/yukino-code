@@ -1,26 +1,4 @@
 /**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-/**
  * Leaf module for the provider-config domain: the global config path, the
  * provider schema, and the thinking-level machinery. It must not import the
  * config barrel (./index.js) or provider-login, so both of those can depend
@@ -29,20 +7,19 @@
  * nested `Config.ProviderLogin` re-export.
  */
 
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 import { z } from "zod";
 
-/** The single global config file: $HOME/.yukino/config.yaml. */
+import { yukinoPath } from "@/storage/paths.js";
+
 export function globalConfigPath(): string {
-  return join(homedir(), ".yukino", "config.yaml");
+  return yukinoPath("config.yaml");
 }
 
 /**
  * PI-equivalent thinking levels. `off` disables reasoning entirely; the rest
- * map to a provider-native effort string (openai / openai-compat) or a thinking
- * token budget (anthropic).
+ * map to a provider-native effort string (openai / openai-compat, and
+ * anthropic in adaptive mode) or a thinking token budget (anthropic in budget
+ * mode).
  */
 export const THINKING_LEVELS = [
   "off",
@@ -100,6 +77,18 @@ export const ProviderConfigSchema = z.looseObject({
 });
 
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+
+/**
+ * The provider selected by `default_provider`, falling back to the first
+ * entry when the recorded index is out of range (e.g. a hand-edited config).
+ * Callers guarantee a non-empty list (loadConfig validates it).
+ */
+export function resolveDefaultProvider(
+  providers: ProviderConfig[],
+  defaultProvider: number,
+): ProviderConfig {
+  return providers[defaultProvider] ?? providers[0];
+}
 
 export const DEFAULT_THINKING_LEVEL: ThinkingLevel = "high";
 export const DEFAULT_CONTEXT_WINDOW = 1_000_000;
@@ -171,6 +160,16 @@ export function toReasoningEffort(
       return "high";
     }
   }
+  // The openai protocols have no native xhigh/max: sending them verbatim is a
+  // guaranteed 400. Collapse to the nearest legal effort; providers whose
+  // gateways accept richer values configure them via thinking_level_map.
+  if (
+    (provider?.protocol === "openai" ||
+      provider?.protocol === "openai-compat") &&
+    (level === "xhigh" || level === "max")
+  ) {
+    return "high";
+  }
   return level;
 }
 
@@ -209,7 +208,22 @@ export function getSupportedThinkingLevels(
       return toAnthropicThinkingEffort(level, provider) !== null;
     }
     const effort = toReasoningEffort(level, provider);
-    return effort !== null && effort !== "none";
+    if (effort === null || effort === "none") {
+      return false;
+    }
+    // Do not advertise xhigh/max under the openai protocols unless the
+    // provider explicitly maps them: they have no native effort there, and
+    // the collapse-to-high fallback in toReasoningEffort means offering them
+    // would misrepresent what the request actually carries.
+    if (
+      (provider.protocol === "openai" ||
+        provider.protocol === "openai-compat") &&
+      (level === "xhigh" || level === "max") &&
+      provider.thinking_level_map?.[level] === undefined
+    ) {
+      return false;
+    }
+    return true;
   });
 }
 

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   useEffect,
   useRef,
@@ -53,12 +31,19 @@ export function useAgentOutput(
   const [streamingThinking, setStreamingThinking] = useState("");
   const [retryStatus, setRetryStatus] = useState<string | undefined>();
   const [activeTools, setActiveTools] = useState<ToolBlockInfo[]>([]);
-  const [persistentAgentTools, setPersistentAgentTools] = useState<
-    ToolBlockInfo[]
-  >([]);
   const [inputTokens, setInputTokens] = useState(0);
   const [outputTokens, setOutputTokens] = useState(0);
+  // Session-wide totals, kept in a ref because the exit-summary callback reads
+  // them after many renders. `inputTokens` above excludes the cached prefix, so
+  // the four counters sum to the real-token baseline.
+  const usageTotalsRef = useRef({
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+  });
   const streamingTextRef = useRef("");
+  const streamingThinkingRef = useRef("");
   const streamThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancelFlush = () => {
@@ -75,7 +60,11 @@ export function useAgentOutput(
   };
 
   const prepareTurn = () => {
+    cancelFlush();
+    streamingTextRef.current = "";
+    streamingThinkingRef.current = "";
     setStreamingText("");
+    setStreamingThinking("");
     setRetryStatus(undefined);
     clearTools();
   };
@@ -90,12 +79,21 @@ export function useAgentOutput(
   const resetUsage = () => {
     setInputTokens(0);
     setOutputTokens(0);
-    setPersistentAgentTools([]);
+    usageTotalsRef.current = {
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    };
   };
 
   const createEventHandler = (
     resolveAgentCard?: (toolId: string) => AgentCardDecoration | undefined,
   ) => {
+    cancelFlush();
+    streamingTextRef.current = "";
+    streamingThinkingRef.current = "";
+    setStreamingText("");
     setStreamingThinking("");
     let fullText = "";
     let turnThinkingText = "";
@@ -103,18 +101,60 @@ export function useAgentOutput(
     let turnThinkingDuration = 0;
     const turnToolCalls = new Map<string, ToolSummaryItem | undefined>();
     const pendingToolArgs = new Map<string, string>();
-    const persistentAgentToolIds = new Set<string>();
-    const pendingTeamDeletes = new Map<string, string>();
 
-    const resetTurn = () => {
+    const resetThinking = () => {
       turnThinkingText = "";
       turnThinkingStart = 0;
       turnThinkingDuration = 0;
-      turnToolCalls.clear();
       setStreamingThinking("");
-      pendingToolArgs.clear();
-      persistentAgentToolIds.clear();
-      pendingTeamDeletes.clear();
+      streamingThinkingRef.current = "";
+    };
+
+    const scheduleFlush = () => {
+      streamThrottleRef.current ??= setTimeout(() => {
+        setStreamingText(streamingTextRef.current);
+        setStreamingThinking(streamingThinkingRef.current);
+        streamThrottleRef.current = null;
+      }, 50);
+    };
+
+    const commitOutput = () => {
+      cancelFlush();
+      setStreamingText("");
+      const commits: ChatMessage[] = [];
+      if (turnThinkingText || turnThinkingDuration >= 1) {
+        commits.push({
+          role: "turn_summary",
+          content: turnThinkingText,
+          thinkingDuration:
+            turnThinkingDuration > 0 ? turnThinkingDuration : undefined,
+        });
+      }
+      if (fullText) {
+        commits.push({ role: "assistant", content: fullText });
+      }
+      fullText = "";
+      streamingTextRef.current = "";
+      resetThinking();
+      const completed = new Set<string>();
+      const toolSummary: ToolSummaryItem[] = [];
+      for (const [toolId, tool] of turnToolCalls) {
+        if (tool) {
+          toolSummary.push(tool);
+          completed.add(toolId);
+          turnToolCalls.delete(toolId);
+          pendingToolArgs.delete(`${tool.toolName}:${toolId}`);
+        }
+      }
+      if (toolSummary.length > 0) {
+        commits.push({ role: "turn_summary", content: "", toolSummary });
+        setActiveTools((tools) =>
+          tools.filter((tool) => !completed.has(tool.toolId)),
+        );
+      }
+      if (commits.length > 0) {
+        setMessages((messages) => [...messages, ...commits]);
+      }
     };
 
     return (event: AgentEvent) => {
@@ -129,10 +169,7 @@ export function useAgentOutput(
         case "stream_text": {
           fullText += event.text;
           streamingTextRef.current = fullText;
-          streamThrottleRef.current ??= setTimeout(() => {
-            setStreamingText(streamingTextRef.current);
-            streamThrottleRef.current = null;
-          }, 50);
+          scheduleFlush();
           break;
         }
         case "thinking_text": {
@@ -140,7 +177,8 @@ export function useAgentOutput(
             turnThinkingStart = Date.now();
           }
           turnThinkingText += event.text;
-          setStreamingThinking(turnThinkingText);
+          streamingThinkingRef.current = turnThinkingText;
+          scheduleFlush();
           break;
         }
         case "thinking_complete": {
@@ -162,33 +200,6 @@ export function useAgentOutput(
             loading: true,
           };
           setActiveTools((tools) => [...tools, tool]);
-          // Only teammate spawns stay pinned across turns. One-shot background
-          // agents (run_in_background) commit to history like any other tool
-          // call — their result reaches the user as a task notification.
-          const teamName = event.args.team_name;
-          if (
-            event.toolName === "Agent" &&
-            typeof teamName === "string" &&
-            teamName
-          ) {
-            persistentAgentToolIds.add(event.toolId);
-            setPersistentAgentTools((tools) => [
-              ...tools.filter((item) => item.toolId !== event.toolId),
-              {
-                ...tool,
-                args: {
-                  description: event.args.description,
-                  team_name: teamName,
-                },
-              },
-            ]);
-          }
-          if (
-            event.toolName === "TeamDelete" &&
-            typeof event.args.name === "string"
-          ) {
-            pendingTeamDeletes.set(event.toolId, event.args.name);
-          }
           break;
         }
         case "tool_result": {
@@ -216,47 +227,30 @@ export function useAgentOutput(
               : tool;
           setActiveTools((tools) => tools.map(completeTool));
 
-          const deletedTeam = pendingTeamDeletes.get(event.toolId);
-          if (deletedTeam && !event.isError) {
-            setPersistentAgentTools((tools) =>
-              tools.filter((tool) => tool.args.team_name !== deletedTeam),
-            );
-          }
-
-          // TeamCreate enforces single-team semantics: every existing team is
-          // deleted before the new one is created, so all pinned teammate
-          // cards are stale and must go.
-          if (event.toolName === "TeamCreate" && !event.isError) {
-            setPersistentAgentTools([]);
-          }
-
-          if (persistentAgentToolIds.has(event.toolId) && !event.isError) {
-            setPersistentAgentTools((tools) => tools.map(completeTool));
-            turnToolCalls.delete(event.toolId);
-          } else {
-            if (persistentAgentToolIds.has(event.toolId)) {
-              setPersistentAgentTools((tools) =>
-                tools.filter((tool) => tool.toolId !== event.toolId),
-              );
-            }
-            turnToolCalls.set(event.toolId, {
-              toolName: event.toolName,
-              argsSummary:
-                pendingToolArgs.get(`${event.toolName}:${event.toolId}`) ?? "",
-              output,
-              isError: event.isError,
-              elapsed: event.elapsed,
-              ...(decoration?.status ? { status: decoration.status } : {}),
-              ...(decoration?.progress
-                ? { progress: decoration.progress }
-                : {}),
-            });
+          turnToolCalls.set(event.toolId, {
+            toolName: event.toolName,
+            argsSummary:
+              pendingToolArgs.get(`${event.toolName}:${event.toolId}`) ?? "",
+            output,
+            isError: event.isError,
+            elapsed: event.elapsed,
+            ...(decoration?.status ? { status: decoration.status } : {}),
+            ...(decoration?.progress ? { progress: decoration.progress } : {}),
+          });
+          if (event.toolName === "AskUserQuestion") {
+            // Answered questions must outlive clipping of the live tool viewport.
+            commitOutput();
           }
           break;
         }
         case "usage": {
-          setInputTokens((tokens) => tokens + event.usage.inputTokens);
-          setOutputTokens((tokens) => tokens + event.usage.outputTokens);
+          const totals = usageTotalsRef.current;
+          totals.inputTokens += event.usage.inputTokens;
+          totals.outputTokens += event.usage.outputTokens;
+          totals.cacheReadTokens += event.usage.cacheReadInputTokens;
+          totals.cacheCreationTokens += event.usage.cacheCreationInputTokens;
+          setInputTokens(totals.inputTokens);
+          setOutputTokens(totals.outputTokens);
           break;
         }
         case "compact": {
@@ -281,34 +275,10 @@ export function useAgentOutput(
         }
         case "turn_complete":
         case "loop_complete": {
-          cancelFlush();
-          setStreamingText("");
-          const turnText = fullText;
-          fullText = "";
-          streamingTextRef.current = "";
+          commitOutput();
           clearTools();
-          const commits: ChatMessage[] = [];
-          if (turnThinkingText || turnThinkingDuration >= 1) {
-            commits.push({
-              role: "turn_summary",
-              content: turnThinkingText,
-              thinkingDuration:
-                turnThinkingDuration > 0 ? turnThinkingDuration : undefined,
-            });
-          }
-          if (turnText) {
-            commits.push({ role: "assistant", content: turnText });
-          }
-          const toolSummary = [...turnToolCalls.values()].filter(
-            (tool): tool is ToolSummaryItem => tool !== undefined,
-          );
-          if (toolSummary.length > 0) {
-            commits.push({ role: "turn_summary", content: "", toolSummary });
-          }
-          if (commits.length > 0) {
-            setMessages((messages) => [...messages, ...commits]);
-          }
-          resetTurn();
+          turnToolCalls.clear();
+          pendingToolArgs.clear();
           break;
         }
       }
@@ -321,9 +291,9 @@ export function useAgentOutput(
     retryStatus,
     streamingTextRef,
     activeTools,
-    persistentAgentTools,
     inputTokens,
     outputTokens,
+    usageTotalsRef,
     resetUsage,
     prepareTurn,
     finishTurn,

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { execFile } from "child_process";
 import {
   access,
@@ -34,6 +12,7 @@ import { dirname, isAbsolute, join } from "path";
 import { promisify } from "util";
 
 import { createChildLogger } from "@/logger/index.js";
+import { yukinoPath, projectKey } from "@/storage/paths.js";
 
 const log = createChildLogger({ module: "worktree" });
 
@@ -83,7 +62,9 @@ async function pathExists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
+    // ENOENT is the normal "no" answer here; error-level logs would flood on
+    // every healthy probe.
+    log.debug({ err }, "worktree path probe failed");
     return false;
   }
 }
@@ -121,7 +102,8 @@ async function getCommonDir(gitDir: string): Promise<string> {
     const raw = (await readFile(commonDir, "utf-8")).trim();
     return isAbsolute(raw) ? raw : join(gitDir, raw);
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
+    // The main repo has no commondir — expected, not a failure.
+    log.debug({ err }, "worktree commondir probe failed");
     return "";
   }
 }
@@ -177,7 +159,16 @@ async function readGitHead(gitDir: string): Promise<GitHead | null> {
 /**
  * Resolves a ref within a single git directory (checks loose files first, then packed-refs)
  */
-async function resolveRefInDir(dir: string, ref: string): Promise<string> {
+async function resolveRefInDir(
+  dir: string,
+  ref: string,
+  seen: Set<string>,
+): Promise<string> {
+  const key = `${dir}\0${ref}`;
+  if (seen.size >= 64 || seen.has(key)) {
+    return "";
+  }
+  seen.add(key);
   try {
     const content = (await readFile(join(dir, ref), "utf-8")).trim();
     if (content.startsWith("ref:")) {
@@ -185,15 +176,16 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
       if (!isSafeRefName(target)) {
         return "";
       }
-      return await resolveRef(dir, target);
+      return await resolveRef(dir, target, seen);
     }
     if (SHA_RE.test(content)) {
       return content;
     }
     return "";
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
-    // Loose file does not exist, try packed-refs
+    // Loose ref missing is normal (packed refs); the packed-refs fallback
+    // below is the real lookup for healthy worktrees.
+    log.debug({ err }, "loose ref probe failed");
   }
 
   try {
@@ -215,23 +207,27 @@ async function resolveRefInDir(dir: string, ref: string): Promise<string> {
       }
     }
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
-    // packed-refs does not exist
+    // No packed-refs file is normal for repos with only loose refs.
+    log.debug({ err }, "packed-refs probe failed");
   }
 
   return "";
 }
 
 /** Resolves a git ref — checks the worktree gitDir first, then falls back to commonDir */
-async function resolveRef(gitDir: string, ref: string): Promise<string> {
-  const sha = await resolveRefInDir(gitDir, ref);
+async function resolveRef(
+  gitDir: string,
+  ref: string,
+  seen = new Set<string>(),
+): Promise<string> {
+  const sha = await resolveRefInDir(gitDir, ref, seen);
   if (sha) {
     return sha;
   }
 
   const commonDir = await getCommonDir(gitDir);
   if (commonDir && commonDir !== gitDir) {
-    return resolveRefInDir(commonDir, ref);
+    return resolveRefInDir(commonDir, ref, seen);
   }
   return "";
 }
@@ -250,7 +246,9 @@ export async function readWorktreeHeadSha(
   try {
     raw = (await readFile(join(worktreePath, ".git"), "utf-8")).trim();
   } catch (err) {
-    log.error({ err }, "worktree operation failed");
+    // Candidates that are not worktrees fail here — that is the probe's
+    // "no" answer, not an error.
+    log.debug({ err }, "worktree .git probe failed");
     return "";
   }
   if (!raw.startsWith("gitdir:")) {
@@ -287,11 +285,10 @@ export async function getCurrentBranch(repoRoot: string): Promise<string> {
   return head.branch ?? "";
 }
 
-// ── Worktree Management ──────────────────────────────────────────────
-
 export async function createAgentWorktree(
   slug: string,
   gitRoot?: string,
+  cwd = process.cwd(),
 ): Promise<WorktreeResult> {
   if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
     throw new Error(
@@ -301,23 +298,31 @@ export async function createAgentWorktree(
   const root =
     gitRoot ??
     (
-      await execFileAsync("git", ["rev-parse", "--show-toplevel"])
+      await execFileAsync("git", ["rev-parse", "--show-toplevel"], {
+        cwd: cwd,
+      })
     ).stdout.trim();
 
-  const worktreeDir = join(root, ".yukino", "worktrees", slug);
+  const worktreeDir = yukinoPath("worktrees", projectKey(root), slug);
   const branch = `worktree-${slug}`;
 
   // Validate that an existing directory is really a worktree root before reusing
   // it: git otherwise searches parent directories and would report the main
   // repository's HEAD as this worktree's commit.
   if (await pathExists(worktreeDir)) {
-    const { stdout: topLevel } = await execFileAsync(
-      "git",
-      ["rev-parse", "--show-toplevel"],
-      {
-        cwd: worktreeDir,
-      },
-    );
+    let topLevel: string;
+    try {
+      topLevel = (
+        await execFileAsync("git", ["rev-parse", "--show-toplevel"], {
+          cwd: worktreeDir,
+        })
+      ).stdout;
+    } catch (cause) {
+      throw new Error(
+        `Existing directory is not a worktree root: ${worktreeDir}`,
+        { cause },
+      );
+    }
     if ((await realpath(topLevel.trim())) !== (await realpath(worktreeDir))) {
       throw new Error(
         `Existing directory is not a worktree root: ${worktreeDir}`,
@@ -442,52 +447,13 @@ async function performPostCreationSetup(
   repoRoot: string,
   wtPath: string,
 ): Promise<void> {
-  await copyYukinoSettings(repoRoot, wtPath);
   await copyAgentsSettings(repoRoot, wtPath);
   await configureHooksPath(repoRoot, wtPath);
   await symlinkNodeModules(repoRoot, wtPath);
   await copyWorktreeIncludeFiles(repoRoot, wtPath);
 }
 
-/**
- * Shared settings entries under .yukino/ that are propagated to worktrees.
- * Runtime state (sessions, file-history, plans, logs, teams) is excluded, and
- * worktrees/ must never be included: worktrees live inside .yukino itself, so
- * copying the whole directory targets a subdirectory of its own source and
- * Node's cp rejects that with EINVAL.
- */
-const SHARED_YUKINO_ENTRIES = ["permissions.yaml", "agents", "memory"];
-/** Same allowlist approach for the repo's .agents/ directory. */
 const SHARED_AGENTS_ENTRIES = ["AGENTS.md", "skills"];
-
-/** Copy shared .yukino/ settings from the main repo to the worktree. */
-async function copyYukinoSettings(
-  repoRoot: string,
-  wtPath: string,
-): Promise<void> {
-  const yukinoDir = join(repoRoot, ".yukino");
-  if (!(await pathExists(yukinoDir))) {
-    return;
-  }
-  const dstRoot = join(wtPath, ".yukino");
-  try {
-    await mkdir(dstRoot, { recursive: true });
-  } catch (err) {
-    log.error({ err }, "failed to create .yukino/ in worktree");
-    return;
-  }
-  for (const entry of SHARED_YUKINO_ENTRIES) {
-    const src = join(yukinoDir, entry);
-    if (!(await pathExists(src))) {
-      continue;
-    }
-    try {
-      await cp(src, join(dstRoot, entry), { recursive: true });
-    } catch (err) {
-      log.error({ err, entry }, "failed to copy .yukino/ entry to worktree");
-    }
-  }
-}
 
 async function copyAgentsSettings(
   repoRoot: string,
@@ -518,38 +484,48 @@ async function copyAgentsSettings(
 }
 
 /**
- * Set core.hooksPath in the worktree so git hooks from the main repo are
- * shared. Prioritizes .husky/ over .git/hooks/.
+ * Gives a worktree its own absolute Husky hooks path without changing the
+ * shared core.hooksPath. Git's default common .git/hooks directory needs no
+ * configuration. Existing user configuration always takes precedence.
  */
 async function configureHooksPath(
   repoRoot: string,
   worktreePath: string,
 ): Promise<void> {
   try {
-    const candidates = [
-      join(repoRoot, ".husky"),
-      join(repoRoot, ".git", "hooks"),
-    ];
-    let hooksPath: string | undefined;
-    for (const c of candidates) {
-      try {
-        const info = await stat(c);
-        if (info.isDirectory()) {
-          hooksPath = c;
-          break;
-        }
-      } catch (err) {
-        log.error({ err }, "worktree operation failed");
-        // candidate doesn't exist, try next
-      }
-    }
-    if (!hooksPath) {
+    const existing = await execFileAsync(
+      "git",
+      ["config", "--get", "core.hooksPath"],
+      { cwd: worktreePath },
+    )
+      .then((result) => result.stdout.trim())
+      .catch(() => "");
+    if (existing) {
       return;
     }
 
-    await execFileAsync("git", ["config", "core.hooksPath", hooksPath], {
-      cwd: worktreePath,
-    });
+    const hooksPath = join(repoRoot, ".husky");
+    try {
+      const info = await stat(hooksPath);
+      if (!info.isDirectory()) {
+        return;
+      }
+    } catch (err) {
+      // No Husky directory means Git's shared default hooks remain in effect.
+      log.debug({ err }, "husky hooks path probe failed");
+      return;
+    }
+
+    await execFileAsync(
+      "git",
+      ["config", "extensions.worktreeConfig", "true"],
+      { cwd: worktreePath },
+    );
+    await execFileAsync(
+      "git",
+      ["config", "--worktree", "core.hooksPath", hooksPath],
+      { cwd: worktreePath },
+    );
   } catch (err) {
     log.error({ err }, "failed to configure hooks path in worktree");
   }

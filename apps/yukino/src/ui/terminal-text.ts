@@ -1,24 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+import { stripVTControlCharacters } from "node:util";
 
 import sliceAnsi from "slice-ansi";
 import stringWidth from "string-width";
@@ -27,6 +7,20 @@ import wrapAnsi from "wrap-ansi";
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: "grapheme",
 });
+
+export function plainTerminalText(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(/\r\n?/gu, "\n")
+    .replace(/\p{Cc}/gu, (character) =>
+      character === "\n" || character === "\t" ? character : "",
+    );
+}
+
+export function plainTerminalLine(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\p{Cc}/gu, "");
+}
 
 export function visibleWidth(text: string): number {
   return stringWidth(text);
@@ -45,6 +39,86 @@ export function truncateToWidth(
   return (
     sliceAnsi(text, 0, Math.max(0, columns - visibleWidth(ending))) + ending
   );
+}
+
+export interface CursorWindow {
+  before: string;
+  current: string;
+  after: string;
+  leadingEllipsis: boolean;
+  trailingEllipsis: boolean;
+}
+
+/** Builds a cursor-centered field view that never exceeds the given columns. */
+export function cursorWindow(
+  value: string,
+  cursor: number,
+  maxWidth: number,
+): CursorWindow {
+  const columns = Math.max(1, Math.floor(maxWidth));
+  const position = clampToGraphemeBoundary(value, cursor);
+  const currentEnd = nextGraphemeBoundary(value, position);
+  const current = value.slice(position, currentEnd) || " ";
+  const currentValue =
+    visibleWidth(current) > columns || visibleWidth(current) === 0
+      ? " "
+      : current;
+  const currentWidth = visibleWidth(currentValue);
+  const left = value.slice(0, position);
+  const right = value.slice(position < value.length ? currentEnd : position);
+  const fullWidth =
+    visibleWidth(value) + (position === value.length ? currentWidth : 0);
+
+  if (fullWidth <= columns) {
+    return {
+      before: left,
+      current: currentValue,
+      after: right,
+      leadingEllipsis: false,
+      trailingEllipsis: false,
+    };
+  }
+
+  let leadingEllipsis = left.length > 0;
+  let trailingEllipsis = right.length > 0;
+  while (
+    currentWidth + Number(leadingEllipsis) + Number(trailingEllipsis) >
+    columns
+  ) {
+    if (trailingEllipsis) {
+      trailingEllipsis = false;
+    } else {
+      leadingEllipsis = false;
+    }
+  }
+
+  const surroundingWidth = Math.max(
+    0,
+    columns - currentWidth - Number(leadingEllipsis) - Number(trailingEllipsis),
+  );
+  let leftWidth = Math.floor(surroundingWidth / 2);
+  let rightWidth = surroundingWidth - leftWidth;
+  const availableLeftWidth = visibleWidth(left);
+  const availableRightWidth = visibleWidth(right);
+  if (availableLeftWidth < leftWidth) {
+    rightWidth += leftWidth - availableLeftWidth;
+    leftWidth = availableLeftWidth;
+  } else if (availableRightWidth < rightWidth) {
+    leftWidth += rightWidth - availableRightWidth;
+    rightWidth = availableRightWidth;
+  }
+
+  return {
+    before: sliceAnsi(
+      left,
+      Math.max(0, availableLeftWidth - leftWidth),
+      availableLeftWidth,
+    ),
+    current: currentValue,
+    after: sliceAnsi(right, 0, rightWidth),
+    leadingEllipsis,
+    trailingEllipsis,
+  };
 }
 
 export function wrapToLines(text: string, width: number): string[] {

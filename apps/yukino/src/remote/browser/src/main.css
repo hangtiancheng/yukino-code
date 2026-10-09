@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/*
+ * Theme mirrored from the terminal UI palette (src/ui/styles.ts) so the browser
+ * client and the TUI read as the same product: the same lavender/purple accent,
+ * the same success/error/warning hues, and the same dark-first default. Both a
+ * dark and a light scheme are authored; the active one is chosen by the
+ * `data-theme` attribute on <html> (system preference by default, user-toggleable
+ * and persisted — see hooks/use-theme.ts and the inline bootstrap in index.html).
+ *
+ * Colors are declared as plain custom properties per scheme, then mapped into
+ * Tailwind theme tokens with `@theme inline` so utilities (bg-bg, text-bright,
+ * border-border, bg-accent/10, ...) resolve through the active scheme and keep
+ * working with opacity modifiers.
+ *
+ * Two type voices: prose (conversation, dialogs, questions) uses the humanist
+ * sans stack; machine output (tools, paths, statuses, code) uses the mono stack
+ * via explicit font-mono utilities. The split is informational — it tells readers
+ * apart from the agent's raw output at a glance.
+ * No custom component classes are defined — only theme tokens, scheme variables,
+ * keyframes, and global element rules.
+ */
+@theme inline {
+  --color-bg: var(--yukino-bg);
+  --color-surface: var(--yukino-surface);
+  --color-tool: var(--yukino-tool);
+  --color-code: var(--yukino-code);
+  --color-base: var(--yukino-text);
+  --color-dim: var(--yukino-dim);
+  --color-bright: var(--yukino-bright);
+  --color-accent: var(--yukino-accent);
+  --color-accent-dim: var(--yukino-accent-dim);
+  --color-accent-contrast: var(--yukino-accent-contrast);
+  --color-user-bg: var(--yukino-user-bg);
+  --color-user-text: var(--yukino-user-text);
+  --color-green: var(--yukino-green);
+  --color-red: var(--yukino-red);
+  --color-yellow: var(--yukino-yellow);
+  --color-border: var(--yukino-border);
+
+  --font-sans:
+    "Yukino", "Maple Mono", Menlo, "Cascadia Code", "Sarasa Gothic SC",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    "Yukino", "Maple Mono", Menlo, "Cascadia Code", "Sarasa Gothic SC",
+    "PingFang SC", "Microsoft YaHei", monospace;
+
+  --breakpoint-xs: 26rem;
+
+  --animate-blink: blink 1s step-end infinite;
+  --animate-modal-in: modal-in 140ms ease-out;
+
+  --shadow-card: var(--yukino-shadow-card);
+  --shadow-pop: var(--yukino-shadow-pop);
+}
+
+/* Dark scheme (default) — derived from the TUI DARK_THEME. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --yukino-bg: #14171a;
+  --yukino-surface: #1a1e22;
+  --yukino-tool: #20252a;
+  --yukino-code: #22282e;
+  --yukino-border: #2c343c;
+  --yukino-bright: #e6e9eb;
+  --yukino-text: #a9b2b8;
+  --yukino-dim: #78828a;
+  --yukino-accent: #a798d7;
+  --yukino-accent-dim: #c0b2e6;
+  --yukino-accent-contrast: #241b36;
+  --yukino-user-bg: #213b49;
+  --yukino-user-text: #dee0e1;
+  --yukino-green: #68b78d;
+  --yukino-red: #ea7f81;
+  --yukino-yellow: #cd9a22;
+  --yukino-scrollbar: #3a444e;
+  --yukino-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.24);
+  --yukino-shadow-pop:
+    0 4px 12px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.44);
+}
+
+/* Light scheme — derived from the TUI LIGHT_THEME. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --yukino-bg: #f6f7f9;
+  --yukino-surface: #ffffff;
+  --yukino-tool: #f1f3f6;
+  --yukino-code: #edf0f4;
+  --yukino-border: #dfe3e8;
+  --yukino-bright: #2f3437;
+  --yukino-text: #566069;
+  --yukino-dim: #87909a;
+  --yukino-accent: #7459b4;
+  --yukino-accent-dim: #61499c;
+  --yukino-accent-contrast: #ffffff;
+  --yukino-user-bg: #dfe7ec;
+  --yukino-user-text: #3b3f41;
+  --yukino-green: #337e58;
+  --yukino-red: #c8253d;
+  --yukino-yellow: #8f6802;
+  --yukino-scrollbar: #c3cad2;
+  --yukino-shadow-card:
+    0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.05);
+  --yukino-shadow-pop:
+    0 4px 12px rgb(15 23 42 / 0.08), 0 12px 32px rgb(15 23 42 / 0.12);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--yukino-bg);
+  /* Kill the white flash before the scheme variables apply on first paint. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Thin scrollbar styling applied to every scrollable element. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--yukino-scrollbar) transparent;
+}
+
+/* Consistent, visible keyboard focus for every interactive element.
+ * Lives in @layer base so utility classes (e.g. focus-visible:outline-none
+ * on the input textarea) can override it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--yukino-accent-dim);
+    outline-offset: 2px;
+  }
+}
+
+::selection {
+  background: color-mix(in oklab, var(--yukino-accent) 30%, transparent);
+}
+
+/* Native-feel taps: no grey flash, no accidental text selection on controls. */
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * iOS Safari zooms the page when focusing a control whose font-size is below
+ * 16px. Force 16px on phone-width screens to keep the composer stable. This is
+ * intentionally unlayered so it wins over the `text-sm` utilities on small
+ * screens only; desktop keeps the compact 14px sizing.
+ */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Respect users who prefer minimal motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

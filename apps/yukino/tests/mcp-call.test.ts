@@ -1,26 +1,4 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { needsToolSearchBeta } from "@/llm/anthropic.js";
 import {
@@ -47,7 +25,7 @@ import type {
 } from "@/tools/types.js";
 import { asRecord, strArg } from "@/utils/index.js";
 
-const toolContext: ToolContext = { workDir: process.cwd() };
+const toolContext: ToolContext = { cwd: process.cwd() };
 
 const inputSchema: ToolSchema["input_schema"] = {
   type: "object",
@@ -73,6 +51,11 @@ const toolSchema: ToolSchema = {
   description: "",
   input_schema: inputSchema,
 };
+
+const linearCreateIssue = buildMcpToolName("linear", "create_issue");
+const jiraCreateIssue = buildMcpToolName("jira", "create_issue");
+const chrome2Click = buildMcpToolName("chrome-2", "click");
+const chromeDevtoolsClick = buildMcpToolName("chrome-devtools", "click");
 
 /** A good-enough MCP tool stand-in: exposes its schema and records received arguments. */
 class FakeMcpTool implements MCPToolLike {
@@ -238,7 +221,7 @@ describe("McpCall tool name resolution", () => {
     const { dispatcher, tool } = setup();
     const res = await dispatcher.execute(toolContext, {
       server: "linear",
-      tool: "mcp__linear__create_issue",
+      tool: linearCreateIssue,
       arguments: { issueId: "A" },
     });
     expect(res.isError).toBe(false);
@@ -307,7 +290,8 @@ describe("McpCall tool name resolution", () => {
       arguments: {},
     });
     expect(res.isError).toBe(true);
-    expect(res.output).toContain("mcp__linear__create_issue");
+    expect(res.output).toContain(linearCreateIssue);
+    expect(res.output).toContain(jiraCreateIssue);
   });
 
   test("coerces arguments against the schema before forwarding", async () => {
@@ -331,20 +315,48 @@ describe("three-way routing", () => {
   });
 
   test("small schema size loads everything eagerly", () => {
-    expect(decideMode("https://proxy.example.com", 200000, 1000)).toBe("eager");
+    expect(
+      decideMode("https://proxy.example.com", "anthropic", 200000, 1000),
+    ).toBe("eager");
   });
 
   test("no MCP tools at all also loads eagerly", () => {
-    expect(decideMode("https://proxy.example.com", 200000, 0)).toBe("eager");
+    expect(
+      decideMode("https://proxy.example.com", "anthropic", 200000, 0),
+    ).toBe("eager");
   });
 
-  test("official endpoint uses native deferred loading", () => {
-    expect(decideMode("", 200000, 500000)).toBe("native");
+  test("official endpoint with the anthropic protocol uses native deferred loading", () => {
+    expect(decideMode("", "anthropic", 200000, 500000)).toBe("native");
+  });
+
+  test("openai-protocol providers never use native mode even on official-looking endpoints", () => {
+    // Empty base_url under the openai protocol is the OpenAI SDK default
+    // (api.openai.com), not an Anthropic endpoint; native mode would hide
+    // every deferred MCP tool (tool_reference is dropped, McpCall hidden).
+    expect(decideMode("", "openai", 200000, 500000)).toBe("dispatch");
+    expect(decideMode("", "openai-compat", 200000, 500000)).toBe("dispatch");
+  });
+
+  test("native override maps non-Anthropic protocols to dispatch", () => {
+    vi.stubEnv("YUKINO_MCP_LOADING", "native");
+    try {
+      expect(decideMode("", "openai", 200000, 500000)).toBe("dispatch");
+      expect(decideMode("", "openai-compat", 200000, 500000)).toBe("dispatch");
+      expect(decideMode("", "anthropic", 200000, 500000)).toBe("native");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("third-party endpoint uses McpCall dispatch", () => {
     expect(
-      decideMode("https://api.deepseek.com/anthropic", 200000, 500000),
+      decideMode(
+        "https://api.deepseek.com/anthropic",
+        "anthropic",
+        200000,
+        500000,
+      ),
     ).toBe("dispatch");
   });
 
@@ -403,17 +415,13 @@ describe("applyMode effect on tools[]", () => {
 
 describe("permission content normalization", () => {
   const cases: [string, string, string][] = [
-    ["linear", "mcp__linear__create_issue", "linear__create_issue"],
+    ["linear", linearCreateIssue, "linear__create_issue"],
     ["linear", "create_issue", "linear__create_issue"],
-    ["chrome-2", "mcp__chrome_2__click", "chrome_2__click"],
+    ["chrome-2", chrome2Click, "chrome_2__click"],
     // Short name and fully qualified name must produce the same content,
     // otherwise permission rules would fail to match
     ["chrome-devtools", "click", "chrome_devtools__click"],
-    [
-      "chrome-devtools",
-      "mcp__chrome_devtools__click",
-      "chrome_devtools__click",
-    ],
+    ["chrome-devtools", chromeDevtoolsClick, "chrome_devtools__click"],
   ];
   for (const [server, tool, want] of cases) {
     test(`${server} + ${tool}`, () => {
@@ -425,16 +433,14 @@ describe("permission content normalization", () => {
     expect(
       extractContent("McpCall", {
         server: "linear",
-        tool: "mcp__linear__create_issue",
+        tool: linearCreateIssue,
       }),
     ).toBe("linear__create_issue");
   });
 
   test("content extraction for other tools is unchanged", () => {
     expect(extractContent("Bash", { command: "ls" })).toBe("ls");
-    expect(extractContent("mcp__linear__create_issue", { title: "x" })).toBe(
-      "",
-    );
+    expect(extractContent(linearCreateIssue, { title: "x" })).toBe("");
   });
 });
 
@@ -462,7 +468,11 @@ describe("beta header for native deferred loading", () => {
     expect(
       needsToolSearchBeta([
         { ...toolSchema, name: "Bash" },
-        { ...toolSchema, name: "mcp__linear__x", defer_loading: true },
+        {
+          ...toolSchema,
+          name: buildMcpToolName("linear", "x"),
+          defer_loading: true,
+        },
       ]),
     ).toBe(true);
   });
@@ -477,13 +487,13 @@ describe("beta header for native deferred loading", () => {
 describe("tool naming", () => {
   test("double underscore separator", () => {
     expect(buildMcpToolName("linear", "create_issue")).toBe(
-      "mcp__linear__create_issue",
+      "mcp__6_linear__create_issue",
     );
   });
 
   test("hyphens and dots become underscores, consistent with Go/Python", () => {
     expect(buildMcpToolName("chrome-devtools", "take.snapshot")).toBe(
-      "mcp__chrome_devtools__take_snapshot",
+      "mcp__15_chrome_devtools__take_snapshot",
     );
   });
 
@@ -513,17 +523,14 @@ describe("per-mode tool selection", () => {
   }
 
   test("eager: neither is sent", () => {
-    expect(names("eager")).toEqual(["mcp__linear__create_issue"]);
+    expect(names("eager")).toEqual([linearCreateIssue]);
   });
 
   test("native: only ToolSearch is sent", () => {
-    expect(names("native")).toEqual([
-      "ToolSearch",
-      "mcp__linear__create_issue",
-    ]);
+    expect(names("native")).toEqual(["ToolSearch", linearCreateIssue]);
   });
 
-  test.each(["select:mcp__linear__create_issue", "fake"])(
+  test.each([`select:${linearCreateIssue}`, "fake"])(
     "native ToolSearch returns references for %s",
     async (query) => {
       const registry = new ToolRegistry();

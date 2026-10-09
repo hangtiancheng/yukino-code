@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -53,7 +31,6 @@ export function clipboardImageFileName(bytes: Buffer): string {
 }
 
 export async function storeClipboardImage(
-  workDir: string,
   sessionId: string,
   bytes: Buffer,
 ): Promise<string> {
@@ -65,7 +42,7 @@ export async function storeClipboardImage(
       `Clipboard image is too large (${String(bytes.length)} bytes, limit ${String(MAX_CLIPBOARD_IMAGE_BYTES)}).`,
     );
   }
-  const dir = fileHistoryDir(workDir, sessionId);
+  const dir = fileHistoryDir(sessionId);
   await mkdir(dir, { recursive: true });
   const path = join(dir, clipboardImageFileName(bytes));
   await writeFile(path, bytes);
@@ -270,15 +247,14 @@ async function readWindowsClipboard(tempPath: string): Promise<Buffer> {
 
 /**
  * Read an image from the system clipboard and save it as a PNG under
- * `${workDir}/.yukino/file-history/${sessionId}/`. On success, `value` is the
+ * `~/.yukino/sessions/artifacts/${sessionId}/file-history/`. On success, `value` is the
  * absolute file path, ready to be referenced in a prompt and read back via
  * ReadFile; on failure, `reason` explains why.
  */
 export async function saveClipboardImage(
-  workDir: string,
   sessionId: string,
 ): Promise<SaveClipboardImageResult> {
-  const dir = fileHistoryDir(workDir, sessionId);
+  const dir = fileHistoryDir(sessionId);
   const tempPath = join(dir, `.clipboard-${String(process.pid)}.tmp`);
   try {
     let bytes: Buffer;
@@ -305,7 +281,7 @@ export async function saveClipboardImage(
     }
     return {
       ok: true,
-      value: await storeClipboardImage(workDir, sessionId, bytes),
+      value: await storeClipboardImage(sessionId, bytes),
     };
   } catch (err) {
     return {

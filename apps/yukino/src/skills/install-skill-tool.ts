@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { randomUUID } from "node:crypto";
 import {
   mkdirSync,
@@ -32,6 +10,7 @@ import {
   renameSync,
   rmSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import yaml from "js-yaml";
@@ -45,22 +24,72 @@ import type {
   ToolResult,
   ToolSchema,
 } from "@/tools/types.js";
-import { asErrorString, strArg } from "@/utils/index.js";
+import { asErrorString, isRecord, strArg } from "@/utils/index.js";
+import {
+  fetchPublicHttpUrl,
+  type PublicHttpDependencies,
+} from "@/utils/public-http.js";
 
 const log = createChildLogger({ module: "skills" });
+const MAX_SKILL_DOWNLOAD_BYTES = 1024 * 1024;
+
+async function readSkillResponse(
+  response: Response,
+  signal: AbortSignal,
+): Promise<string> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_SKILL_DOWNLOAD_BYTES
+  ) {
+    throw new Error("Skill download exceeds the 1 MiB size limit");
+  }
+  if (!response.body) {
+    return "";
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      signal.throwIfAborted();
+      const result: unknown = await reader.read();
+      if (!isRecord(result) || typeof result.done !== "boolean") {
+        throw new Error("Skill download returned an invalid response stream");
+      }
+      if (result.done) {
+        break;
+      }
+      if (!(result.value instanceof Uint8Array)) {
+        throw new Error("Skill download returned a non-byte response chunk");
+      }
+      totalBytes += result.value.byteLength;
+      if (totalBytes > MAX_SKILL_DOWNLOAD_BYTES) {
+        await reader.cancel();
+        throw new Error("Skill download exceeds the 1 MiB size limit");
+      }
+      chunks.push(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 // Installs a skill from a local file path or an http(s) URL into
-// .agents/skills/<name>/SKILL.md, then reloads the catalog.
+// ~/.yukino/skills/<name>/SKILL.md, then reloads the catalog.
 export class InstallSkillTool implements Tool {
   name = "InstallSkill";
   description =
-    "Install a skill from a local file path or an http(s) URL into .agents/skills.";
+    "Install a skill from a local file path or an http(s) URL into ~/.yukino/skills.";
   category = "write" as const;
 
   constructor(
-    private workDir: string,
+    private cwd: string,
     private catalog: SkillCatalog,
     private onInstalled?: () => void,
+    private network: PublicHttpDependencies = {},
   ) {}
 
   schema(): ToolSchema {
@@ -113,21 +142,25 @@ export class InstallSkillTool implements Tool {
           ? AbortSignal.any([ctx.abortSignal, timeout.signal])
           : timeout.signal;
         try {
-          const resp = await fetch(source, { signal });
+          const resp = await fetchPublicHttpUrl(
+            source,
+            { signal },
+            this.network,
+          );
           if (!resp.ok) {
             return {
               output: `Error: fetch failed (${String(resp.status)})`,
               isError: true,
             };
           }
-          content = await resp.text();
+          content = await readSkillResponse(resp, signal);
           signal.throwIfAborted();
         } finally {
           // Keep the timeout active until the response body has been consumed.
           clearTimeout(timer);
         }
       } else {
-        content = readFileSync(resolve(this.workDir, source), "utf-8");
+        content = readFileSync(resolve(this.cwd, source), "utf-8");
       }
 
       const parsed = parseSkillFile(content);
@@ -152,10 +185,10 @@ export class InstallSkillTool implements Tool {
       }
 
       ctx.abortSignal?.throwIfAborted();
-      // Resolve the workspace itself (which may be reached via a symlink), then
+      // Resolve the home directory (which may be reached via a symlink), then
       // reject symlinks in every installation component, including dangling links.
-      let dir = realpathSync(this.workDir);
-      for (const segment of [".agents", "skills", name]) {
+      let dir = realpathSync(homedir());
+      for (const segment of [".yukino", "skills", name]) {
         dir = join(dir, segment);
         const stat = lstatSync(dir, { throwIfNoEntry: false });
         if (stat) {
@@ -191,10 +224,10 @@ export class InstallSkillTool implements Tool {
         rmSync(temporary, { force: true });
       }
 
-      this.catalog.load(this.workDir);
+      this.catalog.load(this.cwd);
       this.onInstalled?.();
       return {
-        output: `Skill '${name}' installed to .agents/skills/${name}/SKILL.md`,
+        output: `Skill '${name}' installed to ${destination}`,
         isError: false,
       };
     } catch (err) {

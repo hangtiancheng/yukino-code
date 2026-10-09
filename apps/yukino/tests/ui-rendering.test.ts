@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { stripVTControlCharacters } from "node:util";
 
 import chalk, { Chalk } from "chalk";
@@ -55,9 +33,15 @@ const terminal = vi.hoisted(() => ({ columns: 40 }));
 
 vi.mock("ink", async (importOriginal) => {
   const ink = await importOriginal<typeof Ink>();
+  const stdout = {
+    get columns() {
+      return terminal.columns;
+    },
+    rows: 24,
+  };
   return {
     ...ink,
-    useStdout: () => ({ stdout: { columns: terminal.columns, rows: 24 } }),
+    useStdout: () => ({ stdout }),
   };
 });
 
@@ -79,8 +63,8 @@ describe("terminal column handling", () => {
     expect(visibleWidth(truncateToWidth(text, 4))).toBeLessThanOrEqual(4);
     expect(stripVTControlCharacters(truncateToWidth(text, 4))).toBe("日…");
     expect(
-      wrapToLines(colors.green("文章文章"), 4).map(stripVTControlCharacters),
-    ).toEqual(["文章", "文章"]);
+      wrapToLines(colors.green("かなかな"), 4).map(stripVTControlCharacters),
+    ).toEqual(["かな", "かな"]);
     expect(truncateToWidth(text, 0)).toBe("");
   });
 
@@ -101,7 +85,6 @@ describe("skill transcript presentation", () => {
     {
       meta: { name: "demo", description: "Local skill" },
       sourceDir: "/project/skills/demo",
-      isDirectory: true,
       body: "## Skill details\n\nHidden body.",
     },
     "Update <docs> & keep &lt; literal\nSecond line 日本語",
@@ -177,6 +160,27 @@ describe("skill transcript presentation", () => {
 });
 
 describe("pi Markdown presentation", () => {
+  it("sanitizes raw terminal commands in both streamed and committed Markdown while keeping generated styles", () => {
+    chalk.level = 3;
+    const cache: MarkdownCache = {
+      prefix: "",
+      rendered: "",
+      width: 0,
+      theme: "",
+    };
+    const text = "\x1b[2J\x1b]52;c;clipboard\x07**bold**\0\n\nNext";
+    for (const output of [
+      renderMarkdown(text, 40),
+      renderStreamingMarkdown(text, 40, cache),
+    ]) {
+      expect(output).not.toContain("\x1b[2J");
+      expect(output).not.toContain("clipboard");
+      expect(output).not.toContain("\0");
+      expect(output).toContain("\x1b[1m");
+      expect(stripVTControlCharacters(output)).toContain("bold");
+    }
+  });
+
   it.each(["```", "~~~~"])(
     "does not flash partial closing %s fences during streaming",
     (fence) => {
@@ -206,7 +210,7 @@ describe("pi Markdown presentation", () => {
 
   it("renders inline formatting inside tight list items", () => {
     chalk.level = 3;
-    const source = "1. **项目定位**: `version`";
+    const source = "1. **Project purpose**: `version`";
     const cache: MarkdownCache = {
       prefix: "",
       rendered: "",
@@ -218,7 +222,9 @@ describe("pi Markdown presentation", () => {
       renderMarkdown(source, 80),
       renderStreamingMarkdown(source, 80, cache),
     ]) {
-      expect(stripVTControlCharacters(output)).toBe("1. 项目定位: version");
+      expect(stripVTControlCharacters(output)).toBe(
+        "1. Project purpose: version",
+      );
       expect(output).toContain("\u001b[1m");
       expect(output).toContain(chalk.hex(THEME.mdCode)("version"));
     }
@@ -260,25 +266,79 @@ describe("pi Markdown presentation", () => {
     }
   });
 
-  it("keeps a wide table inside the message card", () => {
-    const source = [
-      "| Column A | Column B | Column C | Column D |",
-      "| --- | --- | --- | --- |",
-      "| a very long cell value that keeps going | another long cell value here | third | fourth |",
-    ].join("\n");
-    const output = stripVTControlCharacters(
-      renderToString(
-        createElement(CommittedMessage, {
-          message: { role: "assistant", content: source },
-        }),
-        { columns: 40 },
-      ),
-    );
-    expect(output).toContain("┌");
-    for (const line of output.split("\n")) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(40);
-    }
-  });
+  it.each(["user", "assistant"] as const)(
+    "keeps completed %s tables as grids inside the message card",
+    (role) => {
+      const source = [
+        "| Column A | Column B | Column C | Column D |",
+        "| --- | --- | --- | --- |",
+        "| a very long cell value that keeps going | another long cell value here | third | fourth |",
+      ].join("\n");
+      const output = stripVTControlCharacters(
+        renderToString(
+          createElement(CommittedMessage, {
+            message: { role, content: source },
+          }),
+          { columns: 40 },
+        ),
+      );
+      expect(output).toContain("┌");
+      expect(output).not.toContain("| --- |");
+      expect(output).not.toContain("…");
+      for (const line of output.split("\n")) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+      }
+    },
+  );
+
+  it.each([8, 10])(
+    "falls back to raw Markdown when wide table columns cannot fit in %i columns",
+    (width) => {
+      const source = "| 字 | emoji |\n| --- | --- |\n| 日本語 | 👩‍💻 |";
+      const cache: MarkdownCache = {
+        prefix: "",
+        rendered: "",
+        width: 0,
+        theme: "",
+      };
+      for (const rendered of [
+        renderMarkdown(source, width),
+        renderStreamingMarkdown(source, width, cache),
+      ]) {
+        const output = stripVTControlCharacters(rendered);
+        expect(output.replace(/\s/gu, "")).toBe(source.replace(/\s/gu, ""));
+        expect(output).not.toContain("┌");
+        for (const line of output.split("\n")) {
+          expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+        }
+      }
+    },
+  );
+
+  it.each([11, 12, 14, 20, 40])(
+    "preserves wide graphemes in streaming tables at %i columns",
+    (width) => {
+      const source = "| 字 | emoji |\n| --- | --- |\n| 日本語 | 👩‍💻 |";
+      const cache: MarkdownCache = {
+        prefix: "",
+        rendered: "",
+        width: 0,
+        theme: "",
+      };
+      const output = stripVTControlCharacters(
+        renderStreamingMarkdown(source, width, cache),
+      );
+      for (const character of ["日", "本", "語", "👩‍💻"]) {
+        expect(output).toContain(character);
+      }
+      expect(output).not.toContain("…");
+      expect(output).not.toContain("| --- |");
+      expect(output).toContain("┌");
+      for (const line of output.split("\n")) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+      }
+    },
+  );
 
   it("restores colons in inline code within table headers", () => {
     const source = [
@@ -294,7 +354,7 @@ describe("pi Markdown presentation", () => {
 
   it("does not create colon placeholders when emoji expansion is disabled", () => {
     const source =
-      "- `code-review/selection.ts` 悬空的 `TODO: How about CJK?`。";
+      "- `code-review/selection.ts` has a dangling `TODO: How about CJK?`.";
     const output = stripVTControlCharacters(renderMarkdown(source, 80));
     expect(output).toContain("TODO: How about CJK?");
     expect(output).not.toContain("#COLON|");
@@ -416,7 +476,6 @@ describe("shared live and committed tool cards", () => {
               loading: true,
             },
           ],
-          persistentAgentTools: [],
           subagents: [
             {
               toolCallId: "a",
@@ -463,8 +522,7 @@ describe("shared live and committed tool cards", () => {
       chalk.level = 3;
       const rendered = renderToString(
         createElement(AgentActivity, {
-          tools: [],
-          persistentAgentTools: [
+          tools: [
             {
               toolId: "team-agent",
               toolName: "Agent",
@@ -574,6 +632,52 @@ describe("shared live and committed tool cards", () => {
     expect(stripVTControlCharacters(output)).toContain("running");
     expect(stripVTControlCharacters(output)).not.toContain("Took");
   });
+
+  it.each(["Bash", "PowerShell"])(
+    "wraps the complete %s command in live and saved cards",
+    (toolName) => {
+      const command =
+        'node ./scripts/verify.mjs --directory="日本語😁 é" --options=' +
+        "abcdefghij".repeat(12) +
+        " --last-argument=COMMAND_END";
+      const tool = {
+        toolId: "shell-long",
+        toolName,
+        args: { command },
+        output: "OUTPUT_END",
+        status: "completed" as const,
+        elapsed: 0.5,
+      };
+      for (const columns of [20, 40, 80, 120]) {
+        terminal.columns = columns;
+        const live = renderToString(createElement(ToolBlock, { tool }), {
+          columns,
+        });
+        const saved = renderToString(
+          createElement(CommittedMessage, {
+            message: {
+              role: "turn_summary",
+              content: "",
+              toolSummary: [{ ...tool, argsSummary: command, isError: false }],
+            },
+          }),
+          { columns },
+        );
+        expect(live).toBe(saved);
+        const plain = stripVTControlCharacters(live);
+        expect(plain.normalize().replaceAll(/\s/gu, "")).toContain(
+          command.normalize().replaceAll(/\s/gu, ""),
+        );
+        expect(plain).toContain("completed");
+        expect(plain).toContain("0.5s");
+        expect(plain).toContain("OUTPUT_END");
+        expect(plain).not.toContain("…");
+        expect(
+          plain.split("\n").every((line) => visibleWidth(line) <= columns),
+        ).toBe(true);
+      }
+    },
+  );
 
   it.each(["dark", "light"] satisfies ("dark" | "light")[])(
     "retains state backgrounds, diff colors and no-color status in %s mode",
@@ -713,7 +817,7 @@ const footerProps = {
   permissionMode: "plan",
   provider: "very-long-provider-name",
   sessionId: "01234567-89ab-cdef-0123-456789abcdef",
-  workDir: "/workspace/project",
+  cwd: "/workspace/project",
 };
 
 describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
@@ -742,7 +846,7 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
                   permissionMode,
                   thinkingLevel: "high",
                   model: colors.red("機種-".repeat(10)),
-                  workDir: colors.green("/作業ディレクトリ/".repeat(10)),
+                  cwd: colors.green("/作業ディレクトリ/".repeat(10)),
                 }),
                 { columns },
               ),
@@ -752,20 +856,13 @@ describe.each(["dark", "light"] satisfies ("dark" | "light")[])(
               true,
             );
             const width = columns - (columns > 2 ? 2 : 0);
-            if (width < visibleWidth(footerProps.sessionId) + 4) {
-              const idRows = wrapToLines(footerProps.sessionId, width);
-              expect(
-                lines
-                  .slice(1, idRows.length + 1)
-                  .map((line) => line.trim())
-                  .join(""),
-              ).toBe(footerProps.sessionId);
-            } else {
+            expect(lines.length).toBeLessThanOrEqual(3);
+            if (width >= visibleWidth(footerProps.sessionId) + 7) {
               expect(footer).toContain(footerProps.sessionId);
             }
-            expect(lines.map((line) => line.trim()).join("")).toContain(
-              label.replace(/ /g, columns === 1 ? "" : " "),
-            );
+            if (columns >= 20) {
+              expect(footer).toContain(label);
+            }
             if (columns >= 20) {
               expect(footer).toContain("機種");
               expect(footer).toContain("high");

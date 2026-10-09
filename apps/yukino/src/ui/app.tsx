@@ -1,31 +1,11 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 import { Box, Text, useApp } from "ink";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import { AgentActivity, type SubagentProgress } from "./agent-activity.js";
+import { AgentStatus } from "./agent-status.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "./chat.js";
 import { Footer } from "./footer.js";
 import { InteractionDock } from "./interaction-dock.js";
@@ -33,18 +13,34 @@ import {
   createInterruptHandlers,
   isForegroundBusy,
 } from "./interrupt-scope.js";
+import type { ModelPickerState } from "./model-select.js";
 import { PendingQueue } from "./pending-queue.js";
+import {
+  createPermissionRequestHandler,
+  type PermissionRequest,
+} from "./permission-request.js";
 import type { PlanChoice } from "./plan-approval.js";
 import { ProviderLogin } from "./provider-login.js";
 import { ProviderSelect } from "./provider-select.js";
 import type { RewindAction } from "./rewind-dialog.js";
-import { TeamStatus } from "./team-status.js";
+import { TerminalLayout } from "./terminal-layout.js";
+import { TodoProgress } from "./todo-progress.js";
+import { ToolBlock } from "./tool-display.js";
 import { Transcript } from "./transcript.js";
+import { UpdateNotice } from "./update-notice.js";
 import {
   useAgentOutput,
   type AgentCardDecoration,
 } from "./use-agent-output.js";
+import { useTaskProgress } from "./use-task-progress.js";
 import { useTerminalControls } from "./use-terminal-controls.js";
+import { useUpdateNotice } from "./use-update-notice.js";
+import {
+  executeUserBash,
+  useUserBash,
+  useUserBashHistory,
+  userBashCard,
+} from "./use-user-bash.js";
 
 import { Agent } from "@/agent/index.js";
 import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
@@ -82,22 +78,30 @@ import {
 } from "@/config/provider-config.js";
 import {
   persistDefaultProvider,
+  persistModel,
   persistThinkingLevel,
   saveProvider,
 } from "@/config/provider-login.js";
 import { expandAtRefsWithImages } from "@/conversation/at-expand.js";
-import { ConversationManager } from "@/conversation/index.js";
+import {
+  ConversationManager,
+  type UserBashResult,
+} from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
 import type { Snapshot } from "@/file-history/index.js";
+import { GoalManager, handleGoalCommand } from "@/goal/index.js";
 import * as historyMod from "@/history/index.js";
 import { HookEngine, validate as validateHooks } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createClient } from "@/llm/client.js";
+import { discoverModels } from "@/llm/model-discovery.js";
 import { createChildLogger } from "@/logger/index.js";
+import type { LspServerConfig } from "@/lsp/config.js";
 import { syncMcpInstructions as announceMcpInstructions } from "@/mcp/instructions.js";
 import { MCPManager, type ConnectResult } from "@/mcp/manager.js";
 import { applyMode, decideAndApply } from "@/mcp/strategy.js";
 import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
+import { MemoryConsolidator } from "@/memory/consolidation.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { MemoryManager, type RecallResult } from "@/memory/manager.js";
@@ -115,7 +119,7 @@ import { runFork as runSkillFork } from "@/skills/executor.js";
 import type { SkillHost, SkillForkHost } from "@/skills/index.js";
 import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
+import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/definition.js";
 import {
   spawnSubagent,
@@ -133,11 +137,10 @@ import {
 } from "@/teams/coordinator.js";
 import type { RunAgent } from "@/teams/index.js";
 import { TeamManager } from "@/teams/index.js";
-import { LEADER_NAME } from "@/teams/protocol.js";
+import { LEADER_NAME, SHUTDOWN_PREFIX } from "@/teams/protocol.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
-  SpawnTeammateTool,
   SendMessageTool,
   ListTeamsTool,
   TeamDeleteTool,
@@ -147,7 +150,6 @@ import { TaskStore } from "@/todo/store.js";
 import { toDisplayPreview } from "@/tool-result/index.js";
 import { AskUserQuestionTool, type Question } from "@/tools/ask-user.js";
 import { BashTool } from "@/tools/bash.js";
-import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import {
@@ -156,6 +158,7 @@ import {
   hasAnyForegroundTasks,
 } from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
+import type { PermissionRequestHandler } from "@/tools/types.js";
 import { activityStatusColor, THEME, thinkingLevelColor } from "@/ui/styles.js";
 import { useFollowUpQueue } from "@/ui/use-follow-up-queue.js";
 import { useIdeInput } from "@/ui/use-ide-input.js";
@@ -177,11 +180,12 @@ interface Props {
   providers: ProviderConfig[];
   permissionMode?: string;
   mcpServers: MCPServerConfig[];
+  lspServers?: LspServerConfig[];
   hooks: HookConfig[];
   sandboxConfig?: SandboxYamlConfig;
   enableCoordinatorMode?: boolean;
   forkDisabled?: boolean;
-  /** Auto memory pipeline switch from config.yaml (`memory:`); defaults to true. */
+  /** Auto memory pipeline switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   resume?: true | string;
   onExitSummary?: (summary: InteractionSummary) => void;
@@ -195,6 +199,7 @@ export function App({
   providers: initialProviders,
   permissionMode,
   mcpServers,
+  lspServers,
   hooks,
   sandboxConfig: sandboxYaml,
   enableCoordinatorMode,
@@ -205,6 +210,7 @@ export function App({
   defaultProvider = 0,
 }: Props) {
   const { exit } = useApp();
+  const { latestVersionRef, noticeVersion, dismissNotice } = useUpdateNotice();
   const [providers, setProviders] = useState(initialProviders);
   const [loginActive, setLoginActive] = useState(initialProviders.length === 0);
   const rememberedProvider = initialProviders[defaultProvider];
@@ -221,7 +227,13 @@ export function App({
       },
   );
   const selectedProviderRef = useRef(selectedProvider);
+  const modelDialogControllerRef = useRef<AbortController | null>(null);
   const [providerDialogActive, setProviderDialogActive] = useState(false);
+  const [modelDialogActive, setModelDialogActive] = useState(false);
+  const [modelDialogState, setModelDialogState] = useState<ModelPickerState>({
+    status: "loading",
+    models: [],
+  });
   const [codeReviewActive, setCodeReviewActive] = useState(false);
   const [thinkingDialogActive, setThinkingDialogActive] = useState(false);
   const [providerSwitching, setProviderSwitching] = useState(false);
@@ -232,7 +244,6 @@ export function App({
     streamingThinking,
     streamingTextRef,
     activeTools,
-    persistentAgentTools,
     inputTokens,
     outputTokens,
   } = output;
@@ -242,9 +253,11 @@ export function App({
     if (process.env.YUKINO_BYPASS_PERMISSIONS === "1") {
       return "bypassPermissions";
     }
-    const isPermissionMode = (mode: string): mode is PermissionMode =>
-      ["default", "acceptEdits", "plan", "bypassPermissions"].includes(mode);
-    if (permissionMode && isPermissionMode(permissionMode)) {
+    const isInitialPermissionMode = (
+      mode: string,
+    ): mode is Exclude<PermissionMode, "plan"> =>
+      ["default", "acceptEdits", "bypassPermissions"].includes(mode);
+    if (permissionMode && isInitialPermissionMode(permissionMode)) {
       return permissionMode;
     }
     return "default";
@@ -263,29 +276,52 @@ export function App({
   const permModeRef = useRef(permMode);
   useEffect(() => {
     permModeRef.current = permMode;
+    if (checkerRef.current) {
+      checkerRef.current.mode = permMode;
+    }
   }, [permMode]);
   const [mcpInfo, setMcpInfo] = useState<{
     servers: string[];
     toolCount: number;
   } | null>(null);
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
-  const [footerRows, setFooterRows] = useState(2);
+  // Bumped when workspace file facts change (file-write tool results, agent run
+  // end); the @-mention completion cache in InputBox keys on it.
+  const [fileFactsVersion, setFileFactsVersion] = useState(0);
 
-  const workDir = process.cwd();
-  const historyDir = `${workDir}/.yukino`;
+  const cwd = process.cwd();
+  const checkerRef = useRef<PermissionChecker | null>(null);
+  checkerRef.current ??= new PermissionChecker(cwd, permMode);
+  const planOwner = () =>
+    (checkerRef.current ??= new PermissionChecker(cwd, permMode));
 
   const clientRef = useRef<LLMClient | null>(null);
   // Resolved context window for the active provider: the configured
   // context_window value, or DEFAULT_CONTEXT_WINDOW when unset.
   const contextWindowRef = useRef(
-    providers[0] ? getContextWindow(providers[0]) : DEFAULT_CONTEXT_WINDOW,
+    rememberedProvider
+      ? getContextWindow(rememberedProvider)
+      : providers[0]
+        ? getContextWindow(providers[0])
+        : DEFAULT_CONTEXT_WINDOW,
   );
   // Output ceiling for the active provider (PI's model.maxTokens equivalent).
   const maxOutputRef = useRef(
-    providers[0] ? getMaxOutputTokens(providers[0]) : undefined,
+    rememberedProvider
+      ? getMaxOutputTokens(rememberedProvider)
+      : providers[0]
+        ? getMaxOutputTokens(providers[0])
+        : undefined,
   );
   const conversationRef = useRef(new ConversationManager());
   const sessionIdRef = useRef(sessionMod.newSessionId());
+  const goalManagerRef = useRef<GoalManager | null>(null);
+  const currentGoal = (): GoalManager => {
+    if (goalManagerRef.current?.sessionId !== sessionIdRef.current) {
+      goalManagerRef.current = new GoalManager(cwd, sessionIdRef.current);
+    }
+    return goalManagerRef.current;
+  };
   const interactionStatsRef = useRef({
     agentActiveMs: 0,
     failedToolCalls: 0,
@@ -295,24 +331,20 @@ export function App({
   });
   const activeToolIdsRef = useRef(new Set<string>());
   const activeToolBatchStartedAtRef = useRef<number | null>(null);
-  const taskListRef = useRef(
-    new TaskList(new TaskStore(workDir, sessionIdRef.current)),
+  const teamManagerRef = useRef(new TeamManager(cwd));
+  const taskListRef = useRef(new TaskList(new TaskStore(sessionIdRef.current)));
+  const { tasks: todos, boardId } = useTaskProgress(
+    taskListRef.current,
+    teamManagerRef.current,
   );
-  const registryRef = useRef(
-    (() => {
-      const reg = createToolRegistry(workDir, taskListRef.current);
-
-      const exitPlan = reg.getInstanceOf("ExitPlanMode", ExitPlanModeTool);
-      if (exitPlan) {
-        exitPlan.isPlanMode = () => permModeRef.current === "plan";
-        exitPlan.planExists = () => {
-          const p = getOrCreatePlanPath(workDir);
-          return existsSync(p);
-        };
-      }
-      return reg;
-    })(),
+  const [toolRegistry] = useState(() =>
+    createToolRegistry(cwd, taskListRef.current, {
+      interactionMode: "interactive",
+      lspServers,
+      teamManager: teamManagerRef.current,
+    }),
   );
+  const registryRef = useRef(toolRegistry);
   const cmdRegistryRef = useRef(
     (() => {
       const registry = createCommandRegistry();
@@ -325,7 +357,7 @@ export function App({
       return registry;
     })(),
   );
-  const usageTrackerRef = useRef(new CommandUsageTracker(workDir));
+  const usageTrackerRef = useRef(new CommandUsageTracker());
   const mcpManagerRef = useRef<MCPManager | null>(null);
   const mcpOperationRef = useRef<Promise<void>>(Promise.resolve());
   // Current MCP server list. Starts as the prop but /mcp reload replaces it
@@ -376,22 +408,28 @@ export function App({
   const memExtractorRef = useRef<InstanceType<typeof MemoryExtractor> | null>(
     null,
   );
+  const memConsolidatorRef = useRef<MemoryConsolidator | null>(null);
   const memManagerRef = useRef<InstanceType<typeof MemoryManager> | null>(null);
   const activeSkillsRef = useRef(new Map<string, string>());
   const toolFilterRef = useRef<((name: string) => boolean) | null>(null);
   const skillHostRef = useRef<SkillHost>({
     activateSkill: (name, body) => activeSkillsRef.current.set(name, body),
   });
-  const teamManagerRef = useRef(new TeamManager(workDir));
+  useEffect(() => {
+    if (checkerRef.current) {
+      teamManagerRef.current.setPermissionChecker(checkerRef.current);
+    }
+    // Restore pending notifications and reclaim interrupted teammates' work.
+    teamManagerRef.current.restoreFromDisk();
+  }, []);
   const backgroundTaskManagerRef = useRef(new TaskManager());
   const fileHistoryRef = useRef<FileHistory | null>(null);
   // The agent instance of the in-flight run, if any. Steering targets it.
   const agentRef = useRef<Agent | null>(null);
   const fileStateCacheRef = useRef(new FileStateCache());
-  const sandboxBackend = sandboxYaml?.backend ?? "native";
   const sandboxRef = useRef<Promise<Sandbox | null> | null>(null);
   const getSandbox = (): Promise<Sandbox | null> =>
-    (sandboxRef.current ??= createSandbox(sandboxBackend));
+    (sandboxRef.current ??= createSandbox());
   const disposeSandbox = async (): Promise<void> => {
     const pending = sandboxRef.current;
     sandboxRef.current = null;
@@ -424,36 +462,104 @@ export function App({
     [],
   );
   const abortControllerRef = useRef<AbortController | null>(null);
-  // Checker of the in-flight agent loop: a fresh checker is created per loop,
-  // so mid-loop permission-mode changes (Shift+Tab) must be applied to this
-  // live instance to take effect before the loop ends.
-  const checkerRef = useRef<PermissionChecker | null>(null);
+  const configureBashSandbox = async (bashTool: BashTool): Promise<boolean> => {
+    if (!sandboxEnabledRef.current) {
+      bashTool.sandbox = null;
+      bashTool.sandboxRequired = false;
+      return false;
+    }
+    const sandbox = await getSandbox();
+    bashTool.sandbox = sandbox;
+    bashTool.sandboxRequired = true;
+    bashTool.sandboxConfig = {
+      allowWrite: [cwd, "/tmp", tmpdir()],
+      denyWrite: [],
+      networkEnabled: sandboxNetworkEnabled,
+    };
+    return (await sandbox?.available()) ?? false;
+  };
+  const userBashHistory = useUserBashHistory({
+    cwd,
+    sessionId: sessionIdRef,
+    conversation: conversationRef.current,
+    busy: isStreaming || isCompacting,
+    onError: (error) => {
+      setMessages((messages) => [
+        ...messages,
+        {
+          role: "system",
+          content: `Error saving user Bash result: ${asErrorString(error)}`,
+        },
+      ]);
+    },
+  });
+  const userBash = useUserBash({
+    execute: async (command, signal, onOutput, excludeFromContext) => {
+      const bashTool = registryRef.current.getInstanceOf("Bash", BashTool);
+      if (!bashTool) {
+        throw new Error("Bash tool is unavailable");
+      }
+      await configureBashSandbox(bashTool);
+      return executeUserBash(
+        bashTool,
+        {
+          cwd,
+          sessionId: sessionIdRef.current,
+          abortSignal: signal,
+          onOutput,
+        },
+        command,
+        excludeFromContext,
+      );
+    },
+    setMessages,
+    onStart: (text) => {
+      dismissNotice();
+      setPromptHistory(historyMod.append(text));
+    },
+    onSettled: () => {
+      setFileFactsVersion((version) => version + 1);
+    },
+    onResult: userBashHistory.record,
+  });
+  const flushUserBashResults = userBashHistory.flush;
   const permissionResolveRef = useRef<
     ((v: "allow" | "deny" | "allowAlways") => void) | null
   >(null);
+  // Permission asks from the main loop, subagents and teammates share the
+  // single dialog slot; concurrent requests queue here and are presented in
+  // order (or denied wholesale on interrupt).
+  const permissionQueueRef = useRef<
+    { present: () => void; deny: () => void }[]
+  >([]);
   const [rewindDialogActive, setRewindDialogActive] = useState(false);
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
+  const [transcriptRevision, setTranscriptRevision] = useState(0);
   // Steering messages queued into the in-flight agent, mirrored for display.
   // Entries are removed when the agent reports them delivered.
   const [steeringPending, setSteeringPending] = useState<string[]>([]);
+  // Steering texts already written to prompt history at steer time. Consumed
+  // when the text enters the conversation (delivered in-run or re-fed as a
+  // follow-up), so the follow-up path records each user prompt exactly once.
+  const steeringHistoryRecordedRef = useRef<string[]>([]);
   const [resumeSessions, setResumeSessions] = useState<
     sessionMod.SessionInfo[]
   >([]);
   const [resumeDialogActive, setResumeDialogActive] = useState(false);
   const initialResumeHandledRef = useRef(false);
-  const [permissionRequest, setPermissionRequest] = useState<{
-    toolName: string;
-    argsSummary: string;
-    reason: string;
-  } | null>(null);
+  const [permissionRequest, setPermissionRequest] =
+    useState<PermissionRequest | null>(null);
   const [askRequest, setAskRequest] = useState<Question[] | null>(null);
   const askResolveRef = useRef<((a: Record<string, string>) => void) | null>(
     null,
   );
   const teammateStates = useTeammateStates(teamManagerRef.current);
-  const [teamsDialogOpen, setTeamsDialogOpen] = useState(false);
+  const [agentsDialogOpen, setAgentsDialogOpen] = useState(false);
   const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<AgentTask[]>([]);
+  const backgroundSubagents = backgroundTasks.filter(
+    (task) => task.kind !== "shell",
+  );
   const subagentIdRef = useRef(0);
   // Terminal card decoration (status + progress line) for Agent calls, keyed by
   // tool call id. Consulted when the tool result is committed to transcript
@@ -461,18 +567,18 @@ export function App({
   // success card whose only hint is an "[Interrupted]" tail. Background calls
   // resolve before their subagent finalizes, so they commit undecorated.
   const subagentCardsRef = useRef(new Map<string, AgentCardDecoration>());
-  const { insertInputTextRef, clearInputRef } = useIdeInput(workDir);
+  const { insertInputTextRef, clearInputRef } = useIdeInput(cwd);
 
   useEffect(
     () => backgroundTaskManagerRef.current.subscribe(setBackgroundTasks),
     [],
   );
 
-  // Interrupt scope: a single Ctrl+C / Esc routes to interruptForeground,
-  // which only stops foreground execution — the in-flight agent loop (its
+  // Without a running user Bash command, Ctrl+C / Esc routes to interruptForeground,
+  // which stops foreground execution — the in-flight agent loop (its
   // signal is shared by synchronous tool calls and run_in_background=false
-  // subagents), /compact, or a code review. Background tasks, background
-  // subagents and teammates own separate abort controllers and keep running;
+  // subagents), a forked slash skill, /compact, or a code review. Background
+  // tasks, background subagents and teammates own separate abort controllers and keep running;
   // only the TUI-exit path (double Ctrl+C, /quit) tears them down through
   // interruptAll().
   const { interruptForeground, interruptAll } = useMemo(
@@ -483,39 +589,91 @@ export function App({
         setPermissionRequest,
         askResolveRef,
         setAskRequest,
+        permissionQueue: permissionQueueRef,
         backgroundTasks: backgroundTaskManagerRef.current,
         teams: teamManagerRef.current,
       }),
     [],
   );
 
+  // Shared approval channel: the main agent loop, subagents and in-process
+  // teammates all route "ask" decisions to the same modal dialog.
+  const requestPermission = useMemo<PermissionRequestHandler>(
+    () =>
+      createPermissionRequestHandler({
+        resolver: permissionResolveRef,
+        queue: permissionQueueRef,
+        present: setPermissionRequest,
+      }),
+    [],
+  );
+
   const requestExit = useCallback(() => {
-    interruptAll();
-    const activeToolTime = activeToolBatchStartedAtRef.current
-      ? Date.now() - activeToolBatchStartedAtRef.current
-      : 0;
-    onExitSummary?.({
-      ...interactionStatsRef.current,
-      sessionId: sessionIdRef.current,
-      toolTimeMs: interactionStatsRef.current.toolTimeMs + activeToolTime,
-    });
-    exit();
-  }, [exit, interruptAll, onExitSummary]);
+    void (async () => {
+      interruptAll();
+      await userBash.stop();
+      // Join the fire-and-forget stopAlls and disconnect MCP before the app
+      // unmounts (parity with print-mode/ACP): on Windows the shell kills go
+      // through async taskkill, and stdio MCP children need an explicit close.
+      const cleanupResults = await Promise.allSettled([
+        backgroundTaskManagerRef.current.stopAll(),
+        teamManagerRef.current.dispose(),
+      ]);
+      for (const result of cleanupResults) {
+        if (result.status === "rejected") {
+          log.error({ error: result.reason }, "terminal worker cleanup failed");
+        }
+      }
+      const mcp = mcpManagerRef.current;
+      if (mcp) {
+        try {
+          await mcp.disconnectAll();
+        } catch {
+          // best-effort — stdio children usually exit on stdin EOF anyway
+        }
+      }
+      const activeToolTime = activeToolBatchStartedAtRef.current
+        ? Date.now() - activeToolBatchStartedAtRef.current
+        : 0;
+      try {
+        await registryRef.current.dispose();
+      } catch (error) {
+        log.error({ error }, "terminal tool cleanup failed");
+      }
+      flushUserBashResults(false);
+      onExitSummary?.({
+        ...interactionStatsRef.current,
+        ...output.usageTotalsRef.current,
+        latestVersion: latestVersionRef.current,
+        sessionId: sessionIdRef.current,
+        toolTimeMs: interactionStatsRef.current.toolTimeMs + activeToolTime,
+      });
+      exit();
+    })();
+  }, [
+    exit,
+    interruptAll,
+    onExitSummary,
+    userBash.stop,
+    flushUserBashResults,
+    latestVersionRef,
+  ]);
 
   // Foreground-only work gate for Ctrl+C/Esc: while only background work is
   // running, a press must fall through to the press-twice-to-exit flow
   // instead of interrupting anything.
-  const foregroundBusy = isForegroundBusy(isStreaming, isCompacting, subagents);
-  const { termWidth, toolsExpanded, ctrlCHint } = useTerminalControls({
-    isStreaming,
+  const foregroundBusy =
+    userBash.running || isForegroundBusy(isStreaming, isCompacting, subagents);
+  const interruptUserWork = () => {
+    if (!userBash.interrupt()) {
+      interruptForeground();
+    }
+  };
+  const { toolsExpanded, ctrlCHint } = useTerminalControls({
     hasRunningWork: foregroundBusy,
     clearInputRef,
-    onInterrupt: interruptForeground,
+    onInterrupt: interruptUserWork,
     onExit: requestExit,
-    teamsDialogOpen,
-    onToggleTeams: () => {
-      setTeamsDialogOpen((open) => !open);
-    },
     onBackgroundShells: () => {
       // Gate the keypress: keep Ctrl+B inert when nothing is backgroundable,
       // and yield the key to the provider-login form while it is open (that
@@ -534,7 +692,7 @@ export function App({
       ? ("retry" as const)
       : isCompacting || providerSwitching
         ? ("compacting" as const)
-        : isStreaming
+        : isStreaming || userBash.running
           ? ("working" as const)
           : ("idle" as const);
 
@@ -584,6 +742,7 @@ export function App({
           decideAndApply(
             registryRef.current,
             provider.base_url,
+            provider.protocol,
             getContextWindow(provider),
           );
           mcpModeDecidedRef.current = true;
@@ -629,7 +788,7 @@ export function App({
       runMcpOperation(async () => {
         let servers: MCPServerConfig[];
         try {
-          servers = withProjectMcpServers(loadConfig(), workDir).mcp_servers;
+          servers = withProjectMcpServers(loadConfig(), cwd).mcp_servers;
         } catch (err) {
           setMessages((prev) => [
             ...prev,
@@ -696,13 +855,18 @@ export function App({
           },
         ]);
       }),
-    [workDir, applyMcpResult, runMcpOperation, syncMcpInstructions],
+    [cwd, applyMcpResult, runMcpOperation, syncMcpInstructions],
   );
 
   const initClient = useCallback(
     async (provider: ProviderConfig) => {
       try {
-        const env = detectEnvironment(workDir);
+        const hookErr = validateHooks(hooks);
+        if (hookErr) {
+          throw hookErr;
+        }
+
+        const env = detectEnvironment(cwd);
         env.model = provider.model;
         const systemPrompt = buildSystemPrompt(env);
         const client = await createClient(provider, systemPrompt);
@@ -711,29 +875,23 @@ export function App({
         contextWindowRef.current = getContextWindow(provider);
         maxOutputRef.current = getMaxOutputTokens(provider);
 
-        fileHistoryRef.current = new FileHistory(workDir, sessionIdRef.current);
+        fileHistoryRef.current = new FileHistory(sessionIdRef.current);
 
-        const instructions = loadInstructions(workDir);
-        // memory: false disables the whole auto-memory pipeline; no manager is
-        // created so nothing scans, rebuilds MEMORY.md, or injects reminders.
-        const memMgr = memoryEnabled ? new MemoryManager(workDir) : null;
+        const instructions = loadInstructions(cwd);
+        // enable_memory: false disables the whole auto-memory pipeline; no
+        // manager is created so nothing scans, rebuilds MEMORY.md, or injects
+        // reminders.
+        const memMgr = memoryEnabled ? new MemoryManager(cwd) : null;
         memManagerRef.current = memMgr;
         const memReminder = memMgr?.buildSystemReminder() ?? "";
         conversationRef.current.injectLongTermMemory(instructions, memReminder);
 
-        setPromptHistory(historyMod.load(historyDir));
+        setPromptHistory(historyMod.load());
 
-        const hookErr = validateHooks(hooks);
-        if (hookErr) {
-          setMessages((prev) => [
-            ...prev,
-            { role: "system", content: `Hook warning: ${hookErr.message}` },
-          ]);
-        }
         hookEngineRef.current = new HookEngine(hooks);
 
         const catalog = new SkillCatalog();
-        catalog.load(workDir);
+        catalog.load(cwd);
         skillCatalogRef.current = catalog;
 
         // The skill catalog is project-scoped and never baked into the system
@@ -747,7 +905,7 @@ export function App({
         // The onInstalled callback re-wires skills→commands so a freshly-fetched
         // skill is immediately available as /<name> without a UI restart.
         registryRef.current.register(
-          new InstallSkillTool(workDir, catalog, () => {
+          new InstallSkillTool(cwd, catalog, () => {
             // Only rewire the slash commands; leave the system prompt alone.
             // Newly installed skills are delivered by skillDelta as a
             // system-reminder on the next turn.
@@ -759,7 +917,6 @@ export function App({
           }),
         );
 
-        // Register AskUserQuestion, delegating the prompt to the UI dialog.
         registryRef.current.register(
           new AskUserQuestionTool(
             (questions) =>
@@ -775,52 +932,39 @@ export function App({
         // backgroundTasks:false — a teammate loop is one spawnSubagent run per
         // task turn, so a per-run manager's turn-end stopAll() would kill
         // anything the teammate backgrounded; teammates stay purely foreground.
-        const teamRunAgent: RunAgent = (task, onEvent, abortSignal) =>
-          spawnSubagent(
-            BUILTIN_AGENTS[0],
-            task,
-            clientRef.current ?? client,
-            registryRef.current,
-            selectedProviderRef.current,
-            workDir,
-            undefined,
-            onEvent,
-            undefined,
-            undefined,
-            { abortSignal, backgroundTasks: false },
-          );
         // RunAgent factory for teammates: runs the teammate agent main loop
         // against the teammate-scoped registry (shared task-board tools are
         // already injected by AgentTool before this factory is called).
-        const teamRunAgentFactory =
-          (
-            registry: ToolRegistry,
-            teamChecker?: PermissionChecker,
-            memberWorkDir = workDir,
-          ): RunAgent =>
-          (task, onEvent, abortSignal) =>
+        const teamRunAgentFactory = (
+          registry: ToolRegistry,
+          teamChecker?: PermissionChecker,
+          memberCwd = cwd,
+          options?: TeammateRunOptions,
+        ): RunAgent => {
+          const conversation = new ConversationManager();
+          return (task, onEvent, abortSignal) =>
             spawnSubagent(
-              BUILTIN_AGENTS[0],
+              options?.definition ?? BUILTIN_AGENTS[0],
               task,
               clientRef.current ?? client,
               registry,
               selectedProviderRef.current,
-              memberWorkDir,
+              memberCwd,
               undefined,
               onEvent,
-              undefined,
+              options?.modelOverride,
               teamChecker,
-              { abortSignal, backgroundTasks: false },
+              {
+                abortSignal,
+                backgroundTasks: false,
+                agentName: options?.agentName,
+                conversation,
+                onPermissionRequest: requestPermission,
+              },
             );
+        };
         registryRef.current.register(
           new TeamCreateTool(teamManagerRef.current),
-        );
-        registryRef.current.register(
-          new SpawnTeammateTool(
-            teamManagerRef.current,
-            teamRunAgent,
-            selectedProviderRef.current.base_url,
-          ),
         );
         registryRef.current.register(
           new SendMessageTool(teamManagerRef.current),
@@ -846,9 +990,9 @@ export function App({
           backgroundTaskManagerRef.current,
         );
 
-        // Load user-defined slash commands from .yukino/commands/*.md
+        // Load user-defined slash commands from ~/.yukino/prompts/*.md
         // (user home, then project — project wins on a name collision).
-        for (const cmd of loadUserCommands(workDir)) {
+        for (const cmd of loadUserCommands()) {
           try {
             cmdRegistryRef.current.register(cmd);
           } catch {
@@ -978,16 +1122,9 @@ export function App({
         };
 
         const agentTool = new AgentTool(
-          workDir,
+          cwd,
           registryRef.current,
-          (
-            def,
-            prompt,
-            background,
-            modelOverride?,
-            workDirOverride?,
-            context?,
-          ) => {
+          (def, prompt, background, modelOverride?, cwdOverride?, context?) => {
             const toolCallId =
               context?.toolCallId ??
               `subagent-${String(++subagentIdRef.current)}`;
@@ -1005,12 +1142,12 @@ export function App({
                   clientRef.current ?? client,
                   registryRef.current,
                   selectedProviderRef.current,
-                  workDirOverride ?? workDir,
+                  cwdOverride ?? cwd,
                   undefined,
                   onEvent,
                   modelOverride,
-                  workDirOverride
-                    ? context?.permissionChecker?.forWorkDir(workDirOverride)
+                  cwdOverride
+                    ? context?.permissionChecker?.forCwd(cwdOverride)
                     : context?.permissionChecker,
                   {
                     abortSignal: context?.abortSignal,
@@ -1040,12 +1177,13 @@ export function App({
                   clientRef.current ?? client,
                   registry,
                   selectedProviderRef.current,
-                  context?.workDir ?? workDir,
+                  context?.cwd ?? cwd,
                   undefined,
                   onEvent,
                   modelOverride,
                   context?.permissionChecker,
                   {
+                    agentName: "fork",
                     conversation,
                     abortSignal: context?.abortSignal,
                     onPermissionRequest: context?.onPermissionRequest,
@@ -1057,11 +1195,7 @@ export function App({
         );
         agentTool.forkDisabled = forkDisabled ?? false;
         // Wire the team manager into AgentTool to enable the team_name teammate path (teammates receive shared task-board tools)
-        agentTool.setTeamManager(
-          teamManagerRef.current,
-          teamRunAgentFactory,
-          selectedProviderRef.current.base_url,
-        );
+        agentTool.setTeamManager(teamManagerRef.current, teamRunAgentFactory);
         registryRef.current.register(agentTool);
 
         if (mcpServers.length > 0) {
@@ -1070,10 +1204,10 @@ export function App({
           void connectMcpServers(mgr, provider);
         }
       } catch (err) {
-        setError(`Failed to init LLM client: ${asErrorString(err)}`);
+        setError(`Failed to initialize agent: ${asErrorString(err)}`);
       }
     },
-    [workDir, mcpServers, connectMcpServers, memoryEnabled],
+    [cwd, mcpServers, connectMcpServers, memoryEnabled, hooks, forkDisabled],
   );
 
   useEffect(() => {
@@ -1082,18 +1216,25 @@ export function App({
     }
   }, [appState, selectedProvider, initClient]);
 
-  const rememberProvider = (
+  // Provider entry identity: reference equality first, then base_url+name for
+  // re-parsed entries that are equal but not identical (see provider-login).
+  const providerIndexOf = (
     provider: ProviderConfig,
     list: ProviderConfig[] = providers,
-  ): void => {
-    const index = list.findIndex(
+  ): number =>
+    list.findIndex(
       (candidate) =>
         candidate === provider ||
         (candidate.base_url === provider.base_url &&
           candidate.name === provider.name),
     );
+
+  const rememberProvider = (
+    provider: ProviderConfig,
+    list: ProviderConfig[] = providers,
+  ): void => {
     try {
-      persistDefaultProvider(Math.max(index, 0));
+      persistDefaultProvider(Math.max(providerIndexOf(provider, list), 0));
     } catch {
       /* best effort */
     }
@@ -1116,7 +1257,7 @@ export function App({
     const previousProvider = selectedProviderRef.current;
     void (async () => {
       try {
-        const environment = detectEnvironment(workDir);
+        const environment = detectEnvironment(cwd);
         environment.model = provider.model;
         const client = await createClient(
           provider,
@@ -1131,6 +1272,7 @@ export function App({
         decideAndApply(
           registryRef.current,
           provider.base_url,
+          provider.protocol,
           contextWindowRef.current,
         );
         setMessages((current) => [
@@ -1147,6 +1289,192 @@ export function App({
         setProviderSwitching(false);
       }
     })();
+  };
+
+  /**
+   * Switches the active model of the current provider — the only field /model
+   * touches. The client is rebuilt so the change takes effect immediately, and
+   * the endpoint's config entry is updated in place.
+   */
+  const applyModel = async (modelId: string): Promise<boolean> => {
+    const provider = selectedProviderRef.current;
+    const nextModel = modelId.trim();
+    if (!nextModel || !clientRef.current) {
+      return false;
+    }
+    if (nextModel === provider.model) {
+      setMessages((current) => [
+        ...current,
+        { role: "system", content: `Model already set to ${nextModel}.` },
+      ]);
+      return true;
+    }
+    const updated = { ...provider, model: nextModel };
+    setProviderSwitching(true);
+    try {
+      const environment = detectEnvironment(cwd);
+      environment.model = updated.model;
+      const client = await createClient(
+        updated,
+        buildSystemPrompt(environment),
+      );
+      clientRef.current = client;
+      selectedProviderRef.current = updated;
+      setSelectedProvider(updated);
+      setProviders((current) =>
+        current.map((entry) =>
+          entry.base_url === updated.base_url
+            ? { ...entry, model: updated.model }
+            : entry,
+        ),
+      );
+      contextWindowRef.current = getContextWindow(updated);
+      maxOutputRef.current = getMaxOutputTokens(updated);
+      decideAndApply(
+        registryRef.current,
+        updated.base_url,
+        updated.protocol,
+        contextWindowRef.current,
+      );
+      // Capability metadata follows the model; drop derived state.
+      memExtractorRef.current = null;
+    } catch (err) {
+      setError(`Failed to switch model: ${asErrorString(err)}`);
+      return false;
+    } finally {
+      setProviderSwitching(false);
+    }
+    // A save failure must not undo the runtime switch.
+    let saved = true;
+    try {
+      persistModel(updated.base_url, updated.model);
+    } catch (err) {
+      saved = false;
+      setError(`Model switched but saving failed: ${asErrorString(err)}`);
+    }
+    setMessages((current) => [
+      ...current,
+      {
+        role: "system",
+        content: `Model set to ${updated.model}${saved ? " and saved" : " for this session"}.`,
+      },
+    ]);
+    return true;
+  };
+
+  const closeModelPicker = (): void => {
+    modelDialogControllerRef.current?.abort();
+    modelDialogControllerRef.current = null;
+    setModelDialogActive(false);
+  };
+
+  /** Lists the models the current provider advertises for the /model picker. */
+  const openModelPicker = (): void => {
+    modelDialogControllerRef.current?.abort();
+    const controller = new AbortController();
+    modelDialogControllerRef.current = controller;
+    const provider = selectedProviderRef.current;
+    setModelDialogState({ status: "loading", models: [] });
+    setModelDialogActive(true);
+    void discoverModels(
+      {
+        protocol: provider.protocol,
+        base_url: provider.base_url,
+        api_key: provider.api_key,
+      },
+      controller.signal,
+    )
+      .then((models) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setModelDialogState({
+          status: models.length > 0 ? "ready" : "empty",
+          models,
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setModelDialogState({ status: "error", models: [] });
+        }
+      });
+  };
+
+  /**
+   * Maps restored/rebuilt conversation records onto visible transcript
+   * messages. Tool chains are persisted as assistant records with tool_uses
+   * and user records carrying only tool_results (empty text); mapping those
+   * verbatim emits blank user-message boxes, so they fold into turn_summary
+   * messages instead, mirroring how live turns are committed. Anything with
+   * no visible text is skipped. Shared by /resume and /rewind so both leave
+   * the transcript in sync with the rebuilt conversation.
+   */
+  const transcriptFromRestored = (
+    restored: readonly {
+      role: "user" | "assistant" | "system";
+      content: string | Record<string, unknown>[];
+      userBash?: UserBashResult;
+      toolUses?: readonly {
+        toolUseId: string;
+        toolName: string;
+        arguments?: Record<string, unknown> | null;
+      }[];
+      toolResults?: readonly {
+        toolUseId: string;
+        content: string;
+        isError: boolean;
+      }[];
+    }[],
+  ): ChatMessage[] => {
+    const pendingUses = new Map<
+      string,
+      { toolName: string; argsSummary: string }
+    >();
+    const out: ChatMessage[] = [];
+    for (const m of restored) {
+      if (m.userBash) {
+        out.push(userBashCard(m.userBash));
+        continue;
+      }
+      for (const tu of m.toolUses ?? []) {
+        pendingUses.set(tu.toolUseId, {
+          toolName: tu.toolName,
+          argsSummary: formatToolArgs(tu.arguments ?? {}),
+        });
+      }
+      if (m.toolResults?.length) {
+        const toolSummary: ToolSummaryItem[] = m.toolResults.map((tr) => {
+          const use = pendingUses.get(tr.toolUseId);
+          pendingUses.delete(tr.toolUseId);
+          const toolName = use?.toolName ?? "tool";
+          // Restored Agent cards get the same status semantics as live
+          // ones: the interruption marker means the run was stopped, so
+          // it must not render as a green success card.
+          const agentStatus =
+            toolName === "Agent" && !tr.isError
+              ? tr.content.includes(SUBAGENT_INTERRUPTED_MARKER)
+                ? "stopped"
+                : "completed"
+              : undefined;
+          return {
+            toolName,
+            argsSummary: use?.argsSummary ?? "",
+            output: toDisplayPreview(tr.content),
+            isError: tr.isError,
+            // No timing data in the session log; 0 hides the suffix.
+            elapsed: 0,
+            ...(agentStatus ? { status: agentStatus } : {}),
+          };
+        });
+        out.push({ role: "turn_summary", content: "", toolSummary });
+        continue;
+      }
+      const text = contentToText(m.content);
+      if (text.trim()) {
+        out.push({ role: m.role, content: text });
+      }
+    }
+    return out;
   };
 
   const handleSlashCommand = async (text: string): Promise<boolean> => {
@@ -1225,14 +1553,40 @@ export function App({
       ]);
       return true;
     }
+    if (cmd.name === "goal") {
+      const result = handleGoalCommand(currentGoal(), parsed.args);
+      setMessages((prev) => [
+        ...prev,
+        { role: "system", content: result.message },
+      ]);
+      if (result.prompt && clientRef.current) {
+        conversationRef.current.addUserMessage(result.prompt);
+        sessionMod.saveMessage(cwd, sessionIdRef.current, {
+          role: "user",
+          content: result.prompt,
+          timestamp: Math.floor(Date.now() / 1000),
+        });
+        setIsStreaming(true);
+        output.prepareTurn();
+        try {
+          await runAgentLoopWithStats();
+        } catch (error) {
+          setError(asErrorString(error));
+        } finally {
+          setIsStreaming(false);
+          output.clearTools();
+        }
+      }
+      return true;
+    }
 
     // Rich status/memory commands need live app state, so handle them here.
     if (cmd.name === "status") {
       const sandbox = sandboxEnabled ? await getSandbox() : null;
       const sandboxReady = sandbox ? await sandbox.available() : false;
       const sbStatus = sandboxEnabled
-        ? `${sandboxAutoAllow ? "ON (auto-allow)" : "ON (manual)"}, ${sandboxBackend}, ${sandboxReady ? "ready" : "blocked"}`
-        : `OFF, ${sandboxBackend}`;
+        ? `${sandboxAutoAllow ? "ON (auto-allow)" : "ON (manual)"}, ${sandboxReady ? "ready" : "blocked"}`
+        : "OFF";
       const lines = [
         `Mode:      ${permMode}`,
         `Model:     ${selectedProvider.model}`,
@@ -1242,13 +1596,13 @@ export function App({
         `Sandbox:   ${sbStatus}`,
         `Memories:  ${
           memoryEnabled
-            ? String(new MemoryManager(workDir).getMemories().length)
-            : "disabled (memory: false)"
+            ? String(memManagerRef.current?.getMemories().length ?? 0)
+            : "disabled (enable_memory: false)"
         }`,
         `Skills:    ${String(skillCatalogRef.current?.list().length ?? 0)}`,
         `MCP:       ${String(mcpInfo?.servers.length ?? 0)} server(s), ${String(mcpInfo?.toolCount ?? 0)} tool(s)`,
         `Session:   ${sessionIdRef.current}`,
-        `Directory: ${workDir}`,
+        `Directory: ${cwd}`,
       ];
       setMessages((prev) => [
         ...prev,
@@ -1262,13 +1616,14 @@ export function App({
           ...prev,
           {
             role: "system",
-            content: "Auto memory is disabled (memory: false in config.yaml).",
+            content:
+              "Auto memory is disabled (enable_memory: false in config.yaml).",
           },
         ]);
         return true;
       }
       const sub = parsed.args.trim().split(/\s+/)[0];
-      const mgr = new MemoryManager(workDir);
+      const mgr = new MemoryManager(cwd);
       if (sub === "clear") {
         mgr.clear();
         setMessages((prev) => [
@@ -1290,10 +1645,23 @@ export function App({
     }
 
     if (cmd.type === "local_ui") {
-      const action = cmd.handler({ workDir, args: parsed.args });
+      const action = cmd.handler({ cwd, args: parsed.args });
       switch (action) {
         case "login": {
           setLoginActive(true);
+          break;
+        }
+        case "model": {
+          if (parsed.args.trim()) {
+            await applyModel(parsed.args);
+          } else if (clientRef.current) {
+            openModelPicker();
+          } else {
+            setMessages((current) => [
+              ...current,
+              { role: "system", content: "Client not ready." },
+            ]);
+          }
           break;
         }
         case "provider": {
@@ -1325,7 +1693,7 @@ export function App({
           conversationRef.current.reset();
           announcedSkillsRef.current.clear();
           conversationRef.current.injectLongTermMemory(
-            loadInstructions(workDir),
+            loadInstructions(cwd),
             memManagerRef.current?.buildSystemReminder() ?? "",
           );
           // The fresh history holds no MCP announcement any more, so this re-sends
@@ -1335,6 +1703,7 @@ export function App({
           }
           // Reset the session ID and the stores derived from it
           sessionIdRef.current = sessionMod.newSessionId();
+          planOwner().planFilePath = "";
           interactionStatsRef.current = {
             agentActiveMs: 0,
             failedToolCalls: 0,
@@ -1344,13 +1713,8 @@ export function App({
           };
           activeToolIdsRef.current.clear();
           activeToolBatchStartedAtRef.current = null;
-          taskListRef.current.useStore(
-            new TaskStore(workDir, sessionIdRef.current),
-          );
-          fileHistoryRef.current = new FileHistory(
-            workDir,
-            sessionIdRef.current,
-          );
+          taskListRef.current.useStore(new TaskStore(sessionIdRef.current));
+          fileHistoryRef.current = new FileHistory(sessionIdRef.current);
           output.resetUsage();
           // Reset memory extraction, recall and compact-recovery state
           memCursorRef.current = 0;
@@ -1358,9 +1722,6 @@ export function App({
           recentToolsRef.current = [];
           surfacedMemoriesRef.current.clear();
           recoveryStateRef.current = new RecoveryState();
-          // Clear both the visible screen and terminal scrollback. Changing the
-          // session ID remounts the static brand block on the next render.
-          process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
           break;
         }
         case "quit":
@@ -1370,19 +1731,21 @@ export function App({
           setPrePlanMode(permMode);
           permModeRef.current = "plan";
           setPermMode("plan");
-          const planPath = getOrCreatePlanPath(workDir);
+          const planPath = getOrCreatePlanPath(planOwner());
           setMessages((prev) => [
             ...prev,
             {
               role: "system",
               content:
                 `Entered plan mode (read-only). Plan file: ${planPath}\n` +
-                "Investigate and design your approach. The agent will call ExitPlanMode when the plan is ready.",
+                (coordinatorActive(enableCoordinatorMode ?? false)
+                  ? "Delegate read-only research and return a plan. Use Shift+Tab to leave plan mode when ready to proceed."
+                  : "Investigate and design your approach. The agent will call ExitPlanMode when the plan is ready."),
             },
           ]);
           // Re-entry after a previous plan-mode exit: if the plan file still
           // exists, rebuild the re-entry reminder
-          if (hasExitedPlanModeRef.current && planExists(workDir)) {
+          if (hasExitedPlanModeRef.current && planExists(planOwner())) {
             const reentryMsg = buildPlanModeReentryReminder(planPath, true);
             if (reentryMsg) {
               conversationRef.current.addSystemReminder(reentryMsg);
@@ -1401,16 +1764,21 @@ export function App({
         case "compact":
           if (clientRef.current) {
             const controller = new AbortController();
+            const client = clientRef.current;
+            const protocol = client.protocol ?? "anthropic";
+            const toolFilter = buildComposedToolFilter(
+              coordinatorToolFilter(enableCoordinatorMode ?? false),
+              toolFilterRef.current,
+            );
             abortControllerRef.current = controller;
             setIsCompacting(true);
             await forceCompact(
               conversationRef.current,
-              clientRef.current,
+              client,
               recoveryStateRef.current,
-              registryRef.current.listTools().map((t) => t.name),
-
-              registryRef.current.getAllSchemas(),
-              sessionMod.getSessionFilePath(workDir, sessionIdRef.current),
+              registryRef.current.listVisibleToolNames(protocol, toolFilter),
+              registryRef.current.getAllSchemas(protocol, toolFilter),
+              sessionMod.getSessionFilePath(cwd, sessionIdRef.current),
               controller.signal,
               parsed.args,
             )
@@ -1418,7 +1786,7 @@ export function App({
                 // Persist the boundary so the compacted state survives /resume.
                 if (result.boundary) {
                   sessionMod.saveCompactBoundary(
-                    workDir,
+                    cwd,
                     sessionIdRef.current,
                     result.boundary,
                   );
@@ -1461,7 +1829,7 @@ export function App({
           const arg = parsed.args.trim();
           if (!arg) {
             const sessions = sessionMod
-              .listSessions(workDir)
+              .listSessions(cwd)
               .filter((session) => session.messageCount > 0);
             if (sessions.length === 0) {
               setMessages((prev) => [
@@ -1475,10 +1843,10 @@ export function App({
             break;
           }
 
-          const saved = sessionMod.loadSession(workDir, arg);
+          const saved = sessionMod.loadSession(cwd, arg);
           if (saved.length === 0) {
             const sessions = sessionMod
-              .listSessions(workDir)
+              .listSessions(cwd)
               .filter((session) => session.messageCount > 0);
             setMessages((prev) => [
               ...prev,
@@ -1503,10 +1871,8 @@ export function App({
           const conv = conversationRef.current;
           conv.reset();
           conv.injectLongTermMemory(
-            loadInstructions(workDir),
-            memoryEnabled
-              ? new MemoryManager(workDir).buildSystemReminder()
-              : "",
+            loadInstructions(cwd),
+            memoryEnabled ? new MemoryManager(cwd).buildSystemReminder() : "",
           );
           const restored = sessionMod.rebuildFromSession(saved);
           conv.appendMessages(
@@ -1518,79 +1884,41 @@ export function App({
               })),
             })),
           );
+          announcedMcpServersRef.current.clear();
+          if (mcpManagerRef.current) {
+            syncMcpInstructions(mcpManagerRef.current);
+          }
           announcedSkillsRef.current.clear();
           sessionIdRef.current = arg;
+          goalManagerRef.current = null;
+          planOwner().planFilePath = "";
+          // Mark the session active: expiry sweeping is mtime-based, and a
+          // resumed-but-not-yet-written session still carries its old stamp.
+          sessionMod.touchSession(cwd, arg);
           setResumeDialogActive(false);
           setResumeSessions([]);
           recentToolsRef.current = [];
           surfacedMemoriesRef.current.clear();
           recoveryStateRef.current = new RecoveryState();
-          taskListRef.current.useStore(new TaskStore(workDir, arg));
+          taskListRef.current.useStore(new TaskStore(arg));
           // Re-key file history to the resumed session. Snapshots persist per
           // session and are reloaded on construction; /rewind after a resume
           // truncates the session log at the snapshot's recorded line count and
           // rebuilds the conversation from it, so stale in-memory message
           // indexes from the previous process are never trusted.
-          fileHistoryRef.current = new FileHistory(workDir, arg);
-          // Rebuild the visible transcript. Tool chains are persisted as
-          // assistant records with tool_uses and user records that carry only
-          // tool_results (empty text). Mapping those verbatim emits empty
-          // role:"user" messages that render as blank user-message boxes.
-          // Fold them into turn_summary messages instead, mirroring how live
-          // turns are committed, and skip anything with no visible text.
-          const pendingUses = new Map<
-            string,
-            { toolName: string; argsSummary: string }
-          >();
-          const resumedMessages: ChatMessage[] = [];
-          for (const m of restored) {
-            for (const tu of m.toolUses ?? []) {
-              pendingUses.set(tu.toolUseId, {
-                toolName: tu.toolName,
-                argsSummary: formatToolArgs(tu.arguments ?? {}),
-              });
-            }
-            if (m.toolResults?.length) {
-              const toolSummary: ToolSummaryItem[] = m.toolResults.map((tr) => {
-                const use = pendingUses.get(tr.toolUseId);
-                pendingUses.delete(tr.toolUseId);
-                const toolName = use?.toolName ?? "tool";
-                // Restored Agent cards get the same status semantics as live
-                // ones: the interruption marker means the run was stopped, so
-                // it must not render as a green success card.
-                const agentStatus =
-                  toolName === "Agent" && !tr.isError
-                    ? tr.content.includes(SUBAGENT_INTERRUPTED_MARKER)
-                      ? "stopped"
-                      : "completed"
-                    : undefined;
-                return {
-                  toolName,
-                  argsSummary: use?.argsSummary ?? "",
-                  output: toDisplayPreview(tr.content),
-                  isError: tr.isError,
-                  // No timing data in the session log; 0 hides the suffix.
-                  elapsed: 0,
-                  ...(agentStatus ? { status: agentStatus } : {}),
-                };
-              });
-              resumedMessages.push({
-                role: "turn_summary",
-                content: "",
-                toolSummary,
-              });
-              continue;
-            }
-            const text = contentToText(m.content);
-            if (text.trim()) {
-              resumedMessages.push({ role: m.role, content: text });
-            }
-          }
+          fileHistoryRef.current = new FileHistory(arg);
+          const resumedMessages = transcriptFromRestored(
+            sessionMod.rebuildFromSession(saved, {
+              includeExcludedUserBash: true,
+            }),
+          );
           resumedMessages.push({
             role: "system",
             content: `⟲ Resumed session ${arg} (${String(restored.length)} messages).`,
           });
           setMessages(resumedMessages);
+          dismissNotice();
+          setTranscriptRevision((revision) => revision + 1);
           break;
         }
         case "skills": {
@@ -1646,7 +1974,7 @@ export function App({
           try {
             const { execSync } = await import("node:child_process");
             const output = execSync("git worktree list", {
-              cwd: workDir,
+              cwd: cwd,
               encoding: "utf-8",
             });
             setMessages((prev) => [
@@ -1687,7 +2015,7 @@ export function App({
             await disposeSandbox();
             setMessages((prev) => [
               ...prev,
-              { role: "system", content: `Sandbox (${sandboxBackend}): OFF` },
+              { role: "system", content: "Sandbox: OFF" },
             ]);
             break;
           }
@@ -1695,7 +2023,7 @@ export function App({
           const sandbox = await getSandbox();
           const sbAvailable = (await sandbox?.available()) ?? false;
           const unavailableReason =
-            sandbox?.availabilityError ?? "sandbox backend unavailable";
+            sandbox?.availabilityError ?? "sandbox unavailable";
           const autoAllow = arg === "auto";
           const manual = arg === "manual";
           if (autoAllow || manual) {
@@ -1707,7 +2035,7 @@ export function App({
               ...prev,
               {
                 role: "system",
-                content: `Sandbox (${sandboxBackend}): ON + ${autoAllow ? "auto-allow" : "manual permissions"}${sbAvailable ? "" : ` (blocked: ${unavailableReason})`}`,
+                content: `Sandbox: ON + ${autoAllow ? "auto-allow" : "manual permissions"}${sbAvailable ? "" : ` (blocked: ${unavailableReason})`}`,
               },
             ]);
           } else {
@@ -1718,7 +2046,6 @@ export function App({
               : "OFF";
             const lines = [
               `Sandbox status: ${status}`,
-              `Backend: ${sandboxBackend}`,
               `Runtime: ${sbAvailable ? "ready" : `blocked (${unavailableReason})`}`,
               "",
               "Usage: /sandbox <mode>",
@@ -1748,7 +2075,7 @@ export function App({
         return true;
       }
       const output = cmd.handler({
-        workDir,
+        cwd,
         args: parsed.args,
         thinkingLevel: () =>
           client?.getThinkingLevel?.() ??
@@ -1777,17 +2104,21 @@ export function App({
           persistThinkingLevel(selectedProviderRef.current.base_url, level);
         },
       });
-      setMessages((prev) => [...prev, { role: "system", content: output }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "system", content: output, markdown: cmd.markdown },
+      ]);
       return true;
     }
 
     if (cmd.type === "prompt") {
       // File-based custom command or inline skill: render the body and run it as a user turn.
-      const promptText = cmd.handler({ workDir, args: parsed.args });
+      const promptText = cmd.handler({ cwd, args: parsed.args });
       if (clientRef.current && promptText.trim()) {
+        setError(null);
         setMessages((prev) => [...prev, { role: "user", content: promptText }]);
         conversationRef.current.addUserMessage(promptText);
-        sessionMod.saveMessage(workDir, sessionIdRef.current, {
+        sessionMod.saveMessage(cwd, sessionIdRef.current, {
           role: "user",
           content: promptText,
           timestamp: Math.floor(Date.now() / 1000),
@@ -1832,10 +2163,15 @@ export function App({
           content: `Running skill "${parsed.name}" in fork mode…`,
         },
       ]);
-      // Build a SkillForkHost backed by the live refs.
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setIsStreaming(true);
+      // Build a SkillForkHost backed by the live refs. The optional signal lets
+      // the skill executor forward cancellation while the fallback keeps this
+      // slash invocation on the TUI's foreground controller.
       const forkHost: SkillForkHost = {
         ...skillHostRef.current,
-        runSubagent: (prompt: string) =>
+        runSubagent: (prompt: string, signal?: AbortSignal) =>
           spawnSubagent(
             {
               name: skill.meta.name,
@@ -1845,8 +2181,16 @@ export function App({
             prompt,
             client,
             registryRef.current,
-            selectedProvider,
-            workDir,
+            selectedProviderRef.current,
+            cwd,
+            undefined,
+            undefined,
+            undefined,
+            checkerRef.current?.forCwd(cwd),
+            {
+              abortSignal: signal ?? controller.signal,
+              onPermissionRequest: requestPermission,
+            },
           ),
         snapshotParentMessages: (count) => {
           const msgs = conversationRef.current.getMessages();
@@ -1856,22 +2200,31 @@ export function App({
             .join("\n");
         },
       };
-      await runSkillFork(skill, parsed.args, forkHost)
-        .then((result) => {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: result },
-          ]);
-        })
-        .catch((err: unknown) => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: `Skill fork error: ${asErrorString(err)}`,
-            },
-          ]);
-        });
+      try {
+        const result = await runSkillFork(
+          skill,
+          parsed.args,
+          forkHost,
+          controller.signal,
+        );
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: result },
+        ]);
+      } catch (err: unknown) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "system",
+            content: `Skill fork error: ${asErrorString(err)}`,
+          },
+        ]);
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        setIsStreaming(false);
+      }
       return true;
     }
 
@@ -1887,27 +2240,16 @@ export function App({
 
     // modeOverride avoids a stale-closure read of permMode right after a
     // setPermMode call (e.g. `/plan <args>` entering plan mode in the same tick).
-    const checker = new PermissionChecker(workDir, modeOverride ?? permMode);
+    const checker = checkerRef.current ?? new PermissionChecker(cwd);
+    checker.mode = modeOverride ?? permModeRef.current;
     checkerRef.current = checker;
 
     const bashTool = registryRef.current.getInstanceOf("Bash", BashTool);
-    let sandboxReady = false;
-    if (bashTool && sandboxEnabledRef.current) {
-      const sandbox = await getSandbox();
-      sandboxReady = (await sandbox?.available()) ?? false;
-      bashTool.sandbox = sandbox;
-      bashTool.sandboxRequired = true;
-      bashTool.sandboxConfig = {
-        allowWrite: [workDir, "/tmp"],
-        denyWrite: [],
-        networkEnabled: sandboxNetworkEnabled,
-      };
-    } else if (bashTool) {
-      bashTool.sandbox = null;
-      bashTool.sandboxRequired = false;
-    }
+    const sandboxReady = bashTool
+      ? await configureBashSandbox(bashTool)
+      : false;
 
-    // Auto-allow is safe only when the requested backend is actually ready.
+    // Auto-allow is safe only when the sandbox is actually ready.
     checker.sandboxEnabled = sandboxEnabledRef.current && sandboxReady;
     checker.sandboxAutoAllow = sandboxAutoAllowRef.current && sandboxReady;
     const recallPromise =
@@ -1923,6 +2265,7 @@ export function App({
               clientRef.current,
               [...recentToolsRef.current],
               new Set(surfacedMemoriesRef.current),
+              controller.signal,
             )
             .then((memories): RecallResult => {
               // Only select and render here; the selected paths travel with the result
@@ -1943,8 +2286,10 @@ export function App({
       registry: registryRef.current,
       checker,
       conversation: conversationRef.current,
-      workDir,
+      cwd,
       sessionId: sessionIdRef.current,
+      goalManager: currentGoal(),
+      shouldContinueGoal: () => !followUps.hasPending(),
       hookEngine: hookEngineRef.current ?? undefined,
       fileHistory: fileHistoryRef.current ?? undefined,
       fileStateCache: fileStateCacheRef.current,
@@ -1953,12 +2298,10 @@ export function App({
       maxOutput: maxOutputRef.current,
       recoveryState: recoveryStateRef.current,
       activeSkills: activeSkillsRef.current,
-      // The first system-reminder carries the full skill list; later turns
-      // only append the delta
-      instructions: loadInstructions(workDir),
+      instructions: loadInstructions(cwd),
       memoryContent: memManagerRef.current?.buildSystemReminder() ?? "",
       skillSection: skillCatalogRef.current
-        ? buildSkillSection(skillCatalogRef.current, workDir)
+        ? buildSkillSection(skillCatalogRef.current)
         : "",
       skillDeltaFn: skillDelta,
       memoryRecallPromise: recallPromise,
@@ -1998,7 +2341,7 @@ export function App({
           .join("\n");
         // Lazy-init the Memory Extractor (one per logged-in client, reused
         // across turns and sessions; discarded on re-login)
-        memExtractorRef.current ??= new MemoryExtractor(client, workDir);
+        memExtractorRef.current ??= new MemoryExtractor(client, cwd);
         memExtractorRef.current
           .extract(summary)
           .then((saved) => {
@@ -2019,17 +2362,17 @@ export function App({
           .finally(() => {
             memExtractingRef.current = false;
           });
-      },
-      onPermissionRequest: async (toolName, args, decision) => {
-        return new Promise<"allow" | "deny" | "allowAlways">((resolve) => {
-          permissionResolveRef.current = resolve;
-          setPermissionRequest({
-            toolName,
-            argsSummary: formatToolArgs(args),
-            reason: decision.reason,
-          });
+        memConsolidatorRef.current ??= new MemoryConsolidator(client, cwd, {
+          appendSystem: (message) => {
+            setMessages((current) => [
+              ...current,
+              { role: "system", content: message },
+            ]);
+          },
         });
+        void memConsolidatorRef.current.maybeRun();
       },
+      onPermissionRequest: requestPermission,
     });
 
     agentRef.current = agent;
@@ -2064,6 +2407,13 @@ export function App({
             if (event.toolName === "ExitPlanMode" && !event.isError) {
               exitPlanSucceeded = true;
             }
+            // @-mention completion must see files the agent just wrote.
+            if (
+              event.toolName === "WriteFile" ||
+              event.toolName === "EditFile"
+            ) {
+              setFileFactsVersion((v) => v + 1);
+            }
             const recent = recentToolsRef.current;
             const dup = recent.indexOf(event.toolName);
             if (dup >= 0) {
@@ -2076,21 +2426,20 @@ export function App({
             break;
           }
           case "steering_delivered": {
-            setSteeringPending((prev) => prev.filter((t) => t !== event.text));
+            // Remove exactly one occurrence: the same text may be queued twice.
+            setSteeringPending((prev) => {
+              const idx = prev.indexOf(event.text);
+              return idx === -1 ? prev : prev.filter((_, i) => i !== idx);
+            });
+            const recorded = steeringHistoryRecordedRef.current;
+            const recordedIdx = recorded.indexOf(event.text);
+            if (recordedIdx !== -1) {
+              recorded.splice(recordedIdx, 1);
+            }
             setMessages((prev) => [
               ...prev,
               { role: "user", content: event.text },
             ]);
-            break;
-          }
-          case "compact": {
-            if (event.boundary) {
-              sessionMod.saveCompactBoundary(
-                workDir,
-                sessionIdRef.current,
-                event.boundary,
-              );
-            }
             break;
           }
           case "loop_complete": {
@@ -2106,12 +2455,38 @@ export function App({
       }
     } finally {
       agentRef.current = null;
-      // Steering queued too late for in-run delivery becomes follow-up turns.
+      // The run may have created/renamed files through any tool (Bash, git,
+      // subagents); refresh the @-mention cache once it ends.
+      setFileFactsVersion((v) => v + 1);
+      // Steering queued too late for in-run delivery becomes follow-up turns —
+      // unless the user interrupted the run: "stop" means the queued messages
+      // must not fire immediately (parity with the remote server's cancel
+      // guard). They are removed from the pending list instead.
       const leftover = agent.drainSteering();
       if (leftover.length > 0) {
-        setSteeringPending((prev) => prev.filter((t) => !leftover.includes(t)));
-        for (const text of leftover) {
-          followUps.enqueue(text);
+        // Remove one pending entry per leftover item, not every text match.
+        setSteeringPending((prev) => {
+          const next = [...prev];
+          for (const text of leftover) {
+            const idx = next.indexOf(text);
+            if (idx !== -1) {
+              next.splice(idx, 1);
+            }
+          }
+          return next;
+        });
+        if (controller.signal.aborted) {
+          const recorded = steeringHistoryRecordedRef.current;
+          for (const text of leftover) {
+            const idx = recorded.indexOf(text);
+            if (idx !== -1) {
+              recorded.splice(idx, 1);
+            }
+          }
+        } else {
+          for (const text of leftover) {
+            followUps.enqueue(text);
+          }
         }
       }
     }
@@ -2184,23 +2559,18 @@ export function App({
       setIsStreaming(false);
       output.finishTurn();
       abortControllerRef.current = null;
+      subagentCardsRef.current.clear();
     }
   };
 
   const runUserTurn = async (text: string, modeOverride?: PermissionMode) => {
     await runAgentTurn(async () => {
       setMessages((prev) => [...prev, { role: "user", content: text }]);
-      const expanded = await expandAtRefsWithImages(text, workDir);
+      const expanded = await expandAtRefsWithImages(text, cwd);
       conversationRef.current.addUserMessage(expanded);
-      sessionMod.saveMessage(workDir, sessionIdRef.current, {
+      sessionMod.saveMessage(cwd, sessionIdRef.current, {
         role: "user",
-        content:
-          typeof expanded === "string"
-            ? text
-            : [
-                { type: "text", text },
-                ...expanded.filter((block) => block.type === "image"),
-              ],
+        content: expanded,
         timestamp: Math.floor(Date.now() / 1000),
       });
     }, modeOverride);
@@ -2213,7 +2583,7 @@ export function App({
   const handlePlanApproval = useCallback(
     (choice: PlanChoice, feedback?: string) => {
       setPlanApprovalActive(false);
-      const planPath = getOrCreatePlanPath(workDir);
+      const planPath = getOrCreatePlanPath(planOwner());
       let planContent = "";
       try {
         if (existsSync(planPath)) {
@@ -2258,7 +2628,7 @@ export function App({
         handleSubmit(feedback);
       }
     },
-    [workDir, prePlanMode],
+    [cwd, prePlanMode],
   );
 
   /**
@@ -2270,22 +2640,39 @@ export function App({
    * unlike in-memory message indexes (which are only meaningful within the
    * process that captured them). Snapshots with no recorded sessionLineCount
    * — or whose session file is gone — fall back to truncating by messageIndex.
+   *
+   * Returns the visible transcript for the rewound state: the caller must
+   * rebuild the displayed messages too, or the UI would keep showing
+   * messages the conversation no longer holds.
    */
-  const rewindConversation = (snap: Snapshot): void => {
+  const rewindConversation = (snap: Snapshot): ChatMessage[] => {
     const sessionFilePath = sessionMod.getSessionFilePath(
-      workDir,
+      cwd,
       sessionIdRef.current,
     );
     if (snap.sessionLineCount !== undefined && existsSync(sessionFilePath)) {
       sessionMod.truncateSessionLines(sessionFilePath, snap.sessionLineCount);
-      const rebuilt = sessionMod.rebuildFromSession(
-        sessionMod.loadSession(workDir, sessionIdRef.current),
-      );
+      const saved = sessionMod.loadSession(cwd, sessionIdRef.current);
+      const rebuilt = sessionMod.rebuildFromSession(saved);
       conversationRef.current.reset();
       conversationRef.current.appendMessages(rebuilt);
-      return;
+      goalManagerRef.current = null;
+      return transcriptFromRestored(
+        sessionMod.rebuildFromSession(saved, {
+          includeExcludedUserBash: true,
+        }),
+      );
     }
     conversationRef.current.truncateTo(snap.messageIndex);
+    return transcriptFromRestored(
+      conversationRef.current
+        .getMessages()
+        .filter(
+          (message) =>
+            message.role !== "system" &&
+            !contentToText(message.content).startsWith("<system-reminder>"),
+        ),
+    );
   };
 
   const handleRewindAction = useCallback(
@@ -2300,30 +2687,32 @@ export function App({
         case "code_and_conversation": {
           const changed = fh.rewind(action.snapshotIndex);
           const snap = rewindSnapshots[action.snapshotIndex];
-          rewindConversation(snap);
+          const transcript = rewindConversation(snap);
           const fileList =
             changed.length > 0
               ? "\n" + changed.map((f) => "  " + f).join("\n")
               : "";
-          setMessages((prev) => [
-            ...prev,
+          setMessages([
+            ...transcript,
             {
               role: "system",
               content: `⟲ Rewound to checkpoint. Restored ${String(changed.length)} file(s) and conversation.${fileList}`,
             },
           ]);
+          setTranscriptRevision((revision) => revision + 1);
           break;
         }
         case "conversation_only": {
           const snap = rewindSnapshots[action.snapshotIndex];
-          rewindConversation(snap);
-          setMessages((prev) => [
-            ...prev,
+          const transcript = rewindConversation(snap);
+          setMessages([
+            ...transcript,
             {
               role: "system",
               content: `⟲ Rewound conversation. Files unchanged.`,
             },
           ]);
+          setTranscriptRevision((revision) => revision + 1);
           break;
         }
         case "code_only": {
@@ -2369,7 +2758,15 @@ export function App({
 
   const processSubmission = async (text: string) => {
     refreshSkillsIfNeeded();
-    setPromptHistory(historyMod.append(historyDir, text));
+    // Steering leftovers were recorded when they were steered; consume the
+    // marker instead of appending again so each user prompt lands once.
+    const recorded = steeringHistoryRecordedRef.current;
+    const recordedIdx = recorded.indexOf(text);
+    if (recordedIdx !== -1) {
+      recorded.splice(recordedIdx, 1);
+    } else {
+      setPromptHistory(historyMod.append(text));
+    }
     if (text.startsWith("/") && (await handleSlashCommand(text))) {
       return;
     }
@@ -2380,18 +2777,20 @@ export function App({
     appState !== "chat" ||
     !clientRef.current ||
     isStreaming ||
+    userBash.running ||
     isCompacting ||
     providerSwitching ||
     loginActive ||
     codeReviewActive ||
     providerDialogActive ||
+    modelDialogActive ||
     thinkingDialogActive ||
     planApprovalActive ||
     rewindDialogActive ||
     resumeDialogActive ||
     permissionRequest !== null ||
     askRequest !== null ||
-    teamsDialogOpen;
+    agentsDialogOpen;
   const followUps = useFollowUpQueue({
     blocked: turnBlocked,
     send: processSubmission,
@@ -2423,12 +2822,34 @@ export function App({
     if (!trimmed) {
       return;
     }
+    dismissNotice();
+    const goalControl = /^\/goal(?:\s+(status|pause|clear|complete))?$/u.exec(
+      trimmed,
+    );
+    if (isStreaming && goalControl) {
+      const result = handleGoalCommand(currentGoal(), goalControl[1] ?? "");
+      setMessages((prev) => [
+        ...prev,
+        { role: "system", content: result.message },
+      ]);
+      return;
+    }
     if (isStreaming && !trimmed.startsWith("/") && agentRef.current) {
       agentRef.current.steer(trimmed);
       setSteeringPending((prev) => [...prev, trimmed]);
+      setPromptHistory(historyMod.append(trimmed));
+      steeringHistoryRecordedRef.current.push(trimmed);
       return;
     }
     followUps.enqueue(text);
+  };
+
+  const handleComposerSubmit = (text: string): boolean | undefined => {
+    const shellSubmission = userBash.submit(text);
+    if (shellSubmission !== undefined) {
+      return shellSubmission;
+    }
+    handleSubmit(text);
   };
 
   /**
@@ -2465,6 +2886,7 @@ export function App({
       return;
     }
 
+    dismissNotice();
     setCodeReviewActive(false);
     const controller = new AbortController();
     const onReviewEvent = output.createEventHandler();
@@ -2474,7 +2896,7 @@ export function App({
 
     void runCodeReview(
       {
-        workDir,
+        cwd,
         ...reviewOptions,
         abortSignal: controller.signal,
         onToolEvent: onReviewEvent,
@@ -2510,7 +2932,7 @@ export function App({
   };
 
   const handleLogin = async (input: ProviderConfig): Promise<void> => {
-    const environment = detectEnvironment(workDir);
+    const environment = detectEnvironment(cwd);
     environment.model = input.model;
     // Construct before saving so invalid client configuration leaves the form editable.
     const client = await createClient(input, buildSystemPrompt(environment));
@@ -2527,6 +2949,7 @@ export function App({
       decideAndApply(
         registryRef.current,
         saved.provider.base_url,
+        saved.provider.protocol,
         contextWindowRef.current,
       );
       memExtractorRef.current = null;
@@ -2581,245 +3004,304 @@ export function App({
   }
 
   return (
-    <Box flexDirection="column" width="100%">
-      <Box flexDirection="column" paddingTop={0} flexGrow={1}>
+    <TerminalLayout
+      transcript={
         <Transcript
           messages={messages}
           sessionId={sessionIdRef.current}
-          termWidth={termWidth}
           expanded={toolsExpanded}
           model={selectedProvider.model || selectedProvider.name}
-          workDir={workDir}
+          cwd={cwd}
           provider={selectedProvider.name}
+          revision={transcriptRevision}
         />
+      }
+      activity={
+        <>
+          <ChatView
+            streamingText={isStreaming ? streamingText : undefined}
+            thinkingText={isStreaming ? streamingThinking : undefined}
+            expanded={toolsExpanded}
+          />
 
-        <ChatView
-          messages={[]}
-          streamingText={isStreaming ? streamingText : undefined}
-          thinkingText={isStreaming ? streamingThinking : undefined}
-          expanded={toolsExpanded}
-        />
+          <AgentActivity
+            tools={activeTools}
+            subagents={subagents}
+            backgroundTasks={backgroundTasks}
+            teammates={teammateStates}
+            isAsking={askRequest !== null}
+            expanded={toolsExpanded}
+          />
+          {userBash.tool && (
+            <ToolBlock tool={userBash.tool} expanded={toolsExpanded} />
+          )}
 
-        <AgentActivity
-          tools={activeTools}
-          persistentAgentTools={persistentAgentTools}
-          subagents={subagents}
-          backgroundTasks={backgroundTasks}
-          teammates={teammateStates}
-          isAsking={askRequest !== null}
-          expanded={toolsExpanded}
-        />
-
-        {error && (
-          <Box marginTop={1} paddingLeft={1}>
-            <Text color={THEME.error}>Error: {error}</Text>
+          {error && (
+            <Box marginTop={1} paddingLeft={1}>
+              <Text color={THEME.error}>Error: {error}</Text>
+            </Box>
+          )}
+        </>
+      }
+      status={
+        <>
+          <UpdateNotice latestVersion={noticeVersion} />
+          <PendingQueue messages={pendingMessages} steering={steeringPending} />
+          {ctrlCHint && (
+            <Box paddingLeft={1}>
+              <Text color={THEME.dim}>Press Ctrl+C again to exit.</Text>
+            </Box>
+          )}
+          <Box width="100%" justifyContent="space-between">
+            <Box flexGrow={1} flexShrink={1} minWidth={0}>
+              <TodoProgress
+                key={`${sessionIdRef.current}:${boardId}`}
+                tasks={todos}
+              />
+            </Box>
+            <Box flexShrink={1} minWidth={0} justifyContent="flex-end">
+              <AgentStatus
+                teammates={teammateStates.length}
+                backgroundSubagents={backgroundSubagents.length}
+              />
+            </Box>
           </Box>
-        )}
-
-        <PendingQueue messages={pendingMessages} steering={steeringPending} />
-        <Text> </Text>
-      </Box>
-
-      {ctrlCHint && (
-        <Box paddingLeft={1}>
-          <Text color={THEME.dim}>Press Ctrl+C again to exit.</Text>
-        </Box>
-      )}
-      <TeamStatus
-        count={
-          teammateStates.filter(
-            (t) => t.status === "running" || t.status === "idle",
-          ).length
-        }
-      />
-      <InteractionDock
-        login={
-          loginActive
-            ? {
-                initialValues: loginInitialValues,
-                onSubmit: handleLogin,
-                onCancel: () => {
-                  setLoginActive(false);
-                },
-              }
-            : undefined
-        }
-        codeReview={
-          codeReviewActive
-            ? {
-                onSubmit: handleCodeReview,
-                onCancel: () => {
-                  setCodeReviewActive(false);
-                },
-              }
-            : undefined
-        }
-        provider={
-          providerDialogActive
-            ? {
-                providers,
-                currentBaseUrl: selectedProvider.base_url,
-                reservedRows: footerRows,
-                onCancel: () => {
-                  setProviderDialogActive(false);
-                },
-                onSelect: handleProviderSelect,
-              }
-            : undefined
-        }
-        thinking={
-          thinkingDialogActive
-            ? {
-                currentLevel: thinkingLevel,
-                levels: availableThinkingLevels,
-                onSelect: (level) => {
-                  setThinkingDialogActive(false);
-                  void handleSlashCommand(`/thinking ${level}`);
-                },
-                onCancel: () => {
-                  setThinkingDialogActive(false);
-                },
-              }
-            : undefined
-        }
-        planApproval={
-          planApprovalActive ? { onSelect: handlePlanApproval } : undefined
-        }
-        rewind={
-          rewindDialogActive
-            ? {
-                snapshots: rewindSnapshots,
-                onComplete: handleRewindAction,
-                onCancel: () => {
-                  setRewindDialogActive(false);
-                },
-              }
-            : undefined
-        }
-        resume={
-          resumeDialogActive
-            ? {
-                sessions: resumeSessions,
-                currentSessionId: sessionIdRef.current,
-                reservedRows: footerRows,
-                onCancel: () => {
-                  setResumeDialogActive(false);
-                },
-                onSelect: (sessionId) => {
-                  void handleSlashCommand(`/resume ${sessionId}`);
-                },
-              }
-            : undefined
-        }
-        permission={
-          permissionRequest
-            ? {
-                ...permissionRequest,
-                onComplete: (action) => {
-                  permissionResolveRef.current?.(action);
-                  permissionResolveRef.current = null;
-                  setPermissionRequest(null);
-                },
-              }
-            : undefined
-        }
-        askUser={
-          askRequest
-            ? {
-                questions: askRequest,
-                onComplete: (answers) => {
-                  askResolveRef.current?.(answers);
-                  askResolveRef.current = null;
-                  setAskRequest(null);
-                },
-              }
-            : undefined
-        }
-        teams={
-          teamsDialogOpen
-            ? {
-                teammates: teammateStates,
-                onClose: () => {
-                  setTeamsDialogOpen(false);
-                },
-                onKill: (name, teamName) => {
-                  const team = teamManagerRef.current.get(teamName);
-                  if (team) {
-                    void team.stopMember(name);
+        </>
+      }
+      dock={
+        <InteractionDock
+          login={
+            loginActive
+              ? {
+                  initialValues: loginInitialValues,
+                  onSubmit: handleLogin,
+                  onCancel: () => {
+                    setLoginActive(false);
+                  },
+                }
+              : undefined
+          }
+          codeReview={
+            codeReviewActive
+              ? {
+                  onSubmit: handleCodeReview,
+                  onCancel: () => {
+                    setCodeReviewActive(false);
+                  },
+                }
+              : undefined
+          }
+          provider={
+            providerDialogActive
+              ? {
+                  providers,
+                  currentProviderIndex: providerIndexOf(selectedProvider),
+                  onCancel: () => {
+                    setProviderDialogActive(false);
+                  },
+                  onSelect: handleProviderSelect,
+                }
+              : undefined
+          }
+          model={
+            modelDialogActive
+              ? {
+                  currentModel: selectedProvider.model,
+                  state: modelDialogState,
+                  onCancel: closeModelPicker,
+                  onSelect: (model) => {
+                    closeModelPicker();
+                    void applyModel(model.id);
+                  },
+                }
+              : undefined
+          }
+          thinking={
+            thinkingDialogActive
+              ? {
+                  currentLevel: thinkingLevel,
+                  levels: availableThinkingLevels,
+                  onSelect: (level) => {
+                    setThinkingDialogActive(false);
+                    void handleSlashCommand(`/thinking ${level}`);
+                  },
+                  onCancel: () => {
+                    setThinkingDialogActive(false);
+                  },
+                }
+              : undefined
+          }
+          planApproval={
+            planApprovalActive ? { onSelect: handlePlanApproval } : undefined
+          }
+          rewind={
+            rewindDialogActive
+              ? {
+                  snapshots: rewindSnapshots,
+                  onComplete: handleRewindAction,
+                  onCancel: () => {
+                    setRewindDialogActive(false);
+                  },
+                }
+              : undefined
+          }
+          resume={
+            resumeDialogActive
+              ? {
+                  sessions: resumeSessions,
+                  currentSessionId: sessionIdRef.current,
+                  onCancel: () => {
+                    setResumeDialogActive(false);
+                  },
+                  onSelect: (sessionId) => {
+                    void handleSlashCommand(`/resume ${sessionId}`);
+                  },
+                }
+              : undefined
+          }
+          permission={
+            permissionRequest
+              ? {
+                  ...permissionRequest,
+                  onComplete: (action) => {
+                    permissionResolveRef.current?.(action);
+                    permissionResolveRef.current = null;
+                    setPermissionRequest(null);
+                    permissionQueueRef.current.shift()?.present();
+                  },
+                }
+              : undefined
+          }
+          askUser={
+            askRequest
+              ? {
+                  questions: askRequest,
+                  onComplete: (answers) => {
+                    askResolveRef.current?.(answers);
+                    askResolveRef.current = null;
+                    setAskRequest(null);
+                  },
+                }
+              : undefined
+          }
+          agents={
+            agentsDialogOpen
+              ? {
+                  teammates: teammateStates,
+                  backgroundTasks: backgroundSubagents,
+                  subagents,
+                  onClose: () => {
+                    setAgentsDialogOpen(false);
+                  },
+                  onKill: (name, teamName) => {
+                    const team = teamManagerRef.current.get(teamName);
+                    if (team) {
+                      void team.stopMember(name);
+                    }
+                  },
+                  onStopBackground: (taskId) => {
+                    backgroundTaskManagerRef.current.stop(taskId);
+                  },
+                  onShutdown: (name, teamName) => {
+                    const team = teamManagerRef.current.get(teamName);
+                    if (team) {
+                      void team.sendMessage(
+                        LEADER_NAME,
+                        name,
+                        `${SHUTDOWN_PREFIX} Please finish and exit`,
+                      );
+                    }
+                  },
+                }
+              : undefined
+          }
+          composer={{
+            onSubmit: handleComposerSubmit,
+            disabled: providerSwitching,
+            history: promptHistory,
+            commands: cmdRegistryRef.current.listCommands(),
+            thinkingLevels: availableThinkingLevels,
+            onRecallQueuedMessage: recallQueuedMessage,
+            onOpenAgents:
+              teammateStates.length > 0 || backgroundSubagents.length > 0
+                ? () => {
+                    setAgentsDialogOpen(true);
                   }
-                },
-                onShutdown: (name, teamName) => {
-                  const team = teamManagerRef.current.get(teamName);
-                  if (team) {
-                    void team.sendMessage(
-                      LEADER_NAME,
-                      name,
-                      "[shutdown] Please finish and exit",
-                    );
-                  }
-                },
+                : undefined,
+            usageTracker: usageTrackerRef.current,
+            inputState: error
+              ? "error"
+              : isStreaming ||
+                  userBash.running ||
+                  isCompacting ||
+                  providerSwitching
+                ? "agent"
+                : "focused",
+            borderColor:
+              activityStatus === "idle" || activityStatus === "working"
+                ? thinkingLevelColor(thinkingLevel)
+                : activityStatusColor(activityStatus),
+            statusLabel: error
+              ? "Error"
+              : providerSwitching
+                ? "Switching provider..."
+                : isCompacting
+                  ? "Compacting context... (Esc to cancel)"
+                  : userBash.running
+                    ? userBash.backgroundAllowed &&
+                      registryRef.current
+                        .getInstanceOf("Bash", BashTool)
+                        ?.backgroundEnabled()
+                      ? "Running Bash... (Ctrl+B background · Esc cancel)"
+                      : "Running Bash... (Esc to cancel)"
+                    : isStreaming
+                      ? (output.retryStatus ?? "Working")
+                      : undefined,
+            permMode,
+            onModeChange: (mode) => {
+              if (permModeRef.current === "plan") {
+                const planPath = checkerRef.current?.planFilePath ?? "";
+                conversationRef.current.addSystemReminder(
+                  buildPlanModeExitReminder(
+                    planPath,
+                    !!planPath && planExists(planOwner()),
+                  ),
+                );
+                hasExitedPlanModeRef.current = true;
               }
-            : undefined
-        }
-        composer={{
-          onSubmit: (text) => {
-            handleSubmit(text);
-          },
-          disabled: providerSwitching,
-          history: promptHistory,
-          commands: cmdRegistryRef.current.listCommands(),
-          thinkingLevels: availableThinkingLevels,
-          onRecallQueuedMessage: recallQueuedMessage,
-          usageTracker: usageTrackerRef.current,
-          inputState: error
-            ? "error"
-            : isStreaming || isCompacting || providerSwitching
-              ? "agent"
-              : "focused",
-          borderColor:
-            activityStatus === "idle" || activityStatus === "working"
-              ? thinkingLevelColor(thinkingLevel)
-              : activityStatusColor(activityStatus),
-          statusLabel: error
-            ? "Error"
-            : providerSwitching
-              ? "Switching provider..."
-              : isCompacting
-                ? "Compacting context... (Esc to cancel)"
-                : isStreaming
-                  ? (output.retryStatus ?? "Working")
-                  : undefined,
-          permMode,
-          onModeChange: (mode) => {
-            setPermMode(mode);
-            if (checkerRef.current) {
-              checkerRef.current.mode = mode;
-            }
-          },
-          workDir,
-          sessionId: sessionIdRef.current,
-          insertTextRef: insertInputTextRef,
-          clearRef: clearInputRef,
-          onEscape: () => {
-            if (foregroundBusy) {
-              interruptForeground();
-            }
-          },
-        }}
-      />
-      <Footer
-        onHeightChange={setFooterRows}
-        contextTokens={currentContextTokens(conversationRef.current)}
-        contextWindow={contextWindowRef.current}
-        inputTokens={inputTokens}
-        model={selectedProvider.model}
-        thinkingLevel={thinkingLevel}
-        outputTokens={outputTokens}
-        permissionMode={permMode}
-        provider={selectedProvider.name}
-        sessionId={sessionIdRef.current}
-        workDir={workDir}
-      />
-    </Box>
+              permModeRef.current = mode;
+              setPermMode(mode);
+              if (checkerRef.current) {
+                checkerRef.current.mode = mode;
+              }
+            },
+            cwd,
+            sessionId: sessionIdRef.current,
+            fileFactsVersion,
+            insertTextRef: insertInputTextRef,
+            clearRef: clearInputRef,
+            onEscape: () => {
+              if (foregroundBusy) {
+                interruptUserWork();
+              }
+            },
+          }}
+        />
+      }
+      footer={
+        <Footer
+          contextTokens={currentContextTokens(conversationRef.current)}
+          contextWindow={contextWindowRef.current}
+          inputTokens={inputTokens}
+          model={selectedProvider.model}
+          thinkingLevel={thinkingLevel}
+          outputTokens={outputTokens}
+          permissionMode={permMode}
+          provider={selectedProvider.name}
+          sessionId={sessionIdRef.current}
+          cwd={cwd}
+        />
+      }
+    />
   );
 }

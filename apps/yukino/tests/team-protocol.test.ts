@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 hangtiancheng
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,7 +11,6 @@ import {
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
-  approved,
   isShutdownRequest,
   newRequestId,
   planApprovalRequest,
@@ -56,7 +33,7 @@ describe("shutdown negotiation", () => {
     expect(req.requestId).toBeTruthy();
     expect(isShutdownRequest(req)).toBe(true);
 
-    // Plain-text prefixes must also be recognized, since pane teammates may be older-version processes
+    // The leader's stop path also sends plain-text shutdown controls.
     expect(isShutdownRequest(plain("leader", "[shutdown] stop"))).toBe(true);
     expect(
       isShutdownRequest(plain("leader", "keep working on the auth module")),
@@ -66,7 +43,7 @@ describe("shutdown negotiation", () => {
   test("the response carries the request id and the stance", () => {
     const req = shutdownRequest("leader", "wrap up");
     const yes = shutdownResponse("alice", req.requestId ?? "", true, "done");
-    expect(approved(yes)).toBe(true);
+    expect(yes.approve).toBe(true);
     expect(yes.requestId).toBe(req.requestId);
     expect(yes.type).toBe(MSG_SHUTDOWN_RESPONSE);
 
@@ -76,10 +53,7 @@ describe("shutdown negotiation", () => {
       false,
       "still running tests",
     );
-    expect(approved(no)).toBe(false);
-
-    // With no stance expressed, treat it as disagreement, not as a nod
-    expect(approved(plain("alice", ""))).toBe(false);
+    expect(no.approve).toBe(false);
   });
 });
 
@@ -92,15 +66,14 @@ describe("plan approval", () => {
     expect(req.type).toBe(MSG_PLAN_APPROVAL_REQUEST);
     expect(req.text).toContain("Extract the interface");
 
-    const rej = planApprovalResponse(
+    const response = planApprovalResponse(
       "leader",
       req.requestId ?? "",
-      false,
-      "don't touch the handler layer",
+      "automatically approved",
     );
-    expect(approved(rej)).toBe(false);
-    expect(rej.text).toBe("don't touch the handler layer");
-    expect(rej.requestId).toBe(req.requestId);
+    expect(response.approve).toBe(true);
+    expect(response.text).toBe("automatically approved");
+    expect(response.requestId).toBe(req.requestId);
   });
 });
 
@@ -161,29 +134,24 @@ describe("SendMessage delivers structured messages", () => {
     return { mgr, team };
   };
 
-  test("delivers an approval response carrying the request id and stance to the teammate's mailbox", async () => {
+  test("does not expose manual teammate plan approvals", async () => {
     const { mgr, team } = setup();
-    const tool = new SendMessageTool(mgr, "leader");
-
-    const res = await tool.execute(
-      {
-        workDir: ".",
-      },
+    const tool = new SendMessageTool(mgr);
+    expect(JSON.stringify(tool.schema())).not.toContain(
+      MSG_PLAN_APPROVAL_RESPONSE,
+    );
+    const result = await tool.execute(
+      { cwd: "." },
       {
         to: "alice",
-        content: "don't touch the handler layer",
+        content: "approved",
         type: MSG_PLAN_APPROVAL_RESPONSE,
         request_id: "req-abc",
-        approve: false,
+        approve: true,
       },
     );
-    expect(res.isError).toBe(false);
-
-    const [msg] = team.getMember("alice")?.mailbox.receiveSync() ?? [];
-    expect(msg?.type).toBe(MSG_PLAN_APPROVAL_RESPONSE);
-    expect(msg?.requestId).toBe("req-abc");
-    expect(msg?.approve).toBe(false);
-    expect(msg?.text).toBe("don't touch the handler layer");
+    expect(result.isError).toBe(true);
+    expect(team.getMember("alice")?.mailbox.unreadCount()).toBe(0);
   });
 
   test("a shutdown request carries an acknowledgement-capable request id", async () => {
@@ -192,7 +160,7 @@ describe("SendMessage delivers structured messages", () => {
 
     await tool.execute(
       {
-        workDir: process.cwd(),
+        cwd: process.cwd(),
       },
       {
         to: "alice",
@@ -211,7 +179,7 @@ describe("SendMessage delivers structured messages", () => {
     const tool = new SendMessageTool(mgr, "alice");
 
     const res = await tool.execute(
-      { workDir: process.cwd() },
+      { cwd: process.cwd() },
       {
         to: "leader",
         content: "ready",
@@ -230,24 +198,5 @@ describe("SendMessage delivers structured messages", () => {
       requestId: "req-abc",
       approve: true,
     });
-  });
-
-  test("errors and does not deliver when an approval response lacks a request id or stance", async () => {
-    const { mgr, team } = setup();
-    const tool = new SendMessageTool(mgr, "leader");
-
-    const res = await tool.execute(
-      {
-        workDir: process.cwd(),
-      },
-      {
-        to: "alice",
-        content: "ok",
-        type: MSG_PLAN_APPROVAL_RESPONSE,
-        approve: true,
-      },
-    );
-    expect(res.isError).toBe(true);
-    expect(team.getMember("alice")?.mailbox.receiveSync()).toHaveLength(0);
   });
 });
