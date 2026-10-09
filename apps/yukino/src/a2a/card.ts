@@ -1,5 +1,4 @@
 import type { AgentCard, AgentInterface } from "@a2a-js/sdk";
-import { duplicateInterfacesForLegacy } from "@a2a-js/sdk/compat/v0_3";
 
 import { version } from "@/version.js";
 
@@ -15,8 +14,7 @@ const SKILL_DESCRIPTION =
 /**
  * Builds the agent card for the given base URL. Both the JSON-RPC endpoint
  * (POST /) and the HTTP+JSON/REST endpoints (/v1/...) are served from the
- * same origin, so both interfaces share the URL. Each binding is mirrored at
- * protocol version 0.3 so legacy clients interoperate via the compat layer.
+ * same origin, so both interfaces share the URL.
  */
 export function buildAgentCard(url: string): AgentCard {
   const interfaces: AgentInterface[] = [
@@ -26,10 +24,7 @@ export function buildAgentCard(url: string): AgentCard {
   return {
     name: "yukino",
     description: DESCRIPTION,
-    supportedInterfaces: duplicateInterfacesForLegacy(interfaces, [
-      "JSONRPC",
-      "HTTP+JSON",
-    ]),
+    supportedInterfaces: interfaces,
     provider: undefined,
     version,
     capabilities: {

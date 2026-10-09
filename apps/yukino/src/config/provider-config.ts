@@ -160,16 +160,6 @@ export function toReasoningEffort(
       return "high";
     }
   }
-  // The openai protocols have no native xhigh/max: sending them verbatim is a
-  // guaranteed 400. Collapse to the nearest legal effort; providers whose
-  // gateways accept richer values configure them via thinking_level_map.
-  if (
-    (provider?.protocol === "openai" ||
-      provider?.protocol === "openai-compat") &&
-    (level === "xhigh" || level === "max")
-  ) {
-    return "high";
-  }
   return level;
 }
 
@@ -208,22 +198,7 @@ export function getSupportedThinkingLevels(
       return toAnthropicThinkingEffort(level, provider) !== null;
     }
     const effort = toReasoningEffort(level, provider);
-    if (effort === null || effort === "none") {
-      return false;
-    }
-    // Do not advertise xhigh/max under the openai protocols unless the
-    // provider explicitly maps them: they have no native effort there, and
-    // the collapse-to-high fallback in toReasoningEffort means offering them
-    // would misrepresent what the request actually carries.
-    if (
-      (provider.protocol === "openai" ||
-        provider.protocol === "openai-compat") &&
-      (level === "xhigh" || level === "max") &&
-      provider.thinking_level_map?.[level] === undefined
-    ) {
-      return false;
-    }
-    return true;
+    return effort !== null && effort !== "none";
   });
 }
 

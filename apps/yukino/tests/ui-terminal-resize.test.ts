@@ -68,31 +68,6 @@ async function resize(columns: number, rows = 40) {
   await instance?.waitUntilRenderFlush();
   return readingPosition;
 }
-
-async function resizeAppleTerminal(columns: number, rows: number) {
-  await act(async () => {
-    const previousRows = stdout.rows;
-    terminal.resize(columns, previousRows);
-    const down = previousRows - 1 - terminal.buffer.active.cursorY;
-    // Apple Terminal retains rows below the caret; xterm deletes them on height shrink.
-    if (rows < previousRows && down > 0) {
-      await new Promise<void>((resolve) => {
-        terminal.write(`\x1b[${String(down)}B`, resolve);
-      });
-    }
-    terminal.resize(columns, rows);
-    if (rows < previousRows && down > 0) {
-      await new Promise<void>((resolve) => {
-        terminal.write(`\x1b[${String(Math.min(down, rows - 1))}A`, resolve);
-      });
-    }
-    stdout.columns = columns;
-    stdout.rows = rows;
-    stdout.emit("resize");
-  });
-  await instance?.waitUntilRenderFlush();
-}
-
 function Scene({
   historyRows = 1,
   nativeCursor = true,
@@ -155,18 +130,125 @@ function RightEdgeText() {
 }
 
 describe("terminal resize output", () => {
+  it.each(
+    ["user", "assistant", "tool"].flatMap((lastCard, index) =>
+      [0, 40].map((liveRows) => ({ lastCard, index, liveRows })),
+    ),
+  )(
+    "preserves recent cards with $lastCard last and $liveRows live rows when native height changes coalesce",
+    async ({ index, liveRows }) => {
+      const recent: ChatMessage[] = [
+        { role: "user", content: "LATEST_USER" },
+        { role: "assistant", content: "LATEST_ASSISTANT" },
+        {
+          role: "turn_summary",
+          content: "",
+          toolSummary: [
+            {
+              toolName: "ReadFile",
+              argsSummary: "LATEST_TOOL",
+              output: "LATEST_RESULT",
+              isError: false,
+              elapsed: 0.1,
+            },
+          ],
+        },
+      ];
+      const messages: ChatMessage[] = [
+        ...Array.from({ length: 60 }, (_, index) => ({
+          role: "assistant" as const,
+          content: `saved-${String(index)}`,
+        })),
+        ...recent.slice(index + 1),
+        ...recent.slice(0, index + 1),
+      ];
+      const scene = () =>
+        createElement(Scene, {
+          messages: messages.slice(),
+          activity: liveRows
+            ? createElement(Text, {}, "LIVE_ROW\n".repeat(liveRows))
+            : null,
+        });
+      act(() => {
+        instance = render(scene(), {
+          stdout,
+          stdin,
+          stderr: stdout,
+          interactive: true,
+          patchConsole: false,
+          exitOnCtrlC: false,
+        });
+      });
+      await instance?.waitUntilRenderFlush();
+      for (const marker of [
+        "LATEST_USER",
+        "LATEST_ASSISTANT",
+        "LATEST_TOOL",
+        "LATEST_RESULT",
+      ]) {
+        expect(
+          bufferLines().filter((line) => line.includes(marker)),
+          marker,
+        ).toHaveLength(1);
+      }
+      for (const [cycle, { heights, finalRows }] of [
+        { heights: [24, 12, 5, 40], finalRows: 40 },
+        { heights: [12, 5, 24], finalRows: 24 },
+        { heights: [5, 60], finalRows: 60 },
+        { heights: [24, 12, 5, 40], finalRows: 40 },
+      ].entries()) {
+        act(() => {
+          for (const rows of heights) {
+            terminal.resize(120, rows);
+          }
+          stdout.rows = finalRows;
+          stdout.emit("resize");
+        });
+        await instance?.waitUntilRenderFlush();
+        for (const marker of [
+          "LATEST_USER",
+          "LATEST_ASSISTANT",
+          "LATEST_TOOL",
+          "LATEST_RESULT",
+        ]) {
+          expect(
+            bufferLines().filter((line) => line.includes(marker)),
+            JSON.stringify({ cycle, marker, lines: bufferLines().slice(-65) }),
+          ).toHaveLength(1);
+        }
+        messages.push({
+          role: "assistant",
+          content: `AFTER_HEIGHT_${String(cycle)}`,
+        });
+        act(() => instance?.rerender(scene()));
+        await instance?.waitUntilRenderFlush();
+        const lines = bufferLines();
+        for (const marker of [
+          "saved-59",
+          "LATEST_USER",
+          "LATEST_ASSISTANT",
+          "LATEST_TOOL",
+          "LATEST_RESULT",
+          `AFTER_HEIGHT_${String(cycle)}`,
+        ]) {
+          expect(
+            lines.filter((line) => line.includes(marker)),
+            JSON.stringify({ cycle, marker, lines: lines.slice(-70) }),
+          ).toHaveLength(1);
+        }
+      }
+    },
+  );
+
   it.each([
     { historyRows: 1, working: false },
     { historyRows: 60, working: false },
     { historyRows: 60, working: true },
   ])(
-    "keeps the Apple Terminal dock and footer visible with $historyRows saved messages and working=$working",
+    "keeps the dock and footer visible with $historyRows saved messages and working=$working",
     async ({ historyRows, working }) => {
       vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
       terminal.options.scrollback = 10_000;
-      restoreOutput();
-      vi.stubEnv("TERM_PROGRAM", "Apple_Terminal");
-      restoreOutput = installTerminalOutput(stdout);
       act(() => {
         instance = render(
           createElement(Scene, {
@@ -204,7 +286,7 @@ describe("terminal resize output", () => {
           [32, 5],
           [120, 40],
         ]) {
-          await resizeAppleTerminal(columns, rows);
+          await resize(columns, rows);
           act(() => {
             vi.advanceTimersByTime(100);
           });

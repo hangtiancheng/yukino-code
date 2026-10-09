@@ -144,6 +144,23 @@ describe("sandbox auto-allow respects deny/ask rules", () => {
   });
 });
 
+describe("read-only Docker commands", () => {
+  it.each(["docker ps", "docker images --all"])("allows %s", (command) => {
+    const checker = new PermissionChecker(makeTmpDir(), "plan");
+    expect(checker.check("Bash", "command", { command }).effect).toBe("allow");
+  });
+
+  it.each(["touch docker ps", "rm docker images", "mydocker ps"])(
+    "does not treat %s as a read-only Docker command",
+    (command) => {
+      const checker = new PermissionChecker(makeTmpDir(), "default");
+      expect(checker.check("Bash", "command", { command }).effect).toBe("ask");
+      checker.mode = "plan";
+      expect(checker.check("Bash", "command", { command }).effect).toBe("deny");
+    },
+  );
+});
+
 describe("extra allowed roots", () => {
   it("opens a path outside the project once declared", () => {
     const dir = makeTmpDir();

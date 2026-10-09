@@ -66,6 +66,7 @@ const echoTool = (onExecute?: () => void): Tool => ({
 function makeAgent(
   client: LLMClient,
   tool?: Tool,
+  abortSignal?: AbortSignal,
 ): { agent: Agent; conversation: ConversationManager } {
   const conversation = new ConversationManager();
   conversation.addUserMessage("hi");
@@ -79,6 +80,7 @@ function makeAgent(
     checker: new PermissionChecker(process.cwd(), "bypassPermissions"),
     conversation,
     cwd: process.cwd(),
+    abortSignal,
   });
   return { agent, conversation };
 }
@@ -107,6 +109,9 @@ describe("Agent steering", () => {
         (e) => e.type === "steering_delivered" && e.text === "steered note",
       ),
     ).toBe(true);
+    expect(events.findIndex((e) => e.type === "turn_complete")).toBeLessThan(
+      events.findIndex((e) => e.type === "steering_delivered"),
+    );
 
     const messages = conversation.getMessages();
     expect(messages.map((m) => m.role)).toEqual([
@@ -188,6 +193,79 @@ describe("Agent steering", () => {
     const events = await collect(agent);
 
     expect(events.some((e) => e.type === "steering_delivered")).toBe(false);
+    expect(client.calls).toBe(1);
+  });
+
+  it("preserves undelivered steering when interrupted between deliveries", async () => {
+    const controller = new AbortController();
+    const client = new ScriptedClient([
+      [{ type: "text_delta", text: "first" }, end()],
+    ]);
+    const { agent, conversation } = makeAgent(
+      client,
+      undefined,
+      controller.signal,
+    );
+    agent.steer("delivered note");
+    agent.steer("pending note");
+
+    const events: AgentEvent[] = [];
+    for await (const event of agent.run()) {
+      events.push(event);
+      if (event.type === "steering_delivered") {
+        controller.abort();
+      }
+    }
+
+    expect(
+      events.filter((event) => event.type === "steering_delivered"),
+    ).toEqual([{ type: "steering_delivered", text: "delivered note" }]);
+    expect(
+      conversation
+        .getMessages()
+        .map((message) => contentToText(message.content)),
+    ).toEqual(["hi", "first", "delivered note"]);
+    expect(agent.drainSteering()).toEqual(["pending note"]);
+    expect(events.at(-1)).toEqual({
+      type: "loop_complete",
+      stopReason: "interrupted",
+    });
+    expect(client.calls).toBe(1);
+  });
+
+  it("preserves all steering when interrupted before delivery at the turn boundary", async () => {
+    const controller = new AbortController();
+    const client = new ScriptedClient([
+      [{ type: "text_delta", text: "first" }, end()],
+    ]);
+    const { agent, conversation } = makeAgent(
+      client,
+      undefined,
+      controller.signal,
+    );
+    agent.steer("pending note");
+
+    const events: AgentEvent[] = [];
+    for await (const event of agent.run()) {
+      events.push(event);
+      if (event.type === "turn_complete") {
+        controller.abort();
+      }
+    }
+
+    expect(events.some((event) => event.type === "steering_delivered")).toBe(
+      false,
+    );
+    expect(
+      conversation
+        .getMessages()
+        .map((message) => contentToText(message.content)),
+    ).toEqual(["hi", "first"]);
+    expect(agent.drainSteering()).toEqual(["pending note"]);
+    expect(events.at(-1)).toEqual({
+      type: "loop_complete",
+      stopReason: "interrupted",
+    });
     expect(client.calls).toBe(1);
   });
 });

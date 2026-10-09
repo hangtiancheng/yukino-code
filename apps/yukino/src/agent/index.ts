@@ -285,12 +285,17 @@ export class Agent {
     return true;
   }
 
-  /** Inject drained steering messages as user messages, emitting one event each. */
+  /** Inject queued steering messages as user messages, emitting one event each. */
   private *deliverSteering(): Generator<AgentEvent, string[], unknown> {
-    const texts = this.drainSteering();
-    for (const text of texts) {
+    const texts: string[] = [];
+    while (!this.abortSignal?.aborted) {
+      const text = this.steeringQueue.shift();
+      if (text === undefined) {
+        break;
+      }
       this.conversation.addUserMessage(text);
       this.persistLastMessage();
+      texts.push(text);
       yield { type: "steering_delivered", text };
     }
     return texts;
@@ -978,10 +983,12 @@ export class Agent {
           } else {
             // The model produced no tool calls, so the run would normally end.
             // Steering queued up to this point keeps it alive instead (pi-style).
-            const steered = yield* this.deliverSteering();
-            if (steered.length > 0) {
+            if (this.steeringQueue.length > 0) {
               yield { type: "turn_complete" };
-              continue;
+              const steered = yield* this.deliverSteering();
+              if (steered.length > 0 || this.abortSignal?.aborted) {
+                continue;
+              }
             }
             if (stopReason === "end_turn" || stopReason === "stop") {
               const prompt =

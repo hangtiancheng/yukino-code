@@ -61,7 +61,7 @@ export const SAFE_PREFIXES: (string | RegExp)[] = [
   "tail", // Read-only (including -f follow), no dangerous flags
 
   // Cross-platform commands from shared validation
-  /docker\s+(?:ps|images)\b/,
+  /^docker\s+(?:ps|images)(?:\s|$)/u,
 
   // Unix/bash-specific read-only commands (not shared because they don't exist in PowerShell)
 

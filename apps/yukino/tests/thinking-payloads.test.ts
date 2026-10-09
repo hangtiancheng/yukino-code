@@ -195,18 +195,13 @@ describe.each(openAIProtocols)("%s thinking payloads", (protocol) => {
     async (level) => {
       const client = createClient(provider(protocol));
       expect(client.getThinkingLevel()).toBe("high");
-      // xhigh/max have no OpenAI-legal native effort and no explicit
-      // thinking_level_map entry here, so they clamp down to high instead of
-      // being sent verbatim (which the API rejects with a 400).
-      const expectedLevel =
-        level === "xhigh" || level === "max" ? "high" : level;
-      expect(client.setThinkingLevel(level)).toBe(expectedLevel);
-      expect(client.getThinkingLevel()).toBe(expectedLevel);
+      expect(client.setThinkingLevel(level)).toBe(level);
+      expect(client.getThinkingLevel()).toBe(level);
       const payload = await request(client, protocol);
-      const effort = expectedLevel === "off" ? "none" : expectedLevel;
+      const effort = level === "off" ? "none" : level;
       if (protocol === "openai") {
         expect(payload.reasoning).toEqual(
-          expectedLevel === "off" ? { effort } : { effort, summary: "auto" },
+          level === "off" ? { effort } : { effort, summary: "auto" },
         );
       } else {
         expect(payload.reasoning_effort).toBe(effort);

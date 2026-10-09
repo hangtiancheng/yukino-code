@@ -534,6 +534,85 @@ describe("YukinoA2aExecutor", () => {
     await executor.dispose();
   });
 
+  it("rejects concurrent turns while the same context is initializing", async () => {
+    const cwd = makeCwd();
+    let releaseRun = (): void => undefined;
+    const running = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    const onRun = vi.fn(() => running);
+    const runtime = fakeRuntime(cwd, { onRun });
+    let initialize = (_runtime: A2aRuntime): void => undefined;
+    const initializing = new Promise<A2aRuntime>((resolve) => {
+      initialize = resolve;
+    });
+    const factory = vi.fn(() => initializing);
+    const executor = new YukinoA2aExecutor(factory, cwd);
+    const first = executeTurn(
+      executor,
+      userMessage(textParts("first")),
+      "first-task",
+      "shared-context",
+    );
+    const second = executeTurn(
+      executor,
+      userMessage(textParts("second")),
+      "second-task",
+      "shared-context",
+    );
+
+    try {
+      initialize(runtime);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const startedRuns = onRun.mock.calls.length;
+      releaseRun();
+      const [firstResult, secondResult] = await Promise.all([first, second]);
+      expect(factory).toHaveBeenCalledOnce();
+      expect(startedRuns).toBe(1);
+      expect(statusStates(firstResult.events).at(-1)).toBe(
+        TaskState.TASK_STATE_COMPLETED,
+      );
+      const rejection = secondResult.events.flatMap((event) =>
+        event.kind === "message"
+          ? event.data.parts.flatMap((part) =>
+              part.content?.$case === "text" ? [part.content.value] : [],
+            )
+          : [],
+      );
+      expect(rejection.join("\n")).toContain("busy with task first-task");
+    } finally {
+      releaseRun();
+      await Promise.allSettled([first, second]);
+      await executor.dispose();
+    }
+  });
+
+  it("does not start a turn after disposal during runtime initialization", async () => {
+    const cwd = makeCwd();
+    const onRun = vi.fn(() => Promise.resolve());
+    const runtime = fakeRuntime(cwd, { onRun });
+    const dispose = vi.spyOn(runtime, "dispose");
+    let initialize = (_runtime: A2aRuntime): void => undefined;
+    const initializing = new Promise<A2aRuntime>((resolve) => {
+      initialize = resolve;
+    });
+    const executor = new YukinoA2aExecutor(() => initializing, cwd);
+    const turn = executeTurn(
+      executor,
+      userMessage(textParts("first")),
+      "first-task",
+      "shared-context",
+    );
+    const closing = executor.dispose();
+    initialize(runtime);
+    const [result] = await Promise.all([turn, closing]);
+    expect(onRun).not.toHaveBeenCalled();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(statusStates(result.events).at(-1)).toBe(
+      TaskState.TASK_STATE_FAILED,
+    );
+  });
+
   it("does not create a runtime for an invalid message", async () => {
     const cwd = makeCwd();
     const factory = vi.fn(() => Promise.resolve(fakeRuntime(cwd)));

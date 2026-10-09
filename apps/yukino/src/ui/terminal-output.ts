@@ -1,7 +1,7 @@
 import ansiEscapes from "ansi-escapes";
 import sliceAnsi from "slice-ansi";
 
-import { truncateToWidth, visibleWidth, wrapToLines } from "./terminal-text.js";
+import { truncateToWidth, visibleWidth } from "./terminal-text.js";
 
 const BSU = "\x1b[?2026h"; // Begin Synchronized Update
 const ESU = "\x1b[?2026l"; // End Synchronized Update
@@ -70,19 +70,8 @@ function renderStaticOutput(output: string): string {
     .join("\n");
 }
 
-function renderLiveFrame(
-  frame: string,
-  columns: number,
-  reflowsCursorGroup: boolean,
-): string {
+function renderLiveFrame(frame: string, columns: number): string {
   const lines = frame.split("\n");
-  if (reflowsCursorGroup) {
-    return (
-      "\x1b[?7l" +
-      lines.map((line) => truncateToWidth(line, columns, "")).join("\r\n") +
-      "\x1b[?7h"
-    );
-  }
   // A single soft-wrapped cursor group stays out of xterm's native resize reflow.
   return (
     "\x1b[?7l" +
@@ -130,18 +119,13 @@ export function installTerminalOutput(
   }
 
   const synchronized = isSyncOutputSupported();
-  // Apple Terminal reflows the live cursor group and retains rows below its caret.
-  const reflowsCursorGroup = process.env.TERM_PROGRAM === "Apple_Terminal";
   const originalWrite: typeof stdout.write = stdout.write.bind(stdout);
   const originalCork = stdout.cork.bind(stdout);
   const originalUncork = stdout.uncork.bind(stdout);
   let frameRows = 0;
   let frame = "";
-  let footprint: string[] = [];
   let cursorSuffix = "";
   let cursorRow = 0;
-  let cursorLine = 0;
-  let terminalColumns = Math.max(1, stdout.columns || 80);
   let terminalRows = Math.max(1, stdout.rows || 24);
   let resizing = false;
   let pendingFrame = "";
@@ -163,31 +147,14 @@ export function installTerminalOutput(
   });
 
   const eraseFrame = () => {
-    const rows = Math.min(frameRows, terminalRows);
-    const down = Math.max(0, frameRows - 1 - cursorRow);
-    return {
-      rows,
-      output:
-        "\x1b[?25l" +
-        (down > 0 ? ansiEscapes.cursorDown(down) : "") +
-        ansiEscapes.cursorTo(0) +
-        ansiEscapes.eraseLines(rows),
-    };
-  };
-
-  const keepFootprint = (rows: number): string[] => {
-    const retained: string[] = [];
-    for (const [index, line] of footprint.entries()) {
-      if (rows <= 0) {
-        break;
-      }
-      const wrapped =
-        index === cursorLine ? [line] : wrapToLines(line, terminalColumns);
-      const count = Math.min(rows, wrapped.length);
-      retained.push(wrapped.slice(0, count).join(""));
-      rows -= count;
-    }
-    return retained;
+    // Native height changes can discard rows below the caret before resize is delivered.
+    const rows = Math.min(cursorRow + 1, terminalRows);
+    return (
+      "\x1b[?25l" +
+      ansiEscapes.cursorTo(0) +
+      ansiEscapes.eraseDown +
+      ansiEscapes.eraseLines(rows)
+    );
   };
 
   const flushResize = () => {
@@ -195,26 +162,14 @@ export function installTerminalOutput(
       return;
     }
     resizing = false;
-    const { rows, output } = eraseFrame();
-    const retainedRows = Math.max(0, frameRows - rows);
-    // Reflowed rows and cleared gaps can return from scrollback on a later resize.
-    const retained = reflowsCursorGroup ? keepFootprint(retainedRows) : [];
-    originalWrite(output);
+    originalWrite(eraseFrame());
     if (pendingStatic) {
       originalWrite(renderStaticOutput(pendingStatic));
     }
-    const hadStatic = Boolean(pendingStatic);
     pendingStatic = "";
     const lines = pendingFrame.split("\n");
     const visibleLines = lines.slice(-terminalRows);
     const visibleFrame = visibleLines.join("\n");
-    const gap =
-      reflowsCursorGroup && !hadStatic
-        ? Math.max(0, rows - visibleLines.length)
-        : 0;
-    if (gap > 0) {
-      originalWrite(ansiEscapes.cursorDown(gap));
-    }
     const visibleCursor = pendingCursorSuffix.replace(
       /\x1b\[(\d+)A/u,
       (_match, up: string) => {
@@ -223,40 +178,13 @@ export function installTerminalOutput(
       },
     );
     stdout.write(visibleFrame + visibleCursor);
-    if (reflowsCursorGroup && !hadStatic) {
-      footprint = [
-        ...retained,
-        ...Array.from({ length: gap }, () => ""),
-        ...visibleLines,
-      ];
-      frameRows = retainedRows + gap + visibleLines.length;
-      const up = Number(/\x1b\[(\d+)A/u.exec(visibleCursor)?.[1] ?? 0);
-      cursorRow = frameRows - 1 - up;
-      cursorLine = footprint.length - 1 - up;
-    }
   };
 
   const onResize = () => {
     if (frameRows === 0) {
       return;
     }
-    const nextRows = Math.max(1, stdout.rows || 24);
-    const nextColumns = Math.max(1, stdout.columns || 80);
-    if (reflowsCursorGroup && nextColumns !== terminalColumns) {
-      const lineRows = footprint.map((line, index) =>
-        index === cursorLine ? 1 : wrapToLines(line, nextColumns).length,
-      );
-      frameRows = lineRows.reduce((sum, count) => sum + count, 0);
-      cursorRow = lineRows
-        .slice(0, cursorLine)
-        .reduce((sum, count) => sum + count, 0);
-    }
-    terminalColumns = nextColumns;
-    if (!reflowsCursorGroup && nextRows < terminalRows) {
-      // Keep rows above the caret: a resize burst can reveal them again before flush.
-      frameRows -= Math.min(terminalRows - nextRows, frameRows - 1 - cursorRow);
-    }
-    terminalRows = nextRows;
+    terminalRows = Math.max(1, stdout.rows || 24);
     if (!resizing) {
       resizing = true;
       pendingFrame = frame;
@@ -361,45 +289,19 @@ export function installTerminalOutput(
         ? output.slice(erase.index + erase[0].length)
         : output;
       if (!isStatic && rendered.includes("\n")) {
-        const cleared = reflowsCursorGroup && erase ? eraseFrame() : undefined;
-        const retainedRows = cleared
-          ? Math.max(0, frameRows - cleared.rows)
-          : 0;
-        const retained = cleared ? keepFootprint(retainedRows) : [];
         frame = rendered.slice(0, rendered.lastIndexOf("\n") + 1);
         const lines = frame.split("\n");
-        const gap = cleared ? Math.max(0, cleared.rows - lines.length) : 0;
-        footprint = [
-          ...retained,
-          ...Array.from({ length: gap }, () => ""),
-          ...lines,
-        ];
-        frameRows = retainedRows + gap + lines.length;
+        frameRows = lines.length;
         cursorRow = frameRows - 1;
-        cursorLine = footprint.length - 1;
         cursorSuffix = "";
-        const prefix = cleared
-          ? cleared.output + (gap > 0 ? ansiEscapes.cursorDown(gap) : "")
-          : output.slice(0, output.length - rendered.length);
+        const prefix = output.slice(0, output.length - rendered.length);
         output =
           prefix +
-          renderLiveFrame(
-            frame,
-            Math.max(1, stdout.columns || 80),
-            reflowsCursorGroup,
-          ) +
+          renderLiveFrame(frame, Math.max(1, stdout.columns || 80)) +
           rendered.slice(frame.length);
-      } else if (reflowsCursorGroup && erase && !resizing && output) {
-        const cleared = eraseFrame();
-        output = cleared.output + rendered;
-        footprint = [];
-        frameRows = 0;
-        cursorRow = 0;
-        cursorLine = 0;
       }
       if (cursor && !resizing) {
         cursorRow = frameRows - 1 - Number(cursor[1] ?? 0);
-        cursorLine = footprint.length - 1 - Number(cursor[1] ?? 0);
         cursorSuffix = cursor[0];
       }
     }

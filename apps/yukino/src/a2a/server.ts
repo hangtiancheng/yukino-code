@@ -93,21 +93,18 @@ export async function startA2aServer(
     "/.well-known/agent-card.json",
     agentCardHandler({
       agentCardProvider: requestHandler,
-      legacyCompat: { enabled: true },
     }),
   );
   app.use(
     jsonRpcHandler({
       requestHandler,
       userBuilder: UserBuilder.noAuthentication,
-      legacyCompat: { enabled: true },
     }),
   );
   app.use(
     restHandler({
       requestHandler,
       userBuilder: UserBuilder.noAuthentication,
-      legacyCompat: { enabled: true },
     }),
   );
   httpServer.on("request", app);

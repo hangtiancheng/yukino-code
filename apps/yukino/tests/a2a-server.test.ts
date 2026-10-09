@@ -47,13 +47,6 @@ const JsonRpcMessageSchema = z.object({
   result: z.object({ message: z.object({ parts: z.array(z.unknown()) }) }),
 });
 
-const LegacyJsonRpcSchema = z.object({
-  result: z.object({
-    kind: z.string(),
-    status: z.object({ state: z.string() }),
-  }),
-});
-
 const RestTaskSchema = z.object({ task: TaskResultSchema });
 
 function fakeRuntimeFactory(
@@ -160,7 +153,7 @@ describe("A2A server", () => {
     }
   });
 
-  it("serves the agent card for v1.0 and legacy v0.3 clients", async () => {
+  it("advertises only v1.0 JSON-RPC and REST interfaces", async () => {
     const server = await startA2aServer({
       address: testPort(1),
       runtimeFactory: fakeRuntimeFactory(),
@@ -169,50 +162,46 @@ describe("A2A server", () => {
 
     const card = CardSchema.parse(await (await fetch(server.cardUrl)).json());
     expect(card.name).toBe("yukino");
-    expect(card.supportedInterfaces).toHaveLength(4);
+    expect(card.supportedInterfaces).toHaveLength(2);
     expect(
       card.supportedInterfaces?.map((iface) => iface.protocolBinding),
-    ).toEqual(["JSONRPC", "HTTP+JSON", "JSONRPC", "HTTP+JSON"]);
+    ).toEqual(["JSONRPC", "HTTP+JSON"]);
     for (const iface of card.supportedInterfaces ?? []) {
       expect(iface.url).toBe(server.url);
     }
 
-    const legacyResponse = await fetch(server.cardUrl, {
-      headers: { "a2a-version": "0.3" },
-    });
-    expect(legacyResponse.status).toBe(200);
-    const legacy = CardSchema.parse(await legacyResponse.json());
-    expect(legacy.name).toBe("yukino");
-    expect(legacy.url).toBe(server.url);
-    expect(legacy.protocolVersion).toBe("0.3");
+    expect(
+      card.supportedInterfaces?.every(
+        (iface) => iface.protocolVersion === "1.0",
+      ),
+    ).toBe(true);
   });
 
-  it("completes a task over v0.3 JSON-RPC", async () => {
+  it("rejects removed JSON-RPC methods without running the agent", async () => {
+    let runs = 0;
+    const factory = fakeRuntimeFactory();
     const server = await startA2aServer({
-      address: testPort(2),
-      runtimeFactory: fakeRuntimeFactory([
-        { type: "stream_text", text: "done" },
-        { type: "loop_complete", stopReason: "end_turn" },
-      ]),
+      address: "0",
+      runtimeFactory: (cwd) => {
+        runs++;
+        return factory(cwd);
+      },
     });
     servers.push(server);
-
-    const body = LegacyJsonRpcSchema.parse(
-      await postJson(server.url, {
-        jsonrpc: "2.0",
-        id: "1",
-        method: "message/send",
-        params: {
-          message: {
-            messageId: "m1",
-            role: "user",
-            parts: [{ kind: "text", text: "hello" }],
-          },
+    const response = z.object({ error: z.object({ code: z.number() }) }).parse(
+      await postJson(
+        server.url,
+        {
+          jsonrpc: "2.0",
+          id: "removed-method",
+          method: "message/send",
+          params: {},
         },
-      }),
+        V1,
+      ),
     );
-    expect(body.result.kind).toBe("task");
-    expect(body.result.status.state).toBe("completed");
+    expect(response.error.code).toBe(-32601);
+    expect(runs).toBe(0);
   });
 
   it("completes a task over v1.0 JSON-RPC and REST", async () => {

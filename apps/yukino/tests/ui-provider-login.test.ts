@@ -271,32 +271,37 @@ describe("ProviderLogin", () => {
     });
   });
 
-  it("navigates with Tab, changes protocol with arrows, and skips thinking levels without a native effort", async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-    mount(validProvider, onSubmit);
+  it.each([
+    { arrows: 1, thinking: "xhigh" },
+    { arrows: 2, thinking: "max" },
+    { arrows: 3, thinking: "off" },
+  ])(
+    "navigates with Tab and selects OpenAI thinking=$thinking",
+    async ({ arrows, thinking }) => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      mount(validProvider, onSubmit);
 
-    send("", { tab: true });
-    send("", { rightArrow: true });
-    send("", { tab: true });
-    send("", { tab: true });
-    send("", { tab: true });
-    send("", { tab: true });
-    send("", { rightArrow: true });
-    send("", { return: true });
-    await act(async () => {
-      await Promise.resolve();
-    });
+      send("", { tab: true });
+      send("", { rightArrow: true });
+      send("", { tab: true });
+      send("", { tab: true });
+      send("", { tab: true });
+      send("", { tab: true });
+      for (let index = 0; index < arrows; index++) {
+        send("", { rightArrow: true });
+      }
+      send("", { return: true });
+      await act(async () => {
+        await Promise.resolve();
+      });
 
-    // The protocol switch leaves thinking at its default (high). Under the
-    // openai protocol xhigh/max have no native reasoning effort and are not
-    // offered without an explicit thinking_level_map, so the arrow wraps
-    // high -> off instead of advancing to xhigh.
-    expect(onSubmit).toHaveBeenCalledWith({
-      ...validProvider,
-      protocol: "openai",
-      thinking: "off",
-    });
-  });
+      expect(onSubmit).toHaveBeenCalledWith({
+        ...validProvider,
+        protocol: "openai",
+        thinking,
+      });
+    },
+  );
 
   it("keeps an explicit thinking level when the protocol changes", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);

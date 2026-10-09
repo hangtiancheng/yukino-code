@@ -462,6 +462,7 @@ export function App({
     [],
   );
   const abortControllerRef = useRef<AbortController | null>(null);
+  const exitingRef = useRef(false);
   const configureBashSandbox = async (bashTool: BashTool): Promise<boolean> => {
     if (!sandboxEnabledRef.current) {
       bashTool.sandbox = null;
@@ -609,6 +610,7 @@ export function App({
   );
 
   const requestExit = useCallback(() => {
+    exitingRef.current = true;
     void (async () => {
       interruptAll();
       await userBash.stop();
@@ -2458,10 +2460,6 @@ export function App({
       // The run may have created/renamed files through any tool (Bash, git,
       // subagents); refresh the @-mention cache once it ends.
       setFileFactsVersion((v) => v + 1);
-      // Steering queued too late for in-run delivery becomes follow-up turns —
-      // unless the user interrupted the run: "stop" means the queued messages
-      // must not fire immediately (parity with the remote server's cancel
-      // guard). They are removed from the pending list instead.
       const leftover = agent.drainSteering();
       if (leftover.length > 0) {
         // Remove one pending entry per leftover item, not every text match.
@@ -2475,15 +2473,7 @@ export function App({
           }
           return next;
         });
-        if (controller.signal.aborted) {
-          const recorded = steeringHistoryRecordedRef.current;
-          for (const text of leftover) {
-            const idx = recorded.indexOf(text);
-            if (idx !== -1) {
-              recorded.splice(idx, 1);
-            }
-          }
-        } else {
+        if (!exitingRef.current) {
           for (const text of leftover) {
             followUps.enqueue(text);
           }
@@ -2774,6 +2764,7 @@ export function App({
   };
 
   const turnBlocked =
+    exitingRef.current ||
     appState !== "chat" ||
     !clientRef.current ||
     isStreaming ||

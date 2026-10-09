@@ -168,7 +168,7 @@ interface A2aSession {
 
 /**
  * Bridges the A2A protocol to the yukino agent loop. One runtime session is
- * kept per A2A `contextId`; each `message/send` turn runs the agent until it
+ * kept per A2A `contextId`; each `SendMessage` turn runs the agent until it
  * completes, fails, or needs a tool permission decision. Permission requests
  * surface as `INPUT_REQUIRED` status updates carrying a yukino
  * `permission-request` data part; the client answers by sending a
@@ -266,6 +266,29 @@ export class YukinoA2aExecutor implements AgentExecutor {
       runtime = await this.ensureRuntime(session);
     } catch (error) {
       this.reject(session, eventBus, taskId, contextId, asErrorString(error));
+      return;
+    }
+
+    if (this.sessions.get(contextId) !== session) {
+      this.reject(
+        null,
+        eventBus,
+        taskId,
+        contextId,
+        "Session closed during initialization.",
+      );
+      return;
+    }
+    const active = session.run;
+    if (active && !active.finished) {
+      this.reject(
+        session,
+        eventBus,
+        taskId,
+        contextId,
+        `Context ${contextId} is busy with task ${active.taskId}. ` +
+          "Cancel it or wait for it to finish before sending a new message.",
+      );
       return;
     }
 
