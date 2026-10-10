@@ -1,31 +1,11 @@
 "use strict";
 
-/**
- * Bulk-rename files and directories under a root.
- *
- * Features:
- * - Case-sensitive by default.
- * - Optional regex mode: each rule's source is compiled as a regex pattern,
- *   and target may use backreferences (e.g. "$1").
- * - Skips paths ignored by git by default; falls back to a built-in deny-list
- *   when the root is not inside a git repository.
- * - Processes deepest paths first to avoid renaming a parent before its children.
- *
- * Library usage:
- *     import { renamePaths } from './rename.js';
- *     renamePaths([['foo', 'bar']], { root: '.', regex: false, dryRun: true });
- *
- * CLI usage:
- *     node scripts/rename.js "foo=>bar" "v1=>v2" --apply
- *     node scripts/rename.js "(?i)readme=>README" --regex --apply
- */
 
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-/** @type {Set<string>} Fallback deny-list when the root is not a git repo. */
 const FALLBACK_IGNORED_DIRS = new Set([
   ".git",
   ".hg",
@@ -39,28 +19,9 @@ const FALLBACK_IGNORED_DIRS = new Set([
   ".cache",
 ]);
 
-/**
- * @typedef {object} RenamePlan
- * @property {string} src - Absolute source path.
- * @property {string} dst - Absolute destination path.
- */
 
-/**
- * @typedef {object} RenameOptions
- * @property {string} root - Directory to scan recursively.
- * @property {boolean} dryRun - If true, print without touching the filesystem.
- * @property {boolean} regex - If true, treat each rule as regex substitution.
- * @property {boolean} respectGitignore - If true, skip git-ignored paths.
- */
 
-// ---------- name transformation ---------------------------------------------
 
-/**
- * Apply rules as literal, case-sensitive substring replacements.
- * @param {string} name
- * @param {Array<[string, string]>} rules
- * @returns {string}
- */
 function applyLiteral(name, rules) {
   let newName = name;
   for (const [source, target] of rules) {
@@ -70,12 +31,6 @@ function applyLiteral(name, rules) {
   return newName;
 }
 
-/**
- * Apply rules as regex substitutions; target may use backreferences.
- * @param {string} name
- * @param {Array<[RegExp, string]>} compiled
- * @returns {string}
- */
 function applyRegex(name, compiled) {
   let newName = name;
   for (const [pattern, target] of compiled) {
@@ -84,13 +39,7 @@ function applyRegex(name, compiled) {
   return newName;
 }
 
-// ---------- ignore filtering -------------------------------------------------
 
-/**
- * Return true if `root` lives inside a git working tree.
- * @param {string} root
- * @returns {boolean}
- */
 function isGitRepo(root) {
   const result = spawnSync(
     "git",
@@ -105,12 +54,6 @@ function isGitRepo(root) {
   );
 }
 
-/**
- * Ask git which of `candidates` are ignored. Empty set on failure.
- * @param {string} root
- * @param {string[]} candidates
- * @returns {Set<string>}
- */
 function gitIgnored(root, candidates) {
   if (candidates.length === 0) return new Set();
 
@@ -126,42 +69,25 @@ function gitIgnored(root, candidates) {
 
   if (result.status !== 0 && result.status !== 1) return new Set();
   const output = (result.stdout ?? Buffer.alloc(0)).toString();
-  /** @type {Set<string>} */
   const ignored = new Set(output.split("\x00").filter(Boolean));
   return ignored;
 }
 
-/**
- * True if `p` is equal to or nested inside any ancestor.
- * @param {string} p - Absolute path.
- * @param {string[]} ancestors - Absolute paths.
- * @returns {boolean}
- */
 function isUnder(p, ancestors) {
   return ancestors.some((a) => p === a || p.startsWith(a + path.sep));
 }
 
-// ---------- path collection --------------------------------------------------
 
-/**
- * Walk `root` recursively, applying ignore rules, deepest-first.
- * @param {string} root - Absolute root path.
- * @param {boolean} respectGitignore
- * @returns {string[]}
- */
 function collectPaths(root, respectGitignore) {
-  /** @type {string[]} */
   const allPaths = walkRecursive(root);
 
   if (respectGitignore && isGitRepo(root)) {
     const ignored = gitIgnored(root, allPaths);
-    // Always keep .git itself out of the rename set.
     for (const p of allPaths) {
       if (path.basename(p) === ".git" && fs.statSync(p).isDirectory()) {
         ignored.add(p);
       }
     }
-    /** @type {string[]} */
     const ignoredDirs = [...ignored].filter((p) => {
       try {
         return fs.statSync(p).isDirectory();
@@ -169,14 +95,12 @@ function collectPaths(root, respectGitignore) {
         return false;
       }
     });
-    /** @type {string[]} */
     const kept = allPaths.filter(
       (p) => !ignored.has(p) && !isUnder(p, ignoredDirs),
     );
     return kept.sort((a, b) => b.length - a.length);
   }
 
-  /** @type {string[]} */
   const kept = allPaths.filter((p) => {
     const relative = path.relative(root, p);
     const parts = relative.split(path.sep);
@@ -185,13 +109,7 @@ function collectPaths(root, respectGitignore) {
   return kept.sort((a, b) => b.length - a.length);
 }
 
-/**
- * Recursively walk a directory and return all file/dir paths.
- * @param {string} dir
- * @returns {string[]}
- */
 function walkRecursive(dir) {
-  /** @type {string[]} */
   const results = [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -204,22 +122,12 @@ function walkRecursive(dir) {
   return results;
 }
 
-// ---------- planning & execution --------------------------------------------
 
-/**
- * Compute the rename plan for paths whose basename actually changes.
- * @param {string[]} paths
- * @param {Array<[string, string]>} rules
- * @param {boolean} regex
- * @returns {RenamePlan[]}
- */
 function buildPlans(paths, rules, regex) {
-  /** @type {Array<[RegExp, string]>} */
   const compiled = regex
     ? rules.map(([src, dst]) => [new RegExp(src), dst])
     : [];
 
-  /** @type {RenamePlan[]} */
   const plans = [];
   for (const src of paths) {
     const baseName = path.basename(src);
@@ -232,12 +140,6 @@ function buildPlans(paths, rules, regex) {
   return plans;
 }
 
-/**
- * Execute rename plans; return [succeeded, skipped] counts.
- * @param {RenamePlan[]} plans
- * @param {boolean} dryRun
- * @returns {[number, number]}
- */
 function execute(plans, dryRun) {
   let succeeded = 0;
   let skipped = 0;
@@ -254,14 +156,7 @@ function execute(plans, dryRun) {
   return [succeeded, skipped];
 }
 
-// ---------- public entry point -----------------------------------------------
 
-/**
- * Rename every file/directory under `root` whose name matches a rule.
- * @param {Array<[string, string]>} rules - Ordered list of [source, target] pairs.
- * @param {Partial<RenameOptions>} options
- * @returns {[number, number]} [renamedCount, skippedCount]
- */
 function renamePaths(rules, options = {}) {
   const rootPath = path.resolve(options.root ?? ".");
   if (!fs.existsSync(rootPath) || !fs.statSync(rootPath).isDirectory()) {
@@ -273,15 +168,8 @@ function renamePaths(rules, options = {}) {
   return execute(plans, options.dryRun ?? true);
 }
 
-// ---------- CLI --------------------------------------------------------------
 
-/**
- * Parse CLI rule strings of the form 'SOURCE=>TARGET'.
- * @param {string[]} raw
- * @returns {Array<[string, string]>}
- */
 function parseCliRules(raw) {
-  /** @type {Array<[string, string]>} */
   const rules = [];
   for (const item of raw) {
     if (!item.includes("=>")) {
@@ -293,25 +181,10 @@ function parseCliRules(raw) {
   return rules;
 }
 
-/**
- * @typedef {object} CliResult
- * @property {Array<[string, string]>} rules
- * @property {string} root
- * @property {boolean} apply
- * @property {boolean} regex
- * @property {boolean} noGitignore
- */
 
-/**
- * Parse CLI arguments.
- * @param {string[]} argv
- * @returns {CliResult}
- */
 function parseCliArgs(argv) {
   const args = argv.slice(2);
-  /** @type {string[]} */
   const ruleArgs = [];
-  /** @type {CliResult} */
   const result = {
     rules: [],
     root: ".",
@@ -338,11 +211,6 @@ function parseCliArgs(argv) {
   return result;
 }
 
-/**
- * Main CLI entry point.
- * @param {string[]} argv
- * @returns {number}
- */
 function main(argv) {
   const cli = parseCliArgs(argv);
   if (cli.rules.length === 0) {

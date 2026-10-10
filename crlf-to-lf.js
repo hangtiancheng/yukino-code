@@ -1,16 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Converts CRLF line endings to LF for all files that are not ignored by Git
- * within the repository that contains the target directory.
- *
- * Usage:
- *   node git-crlf-to-lf.mjs [directory]
- *
- * If `directory` is omitted, the current working directory is used.
- * The script walks upward to locate the owning Git repository. If none is
- * found, it exits with code 1.
- */
 
 import { spawn } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
@@ -18,19 +7,7 @@ import { access, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 
-/**
- * @typedef {object} ExecResult
- * @property {string} stdout
- * @property {string} stderr
- */
 
-/**
- * Runs a Git command and returns its stdout/stderr as strings.
- *
- * @param {string} cwd - Working directory for the Git process.
- * @param {string[]} args - Arguments to pass to `git`.
- * @returns {Promise<ExecResult>}
- */
 async function execGit(cwd, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn("git", args, { cwd });
@@ -66,12 +43,6 @@ async function execGit(cwd, args) {
   });
 }
 
-/**
- * Locates the Git repository root that owns the given directory.
- *
- * @param {string} cwd - Directory to start searching from.
- * @returns {Promise<string | null>} Absolute path to the repository root, or `null` if not found.
- */
 async function findGitRoot(cwd) {
   try {
     const { stdout } = await execGit(cwd, ["rev-parse", "--show-toplevel"]);
@@ -81,22 +52,10 @@ async function findGitRoot(cwd) {
   }
 }
 
-/**
- * Parses a NUL-delimited Git output string into non-empty lines.
- *
- * @param {string} output - Raw output from a Git command that uses the `-z` flag.
- * @returns {string[]} Individual entries.
- */
 function parseNullDelimited(output) {
   return output.split("\0").filter((entry) => entry.length > 0);
 }
 
-/**
- * Returns absolute paths of all tracked files in the repository.
- *
- * @param {string} repoRoot - Absolute path to the Git repository root.
- * @returns {Promise<string[]>}
- */
 async function getTrackedFiles(repoRoot) {
   const { stdout } = await execGit(repoRoot, ["ls-files", "-z"]);
   return parseNullDelimited(stdout).map((relativePath) =>
@@ -104,12 +63,6 @@ async function getTrackedFiles(repoRoot) {
   );
 }
 
-/**
- * Returns absolute paths of untracked, non-ignored files in the repository.
- *
- * @param {string} repoRoot - Absolute path to the Git repository root.
- * @returns {Promise<string[]>}
- */
 async function getUntrackedFiles(repoRoot) {
   const { stdout } = await execGit(repoRoot, [
     "status",
@@ -121,7 +74,6 @@ async function getUntrackedFiles(repoRoot) {
   const files = [];
 
   for (const entry of entries) {
-    // In --porcelain -z output, untracked files are reported as "?? <path>\0".
     if (entry.startsWith("?? ")) {
       const relativePath = entry.slice(3);
       files.push(path.resolve(repoRoot, relativePath));
@@ -131,16 +83,6 @@ async function getUntrackedFiles(repoRoot) {
   return files;
 }
 
-/**
- * Heuristic binary-file detection.
- *
- * A buffer is considered binary when it contains at least one NUL byte.
- * This matches Git's default text/binary heuristic for safe line-ending
- * conversion.
- *
- * @param {Buffer} buffer - File contents.
- * @returns {boolean} `true` if the buffer appears to represent a binary file.
- */
 function isBinary(buffer) {
   for (let i = 0; i < buffer.length; i += 1) {
     if (buffer[i] === 0x00) {
@@ -150,16 +92,6 @@ function isBinary(buffer) {
   return false;
 }
 
-/**
- * Atomically converts CRLF to LF in a single file and returns whether a change
- * was written.
- *
- * The conversion is performed in-place, but a temporary file is used to avoid
- * corrupting the original if the process is interrupted.
- *
- * @param {string} filePath - Absolute path to the file to process.
- * @returns {Promise<boolean>} `true` if the file was modified, `false` otherwise.
- */
 async function convertFile(filePath) {
   const stats = await stat(filePath);
   if (!stats.isFile()) {
@@ -172,7 +104,6 @@ async function convertFile(filePath) {
     return false;
   }
 
-  // Fast path: skip files that contain no CRLF sequences.
   if (!content.includes("\r\n")) {
     return false;
   }
@@ -187,11 +118,6 @@ async function convertFile(filePath) {
   return true;
 }
 
-/**
- * Main entry point.
- *
- * @returns {Promise<void>}
- */
 async function main() {
   const targetDirectory = path.resolve(process.argv[2] || process.cwd());
 

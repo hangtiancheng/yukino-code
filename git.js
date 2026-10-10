@@ -5,11 +5,6 @@ import path from "node:path";
 
 const execAsync = promisify(exec);
 
-/**
- * Parse CLI arguments into source and target zip paths, split by `--`.
- * Usage: node git.js <source_zips...> -- <target_zips...>
- * @returns {{ sources: string[], targets: string[] }}
- */
 function parseArgs() {
   const args = process.argv.slice(2);
   const sep = args.indexOf("--");
@@ -22,13 +17,6 @@ function parseArgs() {
   return { sources, targets };
 }
 
-/**
- * Validate that sources and targets have equal length
- * and every path is an existing file.
- * @param {string[]} sources
- * @param {string[]} targets
- * @returns {void}
- */
 function validate(sources, targets) {
   if (sources.length !== targets.length) {
     console.error(
@@ -44,12 +32,6 @@ function validate(sources, targets) {
   }
 }
 
-/**
- * Unzip a zip file into a same-named directory (minus the .zip extension).
- * Removes the target directory first if it already exists.
- * @param {string} zipPath - path to the zip file
- * @returns {Promise<string>} the extraction directory
- */
 async function unzip(zipPath) {
   const dir = zipPath.replace(/\.zip$/, "");
   fs.rmSync(dir, { recursive: true, force: true });
@@ -57,12 +39,6 @@ async function unzip(zipPath) {
   return dir;
 }
 
-/**
- * Recursively convert CRLF line endings to LF in all text files under a directory.
- * Skips .git directories and binary files.
- * @param {string} dir - directory to process
- * @returns {Promise<void>}
- */
 async function crlfToLf(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -81,14 +57,6 @@ async function crlfToLf(dir) {
   }
 }
 
-/**
- * Prepare a git-based diff between a source and target directory:
- * init + commit in source, move .git into target so `git diff` / `git status`
- * can be run directly inside the target directory.
- * @param {string} sourceDir
- * @param {string} targetDir
- * @returns {Promise<void>}
- */
 async function prepareDiff(sourceDir, targetDir) {
   fs.rmSync(path.join(sourceDir, ".git"), { recursive: true, force: true });
   await execAsync("git init -b main", { cwd: sourceDir });

@@ -1,30 +1,16 @@
 #!/usr/bin/env bash
 
-# install.sh — Bootstrap installer for yukino CLI via npm global install.
-#
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.sh | bash -s -- --alpha
-#   curl -fsSL https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.sh | bash -s -- --version=0.0.15
-#
-# Installs @yukino.js/yukino globally via npm. npm's `bin` field automatically
-# creates the `yukino` command on PATH. Requires Node.js >= 20.
-#
-# Supports: --uninstall, --version=X.Y.Z, --alpha, --beta, --rc, --canary, --nightly, --tag=NAME
 
 set -euo pipefail
 
-# ── Config ─────────────────────────────────────────────────────────────
 PACKAGE="@yukino.js/yukino"
 NODE_MAJOR_MIN=20
 
-# ── Helpers ────────────────────────────────────────────────────────────
 info() { printf '\033[36m[info]\033[0m  %s\n' "$*"; }
 warn() { printf '\033[33m[warn]\033[0m  %s\n' "$*"; }
 err() { printf '\033[31m[err]\033[0m  %s\n' "$*" >&2; }
 ok() { printf '\033[32m[ok]\033[0m  %s\n' "$*"; }
 
-# ── Parse args ─────────────────────────────────────────────────────────
 ACTION="install"
 VERSION=""
 TAG=""
@@ -70,7 +56,6 @@ EOF
 	esac
 done
 
-# ── Uninstall ──────────────────────────────────────────────────────────
 if [ "$ACTION" = "uninstall" ]; then
 	info "Uninstalling $PACKAGE..."
 	npm uninstall -g "$PACKAGE"
@@ -78,7 +63,6 @@ if [ "$ACTION" = "uninstall" ]; then
 	exit 0
 fi
 
-# ── Write default config (skip if it already exists) ─────────────────
 CONFIG_DIR="$HOME/.yukino"
 CONFIG_FILE="$CONFIG_DIR/config.yaml"
 if [ -f "$CONFIG_FILE" ]; then
@@ -149,7 +133,6 @@ EOF
 	ok "Wrote default config to $CONFIG_FILE"
 fi
 
-# ── Check Node.js ─────────────────────────────────────────────────────
 if ! command -v node >/dev/null 2>&1; then
 	err "Node.js not found. Install Node.js >= $NODE_MAJOR_MIN first:"
 	err "  https://nodejs.org/  or  brew install node@20"
@@ -166,10 +149,7 @@ if ! command -v npm >/dev/null 2>&1; then
 	exit 1
 fi
 
-# ── Install ─────────────────────────────────────────────────────────
-# Priority: --version > --tag > --alpha/beta/rc/canary/nightly > latest.
 if [ -n "$VERSION" ]; then
-	# Strip leading 'v' if user passed v0.1.0
 	VERSION="${VERSION#v}"
 	PKG_VERSION="$PACKAGE@$VERSION"
 elif [ -n "$TAG" ]; then
@@ -181,8 +161,6 @@ fi
 info "Installing $PKG_VERSION globally..."
 npm install -g "$PKG_VERSION" --registry=https://registry.npmjs.org/
 
-# ── Verify ────────────────────────────────────────────────────────────
-# npm global bin should be on PATH. If not, print the prefix/bin hint.
 NPM_BIN="$(npm config get prefix 2>/dev/null)/bin"
 if command -v yukino >/dev/null 2>&1; then
 	ok "Yukino installed successfully"

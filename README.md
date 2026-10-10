@@ -222,4 +222,3 @@ pnpm build                            # build all publishable packages
 
 [MIT](./LICENSE) © [hangtiancheng](https://github.com/hangtiancheng)
 
-<!-- dev < nightly < canary < preview < alpha < beta < rc < x.y.z -->

@@ -1,20 +1,5 @@
 #Requires -Version 5.1
 
-# install.ps1 - Bootstrap installer for yukino CLI via npm global install (Windows).
-#
-# Usage:
-#   irm https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.ps1 | iex
-#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.ps1))) -Alpha
-#   powershell -ExecutionPolicy Bypass -File install.ps1 -Version 0.0.15
-#
-# Installs @yukino.js/yukino globally via npm. npm's `bin` field automatically
-# creates the `yukino` command (yukino.cmd) in npm's global prefix directory,
-# which is normally already on PATH. Requires Node.js >= 20.
-#
-# Supports: -Uninstall, -Version X.Y.Z, -Alpha, -Beta, -Rc, -Canary, -Nightly, -Dev, -Tag NAME
-#
-# Note: `exit` is intentionally avoided in this script so that running it via
-# `irm | iex` never terminates the caller's PowerShell session.
 
 param(
 	[string]$Version = "",
@@ -31,11 +16,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# -- Config -------------------------------------------------------------------
 $Package = "@yukino.js/yukino"
 $NodeMajorMin = 20
 
-# -- Helpers ------------------------------------------------------------------
 function Write-Info([string]$Message) { Write-Host "[info]  $Message" -ForegroundColor Cyan }
 function Write-WarnMsg([string]$Message) { Write-Host "[warn]  $Message" -ForegroundColor Yellow }
 function Write-Err([string]$Message) { Write-Host "[err]  $Message" -ForegroundColor Red }
@@ -46,8 +29,6 @@ function Stop-Installer([string]$Message) {
 	throw $Message
 }
 
-# -- Parse args ---------------------------------------------------------------
-# Channel switches map onto -Tag; priority: -Version > -Tag > channel switch > latest.
 if ($Alpha) { $Tag = "alpha" }
 elseif ($Beta) { $Tag = "beta" }
 elseif ($Rc) { $Tag = "rc" }
@@ -80,7 +61,6 @@ Requires Node.js >= $NodeMajorMin and npm.
 	return
 }
 
-# -- Uninstall ----------------------------------------------------------------
 if ($Uninstall) {
 	Write-Info "Uninstalling $Package..."
 	& npm uninstall -g $Package
@@ -89,7 +69,6 @@ if ($Uninstall) {
 	return
 }
 
-# -- Write default config (skip if it already exists) -------------------------
 $ConfigDir = Join-Path $HOME ".yukino"
 $ConfigFile = Join-Path $ConfigDir "config.yaml"
 if (Test-Path -LiteralPath $ConfigFile) {
@@ -162,7 +141,6 @@ hooks:
 	Write-Ok "Wrote default config to $ConfigFile"
 }
 
-# -- Check Node.js ------------------------------------------------------------
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 	Stop-Installer "Node.js not found. Install Node.js >= $NodeMajorMin first: https://nodejs.org/"
 }
@@ -179,10 +157,7 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 	Stop-Installer "npm not found. It ships with Node.js - reinstall Node.js from https://nodejs.org/"
 }
 
-# -- Install ------------------------------------------------------------------
-# Priority: -Version > -Tag > -Alpha/-Beta/-Rc/-Canary/-Nightly/-Dev > latest.
 if ($Version) {
-	# Strip leading 'v' if user passed v0.1.0
 	$Version = $Version.TrimStart("v")
 	$PkgVersion = "$Package@$Version"
 }
@@ -199,8 +174,6 @@ if ($LASTEXITCODE -ne 0) {
 	Stop-Installer "npm install failed with exit code $LASTEXITCODE"
 }
 
-# -- Verify -------------------------------------------------------------------
-# npm global prefix should be on PATH. If not, print the PATH hint.
 if (Get-Command yukino -ErrorAction SilentlyContinue) {
 	Write-Ok "Yukino installed successfully"
 	$lsOutput = & npm ls -g $Package --depth=0 2>$null

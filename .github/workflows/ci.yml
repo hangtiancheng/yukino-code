@@ -33,13 +33,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # --- @yukino.js/yukino ---
 
       - name: Typecheck yukino
         run: pnpm --filter @yukino.js/yukino typecheck
 
-      # Build before test: tests/library-entry.test.ts asserts on dist/ artifacts
-      # (bin shebang, library boundary), so a fresh runner must have them.
       - name: Build yukino
         run: pnpm --filter @yukino.js/yukino build
 
@@ -52,7 +49,6 @@ jobs:
       - name: Build yukino frontend
         run: pnpm --filter @yukino.js/yukino build:browser
 
-      # --- @yukino.js/mcp ---
 
       - name: Typecheck mcp
         run: pnpm --filter @yukino.js/mcp typecheck
@@ -66,8 +62,6 @@ jobs:
       - name: Build mcp frontend
         run: pnpm --filter @yukino.js/mcp build:fe
 
-  # --- Docs site (apps/docs) → GitHub Pages ---
-  # Publishes on every push to main, after the test/build job passes.
   deploy-docs:
     name: Deploy Docs to GitHub Pages
     needs: ci
@@ -102,7 +96,6 @@ jobs:
       - name: Build docs
         run: pnpm --filter docs build
         env:
-          # Project pages live under /<repo>/; swap DOCS_BASE for a custom domain.
           DOCS_BASE: /${{ github.event.repository.name }}/
 
       - name: Setup Pages
