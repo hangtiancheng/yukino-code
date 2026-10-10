@@ -5,9 +5,6 @@ export interface MarkdownChunk {
   title: string;
 }
 
-// 1000 chars stays far below both the indexer's 8192-char storage cap and
-// embedding-provider input limits, so the embedded text is always identical
-// to the stored text.
 export const CHUNK_SIZE = 1000;
 export const CHUNK_OVERLAP = 200;
 
@@ -29,12 +26,6 @@ function headingsIn(chunk: string): string[] {
   return titles;
 }
 
-/**
- * Split markdown into retrieval chunks via LangChain's markdown-aware
- * recursive splitter. Each chunk is annotated with a section title: the first
- * heading inside the chunk, or the nearest heading carried over from earlier
- * chunks (chunks arrive in document order).
- */
 export async function splitMarkdown(content: string): Promise<MarkdownChunk[]> {
   const parts = await splitter.splitText(content);
   const chunks: MarkdownChunk[] = [];

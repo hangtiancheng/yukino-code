@@ -1,6 +1,4 @@
 import { mkdirSync } from "node:fs";
-// Aliased: the tsup banner already declares a bare `createRequire` in the
-// bundled output, and a second identical binding is a syntax error.
 import { createRequire as nodeCreateRequire } from "node:module";
 import path from "node:path";
 import type { DatabaseSync as Database } from "node:sqlite";
@@ -9,36 +7,21 @@ import type { IndexConfig } from "@/shared/config.js";
 import { logger } from "@/shared/logger.js";
 import type { Embedder } from "./embedder.js";
 
-// How long a writer waits for another process to release the write lock before
-// the caller sees a LockConflictError. This server is a short-lived CLI
-// companion, so blocking for long is worse than reporting "busy".
 const BUSY_TIMEOUT_MS = 5_000;
 
-// Bump when the table layout changes. An older on-disk schema is wiped rather
-// than migrated: the index is a rebuildable cache of the docs directory.
 const SCHEMA_VERSION = "1";
 
-/** SQLITE_BUSY: another connection holds the write lock. */
 const SQLITE_BUSY = 5;
 
-/** In-memory view of every stored vector, rebuilt when the data changes. */
 export interface VectorCache {
   dataVersion: number;
   dim: number;
   ids: string[];
-  /** Row-major `ids.length * dim` matrix of L2-normalized vectors. */
   matrix: Float32Array;
 }
 
 const nodeRequire = nodeCreateRequire(import.meta.url);
 
-/**
- * Load `node:sqlite` lazily rather than with a static import: ESM evaluates
- * imports before any module body, so a top-level import would pull in the
- * experimental module before `quiet-sqlite-warning.ts` can install its filter.
- * The specifier is also kept out of a plain `import` because bundlers rewrite
- * it (see the `removeNodeProtocol` note in tsup.config.ts).
- */
 function loadSqlite(): typeof import("node:sqlite") {
   return nodeRequire("node:sqlite") as typeof import("node:sqlite");
 }
@@ -47,10 +30,6 @@ export interface DocsContext {
   db: Database;
   embedder: Embedder;
   index: IndexConfig;
-  /**
-   * Lazily built by the retriever. Local writes must call invalidateCache:
-   * PRAGMA data_version only moves for commits made by *other* connections.
-   */
   cache: VectorCache | null;
 }
 
@@ -77,7 +56,6 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE INDEX IF NOT EXISTS chunks_source_idx ON chunks(source);
 `;
 
-/** True when the error is SQLite refusing a write because another holds the lock. */
 export function isBusyError(err: unknown): boolean {
   return (
     err instanceof Error &&
@@ -86,11 +64,6 @@ export function isBusyError(err: unknown): boolean {
   );
 }
 
-/**
- * Monotonic counter that SQLite bumps whenever *another* connection commits.
- * Comparing it against the cached value is how a query notices that a sibling
- * process re-indexed behind our back.
- */
 export function currentDataVersion(db: Database): number {
   const row = db.prepare("PRAGMA data_version").get() as
     { data_version?: unknown } | undefined;
@@ -115,11 +88,6 @@ export function invalidateCache(ctx: DocsContext): void {
   ctx.cache = null;
 }
 
-/**
- * Open (creating on first use) the SQLite index. WAL keeps the background sync
- * from blocking readers, and the busy timeout turns a concurrent writer into a
- * short wait instead of an immediate SQLITE_BUSY.
- */
 export function openStore(index: IndexConfig): Database {
   if (index.dbPath !== ":memory:") {
     mkdirSync(path.dirname(index.dbPath), { recursive: true });
@@ -140,18 +108,9 @@ export function openStore(index: IndexConfig): Database {
 export function closeStore(db: Database): void {
   try {
     db.close();
-  } catch {
-    // Closing a broken database is best-effort.
-  }
+  } catch {}
 }
 
-/**
- * Probe the embedding provider for the real vector dimension and make the
- * stored schema match it. The dimension is never taken from static config: the
- * actual model output is authoritative, and a mismatch invalidates every
- * stored vector. On mismatch (or a schema bump) the index is wiped, which
- * forces the next sync to re-embed everything.
- */
 export async function ensureSchema(ctx: DocsContext): Promise<void> {
   const dim = (await ctx.embedder.embedText("dimension probe")).length;
   if (dim === 0) {

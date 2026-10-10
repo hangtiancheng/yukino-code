@@ -30,7 +30,6 @@ describe("splitMarkdown", () => {
     const md = `# Alpha\n${"a ".repeat(400)}\n# Bravo\n${"b ".repeat(400)}`;
     const chunks = await splitMarkdown(md);
     expect(chunks.length).toBeGreaterThan(1);
-    // Every chunk maps to one of the two sections; order follows the document.
     const titles = chunks.map((c) => c.title);
     expect(titles[0]).toBe("Alpha");
     expect(titles[titles.length - 1]).toBe("Bravo");

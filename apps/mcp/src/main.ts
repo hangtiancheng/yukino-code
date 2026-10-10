@@ -1,5 +1,3 @@
-// Must stay the first import: it patches the warning handler before any
-// module below loads `node:sqlite` (see the file for why).
 import "./shared/quiet-sqlite-warning.js";
 import "dotenv/config";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -18,7 +16,6 @@ function shutdown(reason: string, closeTransport: () => Promise<void>): void {
   }
   shuttingDown = true;
   logger.info({ reason }, "shutting down");
-  // Safety net: a wedged transport/module must never keep the process alive.
   setTimeout(() => {
     process.exit(0);
   }, 5000).unref();
@@ -60,9 +57,6 @@ async function main(): Promise<void> {
     const server = createServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    // When the client disconnects, open handles like the SQLite database
-    // would keep the process alive — exit through shutdown instead. The SDK
-    // transport does not self-close on stdin EOF, so watch stdin directly.
     server.server.onclose = () => {
       shutdown("transport closed", () => Promise.resolve());
     };
@@ -76,8 +70,6 @@ async function main(): Promise<void> {
     logger.info("MCP stdio server connected");
   }
 
-  // Kick off module initialization only after the transport is up, so tools
-  // are listable immediately; tool calls await the same init internally.
   for (const module of modules) {
     if (module.init) {
       void module.init().catch((err: unknown) => {

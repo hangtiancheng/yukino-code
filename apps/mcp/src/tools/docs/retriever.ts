@@ -25,12 +25,6 @@ function parseMetadata(raw: unknown): Record<string, unknown> {
   }
 }
 
-/**
- * Load every stored vector into one contiguous matrix. Vectors are stored
- * L2-normalized, so scoring is a plain dot product; at the scale of a personal
- * knowledge base (thousands of chunks) scanning them costs single-digit
- * milliseconds, which is far less than the round trip to an external index.
- */
 function buildCache(ctx: DocsContext, dataVersion: number): VectorCache {
   const dim = Number(readMeta(ctx.db, "dim"));
   const rows = ctx.db.prepare("SELECT id, vector FROM chunks").all() as {
@@ -47,8 +41,6 @@ function buildCache(ctx: DocsContext, dataVersion: number): VectorCache {
     if (typeof row.id !== "string" || !(row.vector instanceof Uint8Array)) {
       continue;
     }
-    // A row written under a different dimension can only be stale data; skip
-    // it rather than misreading the matrix.
     if (row.vector.byteLength !== dim * 4) {
       continue;
     }
@@ -79,7 +71,6 @@ interface Scored {
   score: number;
 }
 
-/** Top-K selection by a single pass, keeping a sorted array of at most K. */
 function topK(scores: Float32Array, k: number): Scored[] {
   const best: Scored[] = [];
   for (let i = 0; i < scores.length; i++) {
@@ -117,7 +108,6 @@ export async function retrieve(
     for (let d = 0; d < cache.dim; d++) {
       dot += cache.matrix[offset + d] * queryVector[d];
     }
-    // Guard the [-1, 1] cosine range against float error before mapping it.
     scores[i] = dot < -1 ? -1 : dot > 1 ? 1 : dot;
   }
 
@@ -137,9 +127,6 @@ export async function retrieve(
       id: cache.ids[hit.index],
       content: String(row.content ?? ""),
       metadata: parseMetadata(row.metadata),
-      // Report the score on the same [0, 1] scale as the previous vector index:
-      // cosine distance d mapped through (2 - d) / 2, which is (1 + cosine) / 2
-      // — 1 for identical vectors and 0 for opposite ones.
       score: (1 + hit.score) / 2,
     });
   }

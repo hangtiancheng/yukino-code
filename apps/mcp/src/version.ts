@@ -1,6 +1,3 @@
-// Resolve the package version: tsup injects __YUKINO_MCP_VERSION__ at build
-// time; in dev (tsx) we walk up from this file to read package.json.
-
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +15,6 @@ function resolveVersion(): string {
     return __YUKINO_MCP_VERSION__;
   }
   const here = path.dirname(fileURLToPath(import.meta.url));
-  // Try both 1 and 2 levels up to cover src/ and dist/ layouts.
   for (const levels of ["..", "../.."]) {
     const candidate = path.resolve(here, levels, "package.json");
     try {
@@ -27,9 +23,7 @@ function resolveVersion(): string {
       if (parsed.success) {
         return parsed.data.version;
       }
-    } catch {
-      // continue
-    }
+    } catch {}
   }
   throw new Error("Could not resolve package version");
 }

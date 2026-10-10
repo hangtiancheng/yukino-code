@@ -20,7 +20,6 @@ afterEach(() => {
   fixture = null;
 });
 
-/** Chunk id as the pipeline derives it: sha256(source) + ordinal. */
 function idOf(source: string, ordinal: number): string {
   return `${sha256(source)}:${String(ordinal)}`;
 }
@@ -105,8 +104,6 @@ describe("atomic RAG source replacement", () => {
     const source = "boom.md";
     await replaceSource(ctx, source, [chunk(source, 0, "keep me")], "h1");
 
-    // Metadata that cannot be serialized explodes after the delete but before
-    // the commit, so the previous chunks and hash must survive untouched.
     const circular: Record<string, unknown> = { _source: source };
     circular["self"] = circular;
     await expect(
@@ -127,8 +124,6 @@ describe("atomic RAG source replacement", () => {
     fixture = makeIndexFixture();
     const { ctx, index } = fixture;
 
-    // A sibling process holding the write lock. The fixture's own handle uses
-    // the production 5s busy timeout, so swap in a short one for the test.
     const sibling = new DatabaseSync(index.dbPath, { timeout: 50 });
     sibling.exec("BEGIN IMMEDIATE");
     closeStore(ctx.db);
@@ -142,7 +137,6 @@ describe("atomic RAG source replacement", () => {
       sibling.close();
     }
 
-    // The lock is released, so the same write now succeeds.
     await expect(
       replaceSource(ctx, "busy.md", [chunk("busy.md", 0, "x")], "h"),
     ).resolves.toBe(1);

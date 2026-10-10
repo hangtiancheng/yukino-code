@@ -1,4 +1,3 @@
-/** Public MCP tool names. Keep compound names; single-word tools use `_tool`. */
 export const TOOL_NAMES = {
   createApp: "create_app",
   docsTool: "docs_tool",

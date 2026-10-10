@@ -19,7 +19,6 @@ export interface SyncStats {
   chunks: number;
 }
 
-/** Split a document into index chunks with deterministic ids (idempotent re-index). */
 export async function buildChunks(
   source: string,
   content: string,
@@ -35,15 +34,6 @@ export async function buildChunks(
     }));
 }
 
-/**
- * Incrementally sync the docs directory into the vector index:
- * - unchanged files (same content sha256 as the recorded one) are skipped,
- * - new/changed files are embedded before their chunks/hash are atomically replaced,
- * - records of files deleted from disk are removed from the index.
- * Per-file failures are logged and skipped so one bad file never aborts the
- * sync; a lock conflict means a sibling server instance is already handling
- * that source and counts as skipped, not failed.
- */
 export async function syncDocs(
   ctx: DocsContext,
   docsDir: string,

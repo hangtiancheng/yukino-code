@@ -1,5 +1,3 @@
-// Shared test helpers for the MCP tool suites.
-
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,18 +10,15 @@ const TextContentSchema = z.object({
   text: z.string(),
 });
 
-/** The text of the first content block, asserting it is a TextContent. */
 export function firstText(result: { content: unknown }): string {
   const content = z.array(z.unknown()).parse(result.content);
   return TextContentSchema.parse(content[0]).text;
 }
 
-/** A fresh temporary directory. */
 export function makeTempDir(): string {
   return mkdtempSync(path.join(tmpdir(), "yukino-mcp-test-"));
 }
 
-/** A fake `gh` executable whose behaviour is the given sh script body. */
 export function writeFakeGh(dir: string, script: string): string {
   const gh = path.join(dir, "gh");
   writeFileSync(gh, `#!/bin/sh\n${script}\n`, { encoding: "utf-8" });
@@ -31,11 +26,6 @@ export function writeFakeGh(dir: string, script: string): string {
   return gh;
 }
 
-/**
- * Snapshot/restore the given process.env keys around every test, so env
- * mutations (PATH, GITHUB_TOKEN, ...) never leak between tests or into the
- * developer's environment.
- */
 export function isolateEnv(keys: string[]): void {
   const saved = new Map<string, string | undefined>();
   beforeEach(() => {
@@ -56,41 +46,29 @@ export function isolateEnv(keys: string[]): void {
   });
 }
 
-/** One fetch call as recorded by stubFetchRoutes. */
 export interface RecordedFetch {
   method: string;
-  /** Full request URL. */
   url: string;
-  /** URL without the query string (what routes match against). */
   baseUrl: string;
   searchParams: Record<string, string>;
   headers: Record<string, string>;
-  /** Request body when it was a string (JSON payloads), else null. */
   body: string | null;
 }
 
 export interface FetchRoute {
   method: string;
-  /** Matched against the request URL without query string. */
   url: string;
   status?: number;
   json?: unknown;
-  /** Raw text body; mutually exclusive with json. */
   text?: string;
   headers?: Record<string, string>;
 }
 
 export interface FetchStub {
   calls: RecordedFetch[];
-  /** The last recorded call (throws when there was none). */
   lastCall(): RecordedFetch;
 }
 
-/**
- * Route-based global fetch stub: matches on method + URL-without-query and
- * answers with the canned payload; unmatched requests answer 404 so no test
- * can reach the real network.
- */
 export function stubFetchRoutes(routes: FetchRoute[]): FetchStub {
   const calls: RecordedFetch[] = [];
   const fetchStub = async (

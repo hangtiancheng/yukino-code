@@ -14,9 +14,6 @@ import type { ToolModule } from "@/tools/types.js";
 
 export const CREATED_APP_RESOURCE_URI = "ui://create-app/create-app.html";
 
-// The shell renders user HTML through a same-document srcdoc iframe, which
-// inherits the host's CSP for the app resource. Without this allowlist, every
-// CDN script/font/style in model-authored HTML would be silently blocked.
 const RESOURCE_DOMAINS = [
   "https://unpkg.com",
   "https://cdn.jsdelivr.net",
@@ -27,8 +24,6 @@ const RESOURCE_DOMAINS = [
   "https://fonts.gstatic.com",
 ];
 
-// Tool results and the UI bridge are JSON; a large cap keeps them within
-// typical host message limits while still allowing rich single-file apps.
 const MAX_HTML_CHARS = 200_000;
 
 const InputSchema = {

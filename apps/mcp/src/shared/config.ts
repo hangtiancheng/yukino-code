@@ -4,9 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 
 export interface EmbeddingConfig {
-  /** Embedding model identifier, e.g. "text-embedding-v4". */
   model: string;
-  /** OpenAI-compatible endpoint base URL (the "/embeddings" suffix is appended by the SDK). */
   baseUrl: string;
   apiKey: string;
 }
@@ -15,21 +13,16 @@ export type EmbeddingConfigResult =
   { ok: true; config: EmbeddingConfig } | { ok: false; reason: string };
 
 export interface RedisConfig {
-  /** Only the unrestricted redis_tool uses this; the docs index is SQLite-backed. */
   url: string;
 }
 
 export interface IndexConfig {
-  /** SQLite file holding the docs RAG vector index. */
   dbPath: string;
 }
 
 export interface GitHubConfig {
-  /** Optional GITHUB_TOKEN/GH_TOKEN passed to gh through its environment. */
   token: string;
-  /** Legacy GITHUB_BASE_URL; its hostname is used when GH_HOST is unset. */
   baseUrl: string;
-  /** Optional GitHub Enterprise hostname (GH_HOST). */
   hostname: string;
 }
 
@@ -47,11 +40,8 @@ export interface AppConfig {
     username: string;
     password: string;
   };
-  /** Directory scanned recursively for knowledge-base documents. */
   docsDir: string;
-  /** HTTP transport listen address (only used with --http). */
   host: string;
-  /** HTTP transport listen port (only used with --http). */
   port: number;
 }
 
@@ -83,13 +73,10 @@ const EnvSchema = z.object({
   PROMETHEUS_TOKEN: z.string().optional(),
   PROMETHEUS_USERNAME: z.string().optional(),
   PROMETHEUS_PASSWORD: z.string().optional(),
-  // .catch: a malformed PORT in the environment must degrade to the default
-  // instead of crashing the stdio server at startup.
   HOST: z.string().default("127.0.0.1"),
   PORT: z.coerce.number().int().positive().default(3300).catch(3300),
 });
 
-/** Empty strings behave as "unset" so placeholder env entries don't mask defaults. */
 function dropEmptyValues(
   env: Record<string, string | undefined>,
 ): Record<string, string> {
@@ -105,8 +92,6 @@ function dropEmptyValues(
 function resolveEmbedding(
   env: z.infer<typeof EnvSchema>,
 ): EmbeddingConfigResult {
-  // Only the OpenAI-compatible protocol is implemented; any other value
-  // degrades the tool with a clear reason instead of a config parse error.
   const protocol = env.EMBEDDING_PROTOCOL ?? "openai";
   if (protocol !== "openai") {
     return {

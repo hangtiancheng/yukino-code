@@ -4,7 +4,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-// Mutable state shared with the mocked modules (vi.mock factories are hoisted).
 const storeState = vi.hoisted(() => ({
   db: null as FakeDb | null,
   openCalls: 0,
@@ -37,8 +36,6 @@ function makeFakeDb(): FakeDb {
   };
 }
 
-// Only the lifecycle is faked: readMeta/currentDataVersion stay real so the
-// retriever is exercised against this stub handle.
 vi.mock("@/tools/docs/store.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/tools/docs/store.js")>();
   return {
@@ -111,8 +108,6 @@ describe("docs engine recovery", () => {
     vi.stubEnv("EMBEDDING_MODEL", "test-model");
     vi.stubEnv("EMBEDDING_BASE_URL", "https://example.com/v1");
     vi.stubEnv("EMBEDDING_API_KEY", "sk-test");
-    // Fake only Date so the 30s degraded-retry window can be fast-forwarded
-    // without disturbing real timers (InMemoryTransport, withTimeout).
     vi.useFakeTimers({ toFake: ["Date"] });
     storeState.db = makeFakeDb();
     client = await connect();
@@ -131,8 +126,6 @@ describe("docs engine recovery", () => {
     expect(storeState.openCalls).toBe(1);
   });
 
-  // Regression test: a ready engine whose database handle died used to stay
-  // "ready" forever — every query failed and the engine never re-initialized.
   it("degrades when the index handle dies mid-session", async () => {
     storeState.db!.isOpen = false;
 
@@ -140,8 +133,6 @@ describe("docs engine recovery", () => {
     expect(failed.isError).toBe(true);
     expect(failed.text).toContain("docs failed: database is closed");
 
-    // The engine is now degraded: the next call reports unavailability
-    // instead of hammering the dead handle.
     const degraded = await queryDocs(client);
     expect(degraded.isError).toBe(true);
     expect(degraded.text).toContain("docs is unavailable");
@@ -149,7 +140,6 @@ describe("docs engine recovery", () => {
   });
 
   it("re-initializes once the degraded retry window has passed", async () => {
-    // The index comes back and the retry window (30s) elapses.
     storeState.db = makeFakeDb();
     vi.setSystemTime(Date.now() + 31_000);
 

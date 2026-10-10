@@ -6,16 +6,10 @@ import { logger } from "@/shared/logger.js";
 const SUPPORTED_EXTENSIONS = new Set([".md", ".markdown", ".txt"]);
 
 export interface ScannedDoc {
-  /** Path relative to the docs dir, POSIX-separated — used as the _source tag. */
   source: string;
   content: string | null;
 }
 
-/**
- * Recursively scan a knowledge-base directory for supported documents.
- * A missing directory is a normal state (user has no knowledge base yet)
- * and yields an empty list; unreadable files are skipped with a warning.
- */
 export async function scanDocsDir(dir: string): Promise<ScannedDoc[]> {
   let entries;
   try {

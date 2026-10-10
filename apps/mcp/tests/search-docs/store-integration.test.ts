@@ -1,7 +1,3 @@
-// End-to-end tests of the SQLite-backed vector index. Unlike the Redis Stack
-// suite this replaces, these need no external service — the index is a
-// temporary file, so they always run.
-
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -51,7 +47,6 @@ describe("sqlite vector index", () => {
     expect(docs).toHaveLength(2);
     expect(docs[0].content).toBe("alpha content");
     expect(docs[0].metadata["_source"]).toBe("a.md");
-    // An exact match is cosine 1, which the score scale maps to 1.
     expect(docs[0].score).toBeCloseTo(1, 5);
     for (const doc of docs) {
       expect(doc.score).toBeGreaterThanOrEqual(0);
@@ -87,8 +82,6 @@ describe("sqlite vector index", () => {
     const { ctx } = fixture;
     await ensureSchema(ctx);
 
-    // Quotes and semicolons are ordinary text in a bound parameter, but this
-    // is exactly what the previous RediSearch TAG escaping had to fight.
     const source = "guides/upload-test.v2 '; DROP TABLE chunks; --.md";
     await indexChunks(ctx, [
       { id: "h:0", content: "hostile one", metadata: { _source: source } },
@@ -198,18 +191,15 @@ describe("sqlite vector index", () => {
     const writer = fixture.ctx;
     await ensureSchema(writer);
 
-    // A second handle on the same file stands in for a sibling server process.
     const reader = makeIndexFixture({ dbPath: fixture.index.dbPath });
     try {
       await ensureSchema(reader.ctx);
-      // Prime the reader's cache while the index is still empty.
       expect(await retrieve(reader.ctx, "alpha", 3)).toEqual([]);
 
       await indexChunks(writer, [
         { id: "a:0", content: "alpha", metadata: { _source: "a.md" } },
       ]);
 
-      // PRAGMA data_version moved, so the reader must rebuild and see it.
       const docs = await retrieve(reader.ctx, "alpha", 3);
       expect(docs.map((d) => d.content)).toEqual(["alpha"]);
     } finally {

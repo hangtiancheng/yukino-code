@@ -11,7 +11,6 @@ import {
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
 
-// EXEC can succeed as a command while individual queued commands return errors.
 function hasReplyError(reply: unknown): boolean {
   return (
     reply instanceof Error ||
@@ -51,8 +50,6 @@ export const redisModule: ToolModule = {
             url,
             socket: { connectTimeout: 10_000, reconnectStrategy: false },
           });
-          // EventEmitter requires an error listener; errors are returned by the
-          // pending connect/sendCommand promise, never printed to stdio.
           client.on("error", () => undefined);
           try {
             await client.connect();

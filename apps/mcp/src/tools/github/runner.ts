@@ -9,7 +9,6 @@ export interface GhResult {
   cancelled: boolean;
 }
 
-/** Run gh directly, preserving argument boundaries and stdin bytes. */
 export function runGh(
   args: string[],
   options: {
@@ -35,15 +34,11 @@ export function runGh(
     let cancelled = false;
 
     function stop(): void {
-      // Aliases and extensions may spawn children that inherit our pipes.
-      // Terminate the group so a timeout also releases those handles.
       if (processGroup && child.pid) {
         try {
           process.kill(-child.pid, "SIGKILL");
           return;
-        } catch {
-          // A process that has already exited needs no further cleanup.
-        }
+        } catch {}
       }
       child.kill("SIGKILL");
     }

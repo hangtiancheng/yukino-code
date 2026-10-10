@@ -13,8 +13,6 @@ import {
   createAppModule,
 } from "@/tools/create-app/tool.js";
 
-// The SDK types these results loosely (index signatures, text/blob unions), so
-// narrow them with zod before asserting on specific fields.
 const ToolSchema = z.looseObject({
   name: z.string(),
   annotations: z.looseObject({ openWorldHint: z.boolean() }),

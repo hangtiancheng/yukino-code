@@ -48,7 +48,6 @@ export function requireConnection(
   return url;
 }
 
-/** Normalize driver values once so text and structured MCP results agree. */
 export function operationResult(data: Record<string, unknown>): CallToolResult {
   const text = JSON.stringify(data, (_key, value: unknown) => {
     if (typeof value === "bigint") return value.toString();

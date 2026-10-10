@@ -17,7 +17,6 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@yukino.js/lit-jsx",
 
-    /* Lit requires legacy class-field semantics */
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
 

@@ -37,8 +37,6 @@ vi.mock("@/tools/docs/indexer.js", async (importOriginal) => {
 });
 vi.mock("@/tools/docs/scanner.js", () => scannerMocks);
 
-// syncDocs only forwards the context to the (mocked) indexer functions, so a
-// throwaway database is enough to satisfy the type.
 let fixture: IndexFixture | null = null;
 
 function makeCtx(): DocsContext {

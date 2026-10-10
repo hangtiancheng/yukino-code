@@ -8,11 +8,8 @@ export interface IndexChunk {
   metadata: Record<string, unknown>;
 }
 
-// Cap stored content: the source text has no built-in limit and oversized
-// chunks only bloat tool responses.
 const MAX_CONTENT_LENGTH = 8192;
 
-/** Thrown when another process holds the write lock for longer than we wait. */
 export class LockConflictError extends Error {
   constructor(source: string) {
     super(`another process is writing "${source}" to the index`);
@@ -20,13 +17,6 @@ export class LockConflictError extends Error {
   }
 }
 
-/**
- * Run `work` in an IMMEDIATE transaction. BEGIN IMMEDIATE takes the write lock
- * up front, so a concurrent writer surfaces as SQLITE_BUSY here rather than as
- * a failure halfway through — which is what the previous Redis implementation
- * needed a SET NX lock plus a Lua script for. SQLite's transaction now gives
- * the same all-or-nothing swap with a single COMMIT.
- */
 function transact<T>(ctx: DocsContext, label: string, work: () => T): T {
   try {
     ctx.db.exec("BEGIN IMMEDIATE");
@@ -40,9 +30,7 @@ function transact<T>(ctx: DocsContext, label: string, work: () => T): T {
   } catch (err) {
     try {
       ctx.db.exec("ROLLBACK");
-    } catch {
-      // The transaction is already gone; the original error is what matters.
-    }
+    } catch {}
     throw err;
   }
 }
@@ -75,8 +63,6 @@ function insertChunk(
   );
 }
 
-// Insert document chunks. The upsert is keyed on the deterministic chunk id, so
-// re-indexing the same id replaces it in place.
 export async function indexChunks(
   ctx: DocsContext,
   chunks: IndexChunk[],
@@ -103,12 +89,6 @@ export async function indexChunks(
   return chunks.length;
 }
 
-/**
- * Embed first, then atomically replace a source's chunks and its content hash
- * in one transaction. Embedding happens before the write lock is taken, so a
- * provider failure leaves both the previous chunks and the recorded hash
- * untouched.
- */
 export async function replaceSource(
   ctx: DocsContext,
   source: string,
@@ -154,7 +134,6 @@ export async function deleteBySource(
   await replaceSource(ctx, source, [], null);
 }
 
-/** Read the source -> content-hash map recorded by previous syncs. */
 export async function readSourceHashes(
   ctx: DocsContext,
 ): Promise<Map<string, string>> {

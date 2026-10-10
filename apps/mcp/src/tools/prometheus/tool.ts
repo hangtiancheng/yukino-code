@@ -110,9 +110,7 @@ export const prometheusModule: ToolModule = {
           let data: unknown = text;
           try {
             data = JSON.parse(text);
-          } catch {
-            /* Management/metrics endpoints may return text or an empty body. */
-          }
+          } catch {}
           const apiError =
             typeof data === "object" &&
             data !== null &&

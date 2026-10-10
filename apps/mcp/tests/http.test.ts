@@ -1,9 +1,3 @@
-// Transport-level tests for the HTTP app (Streamable HTTP + legacy SSE).
-//
-// These run the real h3 app behind a real server on an ephemeral port, so
-// the transports and the routing are covered end to end — no GitHub call is
-// made (initialize/tools-list only).
-
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -21,7 +15,6 @@ const INITIALIZE_REQUEST = {
   },
 };
 
-// The stateless JSON mode requires the client to accept application/json.
 const STREAMABLE_HEADERS = {
   Accept: "application/json, text/event-stream",
   "Content-Type": "application/json",
@@ -41,7 +34,6 @@ function url(path: string): URL {
   return new URL(path, handle.url);
 }
 
-/** Parse one SSE event at a time from a streaming fetch response. */
 class SseReader {
   private buffer = "";
   private readonly decoder = new TextDecoder();
@@ -63,7 +55,7 @@ class SseReader {
         const event: Record<string, string> = {};
         for (const line of rawEvent.split("\n")) {
           if (line.startsWith(":") || line === "") {
-            continue; // comment ping / blank line
+            continue;
           }
           const separator = line.indexOf(":");
           const field = separator === -1 ? line : line.slice(0, separator);
@@ -91,7 +83,6 @@ class SseReader {
 
 describe("streamable HTTP", () => {
   it("GET /mcp is method not allowed", async () => {
-    // Stateless mode has no server-initiated notification stream.
     const response = await fetch(url("/mcp"));
     expect(response.status).toBe(405);
     expect(await response.json()).toEqual({ error: "Method Not Allowed" });
@@ -121,7 +112,6 @@ describe("streamable HTTP", () => {
   });
 
   it("tools/list needs no prior initialize round trip", async () => {
-    // Stateless requests are born-ready.
     const response = await fetch(url("/mcp"), {
       method: "POST",
       headers: STREAMABLE_HEADERS,
@@ -162,14 +152,11 @@ describe("legacy SSE", () => {
 
     const sse = new SseReader(response.body);
     try {
-      // First event announces the message endpoint for this session.
       const endpointEvent = await sse.nextEvent();
       expect(endpointEvent["event"]).toBe("endpoint");
       const endpoint = endpointEvent["data"] ?? "";
       expect(endpoint.startsWith("/messages?sessionId=")).toBe(true);
 
-      // Client messages are POSTed back; the reply arrives on the SSE
-      // stream, not on the POST (which only answers 202).
       const post = await fetch(url(endpoint), {
         method: "POST",
         headers: { "Content-Type": "application/json" },

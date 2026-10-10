@@ -4,7 +4,6 @@ import type {
 } from "@yukino.js/lit-jsx";
 import en from "../locales/en.json";
 
-/** The docs site ships a single locale; English. */
 export type Locale = "en";
 
 export type Messages = typeof en;
@@ -55,8 +54,6 @@ function applyDocumentMeta(): void {
 
 applyDocumentMeta();
 
-// With a single locale there is nothing to switch, but components keep their
-// subscription plumbing so the i18n API stays uniform.
 const listeners = new Set<() => void>();
 
 export function subscribe(listener: () => void): () => void {

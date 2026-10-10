@@ -139,8 +139,6 @@ function Shell(): ReactElement {
         });
       }
     });
-    // daisyUI themes key off the data-theme attribute, so the host theme must
-    // be mirrored there; style variables and fonts stay on CSS custom props.
     app.addEventListener("hostcontextchanged", (ctx) => {
       if (ctx.theme) applyDocumentTheme(ctx.theme);
       if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);

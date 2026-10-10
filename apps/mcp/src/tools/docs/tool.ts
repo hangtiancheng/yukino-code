@@ -19,14 +19,9 @@ type EngineState =
   | { status: "ready"; ctx: DocsContext }
   | { status: "degraded"; reason: string };
 
-// Fast phase budget (open + dimension probe + schema check). Callers sit on
-// the MCP client's 60s call timeout, so a hanging provider must degrade early.
 const INIT_TIMEOUT_MS = 15_000;
-// A degraded engine retries at most this often (the embedding provider may come
-// back up mid-session without restarting the CLI).
 const DEGRADED_RETRY_MS = 30_000;
 
-// Process-wide engine singleton shared by every transport session.
 let syncPromise: Promise<SyncStats> | null = null;
 
 function runSync(ctx: DocsContext): Promise<SyncStats> {
@@ -84,13 +79,6 @@ function withTimeout<T>(
   });
 }
 
-/**
- * Two-phase initialization, degrading (never throwing) on any failure:
- * - fast phase (awaited): config check, index open, dimension probe +
- *   schema ensure — after this queries can already run against existing data;
- * - background phase (fire-and-forget): incremental docs sync, so a large
- *   knowledge base never blocks the first tool call into the client timeout.
- */
 async function initEngine(): Promise<EngineState> {
   const config = loadConfig();
 
@@ -268,9 +256,6 @@ export const docsModule: ToolModule = {
           };
         } catch (err) {
           logger.warn({ err }, "docs query failed");
-          // A closed database handle never self-heals, so mark the engine
-          // degraded (cached, so the retry-window backoff still applies) to let
-          // a later call re-initialize it from scratch.
           if (!state.ctx.db.isOpen) {
             const degraded: EngineState = {
               status: "degraded",
@@ -297,9 +282,6 @@ export const docsModule: ToolModule = {
   },
 
   async shutdown(): Promise<void> {
-    // Never wait for an in-flight init/sync (the CLI client force-kills after
-    // ~4s); only close what is already connected. In-flight work dies with
-    // the process.
     if (settled?.status === "ready") {
       closeStore(settled.ctx.db);
     }

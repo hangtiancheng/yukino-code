@@ -107,8 +107,6 @@ describe("loadConfig", () => {
 
 describe("github config", () => {
   it("defaults to unconfigured when the environment is empty", () => {
-    // Without an authenticated gh CLI or a token github_tool degrades
-    // per call; nothing in the code points at an account by default.
     const config = loadConfig({});
     expect(config.github.token).toBe("");
     expect(config.github.baseUrl).toBe("");

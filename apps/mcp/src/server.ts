@@ -6,8 +6,6 @@ import { version } from "./version.js";
 
 export const SERVER_NAME = "yukino-mcp";
 
-// Surfaced to clients at initialize time; yukino injects it into the model's
-// context, improving tool selection.
 const INSTRUCTIONS =
   `yukino-mcp provides tools for the Yukino CLI. Use ${TOOL_NAMES.docsTool} to semantically ` +
   "search the user's local knowledge base (Markdown/text files under ~/.yukino/docs) " +
@@ -31,8 +29,6 @@ const INSTRUCTIONS =
   "configured in the environment or supplied per call. Public tool names use " +
   "snake_case with at least two words; existing compound names remain unchanged.";
 
-// registerTool throws on duplicate names — with per-request server instances
-// in HTTP mode that would surface as runtime 500s, so fail fast at startup.
 function assertUniqueModuleNames(): void {
   const seen = new Set<string>();
   for (const module of modules) {
@@ -44,11 +40,6 @@ function assertUniqueModuleNames(): void {
 }
 assertUniqueModuleNames();
 
-/**
- * Build an MCP server with every tool module registered. Cheap to call:
- * the HTTP transports create one instance per session/request while module
- * state stays in process-wide singletons.
- */
 export function createServer(): McpServer {
   const server = new McpServer(
     { name: SERVER_NAME, version },
