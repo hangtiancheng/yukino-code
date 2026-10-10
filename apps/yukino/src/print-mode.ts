@@ -1,5 +1,3 @@
-import { rmSync } from "node:fs";
-
 import type { AgentEvent } from "./agent/events.js";
 import { Agent } from "./agent/index.js";
 import { configureBashSandbox } from "./bootstrap/sandbox.js";
@@ -24,7 +22,11 @@ import { MCPToolWrapper } from "./mcp/tool-wrapper.js";
 import { loadInstructions } from "./memory/instructions.js";
 import { PermissionChecker } from "./permissions/index.js";
 import { buildSystemPrompt, detectEnvironment } from "./prompt/builder.js";
-import { getSessionArtifactsDir, newSessionId } from "./session/index.js";
+import {
+  newSessionId,
+  saveMessage,
+  messageToKeptRecord,
+} from "./session/index.js";
 import { AgentTool } from "./subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "./subagent/definition.js";
 import { spawnSubagent } from "./subagent/spawn.js";
@@ -170,6 +172,11 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
 
   const conv = new ConversationManager();
   conv.addUserMessage(prompt);
+  saveMessage(cwd, sessionId, {
+    role: "user",
+    content: prompt,
+    timestamp: Math.floor(Date.now() / 1000),
+  });
 
   // Print mode intentionally bypasses permission prompts.
   const checker = new PermissionChecker(cwd, "bypassPermissions");
@@ -187,7 +194,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   // a team and delegate tasks within a single non-interactive execution.
   // Teams are not restored here; print mode manages only its own team runtimes.
   teamManager.setPermissionChecker(checker);
-  const backgroundTaskManager = new TaskManager();
+  const backgroundTaskManager = new TaskManager(sessionId);
   // Share the background task registry with the command tools registered here
   // (Bash/PowerShell) so run_in_background and timeout auto-background deliver
   // results through the same notification drain as background agents.
@@ -216,6 +223,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
           ? context?.permissionChecker?.forCwd(cwdOverride)
           : context?.permissionChecker,
         {
+          sessionId: context?.subagentSessionId,
           abortSignal: context?.abortSignal,
           background,
           onPermissionRequest: context?.onPermissionRequest,
@@ -238,6 +246,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         {
           agentName: "fork",
           conversation,
+          sessionId: context?.subagentSessionId,
           abortSignal: context?.abortSignal,
           onPermissionRequest: context?.onPermissionRequest,
         },
@@ -418,6 +427,11 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     }
     for (const task of backgroundNotifications) {
       const notification = formatAgentTaskNotification(task);
+      conv.addSystemReminder(notification);
+      saveMessage(cwd, sessionId, {
+        ...messageToKeptRecord(conv.getMessages()[conv.len() - 1]),
+        timestamp: Math.floor(Date.now() / 1000),
+      });
       if (args.outputFormat === "stream-json") {
         console.log(
           JSON.stringify({ type: "task_notification", notification }),
@@ -455,10 +469,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         // Cleanup must not mask an execution error or change the printed result.
       }
     }
-    rmSync(getSessionArtifactsDir(sessionId), {
-      recursive: true,
-      force: true,
-    });
   }
 }
 

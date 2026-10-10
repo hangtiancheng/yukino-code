@@ -37,8 +37,8 @@ import {
   TOOL_GUIDANCE_MARKER,
 } from "@/prompt/tools.js";
 import {
-  saveMessage,
-  saveCompactBoundary,
+  saveTranscriptMessage,
+  saveTranscriptCompactBoundary,
   sessionLineCount,
   messageToKeptRecord,
 } from "@/session/index.js";
@@ -97,6 +97,7 @@ export interface AgentConfig {
   conversation: ConversationManager;
   cwd: string;
   sessionId?: string;
+  transcriptPath?: string;
   goalManager?: GoalManager;
   shouldContinueGoal?: () => boolean;
   hookEngine?: HookEngine;
@@ -199,9 +200,11 @@ export class Agent {
         ? new GoalManager(config.cwd, config.sessionId)
         : undefined);
     this.shouldContinueGoal = config.shouldContinueGoal;
-    this.sessionFilePath = config.sessionId
-      ? getSessionFilePath(config.cwd, config.sessionId)
-      : "";
+    this.sessionFilePath =
+      config.transcriptPath ??
+      (config.sessionId
+        ? getSessionFilePath(config.cwd, config.sessionId)
+        : "");
     this.hookEngine = config.hookEngine;
     this.fileHistory = config.fileHistory;
     this.fileStateCache = config.fileStateCache;
@@ -466,11 +469,13 @@ export class Agent {
         if (this.hookEngine) {
           for (const note of this.hookEngine.drainNotifications()) {
             this.conversation.addSystemReminder(note);
+            this.persistLastMessage();
           }
         }
         if (this.notificationFn) {
           for (const note of this.notificationFn()) {
             this.conversation.addSystemReminder(note);
+            this.persistLastMessage();
           }
         }
         // Skills added mid-conversation: only send the delta, not the full listing,
@@ -509,8 +514,8 @@ export class Agent {
             this.abortSignal,
           );
           if (mc.message) {
-            if (mc.boundary && this.sessionId) {
-              saveCompactBoundary(this.cwd, this.sessionId, mc.boundary);
+            if (mc.boundary && this.sessionFilePath) {
+              saveTranscriptCompactBoundary(this.sessionFilePath, mc.boundary);
             }
             yield {
               type: "compact",
@@ -659,10 +664,9 @@ export class Agent {
                 }
                 this.conversation.clearUsageAnchor();
                 this.restoreContext();
-                if (result.boundary && this.sessionId) {
-                  saveCompactBoundary(
-                    this.cwd,
-                    this.sessionId,
+                if (result.boundary && this.sessionFilePath) {
+                  saveTranscriptCompactBoundary(
+                    this.sessionFilePath,
                     result.boundary,
                   );
                 }
@@ -1471,10 +1475,10 @@ export class Agent {
    * Persistence lives in the main loop rather than in individual frontends: both
    * the UI and Web share the same recording path, ensuring intermediate assistant
    * text and complete tool-call chains are captured for session restoration.
-   * Skipped when sessionId is empty (one-shot invocations, sub-agents).
+   * Subagents use their own transcript path, separate from the leader's history.
    */
   private persistLastMessage(): void {
-    if (!this.cwd || !this.sessionId) {
+    if (!this.sessionFilePath) {
       return;
     }
     const msgs = this.conversation.getMessages();
@@ -1482,7 +1486,7 @@ export class Agent {
       return;
     }
     const last = msgs[msgs.length - 1];
-    saveMessage(this.cwd, this.sessionId, {
+    saveTranscriptMessage(this.sessionFilePath, {
       ...messageToKeptRecord(last),
       timestamp: Math.floor(Date.now() / 1000),
     });

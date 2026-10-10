@@ -422,7 +422,10 @@ export function App({
     // Restore pending notifications and reclaim interrupted teammates' work.
     teamManagerRef.current.restoreFromDisk();
   }, []);
-  const backgroundTaskManagerRef = useRef(new TaskManager());
+  const [backgroundTaskManager] = useState(
+    () => new TaskManager(sessionIdRef.current),
+  );
+  const backgroundTaskManagerRef = useRef(backgroundTaskManager);
   const fileHistoryRef = useRef<FileHistory | null>(null);
   // The agent instance of the in-flight run, if any. Steering targets it.
   const agentRef = useRef<Agent | null>(null);
@@ -1152,6 +1155,7 @@ export function App({
                     ? context?.permissionChecker?.forCwd(cwdOverride)
                     : context?.permissionChecker,
                   {
+                    sessionId: context?.subagentSessionId,
                     abortSignal: context?.abortSignal,
                     background,
                     onPermissionRequest: context?.onPermissionRequest,
@@ -1187,6 +1191,7 @@ export function App({
                   {
                     agentName: "fork",
                     conversation,
+                    sessionId: context?.subagentSessionId,
                     abortSignal: context?.abortSignal,
                     onPermissionRequest: context?.onPermissionRequest,
                   },
@@ -1705,6 +1710,7 @@ export function App({
           }
           // Reset the session ID and the stores derived from it
           sessionIdRef.current = sessionMod.newSessionId();
+          backgroundTaskManagerRef.current.useSession(sessionIdRef.current);
           planOwner().planFilePath = "";
           interactionStatsRef.current = {
             agentActiveMs: 0,
@@ -1870,6 +1876,8 @@ export function App({
           // session contains a compact_boundary it replays the compacted state
           // (summary + inlined keep + post-boundary appends) instead of the full
           // pre-boundary history; with no boundary it replays everything.
+          await backgroundTaskManagerRef.current.stopAll();
+          backgroundTaskManagerRef.current.useSession(arg);
           const conv = conversationRef.current;
           conv.reset();
           conv.injectLongTermMemory(

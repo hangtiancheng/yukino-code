@@ -14,6 +14,8 @@ import {
 import type { ConversationManager } from "@/conversation/index.js";
 import { createChildLogger, sanitizeNameSegment } from "@/logger/index.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { newSessionId } from "@/session/index.js";
+import { sessionPath } from "@/storage/paths.js";
 import type { TeamManager, RunAgent } from "@/teams/index.js";
 import { isValidTeammateName, LEADER_NAME } from "@/teams/protocol.js";
 import {
@@ -294,6 +296,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
       };
     }
     const background = backgroundArg.data ?? false;
+    ctx = { ...ctx, subagentSessionId: newSessionId() };
     const teamName = strArg(args, "team_name");
     const teammateName = strArg(args, "name");
     const isolation = strArg(args, "isolation");
@@ -442,7 +445,12 @@ ${prompt}`;
       () => {
         controller.abort();
       },
-      { originToolCallId: ctx.toolCallId },
+      {
+        originToolCallId: ctx.toolCallId,
+        transcriptPath: ctx.subagentSessionId
+          ? sessionPath(ctx.subagentSessionId, "transcript.jsonl")
+          : undefined,
+      },
     );
     return {
       output: `Background agent '${description}' started (task_id: ${task.id}). Its result will arrive as a task notification.`,

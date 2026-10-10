@@ -21,6 +21,7 @@ type SessionState = Pick<
   | "taskList"
   | "planFilePath"
   | "goalManager"
+  | "backgroundTaskManager"
 >;
 
 export function restoreRemoteSession(
@@ -29,6 +30,7 @@ export function restoreRemoteSession(
   saved: SessionMessage[],
 ) {
   const replay = rebuildFromSession(saved);
+  state.backgroundTaskManager.useSession(sessionId);
   // AgentTool's fork closure holds this conversation object across runs.
   state.conv.reset();
   state.conv.appendMessages(replay);

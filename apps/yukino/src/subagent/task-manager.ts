@@ -1,3 +1,8 @@
+import {
+  BackgroundTaskStore,
+  type StoredBackgroundTask,
+} from "./task-store.js";
+
 import { createChildLogger } from "@/logger/index.js";
 import { asErrorString } from "@/utils/index.js";
 
@@ -25,11 +30,16 @@ export interface AgentTask {
   kind?: TaskKind;
   status: AgentTaskStatus;
   output: string;
+  error?: string;
+  transcriptPath?: string;
+  startedAt: number;
+  completedAt?: number;
   cancel: () => void;
   done: Promise<void>;
 }
 
 interface CreateTaskOptions {
+  transcriptPath?: string;
   originToolCallId?: string;
   /** ID prefix; defaults to "agent" (background subagents). Bash background tasks use "bash"; PowerShell background tasks use "ps". */
   idPrefix?: string;
@@ -54,6 +64,58 @@ export class TaskManager {
   private notifiedTaskIds = new Set<string>();
   private listeners = new Set<(tasks: AgentTask[]) => void>();
   private pendingTaskIds = new Set<string>();
+  private store?: BackgroundTaskStore;
+
+  constructor(sessionId?: string) {
+    if (sessionId) {
+      this.useSession(sessionId);
+    }
+  }
+
+  useSession(sessionId: string): void {
+    if (this.pendingTaskIds.size > 0) {
+      throw new Error("Stop and await tasks before switching their session");
+    }
+    const store = new BackgroundTaskStore(sessionId);
+    const records = store.load();
+    this.tasks.clear();
+    this.notifiedTaskIds.clear();
+    this.store = store;
+    for (const record of records) {
+      nextTaskId = Math.max(
+        nextTaskId,
+        Number(record.id.split("-").at(-1)) + 1,
+      );
+      const task = this.restore(record);
+      if (task.status === "running") {
+        task.status = "failed";
+        task.error = "Task interrupted before completion (session restored)";
+        task.output = `${task.output}${task.output ? "\n\n" : ""}${task.error}`;
+        task.completedAt = Date.now();
+        record.notified = false;
+        this.persist(task);
+      }
+      this.tasks.set(task.id, task);
+      if (record.notified) {
+        this.notifiedTaskIds.add(task.id);
+      }
+    }
+    this.pruneCompleted();
+    this.emitChange();
+  }
+
+  private restore(record: StoredBackgroundTask): AgentTask {
+    const { notified: _notified, ...task } = record;
+    return { ...task, cancel: () => undefined, done: Promise.resolve() };
+  }
+
+  private persist(task: AgentTask): void {
+    const { cancel: _cancel, done: _done, ...record } = task;
+    this.store?.save({
+      ...record,
+      notified: this.notifiedTaskIds.has(task.id),
+    });
+  }
 
   create(
     name: string,
@@ -71,6 +133,8 @@ export class TaskManager {
       ...(options.kind ? { kind: options.kind } : {}),
       status: "running",
       output: "",
+      startedAt: Date.now(),
+      transcriptPath: options.transcriptPath,
       cancel,
       done: Promise.resolve(),
     };
@@ -83,7 +147,7 @@ export class TaskManager {
         if (task.status === "running") {
           task.status = "completed";
           task.output = output;
-          this.emitChange();
+          this.emitChange(task);
         }
         // A late result after cancellation is discarded: the task stays
         // cancelled with its "Stopped by user" output (pinned contract for
@@ -93,11 +157,13 @@ export class TaskManager {
       .catch((error: unknown) => {
         if (task.status === "running") {
           task.status = "failed";
+          task.error =
+            error instanceof TaskFailure ? error.output : asErrorString(error);
           task.output =
             error instanceof TaskFailure
               ? error.output
               : `Error: ${asErrorString(error)}`;
-          this.emitChange();
+          this.emitChange(task);
         } else if (
           task.status === "cancelled" &&
           error instanceof TaskFailure
@@ -109,21 +175,27 @@ export class TaskManager {
           // Plain Errors (e.g. an aborted background agent's rejection) stay
           // discarded.
           task.output = error.output;
-          this.emitChange();
+          this.emitChange(task);
         }
       })
       .finally(() => {
         task.cancel = () => undefined;
+        task.completedAt = Date.now();
         this.pendingTaskIds.delete(id);
-        this.emitChange();
+        this.emitChange(task);
       });
 
-    this.emitChange();
+    this.emitChange(task);
     return task;
   }
 
   get(id: string): AgentTask | undefined {
-    return this.tasks.get(id);
+    const task = this.tasks.get(id);
+    if (task) {
+      return task;
+    }
+    const record = this.store?.get(id);
+    return record ? this.restore(record) : undefined;
   }
 
   list(): AgentTask[] {
@@ -138,7 +210,10 @@ export class TaskManager {
     };
   }
 
-  private emitChange(): void {
+  private emitChange(task?: AgentTask): void {
+    if (task) {
+      this.persist(task);
+    }
     const tasks = this.list();
     for (const listener of this.listeners) {
       try {
@@ -165,7 +240,7 @@ export class TaskManager {
     } catch (error) {
       log.error({ error, taskId: id }, "task cancellation callback failed");
     } finally {
-      this.emitChange();
+      this.emitChange(task);
     }
     return true;
   }
@@ -286,6 +361,7 @@ export class TaskManager {
     );
     for (const task of completed) {
       this.notifiedTaskIds.add(task.id);
+      this.persist(task);
     }
     this.pruneCompleted();
     return completed;
@@ -332,6 +408,7 @@ export function formatAgentTaskNotification(task: AgentTask): string {
   return [
     `<task-notification task_id="${task.id}" status="${task.status}">`,
     `name=${task.name}`,
+    ...(task.transcriptPath ? [`transcript_path=${task.transcriptPath}`] : []),
     task.output,
     "</task-notification>",
   ].join("\n");

@@ -202,9 +202,14 @@ export function saveMessage(
   sessionId: string,
   msg: SessionMessage,
 ): void {
-  const dir = getSessionsDir(cwd);
-  mkdirSync(dir, { recursive: true });
-  const filePath = getSessionFilePath(cwd, sessionId);
+  saveTranscriptMessage(getSessionFilePath(cwd, sessionId), msg);
+}
+
+export function saveTranscriptMessage(
+  filePath: string,
+  msg: SessionMessage,
+): void {
+  mkdirSync(dirname(filePath), { recursive: true });
   const line = JSON.stringify(msg) + "\n";
   withFileSyncLock(filePath, () => {
     writeFileSync(filePath, line, {
@@ -223,7 +228,14 @@ export function saveCompactBoundary(
   sessionId: string,
   payload: CompactBoundaryPayload,
 ): void {
-  saveMessage(cwd, sessionId, {
+  saveTranscriptCompactBoundary(getSessionFilePath(cwd, sessionId), payload);
+}
+
+export function saveTranscriptCompactBoundary(
+  filePath: string,
+  payload: CompactBoundaryPayload,
+): void {
+  saveTranscriptMessage(filePath, {
     role: "system",
     content: JSON.stringify(payload),
     timestamp: Math.floor(Date.now() / 1000),
@@ -289,7 +301,10 @@ export function truncateSessionLines(
 }
 
 export function loadSession(cwd: string, sessionId: string): SessionMessage[] {
-  const filePath = getSessionFilePath(cwd, sessionId);
+  return loadTranscript(getSessionFilePath(cwd, sessionId));
+}
+
+export function loadTranscript(filePath: string): SessionMessage[] {
   if (!existsSync(dirname(filePath))) {
     return [];
   }

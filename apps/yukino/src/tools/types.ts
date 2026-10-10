@@ -210,6 +210,7 @@ export interface ToolContext {
   goalManager?: GoalManager;
   toolCallId?: string;
   backgroundTaskId?: string;
+  subagentSessionId?: string;
   /**
    * Owning session, when the call runs on the main thread. Lets tools persist
    * auxiliary artifacts (e.g. a backgrounded Bash command's output) into the

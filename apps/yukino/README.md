@@ -501,7 +501,7 @@ The common built-in registry is used by terminal, print, Remote/ACP/A2A, and in-
 
 ### Worker lifecycle
 
-Ordinary subagents run once. On completion, failure, or interruption, the host waits for their owned background commands to stop and releases their scoped tool registry. Parent-owned LSP/MCP tools are borrowed, not shut down by a child. Finished background results remain available for notifications and `TaskOutput`, with bounded retention after delivery; cancellation callbacks are discarded when runners settle. A fork cannot create or replace teams, or stop parent-owned work.
+Ordinary subagents run once. On completion, failure, or interruption, the host waits for their owned background commands to stop and releases their scoped tool registry. Parent-owned LSP/MCP tools are borrowed, not shut down by a child. Background task records and subagent transcripts persist under `~/.yukino/sessions/artifacts/`; `TaskOutput` includes the transcript path and timestamps. Finished results remain queryable from disk after the in-memory retention limit, and delivered notifications are recorded in the leader's session. Resuming restores terminal outcomes and reports abandoned running tasks as interrupted failures. Iteration-limit and model failures preserve partial text alongside the error and transcript. Cancellation callbacks are discarded when runners settle. A fork cannot create or replace teams, or stop parent-owned work.
 
 An explicit `run_in_background: false` overrides a predefined agent's `background: true`; when omitted, the definition supplies the default. Forks default to foreground execution. Role files accept a UTF-8 BOM before frontmatter. Delegated agents cannot manage the main session's persistent goal.
 

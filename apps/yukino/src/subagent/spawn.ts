@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+
 import type { AgentDefinition } from "./definition.js";
 import { formatAgentTaskNotification, TaskManager } from "./task-manager.js";
 import { filterToolsForAgent } from "./tool-filter.js";
@@ -15,8 +17,15 @@ import { loadInstructions } from "@/memory/instructions.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
 import { buildSubagentInstructions } from "@/prompt/delegation.js";
+import {
+  messageToKeptRecord,
+  newSessionId,
+  saveTranscriptMessage,
+} from "@/session/index.js";
+import { sessionPath } from "@/storage/paths.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import type { ToolRegistry } from "@/tools/registry.js";
+import { asErrorString } from "@/utils/index.js";
 
 /**
  * Marker appended to a subagent's output when its run was interrupted. Shared
@@ -39,6 +48,8 @@ export type SubagentProgressEvent =
 export type AgentEventSink = (event: SubagentProgressEvent) => void;
 
 export interface SubagentRunOptions {
+  sessionId?: string;
+  memoryContent?: string;
   agentName?: string;
   abortSignal?: AbortSignal;
   background?: boolean;
@@ -97,8 +108,10 @@ export async function spawnSubagent(
         definition.disallowedTools,
         options.background ?? false,
       );
+  const sessionId = options.sessionId ?? newSessionId();
+  const transcriptPath = sessionPath(sessionId, "transcript.jsonl");
   const taskManager =
-    options.backgroundTasks === false ? null : new TaskManager();
+    options.backgroundTasks === false ? null : new TaskManager(sessionId);
   let output = "";
   let turn = 0;
   try {
@@ -112,6 +125,15 @@ export async function spawnSubagent(
       conversation.addSystemReminder(buildSubagentInstructions(definition));
     }
     conversation.addUserMessage(prompt);
+    const initialMessages = existsSync(transcriptPath)
+      ? conversation.getMessages().slice(-1)
+      : conversation.getMessages();
+    for (const message of initialMessages) {
+      saveTranscriptMessage(transcriptPath, {
+        ...messageToKeptRecord(message),
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+    }
 
     const agent = new Agent({
       agentName: options.agentName ?? definition.name,
@@ -120,11 +142,14 @@ export async function spawnSubagent(
       checker,
       conversation,
       cwd,
+      sessionId,
+      transcriptPath,
       maxIterations: definition.maxTurns ?? 200,
       abortSignal: options.abortSignal,
       onPermissionRequest: options.onPermissionRequest,
       fileStateCache: new FileStateCache(),
       instructions: loadInstructions(cwd),
+      memoryContent: options.memoryContent,
       contextWindow: getContextWindow(provider),
       maxOutput: getMaxOutputTokens(provider),
       taskManager,
@@ -178,6 +203,18 @@ export async function spawnSubagent(
     }
 
     return output || "[No output]";
+  } catch (error) {
+    const detail = asErrorString(error);
+    saveTranscriptMessage(transcriptPath, {
+      role: "system",
+      type: "subagent_error",
+      content: detail,
+      timestamp: Math.floor(Date.now() / 1000),
+    });
+    throw new Error(
+      `${detail}${output ? `\n\nPartial output:\n${output}` : ""}\n\nTranscript: ${transcriptPath}`,
+      { cause: error },
+    );
   } finally {
     // Kill background shells still running now that this loop (and its
     // notification drain) is going away — nobody would ever see their

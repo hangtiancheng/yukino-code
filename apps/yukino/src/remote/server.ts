@@ -84,10 +84,7 @@ import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/definition.js";
-import {
-  spawnSubagent,
-  SUBAGENT_INTERRUPTED_MARKER,
-} from "@/subagent/spawn.js";
+import { spawnSubagent } from "@/subagent/spawn.js";
 import {
   TaskManager,
   formatAgentTaskNotification,
@@ -539,11 +536,13 @@ class AgentHandleImpl implements RemoteAgentHandle {
   }
 
   clearConversation(): void {
+    const sessionId = newSessionId();
+    this.backgroundTaskManager.useSession(sessionId);
     // Reset in place: AgentTool holds this manager for its fork path, so
     // replacing the instance would leave forks inheriting cleared history.
     this.conv.reset();
     this.activeSkills.clear();
-    this.sessionId = newSessionId();
+    this.sessionId = sessionId;
     this.planFilePath = "";
     this.fileHistory = new FileHistory(this.sessionId);
     this.fileStateCache = new FileStateCache();
@@ -715,7 +714,7 @@ export async function createRemoteAgent(
   };
   // Restore pending notifications and reclaim interrupted teammates' work.
   teamManager.restoreFromDisk();
-  const backgroundTaskManager = new TaskManager();
+  const backgroundTaskManager = new TaskManager(sessionId);
   // Share the background task registry with the command tools registered here
   // (Bash/PowerShell) so run_in_background and timeout auto-background deliver
   // results through the same notification drain as background agents.
@@ -744,6 +743,7 @@ export async function createRemoteAgent(
           ? context?.permissionChecker?.forCwd(cwdOverride)
           : context?.permissionChecker,
         {
+          sessionId: context?.subagentSessionId,
           abortSignal: context?.abortSignal,
           background,
           onPermissionRequest: context?.onPermissionRequest,
@@ -754,69 +754,26 @@ export async function createRemoteAgent(
     conv,
     async (prompt, forkConv, forkRegistry, modelOverride?, context?) => {
       const forkCwd = context?.cwd ?? cwd;
-      const resolvedModel = modelOverride ?? provider.model;
-      const forkEnv = detectEnvironment(forkCwd);
-      forkEnv.model = resolvedModel;
-      const forkSystemPrompt = buildSystemPrompt(forkEnv);
-      const forkClient = modelOverride
-        ? await createClient(
-            { ...provider, model: resolvedModel },
-            forkSystemPrompt,
-          )
-        : client;
-
-      const checker = (
-        context?.permissionChecker ?? handle.checker
-      ).forSubagent(forkCwd);
-      forkConv.addUserMessage(prompt);
-
-      // Per-run background task registry (parity with subagent/spawn.ts): the
-      // fork registry shares tool instances with the host, so without this the
-      // fork's backgrounded commands would register in the host-level manager
-      // — the fork would never see their notifications and nothing would kill
-      // its shells when it exits.
-      const forkTaskManager = new TaskManager();
-
-      const agent = new Agent({
-        agentName: "fork",
-        client: forkClient,
-        registry: forkRegistry,
-        checker,
-        conversation: forkConv,
-        cwd: forkCwd,
-        maxIterations: 200,
-        abortSignal: context?.abortSignal,
-        onPermissionRequest: context?.onPermissionRequest,
-        fileStateCache: new FileStateCache(),
-        instructions: loadInstructions(forkCwd),
-        contextWindow: getContextWindow(provider),
-        maxOutput: getMaxOutputTokens(provider),
-        memoryContent: memReminder,
-        taskManager: forkTaskManager,
-        notificationFn: () =>
-          forkTaskManager.drainNotifications().map(formatAgentTaskNotification),
-      });
-
-      let output = "";
-      try {
-        for await (const event of agent.run()) {
-          switch (event.type) {
-            case "stream_text":
-              output += event.text;
-              break;
-            case "loop_complete":
-              if (event.stopReason === "interrupted") {
-                return `${output}${output ? "\n\n" : ""}${SUBAGENT_INTERRUPTED_MARKER}`;
-              }
-              return output || "[No output]";
-            case "error":
-              throw event.error;
-          }
-        }
-        return output || "[No output]";
-      } finally {
-        await forkTaskManager.stopAll();
-      }
+      return spawnSubagent(
+        BUILTIN_AGENTS[0],
+        prompt,
+        client,
+        forkRegistry,
+        provider,
+        forkCwd,
+        undefined,
+        undefined,
+        modelOverride,
+        context?.permissionChecker ?? handle.checker,
+        {
+          agentName: "fork",
+          conversation: forkConv,
+          sessionId: context?.subagentSessionId,
+          memoryContent: memReminder,
+          abortSignal: context?.abortSignal,
+          onPermissionRequest: context?.onPermissionRequest,
+        },
+      );
     },
     backgroundTaskManager,
   );
@@ -1690,6 +1647,7 @@ export class RemoteServer {
 
     switch (name) {
       case "clear":
+        await this.agentHandle.backgroundTaskManager.stopAll();
         // Reset in place (AgentTool captured the conversation manager) and
         // rotate the session so /resume and the JSONL no longer see the
         // pre-clear history.
@@ -1738,7 +1696,7 @@ export class RemoteServer {
         break;
 
       case "resume":
-        this.handleResume(args);
+        await this.handleResume(args);
         break;
 
       case "rewind":
@@ -2307,7 +2265,7 @@ export class RemoteServer {
   }
 
   /** Handles /resume command: resume a previous session. */
-  private handleResume(args: string): void {
+  private async handleResume(args: string): Promise<void> {
     if (!this.agentHandle) {
       return;
     }
@@ -2359,6 +2317,7 @@ export class RemoteServer {
       return;
     }
 
+    await handle.backgroundTaskManager.stopAll();
     const replay = restoreRemoteSession(handle, targetId, saved);
     touchSession(cwd, targetId);
 

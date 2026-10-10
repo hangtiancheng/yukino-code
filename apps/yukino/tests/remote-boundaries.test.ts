@@ -15,6 +15,7 @@ import { parseRemoteAddress } from "@/remote/address.js";
 import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
 import type { SessionMessage } from "@/session/index.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
@@ -481,6 +482,7 @@ describe("remote execution boundaries", () => {
         activeSkills: new Map([["old", "old instructions"]]),
         toolFilter: () => false,
         taskList: new TaskList(new TaskStore("old")),
+        backgroundTaskManager: new TaskManager("old"),
       };
       const forkSnapshot = () => conv.fork();
       state.fileStateCache.record("old-file", 1);

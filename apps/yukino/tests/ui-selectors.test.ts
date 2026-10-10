@@ -155,6 +155,7 @@ function backgroundTask(
     kind: "agent",
     status,
     output: status === "running" ? "" : "review findings",
+    startedAt: 0,
     cancel: vi.fn(),
     done: Promise.resolve(),
   };

@@ -1094,6 +1094,7 @@ describe("persistent composer drafts and input behavior", () => {
                   name: "background review",
                   status: "running",
                   output: "",
+                  startedAt: 0,
                   cancel: vi.fn(),
                   done: Promise.resolve(),
                 },

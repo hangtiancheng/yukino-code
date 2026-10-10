@@ -1,4 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import * as os from "node:os";
 import { join } from "node:path";
 
@@ -20,12 +26,16 @@ import { restoreRemoteSession } from "@/remote/session-state.js";
 import {
   getSessionFilePath,
   loadSession,
+  listSessions,
+  rebuildFromSession,
   sessionLineCount,
   truncateSessionLines,
 } from "@/session/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import * as subagents from "@/subagent/spawn.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import type { ToolContext } from "@/tools/types.js";
+import { contentToText } from "@/utils/index.js";
 import * as worktrees from "@/worktree/index.js";
 
 vi.mock("node:os", async (importOriginal) => ({
@@ -198,6 +208,152 @@ describe("host tracking interfaces", () => {
           interactionMode === "interactive",
         );
       } finally {
+        await handle.registry.dispose();
+        await handle.teamManager.dispose();
+      }
+    },
+  );
+});
+
+function failingBackgroundClient(dispatchFromLeader: boolean): OpenAIClient {
+  let leaderCalls = 0;
+  let childCalls = 0;
+  const llm = new OpenAIClient(
+    { ...cfg.providers[0], api_key: "test" },
+    "system",
+  );
+  vi.spyOn(llm, "stream").mockImplementation(async function* (conversation) {
+    await Promise.resolve();
+    const isChild = conversation
+      .getMessages()
+      .some((message) =>
+        contentToText(message.content).includes("unique-child-assignment"),
+      );
+    if (isChild) {
+      if (childCalls++ > 0) {
+        throw new Error("model disconnected");
+      }
+      yield { type: "text_delta", text: "partial verification report" };
+      yield {
+        type: "tool_call_complete",
+        toolId: "read-proof",
+        toolName: "ReadFile",
+        arguments: { file_path: "proof.txt" },
+      };
+      yield { ...end, stopReason: "tool_use" };
+    } else if (dispatchFromLeader && leaderCalls++ === 0) {
+      yield* delegate({
+        description: "original dispatch",
+        prompt: "unique-child-assignment",
+        subagent_type: "general-purpose",
+        run_in_background: true,
+      });
+    } else {
+      yield { type: "text_delta", text: "leader response" };
+      yield end;
+    }
+  });
+  return llm;
+}
+
+describe("durable background outcomes across hosts", () => {
+  it("keeps print-mode transcripts and task results after exit", async () => {
+    writeFileSync(join(cwd, "proof.txt"), "verified file contents");
+    vi.mocked(clients.createClient).mockResolvedValue(
+      failingBackgroundClient(true),
+    );
+    await runPrintMode({
+      prompt: "delegate work",
+      outputFormat: "stream-json",
+    });
+    const sessions = listSessions(cwd);
+    expect(sessions).toHaveLength(1);
+    const tasks = new TaskManager(sessions[0].id);
+    const task = tasks.list()[0];
+    expect(task.status).toBe("failed");
+    expect(task.output).toContain("partial verification report");
+    expect(task.transcriptPath).toBeDefined();
+    const transcript = task.transcriptPath ?? "";
+    expect(existsSync(transcript)).toBe(true);
+    expect(readFileSync(transcript, "utf8")).toContain(
+      "verified file contents",
+    );
+    const replay = rebuildFromSession(loadSession(cwd, sessions[0].id));
+    expect(
+      replay.filter((message) =>
+        contentToText(message.content).includes(
+          `<task-notification task_id="${task.id}"`,
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(tasks.hasNotifications()).toBe(false);
+  });
+
+  it.each(["defined", "fork"])(
+    "preserves %s background failures in the remote runtime",
+    async (route) => {
+      writeFileSync(join(cwd, "proof.txt"), "verified file contents");
+      vi.mocked(clients.createClient).mockResolvedValue(
+        failingBackgroundClient(false),
+      );
+      const handle = await createRemoteAgent({
+        provider: cfg.providers[0],
+        cwd,
+        enableCoordinatorMode: false,
+        forkDisabled: false,
+        memoryEnabled: false,
+      });
+      try {
+        const tool = handle.registry.get("Agent");
+        if (!tool) {
+          throw new Error("Missing Agent tool");
+        }
+        const result = await tool.execute(
+          {
+            cwd,
+            sessionId: handle.sessionId,
+            taskManager: handle.backgroundTaskManager,
+          },
+          {
+            description: "original dispatch",
+            prompt: "unique-child-assignment",
+            run_in_background: true,
+            ...(route === "defined"
+              ? { subagent_type: "general-purpose" }
+              : {}),
+          },
+        );
+        expect(result.isError).toBe(false);
+        const task = handle.backgroundTaskManager.list()[0];
+        await task.done;
+        expect(task.status).toBe("failed");
+        expect(task.output).toContain("partial verification report");
+        const transcript = task.transcriptPath ?? "";
+        expect(existsSync(transcript)).toBe(true);
+        expect(readFileSync(transcript, "utf8")).toContain(
+          "verified file contents",
+        );
+        for await (const event of handle.run("inspect outcomes", {
+          onPermissionRequest: () => Promise.resolve("allow"),
+        })) {
+          expect(event.type).not.toBe("error");
+        }
+        expect(
+          rebuildFromSession(loadSession(cwd, handle.sessionId)).some(
+            (message) =>
+              contentToText(message.content).includes(
+                `<task-notification task_id="${task.id}"`,
+              ),
+          ),
+        ).toBe(true);
+        expect(new TaskManager(handle.sessionId).get(task.id)?.output).toBe(
+          task.output,
+        );
+        expect(new TaskManager(handle.sessionId).hasNotifications()).toBe(
+          false,
+        );
+      } finally {
+        await handle.backgroundTaskManager.stopAll();
         await handle.registry.dispose();
         await handle.teamManager.dispose();
       }
