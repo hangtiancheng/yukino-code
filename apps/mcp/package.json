@@ -36,7 +36,7 @@
     "@langchain/textsplitters": "^1.0.2",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "ai": "^7.0.136",
+    "ai": "^7.0.137",
     "h3": "^2.0.2",
     "mongodb": "^7.7.0",
     "mysql2": "^3.24.5",
@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^24.19.1",
+    "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
