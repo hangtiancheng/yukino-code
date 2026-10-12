@@ -4,10 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
+import * as config from "@/config/index.js";
+import type { MCPServerConfig } from "@/config/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import { load as loadPromptHistory } from "@/history/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
+import { MCPClient } from "@/mcp/client.js";
 import { App } from "@/ui/app.js";
 import { installTerminalOutput } from "@/ui/terminal-output.js";
 import { checkForUpdate } from "@/update/version-check.js";
@@ -25,6 +28,9 @@ class ControlledClient implements LLMClient {
   readonly protocol = "openai";
   readonly requests: {
     users: string[];
+    conversation: ConversationManager;
+    messages: ReturnType<ConversationManager["getMessages"]>;
+    schemas: unknown[];
     signal?: AbortSignal;
     finish: () => void;
   }[] = [];
@@ -52,6 +58,9 @@ class ControlledClient implements LLMClient {
     });
     const index = this.requests.length;
     this.requests.push({
+      conversation,
+      messages: structuredClone(conversation.getMessages()),
+      schemas: structuredClone(_schemas),
       users: conversation
         .getMessages()
         .filter((message) => message.role === "user")
@@ -113,6 +122,7 @@ afterEach(async () => {
   instance = undefined;
   restoreOutput();
   terminal.dispose();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -154,7 +164,7 @@ async function submit(text: string) {
   await press("\r");
 }
 
-async function start() {
+async function start(mcpServers: MCPServerConfig[] = []) {
   await act(async () => {
     instance = render(
       createElement(App, {
@@ -166,7 +176,7 @@ async function start() {
             model: "test-model",
           },
         ],
-        mcpServers: [],
+        mcpServers,
         hooks: [],
         memoryEnabled: false,
       }),
@@ -286,5 +296,101 @@ describe("App steering delivery", () => {
     await waitForRequests(2);
     expect(client.requests[1]?.users).toContain("EXPLICIT_NEXT_REQUEST");
     await finishRequest(1);
+  });
+});
+
+describe("App MCP reload", () => {
+  it("retracts old instructions without rewriting the cached conversation prefix or unchanged schemas", async () => {
+    let changed = false;
+    vi.spyOn(MCPClient.prototype, "connect").mockImplementation(function (
+      this: MCPClient,
+    ) {
+      return changed && this.name === "failed"
+        ? Promise.reject(new Error("server unavailable"))
+        : Promise.resolve();
+    });
+    vi.spyOn(MCPClient.prototype, "disconnect").mockResolvedValue();
+    vi.spyOn(MCPClient.prototype, "listTools").mockResolvedValue([
+      {
+        name: "echo",
+        description: "Echo",
+        inputSchema: { type: "object", properties: {} },
+      },
+    ]);
+    vi.spyOn(MCPClient.prototype, "getInstructions").mockImplementation(
+      function (this: MCPClient) {
+        return changed && this.name === "quiet"
+          ? ""
+          : `${this.name} ${changed ? "new" : "old"} guidance`;
+      },
+    );
+    const servers = ["same", "removed", "failed", "quiet"].map((name) => ({
+      name,
+      command: "unused",
+    }));
+    const loadConfig = vi.spyOn(config, "loadConfig").mockReturnValue({
+      default_provider: 0,
+      providers: [],
+      mcp_servers: servers,
+      hooks: [],
+    });
+    vi.spyOn(config, "withProjectMcpServers").mockImplementation(
+      (loaded) => loaded,
+    );
+    await start(servers);
+    await finishRequest(0);
+    const systemPromptCalls = client.setSystemPrompt.mock.calls.length;
+    const conversation = client.requests[0].conversation;
+    const before = structuredClone(conversation.getMessages());
+    expect(
+      before.map((message) => contentToText(message.content)).join("\n"),
+    ).toContain("removed old guidance");
+
+    await submit("/mcp reload");
+    await vi.waitFor(() => {
+      expect(terminal.bufferLines().join("\n")).toContain("MCP reloaded:");
+    });
+    await submit("AFTER_UNCHANGED_RELOAD");
+    await waitForRequests(2);
+    const unchanged = client.requests[1];
+    expect(unchanged.schemas).toEqual(client.requests[0].schemas);
+    expect(unchanged.messages.slice(0, before.length)).toEqual(before);
+    const appended = unchanged.messages
+      .slice(before.length)
+      .map((message) => contentToText(message.content))
+      .join("\n");
+    expect(appended).toContain(
+      "no longer apply:\nfailed\nquiet\nremoved\nsame",
+    );
+    expect(appended.indexOf("no longer apply")).toBeLessThan(
+      appended.indexOf("## same\nsame old guidance"),
+    );
+    await finishRequest(1);
+
+    changed = true;
+    loadConfig.mockReturnValue({
+      default_provider: 0,
+      providers: [],
+      mcp_servers: servers.filter(({ name }) => name !== "removed"),
+      hooks: [],
+    });
+    const prefix = structuredClone(conversation.getMessages());
+    await submit("/mcp reload");
+    await vi.waitFor(() => {
+      expect(terminal.bufferLines().join("\n")).toContain("server unavailable");
+    });
+    await submit("AFTER_CHANGED_RELOAD");
+    await waitForRequests(3);
+    const reloaded = client.requests[2].messages;
+    expect(reloaded.slice(0, prefix.length)).toEqual(prefix);
+    const delta = reloaded
+      .slice(prefix.length)
+      .map((message) => contentToText(message.content))
+      .join("\n");
+    expect(delta).toContain("no longer apply:\nfailed\nquiet\nremoved\nsame");
+    expect(delta).toContain("## same\nsame new guidance");
+    expect(delta).not.toContain("## quiet");
+    expect(client.setSystemPrompt).toHaveBeenCalledTimes(systemPromptCalls);
+    await finishRequest(2);
   });
 });

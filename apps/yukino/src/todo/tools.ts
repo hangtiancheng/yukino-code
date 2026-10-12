@@ -20,7 +20,7 @@ export class TaskCreateTool implements Tool {
     "Create a pending item on the current task board. This tracks work; it does not launch an Agent or a background task.";
   category = "read" as const;
   isConcurrencySafe(): boolean {
-    return false;
+    return true;
   }
 
   private list: TaskBoard;
@@ -198,7 +198,7 @@ export class TaskUpdateTool implements Tool {
     "Atomically update the current task board's fields and dependencies. Dependency IDs must already exist; self-dependencies, cycles, and starting blocked work are rejected. Teammates claim in_progress tasks under their own name. deleted removes the task and its links.";
   category = "read" as const;
   isConcurrencySafe(): boolean {
-    return false;
+    return true;
   }
 
   private list: TaskBoard;
@@ -326,7 +326,7 @@ export class TodoWriteTool implements Tool {
   category = "read" as const;
   constructor(private list: TaskList) {}
   isConcurrencySafe(): boolean {
-    return false;
+    return true;
   }
   schema(): ToolSchema {
     return {

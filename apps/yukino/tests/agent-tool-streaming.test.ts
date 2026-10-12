@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
+import type { ToolUseBlock } from "@/conversation/index.js";
 import { HookEngine } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { AgentTool } from "@/subagent/agent-tool.js";
+import { TaskList } from "@/todo/index.js";
+import { TaskCreateTool, TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolResult } from "@/tools/types.js";
 
@@ -25,6 +29,11 @@ function fixture(
   tools: Tool[],
   abortSignal?: AbortSignal,
   hookEngine?: HookEngine,
+  calls: ToolUseBlock[] = tools.map((tool) => ({
+    toolUseId: tool.name,
+    toolName: tool.name,
+    arguments: {},
+  })),
 ) {
   const conversation = new ConversationManager();
   conversation.addUserMessage("run tools");
@@ -37,12 +46,12 @@ function fixture(
     setSystemPrompt: vi.fn(),
     async *stream() {
       if (requests++ === 0) {
-        for (const tool of tools) {
+        for (const call of calls) {
           yield {
             type: "tool_call_complete",
-            toolId: tool.name,
-            toolName: tool.name,
-            arguments: {},
+            toolId: call.toolUseId,
+            toolName: call.toolName,
+            arguments: call.arguments,
           };
         }
       }
@@ -109,6 +118,140 @@ async function collectEvents(iterator: AsyncGenerator<AgentEvent>) {
 }
 
 describe("tool completion streaming", () => {
+  it.each(["TaskCreate", "TaskUpdate", "TodoWrite"])(
+    "%s completes while earlier foreground Agents are still running",
+    async (name) => {
+      const slow = deferredResult();
+      const tasks = new TaskList();
+      const task = tasks.create("work", "");
+      const taskTool =
+        name === "TaskCreate"
+          ? new TaskCreateTool(tasks)
+          : name === "TaskUpdate"
+            ? new TaskUpdateTool(tasks)
+            : new TodoWriteTool(tasks);
+      const args =
+        name === "TaskCreate"
+          ? { subject: "next", description: "" }
+          : name === "TaskUpdate"
+            ? { taskId: task.id, status: "in_progress" }
+            : {
+                todos: [
+                  { id: task.id, subject: "work", status: "in_progress" },
+                ],
+              };
+      const delegation = new AgentTool(
+        process.cwd(),
+        new ToolRegistry(),
+        async () => (await slow.result).output,
+      );
+      const { iterator, conversation } = fixture(
+        [delegation, taskTool],
+        undefined,
+        undefined,
+        [
+          ...["agent-1", "agent-2"].map((toolUseId) => ({
+            toolUseId,
+            toolName: "Agent",
+            arguments: {
+              subagent_type: "general-purpose",
+              prompt: "do work",
+              description: "work",
+            },
+          })),
+          { toolUseId: "tracking", toolName: name, arguments: args },
+        ],
+      );
+      const completed = vi.fn();
+      const next = nextResult(iterator).then(completed);
+      try {
+        await vi.waitFor(
+          () => {
+            expect(completed).toHaveBeenCalledWith(
+              expect.objectContaining({
+                toolId: "tracking",
+                toolName: name,
+                isError: false,
+              }),
+            );
+          },
+          { timeout: 500 },
+        );
+        expect(tasks.list()).toHaveLength(name === "TaskCreate" ? 2 : 1);
+        if (name !== "TaskCreate") {
+          expect(tasks.get(task.id)?.status).toBe("in_progress");
+        }
+        slow.release({ output: "done", isError: false });
+        await collectEvents(iterator);
+        expect(
+          conversation
+            .getMessages()
+            .at(-1)
+            ?.toolResults?.map((result) => result.toolUseId),
+        ).toEqual(["agent-1", "agent-2", "tracking"]);
+      } finally {
+        slow.release({ output: "done", isError: false });
+        await next;
+        await iterator.return(undefined);
+      }
+    },
+  );
+
+  it("preserves task creation and dependent update order within a concurrent batch", async () => {
+    const tasks = new TaskList();
+    const calls = [
+      {
+        toolName: "TaskCreate",
+        arguments: { subject: "first", description: "" },
+      },
+      {
+        toolName: "TaskCreate",
+        arguments: { subject: "second", description: "" },
+      },
+      {
+        toolName: "TaskUpdate",
+        arguments: { taskId: "2", addBlockedBy: ["1"] },
+      },
+      {
+        toolName: "TaskUpdate",
+        arguments: { taskId: "1", status: "completed" },
+      },
+      {
+        toolName: "TaskUpdate",
+        arguments: { taskId: "2", status: "in_progress" },
+      },
+    ].map((call, index) => ({
+      ...call,
+      toolUseId: String(index),
+    }));
+    const { iterator, conversation } = fixture(
+      [new TaskCreateTool(tasks), new TaskUpdateTool(tasks)],
+      undefined,
+      undefined,
+      calls,
+    );
+    const events = await collectEvents(iterator);
+    expect(
+      events
+        .filter((event) => event.type === "tool_result")
+        .map((event) => event.isError),
+    ).toEqual([false, false, false, false, false]);
+    expect(tasks.get("1")).toMatchObject({
+      status: "completed",
+      blocks: ["2"],
+    });
+    expect(tasks.get("2")).toMatchObject({
+      status: "in_progress",
+      blockedBy: ["1"],
+    });
+    expect(
+      conversation
+        .getMessages()
+        .at(-1)
+        ?.toolResults?.map((result) => result.toolUseId),
+    ).toEqual(["0", "1", "2", "3", "4"]);
+  });
+
   it("emits a fast result before a slow call finishes and persists source order", async () => {
     const slow = deferredResult();
     const { iterator, conversation } = fixture([

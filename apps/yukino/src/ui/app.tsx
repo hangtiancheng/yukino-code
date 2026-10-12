@@ -97,7 +97,10 @@ import { createClient } from "@/llm/client.js";
 import { discoverModels } from "@/llm/model-discovery.js";
 import { createChildLogger } from "@/logger/index.js";
 import type { LspServerConfig } from "@/lsp/config.js";
-import { syncMcpInstructions as announceMcpInstructions } from "@/mcp/instructions.js";
+import {
+  retractMcpInstructions,
+  syncMcpInstructions as announceMcpInstructions,
+} from "@/mcp/instructions.js";
 import { MCPManager, type ConnectResult } from "@/mcp/manager.js";
 import { applyMode, decideAndApply } from "@/mcp/strategy.js";
 import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
@@ -833,11 +836,11 @@ export function App({
             content: `Reloading MCP server(s): ${servers.map((s) => s.name).join(", ")}`,
           },
         ]);
-        // Every connection is torn down and rebuilt, so all old wrappers and all
-        // announced instructions are stale: drop them and let applyMcpResult
-        // register the new tools and re-announce the new instructions.
         removeMcpTools(registryRef.current);
-        announcedMcpServersRef.current.clear();
+        retractMcpInstructions(
+          conversationRef.current,
+          announcedMcpServersRef.current,
+        );
         const result = await mgr.reconnectAll(servers);
         applyMcpResult(mgr, selectedProviderRef.current, result);
         setMessages((prev) => [

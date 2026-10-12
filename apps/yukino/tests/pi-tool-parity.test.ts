@@ -153,6 +153,7 @@ describe("force bypasses the read-before-write file-state gate", () => {
     });
     expect(forced.isError).toBe(false);
     expect(readFileSync(file, "utf8")).toBe("forced");
+    expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
   });
 
   it("WriteFile overwrites an unread existing file only with force", async () => {
@@ -173,6 +174,7 @@ describe("force bypasses the read-before-write file-state gate", () => {
     });
     expect(forced.isError).toBe(false);
     expect(readFileSync(file, "utf8")).toBe("forced");
+    expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
   });
 
   it("EditFile applies to a stale file only with force", async () => {
@@ -196,6 +198,45 @@ describe("force bypasses the read-before-write file-state gate", () => {
     });
     expect(forced.isError).toBe(false);
     expect(readFileSync(file, "utf8")).toBe("goodbye world");
+    expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
+  });
+
+  it("EditFile can force an unread file but still requires a matching edit and refreshes the cache", async () => {
+    const file = join(ctx.cwd, "edit-unread.txt");
+    writeFileSync(file, "hello world");
+    const tool = new EditFileTool();
+    const args = {
+      file_path: file,
+      edits: [{ old_string: "hello", new_string: "goodbye" }],
+    };
+    const blocked = await tool.execute(ctx, { ...args, force: false });
+    expect(blocked.isError).toBe(true);
+    expect(blocked.output).toContain("has not been read yet");
+
+    const mismatch = await tool.execute(ctx, {
+      ...args,
+      edits: [{ old_string: "missing", new_string: "goodbye" }],
+      force: true,
+    });
+    expect(mismatch.isError).toBe(true);
+    expect(mismatch.output).toContain("old_string not found");
+    expect(readFileSync(file, "utf8")).toBe("hello world");
+    expect(ctx.fileStateCache?.has(file)).toBe(false);
+
+    expect((await tool.execute(ctx, { ...args, force: true })).isError).toBe(
+      false,
+    );
+    expect(readFileSync(file, "utf8")).toBe("goodbye world");
+    expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
+    expect(
+      (
+        await tool.execute(ctx, {
+          file_path: file,
+          edits: [{ old_string: "goodbye", new_string: "hi" }],
+        })
+      ).isError,
+    ).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe("hi world");
   });
 });
 

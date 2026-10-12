@@ -71,6 +71,16 @@ export function syncMcpInstructions(
   return true;
 }
 
+export function retractMcpInstructions(
+  history: ReminderHistory,
+  announced: Set<string>,
+): boolean {
+  return syncMcpInstructions(history, announced, {
+    connectedServers: () => [],
+    connectedInstructions: () => [],
+  });
+}
+
 function formatMcpInstructionsDelta(
   added: McpInstruction[],
   removed: string[],
