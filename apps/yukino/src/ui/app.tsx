@@ -786,8 +786,7 @@ export function App({
   );
 
   // /mcp reload — re-reads the MCP server list from disk (config.yaml plus the
-  // project .mcp.json), keeps unchanged connections, disconnects removed ones,
-  // and connects new or reconfigured servers.
+  // project .mcp.json), disconnects every old server, and connects the fresh list.
   const reloadMcpServers = useCallback(
     () =>
       runMcpOperation(async () => {
@@ -809,7 +808,7 @@ export function App({
         if (servers.length === 0) {
           const previous = mcpManagerRef.current;
           if (previous) {
-            await previous.reconcile([]);
+            await previous.disconnectAll();
             syncMcpInstructions(previous);
           }
           removeMcpTools(registryRef.current);
@@ -834,19 +833,12 @@ export function App({
             content: `Reloading MCP server(s): ${servers.map((s) => s.name).join(", ")}`,
           },
         ]);
-        const result = await mgr.reconcile(servers);
-        // Unchanged wrappers keep both their schemas and live clients. Removed and
-        // reconfigured servers must lose their old wrappers before new schemas are
-        // registered below. A restarted server also gets a fresh connection, so the
-        // instructions announced for the old one are stale — forget them and let
-        // applyMcpResult announce the new ones.
-        for (const name of result.restarted) {
-          announcedMcpServersRef.current.delete(name);
-        }
-        removeMcpTools(
-          registryRef.current,
-          new Set([...result.removed, ...result.restarted]),
-        );
+        // Every connection is torn down and rebuilt, so all old wrappers and all
+        // announced instructions are stale: drop them and let applyMcpResult
+        // register the new tools and re-announce the new instructions.
+        removeMcpTools(registryRef.current);
+        announcedMcpServersRef.current.clear();
+        const result = await mgr.reconnectAll(servers);
         applyMcpResult(mgr, selectedProviderRef.current, result);
         setMessages((prev) => [
           ...prev,
@@ -854,9 +846,7 @@ export function App({
             role: "system",
             content:
               `MCP reloaded: ${String(mgr.connectedServers().length)} server(s) connected, ` +
-              `${String(countMcpTools(registryRef.current))} tool(s) ` +
-              `(${String(result.added.length)} added, ${String(result.removed.length)} removed, ` +
-              `${String(result.restarted.length)} restarted, ${String(result.unchanged.length)} unchanged)`,
+              `${String(countMcpTools(registryRef.current))} tool(s)`,
           },
         ]);
       }),
@@ -1491,7 +1481,7 @@ export function App({
     }
 
     // /mcp — show MCP server status, first retrying any server still not
-    // connected; /mcp reload re-reads the config from disk and reconciles it.
+    // connected; /mcp reload re-reads the config from disk and reconnects it.
     if (parsed.name === "mcp") {
       usageTrackerRef.current.record("mcp");
       if (parsed.args.trim().toLowerCase() === "reload") {

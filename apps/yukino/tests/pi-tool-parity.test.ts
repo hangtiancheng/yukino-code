@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import * as os from "node:os";
@@ -126,6 +127,75 @@ describe("file paths and queued writes", () => {
     });
     expect(existsSync(file)).toBe(false);
     expect(ctx.fileStateCache?.has(file)).toBe(false);
+  });
+});
+
+describe("force bypasses the read-before-write file-state gate", () => {
+  it("WriteFile overwrites a stale file only with force", async () => {
+    const file = join(ctx.cwd, "stale.txt");
+    writeFileSync(file, "original");
+    await new ReadFileTool().execute(ctx, { file_path: file });
+    writeFileSync(file, "changed externally");
+    const future = new Date(Date.now() + 10_000);
+    utimesSync(file, future, future);
+
+    const blocked = await new WriteFileTool().execute(ctx, {
+      file_path: file,
+      content: "forced",
+    });
+    expect(blocked.isError).toBe(true);
+    expect(blocked.output).toContain("modified since last read");
+
+    const forced = await new WriteFileTool().execute(ctx, {
+      file_path: file,
+      content: "forced",
+      force: true,
+    });
+    expect(forced.isError).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe("forced");
+  });
+
+  it("WriteFile overwrites an unread existing file only with force", async () => {
+    const file = join(ctx.cwd, "unread.txt");
+    writeFileSync(file, "original");
+
+    const blocked = await new WriteFileTool().execute(ctx, {
+      file_path: file,
+      content: "forced",
+    });
+    expect(blocked.isError).toBe(true);
+    expect(blocked.output).toContain("has not been read yet");
+
+    const forced = await new WriteFileTool().execute(ctx, {
+      file_path: file,
+      content: "forced",
+      force: true,
+    });
+    expect(forced.isError).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe("forced");
+  });
+
+  it("EditFile applies to a stale file only with force", async () => {
+    const file = join(ctx.cwd, "edit-stale.txt");
+    writeFileSync(file, "hello world");
+    await new ReadFileTool().execute(ctx, { file_path: file });
+    const future = new Date(Date.now() + 10_000);
+    utimesSync(file, future, future);
+
+    const blocked = await new EditFileTool().execute(ctx, {
+      file_path: file,
+      edits: [{ old_string: "hello", new_string: "goodbye" }],
+    });
+    expect(blocked.isError).toBe(true);
+    expect(blocked.output).toContain("modified since last read");
+
+    const forced = await new EditFileTool().execute(ctx, {
+      file_path: file,
+      edits: [{ old_string: "hello", new_string: "goodbye" }],
+      force: true,
+    });
+    expect(forced.isError).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe("goodbye world");
   });
 });
 

@@ -19,9 +19,9 @@ function stubTool(name: string, deferred = false): Tool {
   };
 }
 
-// unregister backs /mcp reload: reconnecting replaces wrappers, and tools of
-// servers removed from the config must disappear along with their discovery
-// state — a re-registered tool has to start deferred again.
+// unregister backs /mcp reload: the reload reconnects every server, so each old
+// wrapper is dropped along with its discovery state — a re-registered tool has to
+// start deferred again.
 describe("ToolRegistry.unregister", () => {
   it("removes the tool", () => {
     const registry = new ToolRegistry();
@@ -61,23 +61,5 @@ describe("removeMcpTools", () => {
     removeMcpTools(registry);
 
     expect(registry.listTools().map((t) => t.name)).toEqual(["ReadFile"]);
-  });
-
-  it("can remove only wrappers belonging to changed servers", () => {
-    const registry = new ToolRegistry();
-    registry.register(
-      Object.assign(stubTool("mcp__keep__a", true), { mcpServerName: "keep" }),
-    );
-    registry.register(
-      Object.assign(stubTool("mcp__restart__b", true), {
-        mcpServerName: "restart",
-      }),
-    );
-
-    removeMcpTools(registry, new Set(["restart"]));
-
-    expect(registry.listTools().map((tool) => tool.name)).toEqual([
-      "mcp__keep__a",
-    ]);
   });
 });

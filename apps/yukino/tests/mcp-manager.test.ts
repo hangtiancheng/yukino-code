@@ -32,7 +32,7 @@ describe("MCPManager", () => {
     expect(mgr.missingServers(unreachable)).toEqual(["broken"]);
   });
 
-  test("reconciles added, removed, changed, and unchanged servers", async () => {
+  test("reconnectAll disconnects every old server and connects the fresh config", async () => {
     const disconnect = vi
       .spyOn(MCPClient.prototype, "disconnect")
       .mockResolvedValue();
@@ -61,27 +61,21 @@ describe("MCPManager", () => {
       { name: "removed", command: "x" },
     ]);
     const sameClient = mgr.getClient("same");
-    const changedClient = mgr.getClient("changed");
 
-    const result = await mgr.reconcile([
+    const result = await mgr.reconnectAll([
       { name: "same", command: "same" },
       { name: "changed", command: "new" },
       { name: "added", command: "y" },
     ]);
 
-    expect(disconnect).toHaveBeenCalledTimes(2);
-    expect(mgr.getClient("same")).toBe(sameClient);
-    expect(mgr.getClient("changed")).toBe(changedClient);
+    // Every old connection is dropped, even the one whose config did not change.
+    expect(disconnect).toHaveBeenCalledTimes(3);
+    expect(mgr.getClient("same")).not.toBe(sameClient);
     expect(mgr.getClient("removed")).toBeUndefined();
     expect(mgr.connectedServers()).toEqual(["same", "changed", "added"]);
-    expect(result).toMatchObject({
-      added: ["added"],
-      removed: ["removed"],
-      restarted: ["changed"],
-      unchanged: ["same"],
-      servers: ["changed", "added"],
-    });
+    expect(result.servers).toEqual(["same", "changed", "added"]);
     expect(result.tools.map(({ tool }) => tool.name)).toEqual([
+      "same-tool",
       "changed-tool",
       "added-tool",
     ]);
@@ -92,7 +86,7 @@ describe("MCPManager", () => {
     ]);
   });
 
-  test("queues reconciliation behind an in-flight startup connection", async () => {
+  test("queues a reload behind an in-flight startup connection", async () => {
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -108,12 +102,13 @@ describe("MCPManager", () => {
 
     const mgr = new MCPManager();
     const startup = mgr.connectAll([{ name: "server", command: "old" }]);
-    const reload = mgr.reconcile([{ name: "server", command: "new" }]);
+    const reload = mgr.reconnectAll([{ name: "server", command: "new" }]);
     await Promise.resolve();
     expect(disconnect).not.toHaveBeenCalled();
 
     release?.();
     await Promise.all([startup, reload]);
+    // Startup connects once; the reload tears that connection down and reconnects.
     expect(connect).toHaveBeenCalledTimes(2);
     expect(disconnect).toHaveBeenCalledTimes(1);
   });
@@ -185,7 +180,7 @@ describe("MCPManager", () => {
   });
 
   test("deduplicates same-named configs before opening concurrent connections", async () => {
-    const configure = vi
+    const connect = vi
       .spyOn(MCPClient.prototype, "connect")
       .mockResolvedValue();
     vi.spyOn(MCPClient.prototype, "listTools").mockResolvedValue([]);
@@ -194,10 +189,11 @@ describe("MCPManager", () => {
       { name: "same", command: "old" },
       { name: "same", command: "new" },
     ]);
-    expect(configure).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(1);
     expect(result.servers).toEqual(["same"]);
+    // A reload reconnects the single deduplicated server.
     expect(
-      (await mgr.reconcile([{ name: "same", command: "new" }])).unchanged,
+      (await mgr.reconnectAll([{ name: "same", command: "new" }])).servers,
     ).toEqual(["same"]);
   });
 });

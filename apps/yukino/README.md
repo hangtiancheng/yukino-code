@@ -38,6 +38,8 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 }
 ```
 
+Both `EditFile` and `WriteFile` accept an optional `force` flag (default `false`). Set it to `true` to skip the read-before-write file-state check and write regardless of the cached mtime state.
+
 ### Conversation and Memory
 
 - Session persistence with JSONL-based storage for cross-session resume
@@ -462,7 +464,7 @@ In addition to `mcp_servers` in `config.yaml`, Yukino reads a project-level `.mc
 
 Each entry takes `command`/`args`/`env` (stdio) or `url`/`headers` with `type` of `http` or `sse`. Environment references support `${VAR}`, `${VAR:-default}`, and `$VAR` in commands, arguments, environment values, URLs, and headers; an unset variable without a default prevents that server from connecting. These servers are merged with the user-level `mcp_servers`; on a name collision the user-level entry wins. At startup, a malformed `.mcp.json` is ignored (logged), while an invalid individual server entry is skipped without disabling valid siblings. During `/mcp reload`, invalid config aborts the reload so the current connections remain intact.
 
-After editing `.mcp.json` or `config.yaml`, use `/mcp reload` in the UI to re-read both sources. Unchanged connections stay live, removed servers disconnect, new servers connect, and servers whose settings changed restart.
+After editing `.mcp.json` or `config.yaml`, use `/mcp reload` in the UI to re-read both sources. The reload is a full reset: every current connection is dropped, then the freshly read list is connected from scratch.
 
 ### Language servers (LSP)
 
@@ -621,7 +623,7 @@ Inside the UI, these commands are available:
 | /sandbox [mode]      | Configure sandbox (auto=on+auto, manual=on+manual, off)                                                                                                                                     |
 | /worktree            | List git worktrees                                                                                                                                                                          |
 | /mcp                 | Show MCP server status                                                                                                                                                                      |
-| /mcp reload          | Re-read MCP config; reconcile unchanged, removed, new, and changed servers                                                                                                                  |
+| /mcp reload          | Re-read MCP config; disconnect every server and reconnect the freshly read list                                                                                                             |
 | /thinking [level]    | Without an argument, open a picker of the supported thinking levels; with one, set the level (off, minimal, low, medium, high, xhigh, max). The setting persists to `~/.yukino/config.yaml` |
 | /code-review         | Open the code review form for workspace, branch-range, or commit review                                                                                                                     |
 | /quit                | Exit the application                                                                                                                                                                        |

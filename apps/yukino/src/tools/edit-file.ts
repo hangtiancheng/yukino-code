@@ -131,6 +131,12 @@ export class EditFileTool implements Tool {
           description:
             "Path to the existing file, absolute or relative to the Agent's working directory. Read it first with ReadFile.",
         },
+        force: {
+          type: "boolean" as const,
+          description:
+            "Skip the read-before-write file-state check and apply the edit regardless of cached state (default false).",
+          default: false,
+        },
         edits: {
           type: "array" as const,
           minItems: 1,
@@ -192,6 +198,7 @@ export class EditFileTool implements Tool {
     }
 
     const filePath = resolveToolPath(ctx.cwd, requestedPath);
+    const force = boolArg(args, "force");
     if (!Array.isArray(args.edits) || args.edits.length === 0) {
       return {
         output: "Error: edits must contain at least one replacement",
@@ -223,7 +230,7 @@ export class EditFileTool implements Tool {
       if (ctx.abortSignal?.aborted) {
         return { output: "Error: operation interrupted", isError: true };
       }
-      if (ctx.fileStateCache) {
+      if (!force && ctx.fileStateCache) {
         const gate = ctx.fileStateCache.check(filePath);
         if (!gate.ok) {
           return { output: gate.error, isError: true };
@@ -255,7 +262,7 @@ export class EditFileTool implements Tool {
       if (ctx.abortSignal?.aborted) {
         return { output: "Error: operation interrupted", isError: true };
       }
-      if (ctx.fileStateCache) {
+      if (!force && ctx.fileStateCache) {
         const gate = ctx.fileStateCache.check(filePath);
         if (!gate.ok) {
           return { output: gate.error, isError: true };

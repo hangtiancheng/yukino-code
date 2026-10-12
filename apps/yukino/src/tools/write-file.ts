@@ -14,8 +14,7 @@ import {
 } from "./types.js";
 
 import { createChildLogger } from "@/logger/index.js";
-import { asErrorString } from "@/utils/index.js";
-import { strArg } from "@/utils/index.js";
+import { asErrorString, boolArg, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
@@ -43,6 +42,12 @@ export class WriteFileTool implements Tool {
           type: "string" as const,
           description:
             "Complete UTF-8 file contents. Replaces all existing content; an empty string creates or truncates an empty file.",
+        },
+        force: {
+          type: "boolean" as const,
+          description:
+            "Skip the read-before-write file-state check and overwrite regardless of cached state (default false).",
+          default: false,
         },
       },
       required: ["file_path", "content"],
@@ -82,6 +87,7 @@ export class WriteFileTool implements Tool {
       });
     }
     const content = args.content;
+    const force = boolArg(args, "force");
 
     const filePath = resolveToolPath(ctx.cwd, requestedPath);
     return withFileMutationQueue<ToolResult>(filePath, async () => {
@@ -93,6 +99,7 @@ export class WriteFileTool implements Tool {
       }
       // Gate: read-before-write enforcement (skip for genuinely new files).
       if (
+        !force &&
         ctx.fileStateCache &&
         (existsSync(filePath) || ctx.fileStateCache.has(filePath))
       ) {
@@ -108,6 +115,7 @@ export class WriteFileTool implements Tool {
           return { output: "Error: operation interrupted", isError: true };
         }
         if (
+          !force &&
           ctx.fileStateCache &&
           (existsSync(filePath) || ctx.fileStateCache.has(filePath))
         ) {

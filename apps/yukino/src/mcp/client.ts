@@ -195,17 +195,6 @@ export class MCPClient {
     this.config = config;
   }
 
-  /** Reconfigure a disconnected client while preserving wrapper references. */
-  configure(config: MCPServerConfig): void {
-    if (this.client || this.transport) {
-      throw new Error(
-        `MCP server '${this.name}' must be disconnected before reconfiguration`,
-      );
-    }
-    this.name = config.name;
-    this.config = config;
-  }
-
   async connect(): Promise<void> {
     const config = expandMcpServerConfigEnvironment(this.config);
     if (config.command) {

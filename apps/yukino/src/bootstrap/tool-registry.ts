@@ -41,22 +41,12 @@ export function countMcpTools(registry: ToolRegistry): number {
 }
 
 /**
- * Removes MCP tool wrappers from the registry, optionally limited to a set of
- * server names. Used during /mcp reload so removed servers and stale schemas do
- * not linger while unchanged wrappers keep their discovery state.
+ * Removes every MCP tool wrapper from the registry. Used by /mcp reload, which
+ * reconnects all servers from scratch, so no wrapper survives the reload.
  */
-export function removeMcpTools(
-  registry: ToolRegistry,
-  serverNames?: ReadonlySet<string>,
-): void {
+export function removeMcpTools(registry: ToolRegistry): void {
   for (const tool of registry.listTools()) {
-    if (
-      tool.name.startsWith(MCP_TOOL_PREFIX) &&
-      (!serverNames ||
-        ("mcpServerName" in tool &&
-          typeof tool.mcpServerName === "string" &&
-          serverNames.has(tool.mcpServerName)))
-    ) {
+    if (tool.name.startsWith(MCP_TOOL_PREFIX)) {
       registry.unregister(tool.name);
     }
   }

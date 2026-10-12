@@ -1,5 +1,3 @@
-import { isDeepStrictEqual } from "node:util";
-
 import { MCPClient } from "./client.js";
 import type { MCPTool } from "./client.js";
 
@@ -16,16 +14,8 @@ export interface ConnectResult {
   instructions: { serverName: string; text: string }[];
 }
 
-export interface ReconcileResult extends ConnectResult {
-  added: string[];
-  removed: string[];
-  restarted: string[];
-  unchanged: string[];
-}
-
 export class MCPManager {
   private clients = new Map<string, MCPClient>();
-  private configs = new Map<string, MCPServerConfig>();
   private operation = Promise.resolve();
 
   /** Serialize lifecycle changes so startup, retries, and `/mcp reload` cannot race. */
@@ -48,9 +38,20 @@ export class MCPManager {
     return this.runExclusive(() => this.connectAllNow(configs));
   }
 
+  /**
+   * Drops every live connection, then brings up the given config from scratch. This is
+   * what `/mcp reload` does: no diffing against the previous config, just a full
+   * teardown followed by a full connect.
+   */
+  async reconnectAll(configs: MCPServerConfig[]): Promise<ConnectResult> {
+    return this.runExclusive(async () => {
+      await this.disconnectAllNow();
+      return this.connectAllNow(configs);
+    });
+  }
+
   private async connectAllNow(
     configs: MCPServerConfig[],
-    reusable = new Map<string, MCPClient>(),
   ): Promise<ConnectResult> {
     const result: ConnectResult = {
       tools: [],
@@ -64,11 +65,8 @@ export class MCPManager {
     ].filter((cfg) => !this.clients.has(cfg.name));
     const connections = await Promise.all(
       pending.map(async (cfg) => {
-        const client = reusable.get(cfg.name) ?? new MCPClient(cfg);
+        const client = new MCPClient(cfg);
         try {
-          if (reusable.has(cfg.name)) {
-            client.configure(cfg);
-          }
           await client.connect();
           const tools = await client.listTools();
           return { ok: true as const, cfg, client, tools };
@@ -88,7 +86,6 @@ export class MCPManager {
       }
       const { client, tools } = connection;
       this.clients.set(cfg.name, client);
-      this.configs.set(cfg.name, structuredClone(cfg));
       result.servers.push(cfg.name);
       result.tools.push(
         ...tools.map((tool) => ({ serverName: cfg.name, tool })),
@@ -102,47 +99,11 @@ export class MCPManager {
     return result;
   }
 
-  /**
-   * Applies a freshly loaded config without disturbing unchanged connections.
-   * A same-named server whose config changed is restarted.
-   */
-  async reconcile(configs: MCPServerConfig[]): Promise<ReconcileResult> {
-    return this.runExclusive(async () => {
-      const desired = new Map(configs.map((config) => [config.name, config]));
-      const removed: string[] = [];
-      const restarted: string[] = [];
-      const unchanged: string[] = [];
-      const reusable = new Map<string, MCPClient>();
-
-      for (const [name, client] of [...this.clients]) {
-        const next = desired.get(name);
-        const current = this.configs.get(name);
-        if (next && current && isDeepStrictEqual(current, next)) {
-          unchanged.push(name);
-          continue;
-        }
-
-        await client.disconnect();
-        this.clients.delete(name);
-        this.configs.delete(name);
-        if (next) {
-          restarted.push(name);
-          reusable.set(name, client);
-        } else {
-          removed.push(name);
-        }
-      }
-
-      const connected = await this.connectAllNow(configs, reusable);
-      const restartedSet = new Set(restarted);
-      return {
-        ...connected,
-        added: connected.servers.filter((name) => !restartedSet.has(name)),
-        removed,
-        restarted,
-        unchanged,
-      };
-    });
+  private async disconnectAllNow(): Promise<void> {
+    for (const client of this.clients.values()) {
+      await client.disconnect();
+    }
+    this.clients.clear();
   }
 
   getClient(name: string): MCPClient | undefined {
@@ -174,12 +135,6 @@ export class MCPManager {
   }
 
   async disconnectAll(): Promise<void> {
-    await this.runExclusive(async () => {
-      for (const client of this.clients.values()) {
-        await client.disconnect();
-      }
-      this.clients.clear();
-      this.configs.clear();
-    });
+    await this.runExclusive(() => this.disconnectAllNow());
   }
 }
