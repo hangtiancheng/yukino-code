@@ -4,6 +4,8 @@ import sliceAnsi from "slice-ansi";
 import stringWidth from "string-width";
 import wrapAnsi from "wrap-ansi";
 
+export const TAB_SIZE = 2;
+
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: "grapheme",
 });
@@ -17,9 +19,7 @@ export function plainTerminalText(text: string): string {
 }
 
 export function plainTerminalLine(text: string): string {
-  return stripVTControlCharacters(text)
-    .replace(/[\r\n\t]+/g, " ")
-    .replace(/\p{Cc}/gu, "");
+  return expandTabs(plainTerminalText(text).replace(/\n+/gu, " "));
 }
 
 export function visibleWidth(text: string): number {
@@ -122,7 +122,7 @@ export function cursorWindow(
 }
 
 export function wrapToLines(text: string, width: number): string[] {
-  return wrapAnsi(text, Math.max(1, Math.floor(width)), {
+  return wrapAnsi(expandTabs(text), Math.max(1, Math.floor(width)), {
     hard: true,
     wordWrap: false,
     trim: false,
@@ -134,25 +134,15 @@ export function wrapToLines(text: string, width: number): string[] {
  * only splits a word (or space-less text such as Chinese) when it cannot fit.
  */
 export function wrapWordsToLines(text: string, width: number): string[] {
-  return wrapAnsi(text, Math.max(1, Math.floor(width)), {
+  return wrapAnsi(expandTabs(text), Math.max(1, Math.floor(width)), {
     hard: true,
     wordWrap: true,
     trim: true,
   }).split("\n");
 }
 
-/** Tab stop interval terminals use when advancing past a TAB character. */
-const TAB_SIZE = 8;
-
-/**
- * Replace TAB characters with the spaces a terminal would render them as.
- *
- * string-width counts a TAB as zero columns, but terminals advance to the next
- * 8-column stop. Text that fits under the wrong measurement is left unwrapped by
- * Ink and then fills the row past the terminal width, so the surplus columns
- * wrap onto a bogus extra line.
- */
-export function expandTabs(text: string, tabSize = TAB_SIZE): string {
+/** Expand tabs to two-column stops before measuring or rendering. */
+export function expandTabs(text: string): string {
   if (!text.includes("\t")) {
     return text;
   }
@@ -165,7 +155,7 @@ export function expandTabs(text: string, tabSize = TAB_SIZE): string {
       const segments = line.split("\t");
       let expanded = segments[0];
       for (const segment of segments.slice(1)) {
-        const advance = tabSize - (visibleWidth(expanded) % tabSize);
+        const advance = TAB_SIZE - (visibleWidth(expanded) % TAB_SIZE);
         expanded += " ".repeat(advance) + segment;
       }
       return expanded;

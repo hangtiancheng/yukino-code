@@ -9,6 +9,22 @@ import { collapsePaste, inputBoundary } from "@/ui/input-paste.js";
 import { visibleWidth } from "@/ui/terminal-text.js";
 
 describe("input visual-row navigation", () => {
+  it("uses two-column tab stops while preserving draft offsets and wrapping", () => {
+    const lines = ["\t\tx", "a\tb", "日\tb"];
+    const rows = layoutInputRows(lines, 20);
+    expect(
+      rows.map((row) => row.cells.map((cell) => cell.text).join("")),
+    ).toEqual(["    x ", "a b ", "日  b "]);
+    expect(locateInputCursor(rows, 0, 2).column).toBe(4);
+    expect(locateInputCursor(rows, 1, 2).column).toBe(2);
+    expect(locateInputCursor(rows, 2, 2).column).toBe(4);
+    const wrapped = layoutInputRows(["abc\tX"], 3);
+    expect(
+      wrapped.map((row) => row.cells.map((cell) => cell.text).join("")),
+    ).toEqual(["abc", " X "]);
+    expect(lines).toEqual(["\t\tx", "a\tb", "日\tb"]);
+  });
+
   it("preserves the preferred cell column across short logical lines in both directions", () => {
     const rows = layoutInputRows(["abcdef", "x", "abcdef"], 20);
     const up = moveInputVertically(rows, 2, 5, -1);

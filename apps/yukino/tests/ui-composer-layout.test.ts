@@ -958,7 +958,7 @@ describe("footer priorities", () => {
       model: "model\r\nname\twide\x07",
       cwd: "/project\nfolder",
     });
-    expect(output).toContain("providerred next/model name wide");
+    expect(output).toContain("providerred next/model name  wide");
     expect(output).toContain("/project folder");
     expect(output.split("\n")).toHaveLength(2);
   });

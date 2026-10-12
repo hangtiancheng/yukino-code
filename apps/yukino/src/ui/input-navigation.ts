@@ -2,7 +2,7 @@ import ansiRegex from "ansi-regex";
 
 import { inputBoundary } from "./input-paste.js";
 import type { PasteStore } from "./input-paste.js";
-import { truncateToWidth, visibleWidth } from "./terminal-text.js";
+import { TAB_SIZE, truncateToWidth, visibleWidth } from "./terminal-text.js";
 
 interface InputCell {
   /** UTF-16 offset in the stored logical line, not a display column. */
@@ -28,18 +28,24 @@ export function layoutInputRows(
   const columns = Math.max(1, Math.floor(width));
   const rows: InputRow[] = [];
   for (const [lineIndex, line] of lines.entries()) {
+    let column = 0;
     let row: InputRow = { line: lineIndex, cells: [], width: 0 };
     rows.push(row);
     const append = (offset: number, raw: string) => {
       // A wide grapheme cannot fit a one-cell terminal. Show a placeholder, not
       // half a grapheme. Oversized paste markers are clipped as one editable atom.
       const display =
-        raw === "\t" ? "    " : visibleWidth(raw) === 0 ? " " : raw;
+        raw === "\t"
+          ? " ".repeat(TAB_SIZE - (column % TAB_SIZE))
+          : visibleWidth(raw) === 0
+            ? " "
+            : raw;
       const text =
         visibleWidth(display) > columns
           ? truncateToWidth(display, columns)
           : display;
       const cellWidth = visibleWidth(text);
+      column += cellWidth;
       if (row.width > 0 && row.width + cellWidth > columns) {
         row = { line: lineIndex, cells: [], width: 0 };
         rows.push(row);

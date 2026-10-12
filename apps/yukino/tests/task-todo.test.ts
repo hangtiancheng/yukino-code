@@ -320,7 +320,7 @@ describe("atomic task/TODO list", () => {
       createElement(TodoProgress, { tasks: list.list() }),
       { columns: 120 },
     );
-    expect(text).toContain("Testing progress🙂 files");
+    expect(text).toContain("Testing progress🙂  files");
     expect(text.split("\n")).toHaveLength(1);
     expect(text).not.toContain("\u0007");
     expect(text).not.toContain("\u001b[31m");

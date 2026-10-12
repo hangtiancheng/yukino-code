@@ -18,7 +18,7 @@ import {
 import { THEME } from "@/ui/styles.js";
 
 function fitHint(hint: string, width: number): string {
-  const full = hint.replace(/[\r\n\t]+/g, " ");
+  const full = plainTerminalLine(hint);
   const compact = full.replace(/Escape/g, "Esc").replace(/ navigate/g, "");
   const actions = compact.split(" · ").filter((part) => /Enter|Esc/.test(part));
   const keys = actions.map((part) => part.split(" ")[0]).join(" / ");

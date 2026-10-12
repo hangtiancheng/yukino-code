@@ -2,10 +2,36 @@ import { stripVTControlCharacters } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { visibleWidth, plainTerminalText } from "@/ui/terminal-text.js";
+import {
+  expandTabs,
+  plainTerminalLine,
+  plainTerminalText,
+  visibleWidth,
+  wrapToLines,
+  wrapWordsToLines,
+} from "@/ui/terminal-text.js";
 import { formatToolOutputPreview } from "@/ui/tool-preview.js";
 
 describe("UI v2 tool previews", () => {
+  it.each([
+    ["\t\tcode", "    code"],
+    ["a\tb\tc", "a b c"],
+    ["ab\tc\n\tx", "ab  c\n  x"],
+    ["日\tx\te\u0301\tz", "日  x e\u0301 z"],
+    ["  code", "  code"],
+  ])("expands %j at two-column stops", (source, expected) => {
+    expect(expandTabs(source)).toBe(expected);
+  });
+
+  it("expands styled tabs before wrapping and single-line normalization", () => {
+    const source = "\x1b[31ma\x1b[0m\tb";
+    for (const wrap of [wrapToLines, wrapWordsToLines]) {
+      expect(wrap(source, 20).map(stripVTControlCharacters)).toEqual(["a b"]);
+    }
+    expect(wrapToLines("\txy", 3)).toEqual(["  x", "y"]);
+    expect(plainTerminalLine("\tfirst\n\tsecond")).toBe("  first   second");
+  });
+
   it("removes raw terminal controls and expands tabs before wrapping", () => {
     const source =
       "\x1b[2J\x1b]52;c;clipboard\x07\x1b[31mhello\x1b[0m\0\tworld\r\nnext";

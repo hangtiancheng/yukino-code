@@ -3,6 +3,7 @@ import React, { useRef } from "react";
 
 import { renderMarkdown, renderStreamingMarkdown } from "./markdown.js";
 import {
+  expandTabs,
   plainTerminalLine,
   plainTerminalText,
   truncateToWidth,
@@ -147,7 +148,7 @@ function MessageBlock(props: MessageBlockProps) {
               {expanded && (
                 <>
                   <Text color={THEME.muted}>
-                    {plainTerminalText(skill.directory)}
+                    {expandTabs(plainTerminalText(skill.directory))}
                   </Text>
                   <Text color={THEME.customMessageText}>
                     {renderMarkdown(skill.body, contentWidth, "user")}
@@ -166,7 +167,7 @@ function MessageBlock(props: MessageBlockProps) {
             >
               <Text color={THEME.userMessageText}>
                 {skill
-                  ? plainTerminalText(text)
+                  ? expandTabs(plainTerminalText(text))
                   : renderMarkdown(text, contentWidth, "user")}
               </Text>
             </Box>
@@ -212,8 +213,10 @@ function MessageBlock(props: MessageBlockProps) {
               [compaction]
             </Text>
             <Text color={THEME.customMessageText}>
-              {plainTerminalText(
-                message.content.replace(/^(?:⊙ |Compact:\s*)/u, ""),
+              {expandTabs(
+                plainTerminalText(
+                  message.content.replace(/^(?:⊙ |Compact:\s*)/u, ""),
+                ),
               )}
             </Text>
           </Box>
@@ -226,7 +229,11 @@ function MessageBlock(props: MessageBlockProps) {
               isError ? THEME.error : isWarning ? THEME.warning : THEME.muted
             }
           >
-            {plainTerminalText(message.content.replace(/^↻\s*/u, "Retrying: "))}
+            {expandTabs(
+              plainTerminalText(
+                message.content.replace(/^↻\s*/u, "Retrying: "),
+              ),
+            )}
           </Text>
         </Box>
       );

@@ -1,6 +1,10 @@
 import { Text } from "ink";
 
-import { truncateToWidth, visibleWidth } from "./terminal-text.js";
+import {
+  plainTerminalLine,
+  truncateToWidth,
+  visibleWidth,
+} from "./terminal-text.js";
 
 import { THEME } from "@/ui/styles.js";
 
@@ -30,7 +34,7 @@ export function StatusBorder({
   const overflowStart = Math.floor((columns - overflowWidth) / 2);
   let status = statusLabel
     ? truncateToWidth(
-        `${spinner} ${statusLabel.replace(/[\r\n\t]+/g, " ")}`,
+        plainTerminalLine(`${spinner} ${statusLabel}`),
         Math.max(0, columns - 5),
       )
     : "";

@@ -160,6 +160,27 @@ describe("skill transcript presentation", () => {
 });
 
 describe("pi Markdown presentation", () => {
+  it.each(["ts", "unknown-language"])(
+    "uses two-column tabs in streamed and committed %s code",
+    (language) => {
+      chalk.level = 3;
+      const cache: MarkdownCache = {
+        prefix: "",
+        rendered: "",
+        width: 0,
+        theme: "",
+      };
+      const source = `\`\`\`${language}\n\tfunction run() {\n\t\twork();\n\t}\n\`\`\``;
+      const expected = `\`\`\`${language}\n    function run() {\n      work();\n    }\n\`\`\``;
+      for (const output of [
+        renderMarkdown(source, 80),
+        renderStreamingMarkdown(source, 80, cache),
+      ]) {
+        expect(stripVTControlCharacters(output)).toBe(expected);
+      }
+    },
+  );
+
   it("sanitizes raw terminal commands in both streamed and committed Markdown while keeping generated styles", () => {
     chalk.level = 3;
     const cache: MarkdownCache = {
@@ -767,45 +788,63 @@ describe("shared live and committed tool cards", () => {
     expect(expanded).not.toContain("more lines");
   });
 
-  it("expands ReadFile tabs so the card never overflows the terminal", () => {
-    // ReadFile numbers lines with a literal TAB. string-width counts a TAB as
-    // zero columns while a terminal advances to the next 8-column stop, so an
-    // unwrapped row fills past the terminal width and wraps onto a bogus
-    // background-colored line.
-    const output = [
-      '1\timport { createFileRoute } from "@tanstack/react-router";',
-      "2\t",
-      "3\t\tconst nested = 1;",
-    ].join("\n");
-    const physicalColumns = (row: string): number => {
-      let col = 0;
-      for (const character of row) {
-        col += character === "\t" ? 8 - (col % 8) : 1;
-      }
-      return col;
-    };
-
-    for (const columns of [74, 80, 120, 200]) {
-      terminal.columns = columns;
-      const frame = renderToString(
-        createElement(ToolBlock, {
-          tool: {
-            toolId: "read",
-            toolName: "ReadFile",
-            args: { file_path: "src/session.ts" },
-            output,
-            isError: false,
-            elapsed: 0.9,
-          },
-          expanded: true,
-        }),
-        { columns },
+  it.each([false, true])(
+    "uses two-column tabs in diff cards with expanded=%s",
+    (expanded) => {
+      const frame = stripVTControlCharacters(
+        renderToString(
+          createElement(ToolBlock, {
+            tool: {
+              toolId: "edit",
+              toolName: "EditFile",
+              args: {},
+              output:
+                "-   92  \t\tconst name = app.repo_path;\n+   92  \t\tconst name = app.repo;",
+            },
+            expanded,
+          }),
+          { columns: 40 },
+        ),
       );
-      const rows = frame.split("\n").map(stripVTControlCharacters);
-      expect(rows.some((row) => row.includes("\t"))).toBe(false);
-      expect(rows.every((row) => physicalColumns(row) <= columns)).toBe(true);
-    }
-  });
+      expect(frame).not.toContain("\t");
+      expect(frame).toContain("-   92      const name =");
+      expect(frame).toContain("+   92      const name =");
+    },
+  );
+
+  it.each([false, true])(
+    "expands ReadFile tabs at two-column stops with expanded=%s",
+    (expanded) => {
+      const output = [
+        '1\timport { createFileRoute } from "@tanstack/react-router";',
+        "2\t",
+        "3\t\tconst nested = 1;",
+      ].join("\n");
+      for (const columns of [74, 80, 120, 200]) {
+        terminal.columns = columns;
+        const frame = renderToString(
+          createElement(ToolBlock, {
+            tool: {
+              toolId: "read",
+              toolName: "ReadFile",
+              args: { file_path: "src/session.ts" },
+              output,
+              isError: false,
+              elapsed: 0.9,
+            },
+            expanded,
+          }),
+          { columns },
+        );
+        const rows = frame.split("\n").map(stripVTControlCharacters);
+        expect(rows.some((row) => row.includes("\t"))).toBe(false);
+        expect(rows.every((row) => visibleWidth(row) <= columns)).toBe(true);
+        expect(rows.some((row) => row.includes("3   const nested = 1;"))).toBe(
+          true,
+        );
+      }
+    },
+  );
 });
 
 const footerProps = {
