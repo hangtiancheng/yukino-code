@@ -46,6 +46,46 @@ function buildConfig(
   return conf as unknown as GlobalConfig;
 }
 
+/**
+ * librdkafka properties that are *topic*-level rather than global
+ * (auto.offset.reset, enable.auto.commit, acks, message.timeout.ms, ...).
+ * node-rdkafka replaces the client's default topic configuration with the
+ * second constructor argument, so topic-level properties set only in the
+ * global configuration are silently ignored — e.g. auto.offset.reset keeps
+ * its "largest" default, and a from_beginning consume would start at the high
+ * watermark and read nothing. Mirror these keys into the topic configuration
+ * so they actually take effect.
+ */
+const TOPIC_CONF_KEYS = [
+  "acks",
+  "request.required.acks",
+  "request.timeout.ms",
+  "message.timeout.ms",
+  "produce.offset.report",
+  "compression.type",
+  "compression.codec",
+  "compression.level",
+  "queuing.strategy",
+  "auto.commit.enable",
+  "enable.auto.commit",
+  "auto.commit.interval.ms",
+  "auto.offset.reset",
+  "consume.callback.max.messages",
+] as const;
+
+function splitTopicConfig(conf: GlobalConfig): {
+  globalConf: GlobalConfig;
+  topicConf: Record<string, string | number | boolean>;
+} {
+  const record = conf as unknown as ConfigRecord;
+  const topicConf: Record<string, string | number | boolean> = {};
+  for (const key of TOPIC_CONF_KEYS) {
+    const value = record[key];
+    if (value !== undefined) topicConf[key] = value;
+  }
+  return { globalConf: conf, topicConf };
+}
+
 function connectClient(client: Connectable): Promise<Metadata> {
   return new Promise((resolve, reject) => {
     client.connect({}, (err: LibrdKafkaError, data: Metadata) => {
@@ -112,7 +152,11 @@ async function withClient<T>(
   conf: GlobalConfig,
   fn: (client: Kafka.Producer) => Promise<T>,
 ): Promise<T> {
-  const client = new Kafka.Producer(conf as ProducerGlobalConfig, {});
+  const { globalConf, topicConf } = splitTopicConfig(conf);
+  const client = new Kafka.Producer(
+    globalConf as ProducerGlobalConfig,
+    topicConf,
+  );
   await connectClient(client);
   try {
     return await fn(client);
@@ -193,7 +237,11 @@ async function opProduce(input: OpInput, conf: GlobalConfig): Promise<unknown> {
   const messages = input.messages ?? [];
   if (messages.length === 0)
     throw new Error("produce requires at least one message");
-  const producer = new Kafka.Producer(conf as ProducerGlobalConfig, {});
+  const { globalConf, topicConf } = splitTopicConfig(conf);
+  const producer = new Kafka.Producer(
+    globalConf as ProducerGlobalConfig,
+    topicConf,
+  );
   await connectClient(producer);
   try {
     let produced = 0;
@@ -264,9 +312,12 @@ async function opConsume(input: OpInput, conf: GlobalConfig): Promise<unknown> {
     "auto.offset.reset": input.from_beginning ? "earliest" : "latest",
   };
   if (groupId) consumerConf["group.id"] = groupId;
+  const { globalConf, topicConf } = splitTopicConfig(
+    consumerConf as unknown as GlobalConfig,
+  );
   const consumer = new Kafka.KafkaConsumer(
-    consumerConf as unknown as ConsumerGlobalConfig,
-    {},
+    globalConf as unknown as ConsumerGlobalConfig,
+    topicConf,
   );
   await connectClient(consumer);
   const collected: Record<string, unknown>[] = [];
@@ -454,11 +505,17 @@ async function opCommittedOffsets(
   }));
   if (toppars.length === 0)
     throw new Error("committed_offsets requires partitions");
-  const consumerConf = {
+  const consumerConf: ConfigRecord = {
     ...(conf as unknown as ConfigRecord),
     "group.id": groupId,
-  } as unknown as ConsumerGlobalConfig;
-  const consumer = new Kafka.KafkaConsumer(consumerConf, {});
+  };
+  const { globalConf, topicConf } = splitTopicConfig(
+    consumerConf as unknown as GlobalConfig,
+  );
+  const consumer = new Kafka.KafkaConsumer(
+    globalConf as unknown as ConsumerGlobalConfig,
+    topicConf,
+  );
   await connectClient(consumer);
   try {
     const offsets = await new Promise<TopicPartitionOffset[]>(
@@ -473,7 +530,16 @@ async function opCommittedOffsets(
         );
       },
     );
-    return { group_id: groupId, offsets };
+    return {
+      group_id: groupId,
+      offsets: offsets.map((position) => ({
+        topic: position.topic,
+        partition: position.partition,
+        // librdkafka reports RD_KAFKA_OFFSET_INVALID (-1001) for partitions
+        // without a committed offset; node-rdkafka may leave it undefined.
+        offset: typeof position.offset === "number" ? position.offset : -1001,
+      })),
+    };
   } finally {
     await disconnectClient(consumer);
   }
@@ -500,7 +566,7 @@ export const kafkaModule: ToolModule = {
       {
         title: "Kafka",
         description:
-          "Operate an Apache Kafka cluster through librdkafka (node-rdkafka) with full client privileges. Choose an operation: produce (send messages), consume (read messages by subscription or explicit partition assignments), list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets (low/high per partition) and committed_offsets (a group's committed positions). There is no operation allowlist beyond these; raw librdkafka configuration (security.protocol, sasl.*, ssl.*, etc.) is passed through config. Message keys/values are strings decoded with encoding (utf8 default, or base64 for binary); consume returns at most max_messages within timeout_ms. Uses KAFKA_BROKERS (default localhost:9092) or brokers, plus KAFKA_CLIENT_ID and optional KAFKA_USERNAME/KAFKA_PASSWORD/KAFKA_SASL_MECHANISM/KAFKA_SECURITY_PROTOCOL.",
+          "Operate an Apache Kafka cluster through librdkafka (node-rdkafka) with full client privileges. Choose an operation: produce (send messages), consume (read messages by subscription or explicit partition assignments), list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets (low/high per partition) and committed_offsets (a group's committed positions; -1001 means uncommitted). There is no operation allowlist beyond these; raw librdkafka configuration (security.protocol, sasl.*, ssl.*, etc.) is passed through config. Message keys/values are strings decoded with encoding (utf8 default, or base64 for binary); consume returns at most max_messages within timeout_ms. Uses KAFKA_BROKERS (default localhost:9092) or brokers, plus KAFKA_CLIENT_ID and optional KAFKA_USERNAME/KAFKA_PASSWORD/KAFKA_SASL_MECHANISM/KAFKA_SECURITY_PROTOCOL.",
         inputSchema: {
           brokers: z
             .string()

@@ -99,7 +99,6 @@ export const clickhouseModule: ToolModule = {
 
           const url = new URL(base);
           const search = url.searchParams;
-          if (user) search.set("user", user);
           if (database) search.set("database", database);
           for (const [key, value] of Object.entries(input.params)) {
             search.set(`param_${key}`, String(value));
@@ -112,9 +111,13 @@ export const clickhouseModule: ToolModule = {
           if (input.stacktrace) search.set("stacktrace", "1");
 
           const requestHeaders = new Headers();
+          // Send credentials through exactly one channel: ClickHouse rejects
+          // requests that carry them in both the query string and the
+          // Authorization header (AUTHENTICATION_FAILED), so no `user` query
+          // parameter is set alongside the basic-auth header.
           if (input.api_key) {
             requestHeaders.set("x-clickhouse-key", input.api_key);
-          } else if (password) {
+          } else if (user || password) {
             requestHeaders.set(
               "authorization",
               `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`,

@@ -62,7 +62,9 @@ describe("clickhouse_tool", () => {
     expect(last.body).toBe("SELECT 1 AS n");
     expect(last.headers["content-type"]).toContain("text/plain");
     const url = new URL(last.url);
-    expect(url.searchParams.get("user")).toBe("langfuse");
+    // Credentials travel only in the Authorization header; a `user` query
+    // parameter alongside basic auth makes ClickHouse fail authentication.
+    expect(url.searchParams.get("user")).toBeNull();
     expect(url.searchParams.get("database")).toBe("default");
     expect(url.searchParams.get("default_format")).toBe("JSON");
     expect(last.headers["authorization"]).toBe(

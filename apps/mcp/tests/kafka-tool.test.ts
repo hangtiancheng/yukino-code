@@ -21,13 +21,19 @@ const state = vi.hoisted(() => ({
   adminCalls: [] as Array<Record<string, unknown>>,
   producerConf: null as Record<string, unknown> | null,
   consumerConf: null as Record<string, unknown> | null,
+  producerTopicConf: null as Record<string, unknown> | null,
+  consumerTopicConf: null as Record<string, unknown> | null,
   connectError: null as unknown,
 }));
 
 vi.mock("node-rdkafka", () => {
   class MockProducer {
-    constructor(conf: Record<string, unknown>) {
+    constructor(
+      conf: Record<string, unknown>,
+      topicConf?: Record<string, unknown>,
+    ) {
       state.producerConf = conf;
+      state.producerTopicConf = topicConf ?? null;
     }
     connect(_opts: unknown, cb: (e: unknown, d: unknown) => void): void {
       cb(state.connectError, state.metadata);
@@ -66,8 +72,12 @@ vi.mock("node-rdkafka", () => {
     handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
     subscribed: unknown;
     assigned: unknown;
-    constructor(conf: Record<string, unknown>) {
+    constructor(
+      conf: Record<string, unknown>,
+      topicConf?: Record<string, unknown>,
+    ) {
       state.consumerConf = conf;
+      state.consumerTopicConf = topicConf ?? null;
     }
     connect(_opts: unknown, cb: (e: unknown, d: unknown) => void): void {
       cb(state.connectError, state.metadata);
@@ -180,6 +190,8 @@ beforeEach(async () => {
   state.adminCalls = [];
   state.producerConf = null;
   state.consumerConf = null;
+  state.producerTopicConf = null;
+  state.consumerTopicConf = null;
   state.connectError = null;
   const server = new McpServer({ name: "test", version: "1" });
   kafkaModule.register(server);
@@ -227,6 +239,18 @@ describe("kafka_tool", () => {
     expect((state.produced[0]["value"] as Buffer).equals(bytes)).toBe(true);
   });
 
+  it("mirrors topic-level config entries into the topic conf", async () => {
+    await call({
+      operation: "produce",
+      topic: "events",
+      messages: [{ value: "v" }],
+      config: { acks: "all", "message.timeout.ms": 1000 },
+    });
+    expect(state.producerConf?.["acks"]).toBe("all");
+    expect(state.producerTopicConf?.["acks"]).toBe("all");
+    expect(state.producerTopicConf?.["message.timeout.ms"]).toBe(1000);
+  });
+
   it("consumes by subscription and normalizes messages", async () => {
     state.consumed = [
       {
@@ -269,6 +293,11 @@ describe("kafka_tool", () => {
     expect(data.messages[1]["value"]).toBeNull();
     expect(state.consumerConf?.["group.id"]).toBe("g1");
     expect(state.consumerConf?.["auto.offset.reset"]).toBe("earliest");
+    // Topic-level properties must also land in the topic conf: node-rdkafka
+    // replaces the default topic config with the second constructor argument,
+    // so global-only values such as auto.offset.reset would be ignored.
+    expect(state.consumerTopicConf?.["auto.offset.reset"]).toBe("earliest");
+    expect(state.consumerTopicConf?.["enable.auto.commit"]).toBe(false);
   });
 
   it("consumes by explicit assignment without a group", async () => {
