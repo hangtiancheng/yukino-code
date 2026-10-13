@@ -299,9 +299,6 @@ func stripTrailingSlashes(value string) string { return strings.TrimRight(value,
 
 func normalizeEtcdURL(raw string) string {
 	trimmed := strings.TrimSpace(raw)
-	if httpSchemeRE.MatchString(trimmed) {
-		return stripTrailingSlashes(trimmed)
-	}
 	first := ""
 	if idx := strings.Index(trimmed, ","); idx >= 0 {
 		first = strings.TrimSpace(trimmed[:idx])
@@ -310,6 +307,9 @@ func normalizeEtcdURL(raw string) string {
 	}
 	if first == "" {
 		return ""
+	}
+	if httpSchemeRE.MatchString(first) {
+		return stripTrailingSlashes(first)
 	}
 	return stripTrailingSlashes("http://" + first)
 }

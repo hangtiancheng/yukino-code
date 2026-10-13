@@ -117,6 +117,7 @@ export const clickhouseModule: ToolModule = {
           // parameter is set alongside the basic-auth header.
           if (input.api_key) {
             requestHeaders.set("x-clickhouse-key", input.api_key);
+            if (user) requestHeaders.set("x-clickhouse-user", user);
           } else if (user || password) {
             requestHeaders.set(
               "authorization",

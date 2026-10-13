@@ -181,7 +181,7 @@ func SignRequest(opts SignOptions) SignedRequest {
 
 	signed := map[string]string{}
 	for key, value := range opts.Headers {
-		signed[strings.ToLower(key)] = strings.TrimSpace(value)
+		signed[strings.ToLower(key)] = strings.Join(strings.Fields(value), " ")
 	}
 	signed["host"] = host
 	signed["x-amz-content-sha256"] = contentSha256

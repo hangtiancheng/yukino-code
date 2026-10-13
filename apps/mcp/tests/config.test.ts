@@ -146,6 +146,15 @@ describe("github config", () => {
 });
 
 describe("database and Prometheus config", () => {
+  it("uses the first etcd endpoint and preserves its scheme", () => {
+    expect(
+      loadConfig({ ETCD_ENDPOINTS: " https://one:2379/,http://two:2379 " }).etcd
+        .url,
+    ).toBe("https://one:2379");
+    expect(loadConfig({ ETCD_ENDPOINTS: "one:2379,two:2379" }).etcd.url).toBe(
+      "http://one:2379",
+    );
+  });
   it("leaves optional backends unconfigured without preventing startup", () => {
     const config = loadConfig({});
     expect(config.postgres.url).toBe("");

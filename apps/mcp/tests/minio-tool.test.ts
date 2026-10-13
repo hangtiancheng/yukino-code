@@ -63,6 +63,25 @@ afterEach(async () => {
 });
 
 describe("S3 SigV4 helpers", () => {
+  it("normalizes internal whitespace in signed header values", () => {
+    const options = {
+      method: "GET",
+      endpoint: "http://localhost:9000",
+      canonicalUri: "/data/file",
+      credentials: { accessKey: "a", secretKey: "b", region: "us-east-1" },
+      now: new Date("2026-01-02T03:04:05.000Z"),
+    };
+    const a = signRequest({
+      ...options,
+      headers: { "x-amz-meta-title": "  a   b\tc  " },
+    });
+    const b = signRequest({
+      ...options,
+      headers: { "x-amz-meta-title": "a b c" },
+    });
+    expect(a.headers["authorization"]).toBe(b.headers["authorization"]);
+    expect(a.headers["x-amz-meta-title"]).toBe("a b c");
+  });
   it("RFC 3986 encodes reserved and unicode characters", () => {
     expect(rfc3986Encode("a b")).toBe("a%20b");
     expect(rfc3986Encode("a+b")).toBe("a%2Bb");

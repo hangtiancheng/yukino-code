@@ -188,6 +188,17 @@ func SortedKeys[V any](m map[string]V) []string {
 
 func sortedKeys[V any](m map[string]V) []string { return SortedKeys(m) }
 
+// MergeHeaders applies caller overrides case-insensitively, as HTTP requires.
+func MergeHeaders(base, overrides map[string]string) map[string]string {
+	headers := make(map[string]string, len(base)+len(overrides))
+	for _, source := range []map[string]string{base, overrides} {
+		for _, key := range sortedKeys(source) {
+			headers[http.CanonicalHeaderKey(key)] = source[key]
+		}
+	}
+	return headers
+}
+
 // HTTPResult is the raw outcome of a Do call.
 type HTTPResult struct {
 	StatusCode int

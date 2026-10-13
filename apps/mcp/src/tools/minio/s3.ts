@@ -158,7 +158,7 @@ export function signRequest(options: SignOptions): SignedRequest {
   // Lowercase and merge caller headers with the mandatory signed headers.
   const signed: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
-    signed[key.toLowerCase()] = value.trim();
+    signed[key.toLowerCase()] = value.trim().replace(/\s+/g, " ");
   }
   signed["host"] = host;
   signed["x-amz-content-sha256"] = contentSha256;

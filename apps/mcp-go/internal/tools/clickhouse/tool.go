@@ -31,7 +31,7 @@ type Input struct {
 	Data          *string           `json:"data,omitempty" jsonschema:"Raw data body for INSERT ... FORMAT <fmt>; the SQL moves to the query parameter."`
 	DataBase64    *string           `json:"data_base64,omitempty" jsonschema:"Base64-encoded data body for binary INSERT formats."`
 	User          string            `json:"user,omitempty" jsonschema:"User override."`
-	Password      string            `json:"password,omitempty" jsonschema:"Password override."`
+	Password      *string           `json:"password,omitempty" jsonschema:"Password override, including an empty password."`
 	APIKey        string            `json:"api_key,omitempty" jsonschema:"Send X-ClickHouse-Key instead of basic auth."`
 	Headers       map[string]string `json:"headers,omitempty" jsonschema:"Additional HTTP headers."`
 	Stacktrace    bool              `json:"stacktrace,omitempty" jsonschema:"Request a server stack trace on errors."`
@@ -65,8 +65,8 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 
 	user := firstNonEmpty(in.User, cfg.Username)
 	password := cfg.Password
-	if in.Password != "" {
-		password = in.Password
+	if in.Password != nil {
+		password = *in.Password
 	}
 	database := firstNonEmpty(in.Database, cfg.Database)
 	format := in.Format
@@ -102,12 +102,13 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	// carrying them in both the query string and the Authorization header.
 	if in.APIKey != "" {
 		headers["X-ClickHouse-Key"] = in.APIKey
+		if user != "" {
+			headers["X-ClickHouse-User"] = user
+		}
 	} else if user != "" || password != "" {
 		headers["Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 	}
-	for k, v := range in.Headers {
-		headers[k] = v
-	}
+	headers = operations.MergeHeaders(headers, in.Headers)
 
 	var body []byte
 	if in.Data != nil || in.DataBase64 != nil {

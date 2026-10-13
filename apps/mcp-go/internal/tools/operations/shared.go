@@ -34,7 +34,7 @@ const ConnectionURLDescription = "Connection URL override; otherwise uses the co
 func Result(data any) *mcp.CallToolResult {
 	text, err := json.Marshal(data)
 	if err != nil {
-		text = []byte(`{"error":"failed to serialize result: ` + err.Error() + `"}`)
+		return ResultErr("operation", fmt.Errorf("failed to serialize result: %w", err))
 	}
 	return &mcp.CallToolResult{
 		Content:           []mcp.Content{&mcp.TextContent{Text: string(text)}},

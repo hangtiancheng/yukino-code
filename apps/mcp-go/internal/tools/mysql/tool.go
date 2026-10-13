@@ -5,8 +5,9 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"net"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 
 const queryTimeout = 10 * time.Second
 
-const description = "Execute arbitrary MySQL SQL with full connection privileges: queries, writes, DDL, transactions, administration and multiple statements. Put a complete transaction in one call. Optional ? parameters are supported. Returns query rows or mutation result headers and field metadata for all statements. Uses MYSQL_URL or connection_url."
+const description = "Execute arbitrary MySQL SQL with full connection privileges: queries, writes, DDL, transactions, administration and multiple statements. Put a complete transaction in one call. Optional ? parameters are supported. Returns query rows and field metadata. The Go SQL driver does not expose mutation result headers and skips intermediate mutation result sets. Uses MYSQL_URL or connection_url."
 
 // Module returns the mysql tool module.
 func Module() tools.ToolModule {
@@ -141,23 +142,14 @@ func collectResultSet(rows *sql.Rows) (any, any, error) {
 }
 
 // normalizeValue converts driver values to JSON-friendly forms: NULL stays nil,
-// byte slices become numbers when unambiguous and strings otherwise, and times
+// byte slices become strings without guessing their SQL type, and times
 // pass through for RFC 3339 marshaling.
 func normalizeValue(v any) any {
 	switch value := v.(type) {
 	case nil:
 		return nil
 	case []byte:
-		s := string(value)
-		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return i
-		}
-		if strings.ContainsAny(s, ".eE") {
-			if f, err := strconv.ParseFloat(s, 64); err == nil {
-				return f
-			}
-		}
-		return s
+		return string(value)
 	case time.Time:
 		return value
 	default:
@@ -165,19 +157,31 @@ func normalizeValue(v any) any {
 	}
 }
 
-// toDSN converts a mysql:// URL (or passes through an existing DSN) into a
-// go-sql-driver DSN with multi-statements and time parsing enabled.
+// toDSN converts a mysql:// URL or normalizes an existing go-sql-driver DSN,
+// enabling multi-statement batches and parameter interpolation.
 func toDSN(raw string) (string, error) {
 	if !strings.Contains(raw, "://") {
-		return raw, nil
+		cfg, err := mysqldriver.ParseDSN(raw)
+		if err != nil {
+			return "", err
+		}
+		cfg.MultiStatements = true
+		cfg.InterpolateParams = true
+		return cfg.FormatDSN(), nil
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "", err
 	}
+	if u.Scheme != "mysql" {
+		return "", fmt.Errorf("unsupported MySQL URL scheme %q", u.Scheme)
+	}
 	cfg := mysqldriver.NewConfig()
 	cfg.Net = "tcp"
 	cfg.Addr = u.Host
+	if u.Port() == "" {
+		cfg.Addr = net.JoinHostPort(u.Hostname(), "3306")
+	}
 	if u.User != nil {
 		cfg.User = u.User.Username()
 		if password, ok := u.User.Password(); ok {
@@ -187,5 +191,16 @@ func toDSN(raw string) (string, error) {
 	cfg.DBName = strings.TrimPrefix(u.Path, "/")
 	cfg.MultiStatements = true
 	cfg.ParseTime = true
+	// Parse the URL options through the driver's DSN parser so TLS, timeouts,
+	// charset and session settings are retained instead of silently discarded.
+	if u.RawQuery != "" {
+		cfg, err = mysqldriver.ParseDSN(cfg.FormatDSN() + "&" + u.RawQuery)
+		if err != nil {
+			return "", err
+		}
+	}
+	cfg.MultiStatements = true
+	// Parameters in multi-statement batches require client-side interpolation.
+	cfg.InterpolateParams = true
 	return cfg.FormatDSN(), nil
 }

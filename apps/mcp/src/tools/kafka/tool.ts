@@ -48,7 +48,7 @@ function buildConfig(
 
 /**
  * librdkafka properties that are *topic*-level rather than global
- * (auto.offset.reset, enable.auto.commit, acks, message.timeout.ms, ...).
+ * (auto.offset.reset, acks, message.timeout.ms, ...).
  * node-rdkafka replaces the client's default topic configuration with the
  * second constructor argument, so topic-level properties set only in the
  * global configuration are silently ignored — e.g. auto.offset.reset keeps
@@ -67,8 +67,6 @@ const TOPIC_CONF_KEYS = [
   "compression.level",
   "queuing.strategy",
   "auto.commit.enable",
-  "enable.auto.commit",
-  "auto.commit.interval.ms",
   "auto.offset.reset",
   "consume.callback.max.messages",
 ] as const;
@@ -157,8 +155,8 @@ async function withClient<T>(
     globalConf as ProducerGlobalConfig,
     topicConf,
   );
-  await connectClient(client);
   try {
+    await connectClient(client);
     return await fn(client);
   } finally {
     await disconnectClient(client);
@@ -238,12 +236,26 @@ async function opProduce(input: OpInput, conf: GlobalConfig): Promise<unknown> {
   if (messages.length === 0)
     throw new Error("produce requires at least one message");
   const { globalConf, topicConf } = splitTopicConfig(conf);
+  let delivered = 0;
+  let deliveryError: LibrdKafkaError | undefined;
+  let finishDelivery: () => void = () => {};
+  const deliveries = new Promise<void>((resolve) => {
+    finishDelivery = resolve;
+  });
   const producer = new Kafka.Producer(
-    globalConf as ProducerGlobalConfig,
+    {
+      ...globalConf,
+      "delivery.report.only.error": false,
+      dr_cb: (error: LibrdKafkaError) => {
+        if (error) deliveryError ??= error;
+        delivered += 1;
+        if (deliveryError || delivered >= messages.length) finishDelivery();
+      },
+    } as ProducerGlobalConfig,
     topicConf,
   );
-  await connectClient(producer);
   try {
+    await connectClient(producer);
     let produced = 0;
     for (const message of messages) {
       producer.produce(
@@ -260,6 +272,19 @@ async function opProduce(input: OpInput, conf: GlobalConfig): Promise<unknown> {
       produced += 1;
     }
     await flushProducer(producer, input.timeout_ms);
+    // flush succeeds once the queue is empty even if a message was rejected.
+    // Delivery reports are dispatched asynchronously, including after flush.
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error("Timed out waiting for Kafka delivery reports")),
+        input.timeout_ms,
+      );
+      void deliveries.then(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+    if (deliveryError) throw deliveryError;
     return { produced };
   } finally {
     await disconnectClient(producer);
@@ -273,25 +298,54 @@ function collectMessages(
   timeoutMs: number,
   encoding: Encoding,
 ): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false;
-    const onData = (message: Message): void => {
-      out.push(normalizeMessage(message, encoding));
-      if (out.length >= max) finish();
-    };
-    const onError = (): void => undefined;
-    const timer = setTimeout(finish, timeoutMs);
-    function finish(): void {
+    let reading = false;
+    const deadline = Date.now() + timeoutMs;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const onError = (error: LibrdKafkaError): void => finish(error);
+    // Let an in-flight bounded read finish so its already-consumed messages
+    // are included even if callback dispatch occurs just after the deadline.
+    const timer = setTimeout(() => {
+      if (!reading) finish();
+    }, timeoutMs);
+    function finish(error?: LibrdKafkaError): void {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      consumer.removeListener("data", onData);
+      clearTimeout(retryTimer);
       consumer.removeListener("event.error", onError);
-      resolve();
+      if (error) reject(error);
+      else resolve();
     }
-    consumer.on("data", onData);
+    function read(): void {
+      if (settled) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return finish();
+      consumer.setDefaultConsumeTimeout(Math.min(remaining, 100));
+      try {
+        reading = true;
+        // The streaming consume loop may fetch and auto-commit messages after
+        // max_messages is reached. Bounded reads leave those messages unread.
+        // librdkafka applies this timeout per message, so read one at a time
+        // to keep each native call within the remaining consume window.
+        consumer.consume(1, (error, messages) => {
+          reading = false;
+          if (settled) return;
+          if (error) return finish(error);
+          out.push(
+            ...messages.map((message) => normalizeMessage(message, encoding)),
+          );
+          if (out.length >= max || Date.now() >= deadline) return finish();
+          retryTimer = setTimeout(read, 1);
+        });
+      } catch (error) {
+        reading = false;
+        finish(error as LibrdKafkaError);
+      }
+    }
     consumer.on("event.error", onError);
-    consumer.consume();
+    read();
   });
 }
 
@@ -303,9 +357,8 @@ async function opConsume(input: OpInput, conf: GlobalConfig): Promise<unknown> {
   }
   const groupId =
     input.group_id ??
-    (useAssign
-      ? undefined
-      : `yukino-mcp-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    ((conf as unknown as ConfigRecord)["group.id"] as string | undefined) ??
+    `yukino-mcp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const consumerConf: ConfigRecord = {
     ...(conf as unknown as ConfigRecord),
     "enable.auto.commit": input.auto_commit,
@@ -319,9 +372,9 @@ async function opConsume(input: OpInput, conf: GlobalConfig): Promise<unknown> {
     globalConf as unknown as ConsumerGlobalConfig,
     topicConf,
   );
-  await connectClient(consumer);
   const collected: Record<string, unknown>[] = [];
   try {
+    await connectClient(consumer);
     if (useAssign) {
       consumer.assign(
         (input.assignments ?? []).map((a) => ({
@@ -516,8 +569,8 @@ async function opCommittedOffsets(
     globalConf as unknown as ConsumerGlobalConfig,
     topicConf,
   );
-  await connectClient(consumer);
   try {
+    await connectClient(consumer);
     const offsets = await new Promise<TopicPartitionOffset[]>(
       (resolve, reject) => {
         consumer.committed(

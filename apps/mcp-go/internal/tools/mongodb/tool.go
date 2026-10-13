@@ -71,7 +71,7 @@ func Module() tools.ToolModule {
 	}
 }
 
-func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToolResult, any, error) {
+func handle(ctx context.Context, req *mcp.CallToolRequest, in Input) (*mcp.CallToolResult, any, error) {
 	cfg := config.Load().MongoDB
 	rawURL, err := operations.RequireConnection(in.ConnectionURL, cfg.URL, "MONGODB_URL")
 	if err != nil {
@@ -96,8 +96,8 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		dbName = databaseFromURL(rawURL)
 	}
 
-	var command bson.D
-	if err := bson.UnmarshalExtJSON(in.Command, false, &command); err != nil {
+	command, err := parseCommand(req, in.Command)
+	if err != nil {
 		return operations.ResultErr(tools.MongoDBTool, err), nil, nil
 	}
 
@@ -118,6 +118,21 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		return operations.ResultErr(tools.MongoDBTool, err), nil, nil
 	}
 	return operations.Result(map[string]any{"data": data}), nil, nil
+}
+
+func parseCommand(req *mcp.CallToolRequest, fallback json.RawMessage) (bson.D, error) {
+	// AddTool validates through a map and re-marshals arguments, which may
+	// reorder the command fields. MongoDB requires the command name first.
+	if req != nil && req.Params != nil {
+		var original Input
+		if err := json.Unmarshal(req.Params.Arguments, &original); err != nil {
+			return nil, err
+		}
+		fallback = original.Command
+	}
+	var command bson.D
+	err := bson.UnmarshalExtJSON(fallback, false, &command)
+	return command, err
 }
 
 // databaseFromURL extracts the database name from a mongodb:// connection

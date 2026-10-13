@@ -24,16 +24,24 @@ const state = vi.hoisted(() => ({
   producerTopicConf: null as Record<string, unknown> | null,
   consumerTopicConf: null as Record<string, unknown> | null,
   connectError: null as unknown,
+  consumeError: null as unknown,
+  consumedCount: 0,
+  disconnected: 0,
+  deliveryError: null as unknown,
+  consumeDelayMs: 0,
 }));
 
 vi.mock("node-rdkafka", () => {
   class MockProducer {
+    deliveryCallback?: (error: unknown) => void;
     constructor(
       conf: Record<string, unknown>,
       topicConf?: Record<string, unknown>,
     ) {
       state.producerConf = conf;
       state.producerTopicConf = topicConf ?? null;
+      this.deliveryCallback = conf["dr_cb"] as
+        ((error: unknown) => void) | undefined;
     }
     connect(_opts: unknown, cb: (e: unknown, d: unknown) => void): void {
       cb(state.connectError, state.metadata);
@@ -48,11 +56,13 @@ vi.mock("node-rdkafka", () => {
       headers: unknown,
     ): void {
       state.produced.push({ topic, partition, value, key, timestamp, headers });
+      setTimeout(() => this.deliveryCallback?.(state.deliveryError), 0);
     }
     flush(_timeout: number, cb: (e: unknown) => void): void {
       cb(null);
     }
     disconnect(cb?: (e: unknown, d: unknown) => void): void {
+      state.disconnected += 1;
       if (cb) cb(null, {});
     }
     getMetadata(_opts: unknown, cb: (e: unknown, d: unknown) => void): void {
@@ -102,8 +112,18 @@ vi.mock("node-rdkafka", () => {
       for (const handler of (this.handlers[event] ?? []).slice())
         handler(...args);
     }
-    consume(): void {
-      for (const message of state.consumed) this.emit("data", message);
+    setDefaultConsumeTimeout(_timeout: number): void {}
+    consume(
+      count: number,
+      cb: (e: unknown, messages: unknown[]) => void,
+    ): void {
+      if (state.consumeError) return cb(state.consumeError, []);
+      const messages = state.consumed.splice(0, count);
+      state.consumedCount += messages.length;
+      for (const message of messages) this.emit("data", message);
+      if (state.consumeDelayMs)
+        setTimeout(() => cb(null, messages), state.consumeDelayMs);
+      else cb(null, messages);
     }
     committed(
       _toppars: unknown,
@@ -113,6 +133,7 @@ vi.mock("node-rdkafka", () => {
       cb(null, state.committed);
     }
     disconnect(cb?: (e: unknown, d: unknown) => void): void {
+      state.disconnected += 1;
       if (cb) cb(null, {});
     }
   }
@@ -193,6 +214,11 @@ beforeEach(async () => {
   state.producerTopicConf = null;
   state.consumerTopicConf = null;
   state.connectError = null;
+  state.consumeError = null;
+  state.consumedCount = 0;
+  state.disconnected = 0;
+  state.deliveryError = null;
+  state.consumeDelayMs = 0;
   const server = new McpServer({ name: "test", version: "1" });
   kafkaModule.register(server);
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -205,6 +231,33 @@ afterEach(async () => {
 });
 
 describe("kafka_tool", () => {
+  it("retains messages consumed before a delayed callback crosses the deadline", async () => {
+    state.consumed = [
+      { topic: "events", partition: 0, offset: 0, value: Buffer.from("x") },
+    ];
+    state.consumeDelayMs = 20;
+    const result = await call({
+      operation: "consume",
+      topics: ["events"],
+      max_messages: 1,
+      timeout_ms: 10,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(
+      (result.structuredContent?.["data"] as { count: number }).count,
+    ).toBe(1);
+  });
+  it("reports asynchronous delivery failures even when flush succeeds", async () => {
+    state.deliveryError = new Error("unknown partition");
+    const result = await call({
+      operation: "produce",
+      topic: "events",
+      messages: [{ value: "x" }],
+    });
+    expect(result.isError).toBe(true);
+    expect(firstText(result)).toContain("unknown partition");
+    expect(state.disconnected).toBe(1);
+  });
   it("produces messages and flushes", async () => {
     const result = await call({
       operation: "produce",
@@ -297,10 +350,12 @@ describe("kafka_tool", () => {
     // replaces the default topic config with the second constructor argument,
     // so global-only values such as auto.offset.reset would be ignored.
     expect(state.consumerTopicConf?.["auto.offset.reset"]).toBe("earliest");
-    expect(state.consumerTopicConf?.["enable.auto.commit"]).toBe(false);
+    // High-level consumer auto-commit properties belong to the global conf.
+    expect(state.consumerConf?.["enable.auto.commit"]).toBe(false);
+    expect(state.consumerTopicConf?.["enable.auto.commit"]).toBeUndefined();
   });
 
-  it("consumes by explicit assignment without a group", async () => {
+  it("supplies the required group id for explicit assignments", async () => {
     state.consumed = [
       {
         topic: "events",
@@ -317,7 +372,51 @@ describe("kafka_tool", () => {
     });
     const sc = result.structuredContent as Record<string, unknown>;
     expect((sc["data"] as { count: number }).count).toBe(1);
-    expect(state.consumerConf?.["group.id"]).toBeUndefined();
+    expect(state.consumerConf?.["group.id"]).toMatch(/^yukino-mcp-/);
+  });
+
+  it("leaves messages beyond max_messages unread", async () => {
+    state.consumed = [0, 1, 2].map((offset) => ({
+      topic: "events",
+      partition: 0,
+      offset,
+      size: 1,
+      value: Buffer.from("x"),
+    }));
+    const result = await call({
+      operation: "consume",
+      topics: ["events"],
+      max_messages: 1,
+      auto_commit: true,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(state.consumedCount).toBe(1);
+    expect(state.consumed).toHaveLength(2);
+  });
+
+  it("reports consume errors instead of a successful empty result", async () => {
+    state.consumeError = new Error("Topic authorization failed");
+    const result = await call({ operation: "consume", topics: ["events"] });
+    expect(result.isError).toBe(true);
+    expect(firstText(result)).toContain("Topic authorization failed");
+    expect(state.disconnected).toBe(1);
+  });
+
+  it("honors a group id passed through raw config", async () => {
+    await call({
+      operation: "consume",
+      topics: ["events"],
+      config: { "group.id": "configured-group" },
+      timeout_ms: 5,
+    });
+    expect(state.consumerConf?.["group.id"]).toBe("configured-group");
+  });
+
+  it("cleans up clients when connecting fails", async () => {
+    state.connectError = new Error("cannot connect");
+    const result = await call({ operation: "list_topics" });
+    expect(result.isError).toBe(true);
+    expect(state.disconnected).toBe(1);
   });
 
   it("lists topics from metadata", async () => {

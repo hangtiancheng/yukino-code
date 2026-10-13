@@ -86,9 +86,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	if bearer != "" {
 		headers["Authorization"] = "Bearer " + bearer
 	}
-	for k, v := range in.Headers {
-		headers[k] = v
-	}
+	headers = operations.MergeHeaders(headers, in.Headers)
 
 	var bodyBytes []byte
 	if method != "GET" {

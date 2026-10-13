@@ -47,6 +47,16 @@ afterEach(async () => {
 });
 
 describe("clickhouse_tool", () => {
+  it("sends the configured user with X-ClickHouse-Key", async () => {
+    const routes = stubFetchRoutes([
+      { method: "POST", url: "http://localhost:8123/", json: { data: [] } },
+    ]);
+    const result = await call({ sql: "SELECT 1", api_key: "override" });
+    expect(result.isError).toBeUndefined();
+    expect(routes.lastCall().headers["x-clickhouse-user"]).toBe("langfuse");
+    expect(routes.lastCall().headers["x-clickhouse-key"]).toBe("override");
+    expect(routes.lastCall().headers["authorization"]).toBeUndefined();
+  });
   it("runs a SELECT and parses the JSON result", async () => {
     const payload = { meta: [], data: [{ n: 1 }], rows: 1 };
     const routes = stubFetchRoutes([

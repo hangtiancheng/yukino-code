@@ -11,6 +11,7 @@ import {
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
 import { buildCanonicalUri, signRequest } from "./s3.js";
+import { fetchS3 } from "./http.js";
 
 const TEXT_SUBTYPE =
   /(^|\/)(xml|json|javascript|html|x-www-form-urlencoded)([;+]|$)/i;
@@ -186,7 +187,7 @@ export const minioModule: ToolModule = {
             },
           });
 
-          const response = await fetch(signed.url, {
+          const response = await fetchS3(signed.url, {
             method: input.method,
             headers: signed.headers,
             ...(input.method === "GET" ||

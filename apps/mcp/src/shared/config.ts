@@ -209,12 +209,11 @@ function stripTrailingSlashes(value: string): string {
 }
 
 function normalizeEtcdUrl(raw: string): string {
-  const trimmed = raw.trim();
-  if (/^https?:\/\//i.test(trimmed)) return stripTrailingSlashes(trimmed);
   // Compose-style endpoint such as "etcd:2379" or a comma-separated list; use
-  // the first entry over plain HTTP for the v3 JSON gateway.
-  const first = trimmed.split(",")[0]?.trim() ?? "";
+  // the first entry, preserving its scheme when supplied.
+  const first = raw.split(",")[0]?.trim() ?? "";
   if (!first) return "";
+  if (/^https?:\/\//i.test(first)) return stripTrailingSlashes(first);
   return stripTrailingSlashes(`http://${first}`);
 }
 

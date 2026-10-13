@@ -51,10 +51,14 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		return operations.ResultErr(tools.RedisTool, err), nil, nil
 	}
 	opts.DialTimeout = connectTimeout
-	opts.MaxRetries = 0
+	// In go-redis, zero selects the default retries. Retrying arbitrary writes
+	// after a connection failure can execute them twice.
+	opts.MaxRetries = -1
 
 	client := goredis.NewClient(opts)
 	defer client.Close()
+	conn := client.Conn()
+	defer conn.Close()
 
 	results := make([]any, 0, len(in.Commands))
 	fail := func(err error) (*mcp.CallToolResult, any, error) {
@@ -68,7 +72,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 
 	connectCtx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
-	if err := client.Ping(connectCtx).Err(); err != nil {
+	if err := conn.Ping(connectCtx).Err(); err != nil {
 		return fail(err)
 	}
 
@@ -77,8 +81,10 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		for i, arg := range command {
 			args[i] = arg
 		}
-		cmd := client.Do(ctx, args...)
-		if cmd.Err() != nil {
+		cmd := conn.Do(ctx, args...)
+		// A nil bulk reply (e.g. GET of a missing key) is a successful Redis
+		// result, represented as null in the TypeScript tool.
+		if cmd.Err() != nil && cmd.Err() != goredis.Nil {
 			results = append(results, map[string]any{"name": "Error", "message": cmd.Err().Error()})
 			data := map[string]any{
 				"results":              results,

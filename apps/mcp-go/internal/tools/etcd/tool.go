@@ -76,10 +76,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		payload = encodeRequestBytes(payload)
 	}
 
-	headers := map[string]string{"Content-Type": "application/json"}
-	for k, v := range in.Headers {
-		headers[k] = v
-	}
+	headers := operations.MergeHeaders(map[string]string{"Content-Type": "application/json"}, in.Headers)
 
 	var bodyBytes []byte
 	if method != "GET" {
