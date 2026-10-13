@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>create_app</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { margin: 0; height: 100%; }
+      main { display: flex; flex-direction: column; height: 100vh; background: var(--color-background-primary, Canvas); color: var(--color-text-primary, CanvasText); font-family: var(--font-sans, system-ui, sans-serif); }
+      nav { display: flex; gap: 12px; align-items: center; min-height: 0; padding: 4px 12px; border-bottom: 1px solid var(--color-border-primary, GrayText); background: var(--color-background-secondary, Canvas); }
+      .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+      .status { font-size: 12px; opacity: 0.7; }
+      iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--color-background-primary, Canvas); }
+      .error { margin: auto; padding: 16px 20px; }
+    </style>
+  </head>
+  <body>
+    <main id="root">
+      <nav>
+        <div class="title" id="title">{{.FallbackTitle}}</div>
+        <div class="status" id="status">Connecting to host…</div>
+      </nav>
+      <iframe id="frame" sandbox="allow-scripts allow-forms allow-modals allow-popups" title="Rendered app"></iframe>
+    </main>
+    <script>
+      const fallbackTitle = {{.FallbackTitleJS}};
+      const titleEl = document.getElementById("title");
+      const statusEl = document.getElementById("status");
+      const frame = document.getElementById("frame");
+      const parentWindow = window.parent;
+      let nextID = 1;
+      const pending = new Map();
+      let hostContext = {};
+
+      function send(message) {
+        parentWindow.postMessage(message, "*");
+      }
+      function request(method, params) {
+        const id = nextID++;
+        return new Promise((resolve, reject) => {
+          pending.set(id, { resolve, reject });
+          send({ jsonrpc: "2.0", id, method, params });
+        });
+      }
+      function notify(method, params) {
+        send({ jsonrpc: "2.0", method, params: params || {} });
+      }
+      function readString(record, key) {
+        const value = record && record[key];
+        return typeof value === "string" && value !== "" ? value : undefined;
+      }
+      function applyHost(ctx) {
+        if (!ctx) return;
+        hostContext = Object.assign(hostContext, ctx);
+        const root = document.documentElement;
+        if (hostContext.theme) {
+          root.dataset.theme = hostContext.theme;
+          root.style.colorScheme = hostContext.theme;
+        }
+        const variables = hostContext.styles && hostContext.styles.variables;
+        if (variables) {
+          for (const key of Object.keys(variables)) {
+            if (typeof variables[key] === "string") root.style.setProperty(key, variables[key]);
+          }
+        }
+        const fonts = hostContext.styles && hostContext.styles.css && hostContext.styles.css.fonts;
+        if (typeof fonts === "string" && fonts !== "") {
+          let style = document.getElementById("host-fonts");
+          if (!style) {
+            style = document.createElement("style");
+            style.id = "host-fonts";
+            document.head.appendChild(style);
+          }
+          style.textContent = fonts;
+        }
+      }
+      function show(html, title) {
+        titleEl.textContent = title || fallbackTitle;
+        frame.srcdoc = html;
+        statusEl.textContent = "Rendered";
+      }
+      function fail(message) {
+        statusEl.textContent = message;
+      }
+      function onToolInput(params) {
+        const html = readString(params.arguments, "html");
+        const title = readString(params.arguments, "title");
+        if (html !== undefined) show(html, title);
+      }
+      function onNotification(method, params) {
+        if (method === "ui/notifications/tool-input") onToolInput(params);
+        else if (method === "ui/notifications/tool-input-partial") {
+          const html = readString(params.arguments, "html");
+          statusEl.textContent = "Generating app… " + ((html ? html.length : 0) / 1024).toFixed(1) + " KB";
+        } else if (method === "ui/notifications/tool-result") {
+          if (params.isError) {
+            fail("The create_app tool call failed.");
+            return;
+          }
+          const html = readString(params._meta, "html");
+          const title = readString(params._meta, "title") || readString(params.structuredContent, "title");
+          if (html !== undefined) show(html, title);
+          else fail("Tool result contained no app HTML.");
+        } else if (method === "ui/notifications/tool-cancelled") {
+          fail("App creation was cancelled.");
+        } else if (method === "ui/notifications/host-context-changed") {
+          applyHost(params);
+        }
+      }
+      window.addEventListener("message", (event) => {
+        if (event.source !== parentWindow) return;
+        const msg = event.data;
+        if (!msg || msg.jsonrpc !== "2.0") return;
+        if (msg.id !== undefined && msg.method) {
+          if (msg.method === "ui/resource-teardown" || msg.method === "ping") {
+            send({ jsonrpc: "2.0", id: msg.id, result: {} });
+          } else {
+            send({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "Method not found" } });
+          }
+          return;
+        }
+        if (msg.id !== undefined && (msg.result !== undefined || msg.error)) {
+          const waiter = pending.get(msg.id);
+          if (!waiter) return;
+          pending.delete(msg.id);
+          if (msg.error) waiter.reject(new Error(msg.error.message || "rpc error"));
+          else waiter.resolve(msg.result);
+          return;
+        }
+        if (msg.method) onNotification(msg.method, msg.params || {});
+      });
+      function reportSize() {
+        notify("ui/notifications/size-changed", {
+          width: document.documentElement.clientWidth,
+          height: document.documentElement.clientHeight,
+        });
+      }
+      request("ui/initialize", {
+        appInfo: { name: "yukino create_app", version: "1.0.0" },
+        appCapabilities: {},
+        protocolVersion: "2026-01-26",
+      }).then((result) => {
+        applyHost(result && result.hostContext);
+        notify("ui/notifications/initialized");
+        statusEl.textContent = "Waiting for app…";
+        reportSize();
+        if (window.ResizeObserver) {
+          let frameID = 0;
+          new ResizeObserver(() => {
+            cancelAnimationFrame(frameID);
+            frameID = requestAnimationFrame(reportSize);
+          }).observe(document.documentElement);
+        }
+      }).catch((err) => {
+        titleEl.textContent = fallbackTitle;
+        frame.remove();
+        const alert = document.createElement("div");
+        alert.className = "error";
+        alert.setAttribute("role", "alert");
+        alert.textContent = "Could not connect to the MCP host: " + (err && err.message ? err.message : String(err));
+        document.getElementById("root").appendChild(alert);
+      });
+    </script>
+  </body>
+</html>

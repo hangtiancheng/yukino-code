@@ -4,6 +4,7 @@ package github
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"syscall"
 )
@@ -22,6 +23,8 @@ func killProcGroup(cmd *exec.Cmd) error {
 }
 
 func signalName(sig syscall.Signal) string { return sig.String() }
+
+func exitSignal(state *os.ProcessState) string { return "" }
 
 func isSpawnError(err error) bool {
 	if err == nil {

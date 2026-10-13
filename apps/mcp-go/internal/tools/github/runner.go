@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -64,11 +63,7 @@ func RunGh(ctx context.Context, args []string, opts GhOptions) (GhResult, error)
 	}
 	if cmd.ProcessState != nil {
 		res.ExitCode = cmd.ProcessState.ExitCode()
-		if res.ExitCode == -1 {
-			if sig := cmd.ProcessState.Signal(); sig != syscall.Signal(-1) {
-				res.Signal = signalName(sig)
-			}
-		}
+		res.Signal = exitSignal(cmd.ProcessState)
 	}
 	res.TimedOut = runCtx.Err() == context.DeadlineExceeded
 	res.Cancelled = !res.TimedOut && runCtx.Err() == context.Canceled

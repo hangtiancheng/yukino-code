@@ -68,7 +68,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 
 	connectCtx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
-	if err := client.Connect(connectCtx); err != nil {
+	if err := client.Ping(connectCtx).Err(); err != nil {
 		return fail(err)
 	}
 
