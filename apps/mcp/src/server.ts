@@ -25,7 +25,14 @@ const INSTRUCTIONS =
   `Use ${TOOL_NAMES.postgresTool} and ${TOOL_NAMES.mysqlTool} to execute any SQL (including writes, DDL and ` +
   `multiple statements), ${TOOL_NAMES.redisTool} for arbitrary Redis command batches, ${TOOL_NAMES.mongodbTool} ` +
   `for any MongoDB database command, and ${TOOL_NAMES.prometheusTool} for PromQL, alerts, targets ` +
-  "and any Prometheus HTTP API or administrative endpoint. Connection URLs may be " +
+  `and any Prometheus HTTP API or administrative endpoint, and ${TOOL_NAMES.grafanaTool} for Grafana ` +
+  `dashboards, folders, datasources, proxied datasource queries, annotations, alerting and admin APIs. ` +
+  `Use ${TOOL_NAMES.minioTool} for any S3/MinIO object-storage operation, ` +
+  `${TOOL_NAMES.clickhouseTool} for arbitrary ClickHouse SQL over the HTTP interface, ` +
+  `${TOOL_NAMES.etcdTool} for etcd v3 key-value, lease, auth, cluster and maintenance operations, ` +
+  `${TOOL_NAMES.milvusTool} for Milvus vector-database REST operations, and ` +
+  `${TOOL_NAMES.kafkaTool} for Kafka produce/consume and topic, partition, offset and cluster administration. ` +
+  "Connection URLs may be " +
   "configured in the environment or supplied per call. Public tool names use " +
   "snake_case with at least two words; existing compound names remain unchanged.";
 

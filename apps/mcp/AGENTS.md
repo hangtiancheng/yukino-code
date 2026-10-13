@@ -1,1 +1,15 @@
 @https://raw.githubusercontent.com/hangtiancheng/hangtiancheng/main/docker-compose.yml
+
+- Langfuse MCP (Ref: official MCP langfuse/mcp-server-langfuse)
+- etcd MCP (No official MCP reference)
+- Kafka MCP (No official MCP reference)
+- MinIO/S3 MCP (No official MCP reference)
+- Grafana MCP (Ref: official MCP grafana/mcp-grafana)
+- ClickHouse MCP (Ref: official MCP ClickHouse/mcp-clickhouse)
+- Milvus MCP (Ref: official MCP zilliztech/mcp-server-milvus)
+- Prometheus MCP (Ref: official MCP prometheus/prometheus-mcp)
+- MySQL MCP (No official MCP reference)
+- PostgreSQL MCP (No official MCP reference)
+- MongoDB MCP (Ref: official MCP mongodb-js/mongodb-mcp-server)
+- Redis MCP (Ref: official MCP redis/mcp-redis)
+- GitHub MCP (Ref: official MCP github/github-mcp-server)

@@ -61,6 +61,7 @@ export interface FetchRoute {
   status?: number;
   json?: unknown;
   text?: string;
+  bytes?: Uint8Array;
   headers?: Record<string, string>;
 }
 
@@ -108,16 +109,22 @@ export function stubFetchRoutes(routes: FetchRoute[]): FetchStub {
       );
     }
     const status = route.status ?? 200;
-    const body =
-      route.text !== undefined
-        ? route.text
-        : route.json !== undefined
-          ? JSON.stringify(route.json)
-          : null;
+    const body: BodyInit | null =
+      route.bytes !== undefined
+        ? new Uint8Array(route.bytes)
+        : route.text !== undefined
+          ? route.text
+          : route.json !== undefined
+            ? JSON.stringify(route.json)
+            : null;
+    const isJson =
+      route.json !== undefined &&
+      route.bytes === undefined &&
+      route.text === undefined;
     return new Response(body, {
       status,
       headers: {
-        ...(body !== null ? { "content-type": "application/json" } : {}),
+        ...(isJson ? { "content-type": "application/json" } : {}),
         ...route.headers,
       },
     });

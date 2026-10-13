@@ -4,7 +4,7 @@ The **Yukino MCP server** — an official collection of MCP tools for the
 [Yukino CLI](../../README.md). It includes a semantic
 `docs_tool` RAG tool over your local Yukino knowledge base, a `create_app`
 tool that lets agents deliver interactive MCP Apps with a sandboxed UI,
-and a `github_tool` that runs GitHub CLI commands, plus PostgreSQL, MySQL, Redis, MongoDB and Prometheus tools.
+and a `github_tool` that runs GitHub CLI commands, plus PostgreSQL, MySQL, Redis, MongoDB, Prometheus, Grafana, MinIO/S3, ClickHouse, etcd, Milvus and Kafka tools.
 
 [![npm](https://img.shields.io/npm/v/@yukino.js/mcp?label=npm&color=F05138)](https://www.npmjs.com/package/@yukino.js/mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f5a623.svg)](../../LICENSE)
@@ -173,35 +173,240 @@ flags and account privileges still determine available operations.
 {"tool":"prometheus_tool","arguments":{"path":"/-/reload","method":"POST"}}
 ```
 
+### `grafana_tool`
+
+Call any Grafana HTTP API endpoint. `path` defaults to `/api/health`. Use
+`/api/search` to list dashboards/folders, `/api/dashboards/uid/{uid}` to fetch
+(GET) or save (POST) a dashboard, `/api/folders`, `/api/datasources` and
+`/api/datasources/{id}` for provisioning, `/api/ds/query` for proxied datasource
+queries, `/api/annotations`, `/api/ruler/...` and `/api/v1/provisioning/*` for
+alerting, and `/api/admin`, `/api/org`, `/api/users`, `/api/serviceaccounts` for
+administration. There is no endpoint allowlist; Grafana RBAC and the credential's
+role still govern what succeeds.
+
+This tool shares the same authenticated HTTP-passthrough plumbing as
+`prometheus_tool` (`src/tools/operations/http.ts`).
+
+- **Input** — optional `base_url`, `path`, `method` (default `GET`), `params`,
+  `body`, `headers`, and `timeout_ms` (default `30000`). `path` may be an absolute
+  URL. `body` is JSON (dashboard models, `/api/ds/query` payloads) or a raw string
+  sent verbatim.
+- **Configuration** — `GRAFANA_BASE_URL` (`GRAFANA_URL` fallback), with either a
+  bearer token (`GRAFANA_TOKEN`, `GRAFANA_API_KEY` fallback — a service-account
+  token or API key) or basic auth (`GRAFANA_USERNAME`/`GRAFANA_PASSWORD`). Custom
+  `headers` override configured auth and can set `X-Grafana-Org-Id`.
+- **Output** — `{status_code, data}` with the complete JSON response or text for
+  non-JSON endpoints. Non-2xx responses retain their body and set `isError: true`.
+
+```json
+{"tool":"grafana_tool","arguments":{}}
+{"tool":"grafana_tool","arguments":{"path":"/api/search","params":{"query":"my-dashboard"}}}
+{"tool":"grafana_tool","arguments":{"path":"/api/dashboards/uid/abc123"}}
+{"tool":"grafana_tool","arguments":{"path":"/api/ds/query","method":"POST","body":{"queries":[{"refId":"A","datasource":{"uid":"prometheus"},"expr":"up"}]}}}
+{"tool":"grafana_tool","arguments":{"path":"/api/dashboards/db","method":"POST","body":{"dashboard":{"title":"Demo","panels":[]},"overwrite":true}}}
+```
+
+### `minio_tool`
+
+Call any S3-compatible (MinIO) REST operation with full account privileges:
+list buckets, list/create/delete buckets, get/put/head/delete objects, multipart
+uploads, and bucket subresources such as versioning, policy and lifecycle. There
+is no operation allowlist. Requests are signed with **AWS Signature V4**
+(path-style) using a hand-rolled signer (`src/tools/minio/s3.ts`), so no AWS SDK
+is required.
+
+- **Input** — `method` (default `GET`), optional `bucket`, `key`, `query`
+  (subresource parameters; use an empty string for valueless ones like
+  `location`, `uploads`, `versioning`, `delete`), `headers`, and a body via
+  `body` (UTF-8 XML/JSON), `body_base64` (binary) or `body_path` (local file).
+  `response_format` (`auto`/`text`/`base64`/`none`), `max_bytes` and `save_path`
+  control how the response body is returned; large or binary bodies can be
+  written straight to `save_path`.
+- **Configuration** — `MINIO_URL` (`S3_ENDPOINT` fallback),
+  `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
+  fallback), `MINIO_REGION` (`AWS_REGION`/`AWS_DEFAULT_REGION` fallback, default
+  `us-east-1`) and optional `MINIO_SESSION_TOKEN`. Per-call `endpoint`/`region`
+  override the environment.
+- **Output** — `{status_code, headers, size, body?|body_base64?, truncated?,
+saved_to?}`. Non-2xx responses keep their body and set `isError: true`.
+
+```json
+{"tool":"minio_tool","arguments":{}}
+{"tool":"minio_tool","arguments":{"bucket":"data","query":{"list-type":2,"prefix":"logs/"}}}
+{"tool":"minio_tool","arguments":{"method":"PUT","bucket":"data","key":"hello.txt","body":"hello world","headers":{"content-type":"text/plain"}}}
+{"tool":"minio_tool","arguments":{"bucket":"data","key":"hello.txt","save_path":"/tmp/hello.txt"}}
+{"tool":"minio_tool","arguments":{"method":"DELETE","bucket":"data","key":"hello.txt"}}
+```
+
+### `clickhouse_tool`
+
+Execute arbitrary ClickHouse SQL over the HTTP interface with the account's full
+privileges: queries, inserts, DDL, mutations, `system` tables and administrative
+statements. There is no SQL allowlist or read-only mode.
+
+- **Input** — `sql`, optional `params` (parameterized-query values sent as
+  `param_<name>` for `{name:Type}` placeholders), `settings` (engine settings as
+  query parameters, e.g. `max_execution_time`, `readonly`), `database`, `format`
+  (`default_format`, default `JSON`), and `data`/`data_base64` for
+  `INSERT ... FORMAT <fmt>` (the SQL moves to the `query` parameter and the rows
+  become the body). Optional `user`/`password`/`api_key` and `headers`.
+- **Configuration** — `CLICKHOUSE_URL` (`CLICKHOUSE_HTTP_URL` fallback) or
+  `connection_url`; `CLICKHOUSE_USER`/`CLICKHOUSE_PASSWORD` (basic auth) and
+  `CLICKHOUSE_DATABASE`.
+- **Output** — `{status_code, format, data}`. JSON-family formats are parsed into
+  `data`; other formats return text. Non-2xx responses set `isError: true`.
+
+```json
+{"tool":"clickhouse_tool","arguments":{"sql":"SELECT number FROM system.numbers LIMIT 5"}}
+{"tool":"clickhouse_tool","arguments":{"sql":"SELECT {id:UInt64} AS id","params":{"id":42}}}
+{"tool":"clickhouse_tool","arguments":{"sql":"INSERT INTO t FORMAT JSONEachRow","data":"{\"a\":1}\n","format":"JSONEachRow"}}
+```
+
+### `etcd_tool`
+
+Call any etcd **v3 JSON-gateway** endpoint with full privileges: kv
+range/put/deleterange/txn/compaction, lease grant/revoke/keepalive/timetolive,
+auth, cluster member management and maintenance (status/defragment/alarm/hash).
+There is no endpoint allowlist.
+
+Because the gateway maps proto3 `bytes` to base64 — where a plain string like
+`"test"` would be silently mis-decoded — the tool accepts **plain UTF-8 strings**
+for `key`, `range_end` and `value`, base64-encodes them on the way in, and decodes
+response keys/values back to strings (binary values stay base64). Set
+`raw_base64: true` to send and receive verbatim base64 instead.
+
+- **Input** — `path` (default `/v3/kv/range`), `method` (default `POST`), `body`
+  (JSON request document), `headers` (e.g. `{authorization: '<token>'}` after
+  `/v3/auth/authenticate`), `raw_base64`, `base_url`, `timeout_ms`. Streaming
+  endpoints (`/v3/watch`, `/v3/maintenance/snapshot`) are not supported.
+- **Configuration** — `ETCD_URL` (`ETCD_ENDPOINTS` fallback; a compose-style
+  `etcd:2379` is normalized to `http://etcd:2379`) or `base_url`. The reference
+  compose service does not publish 2379 to the host, so point `ETCD_URL` at a
+  reachable endpoint or publish the port.
+- **Output** — `{status_code, data}` with decoded keys/values. Non-2xx responses
+  set `isError: true`.
+
+```json
+{"tool":"etcd_tool","arguments":{"path":"/v3/kv/put","body":{"key":"app/name","value":"yukino"}}}
+{"tool":"etcd_tool","arguments":{"path":"/v3/kv/range","body":{"key":"app/"}}}
+{"tool":"etcd_tool","arguments":{"path":"/v3/lease/grant","body":{"TTL":"60","ID":"0"}}}
+{"tool":"etcd_tool","arguments":{"path":"/v3/maintenance/status","body":{}}}
+```
+
+### `milvus_tool`
+
+Call any Milvus **RESTful API v2** endpoint with full privileges: collections
+(list/create/describe/drop/has/load/release/rename/alter), entities
+(insert/upsert/delete/get/query/search/hybrid_search), indexes, partitions,
+databases, aliases, users/roles/grants, import and jobs. There is no endpoint
+allowlist.
+
+- **Input** — `path` (default `/v2/vectordb/collections/list`), `method` (default
+  `POST`), `body` (JSON request document), optional `database` (injected as
+  `dbName`), `token` (Bearer override) and `headers`.
+- **Configuration** — `MILVUS_URL` (`MILVUS_ADDRESS` fallback) or `base_url`;
+  authentication from `MILVUS_TOKEN` or `MILVUS_USERNAME`/`MILVUS_PASSWORD`
+  (combined as `username:password`); default database from `MILVUS_DATABASE`. The
+  REST API shares the gRPC port (default `19530`); health/metrics on `9091` are
+  reachable with an absolute `base_url`.
+- **Output** — `{status_code, data}`. A non-zero Milvus `code` or non-2xx status
+  sets `isError: true`.
+
+```json
+{"tool":"milvus_tool","arguments":{}}
+{"tool":"milvus_tool","arguments":{"path":"/v2/vectordb/collections/describe","body":{"collectionName":"docs"}}}
+{"tool":"milvus_tool","arguments":{"path":"/v2/vectordb/entities/query","body":{"collectionName":"docs","filter":"id > 0","outputFields":["id","vector"],"limit":10}}}
+```
+
+### `kafka_tool`
+
+Operate an Apache Kafka cluster through **librdkafka** (`node-rdkafka`) with full
+client privileges. Choose an `operation`: `produce`, `consume`, `list_topics`,
+`describe_topics`, `describe_cluster`, `create_topic`, `delete_topic`,
+`create_partitions`, `watermark_offsets` and `committed_offsets`. Raw librdkafka
+configuration is passed through `config`, so SASL/SSL and any other client setting
+are available.
+
+- **Input** — `operation` plus operation-specific fields: `topic`/`topics`,
+  `messages` (`{key?, value, partition?, timestamp?, headers?}`; a `null` value
+  writes a tombstone), `assignments` (explicit partitions for `consume`, bypassing
+  group subscription), `partitions`, `group_id`, `from_beginning`, `auto_commit`,
+  `max_messages`, `num_partitions`, `replication_factor`, `topic_config`,
+  `encoding` (`utf8` default or `base64` for binary keys/values) and `timeout_ms`
+  (the consume window and per-request timeout). `consume` collects at most
+  `max_messages` within `timeout_ms` and then disconnects.
+- **Configuration** — `KAFKA_BROKERS` (default `localhost:9092`) or `brokers`,
+  `KAFKA_CLIENT_ID` (default `yukino-mcp`), and optional
+  `KAFKA_SECURITY_PROTOCOL`/`KAFKA_SASL_MECHANISM`/`KAFKA_USERNAME`/`KAFKA_PASSWORD`.
+  Each call opens and closes its own client(s).
+- **Output** — `{operation, data}`. `data` shape depends on the operation, e.g.
+  `{produced}` for produce and `{count, group_id, messages}` for consume.
+- **Native module** — `node-rdkafka` compiles a native addon (librdkafka). It is
+  approved in the workspace `allowBuilds` and rebuilt on install; the bundle keeps
+  it external and loads it from `node_modules` at runtime.
+
+```json
+{"tool":"kafka_tool","arguments":{"operation":"list_topics"}}
+{"tool":"kafka_tool","arguments":{"operation":"produce","topic":"events","messages":[{"key":"k1","value":"v1"}]}}
+{"tool":"kafka_tool","arguments":{"operation":"consume","topics":["events"],"group_id":"demo","from_beginning":true,"max_messages":10,"timeout_ms":5000}}
+{"tool":"kafka_tool","arguments":{"operation":"consume","assignments":[{"topic":"events","partition":0,"offset":0}],"max_messages":10}}
+{"tool":"kafka_tool","arguments":{"operation":"create_topic","topic":"new-topic","num_partitions":3,"replication_factor":1}}
+{"tool":"kafka_tool","arguments":{"operation":"watermark_offsets","topic":"events"}}
+```
+
 ## Configuration
 
-| Environment variable  | Description                                                        | Default                  |
-| --------------------- | ------------------------------------------------------------------ | ------------------------ |
-| `EMBEDDING_PROTOCOL`  | Embedding provider protocol (`openai` is the only supported value) | `openai`                 |
-| `EMBEDDING_MODEL`     | Embedding model id (e.g. `text-embedding-v4`)                      | —                        |
-| `EMBEDDING_BASE_URL`  | OpenAI-compatible `embeddings` endpoint base URL                   | —                        |
-| `EMBEDDING_API_KEY`   | API key (falls back to `OPENAI_API_KEY`)                           | —                        |
-| `REDIS_URL`           | Redis connection string (used only by `redis_tool`)                | `redis://localhost:6379` |
-| `YUKINO_DOCS_DIR`     | Local docs directory to index                                      | `~/.yukino/docs`         |
-| `YUKINO_INDEX_DB`     | SQLite file holding the docs vector index                          | `~/.yukino/index.sqlite` |
-| `GITHUB_TOKEN`        | Optional GitHub CLI token (gh also supports stored login)          | —                        |
-| `GH_TOKEN`            | Native GitHub CLI token; takes precedence over `GITHUB_TOKEN`      | —                        |
-| `GITHUB_BASE_URL`     | Legacy API URL; its hostname is used when `GH_HOST` is unset       | —                        |
-| `POSTGRES_URL`        | PostgreSQL connection URL for `postgres_tool`                      | —                        |
-| `POSTGRESQL_URL`      | Fallback for `POSTGRES_URL`                                        | —                        |
-| `DATABASE_URL`        | Final PostgreSQL connection URL fallback                           | —                        |
-| `MYSQL_URL`           | MySQL connection URL for `mysql_tool`                              | —                        |
-| `MONGODB_URL`         | MongoDB connection URL for `mongodb_tool`                          | —                        |
-| `MONGODB_DATABASE`    | Default MongoDB database (otherwise uses the URL database)         | —                        |
-| `PROMETHEUS_BASE_URL` | Prometheus HTTP base URL                                           | —                        |
-| `PROMETHEUS_URL`      | Fallback for `PROMETHEUS_BASE_URL`                                 | —                        |
-| `PROMETHEUS_TOKEN`    | Optional Prometheus bearer token                                   | —                        |
-| `PROMETHEUS_USERNAME` | Optional Prometheus basic-auth username                            | —                        |
-| `PROMETHEUS_PASSWORD` | Optional Prometheus basic-auth password                            | —                        |
-| `GH_HOST`             | Optional GitHub CLI Enterprise hostname                            | —                        |
-| `GH_ENTERPRISE_TOKEN` | Optional GitHub CLI Enterprise token                               | —                        |
-| `HOST`                | HTTP transport bind address                                        | `127.0.0.1`              |
-| `PORT`                | HTTP transport port                                                | `3300`                   |
+| Environment variable      | Description                                                        | Default                  |
+| ------------------------- | ------------------------------------------------------------------ | ------------------------ |
+| `EMBEDDING_PROTOCOL`      | Embedding provider protocol (`openai` is the only supported value) | `openai`                 |
+| `EMBEDDING_MODEL`         | Embedding model id (e.g. `text-embedding-v4`)                      | —                        |
+| `EMBEDDING_BASE_URL`      | OpenAI-compatible `embeddings` endpoint base URL                   | —                        |
+| `EMBEDDING_API_KEY`       | API key (falls back to `OPENAI_API_KEY`)                           | —                        |
+| `REDIS_URL`               | Redis connection string (used only by `redis_tool`)                | `redis://localhost:6379` |
+| `YUKINO_DOCS_DIR`         | Local docs directory to index                                      | `~/.yukino/docs`         |
+| `YUKINO_INDEX_DB`         | SQLite file holding the docs vector index                          | `~/.yukino/index.sqlite` |
+| `GITHUB_TOKEN`            | Optional GitHub CLI token (gh also supports stored login)          | —                        |
+| `GH_TOKEN`                | Native GitHub CLI token; takes precedence over `GITHUB_TOKEN`      | —                        |
+| `GITHUB_BASE_URL`         | Legacy API URL; its hostname is used when `GH_HOST` is unset       | —                        |
+| `POSTGRES_URL`            | PostgreSQL connection URL for `postgres_tool`                      | —                        |
+| `POSTGRESQL_URL`          | Fallback for `POSTGRES_URL`                                        | —                        |
+| `DATABASE_URL`            | Final PostgreSQL connection URL fallback                           | —                        |
+| `MYSQL_URL`               | MySQL connection URL for `mysql_tool`                              | —                        |
+| `MONGODB_URL`             | MongoDB connection URL for `mongodb_tool`                          | —                        |
+| `MONGODB_DATABASE`        | Default MongoDB database (otherwise uses the URL database)         | —                        |
+| `PROMETHEUS_BASE_URL`     | Prometheus HTTP base URL                                           | —                        |
+| `PROMETHEUS_URL`          | Fallback for `PROMETHEUS_BASE_URL`                                 | —                        |
+| `PROMETHEUS_TOKEN`        | Optional Prometheus bearer token                                   | —                        |
+| `PROMETHEUS_USERNAME`     | Optional Prometheus basic-auth username                            | —                        |
+| `PROMETHEUS_PASSWORD`     | Optional Prometheus basic-auth password                            | —                        |
+| `GRAFANA_BASE_URL`        | Grafana HTTP base URL for `grafana_tool` (`GRAFANA_URL` fallback)  | —                        |
+| `GRAFANA_TOKEN`           | Grafana bearer token (service-account token or API key)            | —                        |
+| `GRAFANA_API_KEY`         | Fallback for `GRAFANA_TOKEN`                                       | —                        |
+| `GRAFANA_USERNAME`        | Grafana basic-auth username                                        | —                        |
+| `GRAFANA_PASSWORD`        | Grafana basic-auth password                                        | —                        |
+| `MINIO_URL`               | MinIO/S3 endpoint for `minio_tool` (`S3_ENDPOINT` fallback)        | —                        |
+| `MINIO_ACCESS_KEY`        | S3 access key (`AWS_ACCESS_KEY_ID` fallback)                       | —                        |
+| `MINIO_SECRET_KEY`        | S3 secret key (`AWS_SECRET_ACCESS_KEY` fallback)                   | —                        |
+| `MINIO_REGION`            | S3 signing region (`AWS_REGION`/`AWS_DEFAULT_REGION` fallback)     | `us-east-1`              |
+| `MINIO_SESSION_TOKEN`     | Optional S3 session token (`AWS_SESSION_TOKEN` fallback)           | —                        |
+| `CLICKHOUSE_URL`          | ClickHouse HTTP URL for `clickhouse_tool` (`CLICKHOUSE_HTTP_URL`)  | —                        |
+| `CLICKHOUSE_USER`         | ClickHouse user                                                    | —                        |
+| `CLICKHOUSE_PASSWORD`     | ClickHouse password                                                | —                        |
+| `CLICKHOUSE_DATABASE`     | Default ClickHouse database                                        | —                        |
+| `ETCD_URL`                | etcd v3 gateway URL for `etcd_tool` (`ETCD_ENDPOINTS` fallback)    | —                        |
+| `MILVUS_URL`              | Milvus REST URL for `milvus_tool` (`MILVUS_ADDRESS` fallback)      | —                        |
+| `MILVUS_TOKEN`            | Milvus bearer token (or `MILVUS_USERNAME`/`MILVUS_PASSWORD`)       | —                        |
+| `MILVUS_DATABASE`         | Default Milvus database                                            | —                        |
+| `KAFKA_BROKERS`           | Kafka broker CSV for `kafka_tool`                                  | `localhost:9092`         |
+| `KAFKA_CLIENT_ID`         | Kafka client id                                                    | `yukino-mcp`             |
+| `KAFKA_SECURITY_PROTOCOL` | Kafka `security.protocol` (e.g. `SASL_SSL`)                        | —                        |
+| `KAFKA_SASL_MECHANISM`    | Kafka `sasl.mechanisms` (e.g. `SCRAM-SHA-512`)                     | —                        |
+| `KAFKA_USERNAME`          | Kafka SASL username                                                | —                        |
+| `KAFKA_PASSWORD`          | Kafka SASL password                                                | —                        |
+| `GH_HOST`                 | Optional GitHub CLI Enterprise hostname                            | —                        |
+| `GH_ENTERPRISE_TOKEN`     | Optional GitHub CLI Enterprise token                               | —                        |
+| `HOST`                    | HTTP transport bind address                                        | `127.0.0.1`              |
+| `PORT`                    | HTTP transport port                                                | `3300`                   |
 
 Both **stdio** (default) and **HTTP** transports are supported: `--http` (or
 `MCP_TRANSPORT=http`) starts `startHttpServer`, which serves the same tools over
@@ -252,6 +457,12 @@ mcp/
 │       ├── mysql/      # unrestricted MySQL SQL
 │       ├── redis/      # arbitrary Redis command batches
 │       ├── mongodb/    # arbitrary MongoDB commands + Extended JSON
-│       └── prometheus/ # general Prometheus HTTP operations
+│       ├── prometheus/ # general Prometheus HTTP operations
+│       ├── grafana/    # general Grafana HTTP operations
+│       ├── minio/      # S3 REST passthrough + hand-rolled SigV4 signer
+│       ├── clickhouse/ # arbitrary ClickHouse SQL over HTTP
+│       ├── etcd/       # etcd v3 gateway passthrough + base64 key/value codec
+│       ├── milvus/     # Milvus RESTful API v2 passthrough
+│       └── kafka/      # Kafka produce/consume/admin via node-rdkafka
 └── tests/
 ```
