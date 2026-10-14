@@ -1,0 +1,69 @@
+{
+  // Copy to .config.jsonc; select another JSON/JSONC file with --config <path>.
+  // All paths are relative to the process working directory. Omit unused backends.
+  "transport": "stdio", // "http" also enables /mcp, /sse and /messages.
+  "host": "127.0.0.1",
+  "port": 3300,
+
+  // MySQL accepts structured fields only. username and password are required
+  // when the mysql object is present; an empty password string is allowed.
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "username": "user",
+    "password": "replace-me",
+    "database": "db0",
+    "timeout_ms": 10000,
+    "read_timeout_ms": 0, // 0 disables the separate socket read timeout.
+    "write_timeout_ms": 0,
+    "collation": "utf8mb4_unicode_ci",
+    "timezone": "Local", // IANA zone used to interpret SQL DATE/DATETIME.
+    // "charset": "utf8mb4",
+    // "socket": "/var/run/mysqld/mysqld.sock", // overrides host/port.
+    // "tls": { "ca_file": "ca.pem", "server_name": "mysql.example.com" },
+    // "session": { "sql_mode": "'STRICT_TRANS_TABLES'" }, // SQL expressions.
+  },
+
+  "kafka": {
+    "brokers": "localhost:9092", // Comma-separated bootstrap broker addresses.
+    "client_id": "yukino-mcp",
+    "security_protocol": "PLAINTEXT", // SSL, SASL_PLAINTEXT or SASL_SSL.
+    // "sasl_mechanism": "SCRAM-SHA-512", // PLAIN / SCRAM-SHA-256 also supported.
+    // "username": "user",
+    // "password": "replace-me",
+    // "tls": { "ca_file": "ca.pem", "cert_file": "client.pem", "key_file": "client.key" },
+  },
+
+  "postgres": { "url": "" },
+  "mongodb": { "url": "", "database": "" },
+  "redis": { "url": "redis://localhost:6379" },
+  "github": { "token": "", "base_url": "", "hostname": "" },
+  "prometheus": { "base_url": "", "token": "", "username": "", "password": "" },
+  "grafana": { "base_url": "", "token": "", "username": "", "password": "" },
+  "minio": {
+    "endpoint": "",
+    "access_key": "",
+    "secret_key": "",
+    "region": "us-east-1",
+    "session_token": "",
+  },
+  "clickhouse": { "url": "", "username": "", "password": "", "database": "" },
+  "etcd": { "url": "" },
+  "milvus": {
+    "url": "",
+    "token": "",
+    "username": "",
+    "password": "",
+    "database": "",
+  },
+
+  // Omit docs_dir and index.db_path to use ~/.yukino/docs and ~/.yukino/index.sqlite.
+  // "docs_dir": "/path/to/docs",
+  // "index": { "db_path": "/path/to/index.sqlite" },
+  "embedding": {
+    "protocol": "openai",
+    "model": "",
+    "base_url": "",
+    "api_key": "",
+  },
+}

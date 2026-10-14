@@ -2,14 +2,18 @@ package clickhouse
 
 import (
 	"context"
+	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestAuthenticationOverrides(t *testing.T) {
-	t.Setenv("CLICKHOUSE_USER", "configured")
-	t.Setenv("CLICKHOUSE_PASSWORD", "secret")
+	previous := config.Load()
+	t.Cleanup(func() { config.Set(previous) })
+	cfg := config.Defaults()
+	cfg.Clickhouse = config.ClickhouseConfig{Username: "configured", Password: "secret"}
+	config.Set(cfg)
 	captured := make(chan http.Header, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured <- r.Header.Clone()

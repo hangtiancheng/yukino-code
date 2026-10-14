@@ -44,7 +44,7 @@ type Input struct {
 	TimeoutMS       int               `json:"timeout_ms,omitempty" jsonschema:"HTTP request timeout in milliseconds. Defaults to 30000."`
 }
 
-const description = "Call any S3-compatible (MinIO) REST operation with full account privileges: list buckets, list/create/delete buckets, get/put/head/delete objects, multipart upload, versioning, policies, lifecycle and other subresources. There is no operation allowlist. Requests are signed with AWS Signature V4 (path-style). Set method plus optional bucket, key, query subresource params (e.g. {location:''}, {uploads:''}, {'list-type':2, prefix:'a/'}, {partNumber:1, uploadId:'...'}, {delete:''}), headers and a body. The body may be a UTF-8 string (XML/JSON), base64 (body_base64) or a local file (body_path). Responses return status_code, headers, size and the body as text (XML/JSON) or base64; large or binary bodies can be written to save_path instead. Uses MINIO_URL (S3_ENDPOINT fallback), MINIO_ACCESS_KEY/MINIO_SECRET_KEY (AWS_* fallback) and MINIO_REGION, or per-call endpoint/region."
+const description = "Call any S3-compatible (MinIO) REST operation with full account privileges: list buckets, list/create/delete buckets, get/put/head/delete objects, multipart upload, versioning, policies, lifecycle and other subresources. There is no operation allowlist. Requests are signed with AWS Signature V4 (path-style). Set method plus optional bucket, key, query subresource params (e.g. {location:''}, {uploads:''}, {'list-type':2, prefix:'a/'}, {partNumber:1, uploadId:'...'}, {delete:''}), headers and a body. The body may be a UTF-8 string (XML/JSON), base64 (body_base64) or a local file (body_path). Responses return status_code, headers, size and the body as text (XML/JSON) or base64; large or binary bodies can be written to save_path instead. Uses minio.endpoint, minio.access_key/minio.secret_key and minio.region, or per-call endpoint/region."
 
 // Module returns the minio tool module.
 func Module() tools.ToolModule {
@@ -66,11 +66,11 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	endpoint := strings.TrimRight(firstNonEmpty(in.Endpoint, cfg.Endpoint), "/")
 	if endpoint == "" {
 		return operations.ResultErr(tools.MinioTool,
-			errors.New("Connection is not configured. Set MINIO_URL (or S3_ENDPOINT) or supply endpoint.")), nil, nil
+			errors.New("Connection is not configured. Set minio.endpoint or supply endpoint.")), nil, nil
 	}
 	if cfg.AccessKey == "" || cfg.SecretKey == "" {
 		return operations.ResultErr(tools.MinioTool,
-			errors.New("Credentials are not configured. Set MINIO_ACCESS_KEY and MINIO_SECRET_KEY (or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY).")), nil, nil
+			errors.New("Credentials are not configured. Set minio.access_key and minio.secret_key.")), nil, nil
 	}
 	method := in.Method
 	if method == "" {

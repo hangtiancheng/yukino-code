@@ -320,12 +320,12 @@ allowlist.
 
 ### `kafka_tool`
 
-Operate an Apache Kafka cluster through **librdkafka** (`node-rdkafka`) with full
+Operate an Apache Kafka cluster through **@platformatic/kafka** with full
 client privileges. Choose an `operation`: `produce`, `consume`, `list_topics`,
 `describe_topics`, `describe_cluster`, `create_topic`, `delete_topic`,
-`create_partitions`, `watermark_offsets` and `committed_offsets`. Raw librdkafka
-configuration is passed through `config`, so SASL/SSL and any other client setting
-are available.
+`create_partitions`, `watermark_offsets` and `committed_offsets`. Client options are passed through `config`, including nested `tls` and `sasl`
+objects, `requestTimeout`, `retries`, `acks` (-1, 0 or 1) and `compression`.
+Legacy librdkafka configuration keys are rejected.
 
 - **Input** — `operation` plus operation-specific fields: `topic`/`topics`,
   `messages` (`{key?, value, partition?, timestamp?, headers?}`; a `null` value
@@ -341,12 +341,18 @@ are available.
   Each call opens and closes its own client(s).
 - **Output** — `{operation, data}`. `data` shape depends on the operation, e.g.
   `{produced}` for produce and `{count, group_id, messages}` for consume.
-- **Native module** — `node-rdkafka` compiles a native addon (librdkafka). It is
-  approved in the workspace `allowBuilds` and rebuilt on install; the bundle keeps
-  it external and loads it from `node_modules` at runtime.
+- **Runtime** — the Kafka client runs in JavaScript; no librdkafka build is required.
+  Node.js 24.6 or newer is required.
+- **Offsets** — subscriptions resume committed positions, falling back to earliest
+  with `from_beginning`, otherwise latest. Explicit assignments bypass group
+  subscription. `auto_commit` commits only returned records; prefetched records
+  are never committed. Uncommitted offsets use -1001. Unsafe integer offsets
+  are returned as decimal strings. `describe_cluster` returns `brokers`,
+  `controller_id` and `cluster_id`.
 
 ```json
 {"tool":"kafka_tool","arguments":{"operation":"list_topics"}}
+{"tool":"kafka_tool","arguments":{"operation":"list_topics","config":{"tls":{},"sasl":{"mechanism":"SCRAM-SHA-512","username":"user","password":"replace-me"}}}}
 {"tool":"kafka_tool","arguments":{"operation":"produce","topic":"events","messages":[{"key":"k1","value":"v1"}]}}
 {"tool":"kafka_tool","arguments":{"operation":"consume","topics":["events"],"group_id":"demo","from_beginning":true,"max_messages":10,"timeout_ms":5000}}
 {"tool":"kafka_tool","arguments":{"operation":"consume","assignments":[{"topic":"events","partition":0,"offset":0}],"max_messages":10}}
@@ -463,6 +469,6 @@ mcp/
 │       ├── clickhouse/ # arbitrary ClickHouse SQL over HTTP
 │       ├── etcd/       # etcd v3 gateway passthrough + base64 key/value codec
 │       ├── milvus/     # Milvus RESTful API v2 passthrough
-│       └── kafka/      # Kafka produce/consume/admin via node-rdkafka
+│       └── kafka/      # Kafka produce/consume/admin via @platformatic/kafka
 └── tests/
 ```

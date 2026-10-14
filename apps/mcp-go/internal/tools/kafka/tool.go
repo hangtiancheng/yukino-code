@@ -1,4 +1,4 @@
-// Package kafka uses the same librdkafka engine as the TypeScript MCP server.
+// Package kafka implements Kafka operations with the pure Go franz-go client.
 package kafka
 
 import (
@@ -6,19 +6,20 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"sort"
-	"strconv"
 	"time"
 
-	native "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/config"
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools"
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools/operations"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kerr"
+	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-const description = "Operate an Apache Kafka cluster through librdkafka with full client privileges. Choose an operation: produce, consume, list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets and committed_offsets (-1001 means uncommitted). Raw librdkafka configuration (security.protocol, sasl.*, ssl.*, etc.) is passed through config. Message keys/values are strings decoded with encoding (utf8 default, or base64 for binary); consume returns at most max_messages within timeout_ms. Uses KAFKA_BROKERS (default localhost:9092) or brokers, plus KAFKA_CLIENT_ID and optional SASL settings."
+const description = "Operate Kafka through franz-go: produce, consume, list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets and committed_offsets (-1001 means uncommitted). Uses the kafka object in JSON configuration or per-call brokers/client_id/config. Config accepts documented Kafka client options, including nested tls and sasl objects. Consume returns at most max_messages within timeout_ms and only commits returned records when auto_commit is enabled."
 
 // Message is one record to produce. A null value writes a tombstone.
 type Message struct {
@@ -47,7 +48,7 @@ type PartitionRef struct {
 type Input struct {
 	Brokers           string            `json:"brokers,omitempty" jsonschema:"CSV broker list override, e.g. localhost:9092."`
 	ClientID          string            `json:"client_id,omitempty" jsonschema:"Client id override."`
-	Config            map[string]any    `json:"config,omitempty" jsonschema:"Raw librdkafka client configuration, e.g. {\"security.protocol\":\"SASL_SSL\",\"sasl.mechanisms\":\"SCRAM-SHA-512\"}."`
+	Config            map[string]any    `json:"config,omitempty" jsonschema:"Kafka client options: requestTimeout, connectTimeout, retries, retryDelay, acks, compression, groupId, maxWaitTime, maxBytes, maxBytesPerPartition, tls and sasl."`
 	Operation         string            `json:"operation" jsonschema:"produce, consume, list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets, or committed_offsets."`
 	Topic             string            `json:"topic,omitempty" jsonschema:"Target topic."`
 	Topics            []string          `json:"topics,omitempty" jsonschema:"Topics to subscribe for consume."`
@@ -70,20 +71,7 @@ func Module() tools.ToolModule {
 		tools.AddTool(server, &mcp.Tool{Name: tools.KafkaTool, Title: "Kafka", Description: description}, handle)
 	}}
 }
-
 func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToolResult, any, error) {
-	env := config.Load().Kafka
-	brokers := in.Brokers
-	if brokers == "" {
-		brokers = env.Brokers
-	}
-	if brokers == "" {
-		brokers = "localhost:9092"
-	}
-	clientID := in.ClientID
-	if clientID == "" {
-		clientID = env.ClientID
-	}
 	if in.Encoding == "" {
 		in.Encoding = "utf8"
 	}
@@ -93,357 +81,326 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	if in.MaxMessages == 0 {
 		in.MaxMessages = 50
 	}
-	conf := buildConfig(brokers, clientID, env, in.Config)
-	data, err := runOperation(ctx, conf, in)
+	cfg := config.Load().Kafka
+	if in.Brokers != "" {
+		cfg.Brokers = in.Brokers
+	}
+	if in.ClientID != "" {
+		cfg.ClientID = in.ClientID
+	}
+	opts, extra, err := buildConfig(cfg, in.Config, in.TimeoutMS)
+	if err == nil {
+		if in.GroupID == "" {
+			in.GroupID = extra.GroupID
+		}
+		var data any
+		data, err = runOperation(ctx, opts, in)
+		if err == nil {
+			return operations.Result(map[string]any{"operation": in.Operation, "data": data}), nil, nil
+		}
+	}
+	return operations.ResultErr(tools.KafkaTool, err), nil, nil
+}
+func runOperation(ctx context.Context, opts []kgo.Opt, in Input) (any, error) {
+	if in.Operation == "consume" {
+		return opConsume(ctx, opts, in)
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(in.TimeoutMS)*time.Millisecond)
+	defer cancel()
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
-		return operations.ResultErr(tools.KafkaTool, err), nil, nil
+		return nil, err
 	}
-	return operations.Result(map[string]any{"operation": in.Operation, "data": data}), nil, nil
-}
-
-func buildConfig(brokers, clientID string, env config.KafkaConfig, extra map[string]any) native.ConfigMap {
-	conf := native.ConfigMap{"metadata.broker.list": brokers, "client.id": clientID}
-	for key, value := range map[string]string{"security.protocol": env.SecurityProtocol, "sasl.mechanisms": env.SASLMechanism, "sasl.username": env.Username, "sasl.password": env.Password} {
-		if value != "" {
-			conf[key] = value
-		}
-	}
-	for key, value := range extra {
-		// JSON numbers decode as float64; librdkafka accepts their string form.
-		if number, ok := value.(float64); ok {
-			value = strconv.FormatFloat(number, 'f', -1, 64)
-		}
-		conf[key] = value
-	}
-	return conf
-}
-
-func runOperation(ctx context.Context, conf native.ConfigMap, in Input) (any, error) {
+	defer client.Close()
+	admin := kadm.NewClient(client)
+	admin.SetTimeoutMillis(int32(in.TimeoutMS))
 	switch in.Operation {
 	case "produce":
-		return opProduce(ctx, conf, in)
-	case "consume":
-		return opConsume(ctx, conf, in)
+		if in.Topic == "" {
+			return nil, fmt.Errorf("produce requires topic")
+		}
+		if len(in.Messages) == 0 {
+			return nil, fmt.Errorf("produce requires at least one message")
+		}
+		records := make([]*kgo.Record, 0, len(in.Messages))
+		for _, message := range in.Messages {
+			record := &kgo.Record{Topic: in.Topic, Partition: -1}
+			if message.Partition != nil {
+				record.Partition = int32(*message.Partition)
+			}
+			if message.Key != nil {
+				record.Key = decode(*message.Key, in.Encoding)
+			}
+			if message.Value != nil {
+				record.Value = decode(*message.Value, in.Encoding)
+			}
+			if message.Timestamp != nil {
+				record.Timestamp = time.UnixMilli(*message.Timestamp)
+			}
+			for _, key := range operations.SortedKeys(message.Headers) {
+				record.Headers = append(record.Headers, kgo.RecordHeader{Key: key, Value: []byte(message.Headers[key])})
+			}
+			records = append(records, record)
+		}
+		if err := client.ProduceSync(ctx, records...).FirstErr(); err != nil {
+			return nil, err
+		}
+		return map[string]any{"produced": len(records)}, nil
 	case "committed_offsets":
-		return opCommittedOffsets(ctx, conf, in)
+		if in.GroupID == "" {
+			return nil, fmt.Errorf("committed_offsets requires group_id")
+		}
+		if len(in.Partitions) == 0 {
+			return nil, fmt.Errorf("committed_offsets requires partitions")
+		}
+		offsets, err := fetchOffsets(ctx, admin, in.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]map[string]any, 0, len(in.Partitions))
+		for _, part := range in.Partitions {
+			topic := part.Topic
+			if topic == "" {
+				topic = in.Topic
+			}
+			if topic == "" {
+				return nil, fmt.Errorf("committed_offsets requires a topic for each partition")
+			}
+			offset, ok := offsets.Lookup(topic, int32(part.Partition))
+			if offset.Err != nil {
+				return nil, offset.Err
+			}
+			at := int64(-1001)
+			if ok && offset.At >= 0 {
+				at = offset.At
+			}
+			out = append(out, map[string]any{"topic": topic, "partition": part.Partition, "offset": at})
+		}
+		return map[string]any{"group_id": in.GroupID, "offsets": out}, nil
 	case "create_topic", "delete_topic", "create_partitions":
-		return opAdmin(ctx, conf, in)
-	case "list_topics", "describe_topics", "describe_cluster", "watermark_offsets":
-		client, err := native.NewProducer(&conf)
-		if err != nil {
-			return nil, err
-		}
-		defer client.Close()
-		var topic *string
-		allTopics := in.Operation == "list_topics" || (in.Operation == "describe_topics" && in.Topic == "")
-		if in.Topic != "" && in.Operation != "describe_cluster" {
-			topic = &in.Topic
-		}
-		metadata, err := client.GetMetadata(topic, allTopics, in.TimeoutMS)
-		if err != nil {
-			return nil, err
+		if in.Topic == "" {
+			return nil, fmt.Errorf("operation requires topic")
 		}
 		switch in.Operation {
-		case "list_topics":
-			names := make([]string, 0, len(metadata.Topics))
-			for name := range metadata.Topics {
-				names = append(names, name)
+		case "create_topic":
+			conf := make(map[string]*string, len(in.TopicConfig))
+			for key, value := range in.TopicConfig {
+				conf[key] = &value
 			}
-			sort.Strings(names)
-			return map[string]any{"topics": names}, nil
-		case "describe_topics":
-			return map[string]any{"topics": normalizeTopics(metadata)}, nil
-		case "describe_cluster":
+			results, err := admin.CreateTopics(ctx, int32(max(1, in.NumPartitions)), int16(max(1, in.ReplicationFactor)), conf, in.Topic)
+			if err != nil {
+				return nil, err
+			}
+			if err := results.Error(); err != nil {
+				return nil, err
+			}
+			return map[string]any{"created": in.Topic}, nil
+		case "delete_topic":
+			results, err := admin.DeleteTopics(ctx, in.Topic)
+			if err != nil {
+				return nil, err
+			}
+			if err := results.Error(); err != nil {
+				return nil, err
+			}
+			return map[string]any{"deleted": in.Topic}, nil
+		default:
+			if in.NumPartitions == 0 {
+				return nil, fmt.Errorf("create_partitions requires num_partitions")
+			}
+			results, err := admin.UpdatePartitions(ctx, in.NumPartitions, in.Topic)
+			if err != nil {
+				return nil, err
+			}
+			if err := results.Error(); err != nil {
+				return nil, err
+			}
+			return map[string]any{"topic": in.Topic, "partitions": in.NumPartitions}, nil
+		}
+	case "watermark_offsets":
+		if in.Topic == "" {
+			return nil, fmt.Errorf("watermark_offsets requires topic")
+		}
+		low, err := admin.ListStartOffsets(ctx, in.Topic)
+		if err != nil {
+			return nil, err
+		}
+		high, err := admin.ListEndOffsets(ctx, in.Topic)
+		if err != nil {
+			return nil, err
+		}
+		if err := low.Error(); err != nil {
+			return nil, err
+		}
+		if err := high.Error(); err != nil {
+			return nil, err
+		}
+		parts := in.Partitions
+		if len(parts) == 0 {
+			for _, offset := range low.Offsets().Sorted() {
+				parts = append(parts, PartitionRef{Partition: int(offset.Partition)})
+			}
+		}
+		out := make([]map[string]any, 0, len(parts))
+		for _, part := range parts {
+			lo, lok := low.Lookup(in.Topic, int32(part.Partition))
+			hi, hik := high.Lookup(in.Topic, int32(part.Partition))
+			if !lok || !hik {
+				return nil, fmt.Errorf("unknown partition %s/%d", in.Topic, part.Partition)
+			}
+			out = append(out, map[string]any{"partition": part.Partition, "low": lo.Offset, "high": hi.Offset})
+		}
+		return map[string]any{"topic": in.Topic, "partitions": out}, nil
+	case "list_topics", "describe_topics", "describe_cluster":
+		var metadata kadm.Metadata
+		if in.Operation == "describe_cluster" {
+			metadata, err = admin.BrokerMetadata(ctx)
+		} else if in.Topic != "" {
+			metadata, err = admin.Metadata(ctx, in.Topic)
+		} else {
+			metadata, err = admin.Metadata(ctx)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if in.Operation == "list_topics" {
+			return map[string]any{"topics": metadata.Topics.Names()}, nil
+		}
+		if in.Operation == "describe_cluster" {
 			brokers := make([]map[string]any, 0, len(metadata.Brokers))
 			for _, broker := range metadata.Brokers {
-				brokers = append(brokers, map[string]any{"id": broker.ID, "host": broker.Host, "port": broker.Port})
+				brokers = append(brokers, map[string]any{"id": broker.NodeID, "host": broker.Host, "port": broker.Port})
 			}
-			return map[string]any{"brokers": brokers, "orig_broker_id": metadata.OriginatingBroker.ID, "orig_broker_name": metadata.OriginatingBroker.Host}, nil
-		case "watermark_offsets":
-			if in.Topic == "" {
-				return nil, fmt.Errorf("operation requires \"topic\"")
-			}
-			parts := in.Partitions
-			if len(parts) == 0 {
-				for _, part := range metadata.Topics[in.Topic].Partitions {
-					parts = append(parts, PartitionRef{Partition: int(part.ID)})
-				}
-			}
-			out := make([]map[string]any, 0, len(parts))
-			for _, part := range parts {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				low, high, err := client.QueryWatermarkOffsets(in.Topic, int32(part.Partition), in.TimeoutMS)
-				if err != nil {
-					return nil, err
-				}
-				out = append(out, map[string]any{"partition": part.Partition, "low": low, "high": high})
-			}
-			return map[string]any{"topic": in.Topic, "partitions": out}, nil
+			return map[string]any{"brokers": brokers, "controller_id": metadata.Controller, "cluster_id": metadata.Cluster}, nil
 		}
+		topics := make([]map[string]any, 0, len(metadata.Topics))
+		for _, topic := range metadata.Topics.Sorted() {
+			if topic.Err != nil {
+				return nil, topic.Err
+			}
+			partitions := make([]map[string]any, 0, len(topic.Partitions))
+			for _, part := range topic.Partitions.Sorted() {
+				if part.Err != nil {
+					return nil, part.Err
+				}
+				partitions = append(partitions, map[string]any{"id": part.Partition, "leader": part.Leader, "replicas": part.Replicas, "isrs": part.ISR})
+			}
+			topics = append(topics, map[string]any{"name": topic.Topic, "partitions": partitions})
+		}
+		return map[string]any{"topics": topics}, nil
+	default:
+		return nil, fmt.Errorf("unknown operation %q", in.Operation)
 	}
-	return nil, fmt.Errorf("unknown operation %q", in.Operation)
 }
-
-func opProduce(ctx context.Context, conf native.ConfigMap, in Input) (any, error) {
-	if in.Topic == "" {
-		return nil, fmt.Errorf("operation requires \"topic\"")
-	}
-	if len(in.Messages) == 0 {
-		return nil, fmt.Errorf("produce requires at least one message")
-	}
-	conf["delivery.report.only.error"] = false
-	producer, err := native.NewProducer(&conf)
-	if err != nil {
-		return nil, err
-	}
-	defer producer.Close()
-	if _, err := producer.GetMetadata(nil, false, in.TimeoutMS); err != nil {
-		return nil, err
-	}
-	delivery := make(chan native.Event, len(in.Messages))
-	for _, input := range in.Messages {
-		partition := int32(native.PartitionAny)
-		if input.Partition != nil {
-			partition = int32(*input.Partition)
-		}
-		message := &native.Message{TopicPartition: native.TopicPartition{Topic: &in.Topic, Partition: partition}}
-		if input.Key != nil {
-			message.Key = decode(*input.Key, in.Encoding)
-		}
-		if input.Value != nil {
-			message.Value = decode(*input.Value, in.Encoding)
-		}
-		if input.Timestamp != nil {
-			message.Timestamp = time.UnixMilli(*input.Timestamp)
-		}
-		for _, key := range operations.SortedKeys(input.Headers) {
-			message.Headers = append(message.Headers, native.Header{Key: key, Value: []byte(input.Headers[key])})
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if err := producer.Produce(message, delivery); err != nil {
-			return nil, err
-		}
-	}
-	deadline := time.NewTimer(time.Duration(in.TimeoutMS) * time.Millisecond)
-	defer deadline.Stop()
-	for count := 0; count < len(in.Messages); {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-deadline.C:
-			return nil, fmt.Errorf("Timed out waiting for Kafka delivery reports")
-		case event := <-delivery:
-			if report, ok := event.(*native.Message); ok {
-				if report.TopicPartition.Error != nil {
-					return nil, report.TopicPartition.Error
-				}
-				count++
-			}
-		}
-	}
-	return map[string]any{"produced": len(in.Messages)}, nil
-}
-
-func opConsume(ctx context.Context, conf native.ConfigMap, in Input) (any, error) {
-	useAssign := len(in.Assignments) > 0
-	if !useAssign && len(in.Topics) == 0 {
+func opConsume(ctx context.Context, opts []kgo.Opt, in Input) (any, error) {
+	assigned := len(in.Assignments) > 0
+	if !assigned && len(in.Topics) == 0 {
 		return nil, fmt.Errorf("consume requires topics or assignments")
 	}
-	groupID := in.GroupID
-	if groupID == "" {
-		if value, ok := conf["group.id"].(string); ok {
-			groupID = value
-		}
-	}
-	if groupID == "" {
+	group := in.GroupID
+	if group == "" {
 		var id [12]byte
 		if _, err := rand.Read(id[:]); err != nil {
 			return nil, err
 		}
-		groupID = "yukino-mcp-" + hex.EncodeToString(id[:])
+		group = "yukino-mcp-" + hex.EncodeToString(id[:])
 	}
-	conf["group.id"] = groupID
-	conf["enable.auto.commit"] = in.AutoCommit
-	// Close() polls the native queue while leaving the group. Disable implicit
-	// offset storage so those discarded messages cannot advance committed offsets.
-	storeOffsets := true
-	if value, ok := conf["enable.auto.offset.store"]; ok {
-		storeOffsets = fmt.Sprint(value) != "false" && fmt.Sprint(value) != "0"
-	}
-	conf["enable.auto.offset.store"] = false
-	conf["auto.offset.reset"] = "latest"
+	reset := kgo.NewOffset().AtEnd()
 	if in.FromBeginning {
-		conf["auto.offset.reset"] = "earliest"
+		reset = kgo.NewOffset().AtStart()
 	}
-	consumer, err := native.NewConsumer(&conf)
+	opts = append(opts, kgo.ConsumeResetOffset(reset))
+	if !assigned {
+		opts = append(opts, kgo.ConsumerGroup(group), kgo.DisableAutoCommit(), kgo.ConsumeTopics(in.Topics...))
+	}
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		return nil, err
 	}
-	defer consumer.Close()
-	if _, err := consumer.GetMetadata(nil, false, in.TimeoutMS); err != nil {
-		return nil, err
-	}
-	if useAssign {
-		assignments := make([]native.TopicPartition, 0, len(in.Assignments))
+	defer client.Close()
+	admin := kadm.NewClient(client)
+	callCtx, cancel := context.WithTimeout(ctx, time.Duration(in.TimeoutMS)*time.Millisecond)
+	defer cancel()
+	if assigned {
+		var stored kadm.OffsetResponses
+		needStored := false
 		for _, assignment := range in.Assignments {
-			offset := native.OffsetStored
+			if assignment.Offset == nil {
+				needStored = true
+			}
+		}
+		if needStored {
+			stored, err = fetchOffsets(callCtx, admin, group)
+			if err != nil {
+				return nil, err
+			}
+		}
+		partitions := make(map[string]map[int32]kgo.Offset)
+		for _, assignment := range in.Assignments {
+			offset := reset
 			if assignment.Offset != nil {
-				offset = native.Offset(*assignment.Offset)
-			}
-			topic := assignment.Topic
-			assignments = append(assignments, native.TopicPartition{Topic: &topic, Partition: int32(assignment.Partition), Offset: offset})
-		}
-		err = consumer.Assign(assignments)
-	} else {
-		err = consumer.SubscribeTopics(in.Topics, nil)
-	}
-	if err != nil {
-		return nil, err
-	}
-	// A single poll loop handles all partitions and only polls as many messages as
-	// will be returned. No extra records can be consumed or auto-committed.
-	messages := make([]map[string]any, 0, in.MaxMessages)
-	deadline := time.Now().Add(time.Duration(in.TimeoutMS) * time.Millisecond)
-	for len(messages) < in.MaxMessages {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			break
-		}
-		wait := min(100, max(1, int(remaining.Milliseconds())))
-		switch event := consumer.Poll(wait).(type) {
-		case *native.Message:
-			if event.TopicPartition.Error != nil {
-				return nil, event.TopicPartition.Error
-			}
-			messages = append(messages, normalizeMessage(event, in.Encoding))
-			if storeOffsets {
-				if _, err := consumer.StoreMessage(event); err != nil {
-					return nil, err
+				offset = kgo.NewOffset().At(*assignment.Offset)
+			} else if commit, ok := stored.Lookup(assignment.Topic, int32(assignment.Partition)); ok {
+				if commit.Err != nil {
+					return nil, commit.Err
+				}
+				if commit.At >= 0 {
+					offset = kgo.NewOffset().At(commit.At)
 				}
 			}
-		case native.Error:
-			return nil, event
+			if partitions[assignment.Topic] == nil {
+				partitions[assignment.Topic] = make(map[int32]kgo.Offset)
+			}
+			partitions[assignment.Topic][int32(assignment.Partition)] = offset
+		}
+		client.AddConsumePartitions(partitions)
+	}
+	records := make([]*kgo.Record, 0, in.MaxMessages)
+	for len(records) < in.MaxMessages {
+		fetched := client.PollRecords(callCtx, in.MaxMessages-len(records))
+		for _, fetchErr := range fetched.Errors() {
+			if errors.Is(fetchErr.Err, context.DeadlineExceeded) && ctx.Err() == nil && callCtx.Err() != nil {
+				continue
+			}
+			return nil, fetchErr.Err
+		}
+		records = append(records, fetched.Records()...)
+		if callCtx.Err() != nil {
+			break
 		}
 	}
-	return map[string]any{"count": len(messages), "group_id": groupID, "messages": messages}, nil
-}
-
-func opCommittedOffsets(ctx context.Context, conf native.ConfigMap, in Input) (any, error) {
-	if in.GroupID == "" {
-		return nil, fmt.Errorf("operation requires \"group_id\"")
-	}
-	if len(in.Partitions) == 0 {
-		return nil, fmt.Errorf("committed_offsets requires partitions")
-	}
-	conf["group.id"] = in.GroupID
-	consumer, err := native.NewConsumer(&conf)
-	if err != nil {
-		return nil, err
-	}
-	defer consumer.Close()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	refs := make([]native.TopicPartition, 0, len(in.Partitions))
-	for _, part := range in.Partitions {
-		topic := part.Topic
-		if topic == "" {
-			topic = in.Topic
+	// Commit only returned records, using a fresh request window after a quiet read.
+	if in.AutoCommit && len(records) > 0 {
+		commitCtx, commitCancel := context.WithTimeout(ctx, time.Duration(in.TimeoutMS)*time.Millisecond)
+		defer commitCancel()
+		if assigned {
+			offsets := make(kadm.Offsets)
+			for _, record := range records {
+				offsets.Add(kadm.Offset{Topic: record.Topic, Partition: record.Partition, At: record.Offset + 1, LeaderEpoch: record.LeaderEpoch})
+			}
+			result, err := admin.CommitOffsets(commitCtx, group, offsets)
+			if err != nil {
+				return nil, err
+			}
+			if err := result.Error(); err != nil {
+				return nil, err
+			}
+		} else if err := client.CommitRecords(commitCtx, records...); err != nil {
+			return nil, err
 		}
-		refs = append(refs, native.TopicPartition{Topic: &topic, Partition: int32(part.Partition)})
 	}
-	committed, err := consumer.Committed(refs, in.TimeoutMS)
-	if err != nil {
-		return nil, err
+	messages := make([]map[string]any, 0, len(records))
+	for _, record := range records {
+		messages = append(messages, normalizeMessage(record, in.Encoding))
 	}
-	out := make([]map[string]any, 0, len(committed))
-	for _, part := range committed {
-		if part.Error != nil {
-			return nil, part.Error
-		}
-		out = append(out, map[string]any{"topic": *part.Topic, "partition": part.Partition, "offset": int64(part.Offset)})
-	}
-	return map[string]any{"group_id": in.GroupID, "offsets": out}, nil
+	return map[string]any{"count": len(messages), "group_id": group, "messages": messages}, nil
 }
-
-func opAdmin(ctx context.Context, conf native.ConfigMap, in Input) (any, error) {
-	if in.Topic == "" {
-		return nil, fmt.Errorf("operation requires \"topic\"")
-	}
-	admin, err := native.NewAdminClient(&conf)
-	if err != nil {
-		return nil, err
-	}
-	defer admin.Close()
-	callCtx, cancel := context.WithTimeout(ctx, time.Duration(in.TimeoutMS)*time.Millisecond)
-	defer cancel()
-	var results []native.TopicResult
-	switch in.Operation {
-	case "create_topic":
-		partitions, replicas := in.NumPartitions, in.ReplicationFactor
-		if partitions == 0 {
-			partitions = 1
-		}
-		if replicas == 0 {
-			replicas = 1
-		}
-		results, err = admin.CreateTopics(callCtx, []native.TopicSpecification{{Topic: in.Topic, NumPartitions: partitions, ReplicationFactor: replicas, Config: in.TopicConfig}})
-	case "delete_topic":
-		results, err = admin.DeleteTopics(callCtx, []string{in.Topic})
-	case "create_partitions":
-		if in.NumPartitions == 0 {
-			return nil, fmt.Errorf("create_partitions requires \"num_partitions\"")
-		}
-		results, err = admin.CreatePartitions(callCtx, []native.PartitionsSpecification{{Topic: in.Topic, IncreaseTo: in.NumPartitions}})
-	}
-	if err != nil {
-		return nil, err
-	}
-	for _, result := range results {
-		if result.Error.Code() != native.ErrNoError {
-			return nil, result.Error
-		}
-	}
-	switch in.Operation {
-	case "create_topic":
-		return map[string]any{"created": in.Topic}, nil
-	case "delete_topic":
-		return map[string]any{"deleted": in.Topic}, nil
-	default:
-		return map[string]any{"topic": in.Topic, "partitions": in.NumPartitions}, nil
-	}
-}
-
-func normalizeTopics(metadata *native.Metadata) []map[string]any {
-	names := make([]string, 0, len(metadata.Topics))
-	for name := range metadata.Topics {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	topics := make([]map[string]any, 0, len(names))
-	for _, name := range names {
-		topic := metadata.Topics[name]
-		partitions := make([]map[string]any, 0, len(topic.Partitions))
-		for _, part := range topic.Partitions {
-			normalized := map[string]any{"id": part.ID, "leader": part.Leader, "replicas": part.Replicas, "isrs": part.Isrs}
-			partitions = append(partitions, normalized)
-		}
-		normalized := map[string]any{"name": name, "partitions": partitions}
-		topics = append(topics, normalized)
-	}
-	return topics
-}
-
-func normalizeMessage(message *native.Message, encoding string) map[string]any {
-	headers := make([]map[string]any, 0, len(message.Headers))
-	for _, header := range message.Headers {
+func normalizeMessage(record *kgo.Record, encoding string) map[string]any {
+	headers := make([]map[string]any, 0, len(record.Headers))
+	for _, header := range record.Headers {
 		data := make([]int, len(header.Value))
 		for i, b := range header.Value {
 			data[i] = int(b)
@@ -451,19 +408,22 @@ func normalizeMessage(message *native.Message, encoding string) map[string]any {
 		headers = append(headers, map[string]any{header.Key: map[string]any{"type": "Buffer", "data": data}})
 	}
 	var key, value any
-	if message.Key != nil {
-		key = encode(message.Key, encoding)
+	if record.Key != nil {
+		key = encode(record.Key, encoding)
 	}
-	if message.Value != nil {
-		value = encode(message.Value, encoding)
+	if record.Value != nil {
+		value = encode(record.Value, encoding)
 	}
-	timestamp := int64(-1)
-	if message.TimestampType != native.TimestampNotAvailable {
-		timestamp = message.Timestamp.UnixMilli()
-	}
-	return map[string]any{"topic": *message.TopicPartition.Topic, "partition": message.TopicPartition.Partition, "offset": int64(message.TopicPartition.Offset), "timestamp": timestamp, "size": len(message.Value), "key": key, "value": value, "headers": headers}
+	return map[string]any{"topic": record.Topic, "partition": record.Partition, "offset": record.Offset, "timestamp": record.Timestamp.UnixMilli(), "size": len(record.Value), "key": key, "value": value, "headers": headers}
 }
 
+func fetchOffsets(ctx context.Context, admin *kadm.Client, group string) (kadm.OffsetResponses, error) {
+	offsets, err := admin.FetchOffsets(ctx, group)
+	if errors.Is(err, kerr.GroupIDNotFound) {
+		return nil, nil
+	}
+	return offsets, err
+}
 func decode(value, encoding string) []byte {
 	if encoding == "base64" {
 		return operations.DecodeBase64(value)

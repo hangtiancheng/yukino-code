@@ -21,13 +21,14 @@
     "access": "public"
   },
   "scripts": {
-    "dev": "pnpm build:fe && tsx ./src/main.ts",
+    "dev": "pnpm build:app && tsx ./src/main.ts",
     "build": "tsup && vite build",
-    "build:fe": "vite build",
-    "test": "pnpm build:fe && vitest run",
-    "test:watch": "pnpm build:fe && vitest",
+    "build:app": "vite build",
+    "test": "pnpm build:app && vitest run",
+    "test:watch": "pnpm build:app && vitest",
     "format": "prettier -w ./ --experimental-cli",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "happy": "pnpm typecheck && pnpm build && pnpm test",
     "happy:fix": "pnpm typecheck && pnpm format && pnpm build && pnpm test"
   },
   "dependencies": {
@@ -36,11 +37,11 @@
     "@langchain/textsplitters": "^1.0.2",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@platformatic/kafka": "^2.14.0",
     "ai": "^7.0.137",
     "h3": "^2.0.2",
     "mongodb": "^7.7.0",
     "mysql2": "^3.24.5",
-    "node-rdkafka": "^3.6.1",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "redis": "^6.3.0",
@@ -67,6 +68,6 @@
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.6.0"
   }
 }

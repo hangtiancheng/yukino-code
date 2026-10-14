@@ -103,7 +103,7 @@ func TestTSDefaultsTrimAndUnknownKeys(t *testing.T) {
 		Unknown    string `json:"unknown"`
 	}
 	var received input
-	tools.AddTool(server, &mcp.Tool{Name: tools.MySQLTool}, func(_ context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, any, error) {
+	tools.AddTool(server, &mcp.Tool{Name: tools.PostgresTool}, func(_ context.Context, _ *mcp.CallToolRequest, in input) (*mcp.CallToolResult, any, error) {
 		received = in
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 	})
@@ -119,8 +119,8 @@ func TestTSDefaultsTrimAndUnknownKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cs.Close()
-	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tools.MySQLTool, Arguments: map[string]any{"connection_url": "\ufeff mysql://localhost/db \ufeff", "sql": "SELECT 1", "unknown": "strip"}})
-	if err != nil || result.IsError || received.Connection != "mysql://localhost/db" || received.Params == nil || received.Unknown != "" {
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tools.PostgresTool, Arguments: map[string]any{"connection_url": "\ufeff postgres://localhost/db \ufeff", "sql": "SELECT 1", "unknown": "strip"}})
+	if err != nil || result.IsError || received.Connection != "postgres://localhost/db" || received.Params == nil || received.Unknown != "" {
 		t.Fatalf("Zod semantics: %#v err=%v result=%+v", received, err, result)
 	}
 }

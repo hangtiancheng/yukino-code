@@ -62,7 +62,7 @@ async function readAppHtml(): Promise<string> {
       { err, path: appHtmlUrl.pathname },
       "create_app UI shell is unavailable",
     );
-    throw new Error("create_app UI shell is unavailable; run pnpm build:fe", {
+    throw new Error("create_app UI shell is unavailable; run pnpm build:app", {
       cause: err,
     });
   }

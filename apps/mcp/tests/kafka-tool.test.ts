@@ -3,176 +3,142 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-
 import { kafkaModule } from "@/tools/kafka/tool.js";
 import { firstText, isolateEnv } from "./helpers.js";
 
 const state = vi.hoisted(() => ({
+  options: [] as Record<string, unknown>[],
+  sent: [] as Record<string, unknown>[],
+  consumed: [] as Record<string, unknown>[],
+  commits: [] as Record<string, unknown>[],
+  adminCalls: [] as Record<string, unknown>[],
+  closed: 0,
+  error: null as Error | null,
+  streamError: null as Error | null,
   metadata: {
-    topics: [] as Array<{ name: string; partitions: Array<{ id: number }> }>,
-    brokers: [] as Array<{ id: number; host: string; port: number }>,
-    orig_broker_id: 1,
-    orig_broker_name: "localhost:9092/1",
+    id: "cluster",
+    controllerId: 1,
+    brokers: new Map([[1, { host: "localhost", port: 9092 }]]),
+    topics: new Map<
+      string,
+      {
+        id: string;
+        partitions: Array<{
+          leader: number;
+          leaderEpoch: number;
+          replicas: number[];
+          isr: number[];
+        }>;
+      }
+    >(),
   },
-  watermarks: { lowOffset: 0, highOffset: 0 },
-  consumed: [] as Array<Record<string, unknown>>,
-  committed: [] as Array<Record<string, unknown>>,
-  produced: [] as Array<Record<string, unknown>>,
-  adminCalls: [] as Array<Record<string, unknown>>,
-  producerConf: null as Record<string, unknown> | null,
-  consumerConf: null as Record<string, unknown> | null,
-  producerTopicConf: null as Record<string, unknown> | null,
-  consumerTopicConf: null as Record<string, unknown> | null,
-  connectError: null as unknown,
-  consumeError: null as unknown,
-  consumedCount: 0,
-  disconnected: 0,
-  deliveryError: null as unknown,
-  consumeDelayMs: 0,
+  offsets: [] as Array<{ partitionIndex: number; committedOffset: bigint }>,
 }));
-
-vi.mock("node-rdkafka", () => {
-  class MockProducer {
-    deliveryCallback?: (error: unknown) => void;
-    constructor(
-      conf: Record<string, unknown>,
-      topicConf?: Record<string, unknown>,
-    ) {
-      state.producerConf = conf;
-      state.producerTopicConf = topicConf ?? null;
-      this.deliveryCallback = conf["dr_cb"] as
-        ((error: unknown) => void) | undefined;
+vi.mock("@platformatic/kafka", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@platformatic/kafka")>();
+  const { Readable } = await import("node:stream");
+  class Base {
+    constructor(options: Record<string, unknown>) {
+      state.options.push(options);
     }
-    connect(_opts: unknown, cb: (e: unknown, d: unknown) => void): void {
-      cb(state.connectError, state.metadata);
+    async close() {
+      state.closed++;
     }
-    produce(
-      topic: string,
-      partition: number | null,
-      value: unknown,
-      key: unknown,
-      timestamp: number | null,
-      _opaque: unknown,
-      headers: unknown,
-    ): void {
-      state.produced.push({ topic, partition, value, key, timestamp, headers });
-      setTimeout(() => this.deliveryCallback?.(state.deliveryError), 0);
-    }
-    flush(_timeout: number, cb: (e: unknown) => void): void {
-      cb(null);
-    }
-    disconnect(cb?: (e: unknown, d: unknown) => void): void {
-      state.disconnected += 1;
-      if (cb) cb(null, {});
-    }
-    getMetadata(_opts: unknown, cb: (e: unknown, d: unknown) => void): void {
-      cb(null, state.metadata);
-    }
-    queryWatermarkOffsets(
-      _topic: string,
-      _partition: number,
-      _timeout: number,
-      cb: (e: unknown, d: unknown) => void,
-    ): void {
-      cb(null, state.watermarks);
+    async metadata() {
+      if (state.error) throw state.error;
+      return state.metadata;
     }
   }
-
-  class MockConsumer {
-    handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
-    subscribed: unknown;
-    assigned: unknown;
-    constructor(
-      conf: Record<string, unknown>,
-      topicConf?: Record<string, unknown>,
-    ) {
-      state.consumerConf = conf;
-      state.consumerTopicConf = topicConf ?? null;
-    }
-    connect(_opts: unknown, cb: (e: unknown, d: unknown) => void): void {
-      cb(state.connectError, state.metadata);
-    }
-    subscribe(topics: unknown): void {
-      this.subscribed = topics;
-    }
-    assign(assignments: unknown): void {
-      this.assigned = assignments;
-    }
-    on(event: string, handler: (...args: unknown[]) => void): this {
-      (this.handlers[event] ??= []).push(handler);
-      return this;
-    }
-    removeListener(event: string, handler: (...args: unknown[]) => void): this {
-      const arr = this.handlers[event] ?? [];
-      const index = arr.indexOf(handler);
-      if (index >= 0) arr.splice(index, 1);
-      return this;
-    }
-    emit(event: string, ...args: unknown[]): void {
-      for (const handler of (this.handlers[event] ?? []).slice())
-        handler(...args);
-    }
-    setDefaultConsumeTimeout(_timeout: number): void {}
-    consume(
-      count: number,
-      cb: (e: unknown, messages: unknown[]) => void,
-    ): void {
-      if (state.consumeError) return cb(state.consumeError, []);
-      const messages = state.consumed.splice(0, count);
-      state.consumedCount += messages.length;
-      for (const message of messages) this.emit("data", message);
-      if (state.consumeDelayMs)
-        setTimeout(() => cb(null, messages), state.consumeDelayMs);
-      else cb(null, messages);
-    }
-    committed(
-      _toppars: unknown,
-      _timeout: number,
-      cb: (e: unknown, d: unknown) => void,
-    ): void {
-      cb(null, state.committed);
-    }
-    disconnect(cb?: (e: unknown, d: unknown) => void): void {
-      state.disconnected += 1;
-      if (cb) cb(null, {});
-    }
-  }
-
-  const AdminClient = {
-    create(_conf: Record<string, unknown>) {
+  class Producer extends Base {
+    override async metadata() {
+      if (state.error) throw state.error;
       return {
-        createTopic(topic: unknown, cb: (e: unknown) => void): void {
-          state.adminCalls.push({ op: "createTopic", topic });
-          cb(null);
-        },
-        deleteTopic(topic: unknown, cb: (e: unknown) => void): void {
-          state.adminCalls.push({ op: "deleteTopic", topic });
-          cb(null);
-        },
-        createPartitions(
-          topic: unknown,
-          count: unknown,
-          cb: (e: unknown) => void,
-        ): void {
-          state.adminCalls.push({ op: "createPartitions", topic, count });
-          cb(null);
-        },
-        disconnect(): void {
-          state.adminCalls.push({ op: "disconnect" });
-        },
+        ...state.metadata,
+        topics: new Map([
+          [
+            "events",
+            {
+              id: "events",
+              partitions: Array.from({ length: 3 }, () => ({
+                leader: 1,
+                leaderEpoch: 0,
+                replicas: [1],
+                isr: [1],
+              })),
+            },
+          ],
+        ]),
       };
-    },
-  };
-
-  return {
-    default: {
-      Producer: MockProducer,
-      KafkaConsumer: MockConsumer,
-      AdminClient,
-    },
-  };
+    }
+    async send(options: { messages: Record<string, unknown>[] }) {
+      state.sent.push(...options.messages);
+      if (state.error) throw state.error;
+      return {};
+    }
+  }
+  class Consumer extends Base {
+    async consume(options: Record<string, unknown>) {
+      state.adminCalls.push({ op: "consume", ...options });
+      if (state.error) throw state.error;
+      const records = state.consumed.slice();
+      return new Readable({
+        objectMode: true,
+        highWaterMark: 1,
+        read() {
+          if (state.streamError) {
+            this.destroy(state.streamError);
+            return;
+          }
+          if (records.length) this.push(records.shift());
+        },
+      });
+    }
+    async commit(options: Record<string, unknown>) {
+      state.commits.push(options);
+    }
+  }
+  class Admin extends Base {
+    async listTopics() {
+      if (state.error) throw state.error;
+      return [...state.metadata.topics.keys()];
+    }
+    async createTopics(options: Record<string, unknown>) {
+      state.adminCalls.push({ op: "createTopics", ...options });
+      if (state.error) throw state.error;
+    }
+    async deleteTopics(options: Record<string, unknown>) {
+      state.adminCalls.push({ op: "deleteTopics", ...options });
+    }
+    async createPartitions(options: Record<string, unknown>) {
+      state.adminCalls.push({ op: "createPartitions", ...options });
+    }
+    async listOffsets(options: {
+      topics: Array<{
+        name: string;
+        partitions: Array<{ partitionIndex: number; timestamp: bigint }>;
+      }>;
+    }) {
+      return options.topics.map((t) => ({
+        name: t.name,
+        partitions: t.partitions.map((p) => ({
+          partitionIndex: p.partitionIndex,
+          offset: p.timestamp === -2n ? 5n : 50n,
+        })),
+      }));
+    }
+    async listConsumerGroupOffsets(options: {
+      groups: Array<{ groupId: string }>;
+    }) {
+      return [
+        {
+          groupId: options.groups[0].groupId,
+          topics: [{ name: "events", partitions: state.offsets }],
+        },
+      ];
+    }
+  }
+  return { ...actual, Producer, Consumer, Admin };
 });
-
 const envKeys = [
   "KAFKA_BROKERS",
   "KAFKA_CLIENT_ID",
@@ -182,73 +148,80 @@ const envKeys = [
   "KAFKA_SECURITY_PROTOCOL",
 ];
 isolateEnv(envKeys);
-
+let client: Client;
+let server: McpServer;
 const resultSchema = z.object({
   content: z.array(z.unknown()),
   isError: z.boolean().optional(),
   structuredContent: z.record(z.string(), z.unknown()).optional(),
 });
-
-let client: Client;
 async function call(args: Record<string, unknown>) {
   return resultSchema.parse(
     await client.callTool({ name: "kafka_tool", arguments: args }),
   );
 }
-
+function data(result: Awaited<ReturnType<typeof call>>) {
+  return result.structuredContent?.["data"] as Record<string, unknown>;
+}
 beforeEach(async () => {
   for (const key of envKeys) delete process.env[key];
-  state.metadata = {
-    topics: [],
-    brokers: [],
-    orig_broker_id: 1,
-    orig_broker_name: "localhost:9092/1",
-  };
-  state.watermarks = { lowOffset: 0, highOffset: 0 };
+  state.options = [];
+  state.sent = [];
   state.consumed = [];
-  state.committed = [];
-  state.produced = [];
+  state.commits = [];
   state.adminCalls = [];
-  state.producerConf = null;
-  state.consumerConf = null;
-  state.producerTopicConf = null;
-  state.consumerTopicConf = null;
-  state.connectError = null;
-  state.consumeError = null;
-  state.consumedCount = 0;
-  state.disconnected = 0;
-  state.deliveryError = null;
-  state.consumeDelayMs = 0;
-  const server = new McpServer({ name: "test", version: "1" });
+  state.closed = 0;
+  state.error = null;
+  state.streamError = null;
+  state.offsets = [];
+  state.metadata.topics.clear();
+  server = new McpServer({ name: "test", version: "1" });
   kafkaModule.register(server);
   const [a, b] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: "test", version: "1" });
   await Promise.all([client.connect(a), server.connect(b)]);
 });
-
 afterEach(async () => {
-  await client.close();
+  await Promise.all([client.close(), server.close()]);
 });
-
 describe("kafka_tool", () => {
-  it("retains messages consumed before a delayed callback crosses the deadline", async () => {
-    state.consumed = [
-      { topic: "events", partition: 0, offset: 0, value: Buffer.from("x") },
-    ];
-    state.consumeDelayMs = 20;
+  it("produces binary values, tombstones, headers and timestamps", async () => {
     const result = await call({
-      operation: "consume",
-      topics: ["events"],
-      max_messages: 1,
-      timeout_ms: 10,
+      operation: "produce",
+      topic: "events",
+      encoding: "base64",
+      messages: [
+        {
+          key: "aw==",
+          value: "AP8=",
+          partition: 2,
+          timestamp: 1700000000000,
+          headers: { trace: "test" },
+        },
+        { value: null },
+      ],
     });
     expect(result.isError).toBeUndefined();
-    expect(
-      (result.structuredContent?.["data"] as { count: number }).count,
-    ).toBe(1);
+    expect(data(result)).toEqual({ produced: 2 });
+    expect(state.sent[0]).toMatchObject({
+      topic: "events",
+      partition: 2,
+      timestamp: 1700000000000n,
+      key: Buffer.from("k"),
+      value: Buffer.from([0, 255]),
+    });
+    expect(state.sent[0]["headers"]).toEqual(
+      new Map([[Buffer.from("trace"), Buffer.from("test")]]),
+    );
+    expect(state.sent[1]["value"]).toBeNull();
+    expect(state.options[0]).toMatchObject({
+      clientId: "yukino-mcp",
+      bootstrapBrokers: ["localhost:9092"],
+    });
+    expect(state.closed).toBe(1);
   });
-  it("reports asynchronous delivery failures even when flush succeeds", async () => {
-    state.deliveryError = new Error("unknown partition");
+  it("reports send rejection and closes the producer", async () => {
+    state.error = new Error("unknown partition");
     const result = await call({
       operation: "produce",
       topic: "events",
@@ -256,262 +229,244 @@ describe("kafka_tool", () => {
     });
     expect(result.isError).toBe(true);
     expect(firstText(result)).toContain("unknown partition");
-    expect(state.disconnected).toBe(1);
+    expect(state.closed).toBe(1);
   });
-  it("produces messages and flushes", async () => {
-    const result = await call({
-      operation: "produce",
-      topic: "events",
-      messages: [
-        { key: "k1", value: "v1" },
-        { value: "v2", partition: 2, headers: { h: "x" } },
-      ],
-    });
-    expect(result.isError).toBeUndefined();
-    const sc = result.structuredContent as Record<string, unknown>;
-    expect((sc["data"] as { produced: number }).produced).toBe(2);
-    expect(state.produced).toHaveLength(2);
-    expect(state.produced[0]["topic"]).toBe("events");
-    expect((state.produced[0]["value"] as Buffer).toString()).toBe("v1");
-    expect((state.produced[0]["key"] as Buffer).toString()).toBe("k1");
-    expect(state.produced[1]["partition"]).toBe(2);
-    expect(state.produced[1]["headers"]).toEqual([{ h: "x" }]);
-    // Default brokers/client id are applied.
-    expect(state.producerConf?.["metadata.broker.list"]).toBe("localhost:9092");
-    expect(state.producerConf?.["client.id"]).toBe("yukino-mcp");
-  });
-
-  it("produces base64-encoded binary values", async () => {
-    const bytes = Buffer.from([0, 1, 2, 3]);
-    await call({
-      operation: "produce",
-      topic: "bin",
-      encoding: "base64",
-      messages: [{ value: bytes.toString("base64") }],
-    });
-    expect((state.produced[0]["value"] as Buffer).equals(bytes)).toBe(true);
-  });
-
-  it("mirrors topic-level config entries into the topic conf", async () => {
+  it("uses nested client options and rejects legacy keys", async () => {
     await call({
       operation: "produce",
       topic: "events",
-      messages: [{ value: "v" }],
-      config: { acks: "all", "message.timeout.ms": 1000 },
+      messages: [{ value: "x" }],
+      config: {
+        acks: -1,
+        compression: "gzip",
+        sasl: { mechanism: "PLAIN", username: "user", password: "pass" },
+        tls: {},
+      },
     });
-    expect(state.producerConf?.["acks"]).toBe("all");
-    expect(state.producerTopicConf?.["acks"]).toBe("all");
-    expect(state.producerTopicConf?.["message.timeout.ms"]).toBe(1000);
-  });
-
-  it("consumes by subscription and normalizes messages", async () => {
-    state.consumed = [
-      {
-        topic: "events",
-        partition: 0,
-        offset: 10,
-        timestamp: 1700000000000,
-        size: 5,
-        key: Buffer.from("k"),
-        value: Buffer.from("hello"),
-        headers: [],
-      },
-      {
-        topic: "events",
-        partition: 1,
-        offset: 11,
-        size: 0,
-        key: null,
-        value: null,
-      },
-    ];
+    expect(state.options[0]).toMatchObject({
+      acks: -1,
+      compression: "gzip",
+      sasl: { mechanism: "PLAIN", username: "user", password: "pass" },
+      tls: {},
+    });
     const result = await call({
-      operation: "consume",
-      topics: ["events"],
-      group_id: "g1",
-      max_messages: 2,
-      from_beginning: true,
+      operation: "list_topics",
+      config: { "security.protocol": "SSL" },
     });
-    expect(result.isError).toBeUndefined();
-    const sc = result.structuredContent as Record<string, unknown>;
-    const data = sc["data"] as {
-      count: number;
-      group_id: string;
-      messages: Array<Record<string, unknown>>;
-    };
-    expect(data.count).toBe(2);
-    expect(data.group_id).toBe("g1");
-    expect(data.messages[0]["value"]).toBe("hello");
-    expect(data.messages[0]["key"]).toBe("k");
-    expect(data.messages[1]["value"]).toBeNull();
-    expect(state.consumerConf?.["group.id"]).toBe("g1");
-    expect(state.consumerConf?.["auto.offset.reset"]).toBe("earliest");
-    // Topic-level properties must also land in the topic conf: node-rdkafka
-    // replaces the default topic config with the second constructor argument,
-    // so global-only values such as auto.offset.reset would be ignored.
-    expect(state.consumerTopicConf?.["auto.offset.reset"]).toBe("earliest");
-    // High-level consumer auto-commit properties belong to the global conf.
-    expect(state.consumerConf?.["enable.auto.commit"]).toBe(false);
-    expect(state.consumerTopicConf?.["enable.auto.commit"]).toBeUndefined();
+    expect(result.isError).toBe(true);
+    expect(firstText(result)).toContain("legacy Kafka config");
   });
-
-  it("supplies the required group id for explicit assignments", async () => {
-    state.consumed = [
-      {
-        topic: "events",
-        partition: 3,
-        offset: 100,
-        size: 1,
-        value: Buffer.from("x"),
-      },
-    ];
-    const result = await call({
-      operation: "consume",
-      assignments: [{ topic: "events", partition: 3, offset: 100 }],
-      max_messages: 1,
-    });
-    const sc = result.structuredContent as Record<string, unknown>;
-    expect((sc["data"] as { count: number }).count).toBe(1);
-    expect(state.consumerConf?.["group.id"]).toMatch(/^yukino-mcp-/);
-  });
-
-  it("leaves messages beyond max_messages unread", async () => {
+  it("commits only returned records after a bounded consume", async () => {
     state.consumed = [0, 1, 2].map((offset) => ({
       topic: "events",
       partition: 0,
-      offset,
-      size: 1,
-      value: Buffer.from("x"),
+      offset: BigInt(offset),
+      timestamp: 1700000000000n,
+      leaderEpoch: 1,
+      key: Buffer.from("k"),
+      value: Buffer.from("hello"),
+      headerEntries: [[Buffer.from("h"), Buffer.from("x")]],
     }));
     const result = await call({
       operation: "consume",
       topics: ["events"],
-      max_messages: 1,
+      group_id: "g1",
+      from_beginning: true,
       auto_commit: true,
+      max_messages: 1,
     });
     expect(result.isError).toBeUndefined();
-    expect(state.consumedCount).toBe(1);
-    expect(state.consumed).toHaveLength(2);
+    expect(data(result)["count"]).toBe(1);
+    expect(
+      (data(result)["messages"] as Record<string, unknown>[])[0],
+    ).toMatchObject({
+      offset: 0,
+      timestamp: 1700000000000,
+      size: 5,
+      value: "hello",
+      headers: [{ h: { type: "Buffer", data: [120] } }],
+    });
+    expect(state.options[0]).toMatchObject({
+      groupId: "g1",
+      autocommit: false,
+    });
+    expect(state.adminCalls[0]).toMatchObject({
+      mode: "committed",
+      fallbackMode: "earliest",
+    });
+    expect(state.commits).toEqual([
+      {
+        offsets: [
+          { topic: "events", partition: 0, offset: 1n, leaderEpoch: 1 },
+        ],
+      },
+    ]);
+    expect(state.closed).toBe(1);
   });
-
-  it("reports consume errors instead of a successful empty result", async () => {
-    state.consumeError = new Error("Topic authorization failed");
-    const result = await call({ operation: "consume", topics: ["events"] });
-    expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain("Topic authorization failed");
-    expect(state.disconnected).toBe(1);
-  });
-
-  it("honors a group id passed through raw config", async () => {
-    await call({
+  it("does not commit when auto_commit is disabled and retains null payloads", async () => {
+    state.consumed = [
+      {
+        topic: "events",
+        partition: 0,
+        offset: 2n,
+        timestamp: 1n,
+        leaderEpoch: 0,
+        headerEntries: [],
+      },
+    ];
+    const result = await call({
       operation: "consume",
       topics: ["events"],
-      config: { "group.id": "configured-group" },
-      timeout_ms: 5,
+      max_messages: 1,
+      config: { groupId: "configured" },
     });
-    expect(state.consumerConf?.["group.id"]).toBe("configured-group");
+    expect(data(result)).toMatchObject({
+      count: 1,
+      group_id: "configured",
+      messages: [{ key: null, value: null }],
+    });
+    expect(state.commits).toEqual([]);
   });
-
-  it("cleans up clients when connecting fails", async () => {
-    state.connectError = new Error("cannot connect");
-    const result = await call({ operation: "list_topics" });
-    expect(result.isError).toBe(true);
-    expect(state.disconnected).toBe(1);
-  });
-
-  it("lists topics from metadata", async () => {
-    state.metadata.topics = [
-      { name: "b", partitions: [{ id: 0 }] },
-      { name: "a", partitions: [{ id: 0 }] },
-    ];
-    const result = await call({ operation: "list_topics" });
-    const sc = result.structuredContent as Record<string, unknown>;
-    expect((sc["data"] as { topics: string[] }).topics).toEqual(["a", "b"]);
-  });
-
-  it("describes the cluster brokers", async () => {
-    state.metadata.brokers = [{ id: 1, host: "localhost", port: 9092 }];
-    const result = await call({ operation: "describe_cluster" });
-    const sc = result.structuredContent as Record<string, unknown>;
-    const data = sc["data"] as { brokers: unknown[]; orig_broker_name: string };
-    expect(data.brokers).toHaveLength(1);
-    expect(data.orig_broker_name).toBe("localhost:9092/1");
-  });
-
-  it("creates a topic through the admin client", async () => {
+  it("bounds empty reads and reports stream errors", async () => {
     const result = await call({
-      operation: "create_topic",
-      topic: "new-topic",
-      num_partitions: 3,
-      replication_factor: 1,
-      topic_config: { "retention.ms": "86400000" },
+      operation: "consume",
+      topics: ["events"],
+      timeout_ms: 10,
     });
-    expect(result.isError).toBeUndefined();
-    expect(state.adminCalls[0]["op"]).toBe("createTopic");
-    expect(
-      (state.adminCalls[0]["topic"] as Record<string, unknown>)[
-        "num_partitions"
+    expect(data(result)["count"]).toBe(0);
+    state.streamError = new Error("Topic authorization failed");
+    const failed = await call({ operation: "consume", topics: ["events"] });
+    expect(failed.isError).toBe(true);
+    expect(firstText(failed)).toContain("Topic authorization failed");
+    expect(state.closed).toBe(2);
+  });
+  it("lists and describes topics and the cluster", async () => {
+    const part = { leader: 1, leaderEpoch: 0, replicas: [1], isr: [1] };
+    state.metadata.topics.set("b", { id: "b", partitions: [part] });
+    state.metadata.topics.set("a", { id: "a", partitions: [part] });
+    expect(data(await call({ operation: "list_topics" }))).toEqual({
+      topics: ["a", "b"],
+    });
+    expect(data(await call({ operation: "describe_topics" }))).toMatchObject({
+      topics: [
+        { name: "a", partitions: [{ id: 0, leader: 1, isrs: [1] }] },
+        { name: "b" },
       ],
-    ).toBe(3);
-    expect(state.adminCalls.some((c) => c["op"] === "disconnect")).toBe(true);
+    });
+    expect(data(await call({ operation: "describe_cluster" }))).toEqual({
+      brokers: [{ id: 1, host: "localhost", port: 9092 }],
+      controller_id: 1,
+      cluster_id: "cluster",
+    });
   });
-
-  it("reads watermark offsets across discovered partitions", async () => {
-    state.metadata.topics = [
-      { name: "events", partitions: [{ id: 0 }, { id: 1 }] },
-    ];
-    state.watermarks = { lowOffset: 5, highOffset: 50 };
-    const result = await call({
-      operation: "watermark_offsets",
+  it("creates, deletes and grows topics with the new admin API", async () => {
+    expect(
+      (
+        await call({
+          operation: "create_topic",
+          topic: "new",
+          num_partitions: 3,
+          replication_factor: 1,
+          topic_config: { "retention.ms": "86400000" },
+        })
+      ).isError,
+    ).toBeUndefined();
+    expect(state.adminCalls[0]).toEqual({
+      op: "createTopics",
+      topics: ["new"],
+      partitions: 3,
+      replicas: 1,
+      configs: [{ name: "retention.ms", value: "86400000" }],
+    });
+    await call({
+      operation: "create_partitions",
+      topic: "new",
+      num_partitions: 4,
+    });
+    expect(state.adminCalls[1]).toMatchObject({
+      op: "createPartitions",
+      topics: [{ name: "new", count: 4 }],
+    });
+    await call({ operation: "delete_topic", topic: "new" });
+    expect(state.adminCalls[2]).toEqual({
+      op: "deleteTopics",
+      topics: ["new"],
+    });
+    expect(state.closed).toBe(3);
+  });
+  it("normalizes watermarks and committed/uncommitted offsets", async () => {
+    state.metadata.topics.set("events", {
+      id: "events",
+      partitions: [{ leader: 1, leaderEpoch: 0, replicas: [1], isr: [1] }],
+    });
+    expect(
+      data(await call({ operation: "watermark_offsets", topic: "events" })),
+    ).toEqual({
       topic: "events",
+      partitions: [{ partition: 0, low: 5, high: 50 }],
     });
-    const sc = result.structuredContent as Record<string, unknown>;
-    const data = sc["data"] as { partitions: Array<Record<string, unknown>> };
-    expect(data.partitions).toEqual([
-      { partition: 0, low: 5, high: 50 },
-      { partition: 1, low: 5, high: 50 },
-    ]);
-  });
-
-  it("reads committed offsets for a group", async () => {
-    state.committed = [{ topic: "events", partition: 0, offset: 42 }];
-    const result = await call({
-      operation: "committed_offsets",
+    state.offsets = [
+      { partitionIndex: 0, committedOffset: 42n },
+      { partitionIndex: 1, committedOffset: -1n },
+    ];
+    expect(
+      data(
+        await call({
+          operation: "committed_offsets",
+          group_id: "g1",
+          topic: "events",
+          partitions: [{ partition: 0 }, { partition: 1 }],
+        }),
+      ),
+    ).toEqual({
       group_id: "g1",
-      partitions: [{ topic: "events", partition: 0 }],
+      offsets: [
+        { topic: "events", partition: 0, offset: 42 },
+        { topic: "events", partition: 1, offset: -1001 },
+      ],
     });
-    const sc = result.structuredContent as Record<string, unknown>;
-    const data = sc["data"] as { group_id: string; offsets: unknown[] };
-    expect(data.group_id).toBe("g1");
-    expect(data.offsets).toEqual([
-      { topic: "events", partition: 0, offset: 42 },
-    ]);
   });
-
-  it("validates required fields per operation", async () => {
-    const noTopic = await call({
-      operation: "produce",
-      messages: [{ value: "x" }],
+  it("preserves large Kafka offsets as decimal strings", async () => {
+    state.offsets = [{ partitionIndex: 0, committedOffset: 9007199254740993n }];
+    expect(
+      data(
+        await call({
+          operation: "committed_offsets",
+          group_id: "g1",
+          topic: "events",
+          partitions: [{ partition: 0 }],
+        }),
+      )["offsets"],
+    ).toEqual([{ topic: "events", partition: 0, offset: "9007199254740993" }]);
+  });
+  it("closes admin clients on connection failures", async () => {
+    state.error = new Error("cannot connect");
+    expect((await call({ operation: "list_topics" })).isError).toBe(true);
+    expect(state.closed).toBe(1);
+  });
+  it("validates required fields", async () => {
+    for (const args of [
+      { operation: "produce", messages: [{ value: "x" }] },
+      { operation: "consume" },
+      { operation: "committed_offsets", group_id: "g1" },
+      { operation: "create_partitions", topic: "events" },
+    ])
+      expect((await call(args)).isError).toBe(true);
+  });
+  it("maps environment security settings to TLS and SASL", async () => {
+    Object.assign(process.env, {
+      KAFKA_BROKERS: "one:9093, two:9093",
+      KAFKA_SECURITY_PROTOCOL: "SASL_SSL",
+      KAFKA_SASL_MECHANISM: "SCRAM-SHA-512",
+      KAFKA_USERNAME: "user",
+      KAFKA_PASSWORD: "pass",
     });
-    expect(noTopic.isError).toBe(true);
-    expect(firstText(noTopic)).toContain("topic");
-
-    const noSource = await call({ operation: "consume" });
-    expect(noSource.isError).toBe(true);
-    expect(firstText(noSource)).toContain("topics or assignments");
-  });
-
-  it("propagates SASL configuration from the environment", async () => {
-    process.env["KAFKA_BROKERS"] = "broker:9093";
-    process.env["KAFKA_SECURITY_PROTOCOL"] = "SASL_SSL";
-    process.env["KAFKA_SASL_MECHANISM"] = "SCRAM-SHA-512";
-    process.env["KAFKA_USERNAME"] = "user";
-    process.env["KAFKA_PASSWORD"] = "pass";
     await call({ operation: "list_topics" });
-    expect(state.producerConf?.["metadata.broker.list"]).toBe("broker:9093");
-    expect(state.producerConf?.["security.protocol"]).toBe("SASL_SSL");
-    expect(state.producerConf?.["sasl.mechanisms"]).toBe("SCRAM-SHA-512");
-    expect(state.producerConf?.["sasl.username"]).toBe("user");
-    expect(state.producerConf?.["sasl.password"]).toBe("pass");
+    expect(state.options[0]).toMatchObject({
+      bootstrapBrokers: ["one:9093", "two:9093"],
+      tls: {},
+      tlsServerName: true,
+      sasl: { mechanism: "SCRAM-SHA-512", username: "user", password: "pass" },
+    });
   });
 });

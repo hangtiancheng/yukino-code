@@ -4,7 +4,7 @@
       "type": "object",
       "properties": {
         "connection_url": {
-          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "description": "Connection URL override; otherwise uses the JSON configuration.",
           "type": "string",
           "minLength": 1
         },
@@ -44,7 +44,7 @@
           }
         },
         "database": {
-          "description": "Database override (CLICKHOUSE_DATABASE fallback).",
+          "description": "Database override (clickhouse.database fallback).",
           "type": "string",
           "minLength": 1
         },
@@ -484,18 +484,12 @@
         },
         "config": {
           "default": {},
-          "description": "Raw librdkafka global configuration passthrough, e.g. {'security.protocol':'SASL_SSL','sasl.mechanisms':'SCRAM-SHA-512'}.",
+          "description": "franz-go client options: requestTimeout, connectTimeout, retries (integer), retryDelay, acks (-1/0/1), compression, groupId, maxWaitTime, maxBytes, maxBytesPerPartition, autocreateTopics, nested tls (ca_file/cert_file/key_file/server_name/insecure_skip_verify) and sasl (mechanism/username/password/token). Legacy librdkafka keys are rejected.",
           "type": "object",
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": {
-            "type": [
-              "string",
-              "number",
-              "boolean"
-            ]
-          }
+          "additionalProperties": {}
         },
         "operation": {
           "type": "string",
@@ -628,12 +622,12 @@
         },
         "from_beginning": {
           "default": false,
-          "description": "consume from earliest offset (auto.offset.reset=earliest).",
+          "description": "Fallback to the earliest offset when the group has no committed position.",
           "type": "boolean"
         },
         "auto_commit": {
           "default": false,
-          "description": "Enable consumer auto-commit.",
+          "description": "Commit only the records returned by this consume call.",
           "type": "boolean"
         },
         "max_messages": {
@@ -732,7 +726,7 @@
           }
         },
         "database": {
-          "description": "Database name injected as dbName in the body (MILVUS_DATABASE fallback).",
+          "description": "Database name injected as dbName in the body (milvus.database fallback).",
           "type": "string",
           "minLength": 1
         },
@@ -940,7 +934,7 @@
       "type": "object",
       "properties": {
         "connection_url": {
-          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "description": "Connection URL override; otherwise uses the JSON configuration.",
           "type": "string",
           "minLength": 1
         },
@@ -1009,11 +1003,6 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "connection_url": {
-          "description": "Connection URL override; otherwise uses the configured environment variable.",
-          "type": "string",
-          "minLength": 1
-        },
         "sql": {
           "type": "string",
           "minLength": 1,
@@ -1078,7 +1067,7 @@
       "type": "object",
       "properties": {
         "connection_url": {
-          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "description": "Connection URL override; otherwise uses the JSON configuration.",
           "type": "string",
           "minLength": 1
         },
@@ -1272,7 +1261,7 @@
       "type": "object",
       "properties": {
         "connection_url": {
-          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "description": "Connection URL override; otherwise uses the JSON configuration.",
           "type": "string",
           "minLength": 1
         },

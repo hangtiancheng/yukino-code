@@ -29,7 +29,7 @@ type Input struct {
 	TimeoutMS int               `json:"timeout_ms,omitempty" jsonschema:"HTTP request timeout in milliseconds. Defaults to 30000."`
 }
 
-const description = "Call any Prometheus HTTP endpoint and method. Defaults to /api/v1/alerts; use /api/v1/query or query_range for PromQL, /api/v1/targets, rules, labels, label/{name}/values, series or metadata for inspection, and admin/tsdb endpoints or /-/reload for administration. params encodes query parameters (arrays repeat the key, e.g. match[]); body accepts raw form text or JSON. Returns full JSON responses including labels/annotations, or text for non-JSON endpoints. No endpoint/method restrictions. Uses PROMETHEUS_BASE_URL (PROMETHEUS_URL fallback) or base_url; supports bearer/basic authentication and custom headers."
+const description = "Call any Prometheus HTTP endpoint and method. Defaults to /api/v1/alerts; use /api/v1/query or query_range for PromQL, /api/v1/targets, rules, labels, label/{name}/values, series or metadata for inspection, and admin/tsdb endpoints or /-/reload for administration. params encodes query parameters (arrays repeat the key, e.g. match[]); body accepts raw form text or JSON. Returns full JSON responses including labels/annotations, or text for non-JSON endpoints. No endpoint/method restrictions. Uses prometheus.base_url or base_url; supports bearer/basic authentication and custom headers."
 
 // Module returns the prometheus tool module.
 func Module() tools.ToolModule {
@@ -60,7 +60,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	outcome, err := operations.RunHTTPPassthrough(ctx, cfg.BaseURL, "PROMETHEUS_BASE_URL",
+	outcome, err := operations.RunHTTPPassthrough(ctx, cfg.BaseURL, "prometheus.base_url",
 		operations.HTTPPassthroughAuth{Token: cfg.Token, Username: cfg.Username, Password: cfg.Password},
 		operations.HTTPPassthroughRequest{
 			BaseURL:   in.BaseURL,

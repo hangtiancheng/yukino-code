@@ -1,326 +1,260 @@
-// Package config resolves the MCP server configuration from the environment.
-//
-// It is a faithful port of apps/mcp/src/shared/config.ts: every backend tool
-// reads its connection details from environment variables, with per-call
-// overrides supplied through tool arguments. Empty/whitespace-only values are
-// dropped before resolution so that defaults and fallbacks apply, matching the
-// zod schema behaviour of the TypeScript build.
+// Package config loads the MCP server's JSON/JSONC configuration at startup.
 package config
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
+	"sync/atomic"
+
+	"github.com/tidwall/jsonc"
 )
 
-// EmbeddingConfig holds the resolved OpenAI-compatible embedding provider.
-type EmbeddingConfig struct {
-	Model   string
-	BaseURL string
-	APIKey  string
-}
+const DefaultPath = ".config.jsonc"
 
-// EmbeddingConfigResult is a discriminated result: either OK with a Config, or
-// not OK with a human-readable Reason explaining what is missing.
+type EmbeddingConfig struct {
+	Model   string `json:"model"`
+	BaseURL string `json:"base_url"`
+	APIKey  string `json:"api_key"`
+}
 type EmbeddingConfigResult struct {
 	OK     bool
 	Config EmbeddingConfig
 	Reason string
 }
-
-// RedisConfig holds the Redis connection URL.
-type RedisConfig struct{ URL string }
-
-// IndexConfig holds the SQLite vector-index path.
-type IndexConfig struct{ DBPath string }
-
-// GitHubConfig holds gh CLI authentication details.
+type RedisConfig struct {
+	URL string `json:"url"`
+}
+type IndexConfig struct {
+	DBPath string `json:"db_path"`
+}
 type GitHubConfig struct {
-	Token    string
-	BaseURL  string
-	Hostname string
+	Token    string `json:"token"`
+	BaseURL  string `json:"base_url"`
+	Hostname string `json:"hostname"`
 }
-
-// MinioConfig holds S3/MinIO endpoint and credentials.
 type MinioConfig struct {
-	Endpoint     string
-	AccessKey    string
-	SecretKey    string
-	Region       string
-	SessionToken string
+	Endpoint     string `json:"endpoint"`
+	AccessKey    string `json:"access_key"`
+	SecretKey    string `json:"secret_key"`
+	Region       string `json:"region"`
+	SessionToken string `json:"session_token"`
 }
-
-// ClickhouseConfig holds the ClickHouse HTTP interface details.
 type ClickhouseConfig struct {
-	URL      string
-	Username string
-	Password string
-	Database string
+	URL      string `json:"url"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Database string `json:"database"`
 }
-
-// EtcdConfig holds the etcd v3 JSON-gateway base URL.
-type EtcdConfig struct{ URL string }
-
-// MilvusConfig holds the Milvus RESTful API details.
+type EtcdConfig struct {
+	URL string `json:"url"`
+}
 type MilvusConfig struct {
-	URL      string
-	Token    string
-	Database string
+	URL      string `json:"url"`
+	Token    string `json:"token"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Database string `json:"database"`
 }
-
-// GrafanaConfig holds the Grafana base URL and credentials.
 type GrafanaConfig struct {
-	BaseURL  string
-	Token    string
-	Username string
-	Password string
+	BaseURL  string `json:"base_url"`
+	Token    string `json:"token"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
-
-// KafkaConfig holds the Kafka broker list and SASL settings.
+type TLSConfig struct {
+	CAFile             string `json:"ca_file"`
+	CertFile           string `json:"cert_file"`
+	KeyFile            string `json:"key_file"`
+	ServerName         string `json:"server_name"`
+	InsecureSkipVerify bool   `json:"insecure_skip_verify"`
+}
 type KafkaConfig struct {
-	Brokers          string
-	ClientID         string
-	Username         string
-	Password         string
-	SASLMechanism    string
-	SecurityProtocol string
+	Brokers          string     `json:"brokers"`
+	ClientID         string     `json:"client_id"`
+	Username         string     `json:"username"`
+	Password         string     `json:"password"`
+	SASLMechanism    string     `json:"sasl_mechanism"`
+	SecurityProtocol string     `json:"security_protocol"`
+	TLS              *TLSConfig `json:"tls"`
 }
-
-// PrometheusConfig holds the Prometheus base URL and credentials.
 type PrometheusConfig struct {
-	BaseURL  string
-	Token    string
-	Username string
-	Password string
+	BaseURL  string `json:"base_url"`
+	Token    string `json:"token"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+type PostgresConfig struct {
+	URL string `json:"url"`
 }
 
-// PostgresConfig holds the PostgreSQL connection URL.
-type PostgresConfig struct{ URL string }
-
-// MySQLConfig holds the MySQL connection URL.
-type MySQLConfig struct{ URL string }
-
-// MongoDBConfig holds the MongoDB connection URL and default database.
+// MySQLConfig contains protocol connection options, never a URL or DSN.
+type MySQLConfig struct {
+	Host           string            `json:"host"`
+	Port           int               `json:"port"`
+	Socket         string            `json:"socket"`
+	Username       string            `json:"username"`
+	Password       string            `json:"password"`
+	Database       string            `json:"database"`
+	TimeoutMS      int               `json:"timeout_ms"`
+	ReadTimeoutMS  int               `json:"read_timeout_ms"`
+	WriteTimeoutMS int               `json:"write_timeout_ms"`
+	Charset        string            `json:"charset"`
+	Collation      string            `json:"collation"`
+	Timezone       string            `json:"timezone"`
+	TLS            *TLSConfig        `json:"tls"`
+	Session        map[string]string `json:"session"`
+}
 type MongoDBConfig struct {
-	URL      string
-	Database string
+	URL      string `json:"url"`
+	Database string `json:"database"`
 }
-
-// AppConfig is the fully resolved configuration tree.
 type AppConfig struct {
-	Embedding  EmbeddingConfigResult
-	Index      IndexConfig
-	Redis      RedisConfig
-	GitHub     GitHubConfig
-	Postgres   PostgresConfig
-	MySQL      MySQLConfig
-	MongoDB    MongoDBConfig
-	Prometheus PrometheusConfig
-	Grafana    GrafanaConfig
-	Minio      MinioConfig
-	Clickhouse ClickhouseConfig
-	Etcd       EtcdConfig
-	Milvus     MilvusConfig
-	Kafka      KafkaConfig
-	DocsDir    string
-	Host       string
-	Port       int
+	Embedding  EmbeddingConfigResult `json:"-"`
+	Index      IndexConfig           `json:"index"`
+	Redis      RedisConfig           `json:"redis"`
+	GitHub     GitHubConfig          `json:"github"`
+	Postgres   PostgresConfig        `json:"postgres"`
+	MySQL      MySQLConfig           `json:"mysql"`
+	MongoDB    MongoDBConfig         `json:"mongodb"`
+	Prometheus PrometheusConfig      `json:"prometheus"`
+	Grafana    GrafanaConfig         `json:"grafana"`
+	Minio      MinioConfig           `json:"minio"`
+	Clickhouse ClickhouseConfig      `json:"clickhouse"`
+	Etcd       EtcdConfig            `json:"etcd"`
+	Milvus     MilvusConfig          `json:"milvus"`
+	Kafka      KafkaConfig           `json:"kafka"`
+	DocsDir    string                `json:"docs_dir"`
+	Host       string                `json:"host"`
+	Port       int                   `json:"port"`
+	Transport  string                `json:"transport"`
 }
 
-var httpSchemeRE = regexp.MustCompile(`(?i)^https?://`)
+var current atomic.Pointer[AppConfig]
 
-// Load resolves the configuration from the current process environment.
-func Load() AppConfig { return LoadFrom(envMap(os.Environ())) }
-
-// LoadFrom resolves the configuration from an explicit environment map. It is
-// used by tests and mirrors loadConfig(env) in the TypeScript build.
-func LoadFrom(env map[string]string) AppConfig {
-	env = dropEmptyValues(env)
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	docsDir := filepath.Join(home, ".yukino", "docs")
-	if v, ok := env["YUKINO_DOCS_DIR"]; ok {
-		docsDir = v
-	}
-	dbPath := filepath.Join(home, ".yukino", "index.sqlite")
-	if v, ok := env["YUKINO_INDEX_DB"]; ok {
-		dbPath = v
-	}
-
-	milvusToken := ""
-	if v, ok := env["MILVUS_TOKEN"]; ok {
-		milvusToken = v
-	} else if env["MILVUS_USERNAME"] != "" || env["MILVUS_PASSWORD"] != "" {
-		milvusToken = env["MILVUS_USERNAME"] + ":" + env["MILVUS_PASSWORD"]
-	}
-
+func init() { Set(Defaults()) }
+func Defaults() AppConfig {
+	home, _ := os.UserHomeDir()
 	return AppConfig{
-		Embedding: resolveEmbedding(env),
-		Index:     IndexConfig{DBPath: dbPath},
-		Redis:     RedisConfig{URL: coalesceOr(env, "redis://localhost:6379", "REDIS_URL")},
-		DocsDir:   docsDir,
-		GitHub: GitHubConfig{
-			Token:    strings.Trim(coalesce(env, "GITHUB_TOKEN", "GH_TOKEN"), " \t\n\r"),
-			BaseURL:  stripTrailingSlashes(env["GITHUB_BASE_URL"]),
-			Hostname: env["GH_HOST"],
-		},
-		Postgres: PostgresConfig{URL: coalesce(env, "POSTGRES_URL", "POSTGRESQL_URL", "DATABASE_URL")},
-		MySQL:    MySQLConfig{URL: env["MYSQL_URL"]},
-		MongoDB: MongoDBConfig{
-			URL:      env["MONGODB_URL"],
-			Database: env["MONGODB_DATABASE"],
-		},
-		Prometheus: PrometheusConfig{
-			BaseURL:  stripTrailingSlashes(coalesce(env, "PROMETHEUS_BASE_URL", "PROMETHEUS_URL")),
-			Token:    env["PROMETHEUS_TOKEN"],
-			Username: env["PROMETHEUS_USERNAME"],
-			Password: env["PROMETHEUS_PASSWORD"],
-		},
-		Grafana: GrafanaConfig{
-			BaseURL:  stripTrailingSlashes(coalesce(env, "GRAFANA_BASE_URL", "GRAFANA_URL")),
-			Token:    coalesce(env, "GRAFANA_TOKEN", "GRAFANA_API_KEY"),
-			Username: env["GRAFANA_USERNAME"],
-			Password: env["GRAFANA_PASSWORD"],
-		},
-		Minio: MinioConfig{
-			Endpoint:     stripTrailingSlashes(coalesce(env, "MINIO_URL", "S3_ENDPOINT")),
-			AccessKey:    coalesce(env, "MINIO_ACCESS_KEY", "AWS_ACCESS_KEY_ID"),
-			SecretKey:    coalesce(env, "MINIO_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"),
-			Region:       coalesceOr(env, "us-east-1", "MINIO_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"),
-			SessionToken: coalesce(env, "MINIO_SESSION_TOKEN", "AWS_SESSION_TOKEN"),
-		},
-		Clickhouse: ClickhouseConfig{
-			URL:      stripTrailingSlashes(coalesce(env, "CLICKHOUSE_URL", "CLICKHOUSE_HTTP_URL")),
-			Username: env["CLICKHOUSE_USER"],
-			Password: env["CLICKHOUSE_PASSWORD"],
-			Database: env["CLICKHOUSE_DATABASE"],
-		},
-		Etcd: EtcdConfig{URL: normalizeEtcdURL(coalesce(env, "ETCD_URL", "ETCD_ENDPOINTS"))},
-		Milvus: MilvusConfig{
-			URL:      stripTrailingSlashes(coalesce(env, "MILVUS_URL", "MILVUS_ADDRESS")),
-			Token:    milvusToken,
-			Database: env["MILVUS_DATABASE"],
-		},
-		Kafka: KafkaConfig{
-			Brokers:          env["KAFKA_BROKERS"],
-			ClientID:         coalesceOr(env, "yukino-mcp", "KAFKA_CLIENT_ID"),
-			Username:         env["KAFKA_USERNAME"],
-			Password:         env["KAFKA_PASSWORD"],
-			SASLMechanism:    env["KAFKA_SASL_MECHANISM"],
-			SecurityProtocol: env["KAFKA_SECURITY_PROTOCOL"],
-		},
-		Host: coalesceOr(env, "127.0.0.1", "HOST"),
-		Port: parsePort(env["PORT"]),
+		Embedding: resolveEmbedding(EmbeddingConfig{}, "openai"),
+		Index:     IndexConfig{DBPath: filepath.Join(home, ".yukino", "index.sqlite")},
+		DocsDir:   filepath.Join(home, ".yukino", "docs"),
+		Redis:     RedisConfig{URL: "redis://localhost:6379"},
+		Minio:     MinioConfig{Region: "us-east-1"},
+		Kafka:     KafkaConfig{ClientID: "yukino-mcp"},
+		MySQL:     MySQLConfig{Host: "localhost", Port: 3306, TimeoutMS: 10000, Collation: "utf8mb4_unicode_ci"},
+		Host:      "127.0.0.1", Port: 3300, Transport: "stdio",
 	}
 }
 
-func resolveEmbedding(env map[string]string) EmbeddingConfigResult {
-	protocol := coalesceOr(env, "openai", "EMBEDDING_PROTOCOL")
-	if protocol != "openai" {
-		return EmbeddingConfigResult{
-			OK:     false,
-			Reason: `unsupported EMBEDDING_PROTOCOL "` + protocol + `" (only "openai" is supported)`,
+// Set installs an immutable snapshot before modules are initialized.
+func Set(cfg AppConfig) { current.Store(&cfg) }
+func Load() AppConfig   { return *current.Load() }
+func LoadFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read configuration %q: %w", path, err)
+	}
+	cfg, err := Parse(data)
+	if err != nil {
+		return fmt.Errorf("configuration %q: %w", path, err)
+	}
+	Set(cfg)
+	return nil
+}
+
+// Parse accepts JSON and JSONC and rejects unknown fields, including legacy DSNs.
+func Parse(data []byte) (AppConfig, error) {
+	data = jsonc.ToJSON(data)
+	if !bytes.HasPrefix(bytes.TrimSpace(data), []byte("{")) {
+		return AppConfig{}, fmt.Errorf("configuration must be a JSON object")
+	}
+	file := struct {
+		AppConfig
+		Embedding struct {
+			EmbeddingConfig
+			Protocol string `json:"protocol"`
+		} `json:"embedding"`
+	}{AppConfig: Defaults()}
+	file.Embedding.Protocol = "openai"
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&file); err != nil {
+		return AppConfig{}, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return AppConfig{}, fmt.Errorf("configuration must contain exactly one JSON object")
+	}
+	cfg := file.AppConfig
+	if cfg.Port < 1 || cfg.Port > 65535 {
+		return AppConfig{}, fmt.Errorf("port must be between 1 and 65535")
+	}
+	if cfg.Transport != "stdio" && cfg.Transport != "http" {
+		return AppConfig{}, fmt.Errorf("transport must be stdio or http")
+	}
+	var sections map[string]json.RawMessage
+	_ = json.Unmarshal(data, &sections)
+	if raw, ok := sections["mysql"]; ok {
+		var credentials map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &credentials)
+		password, hasPassword := credentials["password"]
+		if strings.TrimSpace(cfg.MySQL.Username) == "" || !hasPassword || bytes.Equal(bytes.TrimSpace(password), []byte("null")) {
+			return AppConfig{}, fmt.Errorf("mysql requires username and password (use an empty password string if needed)")
 		}
+	}
+	if cfg.MySQL.Port < 1 || cfg.MySQL.Port > 65535 {
+		return AppConfig{}, fmt.Errorf("mysql.port must be between 1 and 65535")
+	}
+	if cfg.MySQL.TimeoutMS <= 0 || cfg.MySQL.ReadTimeoutMS < 0 || cfg.MySQL.WriteTimeoutMS < 0 {
+		return AppConfig{}, fmt.Errorf("mysql timeout_ms must be positive; read_timeout_ms and write_timeout_ms must be nonnegative")
+	}
+	if cfg.MySQL.Socket == "" && strings.TrimSpace(cfg.MySQL.Host) == "" {
+		return AppConfig{}, fmt.Errorf("mysql.host or mysql.socket is required")
+	}
+	cfg.Embedding = resolveEmbedding(file.Embedding.EmbeddingConfig, file.Embedding.Protocol)
+	cfg.GitHub.BaseURL = strings.TrimRight(cfg.GitHub.BaseURL, "/")
+	cfg.Grafana.BaseURL = strings.TrimRight(cfg.Grafana.BaseURL, "/")
+	cfg.Prometheus.BaseURL = strings.TrimRight(cfg.Prometheus.BaseURL, "/")
+	cfg.Minio.Endpoint = strings.TrimRight(cfg.Minio.Endpoint, "/")
+	cfg.Clickhouse.URL = strings.TrimRight(cfg.Clickhouse.URL, "/")
+	cfg.Etcd.URL = normalizeEtcdURL(cfg.Etcd.URL)
+	cfg.Milvus.URL = strings.TrimRight(cfg.Milvus.URL, "/")
+	if cfg.Milvus.Token == "" && (cfg.Milvus.Username != "" || cfg.Milvus.Password != "") {
+		cfg.Milvus.Token = cfg.Milvus.Username + ":" + cfg.Milvus.Password
+	}
+	return cfg, nil
+}
+func resolveEmbedding(cfg EmbeddingConfig, protocol string) EmbeddingConfigResult {
+	if protocol != "openai" {
+		return EmbeddingConfigResult{Reason: fmt.Sprintf("unsupported embedding.protocol %q (only openai is supported)", protocol)}
 	}
 	var missing []string
-	model := env["EMBEDDING_MODEL"]
-	baseURL := env["EMBEDDING_BASE_URL"]
-	apiKey := coalesce(env, "EMBEDDING_API_KEY", "OPENAI_API_KEY")
-	if model == "" {
-		missing = append(missing, "EMBEDDING_MODEL")
+	if strings.TrimSpace(cfg.Model) == "" {
+		missing = append(missing, "embedding.model")
 	}
-	if baseURL == "" {
-		missing = append(missing, "EMBEDDING_BASE_URL")
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		missing = append(missing, "embedding.base_url")
 	}
-	if apiKey == "" {
-		missing = append(missing, "EMBEDDING_API_KEY (or OPENAI_API_KEY)")
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		missing = append(missing, "embedding.api_key")
 	}
 	if len(missing) > 0 {
-		return EmbeddingConfigResult{
-			OK:     false,
-			Reason: "missing environment variables: " + strings.Join(missing, ", "),
-		}
+		return EmbeddingConfigResult{Reason: "missing configuration fields: " + strings.Join(missing, ", ")}
 	}
-	return EmbeddingConfigResult{
-		OK:     true,
-		Config: EmbeddingConfig{Model: model, BaseURL: baseURL, APIKey: apiKey},
-	}
+	return EmbeddingConfigResult{OK: true, Config: cfg}
 }
-
-func envMap(pairs []string) map[string]string {
-	out := make(map[string]string, len(pairs))
-	for _, pair := range pairs {
-		if k, v, ok := strings.Cut(pair, "="); ok {
-			out[k] = v
-		}
-	}
-	return out
-}
-
-// dropEmptyValues removes entries whose value is empty or whitespace-only, so
-// that defaults and ?? fallbacks apply exactly as in the zod-parsed env.
-func dropEmptyValues(env map[string]string) map[string]string {
-	out := make(map[string]string, len(env))
-	for k, v := range env {
-		if strings.TrimSpace(v) != "" {
-			out[k] = v
-		}
-	}
-	return out
-}
-
-// coalesce returns the value of the first key present in env, or "".
-func coalesce(env map[string]string, keys ...string) string {
-	for _, k := range keys {
-		if v, ok := env[k]; ok {
-			return v
-		}
-	}
-	return ""
-}
-
-// coalesceOr returns the value of the first key present in env, or def when
-// none are present. It models the TypeScript `A ?? B ?? def` chains.
-func coalesceOr(env map[string]string, def string, keys ...string) string {
-	for _, k := range keys {
-		if v, ok := env[k]; ok {
-			return v
-		}
-	}
-	return def
-}
-
-func stripTrailingSlashes(value string) string { return strings.TrimRight(value, "/") }
-
 func normalizeEtcdURL(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	first := ""
-	if idx := strings.Index(trimmed, ","); idx >= 0 {
-		first = strings.TrimSpace(trimmed[:idx])
-	} else {
-		first = strings.TrimSpace(trimmed)
-	}
+	first, _, _ := strings.Cut(raw, ",")
+	first = strings.TrimSpace(first)
 	if first == "" {
 		return ""
 	}
-	if httpSchemeRE.MatchString(first) {
-		return stripTrailingSlashes(first)
+	if !strings.HasPrefix(strings.ToLower(first), "http://") && !strings.HasPrefix(strings.ToLower(first), "https://") {
+		first = "http://" + first
 	}
-	return stripTrailingSlashes("http://" + first)
-}
-
-func parsePort(raw string) int {
-	if raw == "" {
-		return 3300
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil || n <= 0 {
-		return 3300
-	}
-	return n
+	return strings.TrimRight(first, "/")
 }

@@ -26,7 +26,7 @@ var UnrestrictedAnnotations = &mcp.ToolAnnotations{
 
 // ConnectionURLDescription is the shared description for the connection_url
 // override argument.
-const ConnectionURLDescription = "Connection URL override; otherwise uses the configured environment variable."
+const ConnectionURLDescription = "Connection URL override; otherwise uses the JSON configuration."
 
 // Result builds the unified success envelope: a JSON text block plus the same
 // payload as structuredContent. It mirrors operationResult in the TypeScript
@@ -59,15 +59,15 @@ func WithError(res *mcp.CallToolResult) *mcp.CallToolResult {
 }
 
 // RequireConnection resolves a connection URL from a per-call override or the
-// configured environment value, erroring when neither is set. It mirrors
+// JSON configuration value, erroring when neither is set. It mirrors
 // requireConnection.
-func RequireConnection(override, configured, envName string) (string, error) {
+func RequireConnection(override, configured, configField string) (string, error) {
 	url := override
 	if url == "" {
 		url = configured
 	}
 	if url == "" {
-		return "", fmt.Errorf("Connection is not configured. Set %s or supply connection_url.", envName)
+		return "", fmt.Errorf("Connection is not configured. Set %s or supply connection_url.", configField)
 	}
 	return url, nil
 }
@@ -79,10 +79,9 @@ func errMessage(err error) string {
 	return err.Error()
 }
 
-// SQLInput is the shared argument schema for the SQL tools (postgres_tool and
-// mysql_tool), mirroring sqlInputSchema in the TypeScript build.
+// SQLInput is the PostgreSQL argument schema, including a connection URL override.
 type SQLInput struct {
-	ConnectionURL string `json:"connection_url,omitempty" jsonschema:"Connection URL override; otherwise uses the configured environment variable."`
+	ConnectionURL string `json:"connection_url,omitempty" jsonschema:"Connection URL override; otherwise uses the JSON configuration."`
 	SQL           string `json:"sql" jsonschema:"SQL to execute verbatim, including writes, DDL, administration and multiple statements."`
 	Params        []any  `json:"params,omitempty" jsonschema:"Optional positional parameters ($1, $2 for PostgreSQL; ? for MySQL)."`
 }

@@ -26,13 +26,13 @@ type Input struct {
 	Path      string            `json:"path,omitempty" jsonschema:"REST endpoint path or absolute URL. Defaults to /v2/vectordb/collections/list."`
 	Method    string            `json:"method,omitempty" jsonschema:"HTTP method: GET, POST, PUT or DELETE. Milvus v2 uses POST for most operations. Defaults to POST."`
 	Body      map[string]any    `json:"body,omitempty" jsonschema:"JSON request document, e.g. {collectionName:'demo', data:[...]}."`
-	Database  string            `json:"database,omitempty" jsonschema:"Database name injected as dbName in the body (MILVUS_DATABASE fallback)."`
+	Database  string            `json:"database,omitempty" jsonschema:"Database name injected as dbName in the body (milvus.database fallback)."`
 	Token     string            `json:"token,omitempty" jsonschema:"Bearer token override, formatted as username:password or an API key."`
 	Headers   map[string]string `json:"headers,omitempty" jsonschema:"Additional HTTP headers."`
 	TimeoutMS int               `json:"timeout_ms,omitempty" jsonschema:"HTTP request timeout in milliseconds. Defaults to 30000."`
 }
 
-const description = "Call any Milvus RESTful API v2 endpoint with full privileges: collections (list/create/describe/drop/has/load/release/rename/alter), entities (insert/upsert/delete/get/query/search/hybrid_search), indexes, partitions, databases, aliases, users/roles/grants, import and jobs. There is no endpoint allowlist. path defaults to /v2/vectordb/collections/list and method to POST; body is the JSON request document. Set database to inject dbName into the body, or include dbName yourself. Authentication uses a Bearer token from MILVUS_TOKEN or MILVUS_USERNAME:MILVUS_PASSWORD (override with token). Responses return {status_code, data}; a non-zero Milvus code or non-2xx status sets isError. Uses MILVUS_URL (MILVUS_ADDRESS fallback) or base_url. The REST API shares the gRPC port (default 19530); health/metrics live on 9091 and can be reached with an absolute base_url."
+const description = "Call any Milvus RESTful API v2 endpoint with full privileges: collections (list/create/describe/drop/has/load/release/rename/alter), entities (insert/upsert/delete/get/query/search/hybrid_search), indexes, partitions, databases, aliases, users/roles/grants, import and jobs. There is no endpoint allowlist. path defaults to /v2/vectordb/collections/list and method to POST; body is the JSON request document. Set database to inject dbName into the body, or include dbName yourself. Authentication uses a Bearer token from milvus.token or milvus.username:milvus.password (override with token). Responses return {status_code, data}; a non-zero Milvus code or non-2xx status sets isError. Uses milvus.url or base_url. The REST API shares the gRPC port (default 19530); health/metrics live on 9091 and can be reached with an absolute base_url."
 
 // Module returns the milvus tool module.
 func Module() tools.ToolModule {
@@ -66,7 +66,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	}
 	if base == "" && !operations.IsAbsoluteHTTP(path) {
 		return operations.ResultErr(tools.MilvusTool,
-			errors.New("Connection is not configured. Set MILVUS_URL (or MILVUS_ADDRESS) or supply base_url.")), nil, nil
+			errors.New("Connection is not configured. Set milvus.url or supply base_url.")), nil, nil
 	}
 	urlStr := operations.JoinURL(base, path)
 

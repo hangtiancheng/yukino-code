@@ -16,7 +16,7 @@ import (
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools/operations"
 )
 
-const description = "Run any GitHub CLI (gh) command. Supply args without the leading gh, e.g. [\"pr\",\"list\",\"--repo\",\"owner/repo\",\"--json\",\"number,title\"]. Covers repositories, issues, PRs/reviews/merges, Actions, releases/assets, projects and every REST/GraphQL endpoint via gh api. Use --help to discover commands, --json/--jq for focused results, and gh api --paginate --slurp for pagination. stdin supports --input - (JSON/binary-as-text payloads), --body-file - and other stdin-based flags. cwd selects the local repository for checkout/clone/git operations. No command allowlist or confirmation step. Requires gh on PATH; authentication uses gh auth login or GH_TOKEN/GITHUB_TOKEN (Enterprise: GH_HOST/GH_ENTERPRISE_TOKEN). Returns stdout, stderr, exit_code, signal, timed_out and cancelled; nonzero exits, timeouts or cancellation are errors. Use response_format=base64 for binary stdout."
+const description = "Run any GitHub CLI (gh) command. Supply args without the leading gh, e.g. [\"pr\",\"list\",\"--repo\",\"owner/repo\",\"--json\",\"number,title\"]. Covers repositories, issues, PRs/reviews/merges, Actions, releases/assets, projects and every REST/GraphQL endpoint via gh api. Use --help to discover commands, --json/--jq for focused results, and gh api --paginate --slurp for pagination. stdin supports --input - (JSON/binary-as-text payloads), --body-file - and other stdin-based flags. cwd selects the local repository for checkout/clone/git operations. No command allowlist or confirmation step. Requires gh on PATH; authentication uses github.token/github.hostname in JSON configuration or gh auth login (native gh environment authentication is also supported). Returns stdout, stderr, exit_code, signal, timed_out and cancelled; nonzero exits, timeouts or cancellation are errors. Use response_format=base64 for binary stdout."
 
 // Input is the github_tool argument schema.
 type Input struct {
@@ -61,7 +61,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	})
 	if err != nil {
 		if IsNotFound(err) {
-			return operations.ResultErr(tools.GitHubTool, errString("Unable to start gh. Install GitHub CLI and ensure gh is on PATH; check cwd if supplied. Authenticate with gh auth login or set GH_TOKEN/GITHUB_TOKEN.")), nil, nil
+			return operations.ResultErr(tools.GitHubTool, errString("Unable to start gh. Install GitHub CLI and ensure gh is on PATH; check cwd if supplied. Authenticate with gh auth login or configure github.token in JSON.")), nil, nil
 		}
 		return operations.ResultErr(tools.GitHubTool, err), nil, nil
 	}
@@ -118,10 +118,8 @@ func ghEnvironment() []string {
 	if cfg.Token != "" {
 		enterprise := hostname != "" && hostname != "github.com" && hostname != "api.github.com" && !strings.HasSuffix(hostname, ".ghe.com")
 		if enterprise {
-			if env["GH_ENTERPRISE_TOKEN"] == "" && env["GITHUB_ENTERPRISE_TOKEN"] == "" {
-				env["GH_ENTERPRISE_TOKEN"] = cfg.Token
-			}
-		} else if env["GH_TOKEN"] == "" {
+			env["GH_ENTERPRISE_TOKEN"] = cfg.Token
+		} else {
 			env["GH_TOKEN"] = cfg.Token
 		}
 	}

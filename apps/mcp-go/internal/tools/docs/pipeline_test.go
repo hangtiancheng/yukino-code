@@ -39,7 +39,11 @@ func TestSyncUnicodeFailureRecoveryDeletionAndConcurrentCache(t *testing.T) {
 	defer endpoint.Close()
 	dir := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "index.sqlite")
-	t.Setenv("YUKINO_DOCS_DIR", dir)
+	previous := config.Load()
+	t.Cleanup(func() { config.Set(previous) })
+	cfg := config.Defaults()
+	cfg.DocsDir = dir
+	config.Set(cfg)
 	db, err := OpenStore(config.IndexConfig{DBPath: dbPath})
 	if err != nil {
 		t.Fatal(err)

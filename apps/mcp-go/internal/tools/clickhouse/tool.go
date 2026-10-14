@@ -22,11 +22,11 @@ var jsonFormatRE = regexp.MustCompile(`(?i)^JSON`)
 
 // Input is the clickhouse_tool argument schema.
 type Input struct {
-	ConnectionURL string            `json:"connection_url,omitempty" jsonschema:"Connection URL override; otherwise uses the configured environment variable."`
+	ConnectionURL string            `json:"connection_url,omitempty" jsonschema:"Connection URL override; otherwise uses the JSON configuration."`
 	SQL           string            `json:"sql" jsonschema:"SQL statement to execute verbatim."`
 	Params        map[string]any    `json:"params,omitempty" jsonschema:"Parameterized-query values, sent as param_<name> for {name:Type} placeholders."`
 	Settings      map[string]any    `json:"settings,omitempty" jsonschema:"ClickHouse settings passed as query parameters, e.g. {max_execution_time: 10, readonly: 1}."`
-	Database      string            `json:"database,omitempty" jsonschema:"Database override (CLICKHOUSE_DATABASE fallback)."`
+	Database      string            `json:"database,omitempty" jsonschema:"Database override (clickhouse.database fallback)."`
 	Format        string            `json:"format,omitempty" jsonschema:"default_format for results when the SQL has no FORMAT clause. Defaults to JSON."`
 	Data          *string           `json:"data,omitempty" jsonschema:"Raw data body for INSERT ... FORMAT <fmt>; the SQL moves to the query parameter."`
 	DataBase64    *string           `json:"data_base64,omitempty" jsonschema:"Base64-encoded data body for binary INSERT formats."`
@@ -38,7 +38,7 @@ type Input struct {
 	TimeoutMS     int               `json:"timeout_ms,omitempty" jsonschema:"HTTP request timeout in milliseconds. Defaults to 30000."`
 }
 
-const description = "Execute arbitrary ClickHouse SQL over the HTTP interface with the account's full privileges: queries, inserts, DDL, mutations, system and administrative statements. There is no SQL allowlist or read-only mode. SELECT results are returned parsed when the output format is JSON-family (default_format defaults to JSON; override with format, e.g. JSONEachRow, CSV, TSV, Pretty). For INSERT ... FORMAT <fmt>, pass the SQL in sql and the rows in data (or data_base64); the query is sent as a parameter and the data as the body. Parameterized queries use params, mapped to ClickHouse param_<name> settings for {name:Type} placeholders. Extra engine settings (max_execution_time, readonly, etc.) go in settings. Uses CLICKHOUSE_URL (CLICKHOUSE_HTTP_URL fallback) or connection_url; credentials from CLICKHOUSE_USER/CLICKHOUSE_PASSWORD, database from CLICKHOUSE_DATABASE."
+const description = "Execute arbitrary ClickHouse SQL over the HTTP interface with the account's full privileges: queries, inserts, DDL, mutations, system and administrative statements. There is no SQL allowlist or read-only mode. SELECT results are returned parsed when the output format is JSON-family (default_format defaults to JSON; override with format, e.g. JSONEachRow, CSV, TSV, Pretty). For INSERT ... FORMAT <fmt>, pass the SQL in sql and the rows in data (or data_base64); the query is sent as a parameter and the data as the body. Parameterized queries use params, mapped to ClickHouse param_<name> settings for {name:Type} placeholders. Extra engine settings (max_execution_time, readonly, etc.) go in settings. Uses clickhouse.url or connection_url; credentials from clickhouse.username/clickhouse.password, database from clickhouse.database."
 
 // Module returns the clickhouse tool module.
 func Module() tools.ToolModule {
@@ -57,7 +57,7 @@ func Module() tools.ToolModule {
 
 func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToolResult, any, error) {
 	cfg := config.Load().Clickhouse
-	base, err := operations.RequireConnection(in.ConnectionURL, cfg.URL, "CLICKHOUSE_URL")
+	base, err := operations.RequireConnection(in.ConnectionURL, cfg.URL, "clickhouse.url")
 	if err != nil {
 		return operations.ResultErr(tools.Clickhouse, err), nil, nil
 	}

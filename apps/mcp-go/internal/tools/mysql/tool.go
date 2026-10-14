@@ -6,10 +6,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math"
 	"net"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,14 +16,18 @@ import (
 
 	client "github.com/go-mysql-org/go-mysql/client"
 	wire "github.com/go-mysql-org/go-mysql/mysql"
-	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/config"
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools"
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools/operations"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const description = "Execute arbitrary MySQL SQL with full connection privileges: queries, writes, DDL, transactions, administration and multiple statements. Put a complete transaction in one call. Optional ? parameters are supported. Returns query rows or mutation result headers and field metadata for all statements. Uses MYSQL_URL or connection_url."
+const description = "Execute arbitrary MySQL SQL with full connection privileges: queries, writes, DDL, transactions, administration and multiple statements. Put a complete transaction in one call. Optional ? parameters are supported. Returns query rows or mutation result headers and field metadata for all statements. Connection credentials come from the mysql object in the JSON configuration; URLs and DSNs are not accepted."
+
+type Input struct {
+	SQL    string `json:"sql"`
+	Params []any  `json:"params,omitempty"`
+}
 
 func Module() tools.ToolModule {
 	return tools.ToolModule{Name: "mysql", Register: func(server *mcp.Server) {
@@ -32,18 +35,10 @@ func Module() tools.ToolModule {
 	}}
 }
 
-func handle(ctx context.Context, _ *mcp.CallToolRequest, in operations.SQLInput) (*mcp.CallToolResult, any, error) {
-	rawURL, err := operations.RequireConnection(in.ConnectionURL, config.Load().MySQL.URL, "MYSQL_URL")
-	if err != nil {
-		return operations.ResultErr(tools.MySQLTool, err), nil, nil
-	}
-	dsn, err := toDSN(rawURL)
-	if err != nil {
-		return operations.ResultErr(tools.MySQLTool, err), nil, nil
-	}
-	cfg, err := mysqldriver.ParseDSN(dsn)
-	if err != nil {
-		return operations.ResultErr(tools.MySQLTool, err), nil, nil
+func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToolResult, any, error) {
+	cfg := config.Load().MySQL
+	if cfg.Username == "" {
+		return operations.ResultErr(tools.MySQLTool, errors.New("Connection is not configured. Set mysql.username and mysql.password in the JSON configuration.")), nil, nil
 	}
 	data, err := query(ctx, cfg, in.SQL, in.Params)
 	if err != nil {
@@ -52,8 +47,19 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in operations.SQLInput)
 	return operations.Result(data), nil, nil
 }
 
-func query(ctx context.Context, cfg *mysqldriver.Config, sql string, params []any) (map[string]any, error) {
-	timeout := cfg.Timeout
+func query(ctx context.Context, cfg config.MySQLConfig, sql string, params []any) (map[string]any, error) {
+	tlsConfig, err := config.TLS(cfg.TLS, cfg.Host)
+	if err != nil {
+		return nil, err
+	}
+	location := time.Local
+	if cfg.Timezone != "" {
+		location, err = time.LoadLocation(cfg.Timezone)
+		if err != nil {
+			return nil, err
+		}
+	}
+	timeout := time.Duration(cfg.TimeoutMS) * time.Millisecond
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
@@ -71,11 +77,15 @@ func query(ctx context.Context, cfg *mysqldriver.Config, sql string, params []an
 		}
 		return socket, err
 	}
-	conn, err := client.ConnectWithDialer(connectCtx, cfg.Net, cfg.Addr, cfg.User, cfg.Passwd, cfg.DBName, dial, func(conn *client.Conn) error {
-		conn.ReadTimeout = cfg.ReadTimeout
-		conn.WriteTimeout = cfg.WriteTimeout
-		if cfg.TLS != nil {
-			conn.SetTLSConfig(cfg.TLS.Clone())
+	network, address := "tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+	if cfg.Socket != "" {
+		network, address = "unix", cfg.Socket
+	}
+	conn, err := client.ConnectWithDialer(connectCtx, network, address, cfg.Username, cfg.Password, cfg.Database, dial, func(conn *client.Conn) error {
+		conn.ReadTimeout = time.Duration(cfg.ReadTimeoutMS) * time.Millisecond
+		conn.WriteTimeout = time.Duration(cfg.WriteTimeoutMS) * time.Millisecond
+		if tlsConfig != nil {
+			conn.SetTLSConfig(tlsConfig)
 		}
 		for _, flag := range []uint32{wire.CLIENT_MULTI_STATEMENTS, wire.CLIENT_MULTI_RESULTS, wire.CLIENT_FOUND_ROWS, wire.CLIENT_SESSION_TRACK} {
 			if err := conn.SetCapability(flag); err != nil {
@@ -95,19 +105,17 @@ func query(ctx context.Context, cfg *mysqldriver.Config, sql string, params []an
 	_ = socket.SetDeadline(time.Time{})
 	stop := context.AfterFunc(ctx, func() { _ = socket.Close() })
 	defer stop()
-	for _, key := range operations.SortedKeys(cfg.Params) {
-		value := cfg.Params[key]
-		if key == "charset" {
-			if err := conn.SetCharset(strings.Split(value, ",")[0]); err != nil {
-				return nil, err
-			}
-		} else {
-			result, err := conn.Execute("SET " + escapeID(key) + "=" + value)
-			if err != nil {
-				return nil, err
-			}
-			result.Close()
+	if cfg.Charset != "" {
+		if err := conn.SetCharset(cfg.Charset); err != nil {
+			return nil, err
 		}
+	}
+	for _, key := range operations.SortedKeys(cfg.Session) {
+		result, err := conn.Execute("SET " + escapeID(key) + "=" + cfg.Session[key])
+		if err != nil {
+			return nil, err
+		}
+		result.Close()
 	}
 	var results, fields []any
 	var resultErr error
@@ -117,7 +125,7 @@ func query(ctx context.Context, cfg *mysqldriver.Config, sql string, params []an
 			return
 		}
 		defer result.Close()
-		rows, columns, err := normalizeResult(result, cfg.Loc)
+		rows, columns, err := normalizeResult(result, location)
 		if err != nil {
 			resultErr = err
 			return
@@ -266,52 +274,4 @@ func normalizeJSONNumbers(value any) any {
 		}
 	}
 	return value
-}
-
-// toDSN converts a mysql:// URL or normalizes an existing go-sql-driver DSN,
-// enabling multi-statement batches and parameter interpolation.
-func toDSN(raw string) (string, error) {
-	if !strings.Contains(raw, "://") {
-		cfg, err := mysqldriver.ParseDSN(raw)
-		if err != nil {
-			return "", err
-		}
-		cfg.MultiStatements = true
-		cfg.InterpolateParams = true
-		return cfg.FormatDSN(), nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme != "mysql" {
-		return "", fmt.Errorf("unsupported MySQL URL scheme %q", u.Scheme)
-	}
-	cfg := mysqldriver.NewConfig()
-	cfg.Net = "tcp"
-	cfg.Addr = u.Host
-	if u.Port() == "" {
-		cfg.Addr = net.JoinHostPort(u.Hostname(), "3306")
-	}
-	if u.User != nil {
-		cfg.User = u.User.Username()
-		if password, ok := u.User.Password(); ok {
-			cfg.Passwd = password
-		}
-	}
-	cfg.DBName = strings.TrimPrefix(u.Path, "/")
-	cfg.MultiStatements = true
-	cfg.ParseTime = true
-	// Parse the URL options through the driver's DSN parser so TLS, timeouts,
-	// charset and session settings are retained instead of silently discarded.
-	if u.RawQuery != "" {
-		cfg, err = mysqldriver.ParseDSN(cfg.FormatDSN() + "&" + u.RawQuery)
-		if err != nil {
-			return "", err
-		}
-	}
-	cfg.MultiStatements = true
-	// Parameters in multi-statement batches require client-side interpolation.
-	cfg.InterpolateParams = true
-	return cfg.FormatDSN(), nil
 }

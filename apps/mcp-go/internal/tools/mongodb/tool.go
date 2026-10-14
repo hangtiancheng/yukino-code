@@ -22,7 +22,7 @@ import (
 
 const serverSelectionTimeout = 10 * time.Second
 
-const description = "Execute any MongoDB database command with full connection privileges: find, insert, update, delete, aggregate, create/drop collections or databases, indexes, users and administration. Supply a raw command document (e.g. {\"find\":\"users\",\"filter\":{}}); BSON values use Extended JSON such as {\"$oid\":\"...\"}. Set database to admin for administrative commands. Returns the full command response as canonical Extended JSON, preserving BSON types and cursor batches. Uses MONGODB_URL or connection_url; database defaults to MONGODB_DATABASE or the URL's database."
+const description = "Execute any MongoDB database command with full connection privileges: find, insert, update, delete, aggregate, create/drop collections or databases, indexes, users and administration. Supply a raw command document (e.g. {\"find\":\"users\",\"filter\":{}}); BSON values use Extended JSON such as {\"$oid\":\"...\"}. Set database to admin for administrative commands. Returns the full command response as canonical Extended JSON, preserving BSON types and cursor batches. Uses mongodb.url or connection_url; database defaults to mongodb.database or the URL's database."
 
 // Input is the mongodb_tool argument schema. Command is kept as raw JSON so
 // that the command document's key order (the command name must be first) is
@@ -73,7 +73,7 @@ func Module() tools.ToolModule {
 
 func handle(ctx context.Context, req *mcp.CallToolRequest, in Input) (*mcp.CallToolResult, any, error) {
 	cfg := config.Load().MongoDB
-	rawURL, err := operations.RequireConnection(in.ConnectionURL, cfg.URL, "MONGODB_URL")
+	rawURL, err := operations.RequireConnection(in.ConnectionURL, cfg.URL, "mongodb.url")
 	if err != nil {
 		return operations.ResultErr(tools.MongoDBTool, err), nil, nil
 	}

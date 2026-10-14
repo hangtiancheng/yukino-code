@@ -33,34 +33,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Happy yukino
+        run: pnpm --filter @yukino.js/yukino happy
 
-      - name: Typecheck yukino
-        run: pnpm --filter @yukino.js/yukino typecheck
-
-      - name: Build yukino
-        run: pnpm --filter @yukino.js/yukino build
-
-      - name: Test yukino
-        run: pnpm --filter @yukino.js/yukino test
-
-      - name: Lint yukino
-        run: pnpm --filter @yukino.js/yukino lint
-
-      - name: Build yukino frontend
-        run: pnpm --filter @yukino.js/yukino build:browser
-
-
-      - name: Typecheck mcp
-        run: pnpm --filter @yukino.js/mcp typecheck
-
-      - name: Test mcp
-        run: pnpm --filter @yukino.js/mcp test
-
-      - name: Build mcp
-        run: pnpm --filter @yukino.js/mcp build
-
-      - name: Build mcp frontend
-        run: pnpm --filter @yukino.js/mcp build:fe
+      - name: Happy mcp
+        run: pnpm --filter @yukino.js/mcp happy
 
   deploy-docs:
     name: Deploy Docs to GitHub Pages

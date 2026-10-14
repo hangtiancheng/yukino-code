@@ -29,7 +29,7 @@ type Input struct {
 	TimeoutMS int               `json:"timeout_ms,omitempty" jsonschema:"HTTP request timeout in milliseconds. Defaults to 30000."`
 }
 
-const description = "Call any Grafana HTTP API endpoint and method. Defaults to /api/health. Use /api/search to list dashboards and folders, /api/dashboards/uid/{uid} to fetch a dashboard (GET) or save one (POST with a dashboard model), /api/folders, /api/datasources and /api/datasources/{id} for provisioning, /api/ds/query to run proxied datasource queries, /api/annotations, /api/ruler/grafana/api/v1/rules and /api/v1/provisioning/* for alerting, and /api/admin, /api/org, /api/users, /api/serviceaccounts for administration. params encodes query parameters (arrays repeat the key); body accepts JSON (dashboard models, ds/query payloads) or a raw string sent verbatim. Returns full JSON responses, or text for non-JSON endpoints. No endpoint/method restrictions; Grafana RBAC and the credential's role still govern what succeeds. Uses GRAFANA_BASE_URL (GRAFANA_URL fallback) or base_url; supports bearer authentication (service-account token or API key) or basic authentication, plus custom headers such as X-Grafana-Org-Id."
+const description = "Call any Grafana HTTP API endpoint and method. Defaults to /api/health. Use /api/search to list dashboards and folders, /api/dashboards/uid/{uid} to fetch a dashboard (GET) or save one (POST with a dashboard model), /api/folders, /api/datasources and /api/datasources/{id} for provisioning, /api/ds/query to run proxied datasource queries, /api/annotations, /api/ruler/grafana/api/v1/rules and /api/v1/provisioning/* for alerting, and /api/admin, /api/org, /api/users, /api/serviceaccounts for administration. params encodes query parameters (arrays repeat the key); body accepts JSON (dashboard models, ds/query payloads) or a raw string sent verbatim. Returns full JSON responses, or text for non-JSON endpoints. No endpoint/method restrictions; Grafana RBAC and the credential's role still govern what succeeds. Uses grafana.base_url or base_url; supports bearer authentication (service-account token or API key) or basic authentication, plus custom headers such as X-Grafana-Org-Id."
 
 // Module returns the grafana tool module.
 func Module() tools.ToolModule {
@@ -60,7 +60,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	outcome, err := operations.RunHTTPPassthrough(ctx, cfg.BaseURL, "GRAFANA_BASE_URL",
+	outcome, err := operations.RunHTTPPassthrough(ctx, cfg.BaseURL, "grafana.base_url",
 		operations.HTTPPassthroughAuth{Token: cfg.Token, Username: cfg.Username, Password: cfg.Password},
 		operations.HTTPPassthroughRequest{
 			BaseURL:   in.BaseURL,

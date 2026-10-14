@@ -11,6 +11,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createServer } from "../src/server.js";
 import { docsModule } from "../src/tools/docs/tool.js";
+import { goInputSchema } from "./go-contract.js";
 
 const directory = await mkdtemp(join(tmpdir(), "yukino-mcp-parity-"));
 const executable = join(directory, "yukino-mcp");
@@ -85,6 +86,18 @@ const settings: Record<string, string> = {
   MINIO_SECRET_KEY: "fixture",
   LOG_LEVEL: "error",
 };
+const goConfig = join(directory, "go.json");
+await writeFile(
+  goConfig,
+  JSON.stringify({
+    transport: "stdio",
+    docs_dir: docs,
+    index: { db_path: join(directory, "go.sqlite") },
+    embedding: { base_url: base, model: "test", api_key: "test" },
+    minio: { access_key: "fixture", secret_key: "fixture" },
+  }),
+  { mode: 0o600 },
+);
 Object.assign(process.env, settings);
 const tsServer = createServer();
 const tsClient = new Client({ name: "ts-parity", version: "1" });
@@ -98,6 +111,7 @@ try {
     goClient.connect(
       new StdioClientTransport({
         command: executable,
+        args: ["--config", goConfig],
         env: {
           ...Object.fromEntries(
             Object.entries(process.env).filter(
@@ -117,7 +131,7 @@ try {
     tools
       .map(({ name, inputSchema, annotations, _meta }) => ({
         name,
-        inputSchema,
+        inputSchema: goInputSchema({ name, inputSchema }),
         annotations,
         _meta,
       }))

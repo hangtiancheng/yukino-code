@@ -1,12 +1,10 @@
 package mysql
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	wire "github.com/go-mysql-org/go-mysql/mysql"
-	mysqldriver "github.com/go-sql-driver/mysql"
 )
 
 func TestTextFieldsPreserveNumericLookingValues(t *testing.T) {
@@ -36,36 +34,5 @@ func TestDateAndDatetimeZeroValuesMatchMySQL2(t *testing.T) {
 	datetime, err := normalizeField([]byte("0000-00-00 00:00:00"), &wire.Field{Type: wire.MYSQL_TYPE_DATETIME}, time.UTC)
 	if err != nil || datetime != nil {
 		t.Fatalf("zero DATETIME: %#v %v", datetime, err)
-	}
-}
-
-func TestToDSNPreservesConnectionOptions(t *testing.T) {
-	dsn, err := toDSN("mysql://user:p%40ss@localhost/db?tls=true&timeout=3s&charset=utf8mb4")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := mysqldriver.ParseDSN(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.TLSConfig != "true" || cfg.Timeout != 3*time.Second || !strings.Contains(dsn, "charset=utf8mb4") {
-		t.Fatalf("connection options lost: %+v", cfg)
-	}
-	if cfg.Addr != "localhost:3306" || cfg.Passwd != "p@ss" || !cfg.MultiStatements || !cfg.InterpolateParams {
-		t.Fatalf("invalid config: %+v", cfg)
-	}
-}
-
-func TestToDSNEnablesBatchesForNativeDSN(t *testing.T) {
-	dsn, err := toDSN("user:pass@tcp(localhost:3306)/db?tls=true")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := mysqldriver.ParseDSN(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !cfg.MultiStatements || !cfg.InterpolateParams || cfg.TLSConfig != "true" {
-		t.Fatalf("invalid config: %+v", cfg)
 	}
 }

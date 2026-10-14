@@ -1,19 +1,25 @@
-import Kafka from "node-rdkafka";
+import { randomUUID } from "node:crypto";
+import {
+  Admin,
+  Consumer,
+  Producer,
+  MessagesStreamModes,
+  MessagesStreamFallbackModes,
+  IS_CONTROL,
+  protocolErrors,
+  protocolErrorsCodesById,
+  findErrorBy,
+} from "@platformatic/kafka";
 import type {
-  ConsumerGlobalConfig,
-  GlobalConfig,
-  IAdminClient,
-  LibrdKafkaError,
+  BaseOptions,
+  ProducerOptions,
+  ConsumerOptions,
   Message,
-  MessageHeader,
-  Metadata,
-  MetadataOptions,
-  ProducerGlobalConfig,
-  TopicPartitionOffset,
-  WatermarkOffsets,
-} from "node-rdkafka";
+  MessagesStream,
+  ClusterMetadata,
+  CommitOptionsPartition,
+} from "@platformatic/kafka";
 import { z } from "zod";
-
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
 import type { ToolModule } from "@/tools/types.js";
@@ -24,189 +30,126 @@ import {
 } from "@/tools/operations/shared.js";
 
 type Encoding = "utf8" | "base64";
-type Connectable = Kafka.Producer | Kafka.KafkaConsumer;
-type ConfigRecord = Record<string, string | number | boolean>;
-
+type KafkaOptions = BaseOptions &
+  Partial<ProducerOptions<Buffer, Buffer | null, Buffer, Buffer>> &
+  Partial<ConsumerOptions<Buffer, Buffer, Buffer, Buffer>>;
 function buildConfig(
   brokers: string,
   clientId: string,
-  extra: ConfigRecord,
-): GlobalConfig {
-  const kafka = loadConfig().kafka;
-  const conf: ConfigRecord = {
-    "metadata.broker.list": brokers,
-    "client.id": clientId,
-  };
-  if (kafka.securityProtocol)
-    conf["security.protocol"] = kafka.securityProtocol;
-  if (kafka.saslMechanism) conf["sasl.mechanisms"] = kafka.saslMechanism;
-  if (kafka.username) conf["sasl.username"] = kafka.username;
-  if (kafka.password) conf["sasl.password"] = kafka.password;
-  Object.assign(conf, extra);
-  return conf as unknown as GlobalConfig;
-}
-
-/**
- * librdkafka properties that are *topic*-level rather than global
- * (auto.offset.reset, acks, message.timeout.ms, ...).
- * node-rdkafka replaces the client's default topic configuration with the
- * second constructor argument, so topic-level properties set only in the
- * global configuration are silently ignored — e.g. auto.offset.reset keeps
- * its "largest" default, and a from_beginning consume would start at the high
- * watermark and read nothing. Mirror these keys into the topic configuration
- * so they actually take effect.
- */
-const TOPIC_CONF_KEYS = [
-  "acks",
-  "request.required.acks",
-  "request.timeout.ms",
-  "message.timeout.ms",
-  "produce.offset.report",
-  "compression.type",
-  "compression.codec",
-  "compression.level",
-  "queuing.strategy",
-  "auto.commit.enable",
-  "auto.offset.reset",
-  "consume.callback.max.messages",
-] as const;
-
-function splitTopicConfig(conf: GlobalConfig): {
-  globalConf: GlobalConfig;
-  topicConf: Record<string, string | number | boolean>;
-} {
-  const record = conf as unknown as ConfigRecord;
-  const topicConf: Record<string, string | number | boolean> = {};
-  for (const key of TOPIC_CONF_KEYS) {
-    const value = record[key];
-    if (value !== undefined) topicConf[key] = value;
-  }
-  return { globalConf: conf, topicConf };
-}
-
-function connectClient(client: Connectable): Promise<Metadata> {
-  return new Promise((resolve, reject) => {
-    client.connect({}, (err: LibrdKafkaError, data: Metadata) => {
-      if (err) reject(err);
-      else resolve(data);
-    });
-  });
-}
-
-function disconnectClient(client: Connectable): Promise<void> {
-  return new Promise((resolve) => {
-    try {
-      client.disconnect(() => resolve());
-    } catch {
-      resolve();
-    }
-  });
-}
-
-function getMetadata(
-  client: Connectable,
-  options: MetadataOptions,
-): Promise<Metadata> {
-  return new Promise((resolve, reject) => {
-    client.getMetadata(options, (err: LibrdKafkaError, data: Metadata) => {
-      if (err) reject(err);
-      else resolve(data);
-    });
-  });
-}
-
-function queryWatermarks(
-  client: Connectable,
-  topic: string,
-  partition: number,
+  extra: Record<string, unknown>,
   timeout: number,
-): Promise<WatermarkOffsets> {
-  return new Promise((resolve, reject) => {
-    client.queryWatermarkOffsets(
-      topic,
-      partition,
-      timeout,
-      (err: LibrdKafkaError, offsets: WatermarkOffsets) => {
-        if (err) reject(err);
-        else resolve(offsets);
-      },
+): KafkaOptions {
+  const legacy = Object.keys(extra).find((key) => key.includes("."));
+  if (legacy)
+    throw new Error(
+      `Unsupported legacy Kafka config key "${legacy}"; use @platformatic/kafka client options.`,
     );
-  });
-}
-
-function flushProducer(
-  producer: Kafka.Producer,
-  timeout: number,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    producer.flush(timeout, (err: LibrdKafkaError) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-
-async function withClient<T>(
-  conf: GlobalConfig,
-  fn: (client: Kafka.Producer) => Promise<T>,
-): Promise<T> {
-  const { globalConf, topicConf } = splitTopicConfig(conf);
-  const client = new Kafka.Producer(
-    globalConf as ProducerGlobalConfig,
-    topicConf,
-  );
-  try {
-    await connectClient(client);
-    return await fn(client);
-  } finally {
-    await disconnectClient(client);
+  const kafka = loadConfig().kafka;
+  const protocol = kafka.securityProtocol?.toUpperCase();
+  if (
+    protocol &&
+    !["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"].includes(protocol)
+  )
+    throw new Error(`Unsupported Kafka security protocol "${protocol}"`);
+  const bootstrapBrokers = brokers.split(",").map((value) => value.trim());
+  const conf: KafkaOptions = {
+    clientId,
+    bootstrapBrokers,
+    timeout,
+    requestTimeout: timeout,
+    connectTimeout: timeout,
+    retries: 0,
+    strict: true,
+  };
+  if (bootstrapBrokers.some((broker) => broker === ""))
+    throw new Error("Kafka brokers must not contain empty entries");
+  if (protocol === "SSL" || protocol === "SASL_SSL") {
+    conf.tls = {};
+    conf.tlsServerName = true;
   }
+  if (kafka.username || kafka.saslMechanism || protocol?.startsWith("SASL_")) {
+    conf.sasl = {
+      mechanism: (kafka.saslMechanism || "PLAIN") as NonNullable<
+        BaseOptions["sasl"]
+      >["mechanism"],
+      username: kafka.username,
+      password: kafka.password,
+    };
+  }
+  return Object.assign(conf, extra);
 }
-
 function toBuffer(
   value: string | null | undefined,
   encoding: Encoding,
-): Buffer | null {
-  if (value === null || value === undefined) return null;
-  return encoding === "base64"
-    ? Buffer.from(value, "base64")
-    : Buffer.from(value, "utf8");
+): Buffer | undefined {
+  return value == null ? undefined : Buffer.from(value, encoding);
 }
-
 function decodeBuffer(
-  value: Buffer | string | null | undefined,
+  value: Buffer | null | undefined,
   encoding: Encoding,
 ): string | null {
-  if (value === null || value === undefined) return null;
-  const buf = typeof value === "string" ? Buffer.from(value, "utf8") : value;
-  return encoding === "base64" ? buf.toString("base64") : buf.toString("utf8");
+  return value == null ? null : value.toString(encoding);
 }
-
-function toHeaders(headers: Record<string, string>): MessageHeader[] {
-  return Object.entries(headers).map(([key, value]) => ({ [key]: value }));
+function jsonInteger(value: bigint): number | string {
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : value.toString();
 }
-
 function normalizeMessage(
-  message: Message,
+  message: Pick<Message, "topic" | "partition" | "offset" | "timestamp"> & {
+    key?: Buffer;
+    value?: Buffer;
+    headerEntries: Array<[Buffer, Buffer]>;
+  },
   encoding: Encoding,
 ): Record<string, unknown> {
   return {
     topic: message.topic,
     partition: message.partition,
-    offset: message.offset,
-    timestamp: message.timestamp,
-    size: message.size,
+    offset: jsonInteger(message.offset),
+    timestamp: jsonInteger(message.timestamp),
+    size: message.value?.length ?? 0,
     key: decodeBuffer(message.key, encoding),
     value: decodeBuffer(message.value, encoding),
-    headers: message.headers ?? [],
+    headers: message.headerEntries.map(([key, value]) => ({
+      [key.toString()]: value,
+    })),
   };
 }
-
 function requireString(value: string | undefined, field: string): string {
   if (!value) throw new Error(`operation requires "${field}"`);
   return value;
 }
-
+function protocolError(code: number): void {
+  if (code !== 0)
+    throw new Error(
+      protocolErrors[protocolErrorsCodesById[code]]?.message ??
+        `Kafka protocol error ${code}`,
+    );
+}
+async function withAdmin<T>(
+  conf: KafkaOptions,
+  fn: (admin: Admin) => Promise<T>,
+): Promise<T> {
+  const admin = new Admin(conf);
+  try {
+    return await fn(admin);
+  } finally {
+    await admin.close();
+  }
+}
+function normalizeTopics(metadata: ClusterMetadata) {
+  return [...metadata.topics]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, topic]) => ({
+      name,
+      partitions: topic.partitions.map((part, id) => ({
+        id,
+        leader: part.leader,
+        replicas: part.replicas,
+        isrs: part.isr,
+      })),
+    }));
+}
 interface OpInput {
   topic?: string;
   topics?: string[];
@@ -230,374 +173,480 @@ interface OpInput {
   timeout_ms: number;
 }
 
-async function opProduce(input: OpInput, conf: GlobalConfig): Promise<unknown> {
+async function opProduce(input: OpInput, conf: KafkaOptions): Promise<unknown> {
   const topic = requireString(input.topic, "topic");
-  const messages = input.messages ?? [];
-  if (messages.length === 0)
+  if (!input.messages?.length)
     throw new Error("produce requires at least one message");
-  const { globalConf, topicConf } = splitTopicConfig(conf);
-  let delivered = 0;
-  let deliveryError: LibrdKafkaError | undefined;
-  let finishDelivery: () => void = () => {};
-  const deliveries = new Promise<void>((resolve) => {
-    finishDelivery = resolve;
-  });
-  const producer = new Kafka.Producer(
-    {
-      ...globalConf,
-      "delivery.report.only.error": false,
-      dr_cb: (error: LibrdKafkaError) => {
-        if (error) deliveryError ??= error;
-        delivered += 1;
-        if (deliveryError || delivered >= messages.length) finishDelivery();
-      },
-    } as ProducerGlobalConfig,
-    topicConf,
-  );
+  const producer = new Producer<Buffer, Buffer | null, Buffer, Buffer>(conf);
   try {
-    await connectClient(producer);
-    let produced = 0;
-    for (const message of messages) {
-      producer.produce(
-        topic,
-        message.partition ?? null,
-        toBuffer(message.value, input.encoding),
-        message.key === undefined
-          ? null
-          : toBuffer(message.key, input.encoding),
-        message.timestamp ?? null,
-        undefined,
-        message.headers ? toHeaders(message.headers) : undefined,
-      );
-      produced += 1;
-    }
-    await flushProducer(producer, input.timeout_ms);
-    // flush succeeds once the queue is empty even if a message was rejected.
-    // Delivery reports are dispatched asynchronously, including after flush.
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error("Timed out waiting for Kafka delivery reports")),
-        input.timeout_ms,
-      );
-      void deliveries.then(() => {
-        clearTimeout(timer);
-        resolve();
+    if (input.messages.some((message) => message.partition !== undefined)) {
+      const metadata = await producer.metadata({
+        topics: [topic],
+        autocreateTopics: conf.autocreateTopics,
       });
+      const count =
+        metadata.topics.get(topic)?.partitionsCount ??
+        metadata.topics.get(topic)?.partitions.length ??
+        0;
+      for (const message of input.messages) {
+        if (message.partition !== undefined && message.partition >= count)
+          throw new Error(
+            `Unknown Kafka partition ${topic}/${message.partition}`,
+          );
+      }
+    }
+    await producer.send({
+      messages: input.messages.map((message) => ({
+        topic,
+        partition: message.partition,
+        key: toBuffer(message.key, input.encoding),
+        value: toBuffer(message.value, input.encoding) ?? null,
+        timestamp:
+          message.timestamp === undefined
+            ? undefined
+            : BigInt(message.timestamp),
+        headers: message.headers
+          ? new Map(
+              Object.entries(message.headers).map(([key, value]) => [
+                Buffer.from(key),
+                Buffer.from(value),
+              ]),
+            )
+          : undefined,
+      })),
     });
-    if (deliveryError) throw deliveryError;
-    return { produced };
+    return { produced: input.messages.length };
   } finally {
-    await disconnectClient(producer);
+    await producer.close(true);
   }
 }
-
 function collectMessages(
-  consumer: Kafka.KafkaConsumer,
-  out: Record<string, unknown>[],
+  stream: MessagesStream<Buffer, Buffer, Buffer, Buffer>,
   max: number,
-  timeoutMs: number,
-  encoding: Encoding,
-): Promise<void> {
+  timeout: number,
+): Promise<Message[]> {
   return new Promise((resolve, reject) => {
+    const messages: Message[] = [];
     let settled = false;
-    let reading = false;
-    const deadline = Date.now() + timeoutMs;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    const onError = (error: LibrdKafkaError): void => finish(error);
-    // Let an in-flight bounded read finish so its already-consumed messages
-    // are included even if callback dispatch occurs just after the deadline.
-    const timer = setTimeout(() => {
-      if (!reading) finish();
-    }, timeoutMs);
-    function finish(error?: LibrdKafkaError): void {
+    const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      clearTimeout(retryTimer);
-      consumer.removeListener("event.error", onError);
+      stream.pause();
       if (error) reject(error);
-      else resolve();
-    }
-    function read(): void {
+      else resolve(messages);
+    };
+    const timer = setTimeout(() => finish(), Math.max(0, timeout));
+    stream.on("error", (error) => finish(error));
+    stream.on("end", () => finish());
+    stream.on("data", (message) => {
       if (settled) return;
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) return finish();
-      consumer.setDefaultConsumeTimeout(Math.min(remaining, 100));
-      try {
-        reading = true;
-        // The streaming consume loop may fetch and auto-commit messages after
-        // max_messages is reached. Bounded reads leave those messages unread.
-        // librdkafka applies this timeout per message, so read one at a time
-        // to keep each native call within the remaining consume window.
-        consumer.consume(1, (error, messages) => {
-          reading = false;
-          if (settled) return;
-          if (error) return finish(error);
-          out.push(
-            ...messages.map((message) => normalizeMessage(message, encoding)),
-          );
-          if (out.length >= max || Date.now() >= deadline) return finish();
-          retryTimer = setTimeout(read, 1);
+      messages.push(message);
+      if (messages.length >= max) finish();
+    });
+  });
+}
+async function opConsume(input: OpInput, conf: KafkaOptions): Promise<unknown> {
+  if (input.assignments?.length) return opAssignedConsume(input, conf);
+  if (!input.topics?.length)
+    throw new Error("consume requires topics or assignments");
+  const groupId =
+    input.group_id ?? conf.groupId ?? `yukino-mcp-${randomUUID()}`;
+  const consumer = new Consumer<Buffer, Buffer, Buffer, Buffer>({
+    ...conf,
+    groupId,
+    autocommit: false,
+    highWaterMark: 1,
+    maxWaitTime: Math.min(100, input.timeout_ms),
+  });
+  const deadline = Date.now() + input.timeout_ms;
+  let startupTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const stream = await Promise.race([
+      consumer.consume({
+        topics: input.topics,
+        autocommit: false,
+        mode: MessagesStreamModes.COMMITTED,
+        fallbackMode: input.from_beginning
+          ? MessagesStreamFallbackModes.EARLIEST
+          : MessagesStreamFallbackModes.LATEST,
+      }),
+      new Promise<never>((_, reject) => {
+        startupTimer = setTimeout(
+          () => reject(new Error("Kafka consume setup timed out")),
+          input.timeout_ms,
+        );
+      }),
+    ]);
+    clearTimeout(startupTimer);
+    const messages = await collectMessages(
+      stream,
+      input.max_messages,
+      deadline - Date.now(),
+    );
+    if (input.auto_commit && messages.length) {
+      const offsets = new Map<string, CommitOptionsPartition>();
+      for (const message of messages)
+        offsets.set(`${message.topic}:${message.partition}`, {
+          topic: message.topic,
+          partition: message.partition,
+          offset: message.offset + 1n,
+          leaderEpoch: message.leaderEpoch,
         });
-      } catch (error) {
-        reading = false;
-        finish(error as LibrdKafkaError);
+      await consumer.commit({ offsets: [...offsets.values()] });
+    }
+    return {
+      count: messages.length,
+      group_id: groupId,
+      messages: messages.map((message) =>
+        normalizeMessage(message, input.encoding),
+      ),
+    };
+  } finally {
+    clearTimeout(startupTimer);
+    await consumer.close(true);
+  }
+}
+// Direct Fetch requests preserve explicit assignments without joining a group.
+async function opAssignedConsume(
+  input: OpInput,
+  conf: KafkaOptions,
+): Promise<unknown> {
+  const assignments = input.assignments!;
+  const groupId =
+    input.group_id ?? conf.groupId ?? `yukino-mcp-${randomUUID()}`;
+  const consumer = new Consumer<Buffer, Buffer, Buffer, Buffer>({
+    ...conf,
+    groupId,
+    autocommit: false,
+  });
+  const admin = new Admin(conf);
+  const deadline = Date.now() + input.timeout_ms;
+  try {
+    const topics = [...new Set(assignments.map((a) => a.topic))];
+    const metadata = await admin.metadata({ topics });
+    const fallback = await admin.listOffsets({
+      topics: topics.map((name) => ({
+        name,
+        partitions: assignments
+          .filter((a) => a.topic === name)
+          .map((a) => ({
+            partitionIndex: a.partition,
+            timestamp: input.from_beginning ? -2n : -1n,
+          })),
+      })),
+    });
+    const stored = assignments.some((a) => a.offset === undefined)
+      ? await groupOffsets(admin, {
+          groups: [
+            {
+              groupId,
+              topics: topics.map((name) => ({
+                name,
+                partitionIndexes: assignments
+                  .filter((a) => a.topic === name)
+                  .map((a) => a.partition),
+              })),
+            },
+          ],
+        })
+      : [];
+    const positions = assignments.map((a) => {
+      const topic = metadata.topics.get(a.topic);
+      const partition = topic?.partitions[a.partition];
+      if (!topic || !partition)
+        throw new Error(`Unknown Kafka partition ${a.topic}/${a.partition}`);
+      const committed = stored[0]?.topics
+        .find((t) => t.name === a.topic)
+        ?.partitions.find(
+          (p) => p.partitionIndex === a.partition,
+        )?.committedOffset;
+      const fallbackOffset = fallback
+        .find((t) => t.name === a.topic)
+        ?.partitions.find((p) => p.partitionIndex === a.partition)?.offset;
+      const offset =
+        a.offset !== undefined
+          ? BigInt(a.offset)
+          : committed !== undefined && committed >= 0n
+            ? committed
+            : fallbackOffset;
+      if (offset === undefined)
+        throw new Error(`Missing Kafka offset ${a.topic}/${a.partition}`);
+      return {
+        ...a,
+        id: topic.id,
+        leader: partition.leader,
+        epoch: partition.leaderEpoch,
+        offset,
+      };
+    });
+    const messages: Record<string, unknown>[] = [];
+    const commits = new Map<
+      string,
+      {
+        name: string;
+        partitionOffsets: Array<{ partition: number; offset: bigint }>;
+      }
+    >();
+    while (messages.length < input.max_messages && Date.now() < deadline) {
+      for (const position of positions) {
+        if (messages.length >= input.max_messages || Date.now() >= deadline)
+          break;
+        const response = await consumer.fetch({
+          node: position.leader,
+          maxWaitTime: Math.min(100, Math.max(1, deadline - Date.now())),
+          minBytes: 1,
+          maxBytes: 1048576,
+          topics: [
+            {
+              topicId: position.id,
+              partitions: [
+                {
+                  partition: position.partition,
+                  currentLeaderEpoch: position.epoch,
+                  fetchOffset: position.offset,
+                  lastFetchedEpoch: -1,
+                  partitionMaxBytes: 1048576,
+                },
+              ],
+            },
+          ],
+        });
+        protocolError(response.errorCode);
+        for (const topic of response.responses)
+          for (const part of topic.partitions) {
+            protocolError(part.errorCode);
+            for (const batch of part.records ?? []) {
+              if (batch.attributes & IS_CONTROL) continue;
+              for (const record of batch.records) {
+                const offset = batch.firstOffset + BigInt(record.offsetDelta);
+                if (offset < position.offset) continue;
+                messages.push(
+                  normalizeMessage(
+                    {
+                      topic: position.topic,
+                      partition: position.partition,
+                      offset,
+                      timestamp: batch.firstTimestamp + record.timestampDelta,
+                      key: record.key ?? undefined,
+                      value: record.value ?? undefined,
+                      headerEntries: record.headers.map(([key, value]) => [
+                        key ?? Buffer.alloc(0),
+                        value ?? Buffer.alloc(0),
+                      ]),
+                    },
+                    input.encoding,
+                  ),
+                );
+                position.offset = offset + 1n;
+                if (!commits.has(position.topic))
+                  commits.set(position.topic, {
+                    name: position.topic,
+                    partitionOffsets: [],
+                  });
+                const offsets = commits.get(position.topic)!.partitionOffsets;
+                const commit = offsets.find(
+                  (p) => p.partition === position.partition,
+                );
+                if (commit) commit.offset = position.offset;
+                else
+                  offsets.push({
+                    partition: position.partition,
+                    offset: position.offset,
+                  });
+                if (messages.length >= input.max_messages) break;
+              }
+              if (messages.length >= input.max_messages) break;
+            }
+          }
       }
     }
-    consumer.on("event.error", onError);
-    read();
-  });
-}
-
-async function opConsume(input: OpInput, conf: GlobalConfig): Promise<unknown> {
-  const useAssign =
-    Array.isArray(input.assignments) && input.assignments.length > 0;
-  if (!useAssign && (!input.topics || input.topics.length === 0)) {
-    throw new Error("consume requires topics or assignments");
-  }
-  const groupId =
-    input.group_id ??
-    ((conf as unknown as ConfigRecord)["group.id"] as string | undefined) ??
-    `yukino-mcp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const consumerConf: ConfigRecord = {
-    ...(conf as unknown as ConfigRecord),
-    "enable.auto.commit": input.auto_commit,
-    "auto.offset.reset": input.from_beginning ? "earliest" : "latest",
-  };
-  if (groupId) consumerConf["group.id"] = groupId;
-  const { globalConf, topicConf } = splitTopicConfig(
-    consumerConf as unknown as GlobalConfig,
-  );
-  const consumer = new Kafka.KafkaConsumer(
-    globalConf as unknown as ConsumerGlobalConfig,
-    topicConf,
-  );
-  const collected: Record<string, unknown>[] = [];
-  try {
-    await connectClient(consumer);
-    if (useAssign) {
-      consumer.assign(
-        (input.assignments ?? []).map((a) => ({
-          topic: a.topic,
-          partition: a.partition,
-          ...(a.offset !== undefined ? { offset: a.offset } : {}),
-        })),
-      );
-    } else {
-      consumer.subscribe(input.topics ?? []);
-    }
-    await collectMessages(
-      consumer,
-      collected,
-      input.max_messages,
-      input.timeout_ms,
-      input.encoding,
-    );
-    return {
-      count: collected.length,
-      group_id: groupId ?? null,
-      messages: collected.slice(0, input.max_messages),
-    };
+    if (input.auto_commit && commits.size)
+      await admin.alterConsumerGroupOffsets({
+        groupId,
+        topics: [...commits.values()],
+      });
+    return { count: messages.length, group_id: groupId, messages };
   } finally {
-    await disconnectClient(consumer);
+    await Promise.all([consumer.close(true), admin.close()]);
   }
 }
-
 async function opListTopics(
-  input: OpInput,
-  conf: GlobalConfig,
+  _input: OpInput,
+  conf: KafkaOptions,
 ): Promise<unknown> {
-  return withClient(conf, async (client) => {
-    const metadata = await getMetadata(client, {
-      allTopics: true,
-      timeout: input.timeout_ms,
-    });
-    return { topics: metadata.topics.map((t) => t.name).sort() };
-  });
+  return withAdmin(conf, async (admin) => ({
+    topics: (await admin.listTopics({ includeInternals: true })).sort(),
+  }));
 }
-
 async function opDescribeTopics(
   input: OpInput,
-  conf: GlobalConfig,
+  conf: KafkaOptions,
 ): Promise<unknown> {
-  return withClient(conf, async (client) => {
-    const options: MetadataOptions = input.topic
-      ? { topic: input.topic, timeout: input.timeout_ms }
-      : { allTopics: true, timeout: input.timeout_ms };
-    const metadata = await getMetadata(client, options);
-    return { topics: metadata.topics };
-  });
+  return withAdmin(conf, async (admin) => ({
+    topics: normalizeTopics(
+      await admin.metadata({ topics: input.topic ? [input.topic] : undefined }),
+    ),
+  }));
 }
-
 async function opDescribeCluster(
-  input: OpInput,
-  conf: GlobalConfig,
+  _input: OpInput,
+  conf: KafkaOptions,
 ): Promise<unknown> {
-  return withClient(conf, async (client) => {
-    const metadata = await getMetadata(client, {
-      allTopics: false,
-      timeout: input.timeout_ms,
-    });
+  return withAdmin(conf, async (admin) => {
+    const metadata = await admin.metadata({ topics: [] });
     return {
-      brokers: metadata.brokers,
-      orig_broker_id: metadata.orig_broker_id,
-      orig_broker_name: metadata.orig_broker_name,
+      brokers: [...metadata.brokers].map(([id, broker]) => ({
+        id,
+        host: broker.host,
+        port: broker.port,
+      })),
+      controller_id: metadata.controllerId,
+      cluster_id: metadata.id,
     };
   });
 }
-
-async function withAdmin<T>(
-  conf: GlobalConfig,
-  fn: (admin: IAdminClient) => Promise<T>,
-): Promise<T> {
-  const admin = Kafka.AdminClient.create(conf);
-  try {
-    return await fn(admin);
-  } finally {
-    admin.disconnect();
-  }
-}
-
 async function opCreateTopic(
   input: OpInput,
-  conf: GlobalConfig,
+  conf: KafkaOptions,
 ): Promise<unknown> {
   const topic = requireString(input.topic, "topic");
-  return withAdmin(conf, (admin) => {
-    return new Promise((resolve, reject) => {
-      admin.createTopic(
-        {
-          topic,
-          num_partitions: input.num_partitions ?? 1,
-          replication_factor: input.replication_factor ?? 1,
-          ...(input.topic_config ? { config: input.topic_config } : {}),
-        },
-        (err: LibrdKafkaError) => {
-          if (err) reject(err);
-          else resolve({ created: topic });
-        },
-      );
+  return withAdmin(conf, async (admin) => {
+    await admin.createTopics({
+      topics: [topic],
+      partitions: input.num_partitions ?? 1,
+      replicas: input.replication_factor ?? 1,
+      configs: Object.entries(input.topic_config ?? {}).map(
+        ([name, value]) => ({ name, value }),
+      ),
     });
+    return { created: topic };
   });
 }
-
 async function opDeleteTopic(
   input: OpInput,
-  conf: GlobalConfig,
+  conf: KafkaOptions,
 ): Promise<unknown> {
   const topic = requireString(input.topic, "topic");
-  return withAdmin(conf, (admin) => {
-    return new Promise((resolve, reject) => {
-      admin.deleteTopic(topic, (err: LibrdKafkaError) => {
-        if (err) reject(err);
-        else resolve({ deleted: topic });
-      });
-    });
+  return withAdmin(conf, async (admin) => {
+    await admin.deleteTopics({ topics: [topic] });
+    return { deleted: topic };
   });
 }
-
 async function opCreatePartitions(
   input: OpInput,
-  conf: GlobalConfig,
+  conf: KafkaOptions,
 ): Promise<unknown> {
   const topic = requireString(input.topic, "topic");
   if (!input.num_partitions)
     throw new Error('create_partitions requires "num_partitions"');
-  return withAdmin(conf, (admin) => {
-    return new Promise((resolve, reject) => {
-      admin.createPartitions(
-        topic,
-        input.num_partitions as number,
-        (err: LibrdKafkaError) => {
-          if (err) reject(err);
-          else resolve({ topic, partitions: input.num_partitions });
-        },
-      );
+  return withAdmin(conf, async (admin) => {
+    await admin.createPartitions({
+      topics: [{ name: topic, count: input.num_partitions!, assignments: [] }],
     });
+    return { topic, partitions: input.num_partitions };
   });
 }
-
 async function opWatermarkOffsets(
   input: OpInput,
-  conf: GlobalConfig,
+  conf: KafkaOptions,
 ): Promise<unknown> {
   const topic = requireString(input.topic, "topic");
-  return withClient(conf, async (client) => {
-    let partitions = input.partitions?.map((p) => p.partition);
-    if (!partitions || partitions.length === 0) {
-      const metadata = await getMetadata(client, {
-        topic,
-        timeout: input.timeout_ms,
+  return withAdmin(conf, async (admin) => {
+    const metadata = await admin.metadata({ topics: [topic] });
+    const ids = input.partitions?.length
+      ? input.partitions.map((p) => p.partition)
+      : (metadata.topics.get(topic)?.partitions.map((_, id) => id) ?? []);
+    const query = (timestamp: bigint) =>
+      admin.listOffsets({
+        topics: [
+          {
+            name: topic,
+            partitions: ids.map((partitionIndex) => ({
+              partitionIndex,
+              timestamp,
+            })),
+          },
+        ],
       });
-      const found = metadata.topics.find((t) => t.name === topic);
-      partitions = found ? found.partitions.map((p) => p.id) : [];
-    }
-    const out: Array<Record<string, unknown>> = [];
-    for (const partition of partitions) {
-      const wm = await queryWatermarks(
-        client,
-        topic,
-        partition,
-        input.timeout_ms,
-      );
-      out.push({ partition, low: wm.lowOffset, high: wm.highOffset });
-    }
-    return { topic, partitions: out };
+    const [low, high] = await Promise.all([query(-2n), query(-1n)]);
+    return {
+      topic,
+      partitions: ids.map((partition) => {
+        const lo = low[0]?.partitions.find(
+          (p) => p.partitionIndex === partition,
+        )?.offset;
+        const hi = high[0]?.partitions.find(
+          (p) => p.partitionIndex === partition,
+        )?.offset;
+        if (lo === undefined || hi === undefined)
+          throw new Error(`Missing Kafka watermark ${topic}/${partition}`);
+        return { partition, low: jsonInteger(lo), high: jsonInteger(hi) };
+      }),
+    };
   });
 }
-
 async function opCommittedOffsets(
   input: OpInput,
-  conf: GlobalConfig,
+  conf: KafkaOptions,
 ): Promise<unknown> {
   const groupId = requireString(input.group_id, "group_id");
-  const toppars: TopicPartitionOffset[] = (input.partitions ?? []).map((p) => ({
-    topic: p.topic ?? input.topic ?? "",
-    partition: p.partition,
-    offset: p.offset ?? -1,
-  }));
-  if (toppars.length === 0)
+  if (!input.partitions?.length)
     throw new Error("committed_offsets requires partitions");
-  const consumerConf: ConfigRecord = {
-    ...(conf as unknown as ConfigRecord),
-    "group.id": groupId,
-  };
-  const { globalConf, topicConf } = splitTopicConfig(
-    consumerConf as unknown as GlobalConfig,
-  );
-  const consumer = new Kafka.KafkaConsumer(
-    globalConf as unknown as ConsumerGlobalConfig,
-    topicConf,
-  );
-  try {
-    await connectClient(consumer);
-    const offsets = await new Promise<TopicPartitionOffset[]>(
-      (resolve, reject) => {
-        consumer.committed(
-          toppars.map(({ topic, partition }) => ({ topic, partition })),
-          input.timeout_ms,
-          (err: LibrdKafkaError, data: TopicPartitionOffset[]) => {
-            if (err) reject(err);
-            else resolve(data);
-          },
-        );
-      },
-    );
+  const topics = new Map<string, number[]>();
+  const refs = input.partitions.map((part) => ({
+    ...part,
+    topic: requireString(part.topic ?? input.topic, "topic"),
+  }));
+  for (const part of refs) {
+    if (!topics.has(part.topic)) topics.set(part.topic, []);
+    topics.get(part.topic)!.push(part.partition);
+  }
+  return withAdmin(conf, async (admin) => {
+    const groups = await groupOffsets(admin, {
+      groups: [
+        {
+          groupId,
+          topics: [...topics].map(([name, partitionIndexes]) => ({
+            name,
+            partitionIndexes,
+          })),
+        },
+      ],
+    });
     return {
       group_id: groupId,
-      offsets: offsets.map((position) => ({
-        topic: position.topic,
-        partition: position.partition,
-        // librdkafka reports RD_KAFKA_OFFSET_INVALID (-1001) for partitions
-        // without a committed offset; node-rdkafka may leave it undefined.
-        offset: typeof position.offset === "number" ? position.offset : -1001,
-      })),
+      offsets: refs.map((part) => {
+        const offset = groups[0]?.topics
+          .find((t) => t.name === part.topic)
+          ?.partitions.find(
+            (p) => p.partitionIndex === part.partition,
+          )?.committedOffset;
+        return {
+          topic: part.topic,
+          partition: part.partition,
+          offset:
+            offset === undefined || offset < 0n ? -1001 : jsonInteger(offset),
+        };
+      }),
     };
-  } finally {
-    await disconnectClient(consumer);
+  });
+}
+async function groupOffsets(
+  admin: Admin,
+  options: Parameters<Admin["listConsumerGroupOffsets"]>[0],
+) {
+  try {
+    return await admin.listConsumerGroupOffsets(options);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      findErrorBy(error, "apiId", "GROUP_ID_NOT_FOUND")
+    )
+      return [];
+    throw error;
   }
 }
-
 const OPERATIONS = {
   produce: opProduce,
   consume: opConsume,
@@ -610,7 +659,6 @@ const OPERATIONS = {
   watermark_offsets: opWatermarkOffsets,
   committed_offsets: opCommittedOffsets,
 } as const;
-
 export const kafkaModule: ToolModule = {
   name: "kafka",
   register(server) {
@@ -619,7 +667,7 @@ export const kafkaModule: ToolModule = {
       {
         title: "Kafka",
         description:
-          "Operate an Apache Kafka cluster through librdkafka (node-rdkafka) with full client privileges. Choose an operation: produce (send messages), consume (read messages by subscription or explicit partition assignments), list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets (low/high per partition) and committed_offsets (a group's committed positions; -1001 means uncommitted). There is no operation allowlist beyond these; raw librdkafka configuration (security.protocol, sasl.*, ssl.*, etc.) is passed through config. Message keys/values are strings decoded with encoding (utf8 default, or base64 for binary); consume returns at most max_messages within timeout_ms. Uses KAFKA_BROKERS (default localhost:9092) or brokers, plus KAFKA_CLIENT_ID and optional KAFKA_USERNAME/KAFKA_PASSWORD/KAFKA_SASL_MECHANISM/KAFKA_SECURITY_PROTOCOL.",
+          "Operate an Apache Kafka cluster through @platformatic/kafka with full client privileges. Choose an operation: produce (send messages), consume (read messages by subscription or explicit partition assignments), list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets (low/high per partition) and committed_offsets (a group's committed positions; -1001 means uncommitted). There is no operation allowlist beyond these; @platformatic/kafka client options (requestTimeout, retries, acks, compression, nested tls/sasl, etc.) are passed through config. Message keys/values are strings decoded with encoding (utf8 default, or base64 for binary); consume returns at most max_messages within timeout_ms. Uses KAFKA_BROKERS (default localhost:9092) or brokers, plus KAFKA_CLIENT_ID and optional KAFKA_USERNAME/KAFKA_PASSWORD/KAFKA_SASL_MECHANISM/KAFKA_SECURITY_PROTOCOL.",
         inputSchema: {
           brokers: z
             .string()
@@ -634,10 +682,10 @@ export const kafkaModule: ToolModule = {
             .optional()
             .describe("Client id override."),
           config: z
-            .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+            .record(z.string(), z.unknown())
             .default({})
             .describe(
-              "Raw librdkafka global configuration passthrough, e.g. {'security.protocol':'SASL_SSL','sasl.mechanisms':'SCRAM-SHA-512'}.",
+              "@platformatic/kafka client options, e.g. {requestTimeout:5000,sasl:{mechanism:'SCRAM-SHA-512',username:'user',password:'pass'},tls:{}}. Legacy librdkafka keys are not accepted.",
             ),
           operation: z.enum([
             "produce",
@@ -702,12 +750,12 @@ export const kafkaModule: ToolModule = {
             .boolean()
             .default(false)
             .describe(
-              "consume from earliest offset (auto.offset.reset=earliest).",
+              "Fallback to the earliest offset when the group has no committed position.",
             ),
           auto_commit: z
             .boolean()
             .default(false)
-            .describe("Enable consumer auto-commit."),
+            .describe("Commit only the records returned by this consume call."),
           max_messages: z
             .number()
             .int()
@@ -754,7 +802,12 @@ export const kafkaModule: ToolModule = {
           const kafka = loadConfig().kafka;
           const brokers = raw.brokers ?? (kafka.brokers || "localhost:9092");
           const clientId = raw.client_id ?? kafka.clientId;
-          const conf = buildConfig(brokers, clientId, raw.config);
+          const conf = buildConfig(
+            brokers,
+            clientId,
+            raw.config,
+            raw.timeout_ms,
+          );
           const input: OpInput = {
             topic: raw.topic,
             topics: raw.topics,

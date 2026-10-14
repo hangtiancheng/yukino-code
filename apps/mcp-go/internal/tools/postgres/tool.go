@@ -20,7 +20,7 @@ import (
 
 const connectTimeout = 10 * time.Second
 
-const description = "Execute arbitrary PostgreSQL SQL with full connection privileges: queries, writes, DDL, transactions and administrative statements. Multiple statements are supported when params is empty; put a complete transaction in one call. Returns every statement's rows, row count, command and field metadata. Uses POSTGRES_URL (POSTGRESQL_URL/DATABASE_URL fallback) or connection_url."
+const description = "Execute arbitrary PostgreSQL SQL with full connection privileges: queries, writes, DDL, transactions and administrative statements. Multiple statements are supported when params is empty; put a complete transaction in one call. Returns every statement's rows, row count, command and field metadata. Uses postgres.url or connection_url."
 
 // Module returns the postgres tool module.
 func Module() tools.ToolModule {
@@ -38,7 +38,7 @@ func Module() tools.ToolModule {
 }
 
 func handle(ctx context.Context, _ *mcp.CallToolRequest, in operations.SQLInput) (*mcp.CallToolResult, any, error) {
-	rawURL, err := operations.RequireConnection(in.ConnectionURL, config.Load().Postgres.URL, "POSTGRES_URL")
+	rawURL, err := operations.RequireConnection(in.ConnectionURL, config.Load().Postgres.URL, "postgres.url")
 	if err != nil {
 		return operations.ResultErr(tools.PostgresTool, err), nil, nil
 	}

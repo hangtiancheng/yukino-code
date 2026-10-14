@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server.js";
+import { goInputSchema } from "./go-contract.js";
 
 const server = createServer();
 const client = new Client({ name: "export-go-contract", version: "1" });
@@ -17,7 +18,7 @@ try {
       .map((tool) => [
         tool.name,
         {
-          inputSchema: tool.inputSchema,
+          inputSchema: goInputSchema(tool),
           annotations: tool.annotations,
           ...(tool._meta ? { _meta: tool._meta } : {}),
         },

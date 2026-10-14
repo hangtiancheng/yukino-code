@@ -3,7 +3,6 @@ package mysql
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -11,7 +10,7 @@ import (
 
 	wire "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/server"
-	mysqldriver "github.com/go-sql-driver/mysql"
+	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/config"
 )
 
 type batchHandler struct {
@@ -51,7 +50,7 @@ func (h *batchHandler) HandleQuery(sql string) (*wire.Result, error) {
 	return &wire.Result{AffectedRows: 2, Warnings: 1, StatusMessage: "Rows matched: 2  Changed: 1  Warnings: 1"}, nil
 }
 
-func mysqlFixture(t *testing.T) (*mysqldriver.Config, <-chan string) {
+func mysqlFixture(t *testing.T) (config.MySQLConfig, <-chan string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -83,10 +82,10 @@ func mysqlFixture(t *testing.T) (*mysqldriver.Config, <-chan string) {
 		}
 	}()
 	t.Cleanup(func() { _ = listener.Close(); <-finished })
-	cfg, err := mysqldriver.ParseDSN(fmt.Sprintf("user:pass@tcp(%s)/db", listener.Addr()))
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := config.Defaults().MySQL
+	cfg.Timezone = "UTC"
+	address := listener.Addr().(*net.TCPAddr)
+	cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database = address.IP.String(), address.Port, "user", "pass", "db"
 	return cfg, queries
 }
 
@@ -127,6 +126,28 @@ func TestProtocolRetainsEveryStatementAndNativeTypes(t *testing.T) {
 	}
 	if _, ok := single["fields"]; ok {
 		t.Fatalf("mutation has query fields: %#v", single)
+	}
+}
+
+func TestToolUsesStructuredJSONConfiguration(t *testing.T) {
+	cfg, queries := mysqlFixture(t)
+	raw, err := json.Marshal(map[string]any{"mysql": cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := config.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := config.Load()
+	t.Cleanup(func() { config.Set(previous) })
+	config.Set(parsed)
+	res, _, err := handle(context.Background(), nil, Input{SQL: "INSERT INTO test VALUES (?)", Params: []any{"value"}})
+	if err != nil || res.IsError {
+		t.Fatalf("structured connection failed: %+v %v", res, err)
+	}
+	if got := <-queries; got != "INSERT INTO test VALUES ('value')" {
+		t.Fatalf("query: %q", got)
 	}
 }
 

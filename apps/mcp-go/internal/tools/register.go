@@ -64,6 +64,13 @@ func AddTool[In any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandler
 		if args == nil {
 			return inputError(fmt.Errorf("arguments must be an object")), nil
 		}
+		if tool.Name == MySQLTool {
+			for _, key := range []string{"connection_url", "dsn"} {
+				if _, exists := args[key]; exists {
+					return inputError(fmt.Errorf("mysql_tool does not accept %s; configure mysql.username, mysql.password and connection fields in JSON", key)), nil
+				}
+			}
+		}
 		stripUnknown(args, rawSchema)
 		trimArguments(tool.Name, args)
 		if err := resolved.ApplyDefaults(&args); err != nil {

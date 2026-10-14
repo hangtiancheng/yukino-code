@@ -18,11 +18,11 @@ import (
 
 const connectTimeout = 10 * time.Second
 
-const description = "Execute any Redis command with full connection privileges, including reads, writes, Lua scripts, configuration and destructive commands. Supply an ordered commands array of argument arrays, e.g. [[\"SET\",\"key\",\"value\"],[\"GET\",\"key\"]]. All commands run sequentially on one dedicated connection so SELECT, MULTI/EXEC and state changes work within a call. Stops at the first failed command and retains completed replies. Uses REDIS_URL or connection_url; independent of the docs connection."
+const description = "Execute any Redis command with full connection privileges, including reads, writes, Lua scripts, configuration and destructive commands. Supply an ordered commands array of argument arrays, e.g. [[\"SET\",\"key\",\"value\"],[\"GET\",\"key\"]]. All commands run sequentially on one dedicated connection so SELECT, MULTI/EXEC and state changes work within a call. Stops at the first failed command and retains completed replies. Uses redis.url or connection_url; independent of the docs connection."
 
 // Input is the redis_tool argument schema.
 type Input struct {
-	ConnectionURL string     `json:"connection_url,omitempty" jsonschema:"Connection URL override; otherwise uses the configured environment variable."`
+	ConnectionURL string     `json:"connection_url,omitempty" jsonschema:"Connection URL override; otherwise uses the JSON configuration."`
 	Commands      [][]string `json:"commands" jsonschema:"Redis commands as argument arrays. Arguments are sent verbatim, without shell parsing or command filtering."`
 }
 
@@ -42,7 +42,7 @@ func Module() tools.ToolModule {
 }
 
 func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToolResult, any, error) {
-	rawURL, err := operations.RequireConnection(in.ConnectionURL, config.Load().Redis.URL, "REDIS_URL")
+	rawURL, err := operations.RequireConnection(in.ConnectionURL, config.Load().Redis.URL, "redis.url")
 	if err != nil {
 		return operations.ResultErr(tools.RedisTool, err), nil, nil
 	}
