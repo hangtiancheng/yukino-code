@@ -130,8 +130,8 @@ describe("file paths and queued writes", () => {
   });
 });
 
-describe("force bypasses the read-before-write file-state gate", () => {
-  it("WriteFile overwrites a stale file only with force", async () => {
+describe("read-before-write file-state gate", () => {
+  it("WriteFile requires a fresh read before overwriting a stale file", async () => {
     const file = join(ctx.cwd, "stale.txt");
     writeFileSync(file, "original");
     await new ReadFileTool().execute(ctx, { file_path: file });
@@ -141,46 +141,49 @@ describe("force bypasses the read-before-write file-state gate", () => {
 
     const blocked = await new WriteFileTool().execute(ctx, {
       file_path: file,
-      content: "forced",
+      content: "updated",
     });
     expect(blocked.isError).toBe(true);
     expect(blocked.output).toContain("modified since last read");
+    expect(readFileSync(file, "utf8")).toBe("changed externally");
 
-    const forced = await new WriteFileTool().execute(ctx, {
+    await new ReadFileTool().execute(ctx, { file_path: file });
+    const written = await new WriteFileTool().execute(ctx, {
       file_path: file,
-      content: "forced",
-      force: true,
+      content: "updated",
     });
-    expect(forced.isError).toBe(false);
-    expect(readFileSync(file, "utf8")).toBe("forced");
+    expect(written.isError).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe("updated");
     expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
   });
 
-  it("WriteFile overwrites an unread existing file only with force", async () => {
+  it("WriteFile requires a read before overwriting an existing file", async () => {
     const file = join(ctx.cwd, "unread.txt");
     writeFileSync(file, "original");
 
     const blocked = await new WriteFileTool().execute(ctx, {
       file_path: file,
-      content: "forced",
+      content: "updated",
     });
     expect(blocked.isError).toBe(true);
     expect(blocked.output).toContain("has not been read yet");
+    expect(readFileSync(file, "utf8")).toBe("original");
 
-    const forced = await new WriteFileTool().execute(ctx, {
+    await new ReadFileTool().execute(ctx, { file_path: file });
+    const written = await new WriteFileTool().execute(ctx, {
       file_path: file,
-      content: "forced",
-      force: true,
+      content: "updated",
     });
-    expect(forced.isError).toBe(false);
-    expect(readFileSync(file, "utf8")).toBe("forced");
+    expect(written.isError).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe("updated");
     expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
   });
 
-  it("EditFile applies to a stale file only with force", async () => {
+  it("EditFile requires a fresh read before editing a stale file", async () => {
     const file = join(ctx.cwd, "edit-stale.txt");
     writeFileSync(file, "hello world");
     await new ReadFileTool().execute(ctx, { file_path: file });
+    writeFileSync(file, "hello from editor");
     const future = new Date(Date.now() + 10_000);
     utimesSync(file, future, future);
 
@@ -190,18 +193,19 @@ describe("force bypasses the read-before-write file-state gate", () => {
     });
     expect(blocked.isError).toBe(true);
     expect(blocked.output).toContain("modified since last read");
+    expect(readFileSync(file, "utf8")).toBe("hello from editor");
 
-    const forced = await new EditFileTool().execute(ctx, {
+    await new ReadFileTool().execute(ctx, { file_path: file });
+    const edited = await new EditFileTool().execute(ctx, {
       file_path: file,
       edits: [{ old_string: "hello", new_string: "goodbye" }],
-      force: true,
     });
-    expect(forced.isError).toBe(false);
-    expect(readFileSync(file, "utf8")).toBe("goodbye world");
+    expect(edited.isError).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe("goodbye from editor");
     expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
   });
 
-  it("EditFile can force an unread file but still requires a matching edit and refreshes the cache", async () => {
+  it("EditFile requires a read and matching edit and refreshes the cache", async () => {
     const file = join(ctx.cwd, "edit-unread.txt");
     writeFileSync(file, "hello world");
     const tool = new EditFileTool();
@@ -209,23 +213,23 @@ describe("force bypasses the read-before-write file-state gate", () => {
       file_path: file,
       edits: [{ old_string: "hello", new_string: "goodbye" }],
     };
-    const blocked = await tool.execute(ctx, { ...args, force: false });
+    const blocked = await tool.execute(ctx, args);
     expect(blocked.isError).toBe(true);
     expect(blocked.output).toContain("has not been read yet");
+    expect(readFileSync(file, "utf8")).toBe("hello world");
+    expect(ctx.fileStateCache?.has(file)).toBe(false);
 
+    await new ReadFileTool().execute(ctx, { file_path: file });
     const mismatch = await tool.execute(ctx, {
       ...args,
       edits: [{ old_string: "missing", new_string: "goodbye" }],
-      force: true,
     });
     expect(mismatch.isError).toBe(true);
     expect(mismatch.output).toContain("old_string not found");
     expect(readFileSync(file, "utf8")).toBe("hello world");
-    expect(ctx.fileStateCache?.has(file)).toBe(false);
+    expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
 
-    expect((await tool.execute(ctx, { ...args, force: true })).isError).toBe(
-      false,
-    );
+    expect((await tool.execute(ctx, args)).isError).toBe(false);
     expect(readFileSync(file, "utf8")).toBe("goodbye world");
     expect(ctx.fileStateCache?.check(file)).toEqual({ ok: true });
     expect(

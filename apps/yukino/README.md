@@ -38,8 +38,6 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 }
 ```
 
-Both `EditFile` and `WriteFile` accept an optional `force` flag (default `false`). Set it to `true` to skip the read-before-write file-state check and write regardless of the cached mtime state.
-
 ### Conversation and Memory
 
 - Session persistence with JSONL-based storage for cross-session resume
