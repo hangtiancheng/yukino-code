@@ -51,7 +51,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "minio",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.MinioTool,
 				Title:       "MinIO / S3",
 				Description: description,
@@ -99,11 +99,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		}
 		payload = data
 	case in.BodyBase64 != "":
-		decoded, err := base64.StdEncoding.DecodeString(in.BodyBase64)
-		if err != nil {
-			return operations.ResultErr(tools.MinioTool, err), nil, nil
-		}
-		payload = decoded
+		payload = operations.DecodeBase64(in.BodyBase64)
 	case in.Body != "":
 		payload = []byte(in.Body)
 	}
@@ -162,7 +158,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		}
 		switch {
 		case textual:
-			result["body"] = string(slice)
+			result["body"] = operations.DecodeUTF8(slice)
 			if truncated {
 				result["truncated"] = true
 			}

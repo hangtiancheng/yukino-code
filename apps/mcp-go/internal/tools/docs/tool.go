@@ -41,9 +41,14 @@ var (
 	loading      chan struct{}
 	lastDegraded time.Time
 	syncMu       sync.Mutex
-	syncWait     chan struct{}
-	syncRunning  bool
+	syncCurrent  *syncCall
 )
+
+type syncCall struct {
+	done  chan struct{}
+	stats SyncStats
+	err   error
+}
 
 // Module returns the docs tool module.
 func Module() tools.ToolModule {
@@ -51,7 +56,7 @@ func Module() tools.ToolModule {
 		Name: "docs",
 		Register: func(server *mcp.Server) {
 			docsDir := config.Load().DocsDir
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.DocsSync,
 				Title:       "Sync Docs",
 				Description: "Refresh the RAG knowledge base from the configured local docs directory. Waits for initial/in-flight indexing, adds/updates changed files and removes deleted files. Call after editing documents or when docs_tool reports indexing in progress. Per-file failures preserve the previous version and are reported in stats.",
@@ -62,7 +67,7 @@ func Module() tools.ToolModule {
 					OpenWorldHint:   boolPtr(true),
 				},
 			}, handleSync)
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:  tools.DocsTool,
 				Title: "Search Docs",
 				Description: "Semantic search (embedding-based RAG) over the local Yukino knowledge base " +
@@ -214,8 +219,12 @@ func initEngine(ctx context.Context) *engineState {
 		logger.Warn("docs degraded: index initialization failed", logger.Err(err))
 		return &engineState{reason: reason}
 	}
+	syncMu.Lock()
+	call := &syncCall{done: make(chan struct{})}
+	syncCurrent = call
+	syncMu.Unlock()
 	go func() {
-		if _, err := runSync(context.Background(), store); err != nil {
+		if _, err := performSync(context.Background(), store, call); err != nil {
 			logger.Warn("background docs sync failed", logger.Err(err))
 		}
 	}()
@@ -225,25 +234,28 @@ func initEngine(ctx context.Context) *engineState {
 
 func runSync(ctx context.Context, store *Context) (SyncStats, error) {
 	syncMu.Lock()
-	if syncWait != nil {
-		wait := syncWait
+	if syncCurrent != nil {
+		call := syncCurrent
 		syncMu.Unlock()
 		select {
-		case <-wait:
+		case <-call.done:
 		case <-ctx.Done():
 			return SyncStats{}, ctx.Err()
 		}
-		return runSync(ctx, store)
+		return call.stats, call.err
 	}
-	wait := make(chan struct{})
-	syncWait = wait
-	syncRunning = true
+	call := &syncCall{done: make(chan struct{})}
+	syncCurrent = call
 	syncMu.Unlock()
+	return performSync(ctx, store, call)
+}
+
+func performSync(ctx context.Context, store *Context, call *syncCall) (SyncStats, error) {
 	stats, err := SyncDocs(ctx, store, config.Load().DocsDir)
 	syncMu.Lock()
-	syncRunning = false
-	syncWait = nil
-	close(wait)
+	call.stats, call.err = stats, err
+	syncCurrent = nil
+	close(call.done)
 	syncMu.Unlock()
 	return stats, err
 }
@@ -251,7 +263,7 @@ func runSync(ctx context.Context, store *Context) (SyncStats, error) {
 func indexing() bool {
 	syncMu.Lock()
 	defer syncMu.Unlock()
-	return syncRunning
+	return syncCurrent != nil
 }
 
 func degrade(reason string, db *sql.DB) {

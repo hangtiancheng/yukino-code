@@ -231,7 +231,41 @@ describe("unrestricted database tools", () => {
     );
     expect(drivers.mysql.query).toHaveBeenCalledWith(sql, [1]);
     expect(result.structuredContent?.["results"]).toEqual(results);
+    expect(result.structuredContent?.["fields"]).toEqual([
+      null,
+      [{ name: "id" }],
+      null,
+    ]);
     expect(drivers.mysql.end).toHaveBeenCalledOnce();
+  });
+
+  it("publishes MySQL column metadata without driver packet internals", async () => {
+    const field = {
+      name: "id",
+      columnType: 3,
+      characterSet: 63,
+      columnLength: 11,
+      flags: 0,
+      decimals: 0,
+      _buf: Buffer.from("private packet"),
+    };
+    Object.defineProperty(field, "table", { get: () => "example" });
+    drivers.mysql.query.mockResolvedValue([[{ id: 1 }], [field]]);
+    const result = await call("mysql_tool", {
+      connection_url: "mysql://localhost/db",
+      sql: "SELECT id FROM example",
+    });
+    expect(result.structuredContent?.["fields"]).toEqual([
+      {
+        name: "id",
+        type: 3,
+        characterSet: 63,
+        columnLength: 11,
+        flags: 0,
+        decimals: 0,
+        table: "example",
+      },
+    ]);
   });
 
   it("closes MySQL after execution errors", async () => {

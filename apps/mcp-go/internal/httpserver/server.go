@@ -27,7 +27,7 @@ func Handler(server *mcp.Server) http.Handler {
 		Stateless:    true,
 		JSONResponse: true,
 	}))
-	sse := http.NewCrossOriginProtection().Handler(mcp.NewSSEHandler(getServer, nil))
+	sse := http.NewCrossOriginProtection().Handler(newLegacySSE(server))
 
 	app := httpapp.New()
 	app.Use(httpapp.Recovery())
@@ -36,6 +36,10 @@ func Handler(server *mcp.Server) http.Handler {
 		streamable.ServeHTTP(ctx.Writer, ctx.Request)
 	})
 	app.All("/sse", func(ctx *httpapp.Context, _ func()) {
+		ctx.TakeOver()
+		sse.ServeHTTP(ctx.Writer, ctx.Request)
+	})
+	app.All("/messages", func(ctx *httpapp.Context, _ func()) {
 		ctx.TakeOver()
 		sse.ServeHTTP(ctx.Writer, ctx.Request)
 	})
@@ -67,9 +71,9 @@ func Listen(ctx context.Context, addr string, server *mcp.Server) error {
 	logger.Info("MCP HTTP server listening",
 		"addr", listener.Addr().String(),
 		"streamableHttp", "POST /mcp",
-		"sse", "GET/POST /sse?sessionid=",
+		"sse", "GET /sse, POST /messages?sessionId=...",
 	)
-	log.Printf("MCP HTTP listening on http://%s (POST /mcp, GET/POST /sse)", listener.Addr())
+	log.Printf("MCP HTTP listening on http://%s (POST /mcp, GET /sse, POST /messages?sessionId=...)", listener.Addr())
 
 	finished := make(chan error, 1)
 	go func() { finished <- httpServer.Serve(listener) }()

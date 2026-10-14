@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/config"
@@ -27,6 +28,17 @@ func main() {
 }
 
 func run() error {
+	// Like dotenv/config in the TS entrypoint, load the process .env before
+	// resolving transport settings or constructing any module.
+	path := os.Getenv("DOTENV_CONFIG_PATH")
+	if path == "" {
+		path = ".env"
+	}
+	if os.Getenv("DOTENV_CONFIG_OVERRIDE") == "true" {
+		_ = godotenv.Overload(path)
+	} else {
+		_ = godotenv.Load(path)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	mcpServer := server.New()

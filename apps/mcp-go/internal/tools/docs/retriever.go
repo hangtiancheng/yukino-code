@@ -37,10 +37,11 @@ func Retrieve(ctx context.Context, store *Context, query string, limit int) ([]R
 	best := make([]scored, 0, limit)
 	for i := range cache.IDs {
 		offset := i * cache.Dim
-		var dot float32
+		var sum float64
 		for d := 0; d < cache.Dim; d++ {
-			dot += cache.Matrix[offset+d] * queryVector[d]
+			sum += float64(cache.Matrix[offset+d]) * float64(queryVector[d])
 		}
+		dot := float32(sum)
 		if dot < -1 {
 			dot = -1
 		} else if dot > 1 {
@@ -74,13 +75,15 @@ func Retrieve(ctx context.Context, store *Context, query string, limit int) ([]R
 			ID:       cache.IDs[hit.index],
 			Content:  content,
 			Metadata: parseMetadata(rawMeta),
-			Score:    float64(1+hit.score) / 2,
+			Score:    (1 + float64(hit.score)) / 2,
 		})
 	}
 	return docs, nil
 }
 
 func ensureCache(store *Context) (*VectorCache, error) {
+	store.cacheMu.Lock()
+	defer store.cacheMu.Unlock()
 	version := DataVersion(store.DB)
 	if store.Cache != nil && store.Cache.DataVersion == version {
 		return store.Cache, nil

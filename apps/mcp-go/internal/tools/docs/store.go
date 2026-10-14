@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/config"
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/logger"
@@ -53,6 +54,13 @@ type Context struct {
 	Embedder Embedder
 	DBPath   string
 	Cache    *VectorCache
+	cacheMu  sync.Mutex
+}
+
+func (store *Context) invalidateCache() {
+	store.cacheMu.Lock()
+	store.Cache = nil
+	store.cacheMu.Unlock()
 }
 
 // LockConflictError means another process holds the write lock.
@@ -139,7 +147,7 @@ func EnsureSchema(ctx context.Context, store *Context) error {
 	if err := WriteMeta(store.DB, "dim", fmt.Sprint(dim)); err != nil {
 		return err
 	}
-	store.Cache = nil
+	store.invalidateCache()
 	logger.Info("vector index created", "dim", dim, "path", store.DBPath)
 	return nil
 }

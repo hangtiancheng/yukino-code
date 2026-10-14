@@ -4,6 +4,7 @@ package prometheus
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -23,7 +24,7 @@ type Input struct {
 	Path      string            `json:"path,omitempty" jsonschema:"HTTP endpoint path or absolute URL. Defaults to /api/v1/alerts."`
 	Method    string            `json:"method,omitempty" jsonschema:"HTTP method: GET, POST, PUT, PATCH, DELETE, HEAD or OPTIONS. Defaults to GET."`
 	Params    map[string]any    `json:"params,omitempty" jsonschema:"Query parameters, e.g. {query: 'up', time: 1700000000} or {'match[]': ['up', 'process_cpu_seconds_total']}."`
-	Body      any               `json:"body,omitempty" jsonschema:"JSON body, or a string sent verbatim for form-encoded requests. Set content-type through headers when using raw text."`
+	Body      json.RawMessage   `json:"body,omitempty" jsonschema:"JSON body, or a string sent verbatim for form-encoded requests. Set content-type through headers when using raw text."`
 	Headers   map[string]string `json:"headers,omitempty" jsonschema:"Additional HTTP headers; override configured authentication if needed."`
 	TimeoutMS int               `json:"timeout_ms,omitempty" jsonschema:"HTTP request timeout in milliseconds. Defaults to 30000."`
 }
@@ -35,7 +36,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "prometheus",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.Prometheus,
 				Title:       "Prometheus",
 				Description: description,

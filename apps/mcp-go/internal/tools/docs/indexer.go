@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"math"
 	"time"
+
+	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools/operations"
 )
 
 const maxContentLength = 8192
@@ -45,10 +47,7 @@ func ReplaceSource(ctx context.Context, store *Context, source string, chunks []
 			if err != nil {
 				return err
 			}
-			content := chunk.Content
-			if len(content) > maxContentLength {
-				content = content[:maxContentLength]
-			}
+			content := operations.UTF16Prefix(chunk.Content, maxContentLength)
 			_, err = conn.ExecContext(ctx, `
 INSERT INTO chunks (id, source, content, metadata, created_at, vector)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -73,7 +72,7 @@ ON CONFLICT(source) DO UPDATE SET hash = excluded.hash`, source, *hash)
 	if err != nil {
 		return 0, err
 	}
-	store.Cache = nil
+	store.invalidateCache()
 	return len(chunks), nil
 }
 

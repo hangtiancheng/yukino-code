@@ -38,7 +38,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "etcd",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.EtcdTool,
 				Title:       "etcd",
 				Description: description,

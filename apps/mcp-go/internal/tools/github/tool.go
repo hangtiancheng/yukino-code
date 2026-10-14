@@ -32,7 +32,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "github",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.GitHubTool,
 				Title:       "GitHub CLI",
 				Description: description,
@@ -65,7 +65,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		}
 		return operations.ResultErr(tools.GitHubTool, err), nil, nil
 	}
-	stdout := string(result.Stdout)
+	stdout := operations.DecodeUTF8(result.Stdout)
 	if format == "base64" {
 		stdout = base64.StdEncoding.EncodeToString(result.Stdout)
 	}
@@ -73,10 +73,14 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 	if result.Signal != "" {
 		signal = result.Signal
 	}
+	var exitCode any
+	if result.ExitCode >= 0 {
+		exitCode = result.ExitCode
+	}
 	res := operations.Result(map[string]any{
 		"stdout":    stdout,
-		"stderr":    result.Stderr,
-		"exit_code": result.ExitCode,
+		"stderr":    operations.DecodeUTF8([]byte(result.Stderr)),
+		"exit_code": exitCode,
 		"signal":    signal,
 		"timed_out": result.TimedOut,
 		"cancelled": result.Cancelled,

@@ -4,6 +4,7 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,7 +21,17 @@ func TestRunGhExitAndTimeout(t *testing.T) {
 		t.Fatalf("exit result: %+v, %v", res, err)
 	}
 	res, err = RunGh(context.Background(), []string{"wait"}, GhOptions{TimeoutMS: 50})
-	if err != nil || !res.TimedOut || res.Cancelled || res.Signal == "" {
+	if err != nil || !res.TimedOut || res.Cancelled || res.Signal != "SIGKILL" {
 		t.Fatalf("timeout result: %+v, %v", res, err)
+	}
+	result, _, err := handle(context.Background(), nil, Input{Args: []string{"wait"}, TimeoutMS: 50})
+	if err != nil || !result.IsError {
+		t.Fatalf("timeout call: %+v %v", result, err)
+	}
+	raw, _ := json.Marshal(result.StructuredContent)
+	var data map[string]any
+	_ = json.Unmarshal(raw, &data)
+	if data["exit_code"] != nil || data["signal"] != "SIGKILL" {
+		t.Fatalf("signaled process: %s", raw)
 	}
 }

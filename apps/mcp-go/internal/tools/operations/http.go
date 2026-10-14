@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -99,7 +100,20 @@ func RunHTTPPassthrough(
 	}
 
 	var bodyBytes []byte
+	if raw, ok := req.Body.(json.RawMessage); ok {
+		if len(raw) == 0 {
+			req.Body = nil
+		} else {
+			var text string
+			if raw[0] == '"' && json.Unmarshal(raw, &text) == nil {
+				req.Body = text
+			}
+		}
+	}
 	if req.Body != nil {
+		if req.Method == "GET" || req.Method == "HEAD" {
+			return HTTPPassthroughOutcome{}, fmt.Errorf("Request with GET/HEAD method cannot have body.")
+		}
 		if s, ok := req.Body.(string); ok {
 			bodyBytes = []byte(s)
 		} else {
@@ -134,7 +148,7 @@ func RunHTTPPassthrough(
 		return HTTPPassthroughOutcome{}, err
 	}
 
-	var data any = string(text)
+	var data any = DecodeUTF8(text)
 	if json.Valid(text) {
 		var parsedBody any
 		if uErr := json.Unmarshal(text, &parsedBody); uErr == nil {
@@ -161,7 +175,19 @@ func jsonValueToString(value any) string {
 	case bool:
 		return strconv.FormatBool(v)
 	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
+		if v == 0 {
+			return "0"
+		}
+		if math.Abs(v) >= 1e-6 && math.Abs(v) < 1e21 {
+			return strconv.FormatFloat(v, 'f', -1, 64)
+		}
+		text := strconv.FormatFloat(v, 'e', -1, 64)
+		mantissa, exponent, _ := strings.Cut(text, "e")
+		number, _ := strconv.Atoi(exponent)
+		if number >= 0 {
+			return mantissa + "e+" + strconv.Itoa(number)
+		}
+		return mantissa + "e" + strconv.Itoa(number)
 	case json.Number:
 		return v.String()
 	case nil:
@@ -247,14 +273,14 @@ func Do(ctx context.Context, method, urlStr string, headers map[string]string, b
 // pattern used across the TypeScript tools.
 func ParseJSONOrText(body []byte) any {
 	if len(body) == 0 {
-		return string(body)
+		return DecodeUTF8(body)
 	}
 	if !json.Valid(body) {
-		return string(body)
+		return DecodeUTF8(body)
 	}
 	var data any
 	if err := json.Unmarshal(body, &data); err != nil {
-		return string(body)
+		return DecodeUTF8(body)
 	}
 	return data
 }

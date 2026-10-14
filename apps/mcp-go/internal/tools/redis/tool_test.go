@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -102,6 +103,17 @@ func redisEndpoint(t *testing.T) string {
 	return "redis://" + listener.Addr().String()
 }
 
+func TestNestedRedisErrorsAndRESP3Maps(t *testing.T) {
+	value, failed := normalizeReply(map[any]any{"key": []any{"OK", errors.New("WRONGTYPE")}})
+	if !failed {
+		t.Fatal("nested error ignored")
+	}
+	raw, err := json.Marshal(value)
+	if err != nil || string(raw) != `{"key":["OK",{"message":"WRONGTYPE","name":"Error"}]}` {
+		t.Fatalf("normalized replies: %s %v", raw, err)
+	}
+}
+
 func TestBatchConnectionAndNilReplies(t *testing.T) {
 	res, _, err := handle(context.Background(), nil, Input{
 		ConnectionURL: redisEndpoint(t),
@@ -134,7 +146,7 @@ func TestBatchStopsAtFirstError(t *testing.T) {
 	if err := json.Unmarshal(raw, &data); err != nil {
 		t.Fatal(err)
 	}
-	if data.Failed != 1 || len(data.Results) != 2 || data.Results[0] != "PONG" {
+	if data.Failed != 1 || len(data.Results) != 1 || data.Results[0] != "PONG" {
 		t.Fatalf("invalid partial replies: %s", raw)
 	}
 }

@@ -31,7 +31,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "redis",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.RedisTool,
 				Title:       "Redis",
 				Description: description,
@@ -85,14 +85,42 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		// A nil bulk reply (e.g. GET of a missing key) is a successful Redis
 		// result, represented as null in the TypeScript tool.
 		if cmd.Err() != nil && cmd.Err() != goredis.Nil {
-			results = append(results, map[string]any{"name": "Error", "message": cmd.Err().Error()})
-			data := map[string]any{
-				"results":              results,
-				"failed_command_index": len(results) - 1,
-			}
-			return operations.WithError(operations.Result(data)), nil, nil
+			return fail(cmd.Err())
 		}
-		results = append(results, cmd.Val())
+		value, hasError := normalizeReply(cmd.Val())
+		results = append(results, value)
+		if hasError {
+			return operations.WithError(operations.Result(map[string]any{
+				"results": results, "failed_command_index": len(results) - 1,
+			})), nil, nil
+		}
 	}
 	return operations.Result(map[string]any{"results": results}), nil, nil
+}
+
+func normalizeReply(value any) (any, bool) {
+	switch reply := value.(type) {
+	case error:
+		return map[string]any{"name": "Error", "message": reply.Error()}, true
+	case []any:
+		out := make([]any, len(reply))
+		hasError := false
+		for i, entry := range reply {
+			var failed bool
+			out[i], failed = normalizeReply(entry)
+			hasError = hasError || failed
+		}
+		return out, hasError
+	case map[any]any:
+		out := make(map[string]any, len(reply))
+		hasError := false
+		for key, entry := range reply {
+			normalized, failed := normalizeReply(entry)
+			out[fmt.Sprint(key)] = normalized
+			hasError = hasError || failed
+		}
+		return out, hasError
+	default:
+		return value, false
+	}
 }

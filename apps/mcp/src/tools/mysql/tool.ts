@@ -1,4 +1,5 @@
 import { createConnection } from "mysql2/promise";
+import type { FieldPacket } from "mysql2";
 
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
@@ -39,7 +40,10 @@ export const mysqlModule: ToolModule = {
           });
           try {
             const [results, fields] = await client.query(sql, params);
-            return operationResult({ results, fields });
+            return operationResult({
+              results,
+              fields: normalizeFields(fields),
+            });
           } finally {
             await client.end();
           }
@@ -50,3 +54,24 @@ export const mysqlModule: ToolModule = {
     );
   },
 };
+
+// Publish protocol metadata, rather than mysql2's private packet buffers and
+// offsets. This representation is shared by the TypeScript and Go servers.
+function normalizeFields(fields: unknown): unknown {
+  if (fields === undefined || fields === null) return fields;
+  if (Array.isArray(fields)) return fields.map(normalizeFields);
+  const field = fields as FieldPacket;
+  return {
+    catalog: field.catalog,
+    schema: field.schema,
+    name: field.name,
+    orgName: field.orgName,
+    table: field.table,
+    orgTable: field.orgTable,
+    characterSet: field.characterSet,
+    columnLength: field.columnLength,
+    type: field.columnType ?? field.type,
+    flags: field.flags,
+    decimals: field.decimals,
+  };
+}

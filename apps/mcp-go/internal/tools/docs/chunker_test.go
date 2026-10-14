@@ -1,6 +1,10 @@
 package docs
 
-import "testing"
+import (
+	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools/operations"
+	"strings"
+	"testing"
+)
 
 func TestSplitMarkdownKeepsSmallDocument(t *testing.T) {
 	chunks := SplitMarkdown("# One\nalpha\nbeta")
@@ -91,4 +95,17 @@ func repeat(s string, n int) string {
 		out = append(out, s...)
 	}
 	return string(out)
+}
+
+func TestSplitMarkdownUTF16AndSurrogateBoundaries(t *testing.T) {
+	for _, text := range []string{strings.Repeat("中", 1000), strings.Repeat("😀", 500)} {
+		chunks := SplitMarkdown(text)
+		if len(chunks) != 1 || chunks[0].Content != text {
+			t.Fatalf("unexpected Unicode chunks: %#v", chunks)
+		}
+	}
+	chunks := SplitMarkdown("a" + strings.Repeat("😀", 600))
+	if len(chunks) != 2 || operations.UTF16Length(chunks[0].Content) != 1000 || !strings.HasSuffix(chunks[0].Content, "�") || !strings.HasPrefix(chunks[1].Content, "�") {
+		t.Fatalf("surrogate boundaries: %#v", chunks)
+	}
 }

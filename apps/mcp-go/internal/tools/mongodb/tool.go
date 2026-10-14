@@ -60,7 +60,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "mongodb",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.MongoDBTool,
 				Title:       "MongoDB",
 				Description: description,

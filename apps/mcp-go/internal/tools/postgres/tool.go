@@ -4,11 +4,13 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/config"
@@ -25,7 +27,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "postgres",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.PostgresTool,
 				Title:       "PostgreSQL",
 				Description: description,
@@ -79,7 +81,12 @@ func execMultiStatement(ctx context.Context, pg *pgconn.PgConn, sql string) ([]a
 	if err != nil {
 		return nil, err
 	}
+	return normalizeResults(rawResults)
+}
+
+func normalizeResults(rawResults []*pgconn.Result) ([]any, error) {
 	results := make([]any, 0, len(rawResults))
+	types := pgtype.NewMap()
 	for _, res := range rawResults {
 		if res.Err != nil {
 			return nil, res.Err
@@ -98,7 +105,11 @@ func execMultiStatement(ctx context.Context, pg *pgconn.PgConn, sql string) ([]a
 					if col == nil {
 						row[names[i]] = nil
 					} else {
-						row[names[i]] = string(col)
+						value, err := decodeText(types, res.FieldDescriptions[i].DataTypeOID, col)
+						if err != nil {
+							return nil, err
+						}
+						row[names[i]] = value
 					}
 				}
 			}
@@ -106,7 +117,7 @@ func execMultiStatement(ctx context.Context, pg *pgconn.PgConn, sql string) ([]a
 		}
 		results = append(results, map[string]any{
 			"command":   commandWord(res.CommandTag.String()),
-			"row_count": res.CommandTag.RowsAffected(),
+			"row_count": rowCount(res.CommandTag),
 			"rows":      rows,
 			"fields":    fields,
 		})
@@ -114,46 +125,53 @@ func execMultiStatement(ctx context.Context, pg *pgconn.PgConn, sql string) ([]a
 	return results, nil
 }
 
-// execParams runs a parameterized single statement over the extended protocol
-// and returns decoded (typed) values.
+// execParams uses text parameters with unspecified OIDs, as node-postgres does.
+// The server infers each SQL type; JSON numbers and arrays never depend on Go
+// driver's native float64-to-integer or []any encoding plans.
 func execParams(ctx context.Context, conn *pgx.Conn, sql string, params []any) ([]any, error) {
-	rows, err := conn.Query(ctx, sql, params...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	fieldDescs := rows.FieldDescriptions()
-	fields := make([]any, 0, len(fieldDescs))
-	names := make([]string, len(fieldDescs))
-	for i, fd := range fieldDescs {
-		names[i] = fd.Name
-		fields = append(fields, map[string]any{"name": fd.Name, "data_type_id": fd.DataTypeOID})
-	}
-	collected := make([]any, 0)
-	for rows.Next() {
-		values, err := rows.Values()
+	values := make([][]byte, len(params))
+	for i, param := range params {
+		if param == nil {
+			continue
+		}
+		text, err := prepareParameter(param)
 		if err != nil {
 			return nil, err
 		}
-		row := make(map[string]any, len(names))
-		for i, name := range names {
-			if i < len(values) {
-				row[name] = values[i]
+		values[i] = []byte(text)
+	}
+	result := conn.PgConn().ExecParams(ctx, sql, values, nil, nil, nil).Read()
+	return normalizeResults([]*pgconn.Result{result})
+}
+
+func prepareParameter(value any) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case []any:
+		entries := make([]string, len(v))
+		for i, entry := range v {
+			if entry == nil {
+				entries[i] = "NULL"
+				continue
+			}
+			text, err := prepareParameter(entry)
+			if err != nil {
+				return "", err
+			}
+			if _, nested := entry.([]any); nested {
+				entries[i] = text
+			} else {
+				entries[i] = "\"" + strings.ReplaceAll(strings.ReplaceAll(text, "\\", "\\\\"), "\"", "\\\"") + "\""
 			}
 		}
-		collected = append(collected, row)
+		return "{" + strings.Join(entries, ",") + "}", nil
+	case map[string]any:
+		raw, err := json.Marshal(v)
+		return string(raw), err
+	default:
+		return operations.JSONValueToString(v), nil
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	tag := rows.CommandTag()
-	return []any{map[string]any{
-		"command":   commandWord(tag.String()),
-		"row_count": tag.RowsAffected(),
-		"rows":      collected,
-		"fields":    fields,
-	}}, nil
 }
 
 // commandWord extracts the leading command word from a PostgreSQL command tag

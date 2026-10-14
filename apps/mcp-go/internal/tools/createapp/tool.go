@@ -13,6 +13,7 @@ import (
 	"html/template"
 	"strconv"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -56,7 +57,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "create_app",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.CreateApp,
 				Title:       "MCP App",
 				Description: description,
@@ -86,14 +87,14 @@ func handle(_ context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToolR
 	if in.HTML == "" {
 		return textError("html is required"), nil, nil
 	}
-	if len(in.HTML) > maxHTMLChars {
+	if utf8.RuneCountInString(in.HTML) > maxHTMLChars {
 		return textError("html exceeds 200000 characters"), nil, nil
 	}
 	title := in.Title
 	if title == "" {
 		title = fallbackTitle
 	}
-	if len(title) > 120 {
+	if utf8.RuneCountInString(title) > 120 {
 		return textError("title exceeds 120 characters"), nil, nil
 	}
 	if _, err := ShellHTML(); err != nil {

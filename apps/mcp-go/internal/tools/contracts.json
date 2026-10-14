@@ -1,0 +1,1304 @@
+{
+  "clickhouse_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "connection_url": {
+          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "type": "string",
+          "minLength": 1
+        },
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SQL statement to execute verbatim."
+        },
+        "params": {
+          "default": {},
+          "description": "Parameterized-query values, sent as param_<name> for {name:Type} placeholders.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "settings": {
+          "default": {},
+          "description": "ClickHouse settings passed as query parameters, e.g. {max_execution_time: 10, readonly: 1}.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "database": {
+          "description": "Database override (CLICKHOUSE_DATABASE fallback).",
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "description": "default_format for results when the SQL has no FORMAT clause. Defaults to JSON.",
+          "type": "string",
+          "minLength": 1
+        },
+        "data": {
+          "description": "Raw data body for INSERT ... FORMAT <fmt>; the SQL moves to the query parameter.",
+          "type": "string"
+        },
+        "data_base64": {
+          "description": "Base64-encoded data body for binary INSERT formats.",
+          "type": "string"
+        },
+        "user": {
+          "description": "User override.",
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "description": "Password override.",
+          "type": "string"
+        },
+        "api_key": {
+          "description": "Send X-ClickHouse-Key instead of basic auth.",
+          "type": "string",
+          "minLength": 1
+        },
+        "headers": {
+          "default": {},
+          "description": "Additional HTTP headers.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "stacktrace": {
+          "default": false,
+          "description": "Request a server stack trace on errors.",
+          "type": "boolean"
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "description": "HTTP request timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "sql"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "create_app": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "html": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200000,
+          "description": "Complete, self-contained HTML document to render (doctype, styles and scripts inlined). Scripts run in a sandboxed iframe without storage or cookies. External assets may only load from popular CDNs (https://unpkg.com, https://cdn.jsdelivr.net, https://cdn.tailwindcss.com, https://cdnjs.cloudflare.com, https://esm.sh, https://fonts.googleapis.com, https://fonts.gstatic.com). Keep it under 200000 characters."
+        },
+        "title": {
+          "default": "MCP App",
+          "description": "Short human-readable label shown above the app.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "html"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://create-app/create-app.html"
+      },
+      "ui/resourceUri": "ui://create-app/create-app.html"
+    }
+  },
+  "docs_sync": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  "docs_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Natural-language question or keywords to search the knowledge base with."
+        },
+        "top_k": {
+          "default": 3,
+          "description": "Number of most relevant chunks to return (1-10, default 3).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "etcd_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "etcd HTTP(S) base URL override, e.g. http://localhost:2379.",
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "default": "/v3/kv/range",
+          "description": "Gateway endpoint path or absolute URL, e.g. /v3/kv/put.",
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "default": "POST",
+          "description": "HTTP method. The v3 gateway uses POST for nearly all calls.",
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
+          ]
+        },
+        "body": {
+          "default": {},
+          "description": "JSON request document. key/range_end/value strings are base64-encoded automatically unless raw_base64 is set.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/__schema0"
+          }
+        },
+        "headers": {
+          "default": {},
+          "description": "Additional HTTP headers, e.g. {authorization: '<token>'}.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "raw_base64": {
+          "default": false,
+          "description": "Disable automatic base64 encoding/decoding of key/range_end/value fields.",
+          "type": "boolean"
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "description": "HTTP request timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "github_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "args": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered gh arguments without the executable name. Each element is one argument, sent verbatim without shell parsing."
+        },
+        "cwd": {
+          "description": "Working directory; defaults to the MCP process directory.",
+          "type": "string",
+          "minLength": 1
+        },
+        "stdin": {
+          "description": "Text sent verbatim to stdin, e.g. a JSON body for gh api --input -.",
+          "type": "string"
+        },
+        "timeout_ms": {
+          "default": 60000,
+          "description": "Subprocess timeout in milliseconds; increase for long-running commands.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "response_format": {
+          "default": "text",
+          "description": "Encoding of stdout; base64 preserves binary API downloads.",
+          "type": "string",
+          "enum": [
+            "text",
+            "base64"
+          ]
+        }
+      },
+      "required": [
+        "args"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "grafana_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Grafana base URL override, including an optional reverse-proxy prefix.",
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "default": "/api/health",
+          "description": "Grafana HTTP API path or absolute URL, e.g. /api/search or /api/dashboards/uid/abc123.",
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "default": "GET",
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "HEAD",
+            "OPTIONS"
+          ]
+        },
+        "params": {
+          "default": {},
+          "description": "Query parameters, e.g. {query: 'my-dashboard'} for /api/search or {from: 'now-6h', to: 'now'}.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "body": {
+          "description": "JSON body for POST/PUT APIs (dashboard models, /api/ds/query requests, annotations), or a string sent verbatim. Set content-type through headers when using raw text.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/__schema0"
+            }
+          ]
+        },
+        "headers": {
+          "default": {},
+          "description": "Additional HTTP headers; override configured authentication if needed.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "description": "HTTP request timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "kafka_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "brokers": {
+          "description": "CSV broker list override, e.g. localhost:9092.",
+          "type": "string",
+          "minLength": 1
+        },
+        "client_id": {
+          "description": "Client id override.",
+          "type": "string",
+          "minLength": 1
+        },
+        "config": {
+          "default": {},
+          "description": "Raw librdkafka global configuration passthrough, e.g. {'security.protocol':'SASL_SSL','sasl.mechanisms':'SCRAM-SHA-512'}.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "produce",
+            "consume",
+            "list_topics",
+            "describe_topics",
+            "describe_cluster",
+            "create_topic",
+            "delete_topic",
+            "create_partitions",
+            "watermark_offsets",
+            "committed_offsets"
+          ]
+        },
+        "topic": {
+          "description": "Target topic.",
+          "type": "string",
+          "minLength": 1
+        },
+        "topics": {
+          "description": "Topics to subscribe for consume.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "messages": {
+          "description": "Messages to produce. A null value writes a tombstone.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "value": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "partition": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "timestamp": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "headers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        "assignments": {
+          "description": "Explicit partition assignments for consume (bypasses group subscription).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "topic": {
+                "type": "string",
+                "minLength": 1
+              },
+              "partition": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "topic",
+              "partition"
+            ]
+          }
+        },
+        "partitions": {
+          "description": "Partition list for watermark_offsets and committed_offsets.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "topic": {
+                "type": "string",
+                "minLength": 1
+              },
+              "partition": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "partition"
+            ]
+          }
+        },
+        "group_id": {
+          "description": "Consumer group id.",
+          "type": "string",
+          "minLength": 1
+        },
+        "from_beginning": {
+          "default": false,
+          "description": "consume from earliest offset (auto.offset.reset=earliest).",
+          "type": "boolean"
+        },
+        "auto_commit": {
+          "default": false,
+          "description": "Enable consumer auto-commit.",
+          "type": "boolean"
+        },
+        "max_messages": {
+          "default": 50,
+          "description": "Maximum messages to collect for consume.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "num_partitions": {
+          "description": "Partition count for create_topic / desired total for create_partitions.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "replication_factor": {
+          "description": "Replication factor for create_topic.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "topic_config": {
+          "description": "Topic-level config entries for create_topic, e.g. {'retention.ms':'86400000'}.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "encoding": {
+          "default": "utf8",
+          "description": "Encoding for message keys/values.",
+          "type": "string",
+          "enum": [
+            "utf8",
+            "base64"
+          ]
+        },
+        "timeout_ms": {
+          "default": 15000,
+          "description": "Consume window and per-request timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "milvus_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Milvus base URL override, e.g. http://localhost:19530.",
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "default": "/v2/vectordb/collections/list",
+          "description": "REST endpoint path or absolute URL.",
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "default": "POST",
+          "description": "HTTP method. Milvus v2 uses POST for most operations.",
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
+          ]
+        },
+        "body": {
+          "default": {},
+          "description": "JSON request document, e.g. {collectionName:'demo', data:[...] }.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/__schema0"
+          }
+        },
+        "database": {
+          "description": "Database name injected as dbName in the body (MILVUS_DATABASE fallback).",
+          "type": "string",
+          "minLength": 1
+        },
+        "token": {
+          "description": "Bearer token override, formatted as username:password or an API key.",
+          "type": "string",
+          "minLength": 1
+        },
+        "headers": {
+          "default": {},
+          "description": "Additional HTTP headers.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "description": "HTTP request timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "minio_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "S3 endpoint origin override, e.g. http://localhost:9000.",
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "description": "Signing region override (default us-east-1).",
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "default": "GET",
+          "type": "string",
+          "enum": [
+            "GET",
+            "PUT",
+            "POST",
+            "DELETE",
+            "HEAD",
+            "PATCH"
+          ]
+        },
+        "bucket": {
+          "description": "Target bucket. Omit for the service-level ListBuckets call.",
+          "type": "string"
+        },
+        "key": {
+          "description": "Object key, including any '/' path segments.",
+          "type": "string"
+        },
+        "query": {
+          "default": {},
+          "description": "Query/subresource parameters. Use an empty string for valueless subresources such as location, uploads, versioning or delete.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "headers": {
+          "default": {},
+          "description": "Additional request headers, e.g. content-type or x-amz-* headers.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "description": "UTF-8 request body (XML/JSON/text). Ignored when body_base64 or body_path is set.",
+          "type": "string"
+        },
+        "body_base64": {
+          "description": "Base64-encoded binary request body.",
+          "type": "string"
+        },
+        "body_path": {
+          "description": "Local file whose bytes are uploaded as the request body.",
+          "type": "string",
+          "minLength": 1
+        },
+        "unsigned_payload": {
+          "default": false,
+          "description": "Sign with UNSIGNED-PAYLOAD instead of hashing the body.",
+          "type": "boolean"
+        },
+        "response_format": {
+          "default": "auto",
+          "description": "How to return the response body. auto returns text for XML/JSON and base64 otherwise.",
+          "type": "string",
+          "enum": [
+            "auto",
+            "text",
+            "base64",
+            "none"
+          ]
+        },
+        "max_bytes": {
+          "default": 1000000,
+          "description": "Maximum inline response bytes before truncation.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "save_path": {
+          "description": "Write the full response body to this local file path.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "description": "HTTP request timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "mongodb_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "connection_url": {
+          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "type": "string",
+          "minLength": 1
+        },
+        "database": {
+          "description": "Database override; use admin for server-level commands.",
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/__schema0"
+          },
+          "description": "Raw MongoDB command document, accepting Extended JSON for BSON types. There is no operation allowlist."
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "mysql_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "connection_url": {
+          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "type": "string",
+          "minLength": 1
+        },
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SQL to execute verbatim, including writes, DDL, administration and multiple statements."
+        },
+        "params": {
+          "default": [],
+          "description": "Optional positional parameters ($1, $2 for PostgreSQL; ? for MySQL).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/__schema0"
+          }
+        }
+      },
+      "required": [
+        "sql"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "postgres_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "connection_url": {
+          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "type": "string",
+          "minLength": 1
+        },
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SQL to execute verbatim, including writes, DDL, administration and multiple statements."
+        },
+        "params": {
+          "default": [],
+          "description": "Optional positional parameters ($1, $2 for PostgreSQL; ? for MySQL).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/__schema0"
+          }
+        }
+      },
+      "required": [
+        "sql"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "prometheus_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Prometheus server base URL override, including an optional reverse-proxy prefix.",
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "default": "/api/v1/alerts",
+          "description": "HTTP endpoint path or absolute URL.",
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "default": "GET",
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "HEAD",
+            "OPTIONS"
+          ]
+        },
+        "params": {
+          "default": {},
+          "description": "Query parameters, e.g. {query: 'up', time: 1700000000} or {'match[]': ['up', 'process_cpu_seconds_total']}.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "body": {
+          "description": "JSON body, or a string sent verbatim for form-encoded requests. Set content-type through headers when using raw text.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/__schema0"
+            }
+          ]
+        },
+        "headers": {
+          "default": {},
+          "description": "Additional HTTP headers; override configured authentication if needed.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "description": "HTTP request timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "redis_tool": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "connection_url": {
+          "description": "Connection URL override; otherwise uses the configured environment variable.",
+          "type": "string",
+          "minLength": 1
+        },
+        "commands": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "Redis commands as argument arrays. Arguments are sent verbatim, without shell parsing or command filtering."
+        }
+      },
+      "required": [
+        "commands"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  }
+}

@@ -13,7 +13,7 @@ func NormalizeVector(values []float64) []float32 {
 	var sum float64
 	for i, value := range values {
 		out[i] = float32(value)
-		sum += value * value
+		sum += float64(out[i]) * float64(out[i])
 	}
 	norm := math.Sqrt(sum)
 	if norm > 0 {

@@ -2,8 +2,11 @@ package docs
 
 import (
 	"regexp"
+	"slices"
 	"strings"
-	"unicode/utf8"
+	"unicode/utf16"
+
+	"github.com/hangtiancheng/yukino-code/apps/mcp-go/internal/tools/operations"
 )
 
 // MarkdownChunk is one retrieval unit and the heading that labels it.
@@ -13,7 +16,7 @@ type MarkdownChunk struct {
 }
 
 const (
-	// ChunkSize is the maximum chunk length in bytes, matching the TypeScript splitter.
+	// ChunkSize is measured in JavaScript UTF-16 code units.
 	ChunkSize = 1000
 	// ChunkOverlap is how much of the previous chunk is retained when merging splits.
 	ChunkOverlap = 200
@@ -42,10 +45,16 @@ var headingPattern = regexp.MustCompile(`^#{1,6} +(.+)$`)
 // SplitMarkdown splits content with the markdown recursive splitter and tags each
 // chunk with the nearest heading. Empty and whitespace-only input yields no chunks.
 func SplitMarkdown(content string) []MarkdownChunk {
-	parts := splitText(content, markdownSeparators)
+	units := utf16.Encode([]rune(content))
+	separators := make([][]uint16, len(markdownSeparators))
+	for i, separator := range markdownSeparators {
+		separators[i] = utf16.Encode([]rune(separator))
+	}
+	parts := splitText(units, separators)
 	chunks := make([]MarkdownChunk, 0, len(parts))
 	currentTitle := ""
-	for _, part := range parts {
+	for _, units := range parts {
+		part := string(utf16.Decode(units))
 		titles := headingsIn(part)
 		title := currentTitle
 		if len(titles) > 0 {
@@ -62,36 +71,44 @@ func headingsIn(chunk string) []string {
 	for _, line := range strings.Split(chunk, "\n") {
 		match := headingPattern.FindStringSubmatch(line)
 		if match != nil {
-			titles = append(titles, strings.TrimSpace(match[1]))
+			titles = append(titles, operations.TrimJS(match[1]))
 		}
 	}
 	return titles
 }
 
-func splitText(text string, separators []string) []string {
+func indexUnits(text, separator []uint16) int {
+	for i := 0; i+len(separator) <= len(text); i++ {
+		if slices.Equal(text[i:i+len(separator)], separator) {
+			return i
+		}
+	}
+	return -1
+}
+
+func splitText(text []uint16, separators [][]uint16) [][]uint16 {
 	separator := separators[len(separators)-1]
-	var next []string
+	var next [][]uint16
 	for i, candidate := range separators {
-		if candidate == "" {
+		if len(candidate) == 0 {
 			separator = candidate
 			break
 		}
-		if strings.Contains(text, candidate) {
+		if indexUnits(text, candidate) >= 0 {
 			separator = candidate
 			next = separators[i+1:]
 			break
 		}
 	}
 	splits := splitOnSeparator(text, separator)
-	var final []string
-	var good []string
+	var final, good [][]uint16
 	for _, piece := range splits {
 		if len(piece) < ChunkSize {
 			good = append(good, piece)
 			continue
 		}
 		if len(good) > 0 {
-			final = append(final, mergeSplits(good, "")...)
+			final = append(final, mergeSplits(good)...)
 			good = nil
 		}
 		if next == nil {
@@ -101,25 +118,22 @@ func splitText(text string, separators []string) []string {
 		}
 	}
 	if len(good) > 0 {
-		final = append(final, mergeSplits(good, "")...)
+		final = append(final, mergeSplits(good)...)
 	}
 	return final
 }
 
-func splitOnSeparator(text, separator string) []string {
-	if separator == "" {
-		if text == "" {
-			return nil
-		}
-		parts := make([]string, 0, utf8.RuneCountInString(text))
-		for _, r := range text {
-			parts = append(parts, string(r))
+func splitOnSeparator(text, separator []uint16) [][]uint16 {
+	if len(separator) == 0 {
+		parts := make([][]uint16, 0, len(text))
+		for i := range text {
+			parts = append(parts, text[i:i+1])
 		}
 		return parts
 	}
 	var indexes []int
 	for start := 0; ; {
-		rel := strings.Index(text[start:], separator)
+		rel := indexUnits(text[start:], separator)
 		if rel < 0 {
 			break
 		}
@@ -127,12 +141,12 @@ func splitOnSeparator(text, separator string) []string {
 		start += rel + len(separator)
 	}
 	if len(indexes) == 0 {
-		if text == "" {
+		if len(text) == 0 {
 			return nil
 		}
-		return []string{text}
+		return [][]uint16{text}
 	}
-	parts := make([]string, 0, len(indexes)+1)
+	parts := make([][]uint16, 0, len(indexes)+1)
 	if indexes[0] > 0 {
 		parts = append(parts, text[:indexes[0]])
 	}
@@ -148,17 +162,16 @@ func splitOnSeparator(text, separator string) []string {
 	return parts
 }
 
-func mergeSplits(splits []string, separator string) []string {
-	var docs []string
-	var current []string
+func mergeSplits(splits [][]uint16) [][]uint16 {
+	var docs, current [][]uint16
 	total := 0
 	for _, piece := range splits {
 		length := len(piece)
-		if total+length+len(current)*len(separator) > ChunkSize && len(current) > 0 {
-			if doc := joinDocs(current, separator); doc != "" {
+		if total+length > ChunkSize && len(current) > 0 {
+			if doc := joinDocs(current); len(doc) > 0 {
 				docs = append(docs, doc)
 			}
-			for total > ChunkOverlap || (total+length+len(current)*len(separator) > ChunkSize && total > 0) {
+			for total > ChunkOverlap || (total+length > ChunkSize && total > 0) {
 				total -= len(current[0])
 				current = current[1:]
 			}
@@ -166,12 +179,25 @@ func mergeSplits(splits []string, separator string) []string {
 		current = append(current, piece)
 		total += length
 	}
-	if doc := joinDocs(current, separator); doc != "" {
+	if doc := joinDocs(current); len(doc) > 0 {
 		docs = append(docs, doc)
 	}
 	return docs
 }
 
-func joinDocs(docs []string, separator string) string {
-	return strings.TrimSpace(strings.Join(docs, separator))
+func joinDocs(parts [][]uint16) []uint16 {
+	var joined []uint16
+	for _, part := range parts {
+		joined = append(joined, part...)
+	}
+	// Trim in code-unit space so an isolated surrogate is preserved until the
+	// complete chunk is encoded as UTF-8, exactly as the TS SQLite writer does.
+	whitespace := func(unit uint16) bool { return operations.TrimJS(string(rune(unit))) == "" }
+	for len(joined) > 0 && whitespace(joined[0]) {
+		joined = joined[1:]
+	}
+	for len(joined) > 0 && whitespace(joined[len(joined)-1]) {
+		joined = joined[:len(joined)-1]
+	}
+	return joined
 }

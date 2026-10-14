@@ -45,7 +45,7 @@ func Module() tools.ToolModule {
 	return tools.ToolModule{
 		Name: "clickhouse",
 		Register: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{
+			tools.AddTool(server, &mcp.Tool{
 				Name:        tools.Clickhouse,
 				Title:       "ClickHouse",
 				Description: description,
@@ -115,11 +115,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		// INSERT-style: query in the URL, data in the body.
 		query.Set("query", in.SQL)
 		if in.DataBase64 != nil {
-			decoded, decErr := base64.StdEncoding.DecodeString(*in.DataBase64)
-			if decErr != nil {
-				return operations.ResultErr(tools.Clickhouse, decErr), nil, nil
-			}
-			body = decoded
+			body = operations.DecodeBase64(*in.DataBase64)
 		} else {
 			body = []byte(*in.Data)
 			headers["Content-Type"] = "text/plain; charset=utf-8"
@@ -135,7 +131,7 @@ func handle(ctx context.Context, _ *mcp.CallToolRequest, in Input) (*mcp.CallToo
 		return operations.ResultErr(tools.Clickhouse, err), nil, nil
 	}
 
-	text := string(res.Body)
+	text := operations.DecodeUTF8(res.Body)
 	var data any = text
 	if jsonFormatRE.MatchString(format) && strings.TrimSpace(text) != "" {
 		data = operations.ParseJSONOrText(res.Body)
