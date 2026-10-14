@@ -25,7 +25,7 @@ try {
       ]),
   );
   await writeFile(
-    new URL("../../mcp-go/internal/tools/contracts.json", import.meta.url),
+    new URL("../../dejavu/internal/tools/contracts.json", import.meta.url),
     JSON.stringify(contracts, null, 2) + "\n",
   );
 } finally {

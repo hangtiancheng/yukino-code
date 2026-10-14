@@ -19,7 +19,7 @@ execFileSync(
   process.env["GO"] ?? "go",
   ["build", "-o", executable, "./cmd/yukino-mcp"],
   {
-    cwd: fileURLToPath(new URL("../../mcp-go/", import.meta.url)),
+    cwd: fileURLToPath(new URL("../../dejavu/", import.meta.url)),
     stdio: "inherit",
   },
 );
