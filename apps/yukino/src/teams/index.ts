@@ -310,7 +310,7 @@ export class Team {
             break;
           }
           // Plan-mode teammates submit by ending the turn; their tool registry
-          // intentionally omits the main-thread ExitPlanMode dialog tool.
+          // omits the main-thread EnterPlanMode and ExitPlanMode dialog tools.
           if (member.checker?.mode === "plan" && member.planApprovalRequired) {
             uiState.status = "idle";
             const next = await this.runPlanApproval(

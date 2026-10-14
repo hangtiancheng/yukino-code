@@ -97,6 +97,7 @@ async function createRuntime(
     throw acp.RequestError.internalError(undefined, "No provider configured.");
   }
   const runtime = await createRemoteAgent({
+    enableModelPlanMode: false,
     provider,
     cwd,
     hooks: config.hooks,

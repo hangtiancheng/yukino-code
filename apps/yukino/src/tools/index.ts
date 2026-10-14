@@ -7,6 +7,7 @@ export * as Descriptions from "./descriptions.js";
 export * as Diff from "./diff.js";
 export * as EditFile from "./edit-file.js";
 export * as EditFileDiagnostics from "./edit-file-diagnostics.js";
+export * as EnterPlanMode from "./enter-plan-mode.js";
 export * as EnterWorktree from "./enter-worktree.js";
 export * as ExitCodeHints from "./exit-code-hints.js";
 export * as ExitPlanMode from "./exit-plan-mode.js";

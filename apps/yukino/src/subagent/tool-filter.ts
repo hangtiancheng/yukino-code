@@ -51,6 +51,7 @@ type AllTools =
   | "PowerShell"
   | "ComputerUse"
   | "EditFile"
+  | "EnterPlanMode"
   | "EnterWorktree"
   | "ExitPlanMode"
   | "ExitWorktree"
@@ -70,11 +71,12 @@ type AllTools =
 //                     would fight over one device.
 //   AskUserQuestion — prompts through a single modal dialog; a delegated agent
 //                     would hijack it and race parallel siblings (the loser hangs).
-//   ExitPlanMode    — ends the caller's loop and expects the main-thread approval
-//                     dialog, which never fires from a delegated agent.
+//   Enter/ExitPlanMode — mutate main-thread mode and depend on its approval
+//                        dialog, which never fires from a delegated agent.
 export const MAIN_AGENT_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "ComputerUse",
   "AskUserQuestion",
+  "EnterPlanMode",
   "ExitPlanMode",
   "Goal",
 ] satisfies readonly AllTools[]);

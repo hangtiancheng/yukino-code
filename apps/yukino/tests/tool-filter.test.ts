@@ -32,6 +32,7 @@ function buildRegistry(names: string[]): ToolRegistry {
 const ALL = [
   "ComputerUse",
   "AskUserQuestion",
+  "EnterPlanMode",
   "ExitPlanMode",
   "TaskStop",
   "Agent",
@@ -63,7 +64,12 @@ describe("main-agent-only tool policy", () => {
     const forked = cloneRegistryForFork(buildRegistry(ALL));
     const names = new Set(forked.listTools().map((t) => t.name));
 
-    for (const name of ["ComputerUse", "AskUserQuestion", "ExitPlanMode"]) {
+    for (const name of [
+      "ComputerUse",
+      "AskUserQuestion",
+      "EnterPlanMode",
+      "ExitPlanMode",
+    ]) {
       expect(names.has(name)).toBe(false);
     }
     // TaskStop is scoped to owned background tasks; Agent delegates without team authority.
@@ -84,6 +90,7 @@ describe("main-agent-only tool policy", () => {
     for (const name of [
       "ComputerUse",
       "AskUserQuestion",
+      "EnterPlanMode",
       "ExitPlanMode",
       "Agent",
     ]) {

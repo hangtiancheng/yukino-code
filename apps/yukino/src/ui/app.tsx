@@ -267,7 +267,6 @@ export function App({
   });
   const [error, setError] = useState<string | null>(null);
   const [planApprovalActive, setPlanApprovalActive] = useState(false);
-  const [prePlanMode, setPrePlanMode] = useState<PermissionMode>("default");
   // Recently invoked tool names, deduplicated and kept in call order. Passed to the
   // memory recall selector so it skips usage-guide memories for these tools, while
   // still surfacing pitfall and warning memories
@@ -277,12 +276,6 @@ export function App({
   const surfacedMemoriesRef = useRef<Set<string>>(new Set());
   const hasExitedPlanModeRef = useRef(false);
   const permModeRef = useRef(permMode);
-  useEffect(() => {
-    permModeRef.current = permMode;
-    if (checkerRef.current) {
-      checkerRef.current.mode = permMode;
-    }
-  }, [permMode]);
   const [mcpInfo, setMcpInfo] = useState<{
     servers: string[];
     toolCount: number;
@@ -297,6 +290,25 @@ export function App({
   checkerRef.current ??= new PermissionChecker(cwd, permMode);
   const planOwner = () =>
     (checkerRef.current ??= new PermissionChecker(cwd, permMode));
+
+  useEffect(() => {
+    permModeRef.current = permMode;
+    if (checkerRef.current) {
+      checkerRef.current.mode = permMode;
+    }
+  }, [permMode]);
+
+  useEffect(() => {
+    const checker = checkerRef.current;
+    if (!checker) {
+      return;
+    }
+    return checker.subscribeMode(() => {
+      const mode = checker.mode;
+      permModeRef.current = mode;
+      setPermMode(mode);
+    });
+  }, []);
 
   const clientRef = useRef<LLMClient | null>(null);
   // Resolved context window for the active provider: the configured
@@ -1729,10 +1741,9 @@ export function App({
           requestExit();
           break;
         case "plan": {
-          setPrePlanMode(permMode);
-          permModeRef.current = "plan";
-          setPermMode("plan");
-          const planPath = getOrCreatePlanPath(planOwner());
+          const checker = planOwner();
+          checker.enterPlanMode();
+          const planPath = getOrCreatePlanPath(checker);
           setMessages((prev) => [
             ...prev,
             {
@@ -2586,7 +2597,7 @@ export function App({
 
       if (choice === "yolo") {
         hasExitedPlanModeRef.current = true;
-        setPermMode("bypassPermissions");
+        planOwner().exitPlanMode("bypassPermissions");
 
         conversationRef.current.addSystemReminder(
           buildPlanModeExitReminder(planPath, !!planContent),
@@ -2601,7 +2612,7 @@ export function App({
       } else if (choice === "manual") {
         // Exit plan mode and restore the pre-plan permission mode
         hasExitedPlanModeRef.current = true;
-        setPermMode(prePlanMode);
+        planOwner().exitPlanMode();
         conversationRef.current.addSystemReminder(
           buildPlanModeExitReminder(planPath, !!planContent),
         );
@@ -2619,7 +2630,7 @@ export function App({
         handleSubmit(feedback);
       }
     },
-    [cwd, prePlanMode],
+    [cwd],
   );
 
   /**
@@ -3260,11 +3271,9 @@ export function App({
                   ),
                 );
                 hasExitedPlanModeRef.current = true;
-              }
-              permModeRef.current = mode;
-              setPermMode(mode);
-              if (checkerRef.current) {
-                checkerRef.current.mode = mode;
+                planOwner().exitPlanMode(mode);
+              } else {
+                planOwner().mode = mode;
               }
             },
             cwd,

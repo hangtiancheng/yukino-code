@@ -27,6 +27,7 @@ const log = createChildLogger({ module: "permissions" });
 export type DecisionEffect = "allow" | "deny" | "ask";
 export type PermissionMode =
   "default" | "acceptEdits" | "plan" | "bypassPermissions";
+export type NonPlanPermissionMode = Exclude<PermissionMode, "plan">;
 
 export interface Decision {
   effect: DecisionEffect;
@@ -151,6 +152,7 @@ const CONTENT_FIELDS: Record<string, string> = {
 
 const PLAN_COORDINATION_TOOLS = new Set([
   "AskUserQuestion",
+  "EnterPlanMode",
   "ExitPlanMode",
   "Agent",
   "Goal",
@@ -457,6 +459,9 @@ export class PermissionChecker {
     value?: PermissionMode;
     listeners: Set<() => void>;
   };
+  private planModeState: {
+    previous?: NonPlanPermissionMode;
+  };
   private parent?: PermissionChecker;
   planFilePath = "";
   teammate = false;
@@ -474,6 +479,7 @@ export class PermissionChecker {
       value: mode,
       listeners: new Set(),
     };
+    this.planModeState = {};
     this.sandbox = new PathSandbox(cwd);
     this.ruleEngine = new RuleEngine(cwd);
   }
@@ -494,6 +500,9 @@ export class PermissionChecker {
     if (this.modeState.value === mode) {
       return;
     }
+    if (this.mode === "plan" && mode !== "plan") {
+      this.planModeState.previous = undefined;
+    }
     this.modeState.value = mode;
     for (const listener of this.modeState.listeners) {
       listener();
@@ -507,9 +516,26 @@ export class PermissionChecker {
     };
   }
 
+  enterPlanMode(): NonPlanPermissionMode {
+    if (this.mode === "plan") {
+      return this.planModeState.previous ?? "default";
+    }
+    const previous = this.mode;
+    this.planModeState.previous = previous;
+    this.mode = "plan";
+    return previous;
+  }
+
+  exitPlanMode(mode?: NonPlanPermissionMode): NonPlanPermissionMode {
+    const next = mode ?? this.planModeState.previous ?? "default";
+    this.mode = next;
+    return next;
+  }
+
   forCwd(cwd: string): PermissionChecker {
     const checker = new PermissionChecker(cwd, this.mode);
     checker.modeState = this.modeState;
+    checker.planModeState = this.planModeState;
     checker.parent = this.parent;
     checker.planFilePath = this.planFilePath;
     checker.ruleEngine = this.ruleEngine;

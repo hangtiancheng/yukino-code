@@ -40,7 +40,7 @@ export class ExitPlanModeTool implements Tool {
       if (ctx.permissionChecker && planExists(ctx.permissionChecker)) {
         return Promise.resolve({
           output:
-            "You are not in plan mode. Continue within the user's requested scope and current permissions. Only the user can enter plan mode with /plan; AskUserQuestion is for clarification, not approval.",
+            "You are not in plan mode. Continue within the user's requested scope and current permissions, or call EnterPlanMode first when the task genuinely needs planning. AskUserQuestion is for clarification, not approval.",
           isError: true,
         });
       }

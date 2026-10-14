@@ -251,6 +251,7 @@ export interface RemoteAgentHandle {
   longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
   cwd: string;
+  checker: PermissionChecker;
   /** Current permission mode; plan mode is enforced through the run() checker. */
   permissionMode: PermissionMode;
   /** Shared task board; /clear and /resume swap its store to the target session. */
@@ -553,6 +554,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
 }
 
 export interface CreateRemoteAgentOptions {
+  enableModelPlanMode?: boolean;
   interactionMode?: "interactive" | "non-interactive";
   sandboxConfig?: SandboxYamlConfig;
   provider: ProviderConfig;
@@ -599,6 +601,7 @@ export async function createRemoteAgent(
   const taskList = new TaskList(new TaskStore(sessionId));
   const teamManager = new TeamManager(cwd);
   const registry = createToolRegistry(cwd, taskList, {
+    enableModelPlanMode: opts.enableModelPlanMode,
     interactionMode: opts.interactionMode ?? "interactive",
     teamManager,
     lspServers: opts.lspServers,
@@ -944,7 +947,6 @@ export class RemoteServer {
   private readonly accessToken = createWebSocketAccessToken();
 
   // Plan-mode state (parity with the terminal UI approval flow).
-  private prePlanMode: PermissionMode = "default";
   private hasExitedPlanMode = false;
   private exitPlanSucceeded = false;
   /** Set by cancelActiveRun so steering leftovers are dropped, not re-run. */
@@ -1217,6 +1219,7 @@ export class RemoteServer {
           lspServers: this.opts.lspServers,
           sandboxConfig: this.opts.sandboxConfig,
           askUser: this.createAskUserCallback(),
+          enableModelPlanMode: true,
           enableCoordinatorMode: this.opts.enableCoordinatorMode,
           forkDisabled: this.opts.forkDisabled,
           memoryEnabled: this.opts.memoryEnabled !== false,
@@ -1432,6 +1435,9 @@ export class RemoteServer {
         });
         if (ev.toolName === "ExitPlanMode" && !ev.isError) {
           this.exitPlanSucceeded = true;
+        }
+        if (ev.toolName === "EnterPlanMode" && !ev.isError) {
+          this.broadcastStatus();
         }
         break;
 
@@ -1885,10 +1891,7 @@ export class RemoteServer {
     const cwd = handle.cwd;
     const planPath = getOrCreatePlanPath(handle);
 
-    if (handle.permissionMode !== "plan") {
-      this.prePlanMode = handle.permissionMode;
-      handle.permissionMode = "plan";
-    }
+    handle.checker.enterPlanMode();
     this.broadcast({
       type: "system",
       data: {
@@ -2067,8 +2070,9 @@ export class RemoteServer {
     }
 
     this.hasExitedPlanMode = true;
-    handle.permissionMode =
-      choice === "yolo" ? "bypassPermissions" : this.prePlanMode;
+    handle.checker.exitPlanMode(
+      choice === "yolo" ? "bypassPermissions" : undefined,
+    );
     handle.conv.addSystemReminder(
       buildPlanModeExitReminder(planPath, !!planContent),
     );

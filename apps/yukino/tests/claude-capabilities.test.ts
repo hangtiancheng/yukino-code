@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Agent } from "@/agent/index.js";
 import { configureBashSandbox } from "@/bootstrap/sandbox.js";
+import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { FileHistory } from "@/file-history/index.js";
 import type { LLMClient } from "@/llm/client.js";
@@ -27,8 +28,10 @@ import type { AgentDefinition } from "@/subagent/definition.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import { FileMailbox } from "@/teams/file-mailbox.js";
 import { scrubTelemetryPayload } from "@/telemetry/privacy.js";
+import { TaskList } from "@/todo/index.js";
 import { BashTool } from "@/tools/bash.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
+import { EnterPlanModeTool } from "@/tools/enter-plan-mode.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { WebFetchTool } from "@/tools/web-fetch.js";
@@ -61,6 +64,50 @@ const end: StreamEvent = {
 };
 
 describe("Claude capability contracts", () => {
+  it("lets the main agent enter plan mode and restores the preceding permission mode", async () => {
+    const checker = new PermissionChecker(cwd, "acceptEdits");
+    const listener = vi.fn();
+    checker.subscribeMode(listener);
+    const tool = new EnterPlanModeTool();
+
+    expect(tool.schema().input_schema).toMatchObject({
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    });
+    const result = await tool.execute({ cwd, permissionChecker: checker }, {});
+
+    expect(result.isError).toBe(false);
+    expect(checker.mode).toBe("plan");
+    expect(checker.planFilePath).not.toBe("");
+    expect(listener).toHaveBeenCalledOnce();
+    expect(checker.exitPlanMode()).toBe("acceptEdits");
+    expect(checker.mode).toBe("acceptEdits");
+  });
+
+  it("exposes EnterPlanMode only where an interactive approval exit exists", () => {
+    const interactive = createToolRegistry(cwd, new TaskList(), {
+      interactionMode: "interactive",
+    });
+    const nonInteractive = createToolRegistry(cwd, new TaskList(), {
+      interactionMode: "non-interactive",
+    });
+
+    expect(interactive.get("EnterPlanMode")).toBeDefined();
+    expect(nonInteractive.get("EnterPlanMode")).toBeUndefined();
+  });
+
+  it("rejects EnterPlanMode from delegated agents", async () => {
+    const checker = new PermissionChecker(cwd);
+    const result = await new EnterPlanModeTool().execute(
+      { cwd, permissionChecker: checker, subagentSessionId: "child" },
+      {},
+    );
+
+    expect(result.isError).toBe(true);
+    expect(checker.mode).toBe("default");
+  });
+
   it("uses per-session plan paths and rejects empty plans regardless of another session's plan", async () => {
     const a = new PermissionChecker(cwd, "plan");
     const b = new PermissionChecker(cwd, "plan");

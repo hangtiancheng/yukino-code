@@ -17,6 +17,7 @@ import {
 import { BashTool } from "@/tools/bash.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
 import { EditFileTool } from "@/tools/edit-file.js";
+import { EnterPlanModeTool } from "@/tools/enter-plan-mode.js";
 import { EnterWorktreeTool } from "@/tools/enter-worktree.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
@@ -56,6 +57,7 @@ export function createToolRegistry(
   cwd: string,
   taskList: TaskList,
   options: {
+    enableModelPlanMode?: boolean;
     interactionMode?: "interactive" | "non-interactive";
     lspServers?: readonly LspServerConfig[];
     teamManager?: TeamManager;
@@ -86,6 +88,12 @@ export function createToolRegistry(
   registry.register(new PowerShellTool());
   registry.register(new ComputerUseTool());
   registry.register(new EditFileTool());
+  if (
+    options.enableModelPlanMode ??
+    options.interactionMode !== "non-interactive"
+  ) {
+    registry.register(new EnterPlanModeTool());
+  }
   registry.register(new EnterWorktreeTool());
   registry.register(new ExitPlanModeTool());
   registry.register(new ExitWorktreeTool());
