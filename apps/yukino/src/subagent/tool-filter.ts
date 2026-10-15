@@ -41,7 +41,6 @@ type AllTools =
   | "TodoWrite"
   | "TaskOutput"
   | "LSP"
-  | "WebSearch"
   | "TeamCreate"
   | "SendMessage"
   | "ListTeams"
@@ -106,7 +105,6 @@ export const ASYNC_AGENT_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   "TaskOutput",
   "TaskStop",
   "LSP",
-  "WebSearch",
   "ReadFile",
   "WebFetch",
   "Grep",

@@ -141,7 +141,6 @@ const CONTENT_FIELDS: Record<string, string> = {
   ReadFile: "file_path",
   LSP: "file_path",
   WebFetch: "url",
-  WebSearch: "query",
   TaskOutput: "task_id",
   WriteFile: "file_path",
   EditFile: "file_path",

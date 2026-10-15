@@ -35,7 +35,6 @@ import { EnterPlanModeTool } from "@/tools/enter-plan-mode.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { WebFetchTool } from "@/tools/web-fetch.js";
-import { WebSearchTool } from "@/tools/web-search.js";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
@@ -349,46 +348,6 @@ describe("Claude capability contracts", () => {
       },
     };
     expect(await manager.findRelevantMemories("query", incomplete)).toEqual([]);
-  });
-  it("filters search sources by exact hostname and subdomain boundaries", async () => {
-    const html = `<ol id="b_results">
-      <li class="b_algo"><h2><a href="https://docs.example.com/a">Good</a></h2><div class="b_caption"><p>Useful</p></div></li>
-      <li class="b_algo"><h2><a href="https://example.com.evil.test/a">Deceptive</a></h2><div class="b_caption"><p>Wrong domain</p></div></li>
-      <li class="b_algo"><h2><a href="https://other.test/a">Other</a></h2><div class="b_caption"><p>Other</p></div></li>
-    </ol>`;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        await Promise.resolve();
-        return new Response(html);
-      }),
-    );
-    const tool = new WebSearchTool();
-    const result = await tool.execute(
-      { cwd },
-      { query: "documentation", allowed_domains: ["EXAMPLE.COM"] },
-    );
-    expect(result.output).toContain("Useful");
-    expect(result.output).not.toContain("Deceptive");
-    expect(result.output).not.toContain("Other");
-    const blocked = await tool.execute(
-      { cwd },
-      { query: "documentation", blocked_domains: ["example.com"] },
-    );
-    expect(blocked.output).not.toContain("Useful");
-    expect(blocked.output).toContain("Deceptive");
-    expect(
-      (
-        await tool.execute(
-          { cwd },
-          {
-            query: "q",
-            allowed_domains: ["example.com"],
-            blocked_domains: ["other.test"],
-          },
-        )
-      ).isError,
-    ).toBe(true);
   });
   it("cancels rejected WebFetch bodies and honors cancellation before a cache hit", async () => {
     const cancel = vi.fn();

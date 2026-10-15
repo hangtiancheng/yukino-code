@@ -35,7 +35,7 @@
   },
   "hero": {
     "badge": "{version} is out",
-    "badgeNote": "— persistent goals, teams & keyless web search",
+    "badgeNote": "— persistent goals, teams & web fetch",
     "titleA": "The",
     "titleHighlight": "coding agent",
     "titleB": "that lives in your terminal",
@@ -114,7 +114,7 @@
       },
       "toolbelt": {
         "title": "A real toolbelt",
-        "description": "Read, write and edit files, run Bash or PowerShell, glob and grep the tree, search the web without an API key, fetch pages as Markdown, query language servers via LSP, drive the desktop with ComputerUse and call MCP tools."
+        "description": "Read, write and edit files, run Bash or PowerShell, glob and grep the tree, fetch pages as Markdown, query language servers via LSP, drive the desktop with ComputerUse and call MCP tools."
       },
       "safety": {
         "title": "Safety you can tune",
@@ -179,10 +179,6 @@
       "goals": {
         "title": "Goals that persist",
         "description": "Set an objective with /goal and Yukino keeps working turn after turn until it completes or hits a blocker — with token budgets, pause & resume, and state that survives compaction, /resume and checkpoint rewind."
-      },
-      "webSearch": {
-        "title": "Web search, no API key",
-        "description": "The built-in WebSearch queries Bing's public pages directly — no keys, no subscription — while WebFetch reads any page as Markdown. Cancellable, result-capped and domain-filterable."
       }
     }
   },
@@ -461,10 +457,6 @@
       "sandbox": {
         "question": "Do I need to run it in a sandbox?",
         "answer": "No, but you can. Yukino ships with OS-level sandboxing: seatbelt on macOS and bwrap on Linux. Enable it in config.yaml (or toggle with /sandbox) and Bash runs isolated — with optional auto-approval, a network kill switch, and fail-closed behavior when the backend is unavailable. It applies to every run mode, and bypassPermissions does not disable it."
-      },
-      "websearch": {
-        "question": "Does web search need an API key?",
-        "answer": "No. The built-in WebSearch tool queries Bing's public search pages directly — no key, no subscription — and WebFetch reads any HTTP(S) page as Markdown. Both are cancellable and result-capped; WebSearch additionally supports allowed/blocked domain filters."
       },
       "data": {
         "question": "How does it handle my data?",

@@ -67,7 +67,7 @@ export function toolKind(toolName: string): ToolKind {
   if (/^(WriteFile|EditFile)$/u.test(toolName)) {
     return "edit";
   }
-  if (/^(Glob|Grep|ToolSearch|LSP|WebSearch)$/u.test(toolName)) {
+  if (/^(Glob|Grep|ToolSearch|LSP)$/u.test(toolName)) {
     return "search";
   }
   if (/^(Bash|PowerShell|ComputerUse)$/u.test(toolName)) {

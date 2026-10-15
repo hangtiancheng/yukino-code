@@ -1,7 +1,6 @@
 // Submodule namespaces for library consumers (Tools.<Sub>.*).
 export * as AskUser from "./ask-user.js";
 export * as Bash from "./bash.js";
-export * as BingSearch from "./bing-search.js";
 export * as ComputerUse from "./computer-use.js";
 export * as Descriptions from "./descriptions.js";
 export * as Diff from "./diff.js";
@@ -33,5 +32,4 @@ export * as TaskOutput from "./task-output.js";
 export * as ToolSearch from "./tool-search.js";
 export * as Types from "./types.js";
 export * as WebFetch from "./web-fetch.js";
-export * as WebSearch from "./web-search.js";
 export * as WriteFile from "./write-file.js";

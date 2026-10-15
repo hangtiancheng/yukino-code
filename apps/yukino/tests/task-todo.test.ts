@@ -278,7 +278,7 @@ describe("atomic task/TODO list", () => {
       "TaskCreate",
       "TaskOutput",
       "LSP",
-      "WebSearch",
+      "WebFetch",
     ]) {
       expect(
         checker.check(name, "read", { file_path: "/tmp/example.ts" }).effect,

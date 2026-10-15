@@ -108,8 +108,7 @@ export type FeatureId =
   | "observability"
   | "acp"
   | "library"
-  | "goals"
-  | "webSearch";
+  | "goals";
 
 export interface Feature {
   id: FeatureId;
@@ -163,7 +162,6 @@ export const features: Feature[] = [
   { id: "acp", icon: icons.handshake, accent: "accent" },
   { id: "library", icon: icons.blocks, accent: "neutral" },
   { id: "goals", icon: icons.target, accent: "brand" },
-  { id: "webSearch", icon: icons.globe, accent: "accent" },
 ];
 
 export interface ObsBadge {
@@ -220,7 +218,6 @@ export const tools: ToolItem[] = [
   { name: "PowerShell", icon: icons.squareTerminal, group: "Shell" },
   { name: "Glob", icon: icons.folderTree, group: "Search" },
   { name: "Grep", icon: icons.search, group: "Search" },
-  { name: "WebSearch", icon: icons.globe, group: "Search" },
   { name: "WebFetch", icon: icons.globe, group: "Search" },
   { name: "LSP", icon: icons.braces, group: "Search" },
   { name: "ToolSearch", icon: icons.search, group: "Search" },
@@ -348,7 +345,6 @@ export const faqIds = [
   "planMode",
   "goal",
   "sandbox",
-  "websearch",
   "data",
   "headless",
   "ide",

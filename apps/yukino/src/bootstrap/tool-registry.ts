@@ -32,7 +32,6 @@ import { ToolRegistry } from "@/tools/registry.js";
 import { TaskOutputTool } from "@/tools/task-output.js";
 import { ToolSearchTool } from "@/tools/tool-search.js";
 import { WebFetchTool } from "@/tools/web-fetch.js";
-import { WebSearchTool } from "@/tools/web-search.js";
 import { WriteFileTool } from "@/tools/write-file.js";
 
 export function countMcpTools(registry: ToolRegistry): number {
@@ -104,7 +103,6 @@ export function createToolRegistry(
   registry.register(new GlobTool());
   registry.register(new GrepTool());
   registry.register(new WebFetchTool());
-  registry.register(new WebSearchTool());
   return registry;
 }
 

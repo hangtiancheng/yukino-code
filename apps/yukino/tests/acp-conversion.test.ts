@@ -105,9 +105,7 @@ describe("ACP conversion", () => {
     expect(stopReason("tool_use")).toBe("end_turn");
     expect(toolKind("EditFile")).toBe("edit");
     expect(toolKind("Grep")).toBe("search");
-    for (const tool of ["LSP", "WebSearch"]) {
-      expect(toolKind(tool)).toBe("search");
-    }
+    expect(toolKind("LSP")).toBe("search");
     for (const tool of ["TodoWrite", "TaskOutput"]) {
       expect(toolKind(tool)).toBe("think");
     }
