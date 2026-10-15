@@ -1,5 +1,6 @@
 import {
   LEADER_NAME,
+  MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
   MSG_TEXT,
@@ -85,7 +86,7 @@ export class TeamCreateTool implements Tool {
 export class SendMessageTool implements Tool {
   name = "SendMessage";
   description =
-    "Send a message to a teammate or to the leader mailbox. Use to='leader' for the coordinator and to='*' to broadcast to all teammates.";
+    "Send a message to a teammate or to the leader mailbox. Use to='leader' for the coordinator and to='*' to broadcast to all teammates. In coordinator mode, only the leader can send plan_approval_response; copy request_id, set approve, and give review feedback in content.";
   category = "command" as const;
   constructor(
     private mgr: TeamManager,
@@ -119,24 +120,32 @@ export class SendMessageTool implements Tool {
           content: {
             type: "string",
             description:
-              "Message content, or the reason for a shutdown request.",
+              "Message content, shutdown reason, or the leader's plan review feedback.",
           },
           type: {
             type: "string",
-            enum: [MSG_TEXT, MSG_SHUTDOWN_REQUEST, MSG_SHUTDOWN_RESPONSE],
+            enum: [
+              MSG_TEXT,
+              MSG_SHUTDOWN_REQUEST,
+              MSG_SHUTDOWN_RESPONSE,
+              ...(this.mgr.coordinatorMode ? [MSG_PLAN_APPROVAL_RESPONSE] : []),
+            ],
             description:
               "Message kind, defaults to 'text'. Use 'shutdown_request' to ask a teammate " +
-              "to wrap up (it replies with shutdown_response). Teammate plans are automatically approved by the runtime.",
+              "to wrap up (it replies with shutdown_response). " +
+              (this.mgr.coordinatorMode
+                ? "The leader must review each plan_approval_request and reply with plan_approval_response, approve, request_id, and substantive feedback in content."
+                : "Teammate plans are automatically approved by the runtime."),
           },
           request_id: {
             type: "string",
             description:
-              "Copy the requestId from the shutdown request when responding.",
+              "Copy the requestId from the shutdown or plan approval request when responding.",
           },
           approve: {
             type: "boolean",
             description:
-              "Required for shutdown_response: whether the shutdown request was accepted.",
+              "Required for shutdown_response and plan_approval_response: whether the request was accepted.",
           },
         },
         required: ["to", "content"],
@@ -166,6 +175,33 @@ export class SendMessageTool implements Tool {
         typeof args.approve === "boolean" ? args.approve : undefined;
       let structured;
       switch (msgType) {
+        case MSG_PLAN_APPROVAL_RESPONSE:
+          if (
+            this.senderName !== LEADER_NAME ||
+            ctx.permissionChecker?.teammate ||
+            ctx.permissionChecker?.isSubagent
+          ) {
+            return {
+              output: "Only the leader can approve or reject teammate plans.",
+              isError: true,
+            };
+          }
+          if (!requestId || approve === undefined || !message.trim()) {
+            return {
+              output:
+                "plan_approval_response requires request_id, approve, and review feedback in content.",
+              isError: true,
+            };
+          }
+          try {
+            t.respondToPlan(to, requestId, approve, message);
+            return {
+              output: `Plan ${approve ? "approval" : "revision feedback"} sent to '${to}'.`,
+              isError: false,
+            };
+          } catch (error) {
+            return { output: asErrorString(error), isError: true };
+          }
         case MSG_SHUTDOWN_REQUEST:
           structured = shutdownRequest(this.senderName, message);
           break;

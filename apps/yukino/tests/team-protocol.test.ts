@@ -69,11 +69,16 @@ describe("plan approval", () => {
     const response = planApprovalResponse(
       "leader",
       req.requestId ?? "",
-      "automatically approved",
+      true,
+      "The approach and verification are sound",
     );
     expect(response.approve).toBe(true);
-    expect(response.text).toBe("automatically approved");
+    expect(response.text).toBe("The approach and verification are sound");
     expect(response.requestId).toBe(req.requestId);
+    expect(
+      planApprovalResponse("leader", req.requestId ?? "", false, "Add tests")
+        .approve,
+    ).toBe(false);
   });
 });
 
@@ -137,7 +142,8 @@ describe("SendMessage delivers structured messages", () => {
   test("does not expose manual teammate plan approvals", async () => {
     const { mgr, team } = setup();
     const tool = new SendMessageTool(mgr);
-    expect(JSON.stringify(tool.schema())).not.toContain(
+    const typeSchema = tool.schema().input_schema.properties.type;
+    expect("enum" in typeSchema ? typeSchema.enum : []).not.toContain(
       MSG_PLAN_APPROVAL_RESPONSE,
     );
     const result = await tool.execute(

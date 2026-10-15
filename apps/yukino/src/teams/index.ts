@@ -13,6 +13,7 @@ import {
 } from "./progress.js";
 import {
   LEADER_NAME,
+  MSG_PLAN_APPROVAL_RESPONSE,
   SHUTDOWN_PREFIX,
   isValidTeammateName,
   isShutdownRequest,
@@ -74,6 +75,7 @@ export interface Member {
   uiState?: TeammateUIState;
   checker?: PermissionChecker;
   planApprovalRequired?: boolean;
+  pendingPlanApproval?: { request: FileMailMessage; responded: boolean };
 
   // The following fields are metadata for persistence; they do not participate in
   // runtime scheduling and are only used when writing config.json or restoring
@@ -106,7 +108,11 @@ export class Team {
   permissionMode: PermissionChecker["mode"] = "default";
   description?: string;
   createdAt = Math.floor(Date.now() / 1000);
-  constructor(name: string, cwd: string) {
+  constructor(
+    name: string,
+    cwd: string,
+    readonly requiresLeaderPlanApproval = false,
+  ) {
     this.name = name;
     this.cwd = cwd;
     // Mailboxes live in a dedicated inboxes/ subdirectory, separate from
@@ -235,6 +241,10 @@ export class Team {
     }
     this.setMemberMeta(name, role);
     member.planApprovalRequired = role.planApprovalRequired ?? false;
+    member.pendingPlanApproval = undefined;
+    if (checker?.teammate) {
+      checker.requiresLeaderPlanApproval = this.requiresLeaderPlanApproval;
+    }
     if (checker?.mode === "plan" && !checker.planFilePath) {
       checker.planFilePath = createPlanPath();
     }
@@ -309,9 +319,10 @@ export class Team {
             terminalMessage = `[idle] ${name} (reason: stopped)`;
             break;
           }
-          // Plan-mode teammates submit by ending the turn; their tool registry
-          // omits the main-thread EnterPlanMode and ExitPlanMode dialog tools.
-          if (member.checker?.mode === "plan" && member.planApprovalRequired) {
+          if (
+            member.checker?.mode === "plan" &&
+            (member.planApprovalRequired || member.pendingPlanApproval)
+          ) {
             uiState.status = "idle";
             const next = await this.runPlanApproval(
               member,
@@ -367,6 +378,7 @@ export class Team {
         }
       } finally {
         member.active = false;
+        member.pendingPlanApproval = undefined;
         getNameRegistry().unregister(name);
         clearActiveTools(uiState.progress);
         if (uiState.status === "running") {
@@ -456,24 +468,149 @@ export class Team {
     member: Member,
     plan: string,
   ): Promise<string | null> {
-    const request = planApprovalRequest(member.name, plan);
-    await this.leaderMailbox.send(member.name, request.text, request);
-    if (!member.active || member.signal?.aborted || !member.checker) {
+    if (!member.pendingPlanApproval) {
+      this.submitPlan(member.name, plan);
+    }
+    const requestId = member.pendingPlanApproval?.request.requestId;
+    if (
+      !requestId ||
+      !member.active ||
+      member.signal?.aborted ||
+      !member.checker
+    ) {
       return null;
+    }
+    if (!this.requiresLeaderPlanApproval) {
+      const response = planApprovalResponse(
+        LEADER_NAME,
+        requestId,
+        true,
+        "Plan automatically approved; tool permissions remain active.",
+      );
+      await this.leaderMailbox.send(LEADER_NAME, response.text, response);
+      if (!member.active || member.signal?.aborted) {
+        return null;
+      }
+      member.pendingPlanApproval = undefined;
+      member.checker.exitPlanMode(
+        this.permissionMode === "plan" ? "default" : this.permissionMode,
+      );
+      member.planApprovalRequired = false;
+      return "Your plan was automatically approved. Begin execution within the current tool permissions; plan approval does not authorize individual tool calls.";
+    }
+
+    while (member.active && !member.signal?.aborted) {
+      await this.waitForMember(member);
+      if (!member.active || member.signal?.aborted) {
+        return null;
+      }
+      const messages = member.mailbox.receiveMatchingSync(
+        (message) =>
+          isShutdownRequest(message) ||
+          message.type === MSG_PLAN_APPROVAL_RESPONSE,
+      );
+      const shutdown = messages.find(
+        (message) => message.from === LEADER_NAME && isShutdownRequest(message),
+      );
+      if (shutdown) {
+        const response = shutdownResponse(
+          member.name,
+          shutdown.requestId ?? "",
+          true,
+          "Stopped while awaiting plan review",
+        );
+        await this.leaderMailbox.send(member.name, response.text, response);
+        return null;
+      }
+      const response = messages.find(
+        (message) =>
+          message.from === LEADER_NAME &&
+          message.requestId === requestId &&
+          typeof message.approve === "boolean" &&
+          !!message.text.trim(),
+      );
+      if (!response) {
+        continue;
+      }
+      member.pendingPlanApproval = undefined;
+      if (!response.approve) {
+        return `The leader rejected your plan. Review feedback:\n${response.text}\n\nStay in plan mode. Revise the plan and submit it again with ExitPlanMode when available, otherwise return the revised plan in your final response.`;
+      }
+      member.checker.exitPlanMode(
+        this.permissionMode === "plan" ? "default" : this.permissionMode,
+      );
+      member.planApprovalRequired = false;
+      return `The leader approved your plan. Review feedback:\n${response.text}\n\nBegin execution within the approved scope and current tool permissions; plan approval does not authorize individual tool calls.`;
+    }
+    return null;
+  }
+
+  submitPlan(name: string, plan: string): string {
+    const member = this.getMember(name);
+    if (
+      !member?.active ||
+      member.signal?.aborted ||
+      member.checker?.mode !== "plan"
+    ) {
+      throw new Error(
+        "Only an active teammate in plan mode can submit a plan.",
+      );
+    }
+    if (!plan.trim()) {
+      throw new Error("A non-empty plan is required for review.");
+    }
+    if (member.pendingPlanApproval) {
+      throw new Error("This teammate already has a plan awaiting review.");
+    }
+    const request = planApprovalRequest(name, plan);
+    this.leaderMailbox.sendSync(name, request.text, request);
+    member.pendingPlanApproval = { request, responded: false };
+    if (this.requiresLeaderPlanApproval) {
+      member.planApprovalRequired = true;
+    }
+    return request.requestId ?? "";
+  }
+
+  respondToPlan(
+    name: string,
+    requestId: string,
+    approve: boolean,
+    feedback: string,
+  ): void {
+    if (!this.requiresLeaderPlanApproval) {
+      throw new Error(
+        "Teammate plans are automatically approved outside coordinator mode.",
+      );
+    }
+    const member = this.getMember(name);
+    const pending = member?.pendingPlanApproval;
+    if (
+      !member?.active ||
+      member.signal?.aborted ||
+      pending?.request.requestId !== requestId
+    ) {
+      throw new Error(
+        "No matching pending plan approval request for this teammate.",
+      );
+    }
+    if (pending.responded) {
+      throw new Error(
+        "This plan approval request already has a leader response.",
+      );
+    }
+    if (!feedback.trim()) {
+      throw new Error(
+        "Plan approval responses require the leader's review feedback.",
+      );
     }
     const response = planApprovalResponse(
       LEADER_NAME,
-      request.requestId ?? "",
-      "Plan automatically approved; tool permissions remain active.",
+      requestId,
+      approve,
+      feedback,
     );
-    await this.leaderMailbox.send(LEADER_NAME, response.text, response);
-    if (!member.active || member.signal?.aborted) {
-      return null;
-    }
-    member.checker.mode =
-      this.permissionMode === "plan" ? "default" : this.permissionMode;
-    member.planApprovalRequired = false;
-    return "Your plan was automatically approved. Begin execution within the current tool permissions; plan approval does not authorize individual tool calls.";
+    member.mailbox.sendSync(LEADER_NAME, response.text, response);
+    pending.responded = true;
   }
 
   getMember(name: string): Member | undefined {
@@ -530,6 +667,7 @@ export class Team {
     if (
       member.active &&
       member.uiState &&
+      !member.pendingPlanApproval &&
       !content.startsWith(Team.SHUTDOWN_PREFIX)
     ) {
       member.uiState.status = "running";
@@ -630,7 +768,10 @@ export class TeamManager {
   private taskStores = new Map<string, SharedTaskStore>();
   private listeners = new Set<() => void>();
 
-  constructor(cwd: string) {
+  constructor(
+    cwd: string,
+    readonly coordinatorMode = false,
+  ) {
     this.cwd = canonicalPath(cwd);
   }
 
@@ -685,7 +826,7 @@ export class TeamManager {
     }
 
     const key = this.teamKey(name);
-    const team = new Team(name, this.cwd);
+    const team = new Team(name, this.cwd, this.coordinatorMode);
     team.permissionMode = this.permissionChecker?.mode ?? "default";
     team.leaderAgentId = opts.leaderAgentId ?? "";
     team.description = opts.description;
@@ -710,7 +851,7 @@ export class TeamManager {
       return undefined;
     }
 
-    const team = new Team(tf.name, this.cwd);
+    const team = new Team(tf.name, this.cwd, this.coordinatorMode);
     team.leaderAgentId = tf.leaderAgentId;
     team.permissionMode = this.permissionChecker?.mode ?? tf.permissionMode;
     team.description = tf.description;

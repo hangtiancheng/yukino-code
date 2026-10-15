@@ -1,5 +1,6 @@
 import { AgentTool } from "./agent-tool.js";
 
+import type { PermissionMode } from "@/permissions/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import { TaskList } from "@/todo/index.js";
@@ -71,8 +72,8 @@ type AllTools =
 //                     would fight over one device.
 //   AskUserQuestion — prompts through a single modal dialog; a delegated agent
 //                     would hijack it and race parallel siblings (the loser hangs).
-//   Enter/ExitPlanMode — mutate main-thread mode and depend on its approval
-//                        dialog, which never fires from a delegated agent.
+//   EnterPlanMode — only the main agent can initiate a planning phase.
+//   ExitPlanMode  — excluded by default; plan definitions can submit a plan.
 export const MAIN_AGENT_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "ComputerUse",
   "AskUserQuestion",
@@ -142,6 +143,7 @@ export function filterToolsForAgent(
   allowedTools: string[] | undefined,
   disallowedTools: string[] | undefined,
   isAsync: boolean,
+  permissionMode?: PermissionMode,
 ): ToolRegistry {
   const disallowed = new Set(disallowedTools ?? []);
   const allowed = new Set(allowedTools ?? []);
@@ -161,11 +163,12 @@ export function filterToolsForAgent(
       continue;
     }
 
-    if (SUBAGENT_DISALLOWED_TOOLS.has(name)) {
+    const planExit = name === "ExitPlanMode" && permissionMode === "plan";
+    if (!planExit && SUBAGENT_DISALLOWED_TOOLS.has(name)) {
       continue;
     }
 
-    if (isAsync && !ASYNC_AGENT_ALLOWED_TOOLS.has(name)) {
+    if (!planExit && isAsync && !ASYNC_AGENT_ALLOWED_TOOLS.has(name)) {
       continue;
     }
 
@@ -189,12 +192,19 @@ export const FORK_QUERY_SOURCE = "agent:builtin:fork";
  * subagent tools and Leader-only team management tools are stripped. Team-level
  * task tools and the teammate-named SendMessage are added by the caller.
  */
-export function cloneRegistryForTeammate(registry: ToolRegistry): ToolRegistry {
+export function cloneRegistryForTeammate(
+  registry: ToolRegistry,
+  permissionMode?: PermissionMode,
+): ToolRegistry {
   const teammate = new ToolRegistry();
   const tasks = new TaskList();
   teammate.copyLoadingStateFrom(registry);
   for (const tool of registry.listTools()) {
-    if (SUBAGENT_DISALLOWED_TOOLS.has(tool.name) || tool.name === "TaskStop") {
+    const planExit = tool.name === "ExitPlanMode" && permissionMode === "plan";
+    if (
+      (!planExit && SUBAGENT_DISALLOWED_TOOLS.has(tool.name)) ||
+      tool.name === "TaskStop"
+    ) {
       continue;
     }
     registerScopedTool(teammate, tool, tasks);

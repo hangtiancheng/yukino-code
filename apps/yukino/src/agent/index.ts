@@ -389,7 +389,8 @@ export class Agent {
           this.client.protocol ?? "anthropic",
           this.toolFilter,
         );
-        const toolGuidance = buildToolGuidance(toolSchemaNames);
+        const coordinating = this.coordinatorActiveFn?.() ?? false;
+        const toolGuidance = buildToolGuidance(toolSchemaNames, coordinating);
         const guidance =
           toolGuidance ||
           (this.conversation.hasReminderContaining(TOOL_GUIDANCE_MARKER)
@@ -402,7 +403,6 @@ export class Agent {
           );
         }
 
-        const coordinating = this.coordinatorActiveFn?.() ?? false;
         const goalReminder =
           this.goalManager?.reminder() ||
           (this.conversation.hasReminderContaining("<persistent-goal>")
@@ -431,6 +431,10 @@ export class Agent {
               canEditFile: toolSchemaNames.includes("EditFile"),
               canDelegate: toolSchemaNames.includes("Agent"),
               isCoordinator: coordinating,
+              isSubagent: this.checker.isSubagent,
+              isTeammate: this.checker.teammate,
+              requiresLeaderPlanApproval:
+                this.checker.requiresLeaderPlanApproval,
             }),
           );
         }

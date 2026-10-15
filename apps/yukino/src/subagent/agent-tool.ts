@@ -25,6 +25,7 @@ import {
   TeamTaskUpdateTool,
 } from "@/teams/task-tools.js";
 import { SendMessageTool } from "@/teams/tools.js";
+import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type {
   Tool,
@@ -224,10 +225,10 @@ export class AgentTool implements Tool {
           plan_mode_required: {
             type: "boolean",
             description:
-              "Only meaningful together with team_name. Requests plan mode, subject to parent " +
-              "acceptEdits/bypassPermissions overrides. In plan mode, the teammate investigates " +
-              "and writes its plan; the runtime automatically approves the submitted plan and " +
-              "resumes execution under the current tool permissions.",
+              "Only meaningful together with team_name. Requests a planning phase. " +
+              (this.teamManager?.coordinatorMode
+                ? "The teammate stays read-only until the leader reviews its submitted plan and responds with approval or revision feedback."
+                : "Subject to parent acceptEdits/bypassPermissions overrides. The runtime automatically approves the submitted plan and resumes execution under current tool permissions."),
           },
           team_name: {
             type: "string",
@@ -539,12 +540,24 @@ ${prompt}`;
     // Build a teammate-scoped tool registry: clone the parent registry, then
     // inject team-level task tools and a named SendMessage (overriding the
     // inherited leader-named version so the teammate sends under its own name).
+    const teammatePermissionMode = planModeRequired
+      ? "plan"
+      : definition.permissionMode;
     const teammateRegistry = filterToolsForAgent(
-      cloneRegistryForTeammate(this.registry),
+      cloneRegistryForTeammate(this.registry, teammatePermissionMode),
       definition.tools,
       definition.disallowedTools,
       false,
+      teammatePermissionMode,
     );
+    if (teammateRegistry.get("ExitPlanMode")) {
+      teammateRegistry.register(
+        new ExitPlanModeTool(
+          (plan) => team.submitPlan(memberName, plan),
+          team.requiresLeaderPlanApproval,
+        ),
+      );
+    }
     teammateRegistry.register(
       new SendMessageTool(this.teamManager, memberName),
     );
@@ -588,9 +601,10 @@ ${prompt}`;
     this.teamManager.setPermissionChecker(parentChecker);
     const checker = parentChecker.forSubagent(
       memberCwd,
-      planModeRequired ? "plan" : definition.permissionMode,
+      teammatePermissionMode,
     );
     checker.teammate = true;
+    checker.requiresLeaderPlanApproval = team.requiresLeaderPlanApproval;
     try {
       const runAgent = this.teamRunAgentFactory?.(
         teammateRegistry,
@@ -615,7 +629,10 @@ ${prompt}`;
           {
             agentType: definition.name,
             model: modelOverride || definition.model,
-            planApprovalRequired: planModeRequired,
+            planApprovalRequired:
+              planModeRequired ||
+              (team.requiresLeaderPlanApproval &&
+                definition.permissionMode === "plan"),
             cleanup: () => teammateRegistry.dispose(),
           },
         );

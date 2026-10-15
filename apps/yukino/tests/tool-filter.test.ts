@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   cloneRegistryForFork,
+  cloneRegistryForTeammate,
   filterToolsForAgent,
   MAIN_AGENT_ONLY_TOOLS,
   SUBAGENT_DISALLOWED_TOOLS,
@@ -109,5 +110,49 @@ describe("main-agent-only tool policy", () => {
       true,
     );
     expect(filtered.get("Bash")).toBeDefined();
+  });
+
+  it.each([false, true])(
+    "allows ExitPlanMode for plan definitions without allowing EnterPlanMode (async=%s)",
+    (isAsync) => {
+      const registry = buildRegistry(ALL);
+      const filtered = filterToolsForAgent(
+        registry,
+        ["*"],
+        undefined,
+        isAsync,
+        "plan",
+      );
+      expect(filtered.get("ExitPlanMode")).toBeDefined();
+      expect(filtered.get("EnterPlanMode")).toBeUndefined();
+      expect(
+        filterToolsForAgent(
+          registry,
+          ["*"],
+          ["ExitPlanMode"],
+          isAsync,
+          "plan",
+        ).get("ExitPlanMode"),
+      ).toBeUndefined();
+      expect(
+        filterToolsForAgent(
+          registry,
+          ["ReadFile"],
+          undefined,
+          isAsync,
+          "plan",
+        ).get("ExitPlanMode"),
+      ).toBeUndefined();
+    },
+  );
+
+  it("keeps the plan exit exception through teammate cloning", () => {
+    const registry = buildRegistry(ALL);
+    expect(
+      cloneRegistryForTeammate(registry).get("ExitPlanMode"),
+    ).toBeUndefined();
+    const teammate = cloneRegistryForTeammate(registry, "plan");
+    expect(teammate.get("ExitPlanMode")).toBeDefined();
+    expect(teammate.get("EnterPlanMode")).toBeUndefined();
   });
 });

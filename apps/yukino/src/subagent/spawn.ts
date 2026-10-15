@@ -107,12 +107,16 @@ export async function spawnSubagent(
         definition.tools,
         definition.disallowedTools,
         options.background ?? false,
+        checkerOverride?.teammate
+          ? checkerOverride.mode
+          : definition.permissionMode,
       );
   const sessionId = options.sessionId ?? newSessionId();
   const transcriptPath = sessionPath(sessionId, "transcript.jsonl");
   const taskManager =
     options.backgroundTasks === false ? null : new TaskManager(sessionId);
   let output = "";
+  let submittedPlan: string | undefined;
   let turn = 0;
   try {
     const inheritedChecker =
@@ -174,6 +178,9 @@ export async function spawnSubagent(
           });
           break;
         case "tool_result":
+          if (event.toolName === "ExitPlanMode" && !event.isError) {
+            submittedPlan = event.output;
+          }
           onEvent?.({
             type: "tool_result",
             toolId: event.toolId,
@@ -196,7 +203,9 @@ export async function spawnSubagent(
           if (event.stopReason === "interrupted") {
             return `${output}${output ? "\n\n" : ""}${SUBAGENT_INTERRUPTED_MARKER}`;
           }
-          return output || "[No output]";
+          return submittedPlan
+            ? `${output}${output ? "\n\n" : ""}${submittedPlan}`
+            : output || "[No output]";
         case "error":
           throw event.error;
       }

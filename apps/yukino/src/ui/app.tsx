@@ -346,7 +346,9 @@ export function App({
   });
   const activeToolIdsRef = useRef(new Set<string>());
   const activeToolBatchStartedAtRef = useRef<number | null>(null);
-  const teamManagerRef = useRef(new TeamManager(cwd));
+  const teamManagerRef = useRef(
+    new TeamManager(cwd, enableCoordinatorMode ?? false),
+  );
   const taskListRef = useRef(new TaskList(new TaskStore(sessionIdRef.current)));
   const { tasks: todos, boardId } = useTaskProgress(
     taskListRef.current,

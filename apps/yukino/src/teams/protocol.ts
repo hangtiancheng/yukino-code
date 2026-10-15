@@ -95,13 +95,14 @@ export function planApprovalRequest(
   return typed(from, MSG_PLAN_APPROVAL_REQUEST, newRequestId(), plan);
 }
 
-/** Records the runtime's automatic plan approval. */
+/** Leader's decision, with review feedback for the teammate. */
 export function planApprovalResponse(
   from: string,
   requestId: string,
+  approve: boolean,
   feedback = "",
 ): FileMailMessage {
-  return typed(from, MSG_PLAN_APPROVAL_RESPONSE, requestId, feedback, true);
+  return typed(from, MSG_PLAN_APPROVAL_RESPONSE, requestId, feedback, approve);
 }
 
 /**

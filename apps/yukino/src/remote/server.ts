@@ -599,7 +599,7 @@ export async function createRemoteAgent(
   const fileStateCache = new FileStateCache();
 
   const taskList = new TaskList(new TaskStore(sessionId));
-  const teamManager = new TeamManager(cwd);
+  const teamManager = new TeamManager(cwd, enableCoordinatorMode);
   const registry = createToolRegistry(cwd, taskList, {
     enableModelPlanMode: opts.enableModelPlanMode,
     interactionMode: opts.interactionMode ?? "interactive",

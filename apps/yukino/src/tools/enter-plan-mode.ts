@@ -41,7 +41,7 @@ Use it for significant architectural ambiguity, unclear requirements that requir
         isError: true,
       });
     }
-    if (ctx.subagentSessionId || checker.teammate) {
+    if (ctx.subagentSessionId || checker.isSubagent || checker.teammate) {
       return Promise.resolve({
         output: "EnterPlanMode cannot be used from delegated agents.",
         isError: true,

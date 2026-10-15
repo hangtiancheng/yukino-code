@@ -465,6 +465,7 @@ export class PermissionChecker {
   private parent?: PermissionChecker;
   planFilePath = "";
   teammate = false;
+  requiresLeaderPlanApproval = false;
   // Sandbox mode: when enabled, Bash commands run through OS sandbox isolation, with optional auto-allow
   sandboxEnabled = false;
   sandboxAutoAllow = false;
@@ -487,6 +488,13 @@ export class PermissionChecker {
   get mode(): PermissionMode {
     if (!this.parent) {
       return this.modeState.value ?? "default";
+    }
+    if (
+      this.teammate &&
+      this.requiresLeaderPlanApproval &&
+      this.modeState.value === "plan"
+    ) {
+      return "plan";
     }
     const parentMode = this.parent.mode;
     if (parentMode === "acceptEdits" || parentMode === "bypassPermissions") {
@@ -516,6 +524,10 @@ export class PermissionChecker {
     };
   }
 
+  get isSubagent(): boolean {
+    return this.parent !== undefined;
+  }
+
   enterPlanMode(): NonPlanPermissionMode {
     if (this.mode === "plan") {
       return this.planModeState.previous ?? "default";
@@ -540,6 +552,7 @@ export class PermissionChecker {
     checker.planFilePath = this.planFilePath;
     checker.ruleEngine = this.ruleEngine;
     checker.teammate = this.teammate;
+    checker.requiresLeaderPlanApproval = this.requiresLeaderPlanApproval;
     checker.sandboxEnabled = this.sandboxEnabled;
     checker.sandboxAutoAllow = this.sandboxAutoAllow;
     return checker;
@@ -549,6 +562,7 @@ export class PermissionChecker {
     const checker = this.forCwd(cwd);
     checker.parent = this;
     checker.modeState = { value: mode, listeners: this.modeState.listeners };
+    checker.planModeState = {};
     if (!this.teammate) {
       checker.planFilePath = "";
     }

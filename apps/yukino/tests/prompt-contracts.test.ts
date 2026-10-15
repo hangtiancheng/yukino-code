@@ -209,6 +209,10 @@ describe("system prompt contracts", () => {
     expect(coordinator).toContain(
       "automatically approves submitted teammate plans",
     );
+    const reviewed = buildToolGuidance(["Agent", "SendMessage"], true);
+    expect(reviewed).toContain("plan_approval_response");
+    expect(reviewed).toContain("review feedback");
+    expect(reviewed).not.toContain("automatically approves");
     expect(buildToolGuidance(["ToolSearch"])).not.toContain("McpCall");
     expect(buildToolGuidance(["ToolSearch", "McpCall"])).toContain(
       "Dispatch-mode MCP",
@@ -217,6 +221,31 @@ describe("system prompt contracts", () => {
 });
 
 describe("plan and coordinator contracts", () => {
+  it.each([1, 2])(
+    "describes the configured teammate approval policy (turn %i)",
+    (iteration) => {
+      const capabilities = {
+        isTeammate: true,
+        canSendMessage: true,
+        canExitPlanMode: true,
+        canAskUser: false,
+      };
+      const auto = buildPlanModeReminder(
+        "/plan.md",
+        true,
+        iteration,
+        capabilities,
+      );
+      expect(auto).toContain("automatically approve");
+      const reviewed = buildPlanModeReminder("/plan.md", true, iteration, {
+        ...capabilities,
+        requiresLeaderPlanApproval: true,
+      });
+      expect(reviewed).toContain("leader reviews");
+      expect(reviewed).toContain("If rejected");
+      expect(reviewed).not.toContain("automatically approve");
+    },
+  );
   it.each([1, 2])(
     "does not tell a coordinator to await approval from itself (turn %i)",
     (iteration) => {

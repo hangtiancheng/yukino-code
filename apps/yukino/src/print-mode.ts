@@ -182,7 +182,10 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   const checker = new PermissionChecker(cwd, "bypassPermissions");
 
   const taskList = new TaskList();
-  const teamManager = new TeamManager(cwd);
+  const teamManager = new TeamManager(
+    cwd,
+    cfg.enable_coordinator_mode ?? false,
+  );
   const registry = createToolRegistry(cwd, taskList, {
     interactionMode: "non-interactive",
     teamManager,

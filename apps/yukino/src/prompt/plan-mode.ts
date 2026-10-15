@@ -6,6 +6,9 @@ interface PlanCapabilities {
   canEditFile?: boolean;
   canDelegate?: boolean;
   isCoordinator?: boolean;
+  isSubagent?: boolean;
+  isTeammate?: boolean;
+  requiresLeaderPlanApproval?: boolean;
 }
 
 export function buildPlanModeReminder(
@@ -22,6 +25,9 @@ export function buildPlanModeReminder(
     canEditFile = true,
     canDelegate = true,
     isCoordinator = false,
+    isSubagent = false,
+    isTeammate = false,
+    requiresLeaderPlanApproval = false,
   } = capabilities;
   const writable = canWriteFile || (planExist && canEditFile);
   const constraint = writable
@@ -36,11 +42,15 @@ export function buildPlanModeReminder(
         : "Return material unknowns to the parent in your final response.";
   const approval = isCoordinator
     ? "Return the synthesized plan to the user. Stay read-only until the user leaves plan mode with Shift+Tab. Do not submit your own plan to a teammate or treat a worker report as approval."
-    : canExitPlanMode
-      ? "When the plan is ready, call ExitPlanMode for approval; never request approval through prose. Wait for the runtime approval gate before implementation."
-      : canSendMessage
-        ? "When the plan is ready, finish the turn. The runtime will submit and automatically approve the plan, then resume execution under the current tool permissions. Do not ask the leader to approve it through SendMessage."
-        : "When the plan is ready, return it to the parent. This read-only run cannot enter implementation mode.";
+    : isTeammate
+      ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode and end the turn." : "When the plan is ready, return it in your final response; the host will submit it."} ${requiresLeaderPlanApproval ? "Stay read-only until the leader reviews your plan and gives approval. If rejected, revise using the leader's feedback and submit again." : "The runtime will automatically approve the submitted plan and resume execution under current tool permissions."}`
+      : isSubagent
+        ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode to return the plan to the parent and end the turn." : "When the plan is ready, return it to the parent."} This read-only run cannot enter implementation mode.`
+        : canExitPlanMode
+          ? "When the plan is ready, call ExitPlanMode for approval; never request approval through prose. Wait for the runtime approval gate before implementation."
+          : canSendMessage
+            ? "When the plan is ready, finish the turn. The runtime will submit and automatically approve the plan, then resume execution under the current tool permissions. Do not ask the leader to approve it through SendMessage."
+            : "When the plan is ready, return it to the parent. This read-only run cannot enter implementation mode.";
   if (iteration > 1 && (iteration - 1) % 5 !== 0) {
     return `Plan mode still active. ${constraint} Plan file: ${planPath}. Keep Context, Approach, files, and Verification current. ${clarification} ${approval}`;
   }

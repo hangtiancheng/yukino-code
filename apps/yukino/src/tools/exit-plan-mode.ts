@@ -7,17 +7,21 @@ import type {
 } from "./types.js";
 
 import { loadPlan, planExists } from "@/plan-file/index.js";
+import { asErrorString } from "@/utils/index.js";
 
 export class ExitPlanModeTool implements Tool {
   // Use a hardcoded string instead of ExitPlanModeTool.name.replace("Tool", "")
   // because class names are not stable after minification — bundlers like
   // Terser/esbuild may rename or mangle them, producing incorrect tool names at runtime.
   name = "ExitPlanMode";
-  description = `
-  Exit plan mode and present the plan for user approval.
-  Call this when your plan is complete and written to the plan file.
-  `;
+  description =
+    "Submit the completed plan from the plan file. The main agent presents it for user approval; a teammate follows the host's team approval policy (leader review in coordinator mode, automatic approval otherwise); a one-shot subagent returns it to the parent. Do not implement until the host approves execution.";
   category: ToolCategory = "read";
+
+  constructor(
+    private submitTeammatePlan?: (plan: string) => string,
+    private requiresLeaderApproval = false,
+  ) {}
 
   schema(): ToolSchema {
     const inputSchema = {
@@ -51,14 +55,38 @@ export class ExitPlanModeTool implements Tool {
       });
     }
 
-    if (
-      !planExists(ctx.permissionChecker) ||
-      !loadPlan(ctx.permissionChecker)?.trim()
-    ) {
+    const plan = loadPlan(ctx.permissionChecker);
+    if (!planExists(ctx.permissionChecker) || !plan?.trim()) {
       return Promise.resolve({
         output:
           "No non-empty plan file found. Write your plan to the declared plan file before calling ExitPlanMode.",
         isError: true,
+      });
+    }
+
+    if (ctx.permissionChecker.teammate) {
+      if (!this.submitTeammatePlan) {
+        return Promise.resolve({
+          output:
+            "No leader plan approval handler is available for this teammate.",
+          isError: true,
+        });
+      }
+      try {
+        const requestId = this.submitTeammatePlan(plan);
+        return Promise.resolve({
+          output: `Plan submitted. Request ID: ${requestId}. ${this.requiresLeaderApproval ? "Stay in plan mode until the leader reviews it and responds. The host will resume you with approval or revision feedback." : "The host will automatically approve the plan and resume execution under current tool permissions."} End this turn now.`,
+          isError: false,
+        });
+      } catch (error) {
+        return Promise.resolve({ output: asErrorString(error), isError: true });
+      }
+    }
+
+    if (ctx.permissionChecker.isSubagent || ctx.subagentSessionId) {
+      return Promise.resolve({
+        output: `Plan ready for the parent agent:\n\n${plan}\n\nEnd this turn now. This subagent remains read-only; the parent decides how to proceed.`,
+        isError: false,
       });
     }
 
