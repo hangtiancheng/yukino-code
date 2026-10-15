@@ -465,6 +465,7 @@ export class PermissionChecker {
   private parent?: PermissionChecker;
   planFilePath = "";
   teammate = false;
+  readOnly = false;
   requiresLeaderPlanApproval = false;
   // Sandbox mode: when enabled, Bash commands run through OS sandbox isolation, with optional auto-allow
   sandboxEnabled = false;
@@ -486,6 +487,9 @@ export class PermissionChecker {
   }
 
   get mode(): PermissionMode {
+    if (this.readOnly) {
+      return "plan";
+    }
     if (!this.parent) {
       return this.modeState.value ?? "default";
     }
@@ -552,6 +556,7 @@ export class PermissionChecker {
     checker.planFilePath = this.planFilePath;
     checker.ruleEngine = this.ruleEngine;
     checker.teammate = this.teammate;
+    checker.readOnly = this.readOnly;
     checker.requiresLeaderPlanApproval = this.requiresLeaderPlanApproval;
     checker.sandboxEnabled = this.sandboxEnabled;
     checker.sandboxAutoAllow = this.sandboxAutoAllow;

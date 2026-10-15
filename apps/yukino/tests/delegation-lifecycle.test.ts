@@ -527,7 +527,7 @@ describe("team approval and persistence regressions", () => {
     manager.drainLeaderMailbox();
     expect(team.getMember("worker")?.uiState?.status).toBe("running");
   });
-  it("honors teammate tool restrictions and models under parent permission precedence", async () => {
+  it("honors teammate read-only roles, tool restrictions, and model overrides", async () => {
     const parent = new PermissionChecker(directory, "bypassPermissions");
     const registry = new ToolRegistry();
     registry.register(tool("WriteFile", "write"));
@@ -565,7 +565,7 @@ describe("team approval and persistence regressions", () => {
       "plan_approval_request",
     );
     expect(manager.get("squad")?.getMember("planner")?.checker?.mode).toBe(
-      "bypassPermissions",
+      "plan",
     );
   });
 

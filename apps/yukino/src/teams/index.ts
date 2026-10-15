@@ -14,6 +14,7 @@ import {
 import {
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
+  MSG_TEXT,
   SHUTDOWN_PREFIX,
   isValidTeammateName,
   isShutdownRequest,
@@ -240,7 +241,8 @@ export class Team {
       throw new Error(`Teammate '${name}' is already running`);
     }
     this.setMemberMeta(name, role);
-    member.planApprovalRequired = role.planApprovalRequired ?? false;
+    member.planApprovalRequired =
+      !checker?.readOnly && (role.planApprovalRequired ?? false);
     member.pendingPlanApproval = undefined;
     if (checker?.teammate) {
       checker.requiresLeaderPlanApproval = this.requiresLeaderPlanApproval;
@@ -321,6 +323,7 @@ export class Team {
           }
           if (
             member.checker?.mode === "plan" &&
+            !member.checker.readOnly &&
             (member.planApprovalRequired || member.pendingPlanApproval)
           ) {
             uiState.status = "idle";
@@ -496,7 +499,10 @@ export class Team {
         this.permissionMode === "plan" ? "default" : this.permissionMode,
       );
       member.planApprovalRequired = false;
-      return "Your plan was automatically approved. Begin execution within the current tool permissions; plan approval does not authorize individual tool calls.";
+      return this.resumeAfterPlanReview(
+        member,
+        "Your plan was automatically approved. Begin execution within the current tool permissions; plan approval does not authorize individual tool calls.",
+      );
     }
 
     while (member.active && !member.signal?.aborted) {
@@ -534,15 +540,33 @@ export class Team {
       }
       member.pendingPlanApproval = undefined;
       if (!response.approve) {
-        return `The leader rejected your plan. Review feedback:\n${response.text}\n\nStay in plan mode. Revise the plan and submit it again with ExitPlanMode when available, otherwise return the revised plan in your final response.`;
+        return this.resumeAfterPlanReview(
+          member,
+          `The leader rejected your plan. Review feedback:\n${response.text}\n\nStay in plan mode. Revise the plan and submit it again with ExitPlanMode when available, otherwise return the revised plan in your final response.`,
+        );
       }
       member.checker.exitPlanMode(
         this.permissionMode === "plan" ? "default" : this.permissionMode,
       );
       member.planApprovalRequired = false;
-      return `The leader approved your plan. Review feedback:\n${response.text}\n\nBegin execution within the approved scope and current tool permissions; plan approval does not authorize individual tool calls.`;
+      return this.resumeAfterPlanReview(
+        member,
+        `The leader approved your plan. Review feedback:\n${response.text}\n\nBegin execution within the approved scope and current tool permissions; plan approval does not authorize individual tool calls.`,
+      );
     }
     return null;
+  }
+
+  private resumeAfterPlanReview(member: Member, review: string): string {
+    const messages = member.mailbox.receiveMatchingSync(
+      (message) =>
+        (!message.type || message.type === MSG_TEXT) &&
+        !isShutdownRequest(message),
+    );
+    if (!messages.length) {
+      return review;
+    }
+    return `${review}\n\nMessages received while awaiting plan review. Apply scope corrections before executing or revising the plan:\n\n${messages.map((message) => `From ${message.from}: ${message.text}`).join("\n\n")}`;
   }
 
   submitPlan(name: string, plan: string): string {
@@ -550,6 +574,7 @@ export class Team {
     if (
       !member?.active ||
       member.signal?.aborted ||
+      member.checker?.readOnly ||
       member.checker?.mode !== "plan"
     ) {
       throw new Error(

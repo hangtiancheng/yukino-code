@@ -9,6 +9,7 @@ interface PlanCapabilities {
   isSubagent?: boolean;
   isTeammate?: boolean;
   requiresLeaderPlanApproval?: boolean;
+  readOnly?: boolean;
 }
 
 export function buildPlanModeReminder(
@@ -28,6 +29,7 @@ export function buildPlanModeReminder(
     isSubagent = false,
     isTeammate = false,
     requiresLeaderPlanApproval = false,
+    readOnly = false,
   } = capabilities;
   const writable = canWriteFile || (planExist && canEditFile);
   const constraint = writable
@@ -42,15 +44,17 @@ export function buildPlanModeReminder(
         : "Return material unknowns to the parent in your final response.";
   const approval = isCoordinator
     ? "Return the synthesized plan to the user. Stay read-only until the user leaves plan mode with Shift+Tab. Do not submit your own plan to a teammate or treat a worker report as approval."
-    : isTeammate
-      ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode and end the turn." : "When the plan is ready, return it in your final response; the host will submit it."} ${requiresLeaderPlanApproval ? "Stay read-only until the leader reviews your plan and gives approval. If rejected, revise using the leader's feedback and submit again." : "The runtime will automatically approve the submitted plan and resume execution under current tool permissions."}`
-      : isSubagent
-        ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode to return the plan to the parent and end the turn." : "When the plan is ready, return it to the parent."} This read-only run cannot enter implementation mode.`
-        : canExitPlanMode
-          ? "When the plan is ready, call ExitPlanMode for approval; never request approval through prose. Wait for the runtime approval gate before implementation."
-          : canSendMessage
-            ? "When the plan is ready, finish the turn. The runtime will submit and automatically approve the plan, then resume execution under the current tool permissions. Do not ask the leader to approve it through SendMessage."
-            : "When the plan is ready, return it to the parent. This read-only run cannot enter implementation mode.";
+    : readOnly
+      ? "Return the findings or plan to the leader or parent. This role remains read-only for every follow-up; plan approval cannot authorize implementation."
+      : isTeammate
+        ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode and end the turn." : "When the plan is ready, return it in your final response; the host will submit it."} ${requiresLeaderPlanApproval ? "Stay read-only until the leader reviews your plan and gives approval. If rejected, revise using the leader's feedback and submit again." : "The runtime will automatically approve the submitted plan and resume execution under current tool permissions."}`
+        : isSubagent
+          ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode to return the plan to the parent and end the turn." : "When the plan is ready, return it to the parent."} This read-only run cannot enter implementation mode.`
+          : canExitPlanMode
+            ? "When the plan is ready, call ExitPlanMode for approval; never request approval through prose. Wait for the runtime approval gate before implementation."
+            : canSendMessage
+              ? "When the plan is ready, finish the turn. The runtime will submit and automatically approve the plan, then resume execution under the current tool permissions. Do not ask the leader to approve it through SendMessage."
+              : "When the plan is ready, return it to the parent. This read-only run cannot enter implementation mode.";
   if (iteration > 1 && (iteration - 1) % 5 !== 0) {
     return `Plan mode still active. ${constraint} Plan file: ${planPath}. Keep Context, Approach, files, and Verification current. ${clarification} ${approval}`;
   }
@@ -67,7 +71,7 @@ export function buildPlanModeReminder(
   }
   return [
     "# Plan mode",
-    `${constraint} Do not run mutating tools, change configs, or commit. Do not begin implementation before the runtime approval gate allows it.`,
+    `${constraint} Do not run mutating tools, change configs, or commit. ${readOnly ? "This role is permanently read-only; do not begin implementation." : "Do not begin implementation before the runtime approval gate allows it."}`,
     fileInfo.join("\n"),
     `## Context\n${isCoordinator ? "Synthesize code evidence from workers; do not inspect files or run commands yourself." : "Inspect relevant code and reusable patterns."} ${clarification}${canDelegate ? " Delegate bounded read-only research only when useful; at most 3 independent explore agents, with no mandatory plan agent." : ""}`,
     `## Approach\n${writable ? "Write" : "Return"} only the recommended approach, starting with Context. Include files to change, constraints, and a Verification section with concrete checks. Keep the plan proportional to the task; refine it as evidence arrives.`,

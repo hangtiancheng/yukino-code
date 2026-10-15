@@ -124,6 +124,7 @@ export async function spawnSubagent(
     const checker = inheritedChecker.teammate
       ? inheritedChecker.forCwd(cwd)
       : inheritedChecker.forSubagent(cwd, definition.permissionMode);
+    checker.readOnly ||= definition.readOnly ?? false;
     const conversation = options.conversation ?? new ConversationManager();
     if (!options.conversation || conversation.getMessages().length === 0) {
       conversation.addSystemReminder(buildSubagentInstructions(definition));

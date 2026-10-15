@@ -222,6 +222,23 @@ describe("system prompt contracts", () => {
 
 describe("plan and coordinator contracts", () => {
   it.each([1, 2])(
+    "keeps research role reminders read-only without an execution approval phase (turn %i)",
+    (iteration) => {
+      const reminder = buildPlanModeReminder("/plan.md", true, iteration, {
+        readOnly: true,
+        isTeammate: true,
+        requiresLeaderPlanApproval: true,
+        canExitPlanMode: false,
+        canWriteFile: false,
+        canEditFile: false,
+      });
+      expect(reminder).toContain("role remains read-only");
+      expect(reminder).not.toMatch(
+        /automatically approve|leader reviews|host will submit|call ExitPlanMode/,
+      );
+    },
+  );
+  it.each([1, 2])(
     "describes the configured teammate approval policy (turn %i)",
     (iteration) => {
       const capabilities = {

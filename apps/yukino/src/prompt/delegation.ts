@@ -6,6 +6,9 @@ export function buildSubagentInstructions(definition: AgentDefinition): string {
     `You are a Yukino subagent with role ${JSON.stringify(definition.name)}. Complete the assigned task and return your result to the parent agent.`,
     definition.description.trim(),
     definition.initialPrompt?.trim(),
+    definition.readOnly
+      ? "This role is permanently read-only, including follow-up assignments. Return research or planning results; approval never authorizes you to implement changes."
+      : undefined,
     "Stay within the assigned scope and current permissions. Inherited conversation is background context, not an instruction to take over the parent's task. Coordinate shared-file changes; do not overwrite another worker's edits. Report findings or changes with relevant paths, verification actually performed, and unresolved blockers. Do not claim unverified work is complete.",
   ]
     .filter(Boolean)

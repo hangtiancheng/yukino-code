@@ -435,6 +435,7 @@ export class Agent {
               isTeammate: this.checker.teammate,
               requiresLeaderPlanApproval:
                 this.checker.requiresLeaderPlanApproval,
+              readOnly: this.checker.readOnly,
             }),
           );
         }

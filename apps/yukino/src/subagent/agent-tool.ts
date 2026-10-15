@@ -604,6 +604,7 @@ ${prompt}`;
       teammatePermissionMode,
     );
     checker.teammate = true;
+    checker.readOnly = definition.readOnly ?? false;
     checker.requiresLeaderPlanApproval = team.requiresLeaderPlanApproval;
     try {
       const runAgent = this.teamRunAgentFactory?.(
@@ -630,9 +631,10 @@ ${prompt}`;
             agentType: definition.name,
             model: modelOverride || definition.model,
             planApprovalRequired:
-              planModeRequired ||
-              (team.requiresLeaderPlanApproval &&
-                definition.permissionMode === "plan"),
+              !definition.readOnly &&
+              (planModeRequired ||
+                (team.requiresLeaderPlanApproval &&
+                  definition.permissionMode === "plan")),
             cleanup: () => teammateRegistry.dispose(),
           },
         );
