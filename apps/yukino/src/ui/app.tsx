@@ -2610,9 +2610,8 @@ export function App({
           handleSubmit(`Execute this plan:\n\n${planContent}`);
         }
       } else if (choice === "manual") {
-        // Exit plan mode and restore the pre-plan permission mode
         hasExitedPlanModeRef.current = true;
-        planOwner().exitPlanMode();
+        planOwner().exitPlanMode("default");
         conversationRef.current.addSystemReminder(
           buildPlanModeExitReminder(planPath, !!planContent),
         );

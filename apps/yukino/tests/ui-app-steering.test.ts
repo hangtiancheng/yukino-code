@@ -1,3 +1,6 @@
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { render, type Instance } from "ink";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +14,7 @@ import { load as loadPromptHistory } from "@/history/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MCPClient } from "@/mcp/client.js";
+import { PermissionChecker } from "@/permissions/index.js";
 import { App } from "@/ui/app.js";
 import { installTerminalOutput } from "@/ui/terminal-output.js";
 import { checkForUpdate } from "@/update/version-check.js";
@@ -297,6 +301,93 @@ describe("App steering delivery", () => {
     expect(client.requests[1]?.users).toContain("EXPLICIT_NEXT_REQUEST");
     await finishRequest(1);
   });
+});
+
+describe("App plan approval", () => {
+  it.each([
+    {
+      approval: "manual selection",
+      keys: ["\x1b[B", "\r"],
+      mode: "default",
+      effect: "ask",
+      message: "Each edit requires confirmation.",
+    },
+    {
+      approval: "Escape",
+      keys: ["\x1b"],
+      mode: "default",
+      effect: "ask",
+      message: "Each edit requires confirmation.",
+    },
+    {
+      approval: "YOLO selection",
+      keys: ["\r"],
+      mode: "bypassPermissions",
+      effect: "allow",
+      message: "Entered YOLO mode.",
+    },
+  ])(
+    "uses $mode after $approval for a plan entered with Shift+Tab",
+    async ({ keys, mode, effect, message }) => {
+      vi.stubEnv("YUKINO_BYPASS_PERMISSIONS", "");
+      const entered = vi.spyOn(PermissionChecker.prototype, "enterPlanMode");
+      await start();
+      await finishRequest(0);
+      for (let index = 0; index < 3; index++) {
+        await press("\x1b[Z");
+      }
+      expect(entered).toHaveBeenCalledOnce();
+      const checker = entered.mock.contexts[0];
+      if (!(checker instanceof PermissionChecker)) {
+        throw new Error("Plan mode owner was not captured");
+      }
+      expect(checker.mode).toBe("plan");
+      const plan = "A concrete test plan.";
+      vi.spyOn(client, "stream").mockImplementationOnce(async function* () {
+        await writeFile(checker.planFilePath, plan);
+        yield {
+          type: "tool_call_start",
+          toolId: "exit-plan",
+          toolName: "ExitPlanMode",
+        };
+        yield {
+          type: "tool_call_complete",
+          toolId: "exit-plan",
+          toolName: "ExitPlanMode",
+          arguments: {},
+        };
+        yield {
+          type: "stream_end",
+          stopReason: "tool_use",
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+          },
+        };
+      });
+      await submit("Finish the plan");
+      await vi.waitFor(() => {
+        expect(terminal.bufferLines().join("\n")).toContain("Plan complete");
+      });
+      for (const key of keys) {
+        await press(key);
+      }
+      await waitForRequests(2);
+      expect(terminal.bufferLines().join("\n")).toContain(message);
+      expect(checker.mode).toBe(mode);
+      expect(
+        checker.check("EditFile", "write", {
+          file_path: join(process.cwd(), "plan-approval-test.txt"),
+        }).effect,
+      ).toBe(effect);
+      expect(client.requests[1]?.users.at(-1)).toBe(
+        `Execute this plan:\n\n${plan}`,
+      );
+      await finishRequest(1);
+    },
+  );
 });
 
 describe("App MCP reload", () => {
