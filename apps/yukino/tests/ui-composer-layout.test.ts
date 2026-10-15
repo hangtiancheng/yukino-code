@@ -1586,10 +1586,10 @@ describe("persistent composer drafts and input behavior", () => {
   it.each([
     ["default", "acceptEdits"],
     ["acceptEdits", "bypassPermissions"],
-    ["bypassPermissions", "default"],
+    ["bypassPermissions", "plan"],
     ["plan", "default"],
   ] as const)(
-    "retains Tab completion while Shift+Tab switches %s to %s without entering plan",
+    "retains Tab completion while Shift+Tab switches %s to %s",
     (permMode, nextMode) => {
       const ref = draftRef();
       const onModeChange = vi.fn();

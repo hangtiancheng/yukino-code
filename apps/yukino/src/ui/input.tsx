@@ -102,10 +102,11 @@ function scanCwdFiles(root: string, max = 2000): string[] {
 
 export type { InputDraft } from "./input-draft.js";
 
-const PERMISSION_MODE_CYCLE: Exclude<PermissionMode, "plan">[] = [
+const PERMISSION_MODE_CYCLE: PermissionMode[] = [
   "default",
   "acceptEdits",
   "bypassPermissions",
+  "plan",
 ];
 
 interface InputBoxProps {
@@ -123,7 +124,7 @@ interface InputBoxProps {
   statusLabel?: string;
   usageTracker?: CommandUsageTracker;
   permMode?: PermissionMode;
-  onModeChange?: (mode: Exclude<PermissionMode, "plan">) => void;
+  onModeChange?: (mode: PermissionMode) => void;
   cwd?: string;
   sessionId?: string;
   /** Bumped by the parent when workspace file facts change (file writes, agent
@@ -686,8 +687,7 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if ((input === "\x1b[Z" || (key.tab && key.shift)) && onModeChange) {
-      const idx =
-        permMode === "plan" ? -1 : PERMISSION_MODE_CYCLE.indexOf(permMode);
+      const idx = PERMISSION_MODE_CYCLE.indexOf(permMode);
       const next =
         PERMISSION_MODE_CYCLE[(idx + 1) % PERMISSION_MODE_CYCLE.length];
       onModeChange(next);

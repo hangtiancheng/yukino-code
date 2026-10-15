@@ -214,7 +214,7 @@ Print, remote, ACP, and A2A modes require at least one configured provider; the 
 ```yaml
 # Initial permission mode. Enum: default (ask per write/command) | acceptEdits (auto-approve
 # file edits) | bypassPermissions (approve everything).
-# Other values fall back to default. Shift+Tab cycles these modes; only /plan enters plan mode.
+# Other values fall back to default. Shift+Tab cycles these modes and plan mode.
 permission_mode: bypassPermissions
 
 # Model providers. At least one is required.
@@ -641,7 +641,7 @@ Commands can run while the model is streaming, with at most one user command at 
 | ↓         | On the last input line, view all teammates and background subagents                 |
 | Ctrl+B    | Move running foreground Bash/PowerShell tasks to the background                     |
 | Ctrl+V    | Paste a clipboard image (Alt+V on Windows)                                          |
-| Shift+Tab | Cycle default → acceptEdits → bypassPermissions; exit plan to default               |
+| Shift+Tab | Cycle default → acceptEdits → bypassPermissions → plan                              |
 
 Press ↓ on the last visual row of the input to view all teammates and background subagents, including while the foreground agent is streaming. Completion menus and prompt-history navigation take precedence. Enter opens an agent's details, Escape returns or closes the list, and the unsent draft and cursor are preserved. Teammate spawn cards scroll with the transcript like background subagent cards; current progress is available in the Agents list.
 

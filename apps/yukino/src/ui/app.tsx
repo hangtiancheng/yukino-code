@@ -1491,6 +1491,30 @@ export function App({
     return out;
   };
 
+  const enterPlanModeUI = () => {
+    const checker = planOwner();
+    checker.enterPlanMode();
+    const planPath = getOrCreatePlanPath(checker);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "system",
+        content: `Entered plan mode (read-only). Plan file: ${planPath}`,
+      },
+    ]);
+    if (hasExitedPlanModeRef.current && planExists(planOwner())) {
+      const reentryMsg = buildPlanModeReentryReminder(planPath, true);
+      if (reentryMsg) {
+        conversationRef.current.addSystemReminder(reentryMsg);
+        setMessages((prev) => [
+          ...prev,
+          { role: "system", content: reentryMsg },
+        ]);
+      }
+      hasExitedPlanModeRef.current = false;
+    }
+  };
+
   const handleSlashCommand = async (text: string): Promise<boolean> => {
     let parsed = parseCommand(text);
     if (!parsed) {
@@ -1743,33 +1767,7 @@ export function App({
           requestExit();
           break;
         case "plan": {
-          const checker = planOwner();
-          checker.enterPlanMode();
-          const planPath = getOrCreatePlanPath(checker);
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content:
-                `Entered plan mode (read-only). Plan file: ${planPath}\n` +
-                (coordinatorActive(enableCoordinatorMode ?? false)
-                  ? "Delegate read-only research and return a plan. Use Shift+Tab to leave plan mode when ready to proceed."
-                  : "Investigate and design your approach. The agent will call ExitPlanMode when the plan is ready."),
-            },
-          ]);
-          // Re-entry after a previous plan-mode exit: if the plan file still
-          // exists, rebuild the re-entry reminder
-          if (hasExitedPlanModeRef.current && planExists(planOwner())) {
-            const reentryMsg = buildPlanModeReentryReminder(planPath, true);
-            if (reentryMsg) {
-              conversationRef.current.addSystemReminder(reentryMsg);
-              setMessages((prev) => [
-                ...prev,
-                { role: "system", content: reentryMsg },
-              ]);
-            }
-            hasExitedPlanModeRef.current = false;
-          }
+          enterPlanModeUI();
           if (parsed.args) {
             await runUserTurn(parsed.args, "plan");
           }
@@ -3264,7 +3262,9 @@ export function App({
                       : undefined,
             permMode,
             onModeChange: (mode) => {
-              if (permModeRef.current === "plan") {
+              if (mode === "plan") {
+                enterPlanModeUI();
+              } else if (permModeRef.current === "plan") {
                 const planPath = checkerRef.current?.planFilePath ?? "";
                 conversationRef.current.addSystemReminder(
                   buildPlanModeExitReminder(
