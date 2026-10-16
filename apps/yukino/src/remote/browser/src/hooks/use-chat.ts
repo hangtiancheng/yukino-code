@@ -258,7 +258,6 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       if (open) {
         return {
           ...state,
-          streaming: true,
           items: state.items.map((it) =>
             it.kind === "review" && it.id === open.id
               ? {
@@ -279,7 +278,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
         progress: msg.data.progress ?? null,
         done: false,
       };
-      return { ...state, streaming: true, items: [...state.items, item] };
+      return { ...state, items: [...state.items, item] };
     }
 
     case "steering_queued":
@@ -335,12 +334,21 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       };
 
     case "command_done":
-      return finalizeReviews({ ...state, streaming: false });
+      return finalizeReviews(state);
+
+    case "run_state": {
+      if (msg.data.streaming) {
+        return { ...state, streaming: true };
+      }
+      const next = finalizeReviews(
+        finalizeCurrentThinking(finalizeAssistant(state)),
+      );
+      return { ...next, streaming: false, steering: [] };
+    }
 
     case "replay_user":
       return {
         ...state,
-        streaming: true,
         items: [
           ...state.items,
           { kind: "user", id: nextId("usr"), content: msg.data.content },
@@ -538,7 +546,6 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       next = finalizeReviews(next);
       return {
         ...next,
-        streaming: false,
         items: [
           ...next.items,
           { kind: "done", id: nextId("done"), elapsed: msg.data.elapsed },
@@ -558,7 +565,6 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       next = finalizeReviews(next);
       return {
         ...next,
-        streaming: false,
         items: [
           ...next.items,
           { kind: "error", id: nextId("err"), content: msg.data.message },

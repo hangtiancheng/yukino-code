@@ -30,6 +30,7 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
   system: { type: "system", data: { message: "ready" } },
   clear: { type: "clear", data: null },
   command_done: { type: "command_done", data: null },
+  run_state: { type: "run_state", data: { streaming: true } },
   replay_user: { type: "replay_user", data: { content: "question" } },
   replay_assistant: {
     type: "replay_assistant",

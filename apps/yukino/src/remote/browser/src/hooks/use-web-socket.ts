@@ -59,6 +59,7 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
   useEffect(() => {
     let disposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     // A hash-only navigation (e.g. opening a fresh invite URL after the
     // server restarted with a new token) swaps the token without a page
@@ -74,7 +75,16 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
           "",
           window.location.pathname + window.location.search,
         );
-        wsRef.current?.close();
+        const ws = wsRef.current;
+        if (ws && ws.readyState !== WebSocket.CLOSED) {
+          ws.close();
+        } else {
+          if (reconnectTimer !== null) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+          }
+          connect();
+        }
       }
     };
     window.addEventListener("hashchange", onHashChange);
@@ -116,7 +126,7 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
           pingRef.current = null;
         }
         if (!disposed) {
-          setTimeout(connect, RECONNECT_DELAY_MS);
+          reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
         }
       };
 
@@ -149,6 +159,9 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
     return () => {
       disposed = true;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+      }
       window.removeEventListener("hashchange", onHashChange);
       if (pingRef.current) {
         clearInterval(pingRef.current);

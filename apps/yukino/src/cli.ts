@@ -213,7 +213,7 @@ export function parseCliArgs(argv: string[]): CliMode {
           // '-p -- <prompt>': the token after the separator is prompt data
           // even when it looks like a flag.
           const value = argv[index + 2];
-          if (value === undefined) {
+          if (!value?.trim()) {
             throw new CliUsageError(PRINT_PROMPT_REQUIRED);
           }
           prompt = value;
@@ -221,7 +221,7 @@ export function parseCliArgs(argv: string[]): CliMode {
           index += 2;
         } else {
           const value = argv[index + 1];
-          if (value === undefined || value.startsWith("-")) {
+          if (!value?.trim() || value.startsWith("-")) {
             throw new CliUsageError(PRINT_PROMPT_REQUIRED);
           }
           prompt = value;

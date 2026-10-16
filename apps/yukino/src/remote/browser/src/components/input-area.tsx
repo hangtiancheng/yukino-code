@@ -332,7 +332,7 @@ export function InputArea({
         setSlashCursor((c) => Math.max(c - 1, 0));
         return;
       }
-      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+      if ((e.key === "Tab" || e.key === "Enter") && !e.shiftKey) {
         e.preventDefault();
         selectSlash(slashCursor);
         return;
@@ -355,7 +355,7 @@ export function InputArea({
         setAtCursor((c) => Math.max(c - 1, 0));
         return;
       }
-      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+      if ((e.key === "Tab" || e.key === "Enter") && !e.shiftKey) {
         e.preventDefault();
         const match = atMatches[atCursor];
         if (match) {

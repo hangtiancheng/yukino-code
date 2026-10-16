@@ -134,7 +134,7 @@ async function runUiMode(
   let cfg;
   try {
     cfg = withProjectMcpServers(
-      loadConfig(undefined, { allowEmptyProviders: false }),
+      loadConfig(undefined, { allowEmptyProviders: true }),
       process.cwd(),
     );
   } catch (err) {

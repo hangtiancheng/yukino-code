@@ -14,6 +14,8 @@ import { z } from "zod";
 
 import { Agent } from "@/agent/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
+import * as providerLogin from "@/config/provider-login.js";
+import * as historyMod from "@/history/index.js";
 import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
 import { loadSession } from "@/session/index.js";
 import { contentToText } from "@/utils/index.js";
@@ -111,6 +113,12 @@ describe("remote terminal-UI parity", () => {
         "!echo remote-bash-ok",
       ]);
       const toolUse = broadcasts.find((message) => message.type === "tool_use");
+      expect(
+        broadcasts.filter((message) => message.type === "run_state"),
+      ).toEqual([
+        { type: "run_state", data: { streaming: true } },
+        { type: "run_state", data: { streaming: false } },
+      ]);
       expect(ToolUseData.parse(toolUse?.data).toolName).toBe("Bash");
       const toolResult = broadcasts.find(
         (message) => message.type === "tool_result",
@@ -334,9 +342,247 @@ describe("remote terminal-UI parity", () => {
     }
   });
 
+  it("activates replacement credentials and model for the current provider", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-replace-provider-"));
+    const { server, handle } = await setup(cwd);
+    const previousClient = handle.client;
+    try {
+      await invokePrivateAsync(server, "handleProviderSave", [
+        { ...provider, api_key: "replacement-key", model: "replacement-model" },
+      ]);
+      expect(handle.provider.api_key).toBe("replacement-key");
+      expect(handle.provider.model).toBe("replacement-model");
+      expect(handle.client).not.toBe(previousClient);
+    } finally {
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("opens login without a provider and initializes after saving one", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-first-login-"));
+    const agentFactory = vi.fn(
+      (options: Parameters<typeof createRemoteAgent>[0]) =>
+        createRemoteAgent({ ...options, cwd }),
+    );
+    const server = new RemoteServer({
+      providers: [],
+      addr: "127.0.0.1:0",
+      agentFactory,
+      enableCoordinatorMode: false,
+      forkDisabled: true,
+      memoryEnabled: false,
+    });
+    const broadcasts = captureBroadcasts(server);
+    try {
+      await invokePrivateAsync(server, "handleUserMessage", ["/login"]);
+      expect(agentFactory).not.toHaveBeenCalled();
+      expect(broadcasts).toContainEqual({
+        type: "provider_list",
+        data: { providers: [], current: 0 },
+      });
+      await invokePrivateAsync(server, "handleProviderSave", [provider]);
+      expect(agentFactory).toHaveBeenCalledOnce();
+      expect(systemText(broadcasts)).toContain("Provider switched to test");
+      expect(broadcasts.some((message) => message.type === "connected")).toBe(
+        true,
+      );
+    } finally {
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("broadcasts the runtime provider switch when default persistence fails", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-provider-persist-"));
+    const { server, handle, broadcasts } = await setup(cwd);
+    const persist = vi
+      .spyOn(providerLogin, "persistDefaultProvider")
+      .mockImplementation(() => {
+        throw new Error("read-only configuration");
+      });
+    try {
+      await invokePrivateAsync(server, "handleProviderSave", [
+        { ...provider, base_url: "https://other.invalid", name: "other" },
+      ]);
+      expect(handle.provider.name).toBe("other");
+      expect(broadcasts.some((message) => message.type === "status")).toBe(
+        true,
+      );
+      expect(systemText(broadcasts)).toContain(
+        "Default provider could not be saved",
+      );
+    } finally {
+      persist.mockRestore();
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["handleUserMessage", "runNotificationTurn"])(
+    "replays steering queued at the end of %s exactly once",
+    async (method) => {
+      const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-late-steering-"));
+      const { server, handle, broadcasts } = await setup(cwd);
+      let lateQueued = false;
+      Reflect.set(server, "broadcast", (message: Broadcast) => {
+        broadcasts.push(message);
+        if (message.type === "loop_complete" && !lateQueued) {
+          lateQueued = true;
+          invokePrivate(server, "handleSteeringMessage", ["late message"]);
+        }
+      });
+      const run = vi
+        .spyOn(Agent.prototype, "run")
+        .mockImplementation(async function* () {
+          await Promise.resolve();
+          yield { type: "loop_complete", stopReason: "end_turn" };
+        });
+      try {
+        await invokePrivateAsync(
+          server,
+          method,
+          method === "handleUserMessage" ? ["initial"] : [],
+        );
+        expect(run).toHaveBeenCalledTimes(2);
+        expect(handle.takeSteeringLeftovers()).toEqual([]);
+        expect(
+          handle.conv
+            .getMessages()
+            .filter((message) => message.role === "user")
+            .map((message) => contentToText(message.content)),
+        ).toEqual(
+          method === "handleUserMessage"
+            ? ["initial", "late message"]
+            : ["late message"],
+        );
+        expect(
+          historyMod.load().filter((entry) => entry === "late message"),
+        ).toHaveLength(1);
+      } finally {
+        run.mockRestore();
+        await server.stop();
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each(["delivered", "canceled"])(
+    "removes %s steering history markers before a later identical prompt",
+    async (status) => {
+      const cwd = mkdtempSync(
+        join(tmpdir(), "yukino-remote-steering-history-"),
+      );
+      const { server, handle } = await setup(cwd);
+      const steer = vi.spyOn(handle, "steer").mockReturnValue(true);
+      const run = vi
+        .spyOn(Agent.prototype, "run")
+        .mockImplementation(async function* () {
+          await Promise.resolve();
+          yield { type: "loop_complete", stopReason: "end_turn" };
+        });
+      try {
+        invokePrivate(server, "handleSteeringMessage", ["repeated"]);
+        if (status === "delivered") {
+          invokePrivate(server, "bridgeEvent", [
+            { type: "steering_delivered", text: "repeated" },
+            Date.now(),
+            () => undefined,
+          ]);
+        } else {
+          invokePrivate(server, "cancelActiveRun");
+        }
+        historyMod.append("another prompt");
+        await invokePrivateAsync(server, "handleUserMessage", ["repeated"]);
+        expect(historyMod.load()).toEqual([
+          "repeated",
+          "another prompt",
+          "repeated",
+        ]);
+      } finally {
+        steer.mockRestore();
+        run.mockRestore();
+        await server.stop();
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("queues busy Bash submissions instead of steering them into the model", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-busy-bash-"));
+    const { server, handle } = await setup(cwd);
+    const steer = vi.spyOn(handle, "steer").mockReturnValue(true);
+    try {
+      invokePrivate(server, "handleSteeringMessage", ["!!echo local-only"]);
+      expect(steer).not.toHaveBeenCalled();
+      expect(Reflect.get(server, "followUps")).toEqual(["!!echo local-only"]);
+    } finally {
+      steer.mockRestore();
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes provider changes with user turns", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-provider-busy-"));
+    const { server, broadcasts } = await setup(cwd);
+    let finish: () => void = () => undefined;
+    const waiting = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const change = vi.fn(() => waiting);
+    const competingChange = vi.fn();
+    try {
+      const pending = invokePrivateAsync(
+        server,
+        "changeProviderConfiguration",
+        [change],
+      );
+      expect(Reflect.get(server, "streaming")).toBe(true);
+      await invokePrivateAsync(server, "changeProviderConfiguration", [
+        competingChange,
+      ]);
+      expect(competingChange).not.toHaveBeenCalled();
+      invokePrivate(server, "handleSteeringMessage", ["!echo after-switch"]);
+      finish();
+      await pending;
+      expect(Reflect.get(server, "streaming")).toBe(false);
+      expect(
+        broadcasts.some(
+          (message) =>
+            message.type === "tool_result" &&
+            OutputData.parse(message.data).output.includes("after-switch"),
+        ),
+      ).toBe(true);
+    } finally {
+      finish();
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("drops pending follow-ups when the server stops", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-stop-queue-"));
+    const { server, broadcasts } = await setup(cwd);
+    try {
+      invokePrivate(server, "enqueueFollowUp", ["/status"]);
+      await server.stop();
+      broadcasts.length = 0;
+      await invokePrivateAsync(server, "drainFollowUps");
+      expect(Reflect.get(server, "followUps")).toEqual([]);
+      expect(broadcasts).toEqual([]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("stores uploaded images for @-attachment", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-image-"));
     const { server, broadcasts } = await setup(cwd);
+    const replies: Broadcast[] = [];
+    const reply = (message: Broadcast) => {
+      replies.push(message);
+    };
     // 1x1 transparent PNG.
     const png = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -349,21 +595,44 @@ describe("remote terminal-UI parity", () => {
           name: "shot.png",
           dataBase64: png.toString("base64"),
         },
+        reply,
       ]);
-      const saved = broadcasts.find(
-        (message) => message.type === "image_saved",
-      );
+      const saved = replies.find((message) => message.type === "image_saved");
       const path = PathData.parse(saved?.data).path;
       expect(existsSync(path)).toBe(true);
       expect(readFileSync(path).equals(png)).toBe(true);
 
+      const fixedTime = vi.spyOn(Date, "now").mockReturnValue(Date.now());
+      try {
+        await Promise.all(
+          ["same1", "same2"].map((clientId) =>
+            invokePrivateAsync(server, "handleImageUpload", [
+              {
+                clientId,
+                name: "same.png",
+                dataBase64: png.toString("base64"),
+              },
+              reply,
+            ]),
+          ),
+        );
+        const paths = replies
+          .filter((message) => message.type === "image_saved")
+          .map((message) => PathData.parse(message.data).path);
+        expect(new Set(paths).size).toBe(3);
+      } finally {
+        fixedTime.mockRestore();
+      }
+
       await invokePrivateAsync(server, "handleImageUpload", [
         { clientId: "c2", name: "bad.png", dataBase64: "aGVsbG8=" },
+        reply,
       ]);
-      const failed = broadcasts.find(
-        (message) => message.type === "image_error",
-      );
+      const failed = replies.find((message) => message.type === "image_error");
       expect(ClientIdData.parse(failed?.data).clientId).toBe("c2");
+      expect(
+        broadcasts.some((message) => message.type.startsWith("image_")),
+      ).toBe(false);
     } finally {
       await server.stop();
       rmSync(cwd, { recursive: true, force: true });

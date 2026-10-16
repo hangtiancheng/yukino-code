@@ -2,6 +2,7 @@
 // Serves the React browser bundle (browser/dist/) and bridges Agent events to WS.
 
 import { execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -454,8 +455,9 @@ class AgentHandleImpl implements RemoteAgentHandle {
   private memoryConsolidator: MemoryConsolidator | null = null;
 
   private abortController: AbortController | null = null;
-  /** Agent of the current or most recent run; used for mid-run steering and post-run leftover draining. */
+  /** Agent receiving steering during the active run. */
   private currentAgent: Agent | null = null;
+  private steeringLeftovers: string[] = [];
 
   constructor(
     agentHandleImpl: Omit<
@@ -471,6 +473,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
       | "goalManager"
       | "planFilePath"
       | "mcpAnnounced"
+      | "steeringLeftovers"
     >,
   ) {
     this.client = agentHandleImpl.client;
@@ -620,6 +623,9 @@ class AgentHandleImpl implements RemoteAgentHandle {
       this.currentAgent = agent;
       yield* agent.run();
     } finally {
+      this.steeringLeftovers.push(
+        ...(this.currentAgent?.drainSteering() ?? []),
+      );
       this.abortController = null;
       this.currentAgent = null;
     }
@@ -640,7 +646,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
   }
 
   takeSteeringLeftovers(): string[] {
-    return this.currentAgent?.drainSteering() ?? [];
+    return this.steeringLeftovers.splice(0);
   }
 
   clearConversation(): void {
@@ -1151,7 +1157,18 @@ export class RemoteServer {
 
   private agentHandle: RemoteAgentHandle | null = null;
   private agentInitPromise: Promise<RemoteAgentHandle | null> | null = null;
-  private streaming = false;
+  private isStreaming = false;
+  private stopping = false;
+  private get streaming(): boolean {
+    return this.isStreaming;
+  }
+  private set streaming(value: boolean) {
+    if (this.isStreaming === value) {
+      return;
+    }
+    this.isStreaming = value;
+    this.broadcast({ type: "run_state", data: { streaming: value } });
+  }
   private compactController: AbortController | null = null;
   private reviewController: AbortController | null = null;
   private turnCount = 0;
@@ -1300,6 +1317,12 @@ export class RemoteServer {
         data: { entries: historyMod.load().slice(-200) },
       });
       this.sendUsageSnapshot(ws);
+      if (this.opts.providers.length === 0) {
+        this.send(ws, {
+          type: "provider_list",
+          data: { providers: [], current: 0 },
+        });
+      }
       if (this.planApprovalPending) {
         this.sendPlanApprovalRequest(ws);
       }
@@ -1452,7 +1475,9 @@ export class RemoteServer {
       case "model_select": {
         const parsed = ModelSelectSchema.safeParse(msg.data);
         if (parsed.success) {
-          await this.applyModel(parsed.data.model);
+          await this.changeProviderConfiguration(() =>
+            this.applyModel(parsed.data.model),
+          );
         } else {
           log.warn("dropping malformed model_select");
         }
@@ -1465,7 +1490,9 @@ export class RemoteServer {
       case "provider_select": {
         const parsed = ProviderSelectSchema.safeParse(msg.data);
         if (parsed.success) {
-          await this.applyProviderSwitch(parsed.data.index);
+          await this.changeProviderConfiguration(() =>
+            this.applyProviderSwitch(parsed.data.index),
+          );
         } else {
           log.warn("dropping malformed provider_select");
         }
@@ -1474,7 +1501,9 @@ export class RemoteServer {
       case "provider_save": {
         const parsed = ProviderSaveSchema.safeParse(msg.data);
         if (parsed.success) {
-          await this.handleProviderSave(parsed.data);
+          await this.changeProviderConfiguration(() =>
+            this.handleProviderSave(parsed.data),
+          );
         } else {
           log.warn(
             { issues: parsed.error.issues },
@@ -1515,7 +1544,9 @@ export class RemoteServer {
       case "image_upload": {
         const parsed = ImageUploadSchema.safeParse(msg.data);
         if (parsed.success) {
-          await this.handleImageUpload(parsed.data);
+          await this.handleImageUpload(parsed.data, (message) => {
+            this.send(ws, message);
+          });
         } else {
           log.warn("dropping malformed image_upload");
         }
@@ -1611,7 +1642,7 @@ export class RemoteServer {
   /** Handles a user message: creates agent (if needed) and streams events. */
   private async handleUserMessage(content: string): Promise<void> {
     const text = content.trim();
-    if (!text || this.streaming) {
+    if (!text || this.streaming || this.stopping) {
       return;
     }
     // Claim the streaming slot synchronously, BEFORE any await: ensureAgent()
@@ -1627,11 +1658,14 @@ export class RemoteServer {
     this.broadcastSubagents();
     let handle: RemoteAgentHandle | null = null;
     try {
-      handle = await this.ensureAgent();
-      if (!handle) {
+      const command = parseCommand(text);
+      if (command?.name === "login" || command?.name === "provider") {
+        historyMod.append(text);
+        this.broadcast({ type: "replay_user", data: { content: text } });
+        this.broadcastProviderList();
+        this.broadcast({ type: "command_done", data: null });
         return;
       }
-
       // Prompt history parity: each submission lands once. Steering texts are
       // recorded when steered, so a later replay skips the duplicate append.
       const recordedIdx = this.steeringHistoryRecorded.indexOf(text);
@@ -1639,6 +1673,11 @@ export class RemoteServer {
         this.steeringHistoryRecorded.splice(recordedIdx, 1);
       } else {
         historyMod.append(text);
+      }
+
+      handle = await this.ensureAgent();
+      if (!handle || this.runCanceled) {
+        return;
       }
 
       const userBash = parseUserBashCommand(text);
@@ -1690,8 +1729,9 @@ export class RemoteServer {
     // (parity with the terminal UI), unless the run was canceled. A new run
     // may have started between the reset above and this replay; steer the
     // leftover into it instead of silently dropping the message.
+    const leftovers = handle.takeSteeringLeftovers();
     if (!this.runCanceled) {
-      for (const leftover of handle.takeSteeringLeftovers()) {
+      for (const leftover of leftovers) {
         if (this.streaming) {
           this.handleSteeringMessage(leftover);
         } else {
@@ -1738,7 +1778,7 @@ export class RemoteServer {
    * turn as soon as something is pending (the terminal's useNotificationWakeup).
    */
   private async runNotificationTurn(): Promise<void> {
-    if (this.streaming || !this.agentHandle) {
+    if (this.streaming || this.stopping || !this.agentHandle) {
       return;
     }
     const handle = this.agentHandle;
@@ -1756,6 +1796,12 @@ export class RemoteServer {
       });
     } finally {
       this.streaming = false;
+    }
+    const leftovers = handle.takeSteeringLeftovers();
+    if (!this.runCanceled) {
+      for (const leftover of leftovers) {
+        await this.handleUserMessage(leftover);
+      }
     }
     await this.drainFollowUps();
   }
@@ -1873,9 +1919,11 @@ export class RemoteServer {
       this.broadcast({ type: "system", data: { message: result.message } });
       return;
     }
-    // Slash commands need a full turn; like the terminal they queue as
-    // follow-ups and run once the current turn finishes.
-    if (text.startsWith("/") && parseCommand(text) !== null) {
+    // Slash and Bash commands run as follow-ups instead of model steering.
+    if (
+      (text.startsWith("/") && parseCommand(text) !== null) ||
+      parseUserBashCommand(text) !== null
+    ) {
       this.enqueueFollowUp(text);
       return;
     }
@@ -1900,7 +1948,7 @@ export class RemoteServer {
 
   /** Replays queued follow-ups once the streaming slot is free. */
   private async drainFollowUps(): Promise<void> {
-    while (!this.streaming && this.followUps.length > 0) {
+    while (!this.streaming && !this.stopping && this.followUps.length > 0) {
       const next = this.followUps.shift();
       this.broadcastFollowUps();
       if (next !== undefined) {
@@ -1958,12 +2006,17 @@ export class RemoteServer {
         }
         break;
 
-      case "steering_delivered":
+      case "steering_delivered": {
+        const recordedIndex = this.steeringHistoryRecorded.indexOf(ev.text);
+        if (recordedIndex !== -1) {
+          this.steeringHistoryRecorded.splice(recordedIndex, 1);
+        }
         this.broadcast({
           type: "steering_delivered",
           data: { text: ev.text },
         });
         break;
+      }
 
       case "turn_complete":
         this.turnCount++;
@@ -2118,7 +2171,6 @@ export class RemoteServer {
         const prompt = cmd.handler(ctx);
         const displayText = args ? `/${name} ${args}` : `/${name}`;
 
-        this.streaming = true;
         this.exitPlanSucceeded = false;
         const cwd = handle.cwd;
         const sessionId = handle.sessionId;
@@ -2162,8 +2214,6 @@ export class RemoteServer {
             type: "error",
             data: { message: err instanceof Error ? err.message : String(err) },
           });
-        } finally {
-          this.streaming = false;
         }
         break;
       }
@@ -2192,7 +2242,6 @@ export class RemoteServer {
     }
     const controller = new AbortController();
     this.forkController = controller;
-    this.streaming = true;
     this.runCanceled = false;
     this.broadcast({
       type: "system",
@@ -2253,10 +2302,8 @@ export class RemoteServer {
       });
     } finally {
       this.forkController = null;
-      this.streaming = false;
       this.broadcast({ type: "command_done", data: null });
     }
-    await this.drainFollowUps();
   }
 
   /** Handles local_ui commands (clear, compact, plan, resume, rewind, quit, etc.). */
@@ -2503,6 +2550,28 @@ export class RemoteServer {
     }
   }
 
+  private async changeProviderConfiguration(
+    change: () => Promise<void>,
+  ): Promise<void> {
+    if (this.streaming || this.stopping) {
+      this.broadcast({
+        type: "system",
+        data: {
+          message:
+            "Cannot change models or providers while a run is in progress.",
+        },
+      });
+      return;
+    }
+    this.streaming = true;
+    try {
+      await change();
+    } finally {
+      this.streaming = false;
+      await this.drainFollowUps();
+    }
+  }
+
   /** Switches the active model, rebuilding the client (terminal /model parity). */
   private async applyModel(modelId: string): Promise<void> {
     const handle = this.agentHandle ?? (await this.ensureAgent());
@@ -2575,7 +2644,7 @@ export class RemoteServer {
             (entry) => entry.base_url === handle.provider.base_url,
           ),
         )
-      : 0;
+      : (this.opts.defaultProvider ?? 0);
     this.broadcast({
       type: "provider_list",
       data: {
@@ -2592,10 +2661,6 @@ export class RemoteServer {
 
   /** Switches the active provider, rebuilding the client (terminal parity). */
   private async applyProviderSwitch(index: number): Promise<void> {
-    const handle = this.agentHandle ?? (await this.ensureAgent());
-    if (!handle) {
-      return;
-    }
     const provider = this.opts.providers[index];
     if (!provider) {
       this.broadcast({
@@ -2604,14 +2669,11 @@ export class RemoteServer {
       });
       return;
     }
-    if (
-      provider.base_url === handle.provider.base_url &&
-      provider.name === handle.provider.name
-    ) {
-      this.broadcast({
-        type: "system",
-        data: { message: `Provider ${provider.name} is already active.` },
-      });
+    if (!this.agentHandle) {
+      this.opts.defaultProvider = index;
+    }
+    const handle = this.agentHandle ?? (await this.ensureAgent());
+    if (!handle) {
       return;
     }
     try {
@@ -2630,7 +2692,7 @@ export class RemoteServer {
         provider.protocol,
         handle.contextWindow,
       );
-      persistDefaultProvider(index);
+      this.opts.defaultProvider = index;
     } catch (err) {
       this.broadcast({
         type: "error",
@@ -2638,11 +2700,17 @@ export class RemoteServer {
       });
       return;
     }
+    let saved = true;
+    try {
+      persistDefaultProvider(index);
+    } catch {
+      saved = false;
+    }
     this.broadcastStatus();
     this.broadcast({
       type: "system",
       data: {
-        message: `Provider switched to ${provider.name} · ${provider.model}.`,
+        message: `Provider switched to ${provider.name} · ${provider.model}.${saved ? "" : " Default provider could not be saved."}`,
       },
     });
   }
@@ -2996,13 +3064,16 @@ export class RemoteServer {
   }
 
   /** Stores a browser-uploaded image so @-expansion can attach it (clipboard parity). */
-  private async handleImageUpload(upload: {
-    clientId: string;
-    name: string;
-    dataBase64: string;
-  }): Promise<void> {
+  private async handleImageUpload(
+    upload: { clientId: string; name: string; dataBase64: string },
+    reply: (message: WsOutbound) => void,
+  ): Promise<void> {
     const handle = this.agentHandle ?? (await this.ensureAgent());
     if (!handle) {
+      reply({
+        type: "image_error",
+        data: { clientId: upload.clientId, message: "Agent is not ready yet." },
+      });
       return;
     }
     try {
@@ -3037,15 +3108,15 @@ export class RemoteServer {
         .slice(0, 80);
       const path = join(
         dir,
-        `upload-${Date.now().toString(36)}-${safeName || "image"}${ext}`,
+        `upload-${randomUUID()}-${safeName || "image"}${ext}`,
       );
       await writeFile(path, bytes, { mode: 0o600 });
-      this.broadcast({
+      reply({
         type: "image_saved",
         data: { clientId: upload.clientId, path },
       });
     } catch (err) {
-      this.broadcast({
+      reply({
         type: "image_error",
         data: { clientId: upload.clientId, message: asErrorString(err) },
       });
@@ -3291,7 +3362,6 @@ export class RemoteServer {
     const handle = this.agentHandle;
     const controller = new AbortController();
     this.compactController = controller;
-    this.streaming = true;
 
     this.broadcast({
       type: "system",
@@ -3333,7 +3403,6 @@ export class RemoteServer {
       });
     } finally {
       this.compactController = null;
-      this.streaming = false;
       this.broadcast({ type: "command_done", data: null });
     }
   }
@@ -3370,7 +3439,6 @@ export class RemoteServer {
     }
 
     if (args) {
-      this.streaming = true;
       this.exitPlanSucceeded = false;
       this.runCanceled = false;
       saveMessage(cwd, handle.sessionId, {
@@ -3407,8 +3475,6 @@ export class RemoteServer {
           type: "error",
           data: { message: err instanceof Error ? err.message : String(err) },
         });
-      } finally {
-        this.streaming = false;
       }
     } else {
       this.broadcast({ type: "command_done", data: null });
@@ -4056,6 +4122,9 @@ export class RemoteServer {
    * process.
    */
   async stop(): Promise<void> {
+    this.stopping = true;
+    this.followUps = [];
+    this.pendingPlanExecution = null;
     this.cancelActiveRun();
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
@@ -4122,6 +4191,7 @@ export class RemoteServer {
 
   private cancelActiveRun(): void {
     this.runCanceled = true;
+    this.steeringHistoryRecorded = [];
     this.planApprovalPending = false;
     this.agentHandle?.abort();
     this.compactController?.abort();

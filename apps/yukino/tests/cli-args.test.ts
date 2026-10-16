@@ -58,6 +58,10 @@ describe("CLI argument parsing", () => {
   it.each<[string[]]>([
     [["-p"]],
     [["-p", "--"]],
+    [["-p", ""]],
+    [["-p", "   "]],
+    [["-p", "--", ""]],
+    [["-p", "--", "  "]],
     [["-p", "--output-format", "stream-json", "actual prompt"]],
   ])("rejects -p without an immediate prompt (%j)", (args) => {
     expect(() => parseCliArgs(args)).toThrow(

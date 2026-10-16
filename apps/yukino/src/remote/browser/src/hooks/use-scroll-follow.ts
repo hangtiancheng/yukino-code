@@ -23,7 +23,11 @@ export function useScrollFollow(cursor: number) {
     if (!list || !item) {
       return;
     }
-    const top = item.offsetTop;
+    const top =
+      item.getBoundingClientRect().top -
+      list.getBoundingClientRect().top -
+      list.clientTop +
+      list.scrollTop;
     const bottom = top + item.offsetHeight;
     if (top < list.scrollTop) {
       list.scrollTop = top;

@@ -298,6 +298,10 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("clear"), data: z.null() }),
   z.strictObject({ type: z.literal("command_done"), data: z.null() }),
   z.strictObject({
+    type: z.literal("run_state"),
+    data: z.strictObject({ streaming: z.boolean() }),
+  }),
+  z.strictObject({
     type: z.literal("replay_user"),
     data: z.strictObject({ content: z.string() }),
   }),
