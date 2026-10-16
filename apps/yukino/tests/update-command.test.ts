@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handleUpdateCommand } from "@/update/index.js";
+import { runUpdate } from "@/update/index.js";
 import { version } from "@/version.js";
 
 const install = vi.hoisted(() => ({
@@ -34,7 +34,7 @@ describe("yukino update", () => {
       .fn()
       .mockResolvedValue(Response.json({ version: "999.0.0" }));
     vi.stubGlobal("fetch", fetch);
-    await expect(handleUpdateCommand(["update"])).resolves.toBe(true);
+    await runUpdate();
     expect(fetch).toHaveBeenCalledWith(
       "https://registry.npmjs.org/@yukino.js%2Fyukino/latest",
       expect.any(Object),
@@ -48,30 +48,24 @@ describe("yukino update", () => {
   });
 
   it.each([
-    [["update", "--tag=latest"], "latest", "0.0.14"],
-    [["update", "--tag=canary"], "canary", "0.0.14-canary"],
-    [["update", "--tag", "canary"], "canary", "0.0.14-canary"],
-    [["update", "--tag=dev"], "dev", "0.0.14-dev"],
-  ])(
-    "updates with %j from the selected dist-tag",
-    async (args, tag, latest) => {
-      const fetch = vi
-        .fn()
-        .mockResolvedValue(Response.json({ version: latest }));
-      vi.stubGlobal("fetch", fetch);
-      await expect(handleUpdateCommand(args)).resolves.toBe(true);
-      expect(fetch).toHaveBeenCalledWith(
-        `https://registry.npmjs.org/@yukino.js%2Fyukino/${tag}`,
-        expect.any(Object),
-      );
-      expect(install.getSelfUpdateCommand).toHaveBeenCalledWith(latest);
-      expect(install.runSelfUpdate).toHaveBeenCalledOnce();
-      expect(console.log).toHaveBeenLastCalledWith(
-        `Updated Yukino from v${version} to v${latest}.`,
-      );
-      expect(process.exitCode).toBeUndefined();
-    },
-  );
+    ["latest", "0.0.14"],
+    ["canary", "0.0.14-canary"],
+    ["dev", "0.0.14-dev"],
+  ])("updates with %s from the selected dist-tag", async (tag, latest) => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ version: latest }));
+    vi.stubGlobal("fetch", fetch);
+    await runUpdate(tag);
+    expect(fetch).toHaveBeenCalledWith(
+      `https://registry.npmjs.org/@yukino.js%2Fyukino/${tag}`,
+      expect.any(Object),
+    );
+    expect(install.getSelfUpdateCommand).toHaveBeenCalledWith(latest);
+    expect(install.runSelfUpdate).toHaveBeenCalledOnce();
+    expect(console.log).toHaveBeenLastCalledWith(
+      `Updated Yukino from v${version} to v${latest}.`,
+    );
+    expect(process.exitCode).toBeUndefined();
+  });
 
   it.each(["0.0.13-dev", "0.0.12", "0.0.13-canary"])(
     "does not reinstall or downgrade to canary's %s",
@@ -80,7 +74,7 @@ describe("yukino update", () => {
         .fn()
         .mockResolvedValue(Response.json({ version: latest }));
       vi.stubGlobal("fetch", fetch);
-      await handleUpdateCommand(["update", "--tag=canary"]);
+      await runUpdate("canary");
       expect(fetch).toHaveBeenCalledWith(
         "https://registry.npmjs.org/@yukino.js%2Fyukino/canary",
         expect.any(Object),
@@ -96,7 +90,7 @@ describe("yukino update", () => {
       .fn()
       .mockResolvedValue(new Response(null, { status: 404 }));
     vi.stubGlobal("fetch", fetch);
-    await handleUpdateCommand(["update", "--tag=canary"]);
+    await runUpdate("canary");
     expect(process.exitCode).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       'Update failed: No Yukino release found for npm dist-tag "canary".',
@@ -113,7 +107,7 @@ describe("yukino update", () => {
         "fetch",
         vi.fn().mockResolvedValue(Response.json({ version: latest })),
       );
-      await handleUpdateCommand(["update"]);
+      await runUpdate();
       expect(install.runSelfUpdate).not.toHaveBeenCalled();
       expect(console.log).toHaveBeenCalledWith(
         `Yukino is already up to date (v${version}).`,
@@ -131,7 +125,7 @@ describe("yukino update", () => {
           : vi.fn().mockResolvedValue(Response.json({ version: "999.0.0" })),
       );
       install.runSelfUpdate.mockRejectedValue(new Error("install failed"));
-      await handleUpdateCommand(["update"]);
+      await runUpdate();
       expect(process.exitCode).toBe(1);
       expect(console.error).toHaveBeenCalledWith(
         expect.stringMatching(/^Update failed:/u),
@@ -142,50 +136,18 @@ describe("yukino update", () => {
     },
   );
 
-  it.each([
-    ["update", "unexpected"],
-    ["update", "--unknown"],
-    ["update", "--tag"],
-    ["update", "--tag", "--help"],
-    ["update", "--tag="],
-    ["update", "--tag=../latest"],
-    ["update", "--tag=canary", "unexpected"],
-  ])("validates %j before making network requests", async (...args) => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
-    await handleUpdateCommand(args);
-    expect(process.exitCode).toBe(1);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(install.runSelfUpdate).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ["update", "--help"],
-    ["update", "-h"],
-    ["update", "--tag=canary", "--help"],
-  ])(
-    "documents dist-tags with %j without network requests",
-    async (...args) => {
+  it.each(["", "../latest"])(
+    "rejects the invalid dist-tag %j before making network requests",
+    async (tag) => {
       const fetch = vi.fn();
       vi.stubGlobal("fetch", fetch);
-      await handleUpdateCommand(args);
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining(
-          "--tag <tag>  npm dist-tag to check (default: latest)",
-        ),
+      await runUpdate(tag);
+      expect(process.exitCode).toBe(1);
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("Invalid npm dist-tag"),
       );
       expect(fetch).not.toHaveBeenCalled();
-      expect(process.exitCode).toBeUndefined();
+      expect(install.runSelfUpdate).not.toHaveBeenCalled();
     },
   );
-
-  it("handles help and version locally, leaving other modes to the runtime", async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
-    await expect(handleUpdateCommand(["update", "--help"])).resolves.toBe(true);
-    await expect(handleUpdateCommand(["--version"])).resolves.toBe(true);
-    expect(console.log).toHaveBeenLastCalledWith(version);
-    await expect(handleUpdateCommand(["-p", "update"])).resolves.toBe(false);
-    expect(fetch).not.toHaveBeenCalled();
-  });
 });

@@ -20,7 +20,7 @@ import * as clients from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { OpenAIClient } from "@/llm/openai.js";
 import { MCPManager } from "@/mcp/manager.js";
-import { parsePrintFlags, runPrintMode } from "@/print-mode.js";
+import { runPrintMode } from "@/print-mode.js";
 import { createRemoteAgent } from "@/remote/server.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
 import {
@@ -359,51 +359,6 @@ describe("durable background outcomes across hosts", () => {
       }
     },
   );
-});
-
-describe("print mode argument parsing", () => {
-  it("respects -- and treats flag-like prompt text as data", () => {
-    expect(parsePrintFlags(["--", "-p", "task"])).toBeNull();
-    expect(
-      parsePrintFlags(["-p", "--", "--output-format", "stream-json"]),
-    ).toEqual({ prompt: "--output-format", outputFormat: "text" });
-    expect(
-      parsePrintFlags(["--output-format", "stream-json", "-p", "--", "--acp"]),
-    ).toEqual({ prompt: "--acp", outputFormat: "stream-json" });
-  });
-
-  it.each([
-    ["has no following argument", ["-p"]],
-    [
-      "is immediately followed by another flag",
-      ["-p", "--output-format", "stream-json", "actual prompt"],
-    ],
-  ])("rejects -p when it %s", (_label, args) => {
-    const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`exit ${String(code)}`);
-    });
-
-    expect(() => parsePrintFlags(args)).toThrow("exit 1");
-    expect(exit).toHaveBeenCalledWith(1);
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining("requires a prompt argument immediately"),
-    );
-  });
-
-  it.each([
-    ["is missing", ["-p", "prompt", "--output-format"]],
-    ["is invalid", ["-p", "prompt", "--output-format", "json"]],
-  ])("rejects --output-format when its value %s", (_label, args) => {
-    const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`exit ${String(code)}`);
-    });
-
-    expect(() => parsePrintFlags(args)).toThrow("exit 1");
-    expect(exit).toHaveBeenCalledWith(1);
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining("requires 'text' or 'stream-json'"),
-    );
-  });
 });
 
 describe("goal host commands", () => {

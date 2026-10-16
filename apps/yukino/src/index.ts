@@ -48,9 +48,10 @@ export * as Worktree from "./worktree/index.js";
 
 // Process-level headless entry points. They carry no UI, but they own process
 // lifecycle — recover installs crash logging to ~/.yukino/crash.log and calls
-// process.exit(), and print-mode exits on invalid flags — so prefer the
+// process.exit(), and print-mode owns signal exit codes — so prefer the
 // composable namespaces above (Agent, Bootstrap.ToolRegistry, ...) in
-// long-lived host processes.
+// long-lived host processes. CLI argument parsing lives in the bin entry
+// (src/cli.ts) and is not part of the library surface.
 export * as PrintMode from "./print-mode.js";
 export * as Recover from "./recover.js";
 export * as Version from "./version.js";

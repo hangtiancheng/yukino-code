@@ -50,48 +50,11 @@ import { FileStateCache } from "./tools/file-state-cache.js";
 import { attachBackgroundTaskManager } from "./tools/shell-background.js";
 import { SyntheticOutputTool } from "./tools/synthetic-output.js";
 
-type OutputFormat = "text" | "stream-json";
+export type OutputFormat = "text" | "stream-json";
 
 export interface PrintArgs {
   prompt: string;
   outputFormat: OutputFormat;
-}
-
-/** Returns null when -p mode is not active. */
-export function parsePrintFlags(args: string[]): PrintArgs | null {
-  const endOfOptions = args.indexOf("--");
-  const options = args.slice(0, endOfOptions === -1 ? undefined : endOfOptions);
-  const idx = options.indexOf("-p");
-  if (idx === -1) {
-    return null;
-  }
-
-  const separator = args[idx + 1] === "--";
-  const prompt = args[idx + (separator ? 2 : 1)];
-  if (!prompt || (!separator && prompt.startsWith("-"))) {
-    console.error(
-      "Error: -p requires a prompt argument immediately after it; use '-p -- <prompt>' when the prompt starts with '-'",
-    );
-    process.exit(1);
-  }
-
-  let outputFormat: OutputFormat = "text";
-  const fmtIdx = options.findIndex(
-    (arg, index) => arg === "--output-format" && index !== idx + 1,
-  );
-  if (fmtIdx !== -1) {
-    const fmt = options[fmtIdx + 1];
-    if (fmt !== "text" && fmt !== "stream-json") {
-      // Also catches a missing value at the end of the argument list.
-      console.error(
-        `Error: --output-format requires 'text' or 'stream-json' (got '${fmt ?? "nothing"}')`,
-      );
-      process.exit(1);
-    }
-    outputFormat = fmt;
-  }
-
-  return { prompt, outputFormat };
 }
 
 /**

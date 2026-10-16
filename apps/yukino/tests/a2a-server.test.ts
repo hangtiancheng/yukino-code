@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import type { A2aRuntime, A2aRuntimeFactory } from "@/a2a/executor.js";
-import { parseA2aMode } from "@/a2a/index.js";
 import { parseA2aAddress, startA2aServer } from "@/a2a/server.js";
 import type { AgentEvent } from "@/agent/events.js";
 
@@ -116,13 +115,7 @@ describe("A2A server", () => {
     }
   });
 
-  it("parses the CLI mode and restricts the address to loopback", () => {
-    expect(parseA2aMode(["--a2a"])).toEqual({});
-    expect(parseA2aMode(["--a2a", "127.0.0.1:9000"])).toEqual({
-      address: "127.0.0.1:9000",
-    });
-    expect(parseA2aMode(["--remote"])).toBeNull();
-    expect(() => parseA2aMode(["--a2a", "--remote"])).toThrow();
+  it("restricts the address to loopback", () => {
     expect(parseA2aAddress()).toEqual({ host: "127.0.0.1", port: 18890 });
     // A bare host keeps the A2A default port, not the remote-mode 18888.
     expect(parseA2aAddress("localhost")).toEqual({

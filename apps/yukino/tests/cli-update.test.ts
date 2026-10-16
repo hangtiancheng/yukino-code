@@ -34,6 +34,8 @@ afterAll(() => {
 describe("standalone maintenance entry", () => {
   it.each([
     [["--version"], version],
+    [["--help"], "Usage: yukino [options]"],
+    [["-h"], "Type /help inside a session"],
     [["update", "--help"], "Usage: yukino update"],
     [["update", "-h"], "--tag <tag>"],
     [["update", "--tag=canary", "--help"], "default: latest"],
@@ -81,6 +83,21 @@ describe("standalone maintenance entry", () => {
       `Yukino is already up to date (v${version}).`,
     );
     expect(result.stderr).toBe("");
+  });
+
+  it("rejects unknown options before starting the runtime", () => {
+    const result = spawnSync(
+      process.execPath,
+      [join(directory, "main.js"), "--bogus"],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        timeout: 10_000,
+      },
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Unknown option "--bogus"');
+    expect(result.stderr).not.toContain("sharp");
   });
 
   it("rejects invalid update arguments before starting the runtime", () => {

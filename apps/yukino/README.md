@@ -536,6 +536,8 @@ TUI, Remote/ACP/A2A, and print mode share this goal loop. `yukino -p "/goal <obj
 
 ## Usage
 
+Run `yukino --help` (or `-h`) for a summary of all command-line options; type `/help` inside a session for the list of slash commands.
+
 ### Interactive UI Mode
 
 ```bash

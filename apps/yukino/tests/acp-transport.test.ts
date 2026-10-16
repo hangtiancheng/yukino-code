@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 
 import { createYukinoAcpApp } from "@/acp/agent.js";
-import { parseAcpMode } from "@/acp/index.js";
 import {
   parseAcpWebSocketAddress,
   startAcpWebSocketServer,
@@ -61,14 +60,7 @@ describe("ACP transports", () => {
     });
   });
 
-  it("parses ACP CLI modes and restricts WebSocket to loopback", () => {
-    expect(parseAcpMode(["--acp"])).toEqual({ transport: "stdio" });
-    expect(parseAcpMode(["--acp-ws"])).toEqual({ transport: "websocket" });
-    expect(parseAcpMode(["--acp-ws", "127.0.0.1:9000"])).toEqual({
-      transport: "websocket",
-      address: "127.0.0.1:9000",
-    });
-    expect(() => parseAcpMode(["--acp", "--remote"])).toThrow();
+  it("restricts WebSocket to loopback", () => {
     expect(parseAcpWebSocketAddress()).toEqual({
       host: "127.0.0.1",
       port: 18889,
