@@ -196,8 +196,22 @@ export function App() {
     send({ type: "background_shells", data: {} });
   }, [send]);
 
-  // Terminal Shift+Tab parity: cycle the permission mode from anywhere.
+  const modalOpen =
+    activityOpen ||
+    state.planApproval !== null ||
+    state.sessions !== null ||
+    state.codeReviewOpen ||
+    state.modelPicker !== null ||
+    state.providerPicker !== null ||
+    state.rewindPicker !== null ||
+    state.thinkingPicker !== null;
+
+  // Terminal Shift+Tab parity: cycle the permission mode from anywhere —
+  // except while a modal owns the keyboard (Shift+Tab must move focus there).
   useEffect(() => {
+    if (modalOpen) {
+      return;
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.shiftKey && event.key === "Tab") {
         event.preventDefault();
@@ -208,7 +222,7 @@ export function App() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [cyclePermissionMode]);
+  }, [cyclePermissionMode, modalOpen]);
 
   const agentCount =
     state.subagents.filter((agent) => agent.status === "running").length +

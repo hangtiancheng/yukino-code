@@ -85,7 +85,7 @@ export function StatusBar({
 
   return (
     <header className="shrink-0 border-b border-border bg-surface/85 backdrop-blur [padding-top:env(safe-area-inset-top)]">
-      <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2 px-3 py-2 sm:gap-3 sm:px-5 sm:py-2.5">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2 sm:gap-3 sm:px-6 sm:py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent"

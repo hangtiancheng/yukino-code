@@ -1,12 +1,15 @@
 @import "tailwindcss";
 
 /*
- * Theme mirrored from the terminal UI palette (src/ui/styles.ts) so the browser
- * client and the TUI read as the same product: the same lavender/purple accent,
- * the same success/error/warning hues, and the same dark-first default. Both a
- * dark and a light scheme are authored; the active one is chosen by the
- * `data-theme` attribute on <html> (system preference by default, user-toggleable
- * and persisted — see hooks/use-theme.ts and the inline bootstrap in index.html).
+ * Codex-style monochrome theme: near-black canvas with a white accent in dark
+ * mode, white canvas with a black accent in light mode. Hierarchy comes from
+ * weight and opacity (white/black overlays), not hue — the same visual grammar
+ * as the terminal UI, which this client mirrors in layout and typography.
+ * Semantic status colors (success/error/warning) keep the terminal palette so
+ * both clients read tool states identically. The active scheme is chosen by
+ * the `data-theme` attribute on <html> (system preference by default,
+ * user-toggleable and persisted — see hooks/use-theme.ts and the inline
+ * bootstrap in index.html).
  *
  * Colors are declared as plain custom properties per scheme, then mapped into
  * Tailwind theme tokens with `@theme inline` so utilities (bg-bg, text-bright,
@@ -54,56 +57,56 @@
   --shadow-pop: var(--yukino-shadow-pop);
 }
 
-/* Dark scheme (default) — derived from the TUI DARK_THEME. */
+/* Dark scheme (default) — Codex-style near-black with a white accent. */
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --yukino-bg: #14171a;
-  --yukino-surface: #1a1e22;
-  --yukino-tool: #20252a;
-  --yukino-code: #22282e;
-  --yukino-border: #2c343c;
-  --yukino-bright: #e6e9eb;
-  --yukino-text: #a9b2b8;
-  --yukino-dim: #78828a;
-  --yukino-accent: #a798d7;
-  --yukino-accent-dim: #c0b2e6;
-  --yukino-accent-contrast: #241b36;
-  --yukino-user-bg: #213b49;
-  --yukino-user-text: #dee0e1;
+  --yukino-bg: #0d0d0d;
+  --yukino-surface: #141414;
+  --yukino-tool: #1c1c1c;
+  --yukino-code: #161616;
+  --yukino-border: #2b2b2b;
+  --yukino-bright: #f4f4f4;
+  --yukino-text: #b9b9b9;
+  --yukino-dim: #878787;
+  --yukino-accent: #f4f4f4;
+  --yukino-accent-dim: #d6d6d6;
+  --yukino-accent-contrast: #0d0d0d;
+  --yukino-user-bg: #232323;
+  --yukino-user-text: #ededed;
   --yukino-green: #68b78d;
   --yukino-red: #ea7f81;
   --yukino-yellow: #cd9a22;
-  --yukino-scrollbar: #3a444e;
-  --yukino-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.24);
+  --yukino-scrollbar: #343434;
+  --yukino-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
   --yukino-shadow-pop:
-    0 4px 12px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.44);
+    0 4px 12px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.55);
 }
 
-/* Light scheme — derived from the TUI LIGHT_THEME. */
+/* Light scheme — Codex-style white with a black accent. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --yukino-bg: #f6f7f9;
+  --yukino-bg: #ffffff;
   --yukino-surface: #ffffff;
-  --yukino-tool: #f1f3f6;
-  --yukino-code: #edf0f4;
-  --yukino-border: #dfe3e8;
-  --yukino-bright: #2f3437;
-  --yukino-text: #566069;
-  --yukino-dim: #87909a;
-  --yukino-accent: #7459b4;
-  --yukino-accent-dim: #61499c;
+  --yukino-tool: #f4f4f4;
+  --yukino-code: #f2f2f2;
+  --yukino-border: #e3e3e3;
+  --yukino-bright: #171717;
+  --yukino-text: #454545;
+  --yukino-dim: #757575;
+  --yukino-accent: #171717;
+  --yukino-accent-dim: #404040;
   --yukino-accent-contrast: #ffffff;
-  --yukino-user-bg: #dfe7ec;
-  --yukino-user-text: #3b3f41;
-  --yukino-green: #337e58;
-  --yukino-red: #c8253d;
-  --yukino-yellow: #8f6802;
-  --yukino-scrollbar: #c3cad2;
+  --yukino-user-bg: #ededed;
+  --yukino-user-text: #171717;
+  --yukino-green: #2e7d51;
+  --yukino-red: #c22f45;
+  --yukino-yellow: #8a6a12;
+  --yukino-scrollbar: #cccccc;
   --yukino-shadow-card:
-    0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.05);
+    0 1px 2px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.05);
   --yukino-shadow-pop:
-    0 4px 12px rgb(15 23 42 / 0.08), 0 12px 32px rgb(15 23 42 / 0.12);
+    0 4px 12px rgb(0 0 0 / 0.08), 0 12px 32px rgb(0 0 0 / 0.12);
 }
 
 @keyframes blink {

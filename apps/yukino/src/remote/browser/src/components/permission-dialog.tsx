@@ -27,6 +27,12 @@ const RESPONSE_OPTIONS: {
   },
 ];
 
+const RESPONSE_LABEL: Record<string, string> = {
+  allow: "Allowed once",
+  allowAlways: "Allowed for all project agents",
+  deny: "Denied",
+};
+
 export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
   return (
     <section
@@ -63,7 +69,8 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
       </div>
       {item.responded ? (
         <div className="text-xs text-dim">
-          <span className="mr-1 text-green">✓</span> Permission: {item.response}
+          <span className="mr-1 text-green">✓</span>
+          {RESPONSE_LABEL[item.response ?? ""] ?? item.response}
         </div>
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">

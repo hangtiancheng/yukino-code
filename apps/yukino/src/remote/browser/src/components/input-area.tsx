@@ -1,3 +1,4 @@
+import { useScrollFollow } from "@browser/hooks/use-scroll-follow";
 import type {
   FileCompleteResponsePayload,
   ImageResultPayload,
@@ -77,6 +78,7 @@ export function InputArea({
   onBackgroundShells,
 }: InputAreaProps) {
   const [value, setValue] = useState("");
+  const [caret, setCaret] = useState(0);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashCursor, setSlashCursor] = useState(0);
   const [blockedHint, setBlockedHint] = useState("");
@@ -91,7 +93,8 @@ export function InputArea({
   const historyIndexRef = useRef(-1);
   const historyDraftRef = useRef<string | null>(null);
   const atRequestRef = useRef("");
-  const caretRef = useRef(0);
+  const { listRef: atListRef, setItemRef: setAtItemRef } =
+    useScrollFollow(atCursor);
 
   const filtered = useMemo<SlashCommand[]>(() => {
     // Commands cannot run mid-stream; keep the menu closed while steering.
@@ -115,8 +118,8 @@ export function InputArea({
     if (slashOpen) {
       return null;
     }
-    return atQueryBefore(value, caretRef.current);
-  }, [value, slashOpen]);
+    return atQueryBefore(value, caret);
+  }, [value, caret, slashOpen]);
 
   useEffect(() => {
     if (atQuery === null) {
@@ -147,14 +150,15 @@ export function InputArea({
   const applyAtMatch = useCallback(
     (match: string) => {
       const el = textareaRef.current;
-      const caret = el?.selectionStart ?? value.length;
-      const query = atQueryBefore(value, caret);
+      const currentCaret = el?.selectionStart ?? value.length;
+      const query = atQueryBefore(value, currentCaret);
       if (query === null) {
         return;
       }
-      const tokenStart = caret - query.length - 1;
+      const tokenStart = currentCaret - query.length - 1;
       const insertion = match.includes(" ") ? `'@${match}'` : `@${match}`;
-      const next = value.slice(0, tokenStart) + insertion + value.slice(caret);
+      const next =
+        value.slice(0, tokenStart) + insertion + value.slice(currentCaret);
       setValue(next);
       setAtDismissed(true);
       requestAnimationFrame(() => {
@@ -162,7 +166,7 @@ export function InputArea({
           const position = tokenStart + insertion.length;
           el.focus();
           el.setSelectionRange(position, position);
-          caretRef.current = position;
+          setCaret(position);
         }
       });
     },
@@ -304,7 +308,12 @@ export function InputArea({
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    caretRef.current = e.currentTarget.selectionStart ?? value.length;
+    // While an IME composition is active, Enter/arrows/Escape belong to the
+    // composition window — never send or navigate mid-composition.
+    if (e.nativeEvent.isComposing) {
+      return;
+    }
+    setCaret(e.currentTarget.selectionStart ?? value.length);
 
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
       e.preventDefault();
@@ -373,8 +382,8 @@ export function InputArea({
 
     if (e.key === "ArrowUp" && !e.shiftKey) {
       const el = e.currentTarget;
-      const caret = el.selectionStart ?? 0;
-      const onFirstLine = !value.slice(0, caret).includes("\n");
+      const currentCaret = el.selectionStart ?? 0;
+      const onFirstLine = !value.slice(0, currentCaret).includes("\n");
       if (onFirstLine && navigateHistory(-1)) {
         e.preventDefault();
         return;
@@ -382,8 +391,8 @@ export function InputArea({
     }
     if (e.key === "ArrowDown" && !e.shiftKey) {
       const el = e.currentTarget;
-      const caret = el.selectionStart ?? 0;
-      const onLastLine = !value.slice(caret).includes("\n");
+      const currentCaret = el.selectionStart ?? 0;
+      const onLastLine = !value.slice(currentCaret).includes("\n");
       if (onLastLine && historyIndexRef.current !== -1 && navigateHistory(1)) {
         e.preventDefault();
         return;
@@ -402,7 +411,7 @@ export function InputArea({
 
   return (
     <footer className="shrink-0 border-t border-border bg-bg [padding-bottom:env(safe-area-inset-bottom)]">
-      <div className="relative mx-auto w-full max-w-3xl px-3 py-3 sm:px-5 sm:py-4">
+      <div className="relative mx-auto w-full max-w-5xl px-4 py-3 sm:px-6 sm:py-4">
         {slashOpen && (
           <SlashMenu
             commands={filtered}
@@ -413,13 +422,15 @@ export function InputArea({
         )}
         {atMatches.length > 0 && (
           <div
+            ref={atListRef}
             role="listbox"
             aria-label="File completions"
-            className="absolute inset-x-3 bottom-full mb-2 max-h-56 overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-pop sm:inset-x-5"
+            className="absolute inset-x-4 bottom-full mb-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-pop sm:inset-x-6"
           >
             {atMatches.map((match, i) => (
               <button
                 key={match}
+                ref={setAtItemRef(i)}
                 type="button"
                 role="option"
                 aria-selected={i === atCursor}
@@ -430,7 +441,7 @@ export function InputArea({
                 onMouseEnter={() => {
                   setAtCursor(i);
                 }}
-                className={`flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-1.5 text-left ${i === atCursor ? "bg-accent/8" : ""}`}
+                className={`flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-1.5 text-left transition-colors ${i === atCursor ? "bg-accent/8" : ""}`}
               >
                 <span className="truncate font-mono text-xs text-base">
                   {match}
@@ -465,178 +476,188 @@ export function InputArea({
             ))}
           </div>
         )}
-        {uploads.length > 0 && (
-          <div
-            className="mb-2 flex flex-wrap gap-1.5"
-            aria-label="Uploading images"
-          >
-            {uploads.map((upload) => (
-              <span
-                key={upload.clientId}
-                className="max-w-full animate-pulse truncate rounded-full border border-border bg-surface px-2.5 py-0.5 font-mono text-[11px] text-dim"
-                title={upload.name}
-              >
-                {`uploading: ${upload.name}`}
-              </span>
-            ))}
-          </div>
-        )}
         {blockedHint && (
           <p className="mb-2 font-mono text-[11px] text-yellow" role="alert">
             {blockedHint}
           </p>
         )}
-        <div className="flex items-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            multiple
-            className="hidden"
+        {/* Composer card: textarea on top, action toolbar below — attach and
+            send share one baseline instead of floating beside the textarea. */}
+        <div
+          className={`rounded-2xl border bg-surface shadow-card transition-colors focus-within:border-accent/60 ${
+            streaming ? "border-accent/35" : "border-border"
+          }`}
+        >
+          {uploads.length > 0 && (
+            <div
+              className="flex flex-wrap gap-1.5 px-3 pt-3"
+              aria-label="Uploading images"
+            >
+              {uploads.map((upload) => (
+                <span
+                  key={upload.clientId}
+                  className="flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-tool px-2.5 py-0.5 font-mono text-[11px] text-dim"
+                  title={upload.name}
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
+                  <span className="truncate">{upload.name}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={value}
             onChange={(e) => {
-              for (const file of Array.from(e.target.files ?? [])) {
-                uploadImage(file);
-              }
-              e.target.value = "";
+              setValue(e.target.value);
+              setCaret(e.target.selectionStart ?? 0);
+              setAtDismissed(false);
             }}
-          />
-          <button
-            type="button"
-            aria-label="Attach images"
-            title="Attach images (or paste/drop them)"
-            onClick={() => {
-              fileInputRef.current?.click();
+            onKeyDown={onKeyDown}
+            onKeyUp={(e) => {
+              setCaret(e.currentTarget.selectionStart ?? 0);
             }}
-            className="mb-0.5 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 16 16"
-              fill="none"
-              aria-hidden="true"
-            >
-              <rect
-                x="1.8"
-                y="3"
-                width="12.4"
-                height="10"
-                rx="1.7"
-                stroke="currentColor"
-                strokeWidth="1.2"
-              />
-              <circle cx="5.6" cy="6.6" r="1.1" fill="currentColor" />
-              <path
-                d="m2.6 11.6 3.2-3 2.4 2.2 2.3-2.6 2.9 3.4"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          <div className="relative min-w-0 flex-1">
-            {bashMode && (
-              <span className="pointer-events-none absolute top-1.5 right-2.5 z-10 rounded-full border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
-                {bashExcluded ? "Bash · excluded" : "Bash"}
-              </span>
-            )}
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={value}
-              disabled={false}
-              onChange={(e) => {
-                setValue(e.target.value);
-                caretRef.current = e.target.selectionStart ?? 0;
-                setAtDismissed(false);
-              }}
-              onKeyDown={onKeyDown}
-              onKeyUp={(e) => {
-                caretRef.current = e.currentTarget.selectionStart ?? 0;
-              }}
-              onClick={(e) => {
-                caretRef.current = e.currentTarget.selectionStart ?? 0;
-              }}
-              onPaste={(e) => {
-                const files = Array.from(e.clipboardData?.files ?? []).filter(
-                  (file) => file.type.startsWith("image/"),
-                );
-                if (files.length > 0) {
-                  e.preventDefault();
-                  for (const file of files) {
-                    uploadImage(file);
-                  }
-                }
-              }}
-              onDrop={(e) => {
-                const files = Array.from(e.dataTransfer?.files ?? []).filter(
-                  (file) => file.type.startsWith("image/"),
-                );
-                if (files.length > 0) {
-                  e.preventDefault();
-                  for (const file of files) {
-                    uploadImage(file);
-                  }
-                }
-              }}
-              onDragOver={(e) => {
+            onClick={(e) => {
+              setCaret(e.currentTarget.selectionStart ?? 0);
+            }}
+            onSelect={(e) => {
+              setCaret(e.currentTarget.selectionStart ?? 0);
+            }}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData?.files ?? []).filter(
+                (file) => file.type.startsWith("image/"),
+              );
+              if (files.length > 0) {
                 e.preventDefault();
-              }}
-              placeholder={
-                streaming
-                  ? "Send a steering message… (Enter)"
-                  : "Message Yukino… (Enter to send, Shift+Enter for a new line, ! for Bash)"
+                for (const file of files) {
+                  uploadImage(file);
+                }
               }
-              className="max-h-50 w-full resize-none rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm leading-relaxed text-bright shadow-xs outline-none placeholder:text-dim/70 focus:border-accent/60"
-              aria-label="Message input"
+            }}
+            onDrop={(e) => {
+              const files = Array.from(e.dataTransfer?.files ?? []).filter(
+                (file) => file.type.startsWith("image/"),
+              );
+              if (files.length > 0) {
+                e.preventDefault();
+                for (const file of files) {
+                  uploadImage(file);
+                }
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+            }}
+            placeholder={
+              streaming
+                ? "Send a steering message… (Enter)"
+                : "Message Yukino… (Enter to send, Shift+Enter for a new line, ! for Bash)"
+            }
+            className="block max-h-50 w-full resize-none bg-transparent px-4 pt-3.5 pb-1.5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim/70"
+            aria-label="Message input"
+          />
+          <div className="flex items-center gap-2 px-2.5 pb-2.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                for (const file of Array.from(e.target.files ?? [])) {
+                  uploadImage(file);
+                }
+                e.target.value = "";
+              }}
             />
-          </div>
-          {streaming ? (
             <button
               type="button"
-              onClick={onCancel}
-              title="Cancel the running turn (Esc)"
-              className="mb-0.5 flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-red/40 bg-red/10 px-3 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
+              aria-label="Attach images"
+              title="Attach images (or paste/drop them)"
+              onClick={() => {
+                fileInputRef.current?.click();
+              }}
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
             >
               <svg
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <rect x="1.5" y="1.5" width="7" height="7" rx="1" />
-              </svg>
-              Cancel
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={send}
-              disabled={value.trim().length === 0}
-              className="mb-0.5 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-35"
-              aria-label="Send message"
-            >
-              <svg
-                width="14"
-                height="14"
+                width="15"
+                height="15"
                 viewBox="0 0 16 16"
                 fill="none"
                 aria-hidden="true"
               >
-                <path
-                  d="M8 13.5V3m0 0L3.8 7.2M8 3l4.2 4.2"
+                <rect
+                  x="1.8"
+                  y="3"
+                  width="12.4"
+                  height="10"
+                  rx="1.7"
                   stroke="currentColor"
-                  strokeWidth="1.6"
+                  strokeWidth="1.2"
+                />
+                <circle cx="5.6" cy="6.6" r="1.1" fill="currentColor" />
+                <path
+                  d="m2.6 11.6 3.2-3 2.4 2.2 2.3-2.6 2.9 3.4"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </svg>
             </button>
-          )}
+            {bashMode && (
+              <span className="shrink-0 rounded-md border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
+                {bashExcluded ? "Bash · excluded" : "Bash"}
+              </span>
+            )}
+            <div className="min-w-0 flex-1" />
+            {streaming ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                title="Cancel the running turn (Esc)"
+                className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
+              >
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <rect x="1.5" y="1.5" width="7" height="7" rx="1" />
+                </svg>
+                Cancel
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={send}
+                disabled={value.trim().length === 0}
+                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
+                aria-label="Send message"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M8 13.5V3m0 0L3.8 7.2M8 3l4.2 4.2"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
-        <p className="mt-1.5 hidden text-[10px] text-dim/70 sm:block">
+        <p className="mt-2 hidden text-center text-[10px] text-dim/70 sm:block">
           Enter send · Shift+Enter newline · ↑ history · @ files · ! bash ·
           paste/drop images · Esc cancel
         </p>

@@ -1,3 +1,4 @@
+import { useScrollFollow } from "@browser/hooks/use-scroll-follow";
 import type { SlashCommand } from "@browser/types";
 
 interface SlashMenuProps {
@@ -13,18 +14,22 @@ export function SlashMenu({
   onSelect,
   onHover,
 }: SlashMenuProps) {
+  const { listRef, setItemRef } = useScrollFollow(cursor);
+
   if (commands.length === 0) {
     return null;
   }
   return (
     <div
+      ref={listRef}
       role="listbox"
       aria-label="Slash commands"
-      className="absolute inset-x-3 bottom-full sm:inset-x-5 mb-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-pop"
+      className="absolute inset-x-4 bottom-full mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-pop sm:inset-x-6"
     >
       {commands.map((cmd, i) => (
         <button
           key={cmd.name}
+          ref={setItemRef(i)}
           type="button"
           role="option"
           aria-selected={i === cursor}
@@ -35,11 +40,11 @@ export function SlashMenu({
           onMouseEnter={() => {
             onHover(i);
           }}
-          className={`flex w-full cursor-pointer items-baseline gap-2.5 px-3.5 py-2 text-left ${
+          className={`flex w-full cursor-pointer items-baseline gap-2.5 px-3.5 py-2 text-left transition-colors ${
             i === cursor ? "bg-accent/8" : ""
           }`}
         >
-          <span className="font-mono text-[13px] font-semibold whitespace-nowrap text-accent">
+          <span className="font-mono text-[13px] font-semibold whitespace-nowrap text-bright">
             /{cmd.name}
           </span>
           <span className="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-dim">
