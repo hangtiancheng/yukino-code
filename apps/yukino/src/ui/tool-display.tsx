@@ -4,7 +4,6 @@ import { DiffLines } from "./diff-render.js";
 import {
   expandTabs,
   plainTerminalLine,
-  plainTerminalText,
   truncateToWidth,
   visibleWidth,
   wrapToLines,
@@ -14,7 +13,7 @@ import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import { isDiffTool } from "@/tools/is-diff-tool.js";
 import { THEME } from "@/ui/styles.js";
-import { formatToolArgs } from "@/utils/index.js";
+import { formatToolArgs, plainTerminalText } from "@/utils/index.js";
 
 export type ToolCardStatus = "running" | "completed" | "failed" | "stopped";
 

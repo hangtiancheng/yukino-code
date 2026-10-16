@@ -1,22 +1,14 @@
-import { stripVTControlCharacters } from "node:util";
-
 import sliceAnsi from "slice-ansi";
 import stringWidth from "string-width";
 import wrapAnsi from "wrap-ansi";
+
+import { plainTerminalText } from "@/utils/index.js";
 
 export const TAB_SIZE = 2;
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: "grapheme",
 });
-
-export function plainTerminalText(text: string): string {
-  return stripVTControlCharacters(text)
-    .replace(/\r\n?/gu, "\n")
-    .replace(/\p{Cc}/gu, (character) =>
-      character === "\n" || character === "\t" ? character : "",
-    );
-}
 
 export function plainTerminalLine(text: string): string {
   return expandTabs(plainTerminalText(text).replace(/\n+/gu, " "));

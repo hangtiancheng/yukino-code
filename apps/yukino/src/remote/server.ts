@@ -1,8 +1,11 @@
 // Remote server: Express HTTP + WebSocket bridge for browser-based access.
 // Serves the React browser bundle (browser/dist/) and bridges Agent events to WS.
 
+import { execSync } from "node:child_process";
 import { readFileSync, existsSync, statSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
 import { join, extname, normalize } from "node:path";
 import { cwd } from "node:process";
 
@@ -21,6 +24,7 @@ import {
   countMcpTools,
   createToolRegistry,
 } from "@/bootstrap/tool-registry.js";
+import { removeMcpTools } from "@/bootstrap/tool-registry.js";
 import { formatReviewReport } from "@/code-review/report.js";
 import { runCodeReview, validateReviewInput } from "@/code-review/runner.js";
 import {
@@ -30,8 +34,9 @@ import {
   type CommandContext,
 } from "@/commands/commands.js";
 import { loadUserCommands } from "@/commands/loader.js";
-import { forceCompact } from "@/compact/compact.js";
+import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
+import { loadConfig, withProjectMcpServers } from "@/config/index.js";
 import type { SandboxYamlConfig } from "@/config/index.js";
 import type { HookConfig, MCPServerConfig } from "@/config/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
@@ -42,15 +47,34 @@ import {
   getSupportedThinkingLevels,
   resolveDefaultProvider,
 } from "@/config/provider-config.js";
-import { persistThinkingLevel } from "@/config/provider-login.js";
+import {
+  persistDefaultProvider,
+  persistModel,
+  persistThinkingLevel,
+  saveProvider,
+} from "@/config/provider-login.js";
+import { expandAtRefsWithImages } from "@/conversation/at-expand.js";
 import { ConversationManager } from "@/conversation/index.js";
-import { FileHistory } from "@/file-history/index.js";
+import type { UserBashResult } from "@/conversation/index.js";
+import {
+  executeUserBash,
+  parseUserBashCommand,
+  userBashContext,
+} from "@/conversation/user-bash.js";
+import { FileHistory, fileHistoryDir } from "@/file-history/index.js";
+import type { Snapshot } from "@/file-history/index.js";
 import { GoalManager, handleGoalCommand } from "@/goal/index.js";
+import * as historyMod from "@/history/index.js";
 import { HookEngine, validate as validateHooks } from "@/hooks/index.js";
+import { sniffMediaType } from "@/images/index.js";
 import { createClient, type LLMClient } from "@/llm/client.js";
+import { discoverModels } from "@/llm/model-discovery.js";
 import { createChildLogger } from "@/logger/index.js";
 import type { LspServerConfig } from "@/lsp/config.js";
-import { syncMcpInstructions as announceMcpInstructions } from "@/mcp/instructions.js";
+import {
+  retractMcpInstructions,
+  syncMcpInstructions as announceMcpInstructions,
+} from "@/mcp/instructions.js";
 import { MCPManager } from "@/mcp/manager.js";
 import { decideAndApply } from "@/mcp/strategy.js";
 import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
@@ -69,6 +93,7 @@ import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
+import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import {
   newSessionId,
   saveMessage,
@@ -77,14 +102,20 @@ import {
   loadSession,
   getSessionFilePath,
   touchSession,
+  truncateSessionLines,
+  rebuildFromSession,
 } from "@/session/index.js";
+import type { SessionMessage } from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
-import { runInline as runSkillInline } from "@/skills/executor.js";
+import {
+  runFork as runSkillFork,
+  runInline as runSkillInline,
+} from "@/skills/executor.js";
 import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/definition.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
+import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
 import {
   TaskManager,
   formatAgentTaskNotification,
@@ -95,6 +126,7 @@ import {
 } from "@/teams/coordinator.js";
 import { TeamManager, type RunAgent } from "@/teams/index.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
+import { subscribeLeaderTasks } from "@/teams/task-tools.js";
 import {
   TeamCreateTool,
   SendMessageTool,
@@ -110,11 +142,21 @@ import {
 import { BashTool } from "@/tools/bash.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import type { ToolRegistry } from "@/tools/registry.js";
-import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
+import {
+  attachBackgroundTaskManager,
+  backgroundAllForegroundTasks,
+  hasAnyForegroundTasks,
+} from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
-import type { ToolContext } from "@/tools/types.js";
+import type { ToolContext, ToolResult } from "@/tools/types.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
-import { contentToText, strArg } from "@/utils/index.js";
+import { filterFileMatches, scanCwdFiles } from "@/utils/file-scan.js";
+import {
+  asErrorString,
+  contentToText,
+  plainTerminalText,
+  strArg,
+} from "@/utils/index.js";
 import {
   authorizeWebSocketRequest,
   createWebSocketAccessToken,
@@ -178,6 +220,57 @@ const CodeReviewStartSchema = z.object({
   excludePatterns: z.array(z.string()).optional(),
 });
 
+const PermissionModeSchema = z.enum([
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+  "plan",
+]);
+
+const SetPermissionModeSchema = z.object({
+  mode: PermissionModeSchema,
+});
+
+const ModelSelectSchema = z.object({
+  model: z.string(),
+});
+
+const ProviderSelectSchema = z.object({
+  index: z.number().int().nonnegative(),
+});
+
+const ProviderSaveSchema = z.object({
+  name: z.string(),
+  protocol: z.enum(["anthropic", "openai", "openai-compat"]),
+  base_url: z.string(),
+  api_key: z.string().optional(),
+  model: z.string(),
+  thinking: z
+    .enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"])
+    .optional(),
+});
+
+const RewindActionSchema = z.object({
+  snapshotIndex: z.number().int().nonnegative(),
+  action: z.enum(["code_and_conversation", "conversation_only", "code_only"]),
+});
+
+const FileCompleteRequestSchema = z.object({
+  requestId: z.string(),
+  query: z.string(),
+});
+
+const ImageUploadSchema = z.object({
+  clientId: z.string(),
+  name: z.string(),
+  dataBase64: z.string(),
+});
+
+/** Uploaded images follow the terminal clipboard-image limit. */
+const MAX_UPLOAD_IMAGE_BYTES = 32 * 1024 * 1024;
+/** @-mention file cache lifetime (matches the terminal input cache). */
+const FILE_CACHE_TTL_MS = 30_000;
+
 const BROWSER_DIST = [
   join(import.meta.dirname, "browser", "dist"),
   join(import.meta.dirname, "..", "browser", "dist"),
@@ -237,6 +330,8 @@ export interface RemoteAgentHandle {
   activeSkills: Map<string, string>;
   toolFilter: ((name: string) => boolean) | null;
   mcpManager: MCPManager | null;
+  /** Servers whose instructions were already announced; /mcp reload retracts through it. */
+  mcpAnnounced: Set<string>;
   hookEngine: HookEngine | null;
   recoveryState: RecoveryState;
   teamManager: TeamManager;
@@ -257,8 +352,15 @@ export interface RemoteAgentHandle {
   /** Shared task board; /clear and /resume swap its store to the target session. */
   taskList: TaskList;
 
-  /** Runs the agent loop: adds the user message, creates Agent, and yields events. */
-  run(text: string, callbacks: RunCallbacks): AsyncGenerator<AgentEvent>;
+  /**
+   * Runs the agent loop: adds the user message, creates Agent, and yields
+   * events. `null` runs a notification-only turn (no user message is added);
+   * content blocks carry image attachments from @-expansion.
+   */
+  run(
+    text: string | Record<string, unknown>[] | null,
+    callbacks: RunCallbacks,
+  ): AsyncGenerator<AgentEvent>;
 
   /** Aborts the currently running agent loop (if any) and stops all background tasks and teammates. */
   abort(): void;
@@ -341,11 +443,11 @@ class AgentHandleImpl implements RemoteAgentHandle {
   /** Shared task board; /clear and /resume swap its store to the target session. */
   taskList: TaskList;
 
-  // Servers whose instructions this conversation has already been told about. The
-  // remote handle connects MCP once and never reloads it, so nothing is ever
-  // retracted here; the record keeps later runs from repeating the guidance, and
-  // history decides whether it has to be replayed (compaction, session restore).
-  private mcpAnnounced = new Set<string>();
+  // Servers whose instructions this conversation has already been told about.
+  // The record keeps later runs from repeating the guidance; /mcp reload
+  // retracts through it, and history decides whether guidance must be replayed
+  // (compaction, session restore).
+  mcpAnnounced = new Set<string>();
 
   // One consolidator per handle: a fresh instance per loop would reset the
   // lastScanAt throttle, hammering the lock on every loop_complete.
@@ -368,6 +470,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
       | "checker"
       | "goalManager"
       | "planFilePath"
+      | "mcpAnnounced"
     >,
   ) {
     this.client = agentHandleImpl.client;
@@ -405,21 +508,25 @@ class AgentHandleImpl implements RemoteAgentHandle {
   }
 
   async *run(
-    text: string,
+    text: string | Record<string, unknown>[] | null,
     callbacks: RunCallbacks,
   ): AsyncGenerator<AgentEvent> {
-    const command = parseCommand(text);
-    if (command?.name === "goal") {
-      const result = handleGoalCommand(this.goalManager, command.args);
-      yield { type: "stream_text", text: result.message + "\n" };
-      if (!result.prompt) {
-        yield { type: "loop_complete", stopReason: "end_turn" };
-        return;
+    if (typeof text === "string") {
+      const command = parseCommand(text);
+      if (command?.name === "goal") {
+        const result = handleGoalCommand(this.goalManager, command.args);
+        yield { type: "stream_text", text: result.message + "\n" };
+        if (!result.prompt) {
+          yield { type: "loop_complete", stopReason: "end_turn" };
+          return;
+        }
+        yield { type: "turn_complete" };
+        text = result.prompt;
       }
-      yield { type: "turn_complete" };
-      text = result.prompt;
     }
-    this.conv.addUserMessage(text);
+    if (text !== null) {
+      this.conv.addUserMessage(text);
+    }
 
     // Announce the instructions of every connected MCP server this conversation has
     // not seen yet. Nothing goes out while the announcement is still in history, and
@@ -553,6 +660,19 @@ class AgentHandleImpl implements RemoteAgentHandle {
   }
 }
 
+/** Subagent lifecycle event surfaced for activity displays (browser UI). */
+export type RemoteSubagentEvent = {
+  toolCallId: string;
+  role: string;
+  background: boolean;
+} & (
+  | { type: "started" }
+  | { type: "tool_use"; toolId: string; toolName: string }
+  | { type: "tool_result"; toolId: string }
+  | { type: "turn_complete" }
+  | { type: "finished"; status: "completed" | "failed" | "stopped" }
+);
+
 export interface CreateRemoteAgentOptions {
   enableModelPlanMode?: boolean;
   interactionMode?: "interactive" | "non-interactive";
@@ -568,6 +688,8 @@ export interface CreateRemoteAgentOptions {
   memoryEnabled?: boolean;
   askUser?: Asker;
   sessionId?: string;
+  /** Receives subagent lifecycle events for the browser activity display. */
+  onSubagentEvent?: (event: RemoteSubagentEvent) => void;
 }
 
 /**
@@ -633,6 +755,78 @@ export async function createRemoteAgent(
   catalog.load(cwd);
 
   const activeSkills = new Map<string, string>();
+
+  // Mirrors the terminal UI's trackSubagent: keeps a live progress feed for
+  // every Agent-tool spawn and fork so the browser can render activity cards.
+  const reportSubagent = opts.onSubagentEvent;
+  const trackSubagent = (
+    toolCallId: string,
+    role: string,
+    background: boolean,
+    abortSignal: AbortSignal | undefined,
+    run: (onEvent: AgentEventSink) => Promise<string>,
+  ): Promise<string> => {
+    if (!reportSubagent) {
+      return run(() => undefined);
+    }
+    reportSubagent({ toolCallId, role, background, type: "started" });
+    const sink: AgentEventSink = (event) => {
+      switch (event.type) {
+        case "tool_use":
+          reportSubagent({
+            toolCallId,
+            role,
+            background,
+            type: "tool_use",
+            toolId: event.toolId,
+            toolName: event.toolName,
+          });
+          break;
+        case "tool_result":
+          reportSubagent({
+            toolCallId,
+            role,
+            background,
+            type: "tool_result",
+            toolId: event.toolId,
+          });
+          break;
+        case "turn_complete":
+          reportSubagent({
+            toolCallId,
+            role,
+            background,
+            type: "turn_complete",
+          });
+          break;
+        case "usage":
+          break;
+      }
+    };
+    return run(sink).then(
+      (result) => {
+        reportSubagent({
+          toolCallId,
+          role,
+          background,
+          type: "finished",
+          status: abortSignal?.aborted ? "stopped" : "completed",
+        });
+        return result;
+      },
+      (error: unknown) => {
+        reportSubagent({
+          toolCallId,
+          role,
+          background,
+          type: "finished",
+          status: abortSignal?.aborted ? "stopped" : "failed",
+        });
+        throw error;
+      },
+    );
+  };
+
   const skillHost: SkillHost = {
     activateSkill: (name, body) => {
       activeSkills.set(name, body);
@@ -661,9 +855,9 @@ export async function createRemoteAgent(
       spawnSubagent(
         BUILTIN_AGENTS[0],
         prompt,
-        client,
+        handle.client,
         registry,
-        provider,
+        handle.provider,
         cwd,
         undefined,
         undefined,
@@ -697,9 +891,9 @@ export async function createRemoteAgent(
       spawnSubagent(
         options?.definition ?? BUILTIN_AGENTS[0],
         task,
-        client,
+        handle.client,
         registry,
-        provider,
+        handle.provider,
         memberCwd,
         undefined,
         onEvent,
@@ -732,50 +926,66 @@ export async function createRemoteAgent(
     cwd,
     registry,
     async (def, prompt, background, modelOverride?, cwdOverride?, context?) => {
-      return spawnSubagent(
-        def,
-        prompt,
-        client,
-        registry,
-        provider,
-        cwdOverride ?? cwd,
-        undefined,
-        undefined,
-        modelOverride,
-        cwdOverride
-          ? context?.permissionChecker?.forCwd(cwdOverride)
-          : context?.permissionChecker,
-        {
-          sessionId: context?.subagentSessionId,
-          abortSignal: context?.abortSignal,
-          background,
-          onPermissionRequest: context?.onPermissionRequest,
-          permissionMode: context?.permissionChecker?.mode,
-        },
+      const toolCallId = context?.toolCallId ?? nextRequestId("subagent");
+      return trackSubagent(
+        toolCallId,
+        def.name,
+        background,
+        context?.abortSignal,
+        (onEvent) =>
+          spawnSubagent(
+            def,
+            prompt,
+            handle.client,
+            registry,
+            handle.provider,
+            cwdOverride ?? cwd,
+            undefined,
+            onEvent,
+            modelOverride,
+            cwdOverride
+              ? context?.permissionChecker?.forCwd(cwdOverride)
+              : context?.permissionChecker,
+            {
+              sessionId: context?.subagentSessionId,
+              abortSignal: context?.abortSignal,
+              background,
+              onPermissionRequest: context?.onPermissionRequest,
+              permissionMode: context?.permissionChecker?.mode,
+            },
+          ),
       );
     },
     conv,
     async (prompt, forkConv, forkRegistry, modelOverride?, context?) => {
       const forkCwd = context?.cwd ?? cwd;
-      return spawnSubagent(
-        BUILTIN_AGENTS[0],
-        prompt,
-        client,
-        forkRegistry,
-        provider,
-        forkCwd,
-        undefined,
-        undefined,
-        modelOverride,
-        context?.permissionChecker ?? handle.checker,
-        {
-          agentName: "fork",
-          conversation: forkConv,
-          sessionId: context?.subagentSessionId,
-          memoryContent: memReminder,
-          abortSignal: context?.abortSignal,
-          onPermissionRequest: context?.onPermissionRequest,
-        },
+      const toolCallId = context?.toolCallId ?? nextRequestId("fork");
+      return trackSubagent(
+        toolCallId,
+        "fork",
+        false,
+        context?.abortSignal,
+        (onEvent) =>
+          spawnSubagent(
+            BUILTIN_AGENTS[0],
+            prompt,
+            handle.client,
+            forkRegistry,
+            handle.provider,
+            forkCwd,
+            undefined,
+            onEvent,
+            modelOverride,
+            context?.permissionChecker ?? handle.checker,
+            {
+              agentName: "fork",
+              conversation: forkConv,
+              sessionId: context?.subagentSessionId,
+              memoryContent: memReminder,
+              abortSignal: context?.abortSignal,
+              onPermissionRequest: context?.onPermissionRequest,
+            },
+          ),
       );
     },
     backgroundTaskManager,
@@ -787,6 +997,13 @@ export async function createRemoteAgent(
   registry.register(agentTool);
 
   const cmdRegistry = createCommandRegistry();
+  // Terminal-only registration mirrored here so /provider reaches the browser.
+  cmdRegistry.register({
+    name: "provider",
+    type: "local_ui",
+    description: "Switch the active provider",
+    handler: () => "provider",
+  });
   for (const cmd of loadUserCommands()) {
     try {
       cmdRegistry.register(cmd);
@@ -965,6 +1182,40 @@ export class RemoteServer {
     (answers: Record<string, string>) => void
   >();
 
+  // Messages sent while a turn is busy but steering is unavailable (slash
+  // commands, pre-run window): queued and replayed once the slot frees up.
+  private followUps: string[] = [];
+  /** Steering texts already appended to prompt history at steer time. */
+  private steeringHistoryRecorded: string[] = [];
+  private userBashController: AbortController | null = null;
+  private forkController: AbortController | null = null;
+  private modelListController: AbortController | null = null;
+  /** Lazily created OS sandbox for /sandbox toggling (terminal parity). */
+  private sandbox: Promise<Sandbox | null> | null = null;
+  /** Live subagent/fork activity keyed by toolCallId (browser Agents view). */
+  private subagentStates = new Map<
+    string,
+    {
+      toolCallId: string;
+      role: string;
+      background: boolean;
+      turnCount: number;
+      activeTools: { toolId: string; toolName: string }[];
+      status: "running" | "completed" | "failed" | "stopped";
+    }
+  >();
+  private activityAttached = false;
+  private teammateSignature = "";
+  private teammateTimer: NodeJS.Timeout | null = null;
+  private wakeupTimer: NodeJS.Timeout | null = null;
+  private fileCache: {
+    key: string;
+    files: string[];
+    scannedAt: number;
+  } | null = null;
+  /** Last usage snapshot; feeds /status between runs. */
+  private lastUsage = { inputTokens: 0, outputTokens: 0 };
+
   constructor(opts: RemoteServerOptions) {
     this.opts = opts;
     this.app = express();
@@ -1044,6 +1295,11 @@ export class RemoteServer {
       }
 
       this.send(ws, { type: "commands", data: this.buildCommandList() });
+      this.send(ws, {
+        type: "history",
+        data: { entries: historyMod.load().slice(-200) },
+      });
+      this.sendUsageSnapshot(ws);
       if (this.planApprovalPending) {
         this.sendPlanApprovalRequest(ws);
       }
@@ -1180,6 +1436,95 @@ export class RemoteServer {
         this.send(ws, { type: "pong", data: null });
         break;
       }
+      case "set_permission_mode": {
+        const parsed = SetPermissionModeSchema.safeParse(msg.data);
+        if (parsed.success) {
+          this.applyPermissionMode(parsed.data.mode);
+        } else {
+          log.warn("dropping malformed set_permission_mode");
+        }
+        break;
+      }
+      case "model_list_request": {
+        await this.broadcastModelList();
+        break;
+      }
+      case "model_select": {
+        const parsed = ModelSelectSchema.safeParse(msg.data);
+        if (parsed.success) {
+          await this.applyModel(parsed.data.model);
+        } else {
+          log.warn("dropping malformed model_select");
+        }
+        break;
+      }
+      case "provider_list_request": {
+        this.broadcastProviderList();
+        break;
+      }
+      case "provider_select": {
+        const parsed = ProviderSelectSchema.safeParse(msg.data);
+        if (parsed.success) {
+          await this.applyProviderSwitch(parsed.data.index);
+        } else {
+          log.warn("dropping malformed provider_select");
+        }
+        break;
+      }
+      case "provider_save": {
+        const parsed = ProviderSaveSchema.safeParse(msg.data);
+        if (parsed.success) {
+          await this.handleProviderSave(parsed.data);
+        } else {
+          log.warn(
+            { issues: parsed.error.issues },
+            "dropping malformed provider_save",
+          );
+        }
+        break;
+      }
+      case "rewind_list_request": {
+        this.broadcastRewindList();
+        break;
+      }
+      case "rewind_action": {
+        const parsed = RewindActionSchema.safeParse(msg.data);
+        if (parsed.success) {
+          this.handleRewindAction(
+            parsed.data.snapshotIndex,
+            parsed.data.action,
+          );
+        } else {
+          log.warn("dropping malformed rewind_action");
+        }
+        break;
+      }
+      case "file_complete_request": {
+        const parsed = FileCompleteRequestSchema.safeParse(msg.data);
+        if (parsed.success) {
+          this.sendFileCompletions(
+            ws,
+            parsed.data.requestId,
+            parsed.data.query,
+          );
+        } else {
+          log.warn("dropping malformed file_complete_request");
+        }
+        break;
+      }
+      case "image_upload": {
+        const parsed = ImageUploadSchema.safeParse(msg.data);
+        if (parsed.success) {
+          await this.handleImageUpload(parsed.data);
+        } else {
+          log.warn("dropping malformed image_upload");
+        }
+        break;
+      }
+      case "background_shells": {
+        this.backgroundForegroundShells();
+        break;
+      }
       default:
         log.warn({ type: msg.type }, "unknown WS message type");
     }
@@ -1223,8 +1568,12 @@ export class RemoteServer {
           enableCoordinatorMode: this.opts.enableCoordinatorMode,
           forkDisabled: this.opts.forkDisabled,
           memoryEnabled: this.opts.memoryEnabled !== false,
+          onSubagentEvent: (event) => {
+            this.handleSubagentEvent(event);
+          },
         });
         this.agentHandle = handle;
+        this.attachActivityBridge(handle);
         this.broadcast({
           type: "connected",
           data: {
@@ -1235,6 +1584,7 @@ export class RemoteServer {
         });
         this.broadcastStatus();
         this.broadcast({ type: "commands", data: this.buildCommandList() });
+        this.broadcast({ type: "usage", data: this.usagePayload() });
         return handle;
       } catch (err) {
         log.error({ err }, "failed to initialize agent");
@@ -1273,6 +1623,8 @@ export class RemoteServer {
     this.runCanceled = false;
     // totalTurns in loop_complete describes THIS run, not the process.
     this.turnCount = 0;
+    this.subagentStates.clear();
+    this.broadcastSubagents();
     let handle: RemoteAgentHandle | null = null;
     try {
       handle = await this.ensureAgent();
@@ -1280,44 +1632,40 @@ export class RemoteServer {
         return;
       }
 
-      this.broadcast({ type: "replay_user", data: { content: text } });
+      // Prompt history parity: each submission lands once. Steering texts are
+      // recorded when steered, so a later replay skips the duplicate append.
+      const recordedIdx = this.steeringHistoryRecorded.indexOf(text);
+      if (recordedIdx !== -1) {
+        this.steeringHistoryRecorded.splice(recordedIdx, 1);
+      } else {
+        historyMod.append(text);
+      }
 
-      if (text.startsWith("/") && parseCommand(text) !== null) {
+      const userBash = parseUserBashCommand(text);
+      if (userBash !== null) {
+        await this.runUserBash(
+          handle,
+          userBash.command,
+          userBash.excludeFromContext,
+        );
+      } else if (text.startsWith("/") && parseCommand(text) !== null) {
         // Slash commands (including prompt-type skills and /plan turns) run
         // through their own handler; leftover replay below covers them too.
+        this.broadcast({ type: "replay_user", data: { content: text } });
         await this.handleSlashCommand(text);
       } else {
+        this.broadcast({ type: "replay_user", data: { content: text } });
         const startTime = Date.now();
-        const cwd = handle.cwd;
-        const sessionId = handle.sessionId;
-
-        saveMessage(cwd, sessionId, {
+        // @-refs expand exactly like the terminal: the transcript shows the
+        // raw text while the conversation and session store the expansion
+        // (inlined file contents and image blocks).
+        const expanded = await expandAtRefsWithImages(text, handle.cwd);
+        saveMessage(handle.cwd, handle.sessionId, {
           role: "user",
-          content: text,
+          content: expanded,
           timestamp: Math.floor(Date.now() / 1000),
         });
-
-        const callbacks: RunCallbacks = {
-          onPermissionRequest: this.createPermissionCallback(),
-        };
-
-        let streamBuf = "";
-        for await (const ev of handle.run(text, callbacks)) {
-          // Flush accumulated stream text BEFORE tool_result/turn_complete/loop_complete
-          if (
-            ev.type === "tool_result" ||
-            ev.type === "turn_complete" ||
-            ev.type === "loop_complete"
-          ) {
-            if (streamBuf) {
-              this.broadcast({ type: "stream_end", data: { text: streamBuf } });
-              streamBuf = "";
-            }
-          }
-          this.bridgeEvent(ev, startTime, (t) => {
-            streamBuf += t;
-          });
-        }
+        await this.streamAgentRun(handle, expanded, startTime);
       }
     } catch (err) {
       log.error({ err }, "agent stream error");
@@ -1351,6 +1699,161 @@ export class RemoteServer {
         }
       }
     }
+    await this.drainFollowUps();
+  }
+
+  /**
+   * Bridges one agent run to the WebSocket: flushes accumulated stream text
+   * before tool results and turn boundaries, mirroring the terminal loop.
+   */
+  private async streamAgentRun(
+    handle: RemoteAgentHandle,
+    text: string | Record<string, unknown>[] | null,
+    startTime: number,
+  ): Promise<void> {
+    const callbacks: RunCallbacks = {
+      onPermissionRequest: this.createPermissionCallback(),
+    };
+    let streamBuf = "";
+    for await (const ev of handle.run(text, callbacks)) {
+      if (
+        ev.type === "tool_result" ||
+        ev.type === "turn_complete" ||
+        ev.type === "loop_complete"
+      ) {
+        if (streamBuf) {
+          this.broadcast({ type: "stream_end", data: { text: streamBuf } });
+          streamBuf = "";
+        }
+      }
+      this.bridgeEvent(ev, startTime, (t) => {
+        streamBuf += t;
+      });
+    }
+  }
+
+  /**
+   * Terminal-parity wakeup: background tasks and teammates only deliver their
+   * notifications inside a run, so an idle server starts a notification-only
+   * turn as soon as something is pending (the terminal's useNotificationWakeup).
+   */
+  private async runNotificationTurn(): Promise<void> {
+    if (this.streaming || !this.agentHandle) {
+      return;
+    }
+    const handle = this.agentHandle;
+    this.streaming = true;
+    this.runCanceled = false;
+    this.turnCount = 0;
+    const startTime = Date.now();
+    try {
+      await this.streamAgentRun(handle, null, startTime);
+    } catch (err) {
+      log.error({ err }, "notification turn failed");
+      this.broadcast({
+        type: "error",
+        data: { message: err instanceof Error ? err.message : String(err) },
+      });
+    } finally {
+      this.streaming = false;
+    }
+    await this.drainFollowUps();
+  }
+
+  /** Runs a user "!command" through the Bash tool (terminal parity). */
+  private async runUserBash(
+    handle: RemoteAgentHandle,
+    command: string,
+    excludeFromContext: boolean,
+  ): Promise<void> {
+    if (!command) {
+      this.broadcast({
+        type: "system",
+        data: {
+          message: `Warning: Enter a Bash command after ${excludeFromContext ? "!!" : "!"}.`,
+        },
+      });
+      return;
+    }
+    const bashTool = handle.registry.getInstanceOf("Bash", BashTool);
+    if (!bashTool) {
+      this.broadcast({
+        type: "error",
+        data: { message: "Bash tool is unavailable" },
+      });
+      return;
+    }
+    const controller = new AbortController();
+    this.userBashController = controller;
+    const toolId = nextRequestId("user-bash");
+    const started = Date.now();
+    this.broadcast({
+      type: "tool_use",
+      data: { toolId, toolName: "Bash", args: { command } },
+    });
+    let result: ToolResult;
+    try {
+      result = await executeUserBash(
+        bashTool,
+        {
+          cwd: handle.cwd,
+          sessionId: handle.sessionId,
+          abortSignal: controller.signal,
+          onOutput: (output) => {
+            this.broadcast({
+              type: "tool_output",
+              data: { toolId, output: plainTerminalText(output) },
+            });
+          },
+        },
+        command,
+        excludeFromContext,
+      );
+    } catch (error) {
+      result = { output: `Error: ${asErrorString(error)}`, isError: true };
+    }
+    this.userBashController = null;
+    const elapsed = (Date.now() - started) / 1000;
+    const status = controller.signal.aborted
+      ? "stopped"
+      : result.isError
+        ? "failed"
+        : "completed";
+    this.broadcast({
+      type: "tool_result",
+      data: {
+        toolId,
+        toolName: "Bash",
+        output: result.output,
+        isError: result.isError ?? false,
+        elapsed,
+      },
+    });
+    // Record exactly like the terminal: session row always, model context
+    // only unless the user opted out with "!!".
+    const recorded: UserBashResult = {
+      command,
+      excludeFromContext,
+      output: result.output,
+      isError: result.isError ?? false,
+      elapsed,
+      status,
+    };
+    try {
+      const message: SessionMessage = {
+        role: "user",
+        content: userBashContext(recorded),
+        timestamp: Math.floor(Date.now() / 1000),
+        user_bash: recorded,
+      };
+      saveMessage(handle.cwd, handle.sessionId, message);
+      handle.conv.appendMessages(rebuildFromSession([message]));
+    } catch (err) {
+      this.broadcast({
+        type: "error",
+        data: { message: err instanceof Error ? err.message : String(err) },
+      });
+    }
   }
 
   /** Queues a mid-run user message as steering for the active agent run. */
@@ -1370,26 +1873,40 @@ export class RemoteServer {
       this.broadcast({ type: "system", data: { message: result.message } });
       return;
     }
-    // Slash commands need a full turn; they cannot be steered mid-run, and
-    // they are not queued either — the client is told to resend afterwards.
+    // Slash commands need a full turn; like the terminal they queue as
+    // follow-ups and run once the current turn finishes.
     if (text.startsWith("/") && parseCommand(text) !== null) {
-      this.broadcast({
-        type: "system",
-        data: {
-          message:
-            "Commands cannot run mid-turn. Wait for the turn to finish, then resend.",
-        },
-      });
+      this.enqueueFollowUp(text);
       return;
     }
     if (!this.agentHandle?.steer(text)) {
-      this.broadcast({
-        type: "system",
-        data: { message: "The agent is busy; try again shortly." },
-      });
+      this.enqueueFollowUp(text);
       return;
     }
+    historyMod.append(text);
+    this.steeringHistoryRecorded.push(text);
     this.broadcast({ type: "steering_queued", data: { text } });
+  }
+
+  /** Queues a message that cannot run or steer right now. */
+  private enqueueFollowUp(text: string): void {
+    this.followUps.push(text);
+    this.broadcastFollowUps();
+  }
+
+  private broadcastFollowUps(): void {
+    this.broadcast({ type: "followups", data: { list: [...this.followUps] } });
+  }
+
+  /** Replays queued follow-ups once the streaming slot is free. */
+  private async drainFollowUps(): Promise<void> {
+    while (!this.streaming && this.followUps.length > 0) {
+      const next = this.followUps.shift();
+      this.broadcastFollowUps();
+      if (next !== undefined) {
+        await this.handleUserMessage(next);
+      }
+    }
   }
 
   /** Bridges an AgentEvent to the corresponding WS message. */
@@ -1478,13 +1995,11 @@ export class RemoteServer {
       }
 
       case "usage":
-        this.broadcast({
-          type: "usage",
-          data: {
-            inputTokens: ev.usage.inputTokens,
-            outputTokens: ev.usage.outputTokens,
-          },
-        });
+        this.lastUsage = {
+          inputTokens: ev.usage.inputTokens,
+          outputTokens: ev.usage.outputTokens,
+        };
+        this.broadcast({ type: "usage", data: this.usagePayload() });
         break;
 
       case "error":
@@ -1551,10 +2066,35 @@ export class RemoteServer {
             type: "system",
             data: { message: this.buildMemoryStatus(args) },
           });
-        } else if (name === "mcp") {
+        } else if (name === "status") {
           this.broadcast({
             type: "system",
-            data: { message: this.buildMcpStatus(args) },
+            data: { message: await this.buildSessionStatus() },
+          });
+        } else if (name === "mcp") {
+          if (args.trim().toLowerCase() === "reload") {
+            await this.reloadMcpServers();
+            this.broadcast({ type: "command_done", data: null });
+            break;
+          }
+          this.broadcast({
+            type: "system",
+            data: { message: this.buildMcpStatus() },
+          });
+        } else if (name === "thinking" && !args.trim()) {
+          // Terminal parity: bare /thinking opens the level picker.
+          this.broadcast({
+            type: "thinking_form",
+            data: {
+              current:
+                handle.client.getThinkingLevel?.() ??
+                handle.provider.thinking ??
+                DEFAULT_THINKING_LEVEL,
+              levels: [
+                ...(handle.client.getSupportedThinkingLevels?.() ??
+                  getSupportedThinkingLevels(handle.provider)),
+              ],
+            },
           });
         } else {
           const result = cmd.handler(ctx);
@@ -1629,16 +2169,94 @@ export class RemoteServer {
       }
 
       case "skill_fork":
-        this.broadcast({
-          type: "system",
-          data: {
-            message:
-              "Fork-mode skill commands are not available in remote mode. The agent can still run such skills — mention the skill in your message and it will activate them via the LoadSkill tool.",
-          },
-        });
-        this.broadcast({ type: "command_done", data: null });
+        await this.handleSkillFork(name, args);
         break;
     }
+  }
+
+  /** Runs a fork-mode skill command in an isolated subagent (terminal parity). */
+  private async handleSkillFork(name: string, args: string): Promise<void> {
+    const handle = this.agentHandle;
+    if (!handle) {
+      this.broadcast({ type: "command_done", data: null });
+      return;
+    }
+    const skill = handle.skillCatalog?.get(name);
+    if (!skill) {
+      this.broadcast({
+        type: "system",
+        data: { message: `Skill not found: ${name}` },
+      });
+      this.broadcast({ type: "command_done", data: null });
+      return;
+    }
+    const controller = new AbortController();
+    this.forkController = controller;
+    this.streaming = true;
+    this.runCanceled = false;
+    this.broadcast({
+      type: "system",
+      data: { message: `Running skill "${name}" in fork mode…` },
+    });
+    try {
+      const forkHost: SkillForkHost = {
+        activateSkill: (skillName, body) => {
+          handle.activeSkills.set(skillName, body);
+        },
+        snapshotParentMessages: (count: number) => {
+          const msgs = handle.conv.getMessages();
+          return msgs
+            .slice(-count)
+            .map((m) => `[${m.role}] ${contentToText(m.content)}`)
+            .join("\n");
+        },
+        runSubagent: (
+          prompt: string,
+          abortSignal?: AbortSignal,
+          context?: ToolContext,
+        ) =>
+          spawnSubagent(
+            {
+              name: skill.meta.name,
+              description: skill.meta.description,
+              model: skill.meta.model,
+            },
+            prompt,
+            handle.client,
+            handle.registry,
+            handle.provider,
+            handle.cwd,
+            undefined,
+            undefined,
+            undefined,
+            context?.permissionChecker?.forCwd(handle.cwd) ??
+              handle.checker.forCwd(handle.cwd),
+            {
+              abortSignal: abortSignal ?? controller.signal,
+              background: false,
+              onPermissionRequest: this.createPermissionCallback(),
+            },
+          ),
+      };
+      const result = await runSkillFork(
+        skill,
+        args,
+        forkHost,
+        controller.signal,
+      );
+      this.broadcast({ type: "stream_text", data: { text: result } });
+      this.broadcast({ type: "stream_end", data: { text: result } });
+    } catch (err) {
+      this.broadcast({
+        type: "error",
+        data: { message: `Skill fork error: ${asErrorString(err)}` },
+      });
+    } finally {
+      this.forkController = null;
+      this.streaming = false;
+      this.broadcast({ type: "command_done", data: null });
+    }
+    await this.drainFollowUps();
   }
 
   /** Handles local_ui commands (clear, compact, plan, resume, rewind, quit, etc.). */
@@ -1659,6 +2277,8 @@ export class RemoteServer {
         // pre-clear history.
         this.agentHandle.clearConversation();
         this.agentHandle.toolFilter = null;
+        this.subagentStates.clear();
+        this.broadcastSubagents();
         this.broadcast({
           type: "connected",
           data: {
@@ -1680,24 +2300,18 @@ export class RemoteServer {
         break;
 
       case "login":
-        this.broadcast({
-          type: "system",
-          data: {
-            message:
-              "Provider login is only available in terminal mode. The remote server uses the provider it was started with.",
-          },
-        });
+      case "provider":
+        // Browser parity: open the provider dialog (switch or add a provider).
+        this.broadcastProviderList();
         this.broadcast({ type: "command_done", data: null });
         break;
 
       case "model":
-        this.broadcast({
-          type: "system",
-          data: {
-            message:
-              "Model selection is only available in terminal mode. The remote server keeps the model it was started with.",
-          },
-        });
+        if (args.trim()) {
+          await this.applyModel(args.trim());
+        } else {
+          await this.broadcastModelList();
+        }
         this.broadcast({ type: "command_done", data: null });
         break;
 
@@ -1706,22 +2320,19 @@ export class RemoteServer {
         break;
 
       case "rewind":
-        this.broadcast({
-          type: "system",
-          data: { message: "Rewind is not yet supported in remote mode." },
-        });
+        this.broadcastRewindList();
         this.broadcast({ type: "command_done", data: null });
         break;
 
       case "quit":
         this.broadcast({
           type: "system",
-          data: {
-            message:
-              "Quit is not supported in remote mode. Close the browser tab.",
-          },
+          data: { message: "Shutting down the remote server…" },
         });
         this.broadcast({ type: "command_done", data: null });
+        setTimeout(() => {
+          void this.stop();
+        }, 250).unref();
         break;
 
       case "skills": {
@@ -1753,22 +2364,28 @@ export class RemoteServer {
       }
 
       case "sandbox":
-        this.broadcast({
-          type: "system",
-          data: {
-            message: "Sandbox toggle is not yet supported in remote mode.",
-          },
-        });
+        await this.handleSandboxCommand(args);
         this.broadcast({ type: "command_done", data: null });
         break;
 
       case "worktree":
-        this.broadcast({
-          type: "system",
-          data: {
-            message: "Worktree management is not yet supported in remote mode.",
-          },
-        });
+        try {
+          const output = execSync("git worktree list", {
+            cwd: this.agentHandle.cwd,
+            encoding: "utf-8",
+          });
+          this.broadcast({
+            type: "system",
+            data: { message: `Worktree list:\n${output}` },
+          });
+        } catch {
+          this.broadcast({
+            type: "system",
+            data: {
+              message: "Not a git repository or git worktree not available.",
+            },
+          });
+        }
         this.broadcast({ type: "command_done", data: null });
         break;
 
@@ -1790,6 +2407,844 @@ export class RemoteServer {
     }
   }
 
+  /** Mirrors the terminal Shift+Tab / onModeChange permission-mode transitions. */
+  private applyPermissionMode(mode: PermissionMode): void {
+    const handle = this.agentHandle;
+    if (!handle || handle.permissionMode === mode) {
+      return;
+    }
+    if (mode === "plan") {
+      handle.checker.enterPlanMode();
+      const planPath = getOrCreatePlanPath(handle);
+      this.broadcast({
+        type: "system",
+        data: {
+          message: `Entered plan mode (read-only). Plan file: ${planPath}`,
+        },
+      });
+      if (this.hasExitedPlanMode && planExists(handle)) {
+        const reentryMsg = buildPlanModeReentryReminder(planPath, true);
+        if (reentryMsg) {
+          handle.conv.addSystemReminder(reentryMsg);
+          this.broadcast({ type: "system", data: { message: reentryMsg } });
+        }
+      }
+      this.hasExitedPlanMode = false;
+    } else if (handle.permissionMode === "plan") {
+      const planPath = handle.checker.planFilePath;
+      this.hasExitedPlanMode = true;
+      handle.checker.exitPlanMode(mode);
+      handle.conv.addSystemReminder(
+        buildPlanModeExitReminder(planPath, !!planPath && planExists(handle)),
+      );
+      this.broadcast({
+        type: "system",
+        data: {
+          message:
+            mode === "bypassPermissions"
+              ? "Exited plan mode. Entered YOLO mode."
+              : "Exited plan mode. Each edit requires confirmation.",
+        },
+      });
+    } else {
+      handle.checker.mode = mode;
+    }
+    this.broadcastStatus();
+  }
+
+  /** Discovers the provider's models and opens the browser model picker. */
+  private async broadcastModelList(): Promise<void> {
+    const handle = this.agentHandle ?? (await this.ensureAgent());
+    if (!handle) {
+      return;
+    }
+    this.modelListController?.abort();
+    const controller = new AbortController();
+    this.modelListController = controller;
+    const current = handle.provider.model;
+    this.broadcast({
+      type: "model_list",
+      data: { status: "loading", models: [], current },
+    });
+    try {
+      const models = await discoverModels(
+        {
+          protocol: handle.provider.protocol,
+          base_url: handle.provider.base_url,
+          api_key: handle.provider.api_key,
+        },
+        controller.signal,
+      );
+      if (controller.signal.aborted) {
+        return;
+      }
+      this.broadcast({
+        type: "model_list",
+        data: {
+          status: models.length > 0 ? "ready" : "empty",
+          models: models.map((m) => ({
+            id: m.id,
+            name: m.display_name ?? m.name ?? null,
+          })),
+          current,
+        },
+      });
+    } catch {
+      if (!controller.signal.aborted) {
+        this.broadcast({
+          type: "model_list",
+          data: { status: "error", models: [], current },
+        });
+      }
+    } finally {
+      if (this.modelListController === controller) {
+        this.modelListController = null;
+      }
+    }
+  }
+
+  /** Switches the active model, rebuilding the client (terminal /model parity). */
+  private async applyModel(modelId: string): Promise<void> {
+    const handle = this.agentHandle ?? (await this.ensureAgent());
+    if (!handle) {
+      return;
+    }
+    const nextModel = modelId.trim();
+    if (!nextModel) {
+      return;
+    }
+    if (nextModel === handle.provider.model) {
+      this.broadcast({
+        type: "system",
+        data: { message: `Model already set to ${nextModel}.` },
+      });
+      return;
+    }
+    const updated = { ...handle.provider, model: nextModel };
+    try {
+      const environment = detectEnvironment(handle.cwd);
+      environment.model = updated.model;
+      const client = await createClient(
+        updated,
+        buildSystemPrompt(environment),
+      );
+      handle.client = client;
+      handle.provider = updated;
+      handle.contextWindow = getContextWindow(updated);
+      this.opts.providers = this.opts.providers.map((entry) =>
+        entry.base_url === updated.base_url
+          ? { ...entry, model: updated.model }
+          : entry,
+      );
+      decideAndApply(
+        handle.registry,
+        updated.base_url,
+        updated.protocol,
+        handle.contextWindow,
+      );
+    } catch (err) {
+      this.broadcast({
+        type: "error",
+        data: { message: `Failed to switch model: ${asErrorString(err)}` },
+      });
+      return;
+    }
+    // A save failure must not undo the runtime switch.
+    let saved = true;
+    try {
+      persistModel(updated.base_url, updated.model);
+    } catch {
+      saved = false;
+    }
+    this.broadcastStatus();
+    this.broadcast({
+      type: "system",
+      data: {
+        message: `Model set to ${updated.model}${saved ? " and saved" : " for this session"}.`,
+      },
+    });
+  }
+
+  /** Opens the browser provider dialog (never exposes API keys). */
+  private broadcastProviderList(): void {
+    const handle = this.agentHandle;
+    const currentIndex = handle
+      ? Math.max(
+          0,
+          this.opts.providers.findIndex(
+            (entry) => entry.base_url === handle.provider.base_url,
+          ),
+        )
+      : 0;
+    this.broadcast({
+      type: "provider_list",
+      data: {
+        providers: this.opts.providers.map((entry) => ({
+          name: entry.name,
+          protocol: entry.protocol,
+          base_url: entry.base_url,
+          model: entry.model,
+        })),
+        current: currentIndex,
+      },
+    });
+  }
+
+  /** Switches the active provider, rebuilding the client (terminal parity). */
+  private async applyProviderSwitch(index: number): Promise<void> {
+    const handle = this.agentHandle ?? (await this.ensureAgent());
+    if (!handle) {
+      return;
+    }
+    const provider = this.opts.providers[index];
+    if (!provider) {
+      this.broadcast({
+        type: "error",
+        data: { message: `Unknown provider index: ${String(index)}` },
+      });
+      return;
+    }
+    if (
+      provider.base_url === handle.provider.base_url &&
+      provider.name === handle.provider.name
+    ) {
+      this.broadcast({
+        type: "system",
+        data: { message: `Provider ${provider.name} is already active.` },
+      });
+      return;
+    }
+    try {
+      const environment = detectEnvironment(handle.cwd);
+      environment.model = provider.model;
+      const client = await createClient(
+        provider,
+        buildSystemPrompt(environment),
+      );
+      handle.client = client;
+      handle.provider = provider;
+      handle.contextWindow = getContextWindow(provider);
+      decideAndApply(
+        handle.registry,
+        provider.base_url,
+        provider.protocol,
+        handle.contextWindow,
+      );
+      persistDefaultProvider(index);
+    } catch (err) {
+      this.broadcast({
+        type: "error",
+        data: { message: `Failed to switch provider: ${asErrorString(err)}` },
+      });
+      return;
+    }
+    this.broadcastStatus();
+    this.broadcast({
+      type: "system",
+      data: {
+        message: `Provider switched to ${provider.name} · ${provider.model}.`,
+      },
+    });
+  }
+
+  /** Saves a provider from the browser login form and activates it. */
+  private async handleProviderSave(
+    form: z.infer<typeof ProviderSaveSchema>,
+  ): Promise<void> {
+    let saved: ReturnType<typeof saveProvider>;
+    try {
+      saved = saveProvider(form, this.opts.providers);
+    } catch (err) {
+      this.broadcast({
+        type: "error",
+        data: { message: `Failed to save provider: ${asErrorString(err)}` },
+      });
+      return;
+    }
+    this.opts.providers = saved.providers;
+    this.broadcast({
+      type: "system",
+      data: {
+        message: `Provider ${saved.provider.name} saved${saved.replaced ? " (replaced existing entry)" : ""}.`,
+      },
+    });
+    const index = saved.providers.findIndex(
+      (entry) => entry.base_url === saved.provider.base_url,
+    );
+    await this.applyProviderSwitch(Math.max(0, index));
+  }
+
+  /** Sends the rewind checkpoint list for the browser picker. */
+  private broadcastRewindList(): void {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return;
+    }
+    const fileHistory = handle.fileHistory;
+    if (!fileHistory.hasSnapshots()) {
+      this.broadcast({
+        type: "system",
+        data: { message: "No checkpoints to rewind to." },
+      });
+      return;
+    }
+    this.broadcast({
+      type: "rewind_list",
+      data: {
+        snapshots: fileHistory.getSnapshots().map((snap, index) => ({
+          index,
+          userText: snap.userText,
+          timestamp: snap.timestamp,
+          fileCount: Object.keys(snap.backups).length,
+        })),
+      },
+    });
+  }
+
+  /** Restores code and/or conversation to a checkpoint (terminal /rewind parity). */
+  private handleRewindAction(
+    snapshotIndex: number,
+    action: "code_and_conversation" | "conversation_only" | "code_only",
+  ): void {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return;
+    }
+    if (this.streaming) {
+      this.broadcast({
+        type: "system",
+        data: { message: "Cannot rewind while a run is in progress." },
+      });
+      return;
+    }
+    const fileHistory = handle.fileHistory;
+    const snap = fileHistory.getSnapshots()[snapshotIndex];
+    if (!snap) {
+      this.broadcast({
+        type: "error",
+        data: { message: `Checkpoint ${String(snapshotIndex)} not found.` },
+      });
+      return;
+    }
+    const fileList = (changed: string[]): string =>
+      changed.length > 0
+        ? "\n" + changed.map((file) => "  " + file).join("\n")
+        : "";
+    switch (action) {
+      case "code_and_conversation": {
+        const changed = fileHistory.rewind(snapshotIndex);
+        this.rewindConversation(handle, snap);
+        this.broadcast({
+          type: "system",
+          data: {
+            message: `⟲ Rewound to checkpoint. Restored ${String(changed.length)} file(s) and conversation.${fileList(changed)}`,
+          },
+        });
+        break;
+      }
+      case "conversation_only": {
+        this.rewindConversation(handle, snap);
+        this.broadcast({
+          type: "system",
+          data: { message: "⟲ Rewound conversation. Files unchanged." },
+        });
+        break;
+      }
+      case "code_only": {
+        const changed = fileHistory.rewind(snapshotIndex);
+        this.broadcast({
+          type: "system",
+          data: {
+            message: `⟲ Restored ${String(changed.length)} file(s). Conversation unchanged.${fileList(changed)}`,
+          },
+        });
+        break;
+      }
+    }
+  }
+
+  /**
+   * Truncates the live conversation to a snapshot and replays the visible
+   * transcript to the browsers. The snapshot's sessionLineCount is the
+   * authoritative coordinate (terminal parity); messageIndex is the fallback.
+   */
+  private rewindConversation(handle: RemoteAgentHandle, snap: Snapshot): void {
+    this.broadcast({ type: "clear", data: null });
+    const replayMessage = (
+      role: string,
+      content: string | Record<string, unknown>[],
+    ): void => {
+      const displayContent = contentToText(content);
+      if (!displayContent || displayContent.startsWith("<system-reminder>")) {
+        return;
+      }
+      this.broadcast({
+        type: role === "user" ? "replay_user" : "replay_assistant",
+        data: { content: displayContent },
+      });
+    };
+    const sessionFilePath = getSessionFilePath(handle.cwd, handle.sessionId);
+    if (snap.sessionLineCount !== undefined && existsSync(sessionFilePath)) {
+      truncateSessionLines(sessionFilePath, snap.sessionLineCount);
+      const saved = loadSession(handle.cwd, handle.sessionId);
+      const rebuilt = rebuildFromSession(saved);
+      handle.conv.reset();
+      handle.conv.appendMessages(rebuilt);
+      handle.goalManager = new GoalManager(handle.cwd, handle.sessionId);
+      for (const msg of rebuilt) {
+        replayMessage(msg.role, msg.content);
+      }
+      return;
+    }
+    handle.conv.truncateTo(snap.messageIndex);
+    for (const msg of handle.conv.getMessages()) {
+      if (msg.role === "system") {
+        continue;
+      }
+      replayMessage(msg.role, msg.content);
+    }
+  }
+
+  private getSandbox(): Promise<Sandbox | null> {
+    return (this.sandbox ??= createSandbox());
+  }
+
+  private async disposeSandbox(): Promise<void> {
+    const pending = this.sandbox;
+    this.sandbox = null;
+    const bashTool = this.agentHandle?.registry.getInstanceOf("Bash", BashTool);
+    if (bashTool) {
+      bashTool.sandbox = null;
+      bashTool.sandboxRequired = false;
+    }
+    await (await pending)?.dispose?.();
+  }
+
+  /** /sandbox <auto|manual|off> — runtime sandbox toggle (terminal parity). */
+  private async handleSandboxCommand(args: string): Promise<void> {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return;
+    }
+    const bashTool = handle.registry.getInstanceOf("Bash", BashTool);
+    const arg = args.trim();
+    if (arg === "off") {
+      handle.checker.sandboxEnabled = false;
+      handle.checker.sandboxAutoAllow = false;
+      await this.disposeSandbox();
+      this.broadcast({ type: "system", data: { message: "Sandbox: OFF" } });
+      this.broadcastStatus();
+      return;
+    }
+    if (arg === "auto" || arg === "manual") {
+      const sandbox = await this.getSandbox();
+      const sbAvailable = (await sandbox?.available()) ?? false;
+      const unavailableReason =
+        sandbox?.availabilityError ?? "sandbox unavailable";
+      if (bashTool) {
+        bashTool.sandbox = sandbox;
+        bashTool.sandboxRequired = true;
+        bashTool.sandboxConfig = {
+          allowWrite: [handle.cwd, tmpdir()],
+          denyWrite: [],
+          networkEnabled: this.opts.sandboxConfig?.network_enabled ?? true,
+        };
+      }
+      handle.checker.sandboxEnabled = true;
+      handle.checker.sandboxAutoAllow = arg === "auto";
+      this.broadcast({
+        type: "system",
+        data: {
+          message: `Sandbox: ON + ${arg === "auto" ? "auto-allow" : "manual permissions"}${sbAvailable ? "" : ` (blocked: ${unavailableReason})`}`,
+        },
+      });
+      this.broadcastStatus();
+      return;
+    }
+    const enabled = handle.checker.sandboxEnabled;
+    const status = enabled
+      ? handle.checker.sandboxAutoAllow
+        ? "ON + auto-allow"
+        : "ON + manual"
+      : "OFF";
+    let runtime = "not initialized";
+    if (enabled) {
+      const sandbox = await this.getSandbox();
+      const sbAvailable = (await sandbox?.available()) ?? false;
+      runtime = sbAvailable
+        ? "ready"
+        : `blocked (${sandbox?.availabilityError ?? "sandbox unavailable"})`;
+    }
+    const lines = [
+      `Sandbox status: ${status}`,
+      `Runtime: ${runtime}`,
+      "",
+      "Usage: /sandbox <mode>",
+      "  auto   — Enable sandbox + auto-allow (recommended)",
+      "  manual — Enable sandbox + manual permission confirmation",
+      "  off    — Disable sandbox",
+    ];
+    this.broadcast({
+      type: "system",
+      data: { message: lines.join("\n") },
+    });
+  }
+
+  /** /mcp reload — re-reads the config from disk and reconnects (terminal parity). */
+  private async reloadMcpServers(): Promise<void> {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return;
+    }
+    let servers: MCPServerConfig[];
+    try {
+      servers = withProjectMcpServers(loadConfig(), handle.cwd).mcp_servers;
+    } catch (err) {
+      this.broadcast({
+        type: "system",
+        data: { message: `MCP reload failed: ${asErrorString(err)}` },
+      });
+      return;
+    }
+    this.opts.mcpServers = servers;
+    if (servers.length === 0) {
+      const previous = handle.mcpManager;
+      if (previous) {
+        await previous.disconnectAll();
+        retractMcpInstructions(handle.conv, handle.mcpAnnounced);
+      }
+      removeMcpTools(handle.registry);
+      handle.mcpManager = null;
+      this.broadcast({
+        type: "system",
+        data: {
+          message: "MCP config reloaded: no MCP servers are configured.",
+        },
+      });
+      return;
+    }
+    const mgr = handle.mcpManager ?? new MCPManager();
+    handle.mcpManager = mgr;
+    this.broadcast({
+      type: "system",
+      data: {
+        message: `Reloading MCP server(s): ${servers.map((entry) => entry.name).join(", ")}`,
+      },
+    });
+    removeMcpTools(handle.registry);
+    retractMcpInstructions(handle.conv, handle.mcpAnnounced);
+    const result = await mgr.reconnectAll(servers);
+    for (const { serverName, tool } of result.tools) {
+      const client = mgr.getClient(serverName);
+      if (client) {
+        handle.registry.register(new MCPToolWrapper(client, serverName, tool));
+      }
+    }
+    if (result.errors.length > 0) {
+      this.broadcast({
+        type: "system",
+        data: {
+          message: `MCP errors: ${result.errors.map((entry) => `${entry.serverName}: ${entry.error}`).join("; ")}`,
+        },
+      });
+    }
+    if (result.tools.length > 0) {
+      decideAndApply(
+        handle.registry,
+        handle.provider.base_url,
+        handle.provider.protocol,
+        handle.contextWindow,
+      );
+    }
+    this.broadcast({
+      type: "system",
+      data: {
+        message:
+          `MCP reloaded: ${String(mgr.connectedServers().length)} server(s) connected, ` +
+          `${String(countMcpTools(handle.registry))} tool(s)`,
+      },
+    });
+  }
+
+  /** Rich /status output (terminal parity: provider, sandbox, MCP, session). */
+  private async buildSessionStatus(): Promise<string> {
+    const handle = this.agentHandle;
+    if (!handle) {
+      return "Agent is not ready yet.";
+    }
+    const sandbox = handle.checker.sandboxEnabled
+      ? await this.getSandbox()
+      : null;
+    const sandboxReady = (await sandbox?.available()) ?? false;
+    const sbStatus = handle.checker.sandboxEnabled
+      ? `${handle.checker.sandboxAutoAllow ? "ON (auto-allow)" : "ON (manual)"}, ${sandboxReady ? "ready" : "blocked"}`
+      : "OFF";
+    const lines = [
+      `Mode:      ${handle.permissionMode}`,
+      `Model:     ${handle.provider.model}`,
+      `Provider:  ${handle.provider.name} (${handle.provider.protocol})`,
+      `Tokens:    ${String(this.lastUsage.inputTokens)} in / ${String(this.lastUsage.outputTokens)} out`,
+      `Tools:     ${String(handle.registry.listTools().length)}`,
+      `Sandbox:   ${sbStatus}`,
+      `Memories:  ${handle.memoryEnabled ? String(handle.memoryManager.getMemories().length) : "disabled (enable_memory: false)"}`,
+      `Skills:    ${String(handle.skillCatalog?.list().length ?? 0)}`,
+      `MCP:       ${String(handle.mcpManager?.connectedServers().length ?? 0)} server(s), ${String(countMcpTools(handle.registry))} tool(s)`,
+      `Session:   ${handle.sessionId}`,
+      `Directory: ${handle.cwd}`,
+    ];
+    return lines.join("\n");
+  }
+
+  /** Stores a browser-uploaded image so @-expansion can attach it (clipboard parity). */
+  private async handleImageUpload(upload: {
+    clientId: string;
+    name: string;
+    dataBase64: string;
+  }): Promise<void> {
+    const handle = this.agentHandle ?? (await this.ensureAgent());
+    if (!handle) {
+      return;
+    }
+    try {
+      const bytes = Buffer.from(upload.dataBase64, "base64");
+      if (bytes.length === 0) {
+        throw new Error("Uploaded image is empty.");
+      }
+      if (bytes.length > MAX_UPLOAD_IMAGE_BYTES) {
+        throw new Error(
+          `Uploaded image is too large (${String(bytes.length)} bytes, limit ${String(MAX_UPLOAD_IMAGE_BYTES)}).`,
+        );
+      }
+      const mediaType = sniffMediaType(bytes);
+      if (!mediaType) {
+        throw new Error(
+          "Uploaded file is not a recognized image (png, jpeg, gif, webp).",
+        );
+      }
+      const ext =
+        mediaType === "image/png"
+          ? ".png"
+          : mediaType === "image/jpeg"
+            ? ".jpg"
+            : mediaType === "image/gif"
+              ? ".gif"
+              : ".webp";
+      const dir = fileHistoryDir(handle.sessionId);
+      await mkdir(dir, { recursive: true });
+      const safeName = upload.name
+        .replace(/[^a-zA-Z0-9._-]/gu, "_")
+        .replace(/\.[^.]*$/u, "")
+        .slice(0, 80);
+      const path = join(
+        dir,
+        `upload-${Date.now().toString(36)}-${safeName || "image"}${ext}`,
+      );
+      await writeFile(path, bytes, { mode: 0o600 });
+      this.broadcast({
+        type: "image_saved",
+        data: { clientId: upload.clientId, path },
+      });
+    } catch (err) {
+      this.broadcast({
+        type: "image_error",
+        data: { clientId: upload.clientId, message: asErrorString(err) },
+      });
+    }
+  }
+
+  /** @-mention completion for the browser input (terminal dropdown parity). */
+  private sendFileCompletions(
+    ws: WebSocket,
+    requestId: string,
+    query: string,
+  ): void {
+    const root = this.agentHandle?.cwd ?? cwd();
+    const cache = this.fileCache;
+    let files: string[];
+    if (
+      cache?.key === root &&
+      Date.now() - cache.scannedAt < FILE_CACHE_TTL_MS
+    ) {
+      files = cache.files;
+    } else {
+      files = scanCwdFiles(root);
+      this.fileCache = { key: root, files, scannedAt: Date.now() };
+    }
+    this.send(ws, {
+      type: "file_complete_response",
+      data: { requestId, matches: filterFileMatches(files, query) },
+    });
+  }
+
+  /** Ctrl+B parity: move running foreground shells to the background. */
+  private backgroundForegroundShells(): void {
+    const handle = this.agentHandle;
+    if (!handle || !hasAnyForegroundTasks(handle.registry)) {
+      return;
+    }
+    const count = backgroundAllForegroundTasks(handle.registry);
+    this.broadcast({
+      type: "system",
+      data: {
+        message: `Moved ${String(count)} foreground shell task(s) to the background.`,
+      },
+    });
+  }
+
+  /** Folds a subagent lifecycle event into the broadcast activity state. */
+  private handleSubagentEvent(ev: RemoteSubagentEvent): void {
+    const existing = this.subagentStates.get(ev.toolCallId);
+    switch (ev.type) {
+      case "started":
+        this.subagentStates.set(ev.toolCallId, {
+          toolCallId: ev.toolCallId,
+          role: ev.role,
+          background: ev.background,
+          turnCount: 0,
+          activeTools: [],
+          status: "running",
+        });
+        break;
+      case "tool_use":
+        if (existing) {
+          existing.activeTools = [
+            ...existing.activeTools.filter((tool) => tool.toolId !== ev.toolId),
+            { toolId: ev.toolId, toolName: ev.toolName },
+          ];
+        }
+        break;
+      case "tool_result":
+        if (existing) {
+          existing.activeTools = existing.activeTools.filter(
+            (tool) => tool.toolId !== ev.toolId,
+          );
+        }
+        break;
+      case "turn_complete":
+        if (existing) {
+          existing.turnCount += 1;
+          existing.activeTools = [];
+        }
+        break;
+      case "finished":
+        if (existing) {
+          existing.status = ev.status;
+          existing.activeTools = [];
+        } else {
+          this.subagentStates.set(ev.toolCallId, {
+            toolCallId: ev.toolCallId,
+            role: ev.role,
+            background: ev.background,
+            turnCount: 0,
+            activeTools: [],
+            status: ev.status,
+          });
+        }
+        break;
+    }
+    this.broadcastSubagents();
+  }
+
+  private broadcastSubagents(): void {
+    this.broadcast({
+      type: "subagents",
+      data: {
+        list: [...this.subagentStates.values()].map((entry) => ({
+          ...entry,
+          activeTools: [...entry.activeTools],
+        })),
+      },
+    });
+  }
+
+  /**
+   * Wires the live activity feeds the terminal gets from its hooks: the task
+   * board (todo progress), background tasks, teammate states, and the idle
+   * notification wakeup that drains pending task notifications.
+   */
+  private attachActivityBridge(handle: RemoteAgentHandle): void {
+    if (this.activityAttached) {
+      return;
+    }
+    this.activityAttached = true;
+    subscribeLeaderTasks(
+      handle.teamManager,
+      handle.taskList,
+      (tasks, boardId) => {
+        this.broadcast({
+          type: "todo_update",
+          data: {
+            boardId,
+            tasks: tasks.map((task) => ({
+              id: task.id,
+              subject: task.subject,
+              activeForm: task.activeForm ?? null,
+              status: task.status,
+            })),
+          },
+        });
+      },
+    );
+    handle.backgroundTaskManager.subscribe((tasks) => {
+      this.broadcast({
+        type: "background_tasks",
+        data: {
+          list: tasks.map((task) => ({
+            id: task.id,
+            name: task.name,
+            kind: task.kind ?? "agent",
+            status: task.status,
+          })),
+        },
+      });
+    });
+    this.teammateTimer = setInterval(() => {
+      const current = this.agentHandle;
+      if (!current) {
+        return;
+      }
+      const states = current.teamManager.getAllTeammateStates();
+      const signature = JSON.stringify(states);
+      if (signature === this.teammateSignature) {
+        return;
+      }
+      this.teammateSignature = signature;
+      this.broadcast({
+        type: "teammates",
+        data: {
+          list: states.map((state) => ({
+            name: state.name,
+            teamName: state.teamName,
+            status: state.status,
+            spinnerVerb: state.spinnerVerb,
+            lastMessage: state.lastMessage ?? null,
+            turnCount: state.progress.turnCount,
+            toolUseCount: state.progress.toolUseCount,
+            tokenCount: state.progress.tokenCount,
+            activeTools: state.progress.activeTools.map((tool) => ({
+              toolId: tool.toolId,
+              toolName: tool.toolName,
+            })),
+          })),
+        },
+      });
+    }, 500);
+    this.teammateTimer.unref();
+    this.wakeupTimer = setInterval(() => {
+      const current = this.agentHandle;
+      if (!current || this.streaming || this.followUps.length > 0) {
+        return;
+      }
+      if (
+        current.teamManager.hasLeaderNotifications() ||
+        current.backgroundTaskManager.hasNotifications()
+      ) {
+        void this.runNotificationTurn();
+      }
+    }, 250);
+    this.wakeupTimer.unref();
+  }
+
   /** Builds a CommandContext for slash command execution. */
   private buildCommandContext(args: string): CommandContext {
     const handle = this.agentHandle;
@@ -1800,7 +3255,8 @@ export class RemoteServer {
       cwd: handle.cwd,
       args,
       permissionMode: () => handle.permissionMode,
-      tokenCount: () => [0, 0] as const,
+      tokenCount: () =>
+        [this.lastUsage.inputTokens, this.lastUsage.outputTokens] as const,
       toolCount: () => handle.registry.listTools().length,
       memoryList: () =>
         handle.memoryEnabled
@@ -1959,6 +3415,29 @@ export class RemoteServer {
     }
   }
 
+  /** Usage snapshot with live context-window occupancy (terminal footer parity). */
+  private usagePayload(): {
+    inputTokens: number;
+    outputTokens: number;
+    contextTokens: number;
+    contextWindow: number;
+  } {
+    const handle = this.agentHandle;
+    return {
+      inputTokens: this.lastUsage.inputTokens,
+      outputTokens: this.lastUsage.outputTokens,
+      contextTokens: handle ? currentContextTokens(handle.conv) : 0,
+      contextWindow: handle?.contextWindow ?? 0,
+    };
+  }
+
+  private sendUsageSnapshot(ws: WebSocket): void {
+    if (!this.agentHandle) {
+      return;
+    }
+    this.send(ws, { type: "usage", data: this.usagePayload() });
+  }
+
   /** Builds the status snapshot message, or null before the agent exists. */
   private statusPayload(): WsOutbound | null {
     const handle = this.agentHandle;
@@ -1969,11 +3448,19 @@ export class RemoteServer {
       type: "status",
       data: {
         model: handle.provider.model,
+        provider: handle.provider.name,
         permissionMode: handle.permissionMode,
         thinkingLevel:
           handle.client.getThinkingLevel?.() ??
           handle.provider.thinking ??
           DEFAULT_THINKING_LEVEL,
+        thinkingLevels: [
+          ...(handle.client.getSupportedThinkingLevels?.() ??
+            getSupportedThinkingLevels(handle.provider)),
+        ],
+        sandboxEnabled: handle.checker.sandboxEnabled,
+        sandboxAutoAllow: handle.checker.sandboxAutoAllow,
+        contextWindow: handle.contextWindow,
       },
     };
   }
@@ -2247,10 +3734,7 @@ export class RemoteServer {
   }
 
   /** Renders /mcp status output (parity with the terminal UI). */
-  private buildMcpStatus(args: string): string {
-    if (args.trim().toLowerCase() === "reload") {
-      return "MCP reload is not supported in remote mode. Restart the remote server to reconnect.";
-    }
+  private buildMcpStatus(): string {
     const handle = this.agentHandle;
     const manager = handle?.mcpManager;
     if (!manager || !handle) {
@@ -2324,6 +3808,8 @@ export class RemoteServer {
     await handle.backgroundTaskManager.stopAll();
     const replay = restoreRemoteSession(handle, targetId, saved);
     touchSession(cwd, targetId);
+    this.subagentStates.clear();
+    this.broadcastSubagents();
 
     this.broadcast({
       type: "connected",
@@ -2508,7 +3994,7 @@ export class RemoteServer {
     });
     try {
       const factory = this.opts.agentFactory ?? createRemoteAgent;
-      this.agentHandle = await factory({
+      const handle = await factory({
         provider: this.startProvider(),
         cwd: cwd(),
         hooks: this.opts.hookConfigs,
@@ -2519,7 +4005,12 @@ export class RemoteServer {
         enableCoordinatorMode: this.opts.enableCoordinatorMode,
         forkDisabled: this.opts.forkDisabled,
         memoryEnabled: this.opts.memoryEnabled !== false,
+        onSubagentEvent: (event) => {
+          this.handleSubagentEvent(event);
+        },
       });
+      this.agentHandle = handle;
+      this.attachActivityBridge(handle);
     } catch (err) {
       log.warn({ err }, "agent init deferred -- will retry on first message");
       this.agentHandle = null;
@@ -2570,6 +4061,16 @@ export class RemoteServer {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    if (this.teammateTimer) {
+      clearInterval(this.teammateTimer);
+      this.teammateTimer = null;
+    }
+    if (this.wakeupTimer) {
+      clearInterval(this.wakeupTimer);
+      this.wakeupTimer = null;
+    }
+    this.modelListController?.abort();
+    this.modelListController = null;
     for (const ws of this.clients) {
       ws.close();
     }
@@ -2604,6 +4105,11 @@ export class RemoteServer {
         }
       }
       try {
+        await this.disposeSandbox();
+      } catch {
+        // best-effort
+      }
+      try {
         await this.agentHandle.registry.dispose();
       } catch (error) {
         log.error({ error }, "remote tool cleanup failed");
@@ -2620,6 +4126,8 @@ export class RemoteServer {
     this.agentHandle?.abort();
     this.compactController?.abort();
     this.reviewController?.abort();
+    this.userBashController?.abort();
+    this.forkController?.abort();
     // Aborting a provider cannot settle promises owned by the WebSocket UI.
     for (const resolve of this.pendingPermissions.values()) {
       resolve("deny");

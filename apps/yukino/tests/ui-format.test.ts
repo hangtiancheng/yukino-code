@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 import {
   expandTabs,
   plainTerminalLine,
-  plainTerminalText,
   visibleWidth,
   wrapToLines,
   wrapWordsToLines,
 } from "@/ui/terminal-text.js";
 import { formatToolOutputPreview } from "@/ui/tool-preview.js";
+import { plainTerminalText } from "@/utils/index.js";
 
 describe("UI v2 tool previews", () => {
   it.each([

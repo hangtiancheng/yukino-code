@@ -573,6 +573,8 @@ yukino --remote 0                # OS-assigned ephemeral port; the actual URL is
 
 Starts an Express HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction. With port 0 the OS picks a free port and the server prints the reachable address (e.g. `Remote server listening at http://127.0.0.1:61041`) so you know where to connect.
 
+The browser UI mirrors the terminal UI's capabilities: streaming replies and thinking, tool cards with live output, permission and ask-user dialogs, plan approval, the code-review form, `/resume` session picker, steering messages while a turn runs (with a follow-up queue for messages that cannot steer), prompt history (`↑`/`↓`), `@file` completion, `!`/`!!` user Bash, image attachments (paste, drop, or the attach button — stored like terminal clipboard images and expanded as `@` references), todo progress, the Agents panel (subagents, background tasks, teammates), context-window usage, and dark/light themes. Model (`/model`), provider (`/login`, `/provider`), thinking level (`/thinking`), permission mode (badge click or `Shift+Tab`), rewind (`/rewind`), sandbox (`/sandbox`), worktree (`/worktree`), MCP reload (`/mcp reload`), fork-mode skills, and `/quit` (shuts the server down) all work from the browser; `Ctrl+B` backgrounds running foreground shells and `Esc` cancels the active turn. Background tasks and teammate notifications wake an idle server the same way they do in the terminal.
+
 ### ACP Mode (Editor Integration)
 
 ```bash

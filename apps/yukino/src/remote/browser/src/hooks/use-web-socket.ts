@@ -60,6 +60,25 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   useEffect(() => {
     let disposed = false;
 
+    // A hash-only navigation (e.g. opening a fresh invite URL after the
+    // server restarted with a new token) swaps the token without a page
+    // reload; adopt it and reconnect.
+    const onHashChange = () => {
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const token = params.get("token");
+      if (token && token !== accessTokenRef.current) {
+        accessTokenRef.current = token;
+        window.sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+        wsRef.current?.close();
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+
     const connect = () => {
       if (disposed) {
         return;
@@ -130,6 +149,7 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
     return () => {
       disposed = true;
+      window.removeEventListener("hashchange", onHashChange);
       if (pingRef.current) {
         clearInterval(pingRef.current);
         pingRef.current = null;

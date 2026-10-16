@@ -1,20 +1,37 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ActivityPanel } from "./components/activity-panel";
 import { CodeReviewDialog } from "./components/code-review-dialog";
 import { InputArea } from "./components/input-area";
 import { MessageList } from "./components/message-list";
+import { ModelPicker } from "./components/model-picker";
 import { PlanApprovalDialog } from "./components/plan-approval-dialog";
+import { ProviderDialog } from "./components/provider-dialog";
+import { RewindDialog } from "./components/rewind-dialog";
 import { SessionPicker } from "./components/session-picker";
 import { StatusBar } from "./components/status-bar";
+import { ThinkingPicker } from "./components/thinking-picker";
+import { TodoProgress } from "./components/todo-progress";
 import { useChat } from "./hooks/use-chat";
 import { useTheme } from "./hooks/use-theme";
 import { useWebSocket } from "./hooks/use-web-socket";
 import type {
   ClientMessage,
   CodeReviewStartPayload,
+  PermissionModeChoice,
   PermissionResponse,
   PlanChoice,
+  ProviderSavePayload,
+  RewindChoice,
 } from "./types";
+
+/** Terminal PERMISSION_MODE_CYCLE: default → acceptEdits → bypassPermissions → plan. */
+const MODE_CYCLE: PermissionModeChoice[] = [
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+  "plan",
+];
 
 export function App() {
   const {
@@ -26,9 +43,17 @@ export function App() {
     closePlanApproval,
     closeSessions,
     closeCodeReview,
+    closeModelPicker,
+    closeProviderPicker,
+    closeRewindPicker,
+    closeThinkingPicker,
+    openThinkingPicker,
+    appendHistory,
+    consumeImageResult,
   } = useChat();
 
   const { theme, toggleTheme } = useTheme();
+  const [activityOpen, setActivityOpen] = useState(false);
 
   const { send } = useWebSocket({
     onMessage: dispatchMessage,
@@ -42,13 +67,14 @@ export function App() {
 
   const handleSend = useCallback(
     (text: string) => {
+      appendHistory(text);
       const msg: ClientMessage = {
         type: "user_message",
         data: { content: text },
       };
       send(msg);
     },
-    [send],
+    [appendHistory, send],
   );
 
   const handleCancel = useCallback(() => {
@@ -103,6 +129,92 @@ export function App() {
     [closeCodeReview, send],
   );
 
+  const cyclePermissionMode = useCallback(() => {
+    const current = state.permissionMode || "default";
+    const index = MODE_CYCLE.findIndex((mode) => mode === current);
+    const next = MODE_CYCLE[(index + 1) % MODE_CYCLE.length];
+    if (next) {
+      send({ type: "set_permission_mode", data: { mode: next } });
+    }
+  }, [state.permissionMode, send]);
+
+  const handleModelSelect = useCallback(
+    (model: string) => {
+      closeModelPicker();
+      send({ type: "model_select", data: { model } });
+    },
+    [closeModelPicker, send],
+  );
+
+  const handleProviderSelect = useCallback(
+    (index: number) => {
+      closeProviderPicker();
+      send({ type: "provider_select", data: { index } });
+    },
+    [closeProviderPicker, send],
+  );
+
+  const handleProviderSave = useCallback(
+    (form: ProviderSavePayload) => {
+      closeProviderPicker();
+      send({ type: "provider_save", data: form });
+    },
+    [closeProviderPicker, send],
+  );
+
+  const handleRewindAction = useCallback(
+    (snapshotIndex: number, action: RewindChoice) => {
+      closeRewindPicker();
+      send({ type: "rewind_action", data: { snapshotIndex, action } });
+    },
+    [closeRewindPicker, send],
+  );
+
+  const handleThinkingSelect = useCallback(
+    (level: string) => {
+      closeThinkingPicker();
+      send({ type: "user_message", data: { content: `/thinking ${level}` } });
+    },
+    [closeThinkingPicker, send],
+  );
+
+  const handleRequestFileCompletions = useCallback(
+    (requestId: string, query: string) => {
+      send({ type: "file_complete_request", data: { requestId, query } });
+    },
+    [send],
+  );
+
+  const handleUploadImage = useCallback(
+    (clientId: string, name: string, dataBase64: string) => {
+      send({ type: "image_upload", data: { clientId, name, dataBase64 } });
+    },
+    [send],
+  );
+
+  const handleBackgroundShells = useCallback(() => {
+    send({ type: "background_shells", data: {} });
+  }, [send]);
+
+  // Terminal Shift+Tab parity: cycle the permission mode from anywhere.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.shiftKey && event.key === "Tab") {
+        event.preventDefault();
+        cyclePermissionMode();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [cyclePermissionMode]);
+
+  const agentCount =
+    state.subagents.filter((agent) => agent.status === "running").length +
+    state.backgroundTasks.filter((task) => task.status === "running").length +
+    state.teammates.length;
+
   const welcome = useMemo(
     () => ({
       session: state.session,
@@ -128,11 +240,24 @@ export function App() {
         connection={state.connection}
         usage={state.usage}
         cwd={state.cwd}
+        session={state.session}
         model={state.model}
+        provider={state.provider}
         permissionMode={state.permissionMode}
         thinkingLevel={state.thinkingLevel}
+        sandboxEnabled={state.sandboxEnabled}
+        sandboxAutoAllow={state.sandboxAutoAllow}
         theme={theme}
+        agentCount={agentCount}
         onToggleTheme={toggleTheme}
+        onCycleMode={cyclePermissionMode}
+        onOpenModelPicker={() => {
+          send({ type: "model_list_request", data: {} });
+        }}
+        onOpenThinkingPicker={openThinkingPicker}
+        onOpenActivity={() => {
+          setActivityOpen(true);
+        }}
       />
       <MessageList
         items={state.items}
@@ -140,12 +265,21 @@ export function App() {
         onRespondPermission={handleRespondPermission}
         onAnswerAsk={handleAnswerAsk}
       />
+      {state.todos && <TodoProgress todos={state.todos} />}
       <InputArea
         streaming={state.streaming}
         commands={state.commands}
         steering={state.steering}
+        followUps={state.followUps}
+        history={state.history}
+        fileMatches={state.fileMatches}
+        imageResults={state.imageResults}
         onSend={handleSend}
         onCancel={handleCancel}
+        onRequestFileCompletions={handleRequestFileCompletions}
+        onUploadImage={handleUploadImage}
+        onConsumeImageResult={consumeImageResult}
+        onBackgroundShells={handleBackgroundShells}
       />
       {state.planApproval && (
         <PlanApprovalDialog
@@ -164,6 +298,45 @@ export function App() {
         <CodeReviewDialog
           onRun={handleCodeReviewRun}
           onClose={closeCodeReview}
+        />
+      )}
+      {state.modelPicker && (
+        <ModelPicker
+          state={state.modelPicker}
+          onSelect={handleModelSelect}
+          onClose={closeModelPicker}
+        />
+      )}
+      {state.providerPicker && (
+        <ProviderDialog
+          state={state.providerPicker}
+          onSelect={handleProviderSelect}
+          onSave={handleProviderSave}
+          onClose={closeProviderPicker}
+        />
+      )}
+      {state.rewindPicker && (
+        <RewindDialog
+          snapshots={state.rewindPicker}
+          onAction={handleRewindAction}
+          onClose={closeRewindPicker}
+        />
+      )}
+      {state.thinkingPicker && (
+        <ThinkingPicker
+          form={state.thinkingPicker}
+          onSelect={handleThinkingSelect}
+          onClose={closeThinkingPicker}
+        />
+      )}
+      {activityOpen && (
+        <ActivityPanel
+          subagents={state.subagents}
+          backgroundTasks={state.backgroundTasks}
+          teammates={state.teammates}
+          onClose={() => {
+            setActivityOpen(false);
+          }}
         />
       )}
     </div>

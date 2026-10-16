@@ -277,8 +277,17 @@ describe("terminal input report filtering", () => {
     for (const byte of Buffer.from(text + paste)) {
       terminal.stream.write(Buffer.from([byte]));
     }
-    await nextTick();
-    expect(readInput()).toBe(text + paste);
+    // Byte-at-a-time flow through the stream pipeline completes across an
+    // environment-dependent number of event-loop turns; accumulate reads
+    // until the full sequence arrives instead of assuming a single tick.
+    let received = "";
+    await vi.waitFor(
+      () => {
+        received += readInput();
+        expect(received).toBe(text + paste);
+      },
+      { interval: 5, timeout: 2000 },
+    );
     terminal.stream.write("\x1b");
     await vi.advanceTimersByTimeAsync(40);
     expect(readInput()).toBe("\x1b");

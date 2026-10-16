@@ -5,7 +5,6 @@ import { renderMarkdown, renderStreamingMarkdown } from "./markdown.js";
 import {
   expandTabs,
   plainTerminalLine,
-  plainTerminalText,
   truncateToWidth,
   wrapToLines,
 } from "./terminal-text.js";
@@ -15,6 +14,7 @@ import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import { parseSkillPrompt } from "@/skills/executor.js";
 import { THEME } from "@/ui/styles.js";
+import { plainTerminalText } from "@/utils/index.js";
 
 export interface ToolSummaryItem {
   toolName: string;

@@ -18,8 +18,13 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
     type: "status",
     data: {
       model: "model-a",
+      provider: "provider-a",
       permissionMode: "default",
       thinkingLevel: "high",
+      thinkingLevels: ["off", "low", "high"],
+      sandboxEnabled: false,
+      sandboxAutoAllow: false,
+      contextWindow: 200000,
     },
   },
   system: { type: "system", data: { message: "ready" } },
@@ -101,11 +106,126 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
     type: "loop_complete",
     data: { stopReason: "end_turn", totalTurns: 1, elapsed: 1.5 },
   },
-  usage: { type: "usage", data: { inputTokens: 10, outputTokens: 5 } },
+  usage: {
+    type: "usage",
+    data: {
+      inputTokens: 10,
+      outputTokens: 5,
+      contextTokens: 1200,
+      contextWindow: 200000,
+    },
+  },
   error: { type: "error", data: { message: "failed" } },
   compact: { type: "compact", data: { message: "compacted" } },
   retry: { type: "retry", data: { reason: "busy", waitMs: 1000 } },
   pong: { type: "pong", data: null },
+  history: { type: "history", data: { entries: ["hello", "world"] } },
+  todo_update: {
+    type: "todo_update",
+    data: {
+      boardId: "private:0",
+      tasks: [
+        { id: "1", subject: "task", activeForm: null, status: "pending" },
+      ],
+    },
+  },
+  subagents: {
+    type: "subagents",
+    data: {
+      list: [
+        {
+          toolCallId: "call-1",
+          role: "explorer",
+          background: false,
+          turnCount: 2,
+          status: "running",
+          activeTools: [{ toolId: "t1", toolName: "Read" }],
+        },
+      ],
+    },
+  },
+  background_tasks: {
+    type: "background_tasks",
+    data: {
+      list: [
+        { id: "agent-1", name: "build", kind: "shell", status: "running" },
+      ],
+    },
+  },
+  teammates: {
+    type: "teammates",
+    data: {
+      list: [
+        {
+          name: "alice",
+          teamName: "alpha",
+          status: "running",
+          spinnerVerb: "writing",
+          lastMessage: null,
+          turnCount: 3,
+          toolUseCount: 7,
+          tokenCount: 1200,
+          activeTools: [{ toolId: "t2", toolName: "Write" }],
+        },
+      ],
+    },
+  },
+  model_list: {
+    type: "model_list",
+    data: {
+      status: "ready",
+      models: [{ id: "model-a", name: null }],
+      current: "model-a",
+    },
+  },
+  provider_list: {
+    type: "provider_list",
+    data: {
+      providers: [
+        {
+          name: "p1",
+          protocol: "openai",
+          base_url: "https://api.example.com",
+          model: "model-a",
+        },
+      ],
+      current: 0,
+    },
+  },
+  rewind_list: {
+    type: "rewind_list",
+    data: {
+      snapshots: [
+        {
+          index: 0,
+          userText: "fix the bug",
+          timestamp: "2026-10-01T00:00:00.000Z",
+          fileCount: 2,
+        },
+      ],
+    },
+  },
+  thinking_form: {
+    type: "thinking_form",
+    data: { current: "high", levels: ["off", "high"] },
+  },
+  file_complete_response: {
+    type: "file_complete_response",
+    data: { requestId: "at-1", matches: ["src/a.ts"] },
+  },
+  image_saved: {
+    type: "image_saved",
+    data: { clientId: "img-1", path: "/tmp/upload.png" },
+  },
+  image_error: {
+    type: "image_error",
+    data: { clientId: "img-2", message: "too large" },
+  },
+  followups: { type: "followups", data: { list: ["queued message"] } },
+  tool_output: {
+    type: "tool_output",
+    data: { toolId: "user-bash-1", output: "partial" },
+  },
 };
 
 describe("server WebSocket message validation", () => {

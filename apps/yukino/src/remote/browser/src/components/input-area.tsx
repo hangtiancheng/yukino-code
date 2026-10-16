@@ -1,5 +1,9 @@
-import type { SlashCommand } from "@browser/types";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  FileCompleteResponsePayload,
+  ImageResultPayload,
+  SlashCommand,
+} from "@browser/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SlashMenu } from "./slash-menu";
 
@@ -8,34 +12,86 @@ interface InputAreaProps {
   commands: SlashCommand[];
   /** Steering messages queued for the in-flight run. */
   steering: string[];
+  /** Messages queued as follow-ups while the turn is busy. */
+  followUps: string[];
+  /** Prompt history shared with the terminal (↑/↓ navigation). */
+  history: string[];
+  /** Latest @-mention completion response from the server. */
+  fileMatches: FileCompleteResponsePayload | null;
+  /** Settled image uploads (path inserted as an @-ref, or an error hint). */
+  imageResults: ImageResultPayload[];
   onSend: (text: string) => void;
   onCancel: () => void;
+  onRequestFileCompletions: (requestId: string, query: string) => void;
+  onUploadImage: (clientId: string, name: string, dataBase64: string) => void;
+  onConsumeImageResult: (clientId: string) => void;
+  onBackgroundShells: () => void;
 }
 
 const MAX_TEXTAREA_HEIGHT = 200;
+const FILE_COMPLETE_DEBOUNCE_MS = 150;
 
-/** Mirrors the server's slash-command parse: "/name ..." but not filesystem paths. */
-function looksLikeCommand(text: string): boolean {
-  if (!text.startsWith("/")) {
-    return false;
+let uploadCounter = 0;
+function nextUploadId(): string {
+  uploadCounter += 1;
+  return `img_${Date.now().toString(36)}_${String(uploadCounter)}`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Failed to read the file."));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** The `@token` immediately before the caret, or null (terminal atQuery parity). */
+function atQueryBefore(value: string, caret: number): string | null {
+  if (value.startsWith("/") || value.trimStart().startsWith("!")) {
+    return null;
   }
-  const name = text.slice(1).trim().split(/\s/u)[0] ?? "";
-  return name.length > 0 && !name.includes("/");
+  const before = value.slice(0, caret);
+  const match = /(?:^|\s)@([^\s]*)$/u.exec(before);
+  return match ? match[1] : null;
 }
 
 export function InputArea({
   streaming,
   commands,
   steering,
+  followUps,
+  history,
+  fileMatches,
+  imageResults,
   onSend,
   onCancel,
+  onRequestFileCompletions,
+  onUploadImage,
+  onConsumeImageResult,
+  onBackgroundShells,
 }: InputAreaProps) {
   const [value, setValue] = useState("");
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashCursor, setSlashCursor] = useState(0);
   const [blockedHint, setBlockedHint] = useState("");
+  const [atCursor, setAtCursor] = useState(0);
+  const [atDismissed, setAtDismissed] = useState(false);
+  const [uploads, setUploads] = useState<{ clientId: string; name: string }[]>(
+    [],
+  );
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const blockedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyIndexRef = useRef(-1);
+  const historyDraftRef = useRef<string | null>(null);
+  const atRequestRef = useRef("");
+  const caretRef = useRef(0);
 
   const filtered = useMemo<SlashCommand[]>(() => {
     // Commands cannot run mid-stream; keep the menu closed while steering.
@@ -53,6 +109,103 @@ export function InputArea({
     setSlashOpen(filtered.length > 0);
     setSlashCursor(0);
   }, [filtered]);
+
+  // ---- @-mention completion ----
+  const atQuery = useMemo(() => {
+    if (slashOpen) {
+      return null;
+    }
+    return atQueryBefore(value, caretRef.current);
+  }, [value, slashOpen]);
+
+  useEffect(() => {
+    if (atQuery === null) {
+      return;
+    }
+    const requestId = `at_${Date.now().toString(36)}_${String(Math.random()).slice(2, 8)}`;
+    const timer = setTimeout(() => {
+      atRequestRef.current = requestId;
+      onRequestFileCompletions(requestId, atQuery);
+    }, FILE_COMPLETE_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [atQuery, onRequestFileCompletions]);
+
+  const atMatches =
+    atQuery !== null &&
+    !atDismissed &&
+    fileMatches !== null &&
+    fileMatches.requestId === atRequestRef.current
+      ? fileMatches.matches
+      : [];
+
+  useEffect(() => {
+    setAtCursor(0);
+  }, [atMatches.length, atQuery]);
+
+  const applyAtMatch = useCallback(
+    (match: string) => {
+      const el = textareaRef.current;
+      const caret = el?.selectionStart ?? value.length;
+      const query = atQueryBefore(value, caret);
+      if (query === null) {
+        return;
+      }
+      const tokenStart = caret - query.length - 1;
+      const insertion = match.includes(" ") ? `'@${match}'` : `@${match}`;
+      const next = value.slice(0, tokenStart) + insertion + value.slice(caret);
+      setValue(next);
+      setAtDismissed(true);
+      requestAnimationFrame(() => {
+        if (el) {
+          const position = tokenStart + insertion.length;
+          el.focus();
+          el.setSelectionRange(position, position);
+          caretRef.current = position;
+        }
+      });
+    },
+    [value],
+  );
+
+  // ---- image uploads ----
+  const uploadImage = useCallback(
+    (file: File) => {
+      const clientId = nextUploadId();
+      setUploads((prev) => [...prev, { clientId, name: file.name || "image" }]);
+      void fileToBase64(file).then(
+        (dataBase64) => {
+          onUploadImage(clientId, file.name || "image.png", dataBase64);
+        },
+        () => {
+          setUploads((prev) =>
+            prev.filter((entry) => entry.clientId !== clientId),
+          );
+          flashHint("Could not read the image file.");
+        },
+      );
+    },
+    [onUploadImage],
+  );
+
+  useEffect(() => {
+    for (const result of imageResults) {
+      setUploads((prev) =>
+        prev.filter((entry) => entry.clientId !== result.clientId),
+      );
+      if (result.path) {
+        const insertion = `@'${result.path}'`;
+        setValue((current) => {
+          const pad = current.length > 0 && !/\s$/u.test(current) ? " " : "";
+          return current + pad + insertion + " ";
+        });
+      } else {
+        flashHint(result.message ?? "Image upload failed.");
+      }
+      onConsumeImageResult(result.clientId);
+    }
+  }, [imageResults, onConsumeImageResult]);
 
   // Auto-grow the textarea up to MAX_TEXTAREA_HEIGHT.
   useEffect(() => {
@@ -80,7 +233,7 @@ export function InputArea({
     [],
   );
 
-  const flashHint = (message: string): void => {
+  function flashHint(message: string): void {
     setBlockedHint(message);
     if (blockedTimerRef.current) {
       clearTimeout(blockedTimerRef.current);
@@ -88,7 +241,7 @@ export function InputArea({
     blockedTimerRef.current = setTimeout(() => {
       setBlockedHint("");
     }, 4000);
-  };
+  }
 
   const selectSlash = (index: number) => {
     const cmd = filtered[index];
@@ -105,22 +258,60 @@ export function InputArea({
     if (!text) {
       return;
     }
-    if (streaming && looksLikeCommand(text)) {
-      // Matches the server behavior: slash commands cannot be steered into a
-      // running turn, and they are not queued either — the user must resend
-      // once the turn finishes.
-      flashHint(
-        "Commands cannot run mid-turn. Wait for the turn to finish, then resend.",
-      );
-      return;
-    }
     onSend(text);
     setValue("");
     setSlashOpen(false);
+    setAtDismissed(false);
     setBlockedHint("");
+    historyIndexRef.current = -1;
+    historyDraftRef.current = null;
+  };
+
+  /** ↑/↓ prompt-history navigation when the caret is at a vertical edge. */
+  const navigateHistory = (direction: -1 | 1): boolean => {
+    if (history.length === 0) {
+      return false;
+    }
+    const index = historyIndexRef.current;
+    if (direction === -1) {
+      const next = index === -1 ? history.length - 1 : Math.max(0, index - 1);
+      if (index === -1) {
+        historyDraftRef.current = value;
+      }
+      historyIndexRef.current = next;
+      const entry = history[next];
+      if (entry !== undefined) {
+        setValue(entry);
+      }
+      return true;
+    }
+    if (index === -1) {
+      return false;
+    }
+    const next = index + 1;
+    if (next >= history.length) {
+      historyIndexRef.current = -1;
+      setValue(historyDraftRef.current ?? "");
+      historyDraftRef.current = null;
+      return true;
+    }
+    historyIndexRef.current = next;
+    const entry = history[next];
+    if (entry !== undefined) {
+      setValue(entry);
+    }
+    return true;
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    caretRef.current = e.currentTarget.selectionStart ?? value.length;
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      onBackgroundShells();
+      return;
+    }
+
     if (slashOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -143,11 +334,71 @@ export function InputArea({
         return;
       }
     }
+
+    if (atMatches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setAtCursor((c) => Math.min(c + 1, atMatches.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setAtCursor((c) => Math.max(c - 1, 0));
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+        e.preventDefault();
+        const match = atMatches[atCursor];
+        if (match) {
+          applyAtMatch(match);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setAtDismissed(true);
+        return;
+      }
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (streaming) {
+        onCancel();
+      } else if (value) {
+        setValue("");
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp" && !e.shiftKey) {
+      const el = e.currentTarget;
+      const caret = el.selectionStart ?? 0;
+      const onFirstLine = !value.slice(0, caret).includes("\n");
+      if (onFirstLine && navigateHistory(-1)) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if (e.key === "ArrowDown" && !e.shiftKey) {
+      const el = e.currentTarget;
+      const caret = el.selectionStart ?? 0;
+      const onLastLine = !value.slice(caret).includes("\n");
+      if (onLastLine && historyIndexRef.current !== -1 && navigateHistory(1)) {
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
     }
   };
+
+  const trimmed = value.trimStart();
+  const bashMode = trimmed.startsWith("!");
+  const bashExcluded = trimmed.startsWith("!!");
 
   return (
     <footer className="shrink-0 border-t border-border bg-bg [padding-bottom:env(safe-area-inset-bottom)]">
@@ -160,103 +411,234 @@ export function InputArea({
             onHover={setSlashCursor}
           />
         )}
-        {steering.length > 0 && (
+        {atMatches.length > 0 && (
+          <div
+            role="listbox"
+            aria-label="File completions"
+            className="absolute inset-x-3 bottom-full mb-2 max-h-56 overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-pop sm:inset-x-5"
+          >
+            {atMatches.map((match, i) => (
+              <button
+                key={match}
+                type="button"
+                role="option"
+                aria-selected={i === atCursor}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  applyAtMatch(match);
+                }}
+                onMouseEnter={() => {
+                  setAtCursor(i);
+                }}
+                className={`flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-1.5 text-left ${i === atCursor ? "bg-accent/8" : ""}`}
+              >
+                <span className="truncate font-mono text-xs text-base">
+                  {match}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {(steering.length > 0 || followUps.length > 0) && (
           <div
             className="mb-2 flex flex-wrap gap-1.5"
             role="status"
-            aria-label="Queued steering messages"
+            aria-label="Queued messages"
           >
             {steering.map((text, index) => (
               <span
-                key={`${text}_${String(index)}`}
+                key={`steer_${text}_${String(index)}`}
                 className="max-w-full truncate rounded-full border border-accent/30 bg-accent/6 px-2.5 py-0.5 font-mono text-[11px] text-accent"
                 title={text}
               >
-                {`queued: ${text}`}
+                {`steering: ${text}`}
+              </span>
+            ))}
+            {followUps.map((text, index) => (
+              <span
+                key={`follow_${text}_${String(index)}`}
+                className="max-w-full truncate rounded-full border border-yellow/30 bg-yellow/6 px-2.5 py-0.5 font-mono text-[11px] text-yellow"
+                title={text}
+              >
+                {`follow-up: ${text}`}
               </span>
             ))}
           </div>
         )}
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-surface p-2 shadow-card transition-colors focus-within:border-accent/50">
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-            }}
-            onKeyDown={onKeyDown}
-            placeholder={
-              streaming
-                ? "Steer the agent — queued for the next turn…"
-                : "Send a message…"
-            }
-            aria-label="Message"
-            rows={1}
-            className="max-h-50 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim/60 focus-visible:outline-none"
-          />
-          {streaming && (
-            <button
-              type="button"
-              onClick={onCancel}
-              aria-label="Stop generating"
-              title="Stop generating"
-              className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-red/30 bg-red/5 px-3.5 text-[13px] font-semibold text-red transition-colors hover:bg-red/10 sm:h-9"
-            >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                aria-hidden="true"
+        {uploads.length > 0 && (
+          <div
+            className="mb-2 flex flex-wrap gap-1.5"
+            aria-label="Uploading images"
+          >
+            {uploads.map((upload) => (
+              <span
+                key={upload.clientId}
+                className="max-w-full animate-pulse truncate rounded-full border border-border bg-surface px-2.5 py-0.5 font-mono text-[11px] text-dim"
+                title={upload.name}
               >
-                <rect width="10" height="10" rx="1.5" fill="currentColor" />
-              </svg>
-              Stop
-            </button>
-          )}
+                {`uploading: ${upload.name}`}
+              </span>
+            ))}
+          </div>
+        )}
+        {blockedHint && (
+          <p className="mb-2 font-mono text-[11px] text-yellow" role="alert">
+            {blockedHint}
+          </p>
+        )}
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              for (const file of Array.from(e.target.files ?? [])) {
+                uploadImage(file);
+              }
+              e.target.value = "";
+            }}
+          />
           <button
             type="button"
-            onClick={send}
-            aria-label={streaming ? "Queue steering message" : "Send message"}
-            title={streaming ? "Queue a steering message" : "Send message"}
-            className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-accent text-accent-contrast shadow-xs transition-colors hover:bg-accent-dim disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
+            aria-label="Attach images"
+            title="Attach images (or paste/drop them)"
+            onClick={() => {
+              fileInputRef.current?.click();
+            }}
+            className="mb-0.5 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
           >
             <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
+              width="15"
+              height="15"
+              viewBox="0 0 16 16"
               fill="none"
               aria-hidden="true"
             >
-              <path
-                d="M7 12V2M7 2L2.5 6.5M7 2l4.5 4.5"
+              <rect
+                x="1.8"
+                y="3"
+                width="12.4"
+                height="10"
+                rx="1.7"
                 stroke="currentColor"
-                strokeWidth="1.8"
+                strokeWidth="1.2"
+              />
+              <circle cx="5.6" cy="6.6" r="1.1" fill="currentColor" />
+              <path
+                d="m2.6 11.6 3.2-3 2.4 2.2 2.3-2.6 2.9 3.4"
+                stroke="currentColor"
+                strokeWidth="1.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
           </button>
-        </div>
-        <p className="mt-1.5 px-2 text-[11px]">
-          {blockedHint ? (
-            <span className="text-yellow">{blockedHint}</span>
-          ) : streaming ? (
-            <span className="text-dim/70">
-              <span className="hidden sm:inline">
-                Enter queues a steering message ·{" "}
-                <span className="font-mono text-dim">Shift+Enter</span> for a
-                new line
+          <div className="relative min-w-0 flex-1">
+            {bashMode && (
+              <span className="pointer-events-none absolute top-1.5 right-2.5 z-10 rounded-full border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
+                {bashExcluded ? "Bash · excluded" : "Bash"}
               </span>
-              <span className="sm:hidden">Steering — Enter to queue</span>
-            </span>
+            )}
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={value}
+              disabled={false}
+              onChange={(e) => {
+                setValue(e.target.value);
+                caretRef.current = e.target.selectionStart ?? 0;
+                setAtDismissed(false);
+              }}
+              onKeyDown={onKeyDown}
+              onKeyUp={(e) => {
+                caretRef.current = e.currentTarget.selectionStart ?? 0;
+              }}
+              onClick={(e) => {
+                caretRef.current = e.currentTarget.selectionStart ?? 0;
+              }}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData?.files ?? []).filter(
+                  (file) => file.type.startsWith("image/"),
+                );
+                if (files.length > 0) {
+                  e.preventDefault();
+                  for (const file of files) {
+                    uploadImage(file);
+                  }
+                }
+              }}
+              onDrop={(e) => {
+                const files = Array.from(e.dataTransfer?.files ?? []).filter(
+                  (file) => file.type.startsWith("image/"),
+                );
+                if (files.length > 0) {
+                  e.preventDefault();
+                  for (const file of files) {
+                    uploadImage(file);
+                  }
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              placeholder={
+                streaming
+                  ? "Send a steering message… (Enter)"
+                  : "Message Yukino… (Enter to send, Shift+Enter for a new line, ! for Bash)"
+              }
+              className="max-h-50 w-full resize-none rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm leading-relaxed text-bright shadow-xs outline-none placeholder:text-dim/70 focus:border-accent/60"
+              aria-label="Message input"
+            />
+          </div>
+          {streaming ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              title="Cancel the running turn (Esc)"
+              className="mb-0.5 flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-red/40 bg-red/10 px-3 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <rect x="1.5" y="1.5" width="7" height="7" rx="1" />
+              </svg>
+              Cancel
+            </button>
           ) : (
-            <span className="text-dim/70">
-              <span className="hidden sm:inline">
-                Enter to send · Shift+Enter for a new line ·{" "}
-              </span>
-              Type <span className="font-mono text-dim">/</span> for commands
-            </span>
+            <button
+              type="button"
+              onClick={send}
+              disabled={value.trim().length === 0}
+              className="mb-0.5 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-35"
+              aria-label="Send message"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M8 13.5V3m0 0L3.8 7.2M8 3l4.2 4.2"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           )}
+        </div>
+        <p className="mt-1.5 hidden text-[10px] text-dim/70 sm:block">
+          Enter send · Shift+Enter newline · ↑ history · @ files · ! bash ·
+          paste/drop images · Esc cancel
         </p>
       </div>
     </footer>

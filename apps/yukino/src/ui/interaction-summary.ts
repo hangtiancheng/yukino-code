@@ -2,12 +2,13 @@ import { Chalk } from "chalk";
 
 import { renderMarkdown } from "./markdown.js";
 import { THEME } from "./styles.js";
-import { plainTerminalText, wrapWordsToLines } from "./terminal-text.js";
+import { wrapWordsToLines } from "./terminal-text.js";
 
 import {
   formatInteractionSummary,
   type InteractionSummary,
 } from "@/bootstrap/interaction-summary.js";
+import { plainTerminalText } from "@/utils/index.js";
 
 interface SummaryOptions {
   columns?: number;

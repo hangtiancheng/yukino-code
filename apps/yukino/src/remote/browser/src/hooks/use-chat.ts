@@ -1,13 +1,23 @@
 import type {
+  BackgroundTaskInfo,
   ChatItem,
   ConnectionStatus,
+  FileCompleteResponsePayload,
+  ImageResultPayload,
+  ModelListPayload,
   PermissionResponse,
   PlanApprovalPayload,
+  ProviderListPayload,
   ReviewItem,
+  RewindSnapshot,
   ServerMessage,
   SessionSummary,
   SlashCommand,
+  SubagentInfo,
+  TeammateInfo,
+  ThinkingFormPayload,
   ThinkingItem,
+  TodoUpdatePayload,
   ToolItem,
   UsagePayload,
 } from "@browser/types";
@@ -67,6 +77,36 @@ export interface ChatState {
   currentAssistantId: string | null;
   /** id of the thinking item currently receiving thinking_text, if any. */
   currentThinkingId: string | null;
+  /** Prompt history shared with the terminal (↑/↓ navigation). */
+  history: string[];
+  /** Live task-board snapshot (todo progress line). */
+  todos: TodoUpdatePayload | null;
+  /** Live subagent/fork activity (Agents panel). */
+  subagents: SubagentInfo[];
+  /** Background agent/shell tasks. */
+  backgroundTasks: BackgroundTaskInfo[];
+  /** In-process teammate states. */
+  teammates: TeammateInfo[];
+  /** Messages queued while steering was unavailable; replayed when idle. */
+  followUps: string[];
+  /** Active provider name (status payload). */
+  provider: string;
+  /** Thinking levels the active client supports. */
+  thinkingLevels: string[];
+  sandboxEnabled: boolean;
+  sandboxAutoAllow: boolean;
+  /** Open model picker state, if any. */
+  modelPicker: ModelListPayload | null;
+  /** Open provider dialog state, if any. */
+  providerPicker: ProviderListPayload | null;
+  /** Open rewind checkpoint list, if any. */
+  rewindPicker: RewindSnapshot[] | null;
+  /** Open thinking-level picker, if any. */
+  thinkingPicker: ThinkingFormPayload | null;
+  /** Latest @-mention completion response for the input. */
+  fileMatches: FileCompleteResponsePayload | null;
+  /** Settled image uploads awaiting consumption by the input. */
+  imageResults: ImageResultPayload[];
 }
 
 export const initialState: ChatState = {
@@ -86,6 +126,22 @@ export const initialState: ChatState = {
   codeReviewOpen: false,
   currentAssistantId: null,
   currentThinkingId: null,
+  history: [],
+  todos: null,
+  subagents: [],
+  backgroundTasks: [],
+  teammates: [],
+  followUps: [],
+  provider: "",
+  thinkingLevels: [],
+  sandboxEnabled: false,
+  sandboxAutoAllow: false,
+  modelPicker: null,
+  providerPicker: null,
+  rewindPicker: null,
+  thinkingPicker: null,
+  fileMatches: null,
+  imageResults: [],
 };
 
 type Action =
@@ -95,7 +151,14 @@ type Action =
   | { kind: "markAskAnswered"; id: string }
   | { kind: "closePlanApproval" }
   | { kind: "closeSessions" }
-  | { kind: "closeCodeReview" };
+  | { kind: "closeCodeReview" }
+  | { kind: "closeModelPicker" }
+  | { kind: "closeProviderPicker" }
+  | { kind: "closeRewindPicker" }
+  | { kind: "closeThinkingPicker" }
+  | { kind: "openThinkingPicker" }
+  | { kind: "appendHistory"; text: string }
+  | { kind: "consumeImageResult"; clientId: string };
 
 function finalizeCurrentThinking(state: ChatState): ChatState {
   if (state.currentThinkingId === null) {
@@ -171,8 +234,12 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       return {
         ...state,
         model: msg.data.model,
+        provider: msg.data.provider,
         permissionMode: msg.data.permissionMode,
         thinkingLevel: msg.data.thinkingLevel,
+        thinkingLevels: msg.data.thinkingLevels,
+        sandboxEnabled: msg.data.sandboxEnabled,
+        sandboxAutoAllow: msg.data.sandboxAutoAllow,
       };
 
     case "session_list":
@@ -254,6 +321,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
         currentAssistantId: null,
         currentThinkingId: null,
         steering: [],
+        followUps: [],
         planApproval: null,
         sessions: null,
         codeReviewOpen: false,
@@ -527,6 +595,75 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "pong":
       return state;
 
+    case "history":
+      return { ...state, history: msg.data.entries };
+
+    case "todo_update":
+      return {
+        ...state,
+        todos:
+          msg.data.tasks.length === 0
+            ? null
+            : { boardId: msg.data.boardId, tasks: msg.data.tasks },
+      };
+
+    case "subagents":
+      return { ...state, subagents: msg.data.list };
+
+    case "background_tasks":
+      return { ...state, backgroundTasks: msg.data.list };
+
+    case "teammates":
+      return { ...state, teammates: msg.data.list };
+
+    case "followups":
+      return { ...state, followUps: msg.data.list };
+
+    case "model_list":
+      return { ...state, modelPicker: msg.data };
+
+    case "provider_list":
+      return { ...state, providerPicker: msg.data };
+
+    case "rewind_list":
+      return { ...state, rewindPicker: msg.data.snapshots };
+
+    case "thinking_form":
+      return { ...state, thinkingPicker: msg.data };
+
+    case "file_complete_response":
+      return { ...state, fileMatches: msg.data };
+
+    case "image_saved":
+      return {
+        ...state,
+        imageResults: [
+          ...state.imageResults,
+          { clientId: msg.data.clientId, path: msg.data.path },
+        ],
+      };
+
+    case "image_error":
+      return {
+        ...state,
+        imageResults: [
+          ...state.imageResults,
+          { clientId: msg.data.clientId, message: msg.data.message },
+        ],
+      };
+
+    case "tool_output": {
+      const toolId = msg.data.toolId;
+      return {
+        ...state,
+        items: state.items.map((it) =>
+          it.kind === "tool" && it.toolId === toolId && it.status === "running"
+            ? { ...it, output: msg.data.output }
+            : it,
+        ),
+      };
+    }
+
     default:
       return assertNever(msg);
   }
@@ -569,6 +706,47 @@ function reducer(state: ChatState, action: Action): ChatState {
     case "closeCodeReview":
       return { ...state, codeReviewOpen: false };
 
+    case "closeModelPicker":
+      return { ...state, modelPicker: null };
+
+    case "closeProviderPicker":
+      return { ...state, providerPicker: null };
+
+    case "closeRewindPicker":
+      return { ...state, rewindPicker: null };
+
+    case "closeThinkingPicker":
+      return { ...state, thinkingPicker: null };
+
+    case "openThinkingPicker":
+      return {
+        ...state,
+        thinkingPicker: {
+          current: state.thinkingLevel,
+          levels: state.thinkingLevels,
+        },
+      };
+
+    case "appendHistory": {
+      const text = action.text.trim();
+      if (!text) {
+        return state;
+      }
+      const history =
+        state.history[state.history.length - 1] === text
+          ? state.history
+          : [...state.history, text];
+      return { ...state, history };
+    }
+
+    case "consumeImageResult":
+      return {
+        ...state,
+        imageResults: state.imageResults.filter(
+          (entry) => entry.clientId !== action.clientId,
+        ),
+      };
+
     default:
       return assertNever(action);
   }
@@ -583,6 +761,13 @@ export interface ChatApi {
   closePlanApproval: () => void;
   closeSessions: () => void;
   closeCodeReview: () => void;
+  closeModelPicker: () => void;
+  closeProviderPicker: () => void;
+  closeRewindPicker: () => void;
+  closeThinkingPicker: () => void;
+  openThinkingPicker: () => void;
+  appendHistory: (text: string) => void;
+  consumeImageResult: (clientId: string) => void;
 }
 
 export function useChat(): ChatApi {
@@ -619,6 +804,34 @@ export function useChat(): ChatApi {
     dispatch({ kind: "closeCodeReview" });
   }, []);
 
+  const closeModelPicker = useCallback(() => {
+    dispatch({ kind: "closeModelPicker" });
+  }, []);
+
+  const closeProviderPicker = useCallback(() => {
+    dispatch({ kind: "closeProviderPicker" });
+  }, []);
+
+  const closeRewindPicker = useCallback(() => {
+    dispatch({ kind: "closeRewindPicker" });
+  }, []);
+
+  const closeThinkingPicker = useCallback(() => {
+    dispatch({ kind: "closeThinkingPicker" });
+  }, []);
+
+  const openThinkingPicker = useCallback(() => {
+    dispatch({ kind: "openThinkingPicker" });
+  }, []);
+
+  const appendHistory = useCallback((text: string) => {
+    dispatch({ kind: "appendHistory", text });
+  }, []);
+
+  const consumeImageResult = useCallback((clientId: string) => {
+    dispatch({ kind: "consumeImageResult", clientId });
+  }, []);
+
   return {
     state,
     dispatchMessage,
@@ -628,5 +841,12 @@ export function useChat(): ChatApi {
     closePlanApproval,
     closeSessions,
     closeCodeReview,
+    closeModelPicker,
+    closeProviderPicker,
+    closeRewindPicker,
+    closeThinkingPicker,
+    openThinkingPicker,
+    appendHistory,
+    consumeImageResult,
   };
 }

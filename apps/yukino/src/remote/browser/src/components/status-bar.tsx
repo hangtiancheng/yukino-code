@@ -1,38 +1,48 @@
-import type { Theme } from "@browser/hooks/use-theme";
 import { formatTokens } from "@browser/lib/format";
+import type { ConnectionStatus, UsagePayload } from "@browser/types";
 
 interface StatusBarProps {
-  connection: "connecting" | "connected" | "reconnecting";
-  usage: { inputTokens: number; outputTokens: number } | null;
+  connection: ConnectionStatus;
+  usage: UsagePayload | null;
   cwd: string;
+  session: string;
   model: string;
+  provider: string;
   permissionMode: string;
   thinkingLevel: string;
-  theme: Theme;
+  sandboxEnabled: boolean;
+  sandboxAutoAllow: boolean;
+  theme: "dark" | "light";
+  /** Running subagents + background tasks + teammates (opens the Agents panel). */
+  agentCount: number;
   onToggleTheme: () => void;
+  onCycleMode: () => void;
+  onOpenModelPicker: () => void;
+  onOpenThinkingPicker: () => void;
+  onOpenActivity: () => void;
 }
 
-const CONNECTION_LABEL: Record<StatusBarProps["connection"], string> = {
+const CONNECTION_LABEL: Record<ConnectionStatus, string> = {
   connecting: "Connecting",
   connected: "Connected",
   reconnecting: "Reconnecting",
 };
 
-const DOT_COLOR: Record<StatusBarProps["connection"], string> = {
+const DOT_COLOR: Record<ConnectionStatus, string> = {
   connecting: "bg-yellow",
   connected: "bg-green",
   reconnecting: "bg-red",
 };
 
-/** Badge styling per permission mode; "default" shows no badge. Colors mirror
- *  the TUI footer: plan = warning, acceptEdits = success, bypass = error. */
 const MODE_BADGE: Record<string, string> = {
-  plan: "bg-yellow/15 text-yellow",
-  bypassPermissions: "bg-red/15 text-red",
-  acceptEdits: "bg-green/15 text-green",
+  default: "border-border bg-tool text-dim",
+  plan: "border-yellow/40 bg-yellow/15 text-yellow",
+  bypassPermissions: "border-red/40 bg-red/15 text-red",
+  acceptEdits: "border-green/40 bg-green/15 text-green",
 };
 
 const MODE_LABEL: Record<string, string> = {
+  default: "Default",
   plan: "Plan",
   bypassPermissions: "YOLO",
   acceptEdits: "Accept Edits",
@@ -42,17 +52,36 @@ export function StatusBar({
   connection,
   usage,
   cwd,
+  session,
   model,
+  provider,
   permissionMode,
   thinkingLevel,
+  sandboxEnabled,
+  sandboxAutoAllow,
   theme,
+  agentCount,
   onToggleTheme,
+  onCycleMode,
+  onOpenModelPicker,
+  onOpenThinkingPicker,
+  onOpenActivity,
 }: StatusBarProps) {
+  const isDark = theme === "dark";
+  const modeBadge = MODE_BADGE[permissionMode] ?? MODE_BADGE.default;
+  const contextWindow = usage?.contextWindow ?? 0;
+  const contextTokens = usage?.contextTokens ?? 0;
+  const percentage =
+    contextWindow > 0 ? (contextTokens / contextWindow) * 100 : 0;
+  const contextColor =
+    percentage >= 90
+      ? "text-red"
+      : percentage >= 70
+        ? "text-yellow"
+        : "text-dim";
   const usageText = usage
     ? `↑${formatTokens(usage.inputTokens)} ↓${formatTokens(usage.outputTokens)}`
     : "";
-  const modeBadge = MODE_BADGE[permissionMode];
-  const isDark = theme === "dark";
 
   return (
     <header className="shrink-0 border-b border-border bg-surface/85 backdrop-blur [padding-top:env(safe-area-inset-top)]">
@@ -75,39 +104,62 @@ export function StatusBar({
           <span className="shrink-0 text-sm font-semibold text-bright">
             Yukino
           </span>
-          <span className="hidden shrink-0 text-sm text-dim xs:inline">
-            Remote
-          </span>
-          {modeBadge && (
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide ${modeBadge}`}
-              title={`Permission mode: ${permissionMode}`}
-            >
-              {MODE_LABEL[permissionMode] ?? permissionMode}
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={onCycleMode}
+            title="Permission mode — click or Shift+Tab to cycle"
+            className={`shrink-0 cursor-pointer rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide transition-opacity hover:opacity-80 ${modeBadge}`}
+          >
+            {permissionMode
+              ? (MODE_LABEL[permissionMode] ?? permissionMode)
+              : "Default"}
+          </button>
           {model && (
-            <span
-              className="hidden max-w-40 truncate font-mono text-[11px] text-dim md:inline"
-              title={model}
+            <button
+              type="button"
+              onClick={onOpenModelPicker}
+              title={`${provider ? `${provider} · ` : ""}${model} — click to switch model`}
+              className="hidden max-w-40 cursor-pointer truncate font-mono text-[11px] text-dim transition-colors hover:text-bright md:inline"
             >
+              {provider ? `${provider}/` : ""}
               {model}
-            </span>
+            </button>
           )}
           {thinkingLevel && (
-            <span
-              className="hidden rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-dim lg:inline"
-              title={`Thinking level: ${thinkingLevel}`}
+            <button
+              type="button"
+              onClick={onOpenThinkingPicker}
+              title={`Thinking level: ${thinkingLevel} — click to change`}
+              className="hidden cursor-pointer rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-dim transition-colors hover:text-bright lg:inline"
             >
               think: {thinkingLevel}
+            </button>
+          )}
+          {sandboxEnabled && (
+            <span
+              className="hidden shrink-0 rounded-full border border-green/40 bg-green/10 px-2 py-0.5 font-mono text-[10px] text-green sm:inline"
+              title={`Sandbox: ON (${sandboxAutoAllow ? "auto-allow" : "manual permissions"})`}
+            >
+              sandbox
             </span>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2 text-xs text-dim sm:gap-4">
+        <div className="flex shrink-0 items-center gap-2 text-xs text-dim sm:gap-3">
+          {agentCount > 0 && (
+            <button
+              type="button"
+              onClick={onOpenActivity}
+              title="View subagents, background tasks and teammates"
+              className="flex cursor-pointer items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent transition-opacity hover:opacity-80"
+            >
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+              {String(agentCount)}
+            </button>
+          )}
           {cwd && (
             <span
-              className="hidden max-w-56 truncate font-mono text-[11px] xl:inline"
-              title={cwd}
+              className="hidden max-w-44 truncate font-mono text-[11px] text-dim xl:inline"
+              title={`${cwd}${session ? ` · session ${session}` : ""}`}
             >
               {cwd}
             </span>
@@ -115,6 +167,14 @@ export function StatusBar({
           {usageText && (
             <span className="hidden font-mono tabular-nums sm:inline">
               {usageText}
+            </span>
+          )}
+          {contextWindow > 0 && (
+            <span
+              className={`hidden font-mono tabular-nums sm:inline ${contextColor}`}
+              title="Context window occupancy"
+            >
+              {`${percentage.toFixed(1)}%/${formatTokens(contextWindow)}`}
             </span>
           )}
           <span

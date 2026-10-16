@@ -1,11 +1,27 @@
+import { stripVTControlCharacters } from "node:util";
+
 import { createChildLogger } from "@/logger/index.js";
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
+export * as FileScan from "./file-scan.js";
 export * as Paths from "./paths.js";
 export * as PublicHttp from "./public-http.js";
 export * as Slug from "./slug.js";
 
 const log = createChildLogger({ module: "utils" });
+
+/**
+ * Strips ANSI escape sequences and non-printable control characters and
+ * normalizes line endings, so model/tool text can be embedded in plain-text
+ * contexts (JSONL logs, the browser UI, single-line summaries).
+ */
+export function plainTerminalText(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(/\r\n?/gu, "\n")
+    .replace(/\p{Cc}/gu, (character) =>
+      character === "\n" || character === "\t" ? character : "",
+    );
+}
 
 /**
  * Convert message content blocks to a plain-text fallback; non-text blocks

@@ -1,9 +1,10 @@
 import { Chalk } from "chalk";
 
-import { expandTabs, plainTerminalText, wrapToLines } from "./terminal-text.js";
+import { expandTabs, wrapToLines } from "./terminal-text.js";
 
 import { isDiffTool } from "@/tools/is-diff-tool.js";
 import { THEME } from "@/ui/styles.js";
+import { plainTerminalText } from "@/utils/index.js";
 
 const colors = new Chalk({ level: 3 });
 

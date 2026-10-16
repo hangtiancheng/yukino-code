@@ -97,6 +97,9 @@ export interface LoopCompletePayload {
 export interface UsagePayload {
   inputTokens: number;
   outputTokens: number;
+  /** Live context-window occupancy (terminal footer parity). */
+  contextTokens: number;
+  contextWindow: number;
 }
 
 export interface ErrorPayload {
@@ -115,8 +118,13 @@ export interface RetryPayload {
 /** Live snapshot of model / permission mode / thinking level. */
 export interface StatusPayload {
   model: string;
+  provider: string;
   permissionMode: string;
   thinkingLevel: string;
+  thinkingLevels: string[];
+  sandboxEnabled: boolean;
+  sandboxAutoAllow: boolean;
+  contextWindow: number;
 }
 
 export interface SessionSummary {
@@ -145,6 +153,92 @@ export interface CodeReviewProgressPayload {
 
 export interface SteeringPayload {
   text: string;
+}
+
+export interface TodoTask {
+  id: string;
+  subject: string;
+  activeForm: string | null;
+  status: string;
+}
+
+export interface TodoUpdatePayload {
+  boardId: string;
+  tasks: TodoTask[];
+}
+
+export interface SubagentInfo {
+  toolCallId: string;
+  role: string;
+  background: boolean;
+  turnCount: number;
+  status: "running" | "completed" | "failed" | "stopped";
+  activeTools: { toolId: string; toolName: string }[];
+}
+
+export interface BackgroundTaskInfo {
+  id: string;
+  name: string;
+  kind: string;
+  status: string;
+}
+
+export interface TeammateInfo {
+  name: string;
+  teamName: string;
+  status: string;
+  spinnerVerb: string;
+  lastMessage: string | null;
+  turnCount: number;
+  toolUseCount: number;
+  tokenCount: number;
+  activeTools: { toolId: string; toolName: string }[];
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string | null;
+}
+
+export interface ModelListPayload {
+  status: "loading" | "ready" | "empty" | "error";
+  models: ModelInfo[];
+  current: string;
+}
+
+export interface ProviderInfo {
+  name: string;
+  protocol: string;
+  base_url: string;
+  model: string;
+}
+
+export interface ProviderListPayload {
+  providers: ProviderInfo[];
+  current: number;
+}
+
+export interface RewindSnapshot {
+  index: number;
+  userText: string;
+  timestamp: string;
+  fileCount: number;
+}
+
+export interface ThinkingFormPayload {
+  current: string;
+  levels: string[];
+}
+
+export interface FileCompleteResponsePayload {
+  requestId: string;
+  matches: string[];
+}
+
+export interface ImageResultPayload {
+  clientId: string;
+  path?: string;
+  message?: string;
 }
 
 const slashCommandSchema = z.strictObject({
@@ -185,8 +279,13 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("status"),
     data: z.strictObject({
       model: z.string(),
+      provider: z.string(),
       permissionMode: z.string(),
       thinkingLevel: z.string(),
+      thinkingLevels: z.array(z.string()),
+      sandboxEnabled: z.boolean(),
+      sandboxAutoAllow: z.boolean(),
+      contextWindow: z.number(),
     }),
   }),
   z.strictObject({
@@ -297,7 +396,12 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({
     type: z.literal("usage"),
-    data: z.strictObject({ inputTokens: z.number(), outputTokens: z.number() }),
+    data: z.strictObject({
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      contextTokens: z.number(),
+      contextWindow: z.number(),
+    }),
   }),
   z.strictObject({
     type: z.literal("error"),
@@ -312,6 +416,141 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     data: z.strictObject({ reason: z.string(), waitMs: z.number() }),
   }),
   z.strictObject({ type: z.literal("pong"), data: z.null() }),
+  z.strictObject({
+    type: z.literal("history"),
+    data: z.strictObject({ entries: z.array(z.string()) }),
+  }),
+  z.strictObject({
+    type: z.literal("todo_update"),
+    data: z.strictObject({
+      boardId: z.string(),
+      tasks: z.array(
+        z.strictObject({
+          id: z.string(),
+          subject: z.string(),
+          activeForm: z.string().nullable(),
+          status: z.string(),
+        }),
+      ),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("subagents"),
+    data: z.strictObject({
+      list: z.array(
+        z.strictObject({
+          toolCallId: z.string(),
+          role: z.string(),
+          background: z.boolean(),
+          turnCount: z.number(),
+          status: z.enum(["running", "completed", "failed", "stopped"]),
+          activeTools: z.array(
+            z.strictObject({ toolId: z.string(), toolName: z.string() }),
+          ),
+        }),
+      ),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("background_tasks"),
+    data: z.strictObject({
+      list: z.array(
+        z.strictObject({
+          id: z.string(),
+          name: z.string(),
+          kind: z.string(),
+          status: z.string(),
+        }),
+      ),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("teammates"),
+    data: z.strictObject({
+      list: z.array(
+        z.strictObject({
+          name: z.string(),
+          teamName: z.string(),
+          status: z.string(),
+          spinnerVerb: z.string(),
+          lastMessage: z.string().nullable(),
+          turnCount: z.number(),
+          toolUseCount: z.number(),
+          tokenCount: z.number(),
+          activeTools: z.array(
+            z.strictObject({ toolId: z.string(), toolName: z.string() }),
+          ),
+        }),
+      ),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("model_list"),
+    data: z.strictObject({
+      status: z.enum(["loading", "ready", "empty", "error"]),
+      models: z.array(
+        z.strictObject({ id: z.string(), name: z.string().nullable() }),
+      ),
+      current: z.string(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("provider_list"),
+    data: z.strictObject({
+      providers: z.array(
+        z.strictObject({
+          name: z.string(),
+          protocol: z.string(),
+          base_url: z.string(),
+          model: z.string(),
+        }),
+      ),
+      current: z.number(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("rewind_list"),
+    data: z.strictObject({
+      snapshots: z.array(
+        z.strictObject({
+          index: z.number(),
+          userText: z.string(),
+          timestamp: z.string(),
+          fileCount: z.number(),
+        }),
+      ),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("thinking_form"),
+    data: z.strictObject({
+      current: z.string(),
+      levels: z.array(z.string()),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("file_complete_response"),
+    data: z.strictObject({
+      requestId: z.string(),
+      matches: z.array(z.string()),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("image_saved"),
+    data: z.strictObject({ clientId: z.string(), path: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("image_error"),
+    data: z.strictObject({ clientId: z.string(), message: z.string() }),
+  }),
+  z.strictObject({
+    type: z.literal("followups"),
+    data: z.strictObject({ list: z.array(z.string()) }),
+  }),
+  z.strictObject({
+    type: z.literal("tool_output"),
+    data: z.strictObject({ toolId: z.string(), output: z.string() }),
+  }),
 ]);
 
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
@@ -356,12 +595,65 @@ export interface CodeReviewStartPayload {
   excludePatterns?: string[];
 }
 
+export type PermissionModeChoice =
+  "default" | "acceptEdits" | "bypassPermissions" | "plan";
+
+export interface SetPermissionModePayload {
+  mode: PermissionModeChoice;
+}
+
+export interface ModelSelectPayload {
+  model: string;
+}
+
+export interface ProviderSelectPayload {
+  index: number;
+}
+
+export interface ProviderSavePayload {
+  name: string;
+  protocol: "anthropic" | "openai" | "openai-compat";
+  base_url: string;
+  api_key?: string;
+  model: string;
+}
+
+export type RewindChoice =
+  "code_and_conversation" | "conversation_only" | "code_only";
+
+export interface RewindActionPayload {
+  snapshotIndex: number;
+  action: RewindChoice;
+}
+
+export interface FileCompleteRequestPayload {
+  requestId: string;
+  query: string;
+}
+
+export interface ImageUploadPayload {
+  clientId: string;
+  name: string;
+  dataBase64: string;
+}
+
 export type ClientMessage =
   | { type: "user_message"; data: UserMessagePayload }
   | { type: "permission_response"; data: PermissionResponsePayload }
   | { type: "ask_user_response"; data: AskUserResponsePayload }
   | { type: "plan_approval_response"; data: PlanApprovalResponsePayload }
   | { type: "code_review_start"; data: CodeReviewStartPayload }
+  | { type: "set_permission_mode"; data: SetPermissionModePayload }
+  | { type: "model_list_request"; data: Record<string, never> }
+  | { type: "model_select"; data: ModelSelectPayload }
+  | { type: "provider_list_request"; data: Record<string, never> }
+  | { type: "provider_select"; data: ProviderSelectPayload }
+  | { type: "provider_save"; data: ProviderSavePayload }
+  | { type: "rewind_list_request"; data: Record<string, never> }
+  | { type: "rewind_action"; data: RewindActionPayload }
+  | { type: "file_complete_request"; data: FileCompleteRequestPayload }
+  | { type: "image_upload"; data: ImageUploadPayload }
+  | { type: "background_shells"; data: Record<string, never> }
   | { type: "cancel"; data: null }
   | { type: "ping"; data: Record<string, never> };
 

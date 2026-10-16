@@ -1,8 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-
 import {
   useCallback,
   useEffect,
@@ -14,20 +9,22 @@ import {
 } from "react";
 
 import type { ChatMessage } from "./chat.js";
-import { plainTerminalLine, plainTerminalText } from "./terminal-text.js";
+import { plainTerminalLine } from "./terminal-text.js";
 import type { ToolBlockInfo } from "./tool-display.js";
 
 import type { UserBashResult } from "@/conversation/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import {
+  parseUserBashCommand,
+  userBashContext,
+} from "@/conversation/user-bash.js";
+import {
   saveMessage,
   rebuildFromSession,
   type SessionMessage,
 } from "@/session/index.js";
-import { spillDir } from "@/tool-result/index.js";
-import type { BashTool } from "@/tools/bash.js";
-import type { ToolContext, ToolResult } from "@/tools/types.js";
-import { asErrorString } from "@/utils/index.js";
+import type { ToolResult } from "@/tools/types.js";
+import { asErrorString, plainTerminalText } from "@/utils/index.js";
 
 interface Options {
   execute: (
@@ -40,73 +37,6 @@ interface Options {
   onStart: (text: string) => void;
   onSettled: () => void;
   onResult?: (result: UserBashResult) => void;
-}
-
-export function parseUserBashCommand(
-  text: string,
-): { command: string; excludeFromContext: boolean } | null {
-  const trimmed = text.trim();
-  if (!trimmed.startsWith("!")) {
-    return null;
-  }
-  const excludeFromContext = trimmed.startsWith("!!");
-  return {
-    command: trimmed.slice(excludeFromContext ? 2 : 1).trim(),
-    excludeFromContext,
-  };
-}
-
-export async function executeUserBash(
-  tool: BashTool,
-  context: Pick<ToolContext, "cwd" | "sessionId" | "abortSignal" | "onOutput">,
-  command: string,
-  excludeFromContext: boolean,
-): Promise<ToolResult> {
-  const result = await tool.execute(
-    {
-      ...context,
-      ...(excludeFromContext
-        ? { taskManager: null, shellTimeoutDisabled: true }
-        : {}),
-    },
-    { command },
-  );
-  const output = plainTerminalText(result.output);
-  const bytes = Buffer.from(output, "utf8");
-  if (bytes.length <= 50 * 1024 && output.split("\n").length <= 2000) {
-    return { ...result, output };
-  }
-  const path = join(
-    context.sessionId ? spillDir(context.sessionId) : tmpdir(),
-    `user-bash-${randomUUID()}.txt`,
-  );
-  let start = Math.max(0, bytes.length - 50 * 1024);
-  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) {
-    start++;
-  }
-  const tail = bytes
-    .subarray(start)
-    .toString("utf8")
-    .split("\n")
-    .slice(-2000)
-    .join("\n");
-  try {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, output, { encoding: "utf8", mode: 0o600 });
-  } catch (error) {
-    return {
-      output: `[Output truncated; could not save full output: ${asErrorString(error)}]\n${tail}`,
-      isError: true,
-    };
-  }
-  return {
-    ...result,
-    output: `[Output truncated; showing tail. Full output: ${path}]\n${tail}`,
-  };
-}
-
-export function userBashContext(result: UserBashResult): string {
-  return `User executed Bash (${result.status}):\n$ ${result.command}\n\n${result.output}`;
 }
 
 export function userBashCard(result: UserBashResult): ChatMessage {

@@ -1,5 +1,4 @@
-import { readdirSync, statSync } from "fs";
-import { join, relative } from "path";
+import { relative } from "path";
 
 import Fuse from "fuse.js";
 import { Box, Text, useInput, usePaste } from "ink";
@@ -27,7 +26,6 @@ import {
   useAvailableRows,
   useTerminalDimensions,
 } from "./use-terminal-layout.js";
-import { parseUserBashCommand } from "./use-user-bash.js";
 
 import type { Command } from "@/commands/commands.js";
 import type { CommandUsageTracker } from "@/commands/usage-tracker.js";
@@ -35,11 +33,12 @@ import {
   THINKING_LEVELS,
   type ThinkingLevel,
 } from "@/config/provider-config.js";
+import { parseUserBashCommand } from "@/conversation/user-bash.js";
 import { saveClipboardImage } from "@/images/clipboard.js";
 import { createChildLogger } from "@/logger/index.js";
 import type { PermissionMode } from "@/permissions/index.js";
-import { SKIP_DIRS } from "@/tools/types.js";
 import { ICONS, THEME } from "@/ui/styles.js";
+import { scanCwdFiles } from "@/utils/file-scan.js";
 
 const log = createChildLogger({ module: "input" });
 
@@ -59,46 +58,6 @@ const SPINNER_FRAMES = [
   "⠇",
   "⠏",
 ] as const;
-
-function scanCwdFiles(root: string, max = 2000): string[] {
-  const out: string[] = [];
-  const walk = (dir: string, rel: string): void => {
-    if (out.length >= max) {
-      return;
-    }
-    let names: string[];
-    try {
-      names = readdirSync(dir);
-    } catch (err) {
-      log.error({ err }, "cwd scan failed");
-      return;
-    }
-    for (const name of names) {
-      if (out.length >= max) {
-        return;
-      }
-      if (name.startsWith(".") || SKIP_DIRS.has(name)) {
-        continue;
-      }
-      const full = join(dir, name);
-      const relPath = rel ? `${rel}/${name}` : name;
-      let isDir = false;
-      try {
-        isDir = statSync(full).isDirectory();
-      } catch (err) {
-        log.error({ err }, "cwd scan failed");
-        continue;
-      }
-      if (isDir) {
-        walk(full, relPath);
-      } else {
-        out.push(relPath);
-      }
-    }
-  };
-  walk(root, "");
-  return out;
-}
 
 export type { InputDraft } from "./input-draft.js";
 

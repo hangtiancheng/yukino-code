@@ -14,6 +14,10 @@ import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConversationManager } from "@/conversation/index.js";
+import {
+  executeUserBash,
+  parseUserBashCommand,
+} from "@/conversation/user-bash.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import type { Sandbox } from "@/sandbox/index.js";
 import {
@@ -28,12 +32,7 @@ import { BashTool } from "@/tools/bash.js";
 import type { ToolResult } from "@/tools/types.js";
 import type { ChatMessage } from "@/ui/chat.js";
 import { useFollowUpQueue } from "@/ui/use-follow-up-queue.js";
-import {
-  executeUserBash,
-  parseUserBashCommand,
-  useUserBash,
-  useUserBashHistory,
-} from "@/ui/use-user-bash.js";
+import { useUserBash, useUserBashHistory } from "@/ui/use-user-bash.js";
 
 type Options = Omit<Parameters<typeof useUserBash>[0], "setMessages">;
 let instance: Instance | undefined;

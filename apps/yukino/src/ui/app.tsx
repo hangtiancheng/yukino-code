@@ -36,7 +36,6 @@ import { useTaskProgress } from "./use-task-progress.js";
 import { useTerminalControls } from "./use-terminal-controls.js";
 import { useUpdateNotice } from "./use-update-notice.js";
 import {
-  executeUserBash,
   useUserBash,
   useUserBashHistory,
   userBashCard,
@@ -87,6 +86,7 @@ import {
   ConversationManager,
   type UserBashResult,
 } from "@/conversation/index.js";
+import { executeUserBash } from "@/conversation/user-bash.js";
 import { FileHistory } from "@/file-history/index.js";
 import type { Snapshot } from "@/file-history/index.js";
 import { GoalManager, handleGoalCommand } from "@/goal/index.js";

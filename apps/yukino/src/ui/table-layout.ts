@@ -3,11 +3,12 @@ import chalk from "chalk";
 import { THEME } from "./styles.js";
 import {
   expandTabs,
-  plainTerminalText,
   truncateToWidth,
   visibleWidth,
   wrapWordsToLines,
 } from "./terminal-text.js";
+
+import { plainTerminalText } from "@/utils/index.js";
 
 /** One space of padding on each side of a cell, in terminal columns. */
 const CELL_PADDING = 2;

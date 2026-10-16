@@ -4,6 +4,7 @@ import { contentToText } from "@/utils";
 // Submodule namespaces for library consumers (Conversation.<Sub>.*).
 export * as AtExpand from "./at-expand.js";
 export * as Pairing from "./pairing.js";
+export * as UserBash from "./user-bash.js";
 
 export interface ToolUseBlock {
   toolUseId: string;
