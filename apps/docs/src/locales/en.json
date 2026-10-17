@@ -146,7 +146,7 @@
       },
       "codeReview": {
         "title": "Code review in the box",
-        "description": "/code-review audits your diff — workspace changes, a branch range, or a single commit — and returns actionable findings, no extra tooling and no leaving the session."
+        "description": "/review audits your diff — workspace changes, a branch range, or a single commit — and returns actionable findings, no extra tooling and no leaving the session."
       },
       "rewind": {
         "title": "Rewind & checkpoints",

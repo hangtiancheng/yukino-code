@@ -627,7 +627,7 @@ Inside the UI, these commands are available:
 | /mcp                 | Show MCP server status                                                                                                                                                                      |
 | /mcp reload          | Re-read MCP config; disconnect every server and reconnect the freshly read list                                                                                                             |
 | /thinking [level]    | Without an argument, open a picker of the supported thinking levels; with one, set the level (off, minimal, low, medium, high, xhigh, max). The setting persists to `~/.yukino/config.yaml` |
-| /code-review         | Open the code review form for workspace, branch-range, or commit review                                                                                                                     |
+| /review              | Open the code review form for workspace, branch-range, or commit review                                                                                                                     |
 | /quit                | Exit the application                                                                                                                                                                        |
 
 ### User Bash Commands

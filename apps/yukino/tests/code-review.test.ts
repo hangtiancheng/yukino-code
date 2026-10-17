@@ -829,15 +829,13 @@ describe("runner helpers", () => {
     ).toContain("Commit cannot be combined with From/To");
   });
 
-  it("registers only the bare /code-review command", () => {
+  it("registers only the bare /review command", () => {
     const registry = createDefaultRegistry();
-    const command = registry.find("code-review");
-    expect(command?.handler({ cwd: ".", args: "" })).toBe("code-review");
-    expect(command?.handler({ cwd: ".", args: "focus" })).toBe(
-      "code-review-usage",
-    );
-    expect(registry.find("review")).toBeUndefined();
-    expect(parseCommand("/code-review")?.name).toBe("code-review");
+    const command = registry.find("review");
+    expect(command?.handler({ cwd: ".", args: "" })).toBe("review");
+    expect(command?.handler({ cwd: ".", args: "focus" })).toBe("review-usage");
+    expect(registry.find("code-review")).toBeUndefined();
+    expect(parseCommand("/review")?.name).toBe("review");
   });
 
   it("validates ref combinations", () => {

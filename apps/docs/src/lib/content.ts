@@ -286,7 +286,7 @@ export const slashCommands = [
   { cmd: "/skills", desc: "browse skills" },
   { cmd: "/skill", desc: "run a skill" },
   { cmd: "/worktree", desc: "isolate work" },
-  { cmd: "/code-review", desc: "audit the diff" },
+  { cmd: "/review", desc: "audit the diff" },
   { cmd: "/sandbox", desc: "toggle sandbox" },
   { cmd: "/mcp", desc: "manage MCP servers" },
   { cmd: "/thinking", desc: "reasoning depth" },

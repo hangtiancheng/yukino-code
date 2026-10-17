@@ -2436,11 +2436,11 @@ export class RemoteServer {
         this.broadcast({ type: "command_done", data: null });
         break;
 
-      case "code-review":
+      case "review":
         if (args.trim()) {
           this.broadcast({
             type: "system",
-            data: { message: "Usage: /code-review" },
+            data: { message: "Usage: /review" },
           });
         } else {
           this.broadcast({ type: "code_review_form", data: null });

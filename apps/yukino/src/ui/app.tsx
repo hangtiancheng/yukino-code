@@ -1825,15 +1825,15 @@ export function App({
               });
           }
           break;
-        case "code-review":
+        case "review":
           setCodeReviewActive(true);
           break;
-        case "code-review-usage":
+        case "review-usage":
           setMessages((prev) => [
             ...prev,
             {
               role: "system",
-              content: "Usage: /code-review",
+              content: "Usage: /review",
             },
           ]);
           break;

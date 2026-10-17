@@ -251,10 +251,10 @@ export function createDefaultRegistry(): CommandRegistry {
   });
 
   registry.register({
-    name: "code-review",
+    name: "review",
     type: "local_ui",
     description: "Configure and run a structured AI code review",
-    handler: ({ args }) => (args.trim() ? "code-review-usage" : "code-review"),
+    handler: ({ args }) => (args.trim() ? "review-usage" : "review"),
   });
 
   registry.register({
