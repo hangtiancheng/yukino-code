@@ -2,6 +2,10 @@ import { z } from "zod";
 
 import type { FiledIssueRecord, IssueDraft } from "./types.js";
 
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  thinkingBudgetForLevel,
+} from "@/config/provider-config.js";
 import { ConversationManager, type Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { contentToText } from "@/utils/index.js";
@@ -12,7 +16,9 @@ const CONTEXT_BUDGET_RATIO = 0.8;
 // The analysis request also carries the coding-agent system prompt and must
 // leave room for the model's reply; reserve headroom for both.
 const SYSTEM_PROMPT_RESERVE_TOKENS = 8_000;
-const OUTPUT_RESERVE_TOKENS = 8_000;
+// Room for the JSON answer itself, on top of any thinking budget the client's
+// thinking level reserves out of the same output ceiling.
+const ANSWER_RESERVE_TOKENS = 8_000;
 const INSTRUCTIONS_RESERVE_TOKENS = 1_000;
 // Even tiny windows get a minimal well-formed prompt; whether the provider
 // accepts it is the provider's call (failures degrade gracefully).
@@ -102,7 +108,7 @@ export function buildAnalysisPrompt(input: AnalyzeInput): string {
   const totalBudget =
     Math.floor(input.contextWindow * CONTEXT_BUDGET_RATIO) -
     SYSTEM_PROMPT_RESERVE_TOKENS -
-    analysisOutputTokens(input.contextWindow, input.maxOutputTokens) -
+    analysisOutputTokens(input) -
     INSTRUCTIONS_RESERVE_TOKENS;
   const budget = Math.max(totalBudget, MIN_ANALYSIS_BUDGET_TOKENS);
 
@@ -192,16 +198,22 @@ export function buildAnalysisPrompt(input: AnalyzeInput): string {
   return sections.filter((part) => part !== "").join("\n\n");
 }
 
-function analysisOutputTokens(
-  contextWindow: number,
-  maxOutputTokens = OUTPUT_RESERVE_TOKENS,
-): number {
+/**
+ * Output ceiling for the analysis request. Reasoning models split this ceiling
+ * between thinking and the answer, so reserve the client's thinking budget on
+ * top of the answer room; the provider ceiling and a quarter of the context
+ * window still cap the result so the prompt keeps most of the budget.
+ */
+function analysisOutputTokens(input: AnalyzeInput): number {
+  const thinking = thinkingBudgetForLevel(
+    input.client.getThinkingLevel?.() ?? "off",
+  );
   return Math.max(
     1,
     Math.min(
-      OUTPUT_RESERVE_TOKENS,
-      maxOutputTokens,
-      Math.floor(contextWindow / 4),
+      thinking + ANSWER_RESERVE_TOKENS,
+      input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      Math.floor(input.contextWindow / 4),
     ),
   );
 }
@@ -210,13 +222,13 @@ async function collectAnalysisText(
   client: LLMClient,
   conv: ConversationManager,
   abortSignal: AbortSignal,
-  contextWindow: number,
-  maxOutputTokens?: number,
-): Promise<string> {
+  outputTokens: number,
+): Promise<{ text: string; truncated: boolean }> {
   let text = "";
   let completed = false;
+  let truncated = false;
   for await (const event of client.stream(conv, [], abortSignal, {
-    maxOutputTokens: analysisOutputTokens(contextWindow, maxOutputTokens),
+    maxOutputTokens: outputTokens,
   })) {
     abortSignal.throwIfAborted();
     if (event.type === "tool_call_start") {
@@ -227,20 +239,24 @@ async function collectAnalysisText(
     }
     if (event.type === "stream_end") {
       completed = true;
-    }
-    if (
-      event.type === "stream_end" &&
-      event.stopReason !== "end_turn" &&
-      event.stopReason !== "stop"
-    ) {
-      throw new Error(`Feedback analysis did not finish: ${event.stopReason}`);
+      if (event.stopReason === "max_tokens") {
+        // The answer was cut off; salvage what arrived and let the caller retry.
+        truncated = true;
+      } else if (
+        event.stopReason !== "end_turn" &&
+        event.stopReason !== "stop"
+      ) {
+        throw new Error(
+          `Feedback analysis did not finish: ${event.stopReason}`,
+        );
+      }
     }
   }
   abortSignal.throwIfAborted();
   if (!completed) {
     throw new Error("Feedback analysis stream ended before completion");
   }
-  return text;
+  return { text, truncated };
 }
 
 function parseAnalysis(text: string): IssueDraft[] | null {
@@ -290,16 +306,16 @@ export function descriptionFallbackDraft(description: string): IssueDraft {
 export async function analyzeHarnessAnomalies(
   input: AnalyzeInput,
 ): Promise<IssueDraft[]> {
+  const outputTokens = analysisOutputTokens(input);
   const conv = new ConversationManager();
   conv.addUserMessage(buildAnalysisPrompt(input));
-  const text = await collectAnalysisText(
+  const first = await collectAnalysisText(
     input.client,
     conv,
     input.abortSignal,
-    input.contextWindow,
-    input.maxOutputTokens,
+    outputTokens,
   );
-  const drafts = parseAnalysis(text);
+  const drafts = parseAnalysis(first.text);
   if (drafts) {
     return drafts;
   }
@@ -307,21 +323,26 @@ export async function analyzeHarnessAnomalies(
   // The stream does not append the assistant reply to conv, so quote the bad
   // response in the retry nudge.
   conv.addUserMessage(
-    [
-      "Your previous reply was not valid JSON:",
-      text.slice(0, 2000),
-      "",
-      'Respond with ONLY the JSON object {"issues":[{"title":"...","body":"..."}]}, no prose, no code fences.',
-    ].join("\n"),
+    first.truncated
+      ? [
+          "Your previous reply hit the output token limit and was cut off before it finished.",
+          "Respond again far more concisely: at most 3 issues, each body under 600 characters, omit unknown sections.",
+          'Respond with ONLY the JSON object {"issues":[{"title":"...","body":"..."}]}, no prose, no code fences.',
+        ].join("\n")
+      : [
+          "Your previous reply was not valid JSON:",
+          first.text.slice(0, 2000),
+          "",
+          'Respond with ONLY the JSON object {"issues":[{"title":"...","body":"..."}]}, no prose, no code fences.',
+        ].join("\n"),
   );
-  const retryText = await collectAnalysisText(
+  const retry = await collectAnalysisText(
     input.client,
     conv,
     input.abortSignal,
-    input.contextWindow,
-    input.maxOutputTokens,
+    outputTokens,
   );
-  const retried = parseAnalysis(retryText);
+  const retried = parseAnalysis(retry.text);
   if (retried) {
     return retried;
   }

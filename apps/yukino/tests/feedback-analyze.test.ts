@@ -19,6 +19,19 @@ function stubClient(): LLMClient {
   };
 }
 
+function endEvent(stopReason: string): StreamEvent {
+  return {
+    type: "stream_end",
+    stopReason,
+    usage: {
+      inputTokens: 1,
+      outputTokens: 1,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    },
+  };
+}
+
 function makeMessages(count: number, chars = 490): Message[] {
   const messages: Message[] = [];
   for (let i = 0; i < count; i++) {
@@ -170,20 +183,91 @@ describe("analyzeHarnessAnomalies", () => {
       .mockImplementation(async function* () {
         await Promise.resolve();
         yield { type: "text_delta", text: '{"issues":[]}' };
-        yield {
-          type: "stream_end",
-          stopReason: "end_turn",
-          usage: {
-            inputTokens: 1,
-            outputTokens: 1,
-            cacheReadInputTokens: 0,
-            cacheCreationInputTokens: 0,
-          },
-        };
+        yield endEvent("end_turn");
       });
     await analyzeHarnessAnomalies(
       promptInput({ client, maxOutputTokens: 1024 }),
     );
     expect(stream.mock.calls[0][3]?.maxOutputTokens).toBe(1024);
+  });
+
+  it("reserves the thinking budget on top of the answer room", async () => {
+    // thinking:max used to squeeze the answer into max_tokens - budget_tokens
+    // (1024 tokens), so the JSON reply was cut off with stop_reason max_tokens.
+    const client = stubClient();
+    client.getThinkingLevel = () => "max";
+    const stream = vi
+      .spyOn(client, "stream")
+      .mockImplementation(async function* () {
+        await Promise.resolve();
+        yield { type: "text_delta", text: '{"issues":[]}' };
+        yield endEvent("end_turn");
+      });
+    await analyzeHarnessAnomalies(
+      promptInput({
+        client,
+        contextWindow: 1_000_000,
+        maxOutputTokens: 128_000,
+      }),
+    );
+    // THINKING_BUDGETS.max (65536) + answer reserve (8000).
+    expect(stream.mock.calls[0][3]?.maxOutputTokens).toBe(73_536);
+  });
+
+  it("salvages a truncated analysis via a concise retry", async () => {
+    const client = stubClient();
+    let call = 0;
+    const stream = vi
+      .spyOn(client, "stream")
+      .mockImplementation(async function* (conv) {
+        await Promise.resolve();
+        call++;
+        if (call === 1) {
+          yield { type: "text_delta", text: '{"issues":[{"title":"[tool] x"' };
+          yield endEvent("max_tokens");
+          return;
+        }
+        const last = conv.getMessages().at(-1);
+        expect(JSON.stringify(last?.content)).toContain("output token limit");
+        yield {
+          type: "text_delta",
+          text: '{"issues":[{"title":"[tool] retry","body":"b"}]}',
+        };
+        yield endEvent("end_turn");
+      });
+    const issues = await analyzeHarnessAnomalies(promptInput({ client }));
+    expect(issues).toEqual([{ title: "[tool] retry", body: "b" }]);
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts a parseable reply even when it ended at max_tokens", async () => {
+    const client = stubClient();
+    const stream = vi
+      .spyOn(client, "stream")
+      .mockImplementation(async function* () {
+        await Promise.resolve();
+        yield {
+          type: "text_delta",
+          text: '{"issues":[{"title":"[ui] ok","body":"b"}]}',
+        };
+        yield endEvent("max_tokens");
+      });
+    const issues = await analyzeHarnessAnomalies(promptInput({ client }));
+    expect(issues).toEqual([{ title: "[ui] ok", body: "b" }]);
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the description when both attempts are truncated", async () => {
+    const client = stubClient();
+    vi.spyOn(client, "stream").mockImplementation(async function* () {
+      await Promise.resolve();
+      yield { type: "text_delta", text: '{"issues":[{"title":"' };
+      yield endEvent("max_tokens");
+    });
+    const issues = await analyzeHarnessAnomalies(
+      promptInput({ client, description: "权限弹窗卡死" }),
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.title).toContain("权限弹窗卡死");
   });
 });
