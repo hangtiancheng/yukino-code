@@ -3,6 +3,7 @@ import { useRef, type ComponentProps } from "react";
 import { AgentsDialog } from "./agents-dialog.js";
 import { AskUserDialog } from "./ask-user-dialog.js";
 import { CodeReviewDialog } from "./code-review-dialog.js";
+import { FeedbackDialog } from "./feedback-dialog.js";
 import type { InputDraft } from "./input-draft.js";
 import { InputBox } from "./input.js";
 import { ModelSelect } from "./model-select.js";
@@ -25,6 +26,7 @@ interface Props {
   resume?: ComponentProps<typeof SessionSelector>;
   permission?: ComponentProps<typeof PermissionDialog>;
   askUser?: ComponentProps<typeof AskUserDialog>;
+  feedback?: ComponentProps<typeof FeedbackDialog>;
   agents?: ComponentProps<typeof AgentsDialog>;
   composer: ComponentProps<typeof InputBox>;
 }
@@ -40,6 +42,7 @@ export function InteractionDock({
   resume,
   permission,
   askUser,
+  feedback,
   agents,
   composer,
 }: Props) {
@@ -70,6 +73,9 @@ export function InteractionDock({
   }
   if (askUser) {
     return <AskUserDialog {...askUser} />;
+  }
+  if (feedback) {
+    return <FeedbackDialog {...feedback} />;
   }
   if (agents) {
     return <AgentsDialog {...agents} />;

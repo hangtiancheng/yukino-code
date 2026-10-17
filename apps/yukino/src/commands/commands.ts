@@ -283,6 +283,14 @@ export function createDefaultRegistry(): CommandRegistry {
   });
 
   registry.register({
+    name: "feedback",
+    type: "local_ui",
+    description:
+      "Report a problem; analyzes the session and auto-files harness issues to the yukino repo",
+    handler: () => "feedback",
+  });
+
+  registry.register({
     name: "thinking",
     type: "local",
     description:

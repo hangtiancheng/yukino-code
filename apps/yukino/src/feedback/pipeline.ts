@@ -1,0 +1,322 @@
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+
+import {
+  analyzeHarnessAnomalies,
+  descriptionFallbackDraft,
+} from "./analyze.js";
+import {
+  buildEnvironment,
+  collectAttachments,
+  readTextCapped,
+  summarizeEnvironment,
+  type CollectOutput,
+  type EnvironmentSnapshot,
+  type RuntimeInfo,
+} from "./collect.js";
+import {
+  filterDuplicateDrafts,
+  issueFingerprint,
+  loadFiledIssues,
+  recordFiledIssues,
+} from "./dedup.js";
+import {
+  buildIssueUrl,
+  createGist,
+  createIssue,
+  desiredLabels,
+  detectChannel,
+  fetchRepoLabels,
+  openInBrowser,
+} from "./github.js";
+import { redactJsonLines, redactText } from "./redact.js";
+import type {
+  FeedbackChannel,
+  FeedbackOptions,
+  FiledIssueRecord,
+  IssueDraft,
+} from "./types.js";
+import { writeZipArchive } from "./zip.js";
+
+import type { Message } from "@/conversation/index.js";
+import type { LLMClient } from "@/llm/client.js";
+import { sessionPath, yukinoPath } from "@/storage/paths.js";
+import { asErrorString } from "@/utils/index.js";
+import { version } from "@/version.js";
+
+const MAX_ANALYSIS_LOG_BYTES = 200 * 1024;
+
+export interface PipelineDeps {
+  cwd: string;
+  sessionId: string;
+  client: LLMClient;
+  messages: Message[];
+  runtime?: RuntimeInfo;
+  contextWindow: number;
+  abortSignal: AbortSignal;
+  onProgress: (message: string) => void;
+}
+
+function logFilePath(sessionId: string): string {
+  return yukinoPath("logs", `${sessionId}.jsonl`);
+}
+
+/** The log always feeds the analysis, independent of the attachment choice. */
+function readLogForAnalysis(sessionId: string): string | null {
+  try {
+    const { content } = readTextCapped(
+      logFilePath(sessionId),
+      MAX_ANALYSIS_LOG_BYTES,
+    );
+    return redactJsonLines(content);
+  } catch {
+    return null;
+  }
+}
+
+async function writeBundle(
+  sessionId: string,
+  collected: CollectOutput,
+): Promise<string> {
+  const dir = sessionPath(sessionId, "feedback");
+  mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const path = join(dir, `bundle-${stamp}.zip`);
+  await writeZipArchive(
+    path,
+    collected.files.map((file) => ({ name: file.name, data: file.content })),
+  );
+  return path;
+}
+
+function assembleIssueBody(
+  draft: IssueDraft,
+  env: EnvironmentSnapshot,
+  sessionId: string,
+  attachments: { gistUrl?: string; bundlePath?: string; names: string[] },
+): string {
+  const attachmentLines = attachments.gistUrl
+    ? [
+        `Attachments (secret Gist): ${attachments.gistUrl}`,
+        `Included: ${attachments.names.join(", ")}`,
+      ]
+    : attachments.bundlePath
+      ? [
+          `Attachments exported locally (not uploaded): ${attachments.bundlePath}`,
+          `Included: ${attachments.names.join(", ")}`,
+          "Please attach the zip manually if you can.",
+        ]
+      : ["Attachments: none selected"];
+  const body = [
+    draft.body.trim(),
+    "",
+    "<details><summary>Environment</summary>",
+    "",
+    "```json",
+    JSON.stringify(summarizeEnvironment(env), null, 2),
+    "```",
+    "",
+    "</details>",
+    "",
+    ...attachmentLines,
+    "",
+    `Reported via /feedback · session ${sessionId} · yukino ${version}`,
+  ].join("\n");
+  return redactText(body);
+}
+
+interface FiledResult {
+  title: string;
+  url: string;
+  error?: string;
+}
+
+async function fileIssues(
+  channel: FeedbackChannel,
+  drafts: IssueDraft[],
+  bodyFor: (draft: IssueDraft) => string,
+  abortSignal: AbortSignal,
+): Promise<FiledResult[]> {
+  if (channel === "browser") {
+    return drafts.map((draft) => {
+      const url = buildIssueUrl(draft.title, bodyFor(draft));
+      openInBrowser(url);
+      return { title: draft.title, url };
+    });
+  }
+
+  const labels = desiredLabels(await fetchRepoLabels(channel, abortSignal));
+  const results: FiledResult[] = [];
+  for (const draft of drafts) {
+    try {
+      const created = await createIssue(
+        channel,
+        draft.title,
+        bodyFor(draft),
+        labels,
+        abortSignal,
+      );
+      results.push({ title: draft.title, url: created.url });
+    } catch (err) {
+      results.push({
+        title: draft.title,
+        url: "",
+        error: asErrorString(err),
+      });
+    }
+  }
+  return results;
+}
+
+function formatReport(
+  channel: FeedbackChannel,
+  results: FiledResult[],
+  skippedDuplicates: number,
+  gistUrl?: string,
+  bundlePath?: string,
+): string {
+  const lines: string[] = [];
+  const filed = results.filter((r) => !r.error);
+  const failed = results.filter((r) => r.error);
+
+  if (channel === "browser") {
+    lines.push(
+      `No gh CLI or GitHub token found — opened ${String(filed.length)} prefilled issue page(s) in your browser.`,
+      "Review each one and press Submit; the report is not filed until you do.",
+    );
+  } else if (filed.length > 0) {
+    lines.push(`Filed ${String(filed.length)} issue(s) via ${channel}:`);
+  }
+  for (const result of filed) {
+    lines.push(`  • ${result.title} — ${result.url}`);
+  }
+  for (const result of failed) {
+    lines.push(`  ✗ ${result.title} — failed: ${result.error ?? "unknown"}`);
+  }
+  if (skippedDuplicates > 0) {
+    lines.push(
+      `Skipped ${String(skippedDuplicates)} issue(s) already filed in this session.`,
+    );
+  }
+  if (gistUrl) {
+    lines.push(`Attachments (secret Gist): ${gistUrl}`);
+  }
+  if (bundlePath) {
+    lines.push(`Attachments exported locally: ${bundlePath}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Full /feedback flow: analyze the session for harness anomalies, attach the
+ * selected scene capture, and file one issue per distinct defect.
+ */
+export async function runFeedbackPipeline(
+  options: FeedbackOptions,
+  deps: PipelineDeps,
+): Promise<string> {
+  const { sessionId, abortSignal } = deps;
+  const filed = loadFiledIssues(sessionId);
+
+  deps.onProgress("Analyzing session for yukino harness anomalies…");
+  const logContent = readLogForAnalysis(sessionId);
+  let drafts: IssueDraft[];
+  try {
+    drafts = await analyzeHarnessAnomalies({
+      client: deps.client,
+      messages: deps.messages,
+      logContent,
+      description: options.description,
+      filedIssues: filed,
+      contextWindow: deps.contextWindow,
+      abortSignal,
+    });
+  } catch (err) {
+    abortSignal.throwIfAborted();
+    if (!options.description.trim()) {
+      throw err;
+    }
+    // Analysis failed but the user wrote something — file their words.
+    drafts = [descriptionFallbackDraft(options.description)];
+  }
+  if (drafts.length === 0 && options.description.trim()) {
+    drafts = [descriptionFallbackDraft(options.description)];
+  }
+  if (drafts.length === 0) {
+    return "No yukino harness anomalies detected in this session — nothing filed.";
+  }
+
+  const { fresh, skipped } = filterDuplicateDrafts(drafts, filed);
+  if (fresh.length === 0) {
+    return `All ${String(skipped)} detected issue(s) were already filed in this session — nothing new to file.`;
+  }
+
+  const channel = await detectChannel();
+  deps.onProgress(
+    `Found ${String(fresh.length)} issue(s) to file via ${channel}.`,
+  );
+
+  const env = await buildEnvironment(deps.cwd, deps.runtime);
+  let collected: CollectOutput = { files: [], skipped: [] };
+  if (options.attachments.length > 0) {
+    deps.onProgress(
+      `Collecting ${String(options.attachments.length)} attachment group(s)…`,
+    );
+    collected = await collectAttachments({
+      cwd: deps.cwd,
+      sessionId,
+      attachments: options.attachments,
+      runtime: deps.runtime,
+    });
+  }
+
+  let gistUrl: string | undefined;
+  let bundlePath: string | undefined;
+  if (collected.files.length > 0) {
+    if (channel === "browser") {
+      bundlePath = await writeBundle(sessionId, collected);
+    } else {
+      deps.onProgress("Uploading attachments as a secret Gist…");
+      try {
+        gistUrl = await createGist(
+          channel,
+          collected.files,
+          `yukino feedback ${sessionId.slice(0, 8)}`,
+          abortSignal,
+        );
+      } catch (err) {
+        bundlePath = await writeBundle(sessionId, collected);
+        deps.onProgress(
+          `Gist upload failed (${asErrorString(err)}); exported a local bundle instead.`,
+        );
+      }
+    }
+  }
+
+  const attachmentNames = collected.files.map((file) => file.name);
+  const results = await fileIssues(
+    channel,
+    fresh,
+    (draft) =>
+      assembleIssueBody(draft, env, sessionId, {
+        gistUrl,
+        bundlePath,
+        names: attachmentNames,
+      }),
+    abortSignal,
+  );
+
+  const newRecords: FiledIssueRecord[] = results
+    .filter((result) => !result.error)
+    .map((result) => ({
+      fingerprint: issueFingerprint(result.title),
+      title: result.title,
+      url: result.url,
+      channel,
+      ...(gistUrl ? { gistUrl } : {}),
+      createdAt: new Date().toISOString(),
+    }));
+  recordFiledIssues(sessionId, newRecords);
+
+  return formatReport(channel, results, skipped, gistUrl, bundlePath);
+}

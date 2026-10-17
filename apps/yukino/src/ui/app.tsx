@@ -87,6 +87,8 @@ import {
   type UserBashResult,
 } from "@/conversation/index.js";
 import { executeUserBash } from "@/conversation/user-bash.js";
+import { runFeedbackPipeline } from "@/feedback/pipeline.js";
+import type { FeedbackOptions } from "@/feedback/types.js";
 import { FileHistory } from "@/file-history/index.js";
 import type { Snapshot } from "@/file-history/index.js";
 import { GoalManager, handleGoalCommand } from "@/goal/index.js";
@@ -555,6 +557,8 @@ export function App({
   >([]);
   const [rewindDialogActive, setRewindDialogActive] = useState(false);
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
+  const [feedbackActive, setFeedbackActive] = useState(false);
+  const [feedbackDescription, setFeedbackDescription] = useState("");
   const [transcriptRevision, setTranscriptRevision] = useState(0);
   // Steering messages queued into the in-flight agent, mirrored for display.
   // Entries are removed when the agent reports them delivered.
@@ -1825,6 +1829,10 @@ export function App({
               });
           }
           break;
+        case "feedback":
+          setFeedbackDescription(parsed.args);
+          setFeedbackActive(true);
+          break;
         case "review":
           setCodeReviewActive(true);
           break;
@@ -2933,6 +2941,71 @@ export function App({
       });
   };
 
+  const handleFeedbackSubmit = (options: FeedbackOptions): void => {
+    setFeedbackActive(false);
+    const client = clientRef.current;
+    if (!client) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "system", content: "Client not ready." },
+      ]);
+      return;
+    }
+
+    dismissNotice();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setIsStreaming(true);
+    const provider = selectedProviderRef.current;
+    const sessionId = sessionIdRef.current;
+
+    void runFeedbackPipeline(options, {
+      cwd,
+      sessionId,
+      client,
+      messages: conversationRef.current.getMessages(),
+      runtime: {
+        provider: {
+          name: provider.name,
+          model: provider.model,
+          protocol: provider.protocol,
+          baseUrl: provider.base_url,
+          contextWindow: contextWindowRef.current,
+          maxOutputTokens: maxOutputRef.current,
+          thinkingLevel: client.getThinkingLevel?.() ?? provider.thinking,
+        },
+        permissionMode: permModeRef.current,
+        sandbox: {
+          enabled: sandboxEnabledRef.current,
+          autoAllow: sandboxAutoAllowRef.current,
+        },
+        mcpServers: mcpManagerRef.current?.connectedServers(),
+        toolCount: registryRef.current.listTools().length,
+        sessionId,
+      },
+      contextWindow: contextWindowRef.current,
+      abortSignal: controller.signal,
+      onProgress: (message) => {
+        setMessages((prev) => [...prev, { role: "system", content: message }]);
+      },
+    })
+      .then((report) => {
+        setMessages((prev) => [...prev, { role: "system", content: report }]);
+      })
+      .catch((err: unknown) => {
+        const message = controller.signal.aborted
+          ? "Feedback cancelled."
+          : `Feedback failed: ${asErrorString(err)}`;
+        setMessages((prev) => [...prev, { role: "system", content: message }]);
+      })
+      .finally(() => {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        setIsStreaming(false);
+      });
+  };
+
   const handleLogin = async (input: ProviderConfig): Promise<void> => {
     const environment = detectEnvironment(cwd);
     environment.model = input.model;
@@ -3143,6 +3216,19 @@ export function App({
                   onComplete: handleRewindAction,
                   onCancel: () => {
                     setRewindDialogActive(false);
+                  },
+                }
+              : undefined
+          }
+          feedback={
+            feedbackActive
+              ? {
+                  cwd,
+                  sessionId: sessionIdRef.current,
+                  initialDescription: feedbackDescription,
+                  onSubmit: handleFeedbackSubmit,
+                  onCancel: () => {
+                    setFeedbackActive(false);
                   },
                 }
               : undefined

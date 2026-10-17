@@ -2346,6 +2346,16 @@ export class RemoteServer {
         await this.handlePlan(args);
         break;
 
+      case "feedback":
+        this.broadcast({
+          type: "system",
+          data: {
+            message: "/feedback is only supported in the interactive terminal.",
+          },
+        });
+        this.broadcast({ type: "command_done", data: null });
+        break;
+
       case "login":
       case "provider":
         // Browser parity: open the provider dialog (switch or add a provider).
