@@ -10,12 +10,22 @@ import type { ProviderToolSchema, ToolProtocol } from "@/tools/types.js";
 
 export interface LLMStreamOptions {
   maxOutputTokens?: number;
+  /** Answer space to preserve when the provider uses a fixed thinking budget. */
+  answerReserveTokens?: number;
   maxRetries?: number;
+}
+
+export interface LLMOutputBudget {
+  maxOutputTokens: number;
+  /** Planning allowance for the provider-native reasoning effort. */
+  thinkingTokens: number;
 }
 
 export interface LLMClient
   extends Partial<MaxTokensSetter>, Partial<ThinkingLevelControl> {
   readonly protocol?: ToolProtocol;
+
+  getOutputBudget?(): LLMOutputBudget;
 
   stream(
     conversationManager: ConversationManager,

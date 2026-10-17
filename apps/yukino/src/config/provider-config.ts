@@ -132,6 +132,16 @@ export function thinkingBudgetForLevel(level: ThinkingLevel): number {
   return level === "off" ? 0 : THINKING_BUDGETS[level];
 }
 
+export function thinkingBudgetForProvider(
+  provider: ProviderConfig,
+  level: ThinkingLevel,
+): number {
+  const effort = toReasoningEffort(level, provider);
+  return effort === null || effort === "none"
+    ? 0
+    : thinkingBudgetForLevel(effort);
+}
+
 /** Map a logical level using configured capabilities, not model-name guesses. */
 export function toReasoningEffort(
   level: ThinkingLevel,

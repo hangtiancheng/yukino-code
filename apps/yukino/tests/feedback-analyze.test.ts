@@ -1,13 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
+import type { ProviderConfig } from "@/config/provider-config.js";
 import type { Message } from "@/conversation/index.js";
 import {
   analyzeHarnessAnomalies,
   buildAnalysisPrompt,
 } from "@/feedback/analyze.js";
 import type { AnalyzeInput } from "@/feedback/analyze.js";
+import { AnthropicClient } from "@/llm/anthropic.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
+
+afterEach(() => vi.unstubAllGlobals());
 
 function stubClient(): LLMClient {
   return {
@@ -195,7 +200,10 @@ describe("analyzeHarnessAnomalies", () => {
     // thinking:max used to squeeze the answer into max_tokens - budget_tokens
     // (1024 tokens), so the JSON reply was cut off with stop_reason max_tokens.
     const client = stubClient();
-    client.getThinkingLevel = () => "max";
+    client.getOutputBudget = () => ({
+      maxOutputTokens: 128_000,
+      thinkingTokens: 65_536,
+    });
     const stream = vi
       .spyOn(client, "stream")
       .mockImplementation(async function* () {
@@ -270,4 +278,196 @@ describe("analyzeHarnessAnomalies", () => {
     expect(issues).toHaveLength(1);
     expect(issues[0]?.title).toContain("权限弹窗卡死");
   });
+
+  it.each(["max_tokens", "end_turn"])(
+    "rejects unusable %s replies after retry when there is no description",
+    async (stopReason) => {
+      const client = stubClient();
+      const stream = vi
+        .spyOn(client, "stream")
+        .mockImplementation(async function* () {
+          await Promise.resolve();
+          yield { type: "text_delta", text: '{"issues":[{"title":"' };
+          yield endEvent(stopReason);
+        });
+      await expect(
+        analyzeHarnessAnomalies(promptInput({ client })),
+      ).rejects.toThrow(
+        stopReason === "max_tokens"
+          ? "max_tokens after retry"
+          : "valid issue JSON after retry",
+      );
+      expect(stream).toHaveBeenCalledTimes(2);
+    },
+  );
+});
+
+function analysisResponse(): Response {
+  const events = [
+    {
+      type: "message_start",
+      message: {
+        id: "msg_analysis",
+        type: "message",
+        role: "assistant",
+        model: "test",
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 0 },
+      },
+    },
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text", text: "" },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "text_delta", text: '{"issues":[]}' },
+    },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "message_delta",
+      delta: { stop_reason: "end_turn", stop_sequence: null },
+      usage: { output_tokens: 1 },
+    },
+    { type: "message_stop" },
+  ];
+  return new Response(
+    events
+      .map(
+        (event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+      )
+      .join(""),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
+const budgetCases: {
+  name: string;
+  provider: Partial<ProviderConfig>;
+  output: number;
+  thinking: number;
+}[] = [
+  {
+    name: "uncapped max thinking",
+    provider: {},
+    output: 73_536,
+    thinking: 65_536,
+  },
+  {
+    name: "200k context",
+    provider: { context_window: 200_000 },
+    output: 50_000,
+    thinking: 42_000,
+  },
+  {
+    name: "64k provider ceiling without runtime metadata",
+    provider: { max_output_tokens: 64_000 },
+    output: 64_000,
+    thinking: 56_000,
+  },
+  {
+    name: "high mapped to max",
+    provider: { thinking: "high", thinking_level_map: { high: "max" } },
+    output: 73_536,
+    thinking: 65_536,
+  },
+  {
+    name: "max mapped to low",
+    provider: { thinking_level_map: { max: "low" } },
+    output: 10_048,
+    thinking: 2_048,
+  },
+  {
+    name: "no room for thinking",
+    provider: { max_output_tokens: 8_000 },
+    output: 8_000,
+    thinking: 0,
+  },
+  {
+    name: "less than the minimum thinking budget",
+    provider: { max_output_tokens: 9_000 },
+    output: 9_000,
+    thinking: 0,
+  },
+  {
+    name: "exactly the minimum thinking budget",
+    provider: { max_output_tokens: 9_024 },
+    output: 9_024,
+    thinking: 1_024,
+  },
+  {
+    name: "tiny provider ceiling",
+    provider: { max_output_tokens: 1_024 },
+    output: 1_024,
+    thinking: 0,
+  },
+  {
+    name: "tiny context",
+    provider: { context_window: 8_000 },
+    output: 2_000,
+    thinking: 0,
+  },
+];
+
+describe("analysis SDK request budgets", () => {
+  it.each(budgetCases)(
+    "preserves answer space with $name",
+    async ({ provider, output, thinking }) => {
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockImplementation(() => Promise.resolve(analysisResponse()));
+      vi.stubGlobal("fetch", fetchMock);
+      const config: ProviderConfig = {
+        name: "test",
+        protocol: "anthropic",
+        base_url: "https://example.invalid",
+        api_key: "test",
+        model: "test",
+        thinking_mode: "budget",
+        thinking: "max",
+        context_window: 1_000_000,
+        max_output_tokens: 128_000,
+        ...provider,
+      };
+      const client = new AnthropicClient(config, "system");
+      const sessionBudget = client.getOutputBudget();
+      const sessionLevel = client.getThinkingLevel();
+      await expect(
+        analyzeHarnessAnomalies(
+          promptInput({
+            client,
+            contextWindow: config.context_window ?? 1_000_000,
+          }),
+        ),
+      ).resolves.toEqual([]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const raw: unknown = JSON.parse(
+        z.string().parse(fetchMock.mock.calls[0][1]?.body),
+      );
+      const payload = z
+        .object({
+          max_tokens: z.number(),
+          thinking: z.object({
+            type: z.string(),
+            budget_tokens: z.number().optional(),
+          }),
+        })
+        .parse(raw);
+      expect(payload.max_tokens).toBe(output);
+      expect(payload.thinking).toEqual(
+        thinking > 0
+          ? { type: "enabled", budget_tokens: thinking }
+          : { type: "disabled" },
+      );
+      expect(payload.max_tokens - thinking).toBeGreaterThanOrEqual(
+        Math.min(output, 8_000),
+      );
+      expect(client.getOutputBudget()).toEqual(sessionBudget);
+      expect(client.getThinkingLevel()).toBe(sessionLevel);
+    },
+  );
 });

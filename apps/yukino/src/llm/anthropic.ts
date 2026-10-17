@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-import type { LLMClient, LLMStreamOptions } from "./client.js";
+import type { LLMClient, LLMOutputBudget, LLMStreamOptions } from "./client.js";
 import {
   AuthenticationError,
   containsContextLengthError,
@@ -19,11 +19,11 @@ import {
   getSupportedThinkingLevels,
   getThinkingLevel,
   MIN_THINKING_ANSWER_TOKENS,
+  MIN_THINKING_BUDGET_TOKENS,
   type ProviderConfig,
   type ThinkingLevel,
-  thinkingBudgetForLevel,
+  thinkingBudgetForProvider,
   toAnthropicThinkingEffort,
-  toReasoningEffort,
 } from "@/config/provider-config.js";
 import type { ConversationManager, Message } from "@/conversation/index.js";
 import { ensureToolPairing } from "@/conversation/pairing.js";
@@ -292,6 +292,15 @@ export class AnthropicClient implements LLMClient {
   getSupportedThinkingLevels(): readonly ThinkingLevel[] {
     return getSupportedThinkingLevels(this.config);
   }
+  getOutputBudget(): LLMOutputBudget {
+    return {
+      maxOutputTokens: getMaxOutputTokens(this.config),
+      thinkingTokens: thinkingBudgetForProvider(
+        this.config,
+        this.thinkingLevel,
+      ),
+    };
+  }
 
   async *stream(
     conversation: ConversationManager,
@@ -352,18 +361,18 @@ export class AnthropicClient implements LLMClient {
           params.output_config = { effort };
         }
       } else {
-        // Share the strict output ceiling and reserve answer room. Availability
-        // already ensures that at least the minimum thinking budget fits.
-        const effort = toReasoningEffort(level, requestConfig);
-        if (effort !== null && effort !== "none") {
-          params.thinking = {
-            type: "enabled",
-            budget_tokens: Math.min(
-              thinkingBudgetForLevel(effort),
-              maxOutputTokens - MIN_THINKING_ANSWER_TOKENS,
-            ),
-          };
-        }
+        const answerReserve = Math.max(
+          MIN_THINKING_ANSWER_TOKENS,
+          options?.answerReserveTokens ?? 0,
+        );
+        const thinkingTokens = Math.min(
+          thinkingBudgetForProvider(requestConfig, level),
+          maxOutputTokens - answerReserve,
+        );
+        params.thinking =
+          thinkingTokens >= MIN_THINKING_BUDGET_TOKENS
+            ? { type: "enabled", budget_tokens: thinkingTokens }
+            : { type: "disabled" };
       }
     }
 

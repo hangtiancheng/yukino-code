@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-import type { LLMClient, LLMStreamOptions } from "./client.js";
+import type { LLMClient, LLMOutputBudget, LLMStreamOptions } from "./client.js";
 import {
   AuthenticationError,
   containsContextLengthError,
@@ -21,6 +21,7 @@ import {
   getThinkingLevel,
   type ProviderConfig,
   type ThinkingLevel,
+  thinkingBudgetForProvider,
   toReasoningEffort,
 } from "@/config/provider-config.js";
 import type {
@@ -490,6 +491,15 @@ export class OpenAIClient implements LLMClient {
   getSupportedThinkingLevels(): readonly ThinkingLevel[] {
     return getSupportedThinkingLevels(this.config);
   }
+  getOutputBudget(): LLMOutputBudget {
+    return {
+      maxOutputTokens: this.maxOutputTokens,
+      thinkingTokens: thinkingBudgetForProvider(
+        this.config,
+        this.thinkingLevel,
+      ),
+    };
+  }
 }
 
 // Official Responses API input item types, narrowed to the variants this
@@ -883,6 +893,15 @@ export class OpenAICompatClient implements LLMClient {
   }
   getSupportedThinkingLevels(): readonly ThinkingLevel[] {
     return getSupportedThinkingLevels(this.config);
+  }
+  getOutputBudget(): LLMOutputBudget {
+    return {
+      maxOutputTokens: this.maxOutputTokens,
+      thinkingTokens: thinkingBudgetForProvider(
+        this.config,
+        this.thinkingLevel,
+      ),
+    };
   }
 
   async *stream(

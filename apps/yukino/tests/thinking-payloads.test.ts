@@ -258,6 +258,7 @@ describe.each(protocols)("%s explicit capabilities", (protocol) => {
     );
     expect(client.setThinkingLevel("low")).toBe("low");
     expect(client.getThinkingLevel()).toBe("low");
+    expect(client.getOutputBudget().thinkingTokens).toBe(8192);
     const payload = await request(client, protocol);
     if (protocol === "anthropic") {
       expect(payload.thinking).toEqual({
@@ -269,6 +270,25 @@ describe.each(protocols)("%s explicit capabilities", (protocol) => {
     } else {
       expect(payload.reasoning_effort).toBe("medium");
     }
+  });
+
+  it("refreshes the output plan after runtime changes", () => {
+    const client = createClient(
+      provider(protocol, {
+        thinking: "high",
+        thinking_level_map: { high: "max", low: "medium" },
+      }),
+    );
+    expect(client.getOutputBudget()).toEqual({
+      maxOutputTokens: 128_000,
+      thinkingTokens: 65_536,
+    });
+    client.setThinkingLevel("low");
+    client.setMaxOutputTokens(64_000);
+    expect(client.getOutputBudget()).toEqual({
+      maxOutputTokens: 64_000,
+      thinkingTokens: 8_192,
+    });
   });
 
   it("clamps null/none mappings down and reports the same level it sends", async () => {

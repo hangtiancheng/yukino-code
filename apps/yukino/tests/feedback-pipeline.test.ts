@@ -315,6 +315,32 @@ describe("runFeedbackPipeline", () => {
     ).rejects.toThrow("provider exploded");
   });
 
+  it.each(["max_tokens", "end_turn"])(
+    "does not report no anomalies after two unusable %s replies",
+    async (stopReason) => {
+      const client = fakeClient("");
+      const stream = vi
+        .spyOn(client, "stream")
+        .mockImplementation(async function* () {
+          await Promise.resolve();
+          yield { type: "text_delta", text: '{"issues":[{"title":"' };
+          yield { type: "stream_end", stopReason, usage: USAGE };
+        });
+      const deps = makeDeps(client, makeProject());
+      await expect(
+        runFeedbackPipeline({ description: "", attachments: [] }, deps),
+      ).rejects.toThrow(
+        stopReason === "max_tokens"
+          ? "max_tokens after retry"
+          : "valid issue JSON after retry",
+      );
+      expect(stream).toHaveBeenCalledTimes(2);
+      expect(deps.confirmIssues).not.toHaveBeenCalled();
+      expect(mocks.detectChannel).not.toHaveBeenCalled();
+      expect(mocks.createIssue).not.toHaveBeenCalled();
+    },
+  );
+
   it("asks for approval once per round and files all issues when approved", async () => {
     mocks.createIssue
       .mockResolvedValueOnce({

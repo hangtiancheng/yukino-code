@@ -2,10 +2,7 @@ import { z } from "zod";
 
 import type { FiledIssueRecord, IssueDraft } from "./types.js";
 
-import {
-  DEFAULT_MAX_OUTPUT_TOKENS,
-  thinkingBudgetForLevel,
-} from "@/config/provider-config.js";
+import { DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/provider-config.js";
 import { ConversationManager, type Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { contentToText } from "@/utils/index.js";
@@ -16,8 +13,6 @@ const CONTEXT_BUDGET_RATIO = 0.8;
 // The analysis request also carries the coding-agent system prompt and must
 // leave room for the model's reply; reserve headroom for both.
 const SYSTEM_PROMPT_RESERVE_TOKENS = 8_000;
-// Room for the JSON answer itself, on top of any thinking budget the client's
-// thinking level reserves out of the same output ceiling.
 const ANSWER_RESERVE_TOKENS = 8_000;
 const INSTRUCTIONS_RESERVE_TOKENS = 1_000;
 // Even tiny windows get a minimal well-formed prompt; whether the provider
@@ -198,20 +193,13 @@ export function buildAnalysisPrompt(input: AnalyzeInput): string {
   return sections.filter((part) => part !== "").join("\n\n");
 }
 
-/**
- * Output ceiling for the analysis request. Reasoning models split this ceiling
- * between thinking and the answer, so reserve the client's thinking budget on
- * top of the answer room; the provider ceiling and a quarter of the context
- * window still cap the result so the prompt keeps most of the budget.
- */
 function analysisOutputTokens(input: AnalyzeInput): number {
-  const thinking = thinkingBudgetForLevel(
-    input.client.getThinkingLevel?.() ?? "off",
-  );
+  const budget = input.client.getOutputBudget?.();
   return Math.max(
     1,
     Math.min(
-      thinking + ANSWER_RESERVE_TOKENS,
+      (budget?.thinkingTokens ?? 0) + ANSWER_RESERVE_TOKENS,
+      budget?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       Math.floor(input.contextWindow / 4),
     ),
@@ -229,6 +217,7 @@ async function collectAnalysisText(
   let truncated = false;
   for await (const event of client.stream(conv, [], abortSignal, {
     maxOutputTokens: outputTokens,
+    answerReserveTokens: ANSWER_RESERVE_TOKENS,
   })) {
     abortSignal.throwIfAborted();
     if (event.type === "tool_call_start") {
@@ -297,7 +286,7 @@ export function descriptionFallbackDraft(description: string): IssueDraft {
       "## What happened",
       description.trim(),
       "",
-      "_User-submitted feedback; automatic harness analysis found no additional anomalies._",
+      "_User-submitted feedback; no automatic analysis results are included._",
     ].join("\n"),
   };
 }
@@ -346,7 +335,12 @@ export async function analyzeHarnessAnomalies(
   if (retried) {
     return retried;
   }
-  return input.description.trim()
-    ? [descriptionFallbackDraft(input.description)]
-    : [];
+  if (input.description.trim()) {
+    return [descriptionFallbackDraft(input.description)];
+  }
+  throw new Error(
+    retry.truncated
+      ? "Feedback analysis did not finish: max_tokens after retry"
+      : "Feedback analysis did not return valid issue JSON after retry",
+  );
 }
