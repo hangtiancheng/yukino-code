@@ -18,6 +18,7 @@ import {
 } from "@/session/index.js";
 import { sessionPath } from "@/storage/paths.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
+import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/definition.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import {
   formatAgentTaskNotification,
@@ -75,6 +76,93 @@ const provider = {
 const noop = () => undefined;
 
 describe("background agent durable recovery", () => {
+  it.each([false, true])(
+    "lets an ordinary subagent finish beyond 200 turns (background=%s)",
+    async (background) => {
+      const registry = new ToolRegistry();
+      registry.register({
+        name: "ReadFile",
+        description: "read",
+        category: "read",
+        schema: () => ({
+          name: "ReadFile",
+          description: "read",
+          input_schema: { type: "object", properties: {} },
+        }),
+        execute: () => Promise.resolve({ output: "verified", isError: false }),
+      });
+      const scripts = Array.from({ length: 201 }, (_, index): StreamEvent[] =>
+        index < 200
+          ? [
+              {
+                type: "tool_call_complete",
+                toolId: `read-${index}`,
+                toolName: "ReadFile",
+                arguments: {},
+              },
+              end("tool_use"),
+            ]
+          : [
+              {
+                type: "text_delta",
+                text: "Finished verification after 200 tool rounds.",
+              },
+              end(),
+            ],
+      );
+      const worker = client(scripts);
+      const stream = vi.spyOn(worker, "stream");
+      const output = await spawnSubagent(
+        BUILTIN_AGENTS[0],
+        "Verify everything",
+        worker,
+        registry,
+        provider,
+        directory(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { background },
+      );
+      expect(stream).toHaveBeenCalledTimes(201);
+      expect(output).toBe("Finished verification after 200 tool rounds.");
+    },
+  );
+  it.each([false, true])(
+    "keeps the fork's explicit 200-turn limit (background=%s)",
+    async (background) => {
+      const worker = client(
+        Array.from({ length: 201 }, (_, index): StreamEvent[] => [
+          { type: "text_delta", text: "Verified progress. " },
+          {
+            type: "tool_call_complete",
+            toolId: `read-${index}`,
+            toolName: "Unknown",
+            arguments: {},
+          },
+          end("tool_use"),
+        ]),
+      );
+      const stream = vi.spyOn(worker, "stream");
+      await expect(
+        spawnSubagent(
+          FORK_AGENT,
+          "Continue verification",
+          worker,
+          new ToolRegistry(),
+          provider,
+          directory(),
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { background, conversation: new ConversationManager() },
+        ),
+      ).rejects.toThrow("maximum iterations (200)");
+      expect(stream).toHaveBeenCalledTimes(200);
+    },
+  );
   it.each(["completed", "failed"] as const)(
     "replays a %s task notification exactly once and in delivery order",
     async (status) => {

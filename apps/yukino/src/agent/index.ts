@@ -329,6 +329,7 @@ export class Agent {
     let outputRecoveries = 0;
     let transientRetries = 0;
     let iteration = 0;
+    let summarizingGoal = false;
 
     try {
       this.restoreContext();
@@ -352,17 +353,34 @@ export class Agent {
           yield { type: "loop_complete", stopReason: "interrupted" };
           return;
         }
-        if (this.goalManager?.get()?.status === "budget_limited") {
-          yield {
-            type: "stream_text",
-            text: `\n${this.goalManager.format()}\n`,
-          };
-          yield { type: "loop_complete", stopReason: "budget_limited" };
-          outcome = "completed";
-          return;
+        if (
+          this.goalManager &&
+          (summarizingGoal ||
+            this.goalManager.get()?.status === "budget_limited")
+        ) {
+          const canSummarize =
+            !summarizingGoal &&
+            this.checker.mode !== "plan" &&
+            (this.shouldContinueGoal?.() ?? true) &&
+            this.steeringQueue.length === 0 &&
+            this.goalManager.get()?.budgetSummaryPending;
+          if (!canSummarize) {
+            yield {
+              type: "stream_text",
+              text: `\n${this.goalManager.format()}\n`,
+            };
+            yield { type: "loop_complete", stopReason: "budget_limited" };
+            outcome = "completed";
+            return;
+          }
+          summarizingGoal = true;
         }
         iteration++;
-        if (this.maxIterations > 0 && iteration > this.maxIterations) {
+        if (
+          !summarizingGoal &&
+          this.maxIterations > 0 &&
+          iteration > this.maxIterations
+        ) {
           outcome = "error";
           yield {
             type: "error",
@@ -381,13 +399,14 @@ export class Agent {
         let stopReason = "end_turn";
 
         let lastUsage: UsageInfo | null = null;
+        const toolFilter = summarizingGoal ? () => false : this.toolFilter;
         const toolSchemas = this.registry.getAllSchemas(
           this.client.protocol ?? "anthropic",
-          this.toolFilter,
+          toolFilter,
         );
         const toolSchemaNames = this.registry.listVisibleToolNames(
           this.client.protocol ?? "anthropic",
-          this.toolFilter,
+          toolFilter,
         );
         const coordinating = this.coordinatorActiveFn?.() ?? false;
         const toolGuidance = buildToolGuidance(toolSchemaNames, coordinating);
@@ -449,9 +468,11 @@ export class Agent {
           this.conversation.addSystemReminder(coordinatorReminder(iteration));
         }
 
-        const deferredNames = this.registry
-          .getDeferredToolNames()
-          .filter((name) => !this.toolFilter || this.toolFilter(name));
+        const deferredNames = summarizingGoal
+          ? []
+          : this.registry
+              .getDeferredToolNames()
+              .filter((name) => !this.toolFilter || this.toolFilter(name));
         const deferredGuidance = buildDeferredToolGuidance(
           deferredNames,
           toolSchemaNames,
@@ -506,19 +527,21 @@ export class Agent {
           // Tool results are already budget-processed at the time they enter
           // history, so message sizes in the transcript are final — estimate
           // tokens directly from them.
-          const mc = await manageContext(
-            this.conversation,
-            this.client,
-            this.contextWindow,
-            this.maxOutput,
-            this.compactTracking,
-            this.recoveryState,
-            toolSchemaNames,
-            toolSchemas,
-            this.sessionFilePath,
-            this.abortSignal,
-          );
-          if (mc.message) {
+          const mc = summarizingGoal
+            ? undefined
+            : await manageContext(
+                this.conversation,
+                this.client,
+                this.contextWindow,
+                this.maxOutput,
+                this.compactTracking,
+                this.recoveryState,
+                toolSchemaNames,
+                toolSchemas,
+                this.sessionFilePath,
+                this.abortSignal,
+              );
+          if (mc?.message) {
             if (mc.boundary && this.sessionFilePath) {
               saveTranscriptCompactBoundary(this.sessionFilePath, mc.boundary);
             }
@@ -528,7 +551,7 @@ export class Agent {
               boundary: mc.boundary,
             };
           }
-          if (mc.compacted) {
+          if (mc?.compacted) {
             this.restoreContext();
             if (guidance) {
               this.conversation.addSystemReminderIfChanged(
@@ -549,6 +572,21 @@ export class Agent {
           }
 
           try {
+            if (summarizingGoal) {
+              const prompt =
+                this.checker.mode !== "plan" &&
+                (this.shouldContinueGoal?.() ?? true) &&
+                this.steeringQueue.length === 0
+                  ? this.goalManager?.takeBudgetSummary()
+                  : null;
+              if (!prompt) {
+                yield { type: "loop_complete", stopReason: "budget_limited" };
+                outcome = "completed";
+                return;
+              }
+              this.conversation.addUserMessage(prompt);
+              this.persistLastMessage();
+            }
             // Initiate API call directly with the conversation — no need to rebuild
             const stream = observeLlmStream(
               this.client,
@@ -560,6 +598,7 @@ export class Agent {
                   maxOutputTokens: maxTokensEscalated
                     ? this.maxOutput
                     : this.configuredMaxOutput,
+                  ...(summarizingGoal ? { maxRetries: 0 } : {}),
                 },
               ),
               telemetry,
@@ -650,7 +689,7 @@ export class Agent {
             }
 
             // Self-heal: context too long → force-compact, then retry the turn.
-            if (err instanceof ContextTooLongError) {
+            if (!summarizingGoal && err instanceof ContextTooLongError) {
               try {
                 const result = await forceCompact(
                   this.conversation,
@@ -697,6 +736,7 @@ export class Agent {
             // Some transports cannot retract streamed chunks. Replay only before visible output.
             if (
               waitMs !== undefined &&
+              !summarizingGoal &&
               !fullText &&
               !receivedThinking &&
               thinkingBlocks.length === 0 &&
@@ -747,7 +787,12 @@ export class Agent {
           // re-prompts the model to resume from where it stopped. The escalated
           // ceiling stays inside the context window (PI never requests more than
           // the model window can hold).
-          if (stopReason === "max_tokens" && toolUses.length === 0) {
+          if (
+            !summarizingGoal &&
+            stopReason === "max_tokens" &&
+            toolUses.length === 0 &&
+            this.goalManager?.get()?.status !== "budget_limited"
+          ) {
             const ceiling = Math.min(MAX_TOKENS_CEILING, this.contextWindow);
             if (!maxTokensEscalated && this.maxOutput < ceiling) {
               this.maxOutput = ceiling;
@@ -825,7 +870,10 @@ export class Agent {
                 "The response hit the output token limit, so tool arguments may be truncated. Re-issue the call with complete arguments";
             }
           }
-          if (this.goalManager?.get()?.status === "budget_limited") {
+          if (
+            summarizingGoal ||
+            this.goalManager?.get()?.status === "budget_limited"
+          ) {
             for (const call of toolUses) {
               call.parseError =
                 "Goal token budget reached; no further tools will be executed. Report existing progress.";
@@ -855,15 +903,11 @@ export class Agent {
 
           if (
             toolUses.length === 0 &&
-            this.goalManager?.get()?.status === "budget_limited"
+            (summarizingGoal ||
+              this.goalManager?.get()?.status === "budget_limited")
           ) {
-            yield {
-              type: "stream_text",
-              text: `\n${this.goalManager.format()}\n`,
-            };
-            yield { type: "loop_complete", stopReason: "budget_limited" };
-            outcome = "completed";
-            return;
+            yield { type: "turn_complete" };
+            continue;
           }
 
           if (toolUses.length > 0) {
@@ -949,15 +993,12 @@ export class Agent {
               yield { type: "loop_complete", stopReason: "interrupted" };
               return;
             }
-            if (this.goalManager?.get()?.status === "budget_limited") {
+            if (
+              summarizingGoal ||
+              this.goalManager?.get()?.status === "budget_limited"
+            ) {
               yield { type: "turn_complete" };
-              yield {
-                type: "stream_text",
-                text: `\n${this.goalManager.format()}\n`,
-              };
-              yield { type: "loop_complete", stopReason: "budget_limited" };
-              outcome = "completed";
-              return;
+              continue;
             }
 
             // Non-blocking memory recall: after tool execution, check whether the prefetch has settled.

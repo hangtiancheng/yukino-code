@@ -115,7 +115,7 @@ import {
 import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/definition.js";
+import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/definition.js";
 import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
 import {
   TaskManager,
@@ -973,7 +973,7 @@ export async function createRemoteAgent(
         context?.abortSignal,
         (onEvent) =>
           spawnSubagent(
-            BUILTIN_AGENTS[0],
+            FORK_AGENT,
             prompt,
             handle.client,
             forkRegistry,

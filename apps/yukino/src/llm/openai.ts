@@ -274,6 +274,9 @@ export class OpenAIClient implements LLMClient {
     try {
       const stream = await this.client.responses.create(params, {
         ...(abortSignal ? { signal: abortSignal } : {}),
+        ...(options?.maxRetries === undefined
+          ? {}
+          : { maxRetries: options.maxRetries }),
       });
 
       let currentToolName = "";
@@ -929,6 +932,9 @@ export class OpenAICompatClient implements LLMClient {
     try {
       const stream = await this.client.chat.completions.create(params, {
         ...(abortSignal ? { signal: abortSignal } : {}),
+        ...(options?.maxRetries === undefined
+          ? {}
+          : { maxRetries: options.maxRetries }),
       });
 
       const toolCalls = new Map<

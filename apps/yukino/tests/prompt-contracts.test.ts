@@ -61,6 +61,16 @@ afterEach(() => {
 });
 
 describe("system prompt contracts", () => {
+  it("separates TODO progress statuses from the user-controlled Goal lifecycle", () => {
+    const guidance = buildToolGuidance(["Goal", "TaskCreate", "TaskUpdate"]);
+    expect(guidance).toContain("Mark TODO items in_progress");
+    expect(guidance).toContain("A set goal is already active");
+    expect(guidance).toContain(
+      "never send in_progress, active, or paused as a Goal update",
+    );
+    expect(buildToolGuidance(["Goal"])).not.toContain("Mark TODO items");
+    expect(buildToolGuidance(["TaskUpdate"])).not.toContain("Goal manages");
+  });
   it("only advertises deferred tools with available discovery and dispatch routes", () => {
     const names = ["mcp__server__action", "Local"];
     expect(buildDeferredToolGuidance(names, ["ReadFile"], true)).toBe("");

@@ -14,6 +14,13 @@ export interface AgentDefinition {
   initialPrompt?: string;
 }
 
+export const FORK_AGENT: AgentDefinition = {
+  name: "fork",
+  description:
+    "Complete the assigned task using the inherited conversation context.",
+  maxTurns: 200,
+};
+
 export const BUILTIN_AGENTS: AgentDefinition[] = [
   {
     name: "general-purpose",

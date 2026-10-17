@@ -10,6 +10,7 @@ import type { ProviderToolSchema, ToolProtocol } from "@/tools/types.js";
 
 export interface LLMStreamOptions {
   maxOutputTokens?: number;
+  maxRetries?: number;
 }
 
 export interface LLMClient

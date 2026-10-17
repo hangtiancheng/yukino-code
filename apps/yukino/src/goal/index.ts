@@ -26,6 +26,7 @@ export const GoalSchema = z.object({
   blockedAttempts: z.number().int().nonnegative(),
   lastBlockReason: z.string().nullable(),
   lastBlockedTurn: z.number().int().nullable(),
+  budgetSummaryPending: z.boolean(),
 });
 export type GoalState = z.infer<typeof GoalSchema>;
 
@@ -106,6 +107,7 @@ export class GoalManager {
       blockedAttempts: 0,
       lastBlockReason: null,
       lastBlockedTurn: null,
+      budgetSummaryPending: false,
     });
     this.activeSince = null;
     this.trackingUsage = false;
@@ -126,6 +128,7 @@ export class GoalManager {
     this.state.activeMs = this.elapsed();
     this.activeSince = null;
     this.state.status = status;
+    this.state.budgetSummaryPending = status === "budget_limited";
     this.persist();
   }
 
@@ -244,6 +247,17 @@ export class GoalManager {
     return `Continue working toward the persistent goal: ${this.state.objective}\nPreserve the full objective and do not narrow success to completed work. Before using Goal to mark complete, derive all requirements and verify each with authoritative evidence; check that tests cover those requirements and treat uncertainty as unfinished work. If the same blocker persists, record it once per continuation turn; three consecutive turns stop continuation. Difficulty, slowness, and partial progress are not blockers. Honor user steering, current permissions, and pending approvals. Do not repeat completed work.`;
   }
 
+  takeBudgetSummary(): string | null {
+    const goal = this.state;
+    if (goal?.status !== "budget_limited" || !goal.budgetSummaryPending) {
+      return null;
+    }
+    goal.budgetSummaryPending = false;
+    this.trackingUsage = true;
+    this.persist();
+    return `<goal-budget-limit>\n${this.format()}\nThe goal token budget is exhausted. Stop substantive work. This is the single final summary request; no tools are available. Briefly report what was accomplished and verified, what remains unfinished, and any blockers. Preserve the full objective and do not claim incomplete work is complete. Leave the goal budget_limited for the user to decide.\n</goal-budget-limit>`;
+  }
+
   reminder(): string {
     const goal = this.get();
     return goal
@@ -254,7 +268,7 @@ export class GoalManager {
   format(): string {
     const goal = this.get();
     if (!goal) {
-      return "No goal is set. Use /goal <objective>.";
+      return "No goal is set. Only the user can set one with /goal <objective>.";
     }
     return `Goal: ${goal.objective}\nStatus: ${goal.status}\nTokens: ${String(goal.tokensUsed)}${goal.tokenBudget === null ? "" : ` / ${String(goal.tokenBudget)}`}\nActive time: ${String(Math.floor(goal.activeMs / 1000))}s\nContinuation turns: ${String(goal.turnsExecuted)} / ${String(MAX_GOAL_TURNS)}${goal.lastBlockReason ? `\nBlocker: ${goal.lastBlockReason}` : ""}`;
   }

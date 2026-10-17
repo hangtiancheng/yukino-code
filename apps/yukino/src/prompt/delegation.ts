@@ -6,6 +6,9 @@ export function buildSubagentInstructions(definition: AgentDefinition): string {
     `You are a Yukino subagent with role ${JSON.stringify(definition.name)}. Complete the assigned task and return your result to the parent agent.`,
     definition.description.trim(),
     definition.initialPrompt?.trim(),
+    definition.maxTurns
+      ? `This run is limited to ${String(definition.maxTurns)} model turns. Reserve time to report verified progress, unfinished work, and blockers before reaching the limit.`
+      : undefined,
     definition.readOnly
       ? "This role is permanently read-only, including follow-up assignments. Return research or planning results; approval never authorizes you to implement changes."
       : undefined,

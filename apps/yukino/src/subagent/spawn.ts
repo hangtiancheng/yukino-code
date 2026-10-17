@@ -149,7 +149,7 @@ export async function spawnSubagent(
       cwd,
       sessionId,
       transcriptPath,
-      maxIterations: definition.maxTurns ?? 200,
+      maxIterations: definition.maxTurns,
       abortSignal: options.abortSignal,
       onPermissionRequest: options.onPermissionRequest,
       fileStateCache: new FileStateCache(),

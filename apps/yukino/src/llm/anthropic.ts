@@ -385,6 +385,9 @@ export class AnthropicClient implements LLMClient {
       const betas = [...(sendToolSearchBeta ? [NATIVE_TOOL_USE_BETA] : [])];
       const response = this.client.messages.stream(params, {
         ...(abortSignal ? { signal: abortSignal } : {}),
+        ...(options?.maxRetries === undefined
+          ? {}
+          : { maxRetries: options.maxRetries }),
         ...(betas.length > 0
           ? { headers: { "anthropic-beta": betas.join(",") } }
           : {}),

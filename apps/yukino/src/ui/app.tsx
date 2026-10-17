@@ -123,7 +123,7 @@ import type { SkillHost, SkillForkHost } from "@/skills/index.js";
 import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/definition.js";
+import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/definition.js";
 import {
   spawnSubagent,
   SUBAGENT_INTERRUPTED_MARKER,
@@ -1185,7 +1185,7 @@ export function App({
               },
               (onEvent) =>
                 spawnSubagent(
-                  BUILTIN_AGENTS[0],
+                  FORK_AGENT,
                   prompt,
                   clientRef.current ?? client,
                   registry,

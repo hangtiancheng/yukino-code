@@ -36,7 +36,12 @@ export function buildToolGuidance(
     ["TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TodoWrite"].some(has)
   ) {
     rules.push(
-      "Use available tracking tools for complex work, not trivial requests. Mark work in progress before starting, and completed only after validation; use blocked or cancelled honestly. Tracking records work; Agent executes it. Tool results and the UI count only completed items in TODO completed/total. Completed items remain stored until explicitly deleted or replaced. Ordinary subagents and forks have independent private lists.",
+      "Use the available TODO tools for complex work, not trivial requests. Mark TODO items in_progress before starting, and completed only after validation; use blocked or cancelled honestly. Tracking records work; Agent executes it. Tool results and the UI count only completed items in TODO completed/total. Completed items remain stored until explicitly deleted or replaced. Ordinary subagents and forks have independent private lists.",
+    );
+  }
+  if (has("Goal")) {
+    rules.push(
+      "Goal manages a user-set persistent objective, separately from TODO items. A set goal is already active. Use Goal only to get status or report complete/blocked with a reason; never send in_progress, active, or paused as a Goal update. Only the user can set, replace, pause, resume, or clear it.",
     );
   }
   if (["TaskCreate", "TaskUpdate", "TaskList", "TaskGet"].some(has)) {

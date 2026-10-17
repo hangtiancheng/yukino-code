@@ -257,6 +257,7 @@ Available roles (pass a role as subagent_type, not as a tool name):
 ${roles.join("\n")}
 
 Foreground calls return results inline. With run_in_background=true, the call returns a task ID immediately and the final result arrives through a task notification. Use team_name for persistent teammates and SendMessage for their follow-up assignments. Do not predict results before receiving them.
+Named roles have no default model-turn limit; their max_turns configuration supplies an explicit limit. Forks are limited to 200 model turns. Reaching a limit is unfinished work, not successful task completion.
 
 Launch independent tasks together; avoid concurrent writes to the same files. Review returned evidence and integrate it before reporting completion. Worktree isolation separates edits but does not merge them.`;
   }

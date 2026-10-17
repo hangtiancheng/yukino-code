@@ -28,7 +28,7 @@ import {
   messageToKeptRecord,
 } from "./session/index.js";
 import { AgentTool } from "./subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "./subagent/definition.js";
+import { BUILTIN_AGENTS, FORK_AGENT } from "./subagent/definition.js";
 import { spawnSubagent } from "./subagent/spawn.js";
 import {
   TaskManager,
@@ -199,7 +199,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     conv,
     (prompt, conversation, forkRegistry, modelOverride, context) =>
       spawnSubagent(
-        BUILTIN_AGENTS[0],
+        FORK_AGENT,
         prompt,
         client,
         forkRegistry,

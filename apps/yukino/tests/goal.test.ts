@@ -12,7 +12,9 @@ import {
   handleGoalCommand,
   MAX_GOAL_TURNS,
 } from "@/goal/index.js";
+import { HookEngine } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
+import { ContextTooLongError, RateLimitError } from "@/llm/errors.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import {
@@ -29,6 +31,7 @@ import {
 } from "@/subagent/tool-filter.js";
 import { GoalTool } from "@/tools/goal.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import type { ProviderToolSchema } from "@/tools/types.js";
 
 let cwd: string;
 beforeEach(() => {
@@ -51,17 +54,20 @@ const end: StreamEvent = {
 class Client implements LLMClient {
   calls = 0;
   snapshots: string[] = [];
+  toolCounts: number[] = [];
   constructor(
     private scripts: StreamEvent[][],
-    private callback?: () => void,
+    private callback?: (call: number) => void,
   ) {}
   setSystemPrompt = vi.fn();
   async *stream(
     conversation: ConversationManager,
+    tools: ProviderToolSchema[],
   ): AsyncGenerator<StreamEvent> {
     this.snapshots.push(JSON.stringify(conversation.getMessages()));
+    this.toolCounts.push(tools.length);
     const script = this.scripts[this.calls++] ?? [end];
-    this.callback?.();
+    this.callback?.(this.calls);
     await Promise.resolve();
     yield* script;
   }
@@ -73,6 +79,8 @@ async function run(
     mode?: "plan";
     signal?: AbortSignal;
     shouldContinue?: () => boolean;
+    hooks?: HookEngine;
+    onAgent?: (agent: Agent) => void;
   } = {},
 ) {
   const registry = new ToolRegistry();
@@ -89,12 +97,14 @@ async function run(
     checker: new PermissionChecker(cwd, options.mode ?? "bypassPermissions"),
     abortSignal: options.signal,
     shouldContinueGoal: options.shouldContinue,
+    hookEngine: options.hooks,
   });
+  options.onAgent?.(agent);
   const events: AgentEvent[] = [];
   for await (const event of agent.run()) {
     events.push(event);
   }
-  return { events, conversation };
+  return { events, conversation, agent };
 }
 const complete: StreamEvent = {
   type: "tool_call_complete",
@@ -108,6 +118,44 @@ const complete: StreamEvent = {
 };
 
 describe("persistent goals", () => {
+  it.each(["in_progress", "active", "paused"])(
+    "explains why the agent cannot set goal status %s without changing state",
+    async (status) => {
+      const manager = new GoalManager(cwd, "one");
+      manager.set("Finish");
+      const before = manager.get();
+      const result = await new GoalTool().execute(
+        { cwd, goalManager: manager },
+        { action: "update", status, reason: "Start work" },
+      );
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain(
+        "Goal update accepts only 'complete' or 'blocked'",
+      );
+      expect(result.output).toContain("active as soon as the user sets it");
+      expect(result.output).not.toContain("invalid_value");
+      expect(manager.get()).toEqual(before);
+    },
+  );
+  it("keeps goal validation strict and tells the model that goals are user-set", async () => {
+    const manager = new GoalManager(cwd, "one");
+    const tool = new GoalTool();
+    expect(
+      (await tool.execute({ cwd, goalManager: manager }, { action: "get" }))
+        .output,
+    ).toContain("Only the user can set one");
+    for (const args of [
+      { action: "set", objective: "Finish" },
+      { action: "update", status: "complete", reason: " " },
+      { action: "get", unexpected: true },
+    ]) {
+      const result = await tool.execute({ cwd, goalManager: manager }, args);
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("Goal expects");
+      expect(result.output).not.toContain("invalid_");
+    }
+    expect(manager.get()).toBeNull();
+  });
   it("persists a session-local goal through compaction and a clear tombstone", () => {
     const manager = new GoalManager(cwd, "one");
     manager.set("Implement and verify", 100);
@@ -195,19 +243,27 @@ describe("persistent goals", () => {
       "Continue working toward the persistent goal",
     );
   });
-  it("accounts for cache tokens and stops pending tools at the token budget", async () => {
+  it("accounts for cache tokens and summarizes once without executing pending tools at the budget", async () => {
     const manager = new GoalManager(cwd, "one");
     manager.set("Finish", 10);
-    const client = new Client([[complete, end]]);
+    const client = new Client([
+      [complete, end],
+      [{ type: "text_delta", text: "Verification remains unfinished." }, end],
+    ]);
     const { events, conversation } = await run(manager, client);
-    expect(client.calls).toBe(1);
+    expect(client.calls).toBe(2);
+    expect(client.toolCounts).toEqual([1, 0]);
+    expect(client.snapshots[1]).toContain("<goal-budget-limit>");
     expect(manager.get()).toMatchObject({
       status: "budget_limited",
-      tokensUsed: 14,
+      tokensUsed: 28,
+      turnsExecuted: 1,
+      budgetSummaryPending: false,
     });
-    expect(conversation.getMessages().at(-1)?.toolResults?.[0].isError).toBe(
-      true,
-    );
+    expect(
+      conversation.getMessages().find((message) => message.toolResults)
+        ?.toolResults?.[0].isError,
+    ).toBe(true);
     expect(events.at(-1)).toEqual({
       type: "loop_complete",
       stopReason: "budget_limited",
@@ -241,6 +297,235 @@ describe("persistent goals", () => {
       ),
     ).toBe(true);
   });
+  it("rejects tool calls in the final summary and does not recover an output-limited summary", async () => {
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Finish", 10);
+    const client = new Client([
+      [end],
+      [complete, { ...end, stopReason: "max_tokens" }],
+    ]);
+    const { events, conversation } = await run(manager, client);
+    expect(client.calls).toBe(2);
+    expect(client.toolCounts[1]).toBe(0);
+    expect(manager.get()?.status).toBe("budget_limited");
+    expect(conversation.getMessages().at(-1)?.toolResults?.[0]).toMatchObject({
+      isError: true,
+    });
+    expect(events.some((event) => event.type === "retry")).toBe(false);
+  });
+  it("does not recover an output-limited response after the goal budget is exhausted", async () => {
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Finish", 10);
+    const client = new Client([
+      [{ ...end, stopReason: "max_tokens" }],
+      [{ type: "text_delta", text: "Unfinished work remains." }, end],
+    ]);
+    const { events } = await run(manager, client);
+    expect(client.calls).toBe(2);
+    expect(events.some((event) => event.type === "retry")).toBe(false);
+  });
+  it("persists a deferred budget summary and counts it once across session resume", async () => {
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Finish", 10);
+    const initial = new Client([[end]]);
+    await run(manager, initial, { shouldContinue: () => false });
+    expect(initial.calls).toBe(1);
+    expect(manager.get()?.budgetSummaryPending).toBe(true);
+    const restored = new GoalManager(cwd, "one");
+    const summary = new Client([
+      [{ type: "text_delta", text: "Pending: finish verification." }, end],
+    ]);
+    await run(restored, summary);
+    expect(summary.calls).toBe(1);
+    expect(summary.toolCounts).toEqual([0]);
+    expect(restored.get()).toMatchObject({
+      tokensUsed: 28,
+      budgetSummaryPending: false,
+    });
+    const replay = rebuildFromSession(loadSession(cwd, "one"));
+    expect(JSON.stringify(replay)).toContain("Pending: finish verification.");
+    const repeat = new Client([[end]]);
+    await run(new GoalManager(cwd, "one"), repeat);
+    expect(repeat.calls).toBe(0);
+  });
+  it.each(["plan", "interrupted"])(
+    "leaves a budget summary pending when %s owns the turn",
+    async (gate) => {
+      const manager = new GoalManager(cwd, "one");
+      manager.set("Finish", 10);
+      manager.beginTurn();
+      manager.addTokens(14);
+      manager.endRun();
+      const controller = new AbortController();
+      if (gate === "interrupted") {
+        controller.abort();
+      }
+      const client = new Client([[end]]);
+      await run(manager, client, {
+        mode: gate === "plan" ? "plan" : undefined,
+        signal: controller.signal,
+      });
+      expect(client.calls).toBe(0);
+      expect(new GoalManager(cwd, "one").get()?.budgetSummaryPending).toBe(
+        true,
+      );
+    },
+  );
+  it("preserves the summary opportunity when user input arrives before dispatch", async () => {
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Finish", 10);
+    manager.beginTurn();
+    manager.addTokens(14);
+    manager.endRun();
+    const client = new Client([[end]]);
+    let checks = 0;
+    const { conversation } = await run(manager, client, {
+      shouldContinue: () => ++checks === 1,
+    });
+    expect(client.calls).toBe(0);
+    expect(JSON.stringify(conversation.getMessages())).not.toContain(
+      "<goal-budget-limit>",
+    );
+    expect(new GoalManager(cwd, "one").get()?.budgetSummaryPending).toBe(true);
+  });
+  it.each([
+    { toolCalls: false, followUpGuard: false },
+    { toolCalls: true, followUpGuard: false },
+    { toolCalls: false, followUpGuard: true },
+    { toolCalls: true, followUpGuard: true },
+  ])(
+    "defers the summary for queued steering (tools=$toolCalls, follow-up guard=$followUpGuard)",
+    async ({ toolCalls, followUpGuard }) => {
+      const manager = new GoalManager(cwd, "one");
+      manager.set("Finish", 10);
+      let inFlight: Agent | undefined;
+      const client = new Client(
+        [toolCalls ? [complete, end] : [end]],
+        (call) => {
+          if (call === 1) {
+            inFlight?.steer("Stop and explain the current diff.");
+            inFlight?.steer("Keep the files untouched.");
+          }
+        },
+      );
+      const { agent, events, conversation } = await run(manager, client, {
+        shouldContinue: followUpGuard ? () => true : undefined,
+        onAgent: (value) => {
+          inFlight = value;
+        },
+      });
+      expect(client.calls).toBe(1);
+      expect(agent.drainSteering()).toEqual([
+        "Stop and explain the current diff.",
+        "Keep the files untouched.",
+      ]);
+      expect(events.some((event) => event.type === "steering_delivered")).toBe(
+        false,
+      );
+      expect(JSON.stringify(conversation.getMessages())).not.toContain(
+        "<goal-budget-limit>",
+      );
+      expect(new GoalManager(cwd, "one").get()?.budgetSummaryPending).toBe(
+        true,
+      );
+    },
+  );
+  it("rechecks queued steering after pre-send hooks before consuming the summary", async () => {
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Finish", 10);
+    manager.beginTurn();
+    manager.addTokens(14);
+    manager.endRun();
+    const hooks = new HookEngine([]);
+    let inFlight: Agent | undefined;
+    vi.spyOn(hooks, "fire").mockImplementation(async (event) => {
+      await Promise.resolve();
+      if (event === "pre_send") {
+        inFlight?.steer("Pause and read my correction first.");
+      }
+      return [];
+    });
+    const client = new Client([[end]]);
+    const { agent, conversation } = await run(manager, client, {
+      hooks,
+      onAgent: (value) => {
+        inFlight = value;
+      },
+    });
+    expect(client.calls).toBe(0);
+    expect(agent.drainSteering()).toEqual([
+      "Pause and read my correction first.",
+    ]);
+    expect(JSON.stringify(conversation.getMessages())).not.toContain(
+      "<goal-budget-limit>",
+    );
+    expect(new GoalManager(cwd, "one").get()?.budgetSummaryPending).toBe(true);
+  });
+  it("retains steering submitted during an already dispatched summary", async () => {
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Finish", 10);
+    let inFlight: Agent | undefined;
+    const client = new Client([[end], [end]], (call) => {
+      if (call === 2) {
+        inFlight?.steer("Review my follow-up next.");
+      }
+    });
+    const { agent } = await run(manager, client, {
+      onAgent: (value) => {
+        inFlight = value;
+      },
+    });
+    expect(client.calls).toBe(2);
+    expect(agent.drainSteering()).toEqual(["Review my follow-up next."]);
+    expect(manager.get()?.budgetSummaryPending).toBe(false);
+  });
+  it("does not let a final summary execute tools or continue a replacement goal", async () => {
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Old objective", 10);
+    const client = new Client([[end], [complete, end]], (call) => {
+      if (call === 2) {
+        manager.set("New objective", null, true);
+      }
+    });
+    const { conversation } = await run(manager, client);
+    expect(client.calls).toBe(2);
+    expect(manager.get()).toMatchObject({
+      objective: "New objective",
+      status: "active",
+      turnsExecuted: 0,
+    });
+    expect(conversation.getMessages().at(-1)?.toolResults?.[0].isError).toBe(
+      true,
+    );
+  });
+  it.each([
+    new RateLimitError("rate limited"),
+    new ContextTooLongError("too long"),
+  ])(
+    "does not retry or compact a failed budget summary: $name",
+    async (error) => {
+      const manager = new GoalManager(cwd, "one");
+      manager.set("Finish", 10);
+      manager.beginTurn();
+      manager.addTokens(14);
+      manager.endRun();
+      let calls = 0;
+      const client: LLMClient = {
+        setSystemPrompt: vi.fn(),
+        async *stream() {
+          calls++;
+          yield await Promise.reject(error);
+        },
+      };
+      const { events } = await run(manager, client);
+      expect(calls).toBe(1);
+      expect(events.at(-1)).toEqual({ type: "error", error });
+      expect(manager.get()).toMatchObject({
+        status: "budget_limited",
+        budgetSummaryPending: false,
+      });
+    },
+  );
   it("invalidates a cleared goal reminder before the next model request", async () => {
     const manager = new GoalManager(cwd, "one");
     manager.set("Old objective");
