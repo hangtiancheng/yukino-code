@@ -149,41 +149,42 @@ async function runUiMode(
   setTelemetryMode("terminal");
   initLogger({ sessionId: newSessionId(), mode: "terminal" });
   const terminalInput = new TerminalInput(process.stdin);
-  setThemeMode(await detectTerminalTheme(terminalInput));
-  const restoreTerminalOutput = installTerminalOutput();
-  if (process.stdout.isTTY) {
-    process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
-  }
+  let restoreTerminalOutput: (() => void) | undefined;
   let interactionSummary: InteractionSummary | undefined;
-  const appProps = {
-    providers: cfg.providers,
-    permissionMode: cfg.permission_mode,
-    mcpServers: cfg.mcp_servers,
-    lspServers: cfg.lsp_servers,
-    hooks: cfg.hooks,
-    sandboxConfig: cfg.sandbox,
-    enableCoordinatorMode: cfg.enable_coordinator_mode,
-    forkDisabled: !forkEnabled(cfg),
-    memoryEnabled: memoryEnabled(cfg),
-    defaultProvider: cfg.default_provider,
-  };
-  const application = (
-    <App
-      {...appProps}
-      resume={mode.resume}
-      onExitSummary={(summary) => {
-        interactionSummary = summary;
-      }}
-    />
-  );
   try {
+    setThemeMode(await detectTerminalTheme(terminalInput));
+    restoreTerminalOutput = installTerminalOutput();
+    if (process.stdout.isTTY) {
+      process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+    }
+    const appProps = {
+      providers: cfg.providers,
+      permissionMode: cfg.permission_mode,
+      mcpServers: cfg.mcp_servers,
+      lspServers: cfg.lsp_servers,
+      hooks: cfg.hooks,
+      sandboxConfig: cfg.sandbox,
+      enableCoordinatorMode: cfg.enable_coordinator_mode,
+      forkDisabled: !forkEnabled(cfg),
+      memoryEnabled: memoryEnabled(cfg),
+      defaultProvider: cfg.default_provider,
+    };
+    const application = (
+      <App
+        {...appProps}
+        resume={mode.resume}
+        onExitSummary={(summary) => {
+          interactionSummary = summary;
+        }}
+      />
+    );
     const instance = render(application, {
       exitOnCtrlC: false,
       stdin: terminalInput.stdin,
     });
     await instance.waitUntilExit();
   } finally {
-    restoreTerminalOutput();
+    restoreTerminalOutput?.();
     terminalInput.dispose();
   }
   if (interactionSummary) {

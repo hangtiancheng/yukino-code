@@ -125,12 +125,11 @@ export async function detectTerminalTheme(
     return environmentTheme;
   }
   const stdin = input.stdin;
-  if (!stdin.isTTY || !process.stdout.isTTY || !stdin.setRawMode) {
+  if (!stdin.isTTY || !process.stdout.isTTY) {
     return "dark";
   }
 
   return new Promise((resolve) => {
-    const wasRaw = stdin.isRaw;
     let backgroundTheme: TerminalTheme | undefined;
     let settled = false;
 
@@ -141,11 +140,6 @@ export async function detectTerminalTheme(
       settled = true;
       clearTimeout(timer);
       input.off("terminal-response", onData);
-      try {
-        stdin.setRawMode(wasRaw);
-      } catch {
-        // The terminal may disappear during startup; theme selection can still complete.
-      }
       resolve(theme);
     };
     const onData = (report: string) => {
@@ -164,7 +158,6 @@ export async function detectTerminalTheme(
     }, timeoutMs);
 
     try {
-      stdin.setRawMode(true);
       input.on("terminal-response", onData);
       process.stdout.write("\x1b[?996n\x1b]11;?\x07");
     } catch {

@@ -242,7 +242,7 @@ describe("terminal input report filtering", () => {
     expect(write).toHaveBeenCalledWith("\x1b[?996n\x1b]11;?\x07");
     terminal.stream.write("anth" + colorScheme);
     expect(await theme).toBe("light");
-    expect(terminal.controls.isRaw).toBe(false);
+    expect(terminal.controls.isRaw).toBe(true);
     terminal.stream.write(osc.slice(0, -1));
     await vi.advanceTimersByTimeAsync(120);
     expect(readInput()).toBe("anth");
@@ -256,9 +256,35 @@ describe("terminal input report filtering", () => {
     const theme = detectTerminalTheme(input, 5);
     await vi.advanceTimersByTimeAsync(5);
     expect(await theme).toBe("dark");
+    expect(terminal.controls.isRaw).toBe(true);
     terminal.stream.write(osc + colorScheme + "\\/user");
     await nextTick();
     expect(readInput()).toBe("\\/user");
+  });
+
+  it.each([false, true])(
+    "restores the initial raw mode (%s) when input is disposed",
+    async (wasRaw) => {
+      input.dispose();
+      terminal.controls.isRaw = wasRaw;
+      input = new TerminalInput(terminal.stdin);
+      const theme = detectTerminalTheme(input);
+      terminal.stream.write(colorScheme);
+      expect(await theme).toBe("light");
+      expect(terminal.controls.isRaw).toBe(true);
+      input.dispose();
+      expect(terminal.controls.isRaw).toBe(wasRaw);
+    },
+  );
+
+  it("keeps echo disabled with an explicit theme until input is disposed", async () => {
+    vi.stubEnv("YUKINO_THEME", "light");
+    const write = vi.spyOn(process.stdout, "write");
+    expect(await detectTerminalTheme(input)).toBe("light");
+    expect(write).not.toHaveBeenCalled();
+    expect(terminal.controls.isRaw).toBe(true);
+    input.dispose();
+    expect(terminal.controls.isRaw).toBe(false);
   });
 
   it("accepts every split point of OSC and CSI reports, including BEL", async () => {

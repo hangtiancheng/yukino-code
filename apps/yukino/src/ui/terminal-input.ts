@@ -9,6 +9,7 @@ const PASTE_END = "\x1b[201~";
 /** Remove terminal reports before Ink splits them into individual key events. */
 export class TerminalInput extends Transform {
   readonly stdin: NodeJS.ReadStream;
+  private readonly initialRawMode: boolean;
   private pending = "";
   private pasting = false;
   private readonly decoder = new StringDecoder("utf8");
@@ -16,6 +17,7 @@ export class TerminalInput extends Transform {
 
   constructor(private readonly source: NodeJS.ReadStream) {
     super();
+    this.initialRawMode = source.isRaw;
     // Keep the real TTY's raw-mode and ref controls, with reads and events
     // supplied by the filtered stream. Ink's public stdin option requires a TTY
     // stream.
@@ -30,6 +32,10 @@ export class TerminalInput extends Transform {
         return value;
       },
     });
+    // Replies can arrive after theme detection resolves, before Ink takes over.
+    if (source.isTTY && source.setRawMode) {
+      source.setRawMode(true);
+    }
     source.pipe(this);
   }
 
@@ -107,5 +113,12 @@ export class TerminalInput extends Transform {
     clearTimeout(this.escapeTimer);
     this.source.unpipe(this);
     this.destroy();
+    if (this.source.isTTY && this.source.setRawMode) {
+      try {
+        this.source.setRawMode(this.initialRawMode);
+      } catch {
+        // The terminal may have disappeared during shutdown.
+      }
+    }
   }
 }
