@@ -60,6 +60,44 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   useEffect(() => {
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    const incoming: ServerMessage[] = [];
+    let incomingFrame: number | undefined;
+    const flushIncoming = () => {
+      if (incomingFrame !== undefined) {
+        cancelAnimationFrame(incomingFrame);
+        incomingFrame = undefined;
+      }
+      for (const message of incoming.splice(0)) {
+        onMessageRef.current(message);
+      }
+    };
+    const receive = (message: ServerMessage) => {
+      if (
+        message.type !== "stream_text" &&
+        message.type !== "thinking_text" &&
+        message.type !== "tool_output"
+      ) {
+        flushIncoming();
+        onMessageRef.current(message);
+        return;
+      }
+      const last = incoming.at(-1);
+      if (
+        (message.type === "stream_text" && last?.type === "stream_text") ||
+        (message.type === "thinking_text" && last?.type === "thinking_text")
+      ) {
+        last.data.text += message.data.text;
+      } else if (
+        message.type === "tool_output" &&
+        last?.type === "tool_output" &&
+        last.data.toolId === message.data.toolId
+      ) {
+        last.data.output = message.data.output;
+      } else {
+        incoming.push(message);
+      }
+      incomingFrame ??= requestAnimationFrame(flushIncoming);
+    };
 
     // A hash-only navigation (e.g. opening a fresh invite URL after the
     // server restarted with a new token) swaps the token without a page
@@ -120,6 +158,7 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
       };
 
       ws.onclose = () => {
+        flushIncoming();
         onCloseRef.current();
         if (pingRef.current) {
           clearInterval(pingRef.current);
@@ -151,7 +190,7 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
           console.warn("[ws] dropping malformed server message", parsed);
           return;
         }
-        onMessageRef.current(parsed);
+        receive(parsed);
       };
     };
 
@@ -159,6 +198,10 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
     return () => {
       disposed = true;
+      if (incomingFrame !== undefined) {
+        cancelAnimationFrame(incomingFrame);
+      }
+      incoming.length = 0;
       if (reconnectTimer !== null) {
         clearTimeout(reconnectTimer);
       }

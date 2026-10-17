@@ -16,6 +16,7 @@ import { Welcome, type WelcomeInfo } from "./welcome";
 
 interface MessageListProps {
   items: ChatItem[];
+  revision: number;
   /** Session snapshot for the empty-state panel. */
   welcome: WelcomeInfo;
   onRespondPermission: (
@@ -27,13 +28,14 @@ interface MessageListProps {
 
 export function MessageList({
   items,
+  revision,
   welcome,
   onRespondPermission,
   onAnswerAsk,
 }: MessageListProps) {
   const { ref, atBottom, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     items,
-    `${welcome.session}:${items[0]?.id ?? ""}`,
+    `${welcome.session}:${String(revision)}`,
   );
 
   return (

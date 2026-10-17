@@ -252,6 +252,7 @@ export function App() {
     <div className="flex h-dvh w-full flex-col bg-bg font-mono text-sm text-base antialiased">
       <MessageList
         items={state.items}
+        revision={state.transcriptRevision}
         welcome={welcome}
         onRespondPermission={handleRespondPermission}
         onAnswerAsk={handleAnswerAsk}

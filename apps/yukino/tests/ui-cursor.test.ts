@@ -220,7 +220,7 @@ describe("native input cursor", () => {
     expect(line?.getCell(5)?.getWidth()).toBe(2);
     expect(line?.getCell(6)?.getWidth()).toBe(0);
     expect(line?.translateToString(true).trimEnd()).toBe("  あe\u0301😁next");
-    expect(output.join("")).toContain("\x1b[2 q");
+    expect(output.join("")).toContain("\x1b[6 q");
     expect(output.join("")).not.toContain("\x1b[7m");
     act(() => {
       instance?.rerender(view(4));
@@ -248,11 +248,11 @@ describe("native input cursor", () => {
         active: false,
       }),
     );
-    expect(output.join("")).not.toMatch(/\x1b\[[05] q/);
+    expect(output.join("")).not.toMatch(/\x1b\[\d* q/);
     act(() => {
       instance?.rerender(createElement(CursorText, { before: "text" }));
     });
-    expect(output.join("")).not.toMatch(/\x1b\[[05] q/);
+    expect(output.join("")).not.toMatch(/\x1b\[\d* q/);
   });
 
   it("edits Unicode and bracketed multiline paste at the actual caret with real Ink input", async () => {

@@ -237,7 +237,9 @@ describe("terminal input report filtering", () => {
 
   it("buffers typing during detection and consumes a later, split OSC terminator", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const write = vi.spyOn(process.stdout, "write");
     const theme = detectTerminalTheme(input);
+    expect(write).toHaveBeenCalledWith("\x1b[?996n\x1b]11;?\x07");
     terminal.stream.write("anth" + colorScheme);
     expect(await theme).toBe("light");
     expect(terminal.controls.isRaw).toBe(false);

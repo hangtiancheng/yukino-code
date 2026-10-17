@@ -57,6 +57,19 @@ afterEach(() => {
 });
 
 describe("terminal column handling", () => {
+  it("keeps the quote border on every wrapped line", () => {
+    const quote = "> " + "引用内容 **emphasis** and more words ".repeat(8);
+    const rendered = renderMarkdown(quote, 24);
+    const lines = stripVTControlCharacters(rendered).split("\n");
+    expect(lines.length).toBeGreaterThan(2);
+    for (const line of lines.filter((line) => line.trim())) {
+      expect(line).toMatch(/^│ /u);
+      expect(visibleWidth(line)).toBeLessThanOrEqual(24);
+    }
+    expect(rendered).toContain("引用内容");
+    expect(stripVTControlCharacters(rendered)).toContain("emphasis");
+  });
+
   it("measures ANSI, CJK and combining characters without splitting glyphs", () => {
     const text = colors.red("日本e\u0301");
     expect(visibleWidth(text)).toBe(5);

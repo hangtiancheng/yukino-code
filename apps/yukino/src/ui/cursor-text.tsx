@@ -37,7 +37,7 @@ function TerminalCursor({ text, color }: { text: string; color?: string }) {
     if (!stdout.isTTY) {
       return;
     }
-    stdout.write("\x1b[2 q");
+    stdout.write("\x1b[6 q");
     const restore = () => {
       stdout.write("\x1b[0 q");
     };

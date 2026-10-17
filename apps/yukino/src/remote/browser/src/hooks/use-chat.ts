@@ -1,3 +1,5 @@
+import { useCallback, useReducer } from "react";
+
 import type {
   BackgroundTaskInfo,
   ChatItem,
@@ -20,9 +22,8 @@ import type {
   TodoUpdatePayload,
   ToolItem,
   UsagePayload,
-} from "@browser/types";
-import { toolKey } from "@browser/types";
-import { useCallback, useReducer } from "react";
+} from "../types";
+import { toolKey } from "../types";
 
 /** Monotonic id generator for newly created chat items. */
 let idCounter = 0;
@@ -55,6 +56,7 @@ function trimChatItems(state: ChatState): ChatState {
 
 export interface ChatState {
   items: ChatItem[];
+  transcriptRevision: number;
   connection: ConnectionStatus;
   session: string;
   cwd: string;
@@ -111,6 +113,7 @@ export interface ChatState {
 
 export const initialState: ChatState = {
   items: [],
+  transcriptRevision: 0,
   connection: "connecting",
   session: "",
   cwd: "",
@@ -317,6 +320,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "clear":
       return {
         ...state,
+        transcriptRevision: state.transcriptRevision + 1,
         currentAssistantId: null,
         currentThinkingId: null,
         steering: [],
@@ -675,7 +679,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
   }
 }
 
-function reducer(state: ChatState, action: Action): ChatState {
+export function chatReducer(state: ChatState, action: Action): ChatState {
   switch (action.kind) {
     case "connection":
       return { ...state, connection: action.status };
@@ -777,7 +781,7 @@ export interface ChatApi {
 }
 
 export function useChat(): ChatApi {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(chatReducer, initialState);
 
   const dispatchMessage = useCallback((message: ServerMessage) => {
     dispatch({ kind: "message", message });

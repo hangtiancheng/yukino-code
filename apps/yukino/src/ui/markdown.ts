@@ -51,9 +51,11 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
       value
         .trimEnd()
         .split("\n")
-        .map(
-          (line) =>
-            `${chalk.hex(THEME.mdQuoteBorder)("│")} ${chalk.italic.hex(THEME.mdQuote)(line.trimStart())}`,
+        .flatMap((line) =>
+          wrapToLines(line.trimStart(), Math.max(1, width - 2)).map(
+            (wrapped) =>
+              `${chalk.hex(THEME.mdQuoteBorder)("│")} ${chalk.italic.hex(THEME.mdQuote)(wrapped)}`,
+          ),
         )
         .join("\n"),
     code: chalk.hex(THEME.mdCodeBlock),
