@@ -12,7 +12,11 @@ import {
 import type * as feedbackGithub from "@/feedback/github.js";
 import type { IssueResult } from "@/feedback/github.js";
 import { runFeedbackPipeline } from "@/feedback/pipeline.js";
-import type { CollectedFile, FeedbackChannel } from "@/feedback/types.js";
+import type {
+  CollectedFile,
+  FeedbackChannel,
+  IssueDraft,
+} from "@/feedback/types.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { sessionPath } from "@/storage/paths.js";
@@ -143,7 +147,7 @@ describe("runFeedbackPipeline", () => {
         { title: "[ui] Render corruption", body: "## What happened\nGarbled." },
       ]),
     );
-    const report = await runFeedbackPipeline(
+    const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
       makeDeps(client, makeProject()),
     );
@@ -174,7 +178,7 @@ describe("runFeedbackPipeline", () => {
 
   it("files nothing when no anomalies and no description", async () => {
     const client = fakeClient(analysisReply([]));
-    const report = await runFeedbackPipeline(
+    const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
       makeDeps(client, makeProject()),
     );
@@ -199,7 +203,7 @@ describe("runFeedbackPipeline", () => {
         { title: "tool bash RETRY storm!", body: "same defect again" },
       ]),
     );
-    const report = await runFeedbackPipeline(
+    const { report } = await runFeedbackPipeline(
       { description: "", attachments: [] },
       makeDeps(client, makeProject()),
     );
@@ -214,7 +218,7 @@ describe("runFeedbackPipeline", () => {
         { title: "[context] Compaction loses messages", body: "b" },
       ]),
     );
-    const report = await runFeedbackPipeline(
+    const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
       makeDeps(client, makeProject()),
     );
@@ -243,7 +247,7 @@ describe("runFeedbackPipeline", () => {
       number: 3,
     });
     const client = fakeClient("I looked but cannot say anything definitive.");
-    const report = await runFeedbackPipeline(
+    const { report } = await runFeedbackPipeline(
       { description: "权限弹窗在 tmux 里卡死", attachments: [] },
       makeDeps(client, makeProject()),
     );
@@ -264,7 +268,7 @@ describe("runFeedbackPipeline", () => {
       analysisReply([{ title: "[tool] Bash hangs", body: "b" }]),
     );
     const deps = makeDeps(client, makeProject());
-    const report = await runFeedbackPipeline(
+    const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
       deps,
     );
@@ -285,7 +289,7 @@ describe("runFeedbackPipeline", () => {
       url: "https://github.com/hangtiancheng/yukino-code/issues/5",
       number: 5,
     });
-    const report = await runFeedbackPipeline(
+    const { report } = await runFeedbackPipeline(
       { description: "compact 之后工具调用配对错乱", attachments: [] },
       makeDeps(explodingClient(), makeProject()),
     );
@@ -300,5 +304,118 @@ describe("runFeedbackPipeline", () => {
         makeDeps(explodingClient(), makeProject()),
       ),
     ).rejects.toThrow("provider exploded");
+  });
+
+  it("asks for approval once per round and files all issues when approved", async () => {
+    mocks.createIssue
+      .mockResolvedValueOnce({
+        url: "https://github.com/hangtiancheng/yukino-code/issues/21",
+        number: 21,
+      })
+      .mockResolvedValueOnce({
+        url: "https://github.com/hangtiancheng/yukino-code/issues/22",
+        number: 22,
+      });
+    const client = fakeClient(
+      analysisReply([
+        { title: "[tool] Bash retry storm", body: "b1" },
+        { title: "[ui] Render corruption", body: "b2" },
+      ]),
+    );
+    const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
+      Promise.resolve({ approved: true }),
+    );
+    const deps = makeDeps(client, makeProject());
+    const { report, rejection } = await runFeedbackPipeline(
+      { description: "", attachments: [] },
+      { ...deps, confirmIssues },
+    );
+
+    // One confirmation for the whole batch, carrying both drafts.
+    expect(confirmIssues).toHaveBeenCalledTimes(1);
+    const presented = confirmIssues.mock.calls[0][0];
+    expect(presented.map((d) => d.title)).toEqual([
+      "[tool] Bash retry storm",
+      "[ui] Render corruption",
+    ]);
+    expect(mocks.createIssue).toHaveBeenCalledTimes(2);
+    expect(report).toContain("issues/21");
+    expect(report).toContain("issues/22");
+    expect(rejection).toBeUndefined();
+  });
+
+  it("files nothing and reports the reason when the user rejects", async () => {
+    const client = fakeClient(
+      analysisReply([{ title: "[tool] Bash retry storm", body: "b" }]),
+    );
+    const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
+      Promise.resolve({
+        approved: false,
+        reason: "这是我项目代码的问题，不是 yukino 的缺陷",
+      }),
+    );
+    const deps = makeDeps(client, makeProject());
+    const result = await runFeedbackPipeline(
+      { description: "", attachments: ["env"] },
+      { ...deps, confirmIssues },
+    );
+
+    expect(result.report).toContain("Issue filing rejected");
+    expect(result.report).toContain("这是我项目代码的问题，不是 yukino 的缺陷");
+    expect(result.rejection).toEqual({
+      issues: [{ title: "[tool] Bash retry storm", body: "b" }],
+      reason: "这是我项目代码的问题，不是 yukino 的缺陷",
+    });
+    // Nothing is uploaded or filed after a rejection.
+    expect(mocks.createIssue).not.toHaveBeenCalled();
+    expect(mocks.createGist).not.toHaveBeenCalled();
+    expect(mocks.openInBrowser).not.toHaveBeenCalled();
+    expect(loadFiledIssues(SESSION)).toEqual([]);
+  });
+
+  it("rejects cleanly without a reason", async () => {
+    const client = fakeClient(
+      analysisReply([{ title: "[tool] Bash retry storm", body: "b" }]),
+    );
+    const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
+      Promise.resolve({ approved: false }),
+    );
+    const deps = makeDeps(client, makeProject());
+    const result = await runFeedbackPipeline(
+      { description: "", attachments: [] },
+      { ...deps, confirmIssues },
+    );
+    expect(result.report).toContain("Issue filing rejected");
+    expect(result.rejection?.reason).toBeUndefined();
+    expect(mocks.createIssue).not.toHaveBeenCalled();
+  });
+
+  it("presents the deduplicated list for approval", async () => {
+    recordFiledIssues(SESSION, [
+      {
+        fingerprint: issueFingerprint("[tool] Bash retry storm"),
+        title: "[tool] Bash retry storm",
+        url: "https://github.com/hangtiancheng/yukino-code/issues/9",
+        channel: "gh",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    const client = fakeClient(
+      analysisReply([
+        { title: "tool bash retry storm", body: "dup" },
+        { title: "[ui] Render corruption", body: "fresh" },
+      ]),
+    );
+    const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
+      Promise.resolve({ approved: false }),
+    );
+    const deps = makeDeps(client, makeProject());
+    await runFeedbackPipeline(
+      { description: "", attachments: [] },
+      { ...deps, confirmIssues },
+    );
+    expect(confirmIssues).toHaveBeenCalledTimes(1);
+    const presented = confirmIssues.mock.calls[0][0];
+    expect(presented.map((d) => d.title)).toEqual(["[ui] Render corruption"]);
   });
 });

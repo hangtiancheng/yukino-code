@@ -6,6 +6,7 @@ import { CodeReviewDialog } from "./code-review-dialog.js";
 import { FeedbackDialog } from "./feedback-dialog.js";
 import type { InputDraft } from "./input-draft.js";
 import { InputBox } from "./input.js";
+import { IssueApprovalDialog } from "./issue-approval.js";
 import { ModelSelect } from "./model-select.js";
 import { PermissionDialog } from "./permission-dialog.js";
 import { PlanApprovalDialog } from "./plan-approval.js";
@@ -27,6 +28,7 @@ interface Props {
   permission?: ComponentProps<typeof PermissionDialog>;
   askUser?: ComponentProps<typeof AskUserDialog>;
   feedback?: ComponentProps<typeof FeedbackDialog>;
+  issueApproval?: ComponentProps<typeof IssueApprovalDialog>;
   agents?: ComponentProps<typeof AgentsDialog>;
   composer: ComponentProps<typeof InputBox>;
 }
@@ -43,6 +45,7 @@ export function InteractionDock({
   permission,
   askUser,
   feedback,
+  issueApproval,
   agents,
   composer,
 }: Props) {
@@ -76,6 +79,9 @@ export function InteractionDock({
   }
   if (feedback) {
     return <FeedbackDialog {...feedback} />;
+  }
+  if (issueApproval) {
+    return <IssueApprovalDialog {...issueApproval} />;
   }
   if (agents) {
     return <AgentsDialog {...agents} />;

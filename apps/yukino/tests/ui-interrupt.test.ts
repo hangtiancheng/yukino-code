@@ -119,8 +119,10 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     const controller = new AbortController();
     const permissionResolve = vi.fn();
     const askResolve = vi.fn();
+    const issueApprovalResolve = vi.fn();
     const setPermissionRequest = vi.fn();
     const setAskRequest = vi.fn();
+    const setIssueApprovalRequest = vi.fn();
     const stopBackgroundTasks = vi.fn().mockResolvedValue(undefined);
     const stopTeams = vi.fn().mockResolvedValue(undefined);
     const deps: InterruptDeps = {
@@ -130,6 +132,8 @@ describe("createInterruptHandlers (interrupt scope)", () => {
       permissionQueue: { current: [] },
       askResolveRef: { current: askResolve },
       setAskRequest,
+      issueApprovalResolveRef: { current: issueApprovalResolve },
+      setIssueApprovalRequest,
       backgroundTasks: { stopAll: stopBackgroundTasks },
       teams: { stopAll: stopTeams },
     };
@@ -137,8 +141,10 @@ describe("createInterruptHandlers (interrupt scope)", () => {
       controller,
       permissionResolve,
       askResolve,
+      issueApprovalResolve,
       setPermissionRequest,
       setAskRequest,
+      setIssueApprovalRequest,
       stopBackgroundTasks,
       stopTeams,
       deps,
@@ -156,6 +162,10 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     expect(h.askResolve).toHaveBeenCalledWith({});
     expect(h.deps.askResolveRef.current).toBeNull();
     expect(h.setAskRequest).toHaveBeenCalledWith(null);
+    // A pending /feedback issue-approval panel is rejected, never filed.
+    expect(h.issueApprovalResolve).toHaveBeenCalledWith({ approved: false });
+    expect(h.deps.issueApprovalResolveRef.current).toBeNull();
+    expect(h.setIssueApprovalRequest).toHaveBeenCalledWith(null);
     // The core regression: a single Ctrl+C must never stop background tasks,
     // background subagents or teammates.
     expect(h.stopBackgroundTasks).not.toHaveBeenCalled();

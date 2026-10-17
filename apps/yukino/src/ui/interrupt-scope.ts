@@ -1,6 +1,8 @@
 import type { SubagentProgress } from "./agent-tool-progress.js";
 import type { PermissionAction } from "./permission-dialog.js";
 
+import type { IssueConfirmation } from "@/feedback/types.js";
+
 /**
  * Whether a single Ctrl+C / Esc has anything to interrupt. Only foreground
  * execution counts: the streaming run (agent loop, forked skill, or code
@@ -41,6 +43,11 @@ export interface InterruptDeps {
     current: ((answers: Record<string, string>) => void) | null;
   };
   setAskRequest: (request: null) => void;
+  /** Pending /feedback issue approval panel (one per feedback round). */
+  issueApprovalResolveRef: {
+    current: ((confirmation: IssueConfirmation) => void) | null;
+  };
+  setIssueApprovalRequest: (request: null) => void;
   /** Background tasks (Bash/PowerShell/background agents). Stopped only via interruptAll (TUI exit). */
   backgroundTasks: { stopAll(): Promise<void> };
   /** Teammates. Stopped only via interruptAll (TUI exit). */
@@ -78,6 +85,10 @@ export function createInterruptHandlers(
     deps.askResolveRef.current?.({});
     deps.askResolveRef.current = null;
     deps.setAskRequest(null);
+    // Reject (never file) a pending issue-approval panel.
+    deps.issueApprovalResolveRef.current?.({ approved: false });
+    deps.issueApprovalResolveRef.current = null;
+    deps.setIssueApprovalRequest(null);
   };
   const interruptAll = () => {
     interruptForeground();

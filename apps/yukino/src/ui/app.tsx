@@ -13,6 +13,7 @@ import {
   createInterruptHandlers,
   isForegroundBusy,
 } from "./interrupt-scope.js";
+import type { IssueApprovalChoice } from "./issue-approval.js";
 import type { ModelPickerState } from "./model-select.js";
 import { PendingQueue } from "./pending-queue.js";
 import {
@@ -87,8 +88,15 @@ import {
   type UserBashResult,
 } from "@/conversation/index.js";
 import { executeUserBash } from "@/conversation/user-bash.js";
-import { runFeedbackPipeline } from "@/feedback/pipeline.js";
-import type { FeedbackOptions } from "@/feedback/types.js";
+import {
+  runFeedbackPipeline,
+  type PipelineResult,
+} from "@/feedback/pipeline.js";
+import type {
+  FeedbackOptions,
+  IssueConfirmation,
+  IssueDraft,
+} from "@/feedback/types.js";
 import { FileHistory } from "@/file-history/index.js";
 import type { Snapshot } from "@/file-history/index.js";
 import { GoalManager, handleGoalCommand } from "@/goal/index.js";
@@ -559,6 +567,12 @@ export function App({
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
   const [feedbackActive, setFeedbackActive] = useState(false);
   const [feedbackDescription, setFeedbackDescription] = useState("");
+  const [issueApprovalRequest, setIssueApprovalRequest] = useState<
+    IssueDraft[] | null
+  >(null);
+  const issueApprovalResolveRef = useRef<
+    ((confirmation: IssueConfirmation) => void) | null
+  >(null);
   const [transcriptRevision, setTranscriptRevision] = useState(0);
   // Steering messages queued into the in-flight agent, mirrored for display.
   // Entries are removed when the agent reports them delivered.
@@ -614,6 +628,8 @@ export function App({
         setPermissionRequest,
         askResolveRef,
         setAskRequest,
+        issueApprovalResolveRef,
+        setIssueApprovalRequest,
         permissionQueue: permissionQueueRef,
         backgroundTasks: backgroundTaskManagerRef.current,
         teams: teamManagerRef.current,
@@ -2796,6 +2812,8 @@ export function App({
     modelDialogActive ||
     thinkingDialogActive ||
     planApprovalActive ||
+    feedbackActive ||
+    issueApprovalRequest !== null ||
     rewindDialogActive ||
     resumeDialogActive ||
     permissionRequest !== null ||
@@ -2959,6 +2977,7 @@ export function App({
     const provider = selectedProviderRef.current;
     const sessionId = sessionIdRef.current;
 
+    let rejection: PipelineResult["rejection"] | undefined;
     void runFeedbackPipeline(options, {
       cwd,
       sessionId,
@@ -2988,9 +3007,18 @@ export function App({
       onProgress: (message) => {
         setMessages((prev) => [...prev, { role: "system", content: message }]);
       },
+      confirmIssues: (issues) =>
+        new Promise<IssueConfirmation>((resolve) => {
+          issueApprovalResolveRef.current = resolve;
+          setIssueApprovalRequest(issues);
+        }),
     })
-      .then((report) => {
-        setMessages((prev) => [...prev, { role: "system", content: report }]);
+      .then((result) => {
+        rejection = result.rejection;
+        setMessages((prev) => [
+          ...prev,
+          { role: "system", content: result.report },
+        ]);
       })
       .catch((err: unknown) => {
         const message = controller.signal.aborted
@@ -3003,7 +3031,29 @@ export function App({
           abortControllerRef.current = null;
         }
         setIsStreaming(false);
+        // Mirror the plan-approval feedback path: the rejection reason goes
+        // to the agent as a user turn, with the rejected titles as context.
+        const reason = rejection?.reason;
+        if (reason) {
+          const titles = (rejection?.issues ?? [])
+            .map((issue) => `- ${issue.title}`)
+            .join("\n");
+          conversationRef.current.addSystemReminder(
+            `<feedback_issue_rejection>\nThe user rejected filing these /feedback issues and asked you not to re-file them:\n${titles}\n</feedback_issue_rejection>`,
+          );
+          handleSubmit(reason);
+        }
       });
+  };
+
+  const handleIssueApproval = (
+    choice: IssueApprovalChoice,
+    reason?: string,
+  ): void => {
+    setIssueApprovalRequest(null);
+    const resolve = issueApprovalResolveRef.current;
+    issueApprovalResolveRef.current = null;
+    resolve?.({ approved: choice === "approve", reason });
   };
 
   const handleLogin = async (input: ProviderConfig): Promise<void> => {
@@ -3230,6 +3280,14 @@ export function App({
                   onCancel: () => {
                     setFeedbackActive(false);
                   },
+                }
+              : undefined
+          }
+          issueApproval={
+            issueApprovalRequest
+              ? {
+                  issues: issueApprovalRequest,
+                  onSelect: handleIssueApproval,
                 }
               : undefined
           }

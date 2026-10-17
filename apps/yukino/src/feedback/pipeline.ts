@@ -34,6 +34,7 @@ import type {
   FeedbackChannel,
   FeedbackOptions,
   FiledIssueRecord,
+  IssueConfirmation,
   IssueDraft,
 } from "./types.js";
 import { writeZipArchive } from "./zip.js";
@@ -55,6 +56,17 @@ export interface PipelineDeps {
   contextWindow: number;
   abortSignal: AbortSignal;
   onProgress: (message: string) => void;
+  /**
+   * Approval gate before anything is uploaded or filed. Absent in contexts
+   * without a user present (tests, automation) — then issues file directly.
+   */
+  confirmIssues?: (issues: IssueDraft[]) => Promise<IssueConfirmation>;
+}
+
+export interface PipelineResult {
+  report: string;
+  /** Set when the user rejected filing; carries the drafts and their reason. */
+  rejection?: { issues: IssueDraft[]; reason?: string };
 }
 
 function logFilePath(sessionId: string): string {
@@ -214,7 +226,7 @@ function formatReport(
 export async function runFeedbackPipeline(
   options: FeedbackOptions,
   deps: PipelineDeps,
-): Promise<string> {
+): Promise<PipelineResult> {
   const { sessionId, abortSignal } = deps;
   const filed = loadFiledIssues(sessionId);
 
@@ -243,18 +255,39 @@ export async function runFeedbackPipeline(
     drafts = [descriptionFallbackDraft(options.description)];
   }
   if (drafts.length === 0) {
-    return "No yukino harness anomalies detected in this session — nothing filed.";
+    return {
+      report:
+        "No yukino harness anomalies detected in this session — nothing filed.",
+    };
   }
 
   const { fresh, skipped } = filterDuplicateDrafts(drafts, filed);
   if (fresh.length === 0) {
-    return `All ${String(skipped)} detected issue(s) were already filed in this session — nothing new to file.`;
+    return {
+      report: `All ${String(skipped)} detected issue(s) were already filed in this session — nothing new to file.`,
+    };
+  }
+
+  // Approval gate: nothing is uploaded or filed before the user confirms.
+  if (deps.confirmIssues) {
+    deps.onProgress(
+      `Prepared ${String(fresh.length)} issue(s) — waiting for approval.`,
+    );
+    const confirmation = await deps.confirmIssues(fresh);
+    abortSignal.throwIfAborted();
+    if (!confirmation.approved) {
+      const reason = confirmation.reason?.trim() || undefined;
+      return {
+        report: reason
+          ? `Issue filing rejected — reason: ${reason}. Nothing was filed or uploaded.`
+          : "Issue filing rejected. Nothing was filed or uploaded.",
+        rejection: { issues: fresh, reason },
+      };
+    }
   }
 
   const channel = await detectChannel();
-  deps.onProgress(
-    `Found ${String(fresh.length)} issue(s) to file via ${channel}.`,
-  );
+  deps.onProgress(`Filing ${String(fresh.length)} issue(s) via ${channel}.`);
 
   const env = await buildEnvironment(deps.cwd, deps.runtime);
   let collected: CollectOutput = { files: [], skipped: [] };
@@ -318,5 +351,7 @@ export async function runFeedbackPipeline(
     }));
   recordFiledIssues(sessionId, newRecords);
 
-  return formatReport(channel, results, skipped, gistUrl, bundlePath);
+  return {
+    report: formatReport(channel, results, skipped, gistUrl, bundlePath),
+  };
 }

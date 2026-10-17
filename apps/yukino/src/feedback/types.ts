@@ -35,6 +35,12 @@ export const FiledIssueRecordSchema = z.object({
 });
 export type FiledIssueRecord = z.infer<typeof FiledIssueRecordSchema>;
 
+/** User decision on the prepared issue list. */
+export interface IssueConfirmation {
+  approved: boolean;
+  reason?: string;
+}
+
 export interface CollectedFile {
   /** Relative name inside the attachment bundle, e.g. "file-history/snapshots.json". */
   name: string;
