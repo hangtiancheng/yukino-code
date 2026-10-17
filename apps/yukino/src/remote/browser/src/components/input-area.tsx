@@ -483,180 +483,179 @@ export function InputArea({
             {blockedHint}
           </p>
         )}
-        <div
-          style={{
-            borderColor: bashMode
-              ? "var(--yukino-bash-mode)"
-              : `var(--yukino-thinking-${thinkingLevel.toLowerCase() || "off"})`,
-          }}
-          className="border-y bg-bg transition-colors"
-        >
-          {uploads.length > 0 && (
-            <div
-              className="flex flex-wrap gap-1.5 px-3 pt-3"
-              aria-label="Uploading images"
-            >
-              {uploads.map((upload) => (
-                <span
-                  key={upload.clientId}
-                  className="flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-tool px-2.5 py-0.5 font-mono text-[11px] text-dim"
-                  title={upload.name}
-                >
-                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
-                  <span className="truncate">{upload.name}</span>
-                </span>
-              ))}
-            </div>
-          )}
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={value}
+        <div className="flex items-end gap-2 px-3 sm:px-5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            className="hidden"
             onChange={(e) => {
-              setValue(e.target.value);
-              setCaret(e.target.selectionStart ?? 0);
-              setAtDismissed(false);
-            }}
-            onKeyDown={onKeyDown}
-            onKeyUp={(e) => {
-              setCaret(e.currentTarget.selectionStart ?? 0);
-            }}
-            onClick={(e) => {
-              setCaret(e.currentTarget.selectionStart ?? 0);
-            }}
-            onSelect={(e) => {
-              setCaret(e.currentTarget.selectionStart ?? 0);
-            }}
-            onPaste={(e) => {
-              const files = Array.from(e.clipboardData?.files ?? []).filter(
-                (file) => file.type.startsWith("image/"),
-              );
-              if (files.length > 0) {
-                e.preventDefault();
-                for (const file of files) {
-                  uploadImage(file);
-                }
+              for (const file of Array.from(e.target.files ?? [])) {
+                uploadImage(file);
               }
+              e.target.value = "";
             }}
-            onDrop={(e) => {
-              const files = Array.from(e.dataTransfer?.files ?? []).filter(
-                (file) => file.type.startsWith("image/"),
-              );
-              if (files.length > 0) {
-                e.preventDefault();
-                for (const file of files) {
-                  uploadImage(file);
-                }
-              }
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-            }}
-            placeholder={
-              streaming ? "Steer the current task…" : "Message Yukino…"
-            }
-            className="block max-h-50 w-full resize-none bg-transparent px-3 pt-3.5 pb-1.5 sm:px-5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim"
-            aria-label="Message input"
           />
-          <div className="flex items-center gap-2 px-3 pb-2.5 sm:px-5">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
-              multiple
-              className="hidden"
+          <button
+            type="button"
+            aria-label="Attach images"
+            title="Attach images (or paste/drop them)"
+            onClick={() => {
+              fileInputRef.current?.click();
+            }}
+            className="mb-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <rect
+                x="1.8"
+                y="3"
+                width="12.4"
+                height="10"
+                rx="1.7"
+                stroke="currentColor"
+                strokeWidth="1.2"
+              />
+              <circle cx="5.6" cy="6.6" r="1.1" fill="currentColor" />
+              <path
+                d="m2.6 11.6 3.2-3 2.4 2.2 2.3-2.6 2.9 3.4"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <div
+            style={{
+              borderColor: bashMode
+                ? "var(--yukino-bash-mode)"
+                : `var(--yukino-thinking-${thinkingLevel.toLowerCase() || "off"})`,
+            }}
+            className="min-w-0 flex-1 border-y bg-bg transition-colors"
+          >
+            {uploads.length > 0 && (
+              <div
+                className="flex flex-wrap gap-1.5 px-3 pt-3"
+                aria-label="Uploading images"
+              >
+                {uploads.map((upload) => (
+                  <span
+                    key={upload.clientId}
+                    className="flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-tool px-2.5 py-0.5 font-mono text-[11px] text-dim"
+                    title={upload.name}
+                  >
+                    <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
+                    <span className="truncate">{upload.name}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={value}
               onChange={(e) => {
-                for (const file of Array.from(e.target.files ?? [])) {
-                  uploadImage(file);
-                }
-                e.target.value = "";
+                setValue(e.target.value);
+                setCaret(e.target.selectionStart ?? 0);
+                setAtDismissed(false);
               }}
+              onKeyDown={onKeyDown}
+              onKeyUp={(e) => {
+                setCaret(e.currentTarget.selectionStart ?? 0);
+              }}
+              onClick={(e) => {
+                setCaret(e.currentTarget.selectionStart ?? 0);
+              }}
+              onSelect={(e) => {
+                setCaret(e.currentTarget.selectionStart ?? 0);
+              }}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData?.files ?? []).filter(
+                  (file) => file.type.startsWith("image/"),
+                );
+                if (files.length > 0) {
+                  e.preventDefault();
+                  for (const file of files) {
+                    uploadImage(file);
+                  }
+                }
+              }}
+              onDrop={(e) => {
+                const files = Array.from(e.dataTransfer?.files ?? []).filter(
+                  (file) => file.type.startsWith("image/"),
+                );
+                if (files.length > 0) {
+                  e.preventDefault();
+                  for (const file of files) {
+                    uploadImage(file);
+                  }
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              placeholder={
+                streaming ? "Steer the current task…" : "Message Yukino…"
+              }
+              className="block max-h-50 w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim"
+              aria-label="Message input"
             />
+            {bashMode && (
+              <span className="mx-3 mb-2 inline-block rounded-none border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
+                {bashExcluded ? "Bash · excluded" : "Bash"}
+              </span>
+            )}
+          </div>
+          {streaming ? (
             <button
               type="button"
-              aria-label="Attach images"
-              title="Attach images (or paste/drop them)"
-              onClick={() => {
-                fileInputRef.current?.click();
-              }}
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
+              onClick={onCancel}
+              title="Cancel the running turn (Esc)"
+              className="mb-1.5 flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-none border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
             >
               <svg
-                width="15"
-                height="15"
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <rect x="1.5" y="1.5" width="7" height="7" rx="1" />
+              </svg>
+              Cancel
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={send}
+              disabled={value.trim().length === 0}
+              className="mb-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
+              aria-label="Send message"
+            >
+              <svg
+                width="14"
+                height="14"
                 viewBox="0 0 16 16"
                 fill="none"
                 aria-hidden="true"
               >
-                <rect
-                  x="1.8"
-                  y="3"
-                  width="12.4"
-                  height="10"
-                  rx="1.7"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                />
-                <circle cx="5.6" cy="6.6" r="1.1" fill="currentColor" />
                 <path
-                  d="m2.6 11.6 3.2-3 2.4 2.2 2.3-2.6 2.9 3.4"
+                  d="M8 13.5V3m0 0L3.8 7.2M8 3l4.2 4.2"
                   stroke="currentColor"
-                  strokeWidth="1.2"
+                  strokeWidth="1.6"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </svg>
             </button>
-            {bashMode && (
-              <span className="shrink-0 rounded-none border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
-                {bashExcluded ? "Bash · excluded" : "Bash"}
-              </span>
-            )}
-            <div className="min-w-0 flex-1" />
-            {streaming ? (
-              <button
-                type="button"
-                onClick={onCancel}
-                title="Cancel the running turn (Esc)"
-                className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-none border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
-              >
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 10 10"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <rect x="1.5" y="1.5" width="7" height="7" rx="1" />
-                </svg>
-                Cancel
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={send}
-                disabled={value.trim().length === 0}
-                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
-                aria-label="Send message"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M8 13.5V3m0 0L3.8 7.2M8 3l4.2 4.2"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
+          )}
         </div>
         <p className="mt-1 hidden px-3 text-xs text-dim sm:block sm:px-5">
           Enter send · Shift+Enter newline · ↑ history · @ files · ! bash ·

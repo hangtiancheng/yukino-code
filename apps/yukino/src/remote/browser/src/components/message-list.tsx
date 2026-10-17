@@ -45,7 +45,7 @@ export function MessageList({
         role="log"
         aria-live="polite"
         tabIndex={0}
-        className="h-full overflow-y-auto overscroll-contain"
+        className="h-full overflow-y-auto overscroll-contain focus-visible:-outline-offset-2"
       >
         <div className="w-full py-1">
           <Welcome {...welcome} empty={items.length === 0} />
