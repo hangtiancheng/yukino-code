@@ -15,7 +15,8 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@browser/*": ["./src/*"]
+      "@browser/*": ["./src/*"],
+      "@yukino/*": ["../../*"]
     }
   },
   "include": ["src"]
