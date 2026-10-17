@@ -3309,7 +3309,7 @@ export function App({
               ? {
                   cwd,
                   sessionId: sessionIdRef.current,
-                  initialDescription: feedbackDescription,
+                  description: feedbackDescription,
                   onSubmit: handleFeedbackSubmit,
                   onCancel: () => {
                     setFeedbackActive(false);

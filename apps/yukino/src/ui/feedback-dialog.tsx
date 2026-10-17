@@ -5,7 +5,6 @@ import { useRef, useState } from "react";
 import { SelectorFrame } from "./selector-frame.js";
 import { THEME } from "./styles.js";
 import { truncateToWidth } from "./terminal-text.js";
-import { TextField } from "./text-field.js";
 import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import { attachmentSizePreview } from "@/feedback/collect.js";
@@ -14,7 +13,8 @@ import type { AttachmentKind, FeedbackOptions } from "@/feedback/types.js";
 interface Props {
   cwd: string;
   sessionId: string;
-  initialDescription: string;
+  /** Supplied inline as `/feedback <text>`; empty when the user gave none. */
+  description: string;
   onSubmit: (options: FeedbackOptions) => void;
   onCancel: () => void;
 }
@@ -60,14 +60,10 @@ function formatBytes(bytes: number): string {
 export function FeedbackDialog({
   cwd,
   sessionId,
-  initialDescription,
+  description,
   onSubmit,
   onCancel,
 }: Props) {
-  const [phase, setPhase] = useState<"description" | "attachments">(
-    initialDescription.trim() ? "attachments" : "description",
-  );
-  const [description, setDescription] = useState(initialDescription);
   const [cursor, setCursor] = useState(0);
   const [checked, setChecked] = useState<Record<AttachmentKind, boolean>>({
     session: true,
@@ -84,9 +80,6 @@ export function FeedbackDialog({
   );
 
   useInput((input, key) => {
-    if (phase !== "attachments") {
-      return;
-    }
     if (key.upArrow) {
       setCursor((current) => (current > 0 ? current - 1 : ITEMS.length - 1));
     } else if (key.downArrow) {
@@ -104,45 +97,18 @@ export function FeedbackDialog({
         ),
       });
     } else if (key.escape) {
-      if (initialDescription.trim()) {
-        onCancel();
-      } else {
-        setPhase("description");
-      }
+      onCancel();
     }
   });
 
-  if (phase === "description") {
-    return (
-      <SelectorFrame
-        hint="Enter continue · Escape cancel"
-        subtitle="Describe what went wrong (optional)"
-        title="Report a problem"
-      >
-        <TextField
-          initialValue={description}
-          prompt="→ "
-          onChange={setDescription}
-          onSubmit={(value) => {
-            setDescription(value);
-            setPhase("attachments");
-          }}
-          onEscape={onCancel}
-        />
-      </SelectorFrame>
-    );
-  }
-
-  const subtitle = description.trim()
-    ? truncateToWidth(
-        description.trim().split("\n")[0] ?? "",
-        Math.max(10, columns - 8),
-      )
+  const trimmed = description.trim();
+  const subtitle = trimmed
+    ? truncateToWidth(trimmed.split("\n")[0] ?? "", Math.max(10, columns - 8))
     : "no description — the model will analyze the session anyway";
   return (
     <SelectorFrame
       focusRef={focusRef}
-      hint="Space toggle · Enter submit · Escape back"
+      hint="Space toggle · Enter submit · Escape cancel"
       subtitle={subtitle}
       title="Feedback attachments"
     >
