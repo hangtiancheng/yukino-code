@@ -42,6 +42,17 @@ interface InitLoggerOptions {
 let currentLogger: Logger | null = null;
 let currentDest: ReturnType<typeof pino.destination> | null = null;
 let currentFd: number | null = null;
+let currentLogPath: string | null = null;
+
+export function getLogFilePath(): string | null {
+  return currentLogPath;
+}
+
+export function flushLogger(): void {
+  if (currentDest) {
+    flushDestination(currentDest);
+  }
+}
 
 function resolveLogPath(opts: InitLoggerOptions): string {
   const dir = opts.logDir ?? yukinoPath("logs");
@@ -85,6 +96,7 @@ export function initLogger(opts: InitLoggerOptions): Logger {
   // Append mode: multi-process safe, supports resume.
   const fd = openSync(logPath, "a");
   currentFd = fd;
+  currentLogPath = logPath;
   currentDest = pino.destination(fd);
 
   const pinoOpts: LoggerOptions = {
@@ -126,6 +138,7 @@ function getLogger(): Logger | null {
  * SonicBoom internal buffer is written to disk.
  */
 export function closeLogger(): void {
+  currentLogPath = null;
   if (currentLogger) {
     try {
       currentLogger.flush();

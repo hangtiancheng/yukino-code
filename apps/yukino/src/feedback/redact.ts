@@ -50,6 +50,7 @@ const TEXT_PATTERNS: { pattern: RegExp; replacement: string }[] = [
   { pattern: /\bAKIA[A-Z0-9]{16}\b/g, replacement: REDACTED },
   { pattern: /\bAIza[A-Za-z0-9_-]{35}\b/g, replacement: REDACTED },
   { pattern: /\bgh[a-z]_[A-Za-z0-9_]{30,}/g, replacement: REDACTED },
+  { pattern: /\bgithub_pat_[A-Za-z0-9_]{20,}/g, replacement: REDACTED },
   { pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g, replacement: REDACTED },
   {
     pattern: /\b(Bearer\s+)[A-Za-z0-9._~+/-]{20,}/gi,
@@ -58,25 +59,79 @@ const TEXT_PATTERNS: { pattern: RegExp; replacement: string }[] = [
 ];
 
 /** Regex-based redaction for free text (transcripts, logs, issue bodies). */
-export function redactText(text: string): string {
+export function redactText(
+  text: string,
+  secrets: readonly string[] = [],
+): string {
   let out = text;
+  for (const secret of secrets) {
+    if (secret) {
+      out = out.replaceAll(secret, REDACTED);
+    }
+  }
+  out = out.replace(
+    /^([ \t]*)(["']?)([\w.-]+)\2:[ \t]*[|>][^\n]*\n((?:\1[ \t]+[^\n]*(?:\n|$))*)/gm,
+    (match: string, indent: string, quote: string, key: string) =>
+      isSensitiveKey(key)
+        ? `${indent}${quote}${key}${quote}: "${REDACTED}"\n`
+        : match,
+  );
+  out = out.replace(/\b[a-z][a-z0-9+.-]{0,63}:\/\/[^\s<>"'`]+/gi, (url) =>
+    redactUrl(url),
+  );
+  out = out.replace(
+    /(?<![\w.-])(["']?([\w.-]{1,128})["']?[ \t]*[:=][ \t]*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}\]]+)/g,
+    (match: string, prefix: string, key: string, value: string) => {
+      if (!isSensitiveKey(key)) {
+        return match;
+      }
+      const quote = value.startsWith('"')
+        ? '"'
+        : value.startsWith("'")
+          ? "'"
+          : "";
+      return `${prefix}${quote}${REDACTED}${quote}`;
+    },
+  );
   for (const { pattern, replacement } of TEXT_PATTERNS) {
     out = out.replace(pattern, replacement);
   }
   return out;
 }
 
+export function secretValues(
+  value: unknown,
+  seen = new Set<unknown>(),
+): string[] {
+  if (value === null || typeof value !== "object" || seen.has(value)) {
+    return [];
+  }
+  seen.add(value);
+  return Object.entries(value).flatMap(([key, child]: [string, unknown]) =>
+    isSensitiveKey(key) && typeof child === "string" && child
+      ? [child]
+      : secretValues(child, seen),
+  );
+}
+
 function redactString(value: string): string {
   return redactText(redactUrl(value));
 }
 
-function redactValue(value: unknown): unknown {
+function redactValue(value: unknown, ancestors = new Set<unknown>()): unknown {
   if (typeof value === "string") {
     return redactString(value);
   }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (ancestors.has(value)) {
+    return "[Circular]";
+  }
+  const nestedAncestors = new Set(ancestors).add(value);
   const asArray = UnknownArraySchema.safeParse(value);
   if (asArray.success) {
-    return asArray.data.map((item) => redactValue(item));
+    return asArray.data.map((item) => redactValue(item, nestedAncestors));
   }
   const asRecord = UnknownRecordSchema.safeParse(value);
   if (asRecord.success) {
@@ -85,7 +140,7 @@ function redactValue(value: unknown): unknown {
       out[key] =
         child !== null && child !== undefined && isSensitiveKey(key)
           ? REDACTED
-          : redactValue(child);
+          : redactValue(child, nestedAncestors);
     }
     return out;
   }

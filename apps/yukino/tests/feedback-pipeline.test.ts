@@ -19,6 +19,7 @@ import type {
 } from "@/feedback/types.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
+import { saveCompactBoundary, saveMessage } from "@/session/index.js";
 import { sessionPath } from "@/storage/paths.js";
 
 const mocks = vi.hoisted(() => ({
@@ -104,6 +105,9 @@ function makeDeps(client: LLMClient, cwd: string) {
     contextWindow: 200_000,
     abortSignal: new AbortController().signal,
     onProgress: vi.fn<(message: string) => void>(),
+    confirmIssues: vi.fn((_issues: IssueDraft[]) =>
+      Promise.resolve({ approved: true }),
+    ),
   };
 }
 
@@ -238,7 +242,12 @@ describe("runFeedbackPipeline", () => {
       bundleFiles().some((f) => f.startsWith("bundle-") && f.endsWith(".zip")),
     ).toBe(true);
     expect(report).toContain("exported locally");
-    expect(loadFiledIssues(SESSION)[0].channel).toBe("browser");
+    expect(loadFiledIssues(SESSION)).toEqual([]);
+    await runFeedbackPipeline(
+      { description: "", attachments: [] },
+      makeDeps(client, makeProject()),
+    );
+    expect(mocks.openInBrowser).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to a description issue when analysis output is unparseable", async () => {
@@ -417,5 +426,82 @@ describe("runFeedbackPipeline", () => {
     expect(confirmIssues).toHaveBeenCalledTimes(1);
     const presented = confirmIssues.mock.calls[0][0];
     expect(presented.map((d) => d.title)).toEqual(["[ui] Render corruption"]);
+  });
+
+  it("does not upload or open a browser if cancelled during channel detection", async () => {
+    const controller = new AbortController();
+    mocks.detectChannel.mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve("browser");
+    });
+    await expect(
+      runFeedbackPipeline(
+        { description: "", attachments: ["env"] },
+        {
+          ...makeDeps(
+            fakeClient(analysisReply([{ title: "[ui] Hang", body: "b" }])),
+            makeProject(),
+          ),
+          abortSignal: controller.signal,
+        },
+      ),
+    ).rejects.toThrow();
+    expect(mocks.openInBrowser).not.toHaveBeenCalled();
+    expect(mocks.createGist).not.toHaveBeenCalled();
+    expect(bundleFiles().some((file) => file.endsWith(".zip"))).toBe(false);
+  });
+
+  it("retains successfully filed issues if the next submission is cancelled", async () => {
+    const controller = new AbortController();
+    mocks.createIssue
+      .mockResolvedValueOnce({ url: "https://example.com/issues/1", number: 1 })
+      .mockImplementationOnce(() => {
+        controller.abort();
+        return Promise.reject(new DOMException("Cancelled", "AbortError"));
+      });
+    await expect(
+      runFeedbackPipeline(
+        { description: "", attachments: [] },
+        {
+          ...makeDeps(
+            fakeClient(
+              analysisReply([
+                { title: "[tool] First defect", body: "b1" },
+                { title: "[ui] Second defect", body: "b2" },
+                { title: "[context] Third defect", body: "b3" },
+              ]),
+            ),
+            makeProject(),
+          ),
+          abortSignal: controller.signal,
+        },
+      ),
+    ).rejects.toThrow();
+    expect(mocks.createIssue).toHaveBeenCalledTimes(2);
+    expect(loadFiledIssues(SESSION).map((issue) => issue.title)).toEqual([
+      "[tool] First defect",
+    ]);
+  });
+
+  it("analyzes evidence from before compaction even when session attachments are disabled", async () => {
+    const cwd = makeProject();
+    saveMessage(cwd, SESSION, {
+      role: "assistant",
+      content: "PRE_COMPACTION_HARNESS_FAILURE",
+      timestamp: 1,
+    });
+    saveCompactBoundary(cwd, SESSION, {
+      summary: "Compacted task summary",
+      keep: [],
+    });
+    const client = fakeClient(analysisReply([]));
+    const stream = vi.spyOn(client, "stream");
+    await runFeedbackPipeline(
+      { description: "", attachments: [] },
+      makeDeps(client, cwd),
+    );
+    const prompt = stream.mock.calls[0][0].getMessages()[0].content;
+    expect(prompt).toContain("PRE_COMPACTION_HARNESS_FAILURE");
+    expect(mocks.createGist).not.toHaveBeenCalled();
   });
 });

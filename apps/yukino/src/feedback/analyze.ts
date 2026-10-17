@@ -12,7 +12,7 @@ const CONTEXT_BUDGET_RATIO = 0.8;
 // The analysis request also carries the coding-agent system prompt and must
 // leave room for the model's reply; reserve headroom for both.
 const SYSTEM_PROMPT_RESERVE_TOKENS = 8_000;
-const OUTPUT_RESERVE_TOKENS = 2_000;
+const OUTPUT_RESERVE_TOKENS = 8_000;
 const INSTRUCTIONS_RESERVE_TOKENS = 1_000;
 // Even tiny windows get a minimal well-formed prompt; whether the provider
 // accepts it is the provider's call (failures degrade gracefully).
@@ -35,6 +35,7 @@ export interface AnalyzeInput {
   description: string;
   filedIssues: FiledIssueRecord[];
   contextWindow: number;
+  maxOutputTokens?: number;
   abortSignal: AbortSignal;
 }
 
@@ -53,6 +54,9 @@ function serializeMessage(message: Message): string {
       )
       .join("\n")}`;
   }
+  if (message.userBash) {
+    text += `\n[user shell]\n${message.userBash.command}\n${message.userBash.output}`;
+  }
   return text;
 }
 
@@ -67,6 +71,18 @@ function serializeWithinBudget(
   for (; index >= 0; index--) {
     const serialized = serializeMessage(messages[index]);
     const cost = Math.ceil(serialized.length / CHARS_PER_TOKEN);
+    if (selected.length === 0 && cost > tokenBudget) {
+      const marker = `[${messages[index].role}]: [message truncated; recent tail follows]\n`;
+      const tailChars = Math.max(
+        0,
+        Math.floor(tokenBudget * CHARS_PER_TOKEN) - marker.length,
+      );
+      selected.push(
+        marker + (tailChars > 0 ? serialized.slice(-tailChars) : ""),
+      );
+      index--;
+      break;
+    }
     if (selected.length > 0 && tokens + cost > tokenBudget) {
       break;
     }
@@ -86,7 +102,7 @@ export function buildAnalysisPrompt(input: AnalyzeInput): string {
   const totalBudget =
     Math.floor(input.contextWindow * CONTEXT_BUDGET_RATIO) -
     SYSTEM_PROMPT_RESERVE_TOKENS -
-    OUTPUT_RESERVE_TOKENS -
+    analysisOutputTokens(input.contextWindow, input.maxOutputTokens) -
     INSTRUCTIONS_RESERVE_TOKENS;
   const budget = Math.max(totalBudget, MIN_ANALYSIS_BUDGET_TOKENS);
 
@@ -99,28 +115,45 @@ export function buildAnalysisPrompt(input: AnalyzeInput): string {
     logText = input.logContent.slice(-logCharBudget);
     // Drop the leading partial line left by the tail cut.
     const newline = logText.indexOf("\n");
-    if (newline !== -1 && newline < logText.length - 1) {
+    if (
+      input.logContent.length > logCharBudget &&
+      newline !== -1 &&
+      newline < logText.length - 1
+    ) {
       logText = logText.slice(newline + 1);
     }
   }
 
-  // The log never takes more than its quarter, so this stays positive.
+  const descriptionLimit = Math.floor(budget * CHARS_PER_TOKEN * 0.2);
+  const description = input.description.trim();
+  const descriptionText =
+    description.length > descriptionLimit
+      ? `${description.slice(0, Math.max(0, descriptionLimit - 20))}\n[report truncated]`
+      : description;
+  const filedLimit = Math.floor(budget * CHARS_PER_TOKEN * 0.1);
+  const filedList =
+    input.filedIssues.length > 0
+      ? input.filedIssues
+          .map((r) => `- ${r.title}`)
+          .join("\n")
+          .slice(-filedLimit)
+      : "(none)";
   const conversationBudget =
-    budget - Math.ceil((logText ?? "").length / CHARS_PER_TOKEN);
+    budget -
+    Math.ceil(
+      ((logText ?? "").length + descriptionText.length + filedList.length) /
+        CHARS_PER_TOKEN,
+    );
   const { text, omitted } = serializeWithinBudget(
     input.messages,
     conversationBudget,
   );
 
-  const filedList =
-    input.filedIssues.length > 0
-      ? input.filedIssues.map((r) => `- ${r.title}`).join("\n")
-      : "(none)";
   const logSection = logText
     ? `<yukino-log>\n${logText}\n</yukino-log>`
     : "<yukino-log>\n(no log entries)\n</yukino-log>";
-  const descriptionSection = input.description.trim()
-    ? `<user-report>\n${input.description.trim()}\n</user-report>`
+  const descriptionSection = descriptionText
+    ? `<user-report>\n${descriptionText}\n</user-report>`
     : "";
   const truncationNote =
     omitted > 0
@@ -159,19 +192,41 @@ export function buildAnalysisPrompt(input: AnalyzeInput): string {
   return sections.filter((part) => part !== "").join("\n\n");
 }
 
+function analysisOutputTokens(
+  contextWindow: number,
+  maxOutputTokens = OUTPUT_RESERVE_TOKENS,
+): number {
+  return Math.max(
+    1,
+    Math.min(
+      OUTPUT_RESERVE_TOKENS,
+      maxOutputTokens,
+      Math.floor(contextWindow / 4),
+    ),
+  );
+}
+
 async function collectAnalysisText(
   client: LLMClient,
   conv: ConversationManager,
   abortSignal: AbortSignal,
+  contextWindow: number,
+  maxOutputTokens?: number,
 ): Promise<string> {
   let text = "";
-  for await (const event of client.stream(conv, [], abortSignal)) {
+  let completed = false;
+  for await (const event of client.stream(conv, [], abortSignal, {
+    maxOutputTokens: analysisOutputTokens(contextWindow, maxOutputTokens),
+  })) {
     abortSignal.throwIfAborted();
     if (event.type === "tool_call_start") {
       throw new Error("Feedback analysis attempted a tool call");
     }
     if (event.type === "text_delta") {
       text += event.text;
+    }
+    if (event.type === "stream_end") {
+      completed = true;
     }
     if (
       event.type === "stream_end" &&
@@ -180,6 +235,10 @@ async function collectAnalysisText(
     ) {
       throw new Error(`Feedback analysis did not finish: ${event.stopReason}`);
     }
+  }
+  abortSignal.throwIfAborted();
+  if (!completed) {
+    throw new Error("Feedback analysis stream ended before completion");
   }
   return text;
 }
@@ -233,7 +292,13 @@ export async function analyzeHarnessAnomalies(
 ): Promise<IssueDraft[]> {
   const conv = new ConversationManager();
   conv.addUserMessage(buildAnalysisPrompt(input));
-  const text = await collectAnalysisText(input.client, conv, input.abortSignal);
+  const text = await collectAnalysisText(
+    input.client,
+    conv,
+    input.abortSignal,
+    input.contextWindow,
+    input.maxOutputTokens,
+  );
   const drafts = parseAnalysis(text);
   if (drafts) {
     return drafts;
@@ -253,6 +318,8 @@ export async function analyzeHarnessAnomalies(
     input.client,
     conv,
     input.abortSignal,
+    input.contextWindow,
+    input.maxOutputTokens,
   );
   const retried = parseAnalysis(retryText);
   if (retried) {

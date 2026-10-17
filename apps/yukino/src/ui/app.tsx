@@ -63,6 +63,7 @@ import { CommandUsageTracker } from "@/commands/usage-tracker.js";
 import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
 import type {
+  AppConfig,
   MCPServerConfig,
   HookConfig,
   SandboxYamlConfig,
@@ -190,6 +191,7 @@ const log = createChildLogger({ module: "terminal" });
 type AppState = "providerSelect" | "chat";
 
 interface Props {
+  config?: AppConfig;
   providers: ProviderConfig[];
   permissionMode?: string;
   mcpServers: MCPServerConfig[];
@@ -209,6 +211,7 @@ interface Props {
 const MAX_RECENT_TOOLS = 10;
 
 export function App({
+  config: initialConfig,
   providers: initialProviders,
   permissionMode,
   mcpServers,
@@ -2984,6 +2987,28 @@ export function App({
       client,
       messages: conversationRef.current.getMessages(),
       runtime: {
+        config: {
+          ...initialConfig,
+          providers,
+          active_provider: {
+            ...provider,
+            context_window: contextWindowRef.current,
+            max_output_tokens: maxOutputRef.current,
+            thinking: client.getThinkingLevel?.() ?? provider.thinking,
+          },
+          permission_mode: permModeRef.current,
+          mcp_servers: mcpServersRef.current,
+          lsp_servers: lspServers,
+          hooks,
+          sandbox: {
+            ...sandboxYaml,
+            enabled: sandboxEnabledRef.current,
+            auto_allow: sandboxAutoAllowRef.current,
+          },
+          enable_coordinator_mode: enableCoordinatorMode,
+          enable_fork: !forkDisabled,
+          enable_memory: memoryEnabled,
+        },
         provider: {
           name: provider.name,
           model: provider.model,
@@ -3009,6 +3034,13 @@ export function App({
       },
       confirmIssues: (issues) =>
         new Promise<IssueConfirmation>((resolve) => {
+          setMessages((prev) => [
+            ...prev,
+            ...issues.map((issue, index) => ({
+              role: "system" as const,
+              content: `Issue ${String(index + 1)}/${String(issues.length)}: ${issue.title}\n\n${issue.body}`,
+            })),
+          ]);
           issueApprovalResolveRef.current = resolve;
           setIssueApprovalRequest(issues);
         }),
@@ -3041,7 +3073,9 @@ export function App({
           conversationRef.current.addSystemReminder(
             `<feedback_issue_rejection>\nThe user rejected filing these /feedback issues and asked you not to re-file them:\n${titles}\n</feedback_issue_rejection>`,
           );
-          handleSubmit(reason);
+          handleSubmit(
+            `Feedback on the rejected /feedback issues:\n\n${reason}`,
+          );
         }
       });
   };

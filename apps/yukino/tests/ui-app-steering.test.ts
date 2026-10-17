@@ -10,6 +10,9 @@ import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 import * as config from "@/config/index.js";
 import type { MCPServerConfig } from "@/config/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
+import { runFeedbackPipeline } from "@/feedback/pipeline.js";
+import type { PipelineDeps, PipelineResult } from "@/feedback/pipeline.js";
+import type { FeedbackOptions } from "@/feedback/types.js";
 import { load as loadPromptHistory } from "@/history/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
@@ -21,10 +24,17 @@ import { checkForUpdate } from "@/update/version-check.js";
 import { contentToText } from "@/utils/index.js";
 import { connectToIde } from "@/vscode/ide-client.js";
 
-const { createClientMock } = vi.hoisted(() => ({
+const { createClientMock, feedbackMock } = vi.hoisted(() => ({
   createClientMock: vi.fn<() => Promise<LLMClient>>(),
+  feedbackMock:
+    vi.fn<
+      (options: FeedbackOptions, deps: PipelineDeps) => Promise<PipelineResult>
+    >(),
 }));
 vi.mock("@/llm/client.js", () => ({ createClient: createClientMock }));
+vi.mock("@/feedback/pipeline.js", () => ({
+  runFeedbackPipeline: feedbackMock,
+}));
 vi.mock("@/update/version-check.js", () => ({ checkForUpdate: vi.fn() }));
 vi.mock("@/vscode/ide-client.js", () => ({ connectToIde: vi.fn() }));
 
@@ -299,6 +309,95 @@ describe("App steering delivery", () => {
     await submit("EXPLICIT_NEXT_REQUEST");
     await waitForRequests(2);
     expect(client.requests[1]?.users).toContain("EXPLICIT_NEXT_REQUEST");
+    await finishRequest(1);
+  });
+});
+
+describe("App feedback approval", () => {
+  const issues = [
+    {
+      title: "[tool] Retry storm",
+      body: "## What happened\nCONCRETE_TOOL_FAILURE\n\n## Evidence\nTOOL_EVIDENCE_END",
+    },
+    { title: "[ui] Lost input", body: "## What happened\nCONCRETE_UI_FAILURE" },
+  ];
+  const filed = vi.fn();
+
+  beforeEach(() => {
+    feedbackMock.mockReset();
+    filed.mockReset();
+    feedbackMock.mockImplementation(async (_options, deps) => {
+      const confirmation = await deps.confirmIssues(issues);
+      deps.abortSignal.throwIfAborted();
+      if (confirmation.approved) {
+        filed(issues);
+        return { report: "Feedback issues filed." };
+      }
+      return {
+        report: "Feedback rejected.",
+        rejection: { issues, reason: confirmation.reason },
+      };
+    });
+  });
+
+  async function openFeedback() {
+    await start();
+    await finishRequest(0);
+    await submit("/feedback observed failures");
+    await press(" ");
+    await press("\r");
+    await vi.waitFor(() => {
+      expect(runFeedbackPipeline).toHaveBeenCalledTimes(1);
+    });
+    await flush();
+    expect(filed).not.toHaveBeenCalled();
+  }
+
+  it.each([8, 24])(
+    "shows all drafts and requires approval at %i rows",
+    async (rows) => {
+      terminal.resize(120, rows);
+      await openFeedback();
+      expect(feedbackMock.mock.calls[0][0].attachments).toEqual([
+        "tools",
+        "file-history",
+        "log",
+        "env",
+      ]);
+      expect(terminal.bufferLines().join("\n")).toContain("TOOL_EVIDENCE_END");
+      expect(terminal.bufferLines().join("\n")).toContain(
+        "CONCRETE_UI_FAILURE",
+      );
+      await press("\r");
+      await vi.waitFor(() => {
+        expect(filed).toHaveBeenCalledWith(issues);
+      });
+    },
+  );
+
+  it("sends a slash-prefixed rejection reason to the model as feedback", async () => {
+    await openFeedback();
+    await press("\x1b[B");
+    await press("\r");
+    await submit("/quit is the text of my rejection reason");
+    await waitForRequests(2);
+    expect(filed).not.toHaveBeenCalled();
+    expect(client.requests[1]?.users.at(-1)).toBe(
+      "Feedback on the rejected /feedback issues:\n\n/quit is the text of my rejection reason",
+    );
+    expect(JSON.stringify(client.requests[1]?.messages)).toContain(
+      "feedback_issue_rejection",
+    );
+    await finishRequest(1);
+  });
+
+  it("cancels a pending approval without filing or leaving input blocked", async () => {
+    await openFeedback();
+    await press("\x03");
+    expect(feedbackMock.mock.calls[0][1].abortSignal.aborted).toBe(true);
+    expect(filed).not.toHaveBeenCalled();
+    await submit("Continue after feedback cancellation");
+    await waitForRequests(2);
     await finishRequest(1);
   });
 });

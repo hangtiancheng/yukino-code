@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Message } from "@/conversation/index.js";
-import { buildAnalysisPrompt } from "@/feedback/analyze.js";
+import {
+  analyzeHarnessAnomalies,
+  buildAnalysisPrompt,
+} from "@/feedback/analyze.js";
 import type { AnalyzeInput } from "@/feedback/analyze.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
@@ -120,5 +123,67 @@ describe("buildAnalysisPrompt budget", () => {
     );
     expect(prompt).toContain("[tool] Bash retry storm");
     expect(prompt).toContain("One issue per distinct defect");
+  });
+
+  it("bounds a single oversized tool result and user report", () => {
+    const prompt = buildAnalysisPrompt(
+      promptInput({
+        contextWindow: 32_000,
+        description: "report ".repeat(100_000),
+        messages: [
+          {
+            role: "user",
+            content: "",
+            toolResults: [
+              {
+                toolUseId: "t1",
+                content: "x".repeat(1_000_000) + "FAILURE_TAIL",
+                isError: true,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(prompt.length).toBeLessThan(60_000);
+    expect(prompt).toContain("FAILURE_TAIL");
+    expect(prompt).toContain("truncated");
+  });
+});
+
+describe("analyzeHarnessAnomalies", () => {
+  it("does not treat a disconnected stream as a completed analysis", async () => {
+    const client = stubClient();
+    client.stream = async function* () {
+      await Promise.resolve();
+      yield { type: "text_delta", text: '{"issues":[]}' };
+    };
+    await expect(
+      analyzeHarnessAnomalies(promptInput({ client })),
+    ).rejects.toThrow("before completion");
+  });
+
+  it("bounds the analysis output by the configured provider ceiling", async () => {
+    const client = stubClient();
+    const stream = vi
+      .spyOn(client, "stream")
+      .mockImplementation(async function* () {
+        await Promise.resolve();
+        yield { type: "text_delta", text: '{"issues":[]}' };
+        yield {
+          type: "stream_end",
+          stopReason: "end_turn",
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+          },
+        };
+      });
+    await analyzeHarnessAnomalies(
+      promptInput({ client, maxOutputTokens: 1024 }),
+    );
+    expect(stream.mock.calls[0][3]?.maxOutputTokens).toBe(1024);
   });
 });

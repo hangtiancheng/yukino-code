@@ -15,16 +15,11 @@ interface IssueApprovalDialogProps {
   onSelect: (choice: IssueApprovalChoice, reason?: string) => void;
 }
 
-/** First meaningful line of the body, markdown headings stripped. */
 function bodyPreview(body: string): string {
   const line = body
     .split("\n")
-    .map((l) =>
-      l
-        .replace(/^#+\s*/, "")
-        .replace(/^\s*/, "")
-        .trimEnd(),
-    )
+    .filter((line) => !/^\s*(?:#+\s|```)/.test(line))
+    .map((line) => line.trim())
     .find((l) => l.length > 0);
   return line ?? "(no body)";
 }
@@ -77,7 +72,7 @@ export function IssueApprovalDialog({
           ? "Enter send reason · Esc reject without a reason"
           : "↑↓ navigate · Enter select · Esc reject"
       }
-      subtitle={`Yukino analyzed this session and prepared ${count} issue(s) for hangtiancheng/yukino-code.`}
+      subtitle={`${count} issue(s) for hangtiancheng/yukino-code. Full drafts are in the transcript above.`}
       title="File these issues?"
     >
       {issues.map((issue) => (

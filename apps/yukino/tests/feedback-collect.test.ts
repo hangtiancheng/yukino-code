@@ -14,8 +14,10 @@ import {
 } from "@/feedback/collect.js";
 import { redactText } from "@/feedback/redact.js";
 import { fileHistoryDir } from "@/file-history/index.js";
+import { closeLogger, initLogger } from "@/logger/index.js";
 import { saveMessage } from "@/session/index.js";
 import { yukinoPath } from "@/storage/paths.js";
+import { spillDir } from "@/tool-result/index.js";
 
 const SESSION = "collect-test-session";
 
@@ -189,6 +191,45 @@ describe("buildEnvironment", () => {
     expect(summary).not.toHaveProperty("argv");
     expect(summary).not.toHaveProperty("heapSpaces");
   });
+
+  it("redacts raw malformed YAML and parser error snippets", async () => {
+    mkdirSync(yukinoPath(), { recursive: true });
+    writeFileSync(
+      yukinoPath("config.yaml"),
+      "api_key: opaque-api-value\nbroken: [\n",
+    );
+    const env = await buildEnvironment("/tmp");
+    expect(env.configFile.status).toBe("parse_error");
+    expect(JSON.stringify(env)).not.toContain("opaque-api-value");
+  });
+
+  it("preserves the runtime config and raw YAML with credentials removed", async () => {
+    mkdirSync(yukinoPath(), { recursive: true });
+    writeFileSync(
+      yukinoPath("config.yaml"),
+      "enable_memory: false\napi_key: disk-key\n",
+    );
+    const env = await buildEnvironment("/tmp", {
+      config: {
+        active_provider: {
+          model: "runtime-model",
+          thinking_mode: "adaptive",
+          api_key: "runtime-key",
+        },
+        hooks: [{ event: "PreToolUse", action: { command: "hook" } }],
+      },
+    });
+    expect(env.runtime.config).toMatchObject({
+      active_provider: {
+        model: "runtime-model",
+        thinking_mode: "adaptive",
+        api_key: "<redacted>",
+      },
+    });
+    expect(env.configFile.raw).toContain("enable_memory: false");
+    expect(JSON.stringify(env)).not.toContain("disk-key");
+    expect(JSON.stringify(env)).not.toContain("runtime-key");
+  });
 });
 
 describe("collectAttachments", () => {
@@ -266,6 +307,106 @@ describe("collectAttachments", () => {
     expect(log?.truncated).toBe(true);
     expect(log?.content).toContain('"tail":true');
     expect(log?.content).toContain("_note");
+  });
+
+  it("collects and flushes the active process log when its ID differs from the conversation", async () => {
+    const logger = initLogger({
+      sessionId: "process-log-id",
+      mode: "terminal",
+      skipCleanup: true,
+    });
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      logger.error("CURRENT_HARNESS_FAILURE");
+      const out = await collectAttachments({
+        cwd,
+        sessionId: SESSION,
+        attachments: ["log"],
+      });
+      expect(
+        out.files.find((file) => file.name === "log.jsonl")?.content,
+      ).toContain("CURRENT_HARNESS_FAILURE");
+    } finally {
+      closeLogger();
+    }
+  });
+
+  it("includes full spilled tool output only when tools are selected and redacts configured keys", async () => {
+    const dir = spillDir(SESSION);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "t1.txt"),
+      "FULL_TOOL_OUTPUT\nreceived opaque-runtime-key\n",
+    );
+    const runtime = {
+      config: { active_provider: { api_key: "opaque-runtime-key" } },
+    };
+    const out = await collectAttachments({
+      cwd,
+      sessionId: SESSION,
+      attachments: ["tools"],
+      runtime,
+    });
+    const output = out.files.find((file) => file.name === "tool-output/t1.txt");
+    expect(output?.content).toContain("FULL_TOOL_OUTPUT");
+    expect(output?.content).not.toContain("opaque-runtime-key");
+    const without = await collectAttachments({
+      cwd,
+      sessionId: SESSION,
+      attachments: [],
+      runtime,
+    });
+    expect(without.files).toEqual([]);
+  });
+
+  it("keeps recent tool calls and the failure tail when the trace exceeds the cap", async () => {
+    for (let index = 0; index < 65; index++) {
+      saveMessage(cwd, SESSION, {
+        role: "assistant",
+        content: "",
+        timestamp: index,
+        tool_uses: [{ tool_use_id: `t${String(index)}`, tool_name: "Bash" }],
+      });
+      saveMessage(cwd, SESSION, {
+        role: "user",
+        content: "",
+        timestamp: index,
+        tool_results: [
+          {
+            tool_use_id: `t${String(index)}`,
+            content: "x".repeat(110_000) + `FAILURE_${String(index)}`,
+          },
+        ],
+      });
+    }
+    const out = await collectAttachments({
+      cwd,
+      sessionId: SESSION,
+      attachments: ["tools"],
+    });
+    const trace = out.files.find((file) => file.name === "tool-trace.jsonl");
+    expect(trace?.truncated).toBe(true);
+    expect(Buffer.byteLength(trace?.content ?? "")).toBeLessThanOrEqual(
+      MAX_FILE_BYTES,
+    );
+    expect(trace?.content).toContain("FAILURE_64");
+  });
+
+  it("prioritizes snapshot metadata over backups when file history exceeds the total cap", async () => {
+    const dir = fileHistoryDir(SESSION);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "snapshots.json"), '{"snapshots":[]}\n');
+    const content = "x".repeat(1024 * 1024);
+    for (let index = 0; index < 21; index++) {
+      writeFileSync(join(dir, `backup-${String(index)}.ts`), content);
+    }
+    const out = await collectAttachments({
+      cwd,
+      sessionId: SESSION,
+      attachments: ["file-history"],
+    });
+    expect(out.files[0].name).toBe("file-history/snapshots.json");
+    expect(out.skipped.length).toBeGreaterThan(0);
   });
 });
 

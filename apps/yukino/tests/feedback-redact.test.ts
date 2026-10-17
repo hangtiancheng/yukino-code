@@ -79,6 +79,30 @@ describe("redactText", () => {
     const text = `commit ${sha} fixed the retry loop; see docs/page-2.md`;
     expect(redactText(text)).toBe(text);
   });
+
+  it("redacts arbitrary named credentials and embedded credential URLs", () => {
+    const text =
+      'api_key: opaque-key\napiKey="another-key"\nGET https://user:pass@example.com/?api_key=query-key';
+    const out = redactText(text);
+    for (const secret of [
+      "opaque-key",
+      "another-key",
+      "user:pass",
+      "query-key",
+    ]) {
+      expect(out).not.toContain(secret);
+    }
+    expect(out).toContain("example.com");
+  });
+
+  it("redacts YAML block credentials while preserving the following settings", () => {
+    const out = redactText(
+      "provider:\n  api_key: |\n    opaque-multiline-key\n    continuation\n  model: test-model\n",
+    );
+    expect(out).not.toContain("opaque-multiline-key");
+    expect(out).not.toContain("continuation");
+    expect(out).toContain("model: test-model");
+  });
 });
 
 describe("redactUrl", () => {
@@ -137,6 +161,16 @@ describe("redactJsonValue", () => {
     expect(isSensitiveKey("tokenizer")).toBe(false);
     expect(isSensitiveKey("secretsanta")).toBe(false);
     expect(isSensitiveKey("model")).toBe(false);
+  });
+
+  it("handles circular config values from YAML aliases", () => {
+    const config: Record<string, unknown> = { model: "m", api_key: "opaque" };
+    config.self = config;
+    expect(redactJsonValue(config)).toEqual({
+      model: "m",
+      api_key: "<redacted>",
+      self: "[Circular]",
+    });
   });
 });
 

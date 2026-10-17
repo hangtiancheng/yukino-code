@@ -79,7 +79,7 @@ export function FeedbackDialog({
   const focusRef = useRef<DOMElement>(null);
   const { columns } = useTerminalDimensions();
   // Sizes are computed once on mount; they only decorate the checklist.
-  const sizes = useRef(
+  const [sizes] = useState(() =>
     ITEMS.map((item) => attachmentSizePreview(cwd, sessionId, item.kind)),
   );
 
@@ -148,7 +148,7 @@ export function FeedbackDialog({
     >
       {ITEMS.map((item, index) => {
         const selected = index === cursor;
-        const size = sizes.current[index];
+        const size = sizes[index];
         const detail = [item.hint, size !== null ? formatBytes(size) : null]
           .filter((part): part is string => part !== null)
           .join(" · ");
@@ -176,7 +176,7 @@ export function FeedbackDialog({
       <Box paddingLeft={1} paddingRight={1} width="100%">
         <Text color={THEME.dim} wrap="truncate-end">
           {truncateToWidth(
-            "Secrets are redacted before upload. The model analyzes this session and files harness issues automatically.",
+            "Secrets are redacted. Review and approve the issue drafts before anything is uploaded or filed.",
             Math.max(10, columns - 4),
           )}
         </Text>

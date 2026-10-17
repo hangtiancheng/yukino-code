@@ -8,6 +8,8 @@ import {
 import {
   buildEnvironment,
   collectAttachments,
+  feedbackLogPath,
+  feedbackRedactor,
   readTextCapped,
   summarizeEnvironment,
   type CollectOutput,
@@ -33,7 +35,6 @@ import { redactJsonLines, redactText } from "./redact.js";
 import type {
   FeedbackChannel,
   FeedbackOptions,
-  FiledIssueRecord,
   IssueConfirmation,
   IssueDraft,
 } from "./types.js";
@@ -41,11 +42,35 @@ import { writeZipArchive } from "./zip.js";
 
 import type { Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
-import { sessionPath, yukinoPath } from "@/storage/paths.js";
+import {
+  COMPACT_BOUNDARY,
+  loadSession,
+  rebuildFromSession,
+} from "@/session/index.js";
+import { sessionPath } from "@/storage/paths.js";
 import { asErrorString } from "@/utils/index.js";
 import { version } from "@/version.js";
 
 const MAX_ANALYSIS_LOG_BYTES = 200 * 1024;
+
+function analysisHistory(deps: PipelineDeps): Message[] {
+  const saved = loadSession(deps.cwd, deps.sessionId);
+  const boundary = saved.findLastIndex(
+    (message) => message.type === COMPACT_BOUNDARY,
+  );
+  if (boundary < 0) {
+    return deps.messages;
+  }
+  return [
+    ...rebuildFromSession(
+      saved
+        .slice(0, boundary)
+        .filter((message) => message.type !== COMPACT_BOUNDARY),
+      { includeExcludedUserBash: true },
+    ),
+    ...deps.messages,
+  ];
+}
 
 export interface PipelineDeps {
   cwd: string;
@@ -56,11 +81,7 @@ export interface PipelineDeps {
   contextWindow: number;
   abortSignal: AbortSignal;
   onProgress: (message: string) => void;
-  /**
-   * Approval gate before anything is uploaded or filed. Absent in contexts
-   * without a user present (tests, automation) — then issues file directly.
-   */
-  confirmIssues?: (issues: IssueDraft[]) => Promise<IssueConfirmation>;
+  confirmIssues: (issues: IssueDraft[]) => Promise<IssueConfirmation>;
 }
 
 export interface PipelineResult {
@@ -69,15 +90,11 @@ export interface PipelineResult {
   rejection?: { issues: IssueDraft[]; reason?: string };
 }
 
-function logFilePath(sessionId: string): string {
-  return yukinoPath("logs", `${sessionId}.jsonl`);
-}
-
 /** The log always feeds the analysis, independent of the attachment choice. */
 function readLogForAnalysis(sessionId: string): string | null {
   try {
     const { content } = readTextCapped(
-      logFilePath(sessionId),
+      feedbackLogPath(sessionId),
       MAX_ANALYSIS_LOG_BYTES,
     );
     return redactJsonLines(content);
@@ -148,9 +165,12 @@ async function fileIssues(
   drafts: IssueDraft[],
   bodyFor: (draft: IssueDraft) => string,
   abortSignal: AbortSignal,
+  onFiled: (result: FiledResult) => void,
 ): Promise<FiledResult[]> {
+  abortSignal.throwIfAborted();
   if (channel === "browser") {
     return drafts.map((draft) => {
+      abortSignal.throwIfAborted();
       const url = buildIssueUrl(draft.title, bodyFor(draft));
       openInBrowser(url);
       return { title: draft.title, url };
@@ -160,6 +180,8 @@ async function fileIssues(
   const labels = desiredLabels(await fetchRepoLabels(channel, abortSignal));
   const results: FiledResult[] = [];
   for (const draft of drafts) {
+    abortSignal.throwIfAborted();
+    let result: FiledResult;
     try {
       const created = await createIssue(
         channel,
@@ -168,13 +190,18 @@ async function fileIssues(
         labels,
         abortSignal,
       );
-      results.push({ title: draft.title, url: created.url });
+      result = { title: draft.title, url: created.url };
     } catch (err) {
-      results.push({
+      abortSignal.throwIfAborted();
+      result = {
         title: draft.title,
         url: "",
         error: asErrorString(err),
-      });
+      };
+    }
+    results.push(result);
+    if (!result.error) {
+      onFiled(result);
     }
   }
   return results;
@@ -186,6 +213,7 @@ function formatReport(
   skippedDuplicates: number,
   gistUrl?: string,
   bundlePath?: string,
+  collected?: CollectOutput,
 ): string {
   const lines: string[] = [];
   const filed = results.filter((r) => !r.error);
@@ -216,6 +244,18 @@ function formatReport(
   if (bundlePath) {
     lines.push(`Attachments exported locally: ${bundlePath}`);
   }
+  if (collected?.skipped.length) {
+    lines.push(
+      `Skipped unavailable or oversized attachments: ${collected.skipped.join(", ")}`,
+    );
+  }
+  const truncated =
+    collected?.files
+      .filter((file) => file.truncated)
+      .map((file) => file.name) ?? [];
+  if (truncated.length > 0) {
+    lines.push(`Truncated attachments: ${truncated.join(", ")}`);
+  }
   return lines.join("\n");
 }
 
@@ -228,6 +268,10 @@ export async function runFeedbackPipeline(
   deps: PipelineDeps,
 ): Promise<PipelineResult> {
   const { sessionId, abortSignal } = deps;
+  abortSignal.throwIfAborted();
+  const redact = feedbackRedactor(deps.runtime);
+  const env = await buildEnvironment(deps.cwd, deps.runtime);
+  abortSignal.throwIfAborted();
   const filed = loadFiledIssues(sessionId);
 
   deps.onProgress("Analyzing session for yukino harness anomalies…");
@@ -236,11 +280,12 @@ export async function runFeedbackPipeline(
   try {
     drafts = await analyzeHarnessAnomalies({
       client: deps.client,
-      messages: deps.messages,
+      messages: analysisHistory(deps),
       logContent,
       description: options.description,
       filedIssues: filed,
       contextWindow: deps.contextWindow,
+      maxOutputTokens: deps.runtime?.provider?.maxOutputTokens,
       abortSignal,
     });
   } catch (err) {
@@ -261,35 +306,39 @@ export async function runFeedbackPipeline(
     };
   }
 
-  const { fresh, skipped } = filterDuplicateDrafts(drafts, filed);
+  abortSignal.throwIfAborted();
+  const { fresh, skipped } = filterDuplicateDrafts(
+    drafts.map((draft) => ({
+      title: redact(draft.title),
+      body: redact(draft.body),
+    })),
+    filed,
+  );
   if (fresh.length === 0) {
     return {
       report: `All ${String(skipped)} detected issue(s) were already filed in this session — nothing new to file.`,
     };
   }
 
-  // Approval gate: nothing is uploaded or filed before the user confirms.
-  if (deps.confirmIssues) {
-    deps.onProgress(
-      `Prepared ${String(fresh.length)} issue(s) — waiting for approval.`,
-    );
-    const confirmation = await deps.confirmIssues(fresh);
-    abortSignal.throwIfAborted();
-    if (!confirmation.approved) {
-      const reason = confirmation.reason?.trim() || undefined;
-      return {
-        report: reason
-          ? `Issue filing rejected — reason: ${reason}. Nothing was filed or uploaded.`
-          : "Issue filing rejected. Nothing was filed or uploaded.",
-        rejection: { issues: fresh, reason },
-      };
-    }
+  deps.onProgress(
+    `Prepared ${String(fresh.length)} issue(s) — waiting for approval.`,
+  );
+  const confirmation = await deps.confirmIssues(fresh);
+  abortSignal.throwIfAborted();
+  if (!confirmation.approved) {
+    const reason = confirmation.reason?.trim() || undefined;
+    return {
+      report: reason
+        ? `Issue filing rejected — reason: ${reason}. Nothing was filed or uploaded.`
+        : "Issue filing rejected. Nothing was filed or uploaded.",
+      rejection: { issues: fresh, reason },
+    };
   }
 
   const channel = await detectChannel();
+  abortSignal.throwIfAborted();
   deps.onProgress(`Filing ${String(fresh.length)} issue(s) via ${channel}.`);
 
-  const env = await buildEnvironment(deps.cwd, deps.runtime);
   let collected: CollectOutput = { files: [], skipped: [] };
   if (options.attachments.length > 0) {
     deps.onProgress(
@@ -300,8 +349,10 @@ export async function runFeedbackPipeline(
       sessionId,
       attachments: options.attachments,
       runtime: deps.runtime,
+      environment: env,
     });
   }
+  abortSignal.throwIfAborted();
 
   let gistUrl: string | undefined;
   let bundlePath: string | undefined;
@@ -318,6 +369,7 @@ export async function runFeedbackPipeline(
           abortSignal,
         );
       } catch (err) {
+        abortSignal.throwIfAborted();
         bundlePath = await writeBundle(sessionId, collected);
         deps.onProgress(
           `Gist upload failed (${asErrorString(err)}); exported a local bundle instead.`,
@@ -325,33 +377,44 @@ export async function runFeedbackPipeline(
       }
     }
   }
+  abortSignal.throwIfAborted();
 
   const attachmentNames = collected.files.map((file) => file.name);
   const results = await fileIssues(
     channel,
     fresh,
     (draft) =>
-      assembleIssueBody(draft, env, sessionId, {
-        gistUrl,
-        bundlePath,
-        names: attachmentNames,
-      }),
+      redact(
+        assembleIssueBody(draft, env, sessionId, {
+          gistUrl,
+          bundlePath,
+          names: attachmentNames,
+        }),
+      ),
     abortSignal,
+    (result) => {
+      deps.onProgress(`Filed: ${result.title} — ${result.url}`);
+      recordFiledIssues(sessionId, [
+        {
+          fingerprint: issueFingerprint(result.title),
+          title: result.title,
+          url: result.url,
+          channel,
+          ...(gistUrl ? { gistUrl } : {}),
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    },
   );
 
-  const newRecords: FiledIssueRecord[] = results
-    .filter((result) => !result.error)
-    .map((result) => ({
-      fingerprint: issueFingerprint(result.title),
-      title: result.title,
-      url: result.url,
-      channel,
-      ...(gistUrl ? { gistUrl } : {}),
-      createdAt: new Date().toISOString(),
-    }));
-  recordFiledIssues(sessionId, newRecords);
-
   return {
-    report: formatReport(channel, results, skipped, gistUrl, bundlePath),
+    report: formatReport(
+      channel,
+      results,
+      skipped,
+      gistUrl,
+      bundlePath,
+      collected,
+    ),
   };
 }

@@ -36,11 +36,13 @@ import {
   redactJsonValue,
   redactText,
   redactUrl,
+  secretValues,
 } from "./redact.js";
 import type { AttachmentKind, CollectedFile } from "./types.js";
 
 import { globalConfigPath } from "@/config/provider-config.js";
 import { fileHistoryDir } from "@/file-history/index.js";
+import { flushLogger, getLogFilePath } from "@/logger/index.js";
 import {
   getSessionFilePath,
   loadSession,
@@ -48,6 +50,7 @@ import {
   type ToolResultRecord,
 } from "@/session/index.js";
 import { yukinoPath } from "@/storage/paths.js";
+import { spillDir } from "@/tool-result/index.js";
 import { version } from "@/version.js";
 
 const execFileAsync = promisify(execFile);
@@ -61,6 +64,7 @@ const GIT_TIMEOUT_MS = 3_000;
 
 /** Live process/session state handed in by the UI layer. */
 export interface RuntimeInfo {
+  config?: Record<string, unknown>;
   provider?: {
     name: string;
     model: string;
@@ -82,11 +86,34 @@ export interface CollectInput {
   sessionId: string;
   attachments: AttachmentKind[];
   runtime?: RuntimeInfo;
+  environment?: EnvironmentSnapshot;
 }
 
 export interface CollectOutput {
   files: CollectedFile[];
   skipped: string[];
+}
+
+export function feedbackLogPath(sessionId: string): string {
+  flushLogger();
+  return getLogFilePath() ?? yukinoPath("logs", `${sessionId}.jsonl`);
+}
+
+export function feedbackRedactor(
+  runtime?: RuntimeInfo,
+): (text: string) => string {
+  const secrets = [...secretValues(process.env), ...secretValues(runtime)];
+  try {
+    const text = readTextCapped(
+      globalConfigPath(),
+      MAX_CONFIG_FILE_BYTES,
+    ).content;
+    secrets.push(...secretValues(yaml.load(text)));
+  } catch {
+    // Malformed config is handled by named-field redaction.
+  }
+  const sorted = [...new Set(secrets)].sort((a, b) => b.length - a.length);
+  return (text) => redactText(text, sorted);
 }
 
 /**
@@ -140,13 +167,13 @@ function readCappedJsonl(path: string, name: string): CollectedFile | null {
 function traceResultText(content: string | Record<string, unknown>[]): string {
   const text = typeof content === "string" ? content : JSON.stringify(content);
   if (text.length > MAX_TRACE_RESULT_CHARS) {
-    return `${text.slice(0, MAX_TRACE_RESULT_CHARS)}\n…[truncated]`;
+    return `${text.slice(0, 1000)}\n…[truncated]\n${text.slice(-(MAX_TRACE_RESULT_CHARS - 1024))}`;
   }
   return text;
 }
 
 /** Derive a tool-call trace (arguments + results) from the persisted session. */
-function buildToolTrace(cwd: string, sessionId: string): string | null {
+function buildToolTrace(cwd: string, sessionId: string): CollectedFile | null {
   let messages: SessionMessage[];
   try {
     messages = loadSession(cwd, sessionId);
@@ -160,20 +187,83 @@ function buildToolTrace(cwd: string, sessionId: string): string | null {
     }
   }
   const lines: string[] = [];
-  for (const msg of messages) {
-    for (const use of msg.tool_uses ?? []) {
+  let bytes = 0;
+  let truncated = false;
+  for (const msg of messages.toReversed()) {
+    for (const use of (msg.tool_uses ?? []).toReversed()) {
       const result = results.get(use.tool_use_id);
       const entry = {
         timestamp: msg.timestamp,
+        toolUseId: use.tool_use_id,
         tool: use.tool_name,
         arguments: use.arguments ?? {},
         isError: result ? (result.is_error ?? false) : null,
         result: result ? traceResultText(result.content) : null,
       };
-      lines.push(JSON.stringify(redactJsonValue(entry)));
+      const line = JSON.stringify(redactJsonValue(entry));
+      const size = Buffer.byteLength(line) + 1;
+      if (bytes + size > MAX_FILE_BYTES - 128) {
+        truncated = true;
+        continue;
+      }
+      lines.push(line);
+      bytes += size;
     }
   }
-  return lines.length > 0 ? `${lines.join("\n")}\n` : null;
+  if (lines.length === 0 && !truncated) {
+    return null;
+  }
+  lines.reverse();
+  if (truncated) {
+    lines.unshift(
+      JSON.stringify({
+        _note: "truncated: only recent tool calls are included",
+      }),
+    );
+  }
+  return {
+    name: "tool-trace.jsonl",
+    content: `${lines.join("\n")}\n`,
+    truncated,
+  };
+}
+
+function collectToolOutputs(
+  sessionId: string,
+  add: AddFn,
+  skipped: string[],
+): void {
+  const dir = spillDir(sessionId);
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return;
+  }
+  const files = entries
+    .flatMap((entry) => {
+      try {
+        const path = join(dir, entry);
+        const stat = statSync(path);
+        return stat.isFile() ? [{ entry, path, time: stat.mtimeMs }] : [];
+      } catch {
+        return [];
+      }
+    })
+    .sort((a, b) => b.time - a.time);
+  for (const file of files) {
+    const name = `tool-output/${file.entry}`;
+    try {
+      const { content, truncated } = readTextCapped(file.path, MAX_FILE_BYTES);
+      add(
+        name,
+        truncated ? `[truncated; recent output follows]\n${content}` : content,
+        truncated,
+      );
+    } catch {
+      skipped.push(name);
+    }
+  }
 }
 
 function decodeUtf8(buf: Buffer): string | null {
@@ -199,7 +289,13 @@ function collectFileHistory(
     skipped.push("file-history/");
     return;
   }
-  for (const entry of entries.sort()) {
+  for (const entry of entries.sort((a, b) =>
+    a === "snapshots.json"
+      ? -1
+      : b === "snapshots.json"
+        ? 1
+        : a.localeCompare(b),
+  )) {
     const full = join(dir, entry);
     let st;
     try {
@@ -291,6 +387,7 @@ export interface EnvironmentSnapshot {
     sessionId: string | null;
   };
   runtime: {
+    config: unknown;
     provider: RuntimeInfo["provider"] | null;
     permissionMode: string | null;
     sandbox: { enabled: boolean; autoAllow: boolean } | null;
@@ -430,13 +527,25 @@ function collectConfigFile(): EnvironmentSnapshot["configFile"] {
   try {
     // api_key entries and credential-bearing URLs are stripped by the
     // key-name and URL redaction inside redactJsonValue.
-    return { path, status: "ok", yaml: redactJsonValue(yaml.load(text)) };
+    const parsed: unknown = yaml.load(text);
+    return {
+      path,
+      status: "ok",
+      yaml: redactJsonValue(parsed),
+      raw: redactText(text, secretValues(parsed)),
+    };
   } catch (err) {
     return {
       path,
       status: "parse_error",
       raw: redactText(text),
-      error: err instanceof Error ? err.message : String(err),
+      error: redactText(
+        err instanceof yaml.YAMLException
+          ? err.reason
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      ),
     };
   }
 }
@@ -506,19 +615,21 @@ export async function buildEnvironment(
 ): Promise<EnvironmentSnapshot> {
   const resolved = Intl.DateTimeFormat().resolvedOptions();
   const provider = runtime?.provider;
+  const redact = feedbackRedactor(runtime);
   return {
     yukino: {
       version,
       userAgent: `yukino/${version} (${platform()}; ${arch()})`,
       pid: process.pid,
       uptimeSeconds: Math.round(process.uptime()),
-      argv: process.argv,
-      execArgv: process.execArgv,
+      argv: process.argv.map(redact),
+      execArgv: process.execArgv.map(redact),
       execPath: process.execPath,
       cwd,
       sessionId: runtime?.sessionId ?? null,
     },
     runtime: {
+      config: runtime?.config ? redactJsonValue(runtime.config) : null,
       provider: provider
         ? {
             ...provider,
@@ -640,14 +751,17 @@ export async function collectAttachments(
   const skipped: string[] = [];
   let totalBytes = 0;
   const wanted = new Set(input.attachments);
+  const redact = feedbackRedactor(input.runtime);
 
   const add: AddFn = (name, content, truncated) => {
-    if (totalBytes + content.length > MAX_TOTAL_BYTES) {
+    content = redact(content);
+    const bytes = Buffer.byteLength(content);
+    if (totalBytes + bytes > MAX_TOTAL_BYTES) {
       skipped.push(name);
       return;
     }
     files.push({ name, content, truncated });
-    totalBytes += content.length;
+    totalBytes += bytes;
   };
 
   for (const kind of COLLECT_ORDER) {
@@ -656,13 +770,15 @@ export async function collectAttachments(
     }
     switch (kind) {
       case "env": {
-        const env = await buildEnvironment(input.cwd, input.runtime);
+        const env =
+          input.environment ??
+          (await buildEnvironment(input.cwd, input.runtime));
         add("environment.json", `${JSON.stringify(env, null, 2)}\n`, false);
         break;
       }
       case "log": {
         const file = readCappedJsonl(
-          yukinoPath("logs", `${input.sessionId}.jsonl`),
+          feedbackLogPath(input.sessionId),
           "log.jsonl",
         );
         if (file) {
@@ -687,10 +803,11 @@ export async function collectAttachments(
       case "tools": {
         const trace = buildToolTrace(input.cwd, input.sessionId);
         if (trace) {
-          add("tool-trace.jsonl", trace, false);
+          add(trace.name, trace.content, trace.truncated);
         } else {
           skipped.push("tool-trace.jsonl");
         }
+        collectToolOutputs(input.sessionId, add, skipped);
         break;
       }
       case "file-history": {
@@ -713,7 +830,7 @@ export function attachmentSizePreview(
       case "session":
         return statSync(getSessionFilePath(cwd, sessionId)).size;
       case "log":
-        return statSync(yukinoPath("logs", `${sessionId}.jsonl`)).size;
+        return statSync(feedbackLogPath(sessionId)).size;
       case "file-history": {
         const dir = fileHistoryDir(sessionId);
         if (!existsSync(dir)) {
