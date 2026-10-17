@@ -57,8 +57,7 @@ export function detectEnvironment(cwd: string): EnvironmentContext {
       }).trim();
     }
   } catch (err) {
-    log.error({ err }, "prompt operation failed");
-    // not a git repo
+    log.debug({ err }, "optional Git environment probe unavailable");
   }
 
   return env;
