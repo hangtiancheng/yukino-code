@@ -65,7 +65,7 @@ export function ActivityPanel({
               {subagents.map((agent) => (
                 <div
                   key={agent.toolCallId}
-                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                  className="rounded-none border border-border bg-bg px-3 py-2"
                 >
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-bright">
@@ -99,7 +99,7 @@ export function ActivityPanel({
               {backgroundTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2"
+                  className="flex items-center gap-2 rounded-none border border-border bg-bg px-3 py-2"
                 >
                   <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-bright">
                     {task.name}
@@ -122,7 +122,7 @@ export function ActivityPanel({
               {teammates.map((mate) => (
                 <div
                   key={`${mate.teamName}_${mate.name}`}
-                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                  className="rounded-none border border-border bg-bg px-3 py-2"
                 >
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-bright">
@@ -152,7 +152,7 @@ export function ActivityPanel({
         <button
           type="button"
           onClick={onClose}
-          className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+          className="cursor-pointer rounded-none border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
         >
           Close
         </button>

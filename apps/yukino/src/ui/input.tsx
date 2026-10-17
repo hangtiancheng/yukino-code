@@ -317,7 +317,10 @@ export function InputBox(props: InputBoxProps) {
   const borderRows = Math.min(2, Math.max(0, availableRows - 1));
   const maxVisibleLines = Math.max(
     1,
-    Math.min(Math.floor(terminalRows * 0.3), availableRows - borderRows),
+    Math.min(
+      Math.max(5, Math.floor(terminalRows * 0.3)),
+      availableRows - borderRows,
+    ),
   );
   const inputRows = useMemo(
     () => layoutInputRows(lines, rowWidth, pastes),

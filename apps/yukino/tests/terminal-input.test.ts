@@ -88,7 +88,7 @@ function readInput(): string {
 }
 
 describe("terminal input report filtering", () => {
-  it("appends complete history on the primary screen while preserving prompt recall and paste", async () => {
+  it("appends history and rebuilds explicit revisions on the primary screen while preserving prompt recall and paste", async () => {
     const printed: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation(
       (
@@ -208,6 +208,7 @@ describe("terminal input report filtering", () => {
     expect(output.match(/history-000/gu)).toHaveLength(1);
     expect(output.match(/completed response/gu)).toHaveLength(1);
     expect(output).not.toContain("detail-015");
+    expect(printed.join("")).not.toContain("\x1b[3J");
     expanded = true;
     act(() => instance?.rerender(scene()));
     await instance?.waitUntilRenderFlush();
@@ -231,7 +232,7 @@ describe("terminal input report filtering", () => {
     expect(printed.join("")).not.toMatch(
       /\x1b\[\?(?:1049|1000|1002|1003|1006)h/u,
     );
-    expect(printed.join("")).not.toContain("\x1b[3J");
+    expect(printed.join("").match(/\x1b\[3J/gu)).toHaveLength(3);
   });
 
   it("buffers typing during detection and consumes a later, split OSC terminator", async () => {

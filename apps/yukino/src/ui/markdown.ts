@@ -60,8 +60,6 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
     codespan: chalk.hex(THEME.mdCode),
     del: chalk.strikethrough.hex(THEME.dim),
     em: chalk.italic,
-    firstHeading: chalk.bold.underline.hex(THEME.mdHeading),
-    heading: chalk.bold.hex(THEME.mdHeading),
     hr: chalk.hex(THEME.mdHr),
     href: chalk.underline.hex(THEME.mdLinkUrl),
     link: chalk.hex(THEME.mdLink),
@@ -82,6 +80,18 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
   markdown.use({ extensions: [scpStyleRemote] });
   markdown.use({
     renderer: {
+      heading(token) {
+        const color = chalk.hex(THEME.mdHeading);
+        const heading =
+          token.depth === 1
+            ? color.bold.underline
+            : token.depth === 2
+              ? color.bold
+              : token.depth === 3
+                ? color.bold.italic
+                : color.italic;
+        return `${heading(this.parser.parseInline(token.tokens))}\n\n`;
+      },
       code(token) {
         if (streaming) {
           const opening = /^ {0,3}(`{3,}|~{3,})/u.exec(token.raw)?.[1];
@@ -213,12 +223,15 @@ export function renderStreamingMarkdown(
     cache.theme !== theme
   ) {
     cache.prefix = prefix;
-    cache.rendered = markdown.parse(prefix, { async: false });
+    cache.rendered = wrapToLines(
+      markdown.parse(prefix, { async: false }),
+      width,
+    ).join("\n");
     cache.width = width;
     cache.theme = theme;
   }
   const tail = markdown.parse(normalized.slice(prefix.length), {
     async: false,
   });
-  return wrapToLines((cache.rendered + tail).trimEnd(), width).join("\n");
+  return (cache.rendered + wrapToLines(tail, width).join("\n")).trimEnd();
 }

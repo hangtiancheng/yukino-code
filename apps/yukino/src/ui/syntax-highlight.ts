@@ -60,11 +60,11 @@ import vue from "shiki/langs/vue.mjs";
 import xml from "shiki/langs/xml.mjs";
 import yaml from "shiki/langs/yaml.mjs";
 import zig from "shiki/langs/zig.mjs";
-import type { LanguageRegistration, ThemeRegistrationAny } from "shiki/types";
+import type { LanguageRegistration } from "shiki/types";
 
-import { THEME } from "./styles.js";
+import { defaultSyntaxTheme } from "../theme/syntax.js";
 
-const THEME_NAME = "yukino";
+import { getThemeMode, THEME } from "./styles.js";
 
 const GRAMMAR_MODULES: LanguageRegistration[][] = [
   bash,
@@ -139,109 +139,24 @@ const SUPPORTED_LANGUAGES = new Set(
 // rebuilt highlighter keeps tokenizing without recompiling grammars.
 const engine = createJavaScriptRegexEngine();
 
-// One highlighter per palette snapshot: setThemeMode swaps the fixed dark and
-// light palettes, and baked-in theme colors cannot be replaced in place.
 const highlighters = new Map<string, HighlighterCore>();
 
-function buildTheme(): ThemeRegistrationAny {
-  return {
-    name: THEME_NAME,
-    fg: THEME.syntaxOperator,
-    settings: [
-      { settings: { foreground: THEME.syntaxOperator } },
-      {
-        scope: ["comment", "punctuation.definition.comment", "string.comment"],
-        settings: { foreground: THEME.syntaxComment },
-      },
-      {
-        scope: [
-          "string",
-          "punctuation.definition.string",
-          "string.regexp",
-          "markup.inline.raw",
-          "markup.underline.link",
-        ],
-        settings: { foreground: THEME.syntaxString },
-      },
-      {
-        scope: [
-          "constant.character",
-          "constant.character.escape",
-          "constant.language",
-          "constant.numeric",
-          "constant.other",
-          "entity.name.constant",
-          "support.constant",
-          "variable.other.constant",
-        ],
-        settings: { foreground: THEME.syntaxNumber },
-      },
-      {
-        scope: [
-          "keyword",
-          "storage",
-          "entity.name.tag",
-          "markup.heading",
-          "entity.name.section",
-          "variable.language",
-        ],
-        settings: { foreground: THEME.syntaxKeyword },
-      },
-      {
-        scope: ["keyword.operator", "punctuation"],
-        settings: { foreground: THEME.syntaxOperator },
-      },
-      {
-        scope: [
-          "entity.name.function",
-          "support.function",
-          "meta.function-call",
-          "meta.require",
-        ],
-        settings: { foreground: THEME.syntaxFunction },
-      },
-      {
-        scope: [
-          "entity.name.type",
-          "entity.name.namespace",
-          "entity.other.inherited-class",
-          "support.class",
-          "support.function.builtin",
-          "support.type",
-        ],
-        settings: { foreground: THEME.syntaxType },
-      },
-      {
-        scope: [
-          "variable",
-          "entity.name.variable",
-          "entity.other.attribute-name",
-          "meta.definition.variable",
-          "support.type.property-name",
-        ],
-        settings: { foreground: THEME.syntaxVariable },
-      },
-      {
-        scope: ["markup.inserted"],
-        settings: { foreground: THEME.toolDiffAdded },
-      },
-      {
-        scope: ["markup.deleted"],
-        settings: { foreground: THEME.toolDiffRemoved },
-      },
-    ],
-  };
-}
-
 function getHighlighter(): HighlighterCore {
-  const key = JSON.stringify(THEME);
+  const mode = getThemeMode();
+  const key = `${mode}:${THEME.background}`;
   let highlighter = highlighters.get(key);
   if (highlighter === undefined) {
     highlighter = createHighlighterCoreSync({
       engine,
-      themes: [buildTheme()],
+      themes: [defaultSyntaxTheme(mode, THEME.background)],
       langs: GRAMMAR_MODULES,
     });
+    if (highlighters.size >= 4) {
+      for (const cached of highlighters.values()) {
+        cached.dispose();
+      }
+      highlighters.clear();
+    }
     highlighters.set(key, highlighter);
   }
   return highlighter;
@@ -266,16 +181,26 @@ export function highlightCode(
   try {
     const { tokens } = getHighlighter().codeToTokens(code, {
       lang: normalized,
-      theme: THEME_NAME,
+      theme: `yukino-${getThemeMode()}`,
     });
     return tokens
       .map((line) =>
         line
-          .map((token) =>
-            token.content === ""
-              ? ""
-              : chalk.hex(token.color ?? THEME.syntaxOperator)(token.content),
-          )
+          .map((token) => {
+            let style = chalk.hex(token.color ?? THEME.text);
+            const modifiers = token.fontStyle ?? 0;
+            // TextMate encodes italic, bold and underline as bits 1, 2 and 4.
+            if (modifiers & 1) {
+              style = style.italic;
+            }
+            if (modifiers & 2) {
+              style = style.bold;
+            }
+            if (modifiers & 4) {
+              style = style.underline;
+            }
+            return style(token.content);
+          })
           .join(""),
       )
       .join("\n");

@@ -10,6 +10,7 @@ import { SlashMenu } from "./slash-menu";
 
 interface InputAreaProps {
   streaming: boolean;
+  thinkingLevel: string;
   commands: SlashCommand[];
   /** Steering messages queued for the in-flight run. */
   steering: string[];
@@ -64,6 +65,7 @@ function atQueryBefore(value: string, caret: number): string | null {
 
 export function InputArea({
   streaming,
+  thinkingLevel,
   commands,
   steering,
   followUps,
@@ -410,8 +412,8 @@ export function InputArea({
   const bashExcluded = trimmed.startsWith("!!");
 
   return (
-    <footer className="shrink-0 border-t border-border bg-bg [padding-bottom:env(safe-area-inset-bottom)]">
-      <div className="relative mx-auto w-full max-w-5xl px-4 py-3 sm:px-6 sm:py-4">
+    <footer className="shrink-0 border-t border-border bg-bg">
+      <div className="relative w-full pt-3 pb-1">
         {slashOpen && (
           <SlashMenu
             commands={filtered}
@@ -425,7 +427,7 @@ export function InputArea({
             ref={atListRef}
             role="listbox"
             aria-label="File completions"
-            className="absolute inset-x-4 bottom-full mb-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-pop sm:inset-x-6"
+            className="absolute inset-x-4 bottom-full mb-1 max-h-64 overflow-y-auto border-y border-rule bg-bg py-1 sm:inset-x-6"
           >
             {atMatches.map((match, i) => (
               <button
@@ -481,12 +483,13 @@ export function InputArea({
             {blockedHint}
           </p>
         )}
-        {/* Composer card: textarea on top, action toolbar below — attach and
-            send share one baseline instead of floating beside the textarea. */}
         <div
-          className={`rounded-2xl border bg-surface shadow-card transition-colors focus-within:border-accent/60 ${
-            streaming ? "border-accent/35" : "border-border"
-          }`}
+          style={{
+            borderColor: bashMode
+              ? "var(--yukino-bash-mode)"
+              : `var(--yukino-thinking-${thinkingLevel.toLowerCase() || "off"})`,
+          }}
+          className="border-y bg-bg transition-colors"
         >
           {uploads.length > 0 && (
             <div
@@ -550,14 +553,12 @@ export function InputArea({
               e.preventDefault();
             }}
             placeholder={
-              streaming
-                ? "Send a steering message… (Enter)"
-                : "Message Yukino… (Enter to send, Shift+Enter for a new line, ! for Bash)"
+              streaming ? "Steer the current task…" : "Message Yukino…"
             }
-            className="block max-h-50 w-full resize-none bg-transparent px-4 pt-3.5 pb-1.5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim/70"
+            className="block max-h-50 w-full resize-none bg-transparent px-3 pt-3.5 pb-1.5 sm:px-5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim"
             aria-label="Message input"
           />
-          <div className="flex items-center gap-2 px-2.5 pb-2.5">
+          <div className="flex items-center gap-2 px-3 pb-2.5 sm:px-5">
             <input
               ref={fileInputRef}
               type="file"
@@ -578,7 +579,7 @@ export function InputArea({
               onClick={() => {
                 fileInputRef.current?.click();
               }}
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
             >
               <svg
                 width="15"
@@ -607,7 +608,7 @@ export function InputArea({
               </svg>
             </button>
             {bashMode && (
-              <span className="shrink-0 rounded-md border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
+              <span className="shrink-0 rounded-none border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
                 {bashExcluded ? "Bash · excluded" : "Bash"}
               </span>
             )}
@@ -617,7 +618,7 @@ export function InputArea({
                 type="button"
                 onClick={onCancel}
                 title="Cancel the running turn (Esc)"
-                className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
+                className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-none border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
               >
                 <svg
                   width="10"
@@ -635,7 +636,7 @@ export function InputArea({
                 type="button"
                 onClick={send}
                 disabled={value.trim().length === 0}
-                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
+                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
                 aria-label="Send message"
               >
                 <svg
@@ -657,7 +658,7 @@ export function InputArea({
             )}
           </div>
         </div>
-        <p className="mt-2 hidden text-center text-[10px] text-dim/70 sm:block">
+        <p className="mt-1 hidden px-3 text-xs text-dim sm:block sm:px-5">
           Enter send · Shift+Enter newline · ↑ history · @ files · ! bash ·
           paste/drop images · Esc cancel
         </p>

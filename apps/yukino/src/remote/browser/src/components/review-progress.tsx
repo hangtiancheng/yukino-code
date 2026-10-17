@@ -14,7 +14,7 @@ export function ReviewProgress({ item }: ReviewProgressProps) {
   return (
     <div
       role="status"
-      className={`my-3 rounded-xl border bg-surface px-4 py-3 shadow-xs ${
+      className={`my-3 rounded-none border bg-surface px-4 py-3  ${
         item.done ? "border-border" : "border-accent/30"
       }`}
     >

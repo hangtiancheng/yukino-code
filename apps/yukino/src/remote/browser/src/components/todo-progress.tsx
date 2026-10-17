@@ -43,8 +43,8 @@ export function TodoProgress({ todos }: TodoProgressProps) {
   const percent = Math.round((completed / tasks.length) * 100);
 
   return (
-    <div className="shrink-0 border-t border-border/60 bg-surface/60 px-4 py-1.5 sm:px-6">
-      <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+    <div className="shrink-0  px-4 py-1.5 sm:px-6">
+      <div className="flex w-full items-center gap-3">
         <div className="h-1 w-24 shrink-0 overflow-hidden rounded-full bg-border">
           <div
             className="h-full rounded-full bg-accent transition-all"

@@ -86,7 +86,7 @@
     "test": "vitest run --maxWorkers=2",
     "test:coverage": "vitest run --maxWorkers=2 --coverage",
     "test:watch": "vitest --maxWorkers=2",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p src/remote/browser/tsconfig.json",
     "format": "prettier -w ./ --experimental-cli",
     "happy": "pnpm typecheck && pnpm lint && pnpm build && pnpm test",
     "happy:fix": "pnpm typecheck && pnpm format && pnpm lint:fix && pnpm build && pnpm test",

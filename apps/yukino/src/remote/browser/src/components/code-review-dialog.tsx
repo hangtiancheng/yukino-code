@@ -34,7 +34,7 @@ function Field({
   onChange,
 }: FieldProps) {
   const shared =
-    "w-full rounded-lg border bg-bg px-3 py-2 text-sm text-bright outline-none placeholder:text-dim/60 focus:border-accent";
+    "w-full rounded-none border bg-bg px-3 py-2 text-sm text-bright outline-none placeholder:text-dim focus:border-accent";
   const border = error ? "border-red/50" : "border-border";
   return (
     <label className="block">
@@ -67,7 +67,7 @@ function Field({
       {error ? (
         <span className="mt-1 block text-xs text-red">{error}</span>
       ) : hint ? (
-        <span className="mt-1 block text-[11px] text-dim/70">{hint}</span>
+        <span className="mt-1 block text-[11px] text-dim">{hint}</span>
       ) : null}
     </label>
   );
@@ -158,14 +158,14 @@ export function CodeReviewDialog({ onRun, onClose }: CodeReviewDialogProps) {
         <button
           type="button"
           onClick={onClose}
-          className="cursor-pointer rounded-lg border border-border px-4 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+          className="cursor-pointer rounded-none border border-border px-4 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
         >
           Cancel
         </button>
         <button
           type="button"
           onClick={submit}
-          className="cursor-pointer rounded-lg bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast shadow-xs transition-colors hover:bg-accent-dim"
+          className="cursor-pointer rounded-none bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast  transition-colors hover:bg-accent-dim"
         >
           Run review
         </button>

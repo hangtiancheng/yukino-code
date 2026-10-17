@@ -172,12 +172,7 @@ export function SelectorListRow({
       : "";
 
   return (
-    <Box
-      backgroundColor={focused ? THEME.selectedBg : undefined}
-      flexDirection="column"
-      paddingX={padding}
-      width="100%"
-    >
+    <Box flexDirection="column" paddingX={padding} width="100%">
       <Text wrap="truncate-end">
         <Text color={focused ? THEME.accent : THEME.text}>
           {pointer}

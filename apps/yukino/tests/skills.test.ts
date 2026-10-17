@@ -518,6 +518,7 @@ describe("skill catalog reload", () => {
     const another = join(group, "nested", "new");
     mkdirSync(another);
     writeFileSync(join(another, "SKILL.md"), document("new"));
+    utimesSync(dirname(another), new Date(10_000), new Date(10_000));
     expect(catalog.needsReload()).toBe(true);
     catalog.reload();
     expect(catalog.has("new")).toBe(true);

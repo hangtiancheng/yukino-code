@@ -1,6 +1,7 @@
 import type { SessionSummary } from "@browser/types";
 
 import { Modal, ModalHeader } from "./modal";
+import { PickerList } from "./picker-list";
 
 interface SessionPickerProps {
   sessions: SessionSummary[];
@@ -44,39 +45,24 @@ export function SessionPicker({
         subtitle="Pick a session to replace the current conversation."
         title="Resume a session"
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {sessions.map((sess) => (
-          <button
-            key={sess.id}
-            type="button"
-            onClick={() => {
-              onPick(sess.id);
-            }}
-            className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm text-bright">
-                {sess.firstMessage || "(no messages)"}
-              </span>
-              <span className="mt-0.5 block truncate font-mono text-[11px] text-dim">
-                {sess.id}
-              </span>
-            </span>
-            <span className="shrink-0 text-right font-mono text-[11px] text-dim tabular-nums">
-              <span className="block">{`${String(sess.messageCount)} msgs`}</span>
-              <span className="mt-0.5 block">{relativeTime(sess.modTime)}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+      <PickerList
+        items={sessions.map((session) => ({
+          id: session.id,
+          label: session.firstMessage || "(no messages)",
+          detail: session.id,
+          meta: `${String(session.messageCount)} msgs · ${relativeTime(session.modTime)}`,
+        }))}
+        onSelect={onPick}
+        onClose={onClose}
+      />
       <div className="flex items-center justify-between border-t border-border px-4 sm:px-5 py-3">
-        <p className="text-[11px] text-dim/70">
+        <p className="text-[11px] text-dim">
           Or type <span className="font-mono text-dim">/resume &lt;id&gt;</span>
         </p>
         <button
           type="button"
           onClick={onClose}
-          className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+          className="cursor-pointer rounded-none border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
         >
           Cancel
         </button>

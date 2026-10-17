@@ -1,7 +1,7 @@
-import { renderMarkdown } from "@browser/lib/markdown";
 import type { PlanApprovalPayload, PlanChoice } from "@browser/types";
 import { useState } from "react";
 
+import { Markdown } from "./markdown";
 import { Modal, ModalHeader } from "./modal";
 
 interface PlanApprovalDialogProps {
@@ -20,9 +20,6 @@ export function PlanApprovalDialog({
 }: PlanApprovalDialogProps) {
   const [feedback, setFeedback] = useState("");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const planHtml = request.planContent
-    ? renderMarkdown(request.planContent)
-    : "";
 
   return (
     <Modal
@@ -44,11 +41,8 @@ export function PlanApprovalDialog({
         >
           {request.planPath}
         </p>
-        {planHtml ? (
-          <div
-            className="text-sm leading-relaxed [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded [&_code]:bg-code [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[13px] [&_h1]:mt-4 [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:font-semibold [&_h2]:text-bright [&_h3]:mt-3 [&_h3]:mb-1.5 [&_h3]:font-semibold [&_h3]:text-bright [&_li]:my-1 [&_ol]:my-2 [&_ol]:pl-5 [&_p]:mb-2 [&_pre]:my-2.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:bg-code [&_pre]:p-3.5 [&_pre_code]:bg-none [&_pre_code]:p-0 [&_ul]:my-2 [&_ul]:pl-5"
-            dangerouslySetInnerHTML={{ __html: planHtml }}
-          />
+        {request.planContent ? (
+          <Markdown text={request.planContent} />
         ) : (
           <p className="text-sm text-dim">The plan file is empty.</p>
         )}
@@ -73,7 +67,7 @@ export function PlanApprovalDialog({
               placeholder="Tell Yukino what to change..."
               aria-label="Feedback"
               rows={3}
-              className="w-full resize-none rounded-lg border border-border bg-bg px-3 py-2 text-sm text-bright outline-none placeholder:text-dim/70 focus:border-accent"
+              className="w-full resize-none rounded-none border border-border bg-bg px-3 py-2 text-sm text-bright outline-none placeholder:text-dim focus:border-accent"
             />
           </div>
         )}
@@ -83,7 +77,7 @@ export function PlanApprovalDialog({
             onClick={() => {
               onChoose("manual");
             }}
-            className="w-full cursor-pointer rounded-lg sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast shadow-xs transition-colors hover:bg-accent-dim"
+            className="w-full cursor-pointer rounded-none sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast  transition-colors hover:bg-accent-dim"
           >
             Yes, manually approve edits
           </button>
@@ -92,7 +86,7 @@ export function PlanApprovalDialog({
             onClick={() => {
               onChoose("yolo");
             }}
-            className="w-full cursor-pointer rounded-lg sm:w-auto border border-yellow/40 px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-yellow transition-colors hover:bg-yellow/8"
+            className="w-full cursor-pointer rounded-none sm:w-auto border border-yellow/40 px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-yellow transition-colors hover:bg-yellow/8"
           >
             Yes, enter YOLO mode (auto-approve all)
           </button>
@@ -107,12 +101,12 @@ export function PlanApprovalDialog({
                 setFeedbackOpen(true);
               }
             }}
-            className="w-full cursor-pointer rounded-lg sm:w-auto border border-border px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-base transition-colors hover:bg-bg"
+            className="w-full cursor-pointer rounded-none sm:w-auto border border-border px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-base transition-colors hover:bg-bg"
           >
             {feedbackOpen ? "Send feedback" : "Tell Yukino what to change"}
           </button>
         </div>
-        <p className="mt-2.5 text-[11px] text-dim/70">
+        <p className="mt-2.5 text-[11px] text-dim">
           Esc approves with manual edit confirmations.
         </p>
       </div>

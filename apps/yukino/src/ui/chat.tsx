@@ -2,12 +2,7 @@ import { Box, Text } from "ink";
 import React, { useRef } from "react";
 
 import { renderMarkdown, renderStreamingMarkdown } from "./markdown.js";
-import {
-  expandTabs,
-  plainTerminalLine,
-  truncateToWidth,
-  wrapToLines,
-} from "./terminal-text.js";
+import { expandTabs, plainTerminalLine } from "./terminal-text.js";
 import { ThinkingBlock } from "./thinking-block.js";
 import { ToolCard, type ToolCardStatus } from "./tool-display.js";
 import { useTerminalDimensions } from "./use-terminal-layout.js";
@@ -52,11 +47,7 @@ function StreamingText({ text }: { text: string }) {
   const cache = useRef({ prefix: "", rendered: "", width: 0, theme: "" });
   const { columns } = useTerminalDimensions();
   const width = columns - (columns > 2 ? 2 : 0);
-  const rendered = renderStreamingMarkdown(text, width, cache.current);
-  const lines = wrapToLines(rendered, width);
-  return (
-    <Text>{lines.map((line) => truncateToWidth(line, width)).join("\n")}</Text>
-  );
+  return <Text>{renderStreamingMarkdown(text, width, cache.current)}</Text>;
 }
 
 export const ChatView = React.memo(function (props: ChatViewProps) {

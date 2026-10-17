@@ -103,6 +103,44 @@ function renderLiveFrame(frame: string, columns: number): string {
   );
 }
 
+function renderFrameChanges(
+  previous: string,
+  next: string,
+  columns: number,
+  cursorRow: number,
+): string {
+  const before = previous.split("\n");
+  const after = next.split("\n");
+  let output = "\x1b[?25l\x1b[?7l";
+  let row = cursorRow;
+  for (let index = 0; index < after.length; index++) {
+    if (before[index] === after[index]) {
+      continue;
+    }
+    const delta = index - row;
+    output +=
+      delta > 0
+        ? ansiEscapes.cursorDown(delta)
+        : delta < 0
+          ? ansiEscapes.cursorUp(-delta)
+          : "";
+    const content = truncateToWidth(after[index], columns, "");
+    // Erasing a wrapped row breaks its native resize group; overwrite its cells instead.
+    output +=
+      "\r" +
+      content +
+      "\x1b[0m\x1b]8;;\x07" +
+      " ".repeat(Math.max(0, columns - visibleWidth(content)));
+    row = index;
+  }
+  const remaining = after.length - 1 - row;
+  return (
+    output +
+    (remaining > 0 ? ansiEscapes.cursorDown(remaining) : "") +
+    "\r\x1b[?7h"
+  );
+}
+
 export function expectStaticTerminalOutput(
   stdout: NodeJS.WriteStream,
   screenReader: boolean,
@@ -124,6 +162,8 @@ export function installTerminalOutput(
   const originalUncork = stdout.uncork.bind(stdout);
   let frameRows = 0;
   let frame = "";
+  let frameColumns = 0;
+  let frameValid = false;
   let cursorSuffix = "";
   let cursorRow = 0;
   let terminalRows = Math.max(1, stdout.rows || 24);
@@ -135,10 +175,13 @@ export function installTerminalOutput(
   let staticIncludesErase = false;
   let staticIdentity: string | undefined;
   let staticOutput = "";
+  let replaceTranscript = false;
   let scheduled = false;
 
   staticOutputs.set(stdout, (screenReader, identity) => {
     if (staticIdentity !== identity) {
+      // Explicit history revisions rebuild the transcript, as in PI; normal redraws keep scrollback.
+      replaceTranscript = staticOutput.length > 0;
       staticIdentity = identity;
       staticOutput = "";
     }
@@ -162,7 +205,9 @@ export function installTerminalOutput(
       return;
     }
     resizing = false;
-    originalWrite(eraseFrame());
+    frameValid = false;
+    originalWrite(replaceTranscript ? "\x1b[2J\x1b[H\x1b[3J" : eraseFrame());
+    replaceTranscript = false;
     if (pendingStatic) {
       originalWrite(renderStaticOutput(pendingStatic));
     }
@@ -181,6 +226,7 @@ export function installTerminalOutput(
   };
 
   const onResize = () => {
+    frameValid = false;
     if (frameRows === 0) {
       return;
     }
@@ -217,6 +263,7 @@ export function installTerminalOutput(
     if (typeof output === "string") {
       const replaying = output.startsWith(ansiEscapes.clearTerminal);
       if (replaying) {
+        frameValid = false;
         // Ink replays Static history when the previous frame exceeds the new height.
         output = output.slice(ansiEscapes.clearTerminal.length);
         const height = frameHeights.get(stdout)?.();
@@ -259,6 +306,7 @@ export function installTerminalOutput(
         (!erase || staticIncludesErase) &&
         content.includes("\n");
       if (isStatic) {
+        frameValid = false;
         staticExpected = false;
         staticOutput += content;
       }
@@ -283,22 +331,42 @@ export function installTerminalOutput(
         }
       }
       if (isStatic) {
-        output = renderStaticOutput(output);
+        const reset = replaceTranscript && !resizing;
+        output =
+          (reset ? "\x1b[2J\x1b[H\x1b[3J" : "") + renderStaticOutput(output);
+        if (reset) {
+          replaceTranscript = false;
+          frameRows = 0;
+          cursorRow = 0;
+        }
       }
       const rendered = erase
         ? output.slice(erase.index + erase[0].length)
         : output;
       if (!isStatic && rendered.includes("\n")) {
-        frame = rendered.slice(0, rendered.lastIndexOf("\n") + 1);
-        const lines = frame.split("\n");
+        const nextFrame = rendered.slice(0, rendered.lastIndexOf("\n") + 1);
+        const lines = nextFrame.split("\n");
+        const columns = Math.max(1, stdout.columns || 80);
+        const incremental =
+          frameValid &&
+          !!erase &&
+          frameColumns === columns &&
+          lines.length === frameRows &&
+          frameRows <= terminalRows;
+        const prefix = output.slice(0, output.length - rendered.length);
+        output =
+          (incremental
+            ? renderFrameChanges(frame, nextFrame, columns, cursorRow)
+            : prefix + renderLiveFrame(nextFrame, columns)) +
+          rendered.slice(nextFrame.length);
+        frame = nextFrame;
+        frameColumns = columns;
+        frameValid = true;
         frameRows = lines.length;
         cursorRow = frameRows - 1;
         cursorSuffix = "";
-        const prefix = output.slice(0, output.length - rendered.length);
-        output =
-          prefix +
-          renderLiveFrame(frame, Math.max(1, stdout.columns || 80)) +
-          rendered.slice(frame.length);
+      } else if (erase && !resizing) {
+        frameValid = false;
       }
       if (cursor && !resizing) {
         cursorRow = frameRows - 1 - Number(cursor[1] ?? 0);

@@ -104,7 +104,7 @@ export function Footer(props: FooterProps) {
   const separate = rightWidth < visibleWidth(mode) + visibleWidth(thinking) + 5;
   const identityWidth = separate ? width : rightWidth - visibleWidth(mode) - 3;
   const modelWidth = Math.max(1, identityWidth - visibleWidth(thinking));
-  const identity = `${chalk.hex(THEME.muted)(visibleWidth(fullModel) <= modelWidth ? fullModel : truncateToWidth(model, modelWidth))}${thinking}`;
+  const identity = `${chalk.hex(THEME.dim)(visibleWidth(fullModel) <= modelWidth ? fullModel : truncateToWidth(model, modelWidth))}${thinking}`;
   const location = chalk.hex(THEME.dim)(
     locationLine(
       plainTerminalLine(props.cwd),

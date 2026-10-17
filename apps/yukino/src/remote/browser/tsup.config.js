@@ -6,6 +6,7 @@ import { defineConfig } from "tsup";
 export default defineConfig((options) => ({
   entry: { index: "src/index.tsx" },
   format: ["esm"],
+  splitting: true,
   platform: "browser",
   target: "es2020",
   outDir: "dist/static",

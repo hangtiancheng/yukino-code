@@ -1,7 +1,23 @@
 import DOMPurify from "dompurify";
-import { marked } from "marked";
+import { Marked } from "marked";
 
-marked.setOptions({ breaks: true, gfm: true });
+const markdown = new Marked({ breaks: false, gfm: true });
+const userMarkdown = new Marked({ breaks: false, gfm: true });
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+userMarkdown.use({
+  renderer: {
+    html(token) {
+      return escapeHtml(token.text);
+    },
+    text(token) {
+      return token.type === "escape" ? escapeHtml(token.raw) : false;
+    },
+  },
+});
 
 /**
  * Parse markdown into a sanitized HTML string safe for `dangerouslySetInnerHTML`.
@@ -9,8 +25,8 @@ marked.setOptions({ breaks: true, gfm: true });
  * We strip dangerous tags/attrs via DOMPurify even though the content comes
  * from the local agent — the model may echo untrusted file contents.
  */
-export function renderMarkdown(text: string): string {
-  const raw = marked.parse(text, { async: false });
+export function renderMarkdown(text: string, user = false): string {
+  const raw = (user ? userMarkdown : markdown).parse(text, { async: false });
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
       "p",
@@ -41,6 +57,6 @@ export function renderMarkdown(text: string): string {
       "hr",
       "img",
     ],
-    ALLOWED_ATTR: ["href", "src", "alt", "title", "class"],
+    ALLOWED_ATTR: ["href", "src", "alt", "title", "class", "start"],
   });
 }

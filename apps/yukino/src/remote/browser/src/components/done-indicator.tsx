@@ -4,8 +4,8 @@ interface DoneIndicatorProps {
 
 export function DoneIndicator({ elapsed }: DoneIndicatorProps) {
   return (
-    <div className="my-3 flex justify-center">
-      <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-[11px] text-dim shadow-xs">
+    <div className="my-3 px-3 sm:px-5">
+      <span className="flex items-center gap-1.5 text-xs text-muted">
         <span className="text-green" aria-hidden="true">
           ✓
         </span>

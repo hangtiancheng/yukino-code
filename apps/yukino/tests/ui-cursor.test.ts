@@ -220,7 +220,7 @@ describe("native input cursor", () => {
     expect(line?.getCell(5)?.getWidth()).toBe(2);
     expect(line?.getCell(6)?.getWidth()).toBe(0);
     expect(line?.translateToString(true).trimEnd()).toBe("  あe\u0301😁next");
-    expect(output.join("")).toContain("\x1b[5 q");
+    expect(output.join("")).toContain("\x1b[2 q");
     expect(output.join("")).not.toContain("\x1b[7m");
     act(() => {
       instance?.rerender(view(4));

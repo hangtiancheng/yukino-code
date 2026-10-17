@@ -69,6 +69,57 @@ afterEach(() => {
 });
 
 describe("agent output hook", () => {
+  it("moves stable long-answer blocks into history while retaining only the unfinished tail", () => {
+    const send = startLoop();
+    const prefix =
+      "A complete paragraph with 中文 and **formatting**. ".repeat(60) + "\n\n";
+    send({ type: "thinking_text", text: "Reviewing the design" });
+    send({ type: "stream_text", text: prefix + "An unfinished paragraph" });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().messages.map((message) => message.content)).toEqual([
+      "Reviewing the design",
+      prefix,
+    ]);
+    expect(state().output.streamingText).toBe("An unfinished paragraph");
+    expect(state().output.streamingTextRef.current).toBe(
+      "An unfinished paragraph",
+    );
+    send(
+      { type: "stream_text", text: " completed." },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(
+      state()
+        .messages.filter((message) => message.role === "assistant")
+        .map((message) => message.content)
+        .join(""),
+    ).toBe(prefix + "An unfinished paragraph completed.");
+    expect(state().output.streamingText).toBe("");
+  });
+
+  it("leaves open fences and lists editable until a later block seals them", () => {
+    const send = startLoop();
+    const code = "```ts\n" + "const value = 1;\n".repeat(200);
+    send({ type: "stream_text", text: code });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().messages).toEqual([]);
+    expect(state().output.streamingText).toBe(code);
+    send({ type: "stream_text", text: "```\n\nNext paragraph" });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().messages).toEqual([
+      { role: "assistant", content: code + "```\n\n" },
+    ]);
+    expect(state().output.streamingText).toBe("Next paragraph");
+    send({ type: "loop_complete", stopReason: "end_turn" });
+    expect(state().messages.at(-1)?.content).toBe("Next paragraph");
+  });
+
   it.each([false, true])(
     "commits question results immediately with isError=%s while retaining unfinished tools",
     (isError) => {

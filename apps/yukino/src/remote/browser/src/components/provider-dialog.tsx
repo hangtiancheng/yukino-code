@@ -2,6 +2,7 @@ import type { ProviderListPayload, ProviderSavePayload } from "@browser/types";
 import { useState } from "react";
 
 import { Modal, ModalHeader } from "./modal";
+import { PickerList } from "./picker-list";
 
 interface ProviderDialogProps {
   state: ProviderListPayload;
@@ -17,7 +18,7 @@ const PROTOCOLS: ProviderSavePayload["protocol"][] = [
 ];
 
 const inputClass =
-  "w-full rounded-lg border border-border bg-bg px-3 py-2 font-mono text-[13px] text-bright outline-none placeholder:text-dim/60 focus:border-accent";
+  "w-full rounded-none border border-border bg-bg px-3 py-2 font-mono text-[13px] text-bright outline-none placeholder:text-dim focus:border-accent";
 
 /** Provider switcher + login form for /login (terminal provider dialogs parity). */
 export function ProviderDialog({
@@ -65,54 +66,32 @@ export function ProviderDialog({
       />
       {!adding ? (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-            {state.providers.length === 0 && (
-              <p className="px-3 py-4 text-sm text-dim">
-                No providers configured yet.
-              </p>
-            )}
-            {state.providers.map((provider, index) => {
-              const active = index === state.current;
-              return (
-                <button
-                  key={`${provider.base_url}_${provider.name}`}
-                  type="button"
-                  onClick={() => {
-                    onSelect(index);
-                  }}
-                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg ${active ? "bg-accent/8" : ""}`}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-bright">
-                      {provider.name}
-                    </span>
-                    <span className="mt-0.5 block truncate font-mono text-[11px] text-dim">
-                      {`${provider.protocol} · ${provider.model} · ${provider.base_url}`}
-                    </span>
-                  </span>
-                  {active && (
-                    <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent">
-                      active
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <PickerList
+            items={state.providers.map((provider, index) => ({
+              id: String(index),
+              label: provider.name,
+              detail: `${provider.protocol} · ${provider.model} · ${provider.base_url}`,
+              current: index === state.current,
+            }))}
+            onSelect={(id) => {
+              onSelect(Number(id));
+            }}
+            onClose={onClose}
+          />
           <div className="flex items-center justify-between border-t border-border px-4 py-3 sm:px-5">
             <button
               type="button"
               onClick={() => {
                 setAdding(true);
               }}
-              className="cursor-pointer rounded-lg border border-accent/40 px-3.5 py-1.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/10"
+              className="cursor-pointer rounded-none border border-accent/40 px-3.5 py-1.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/10"
             >
               Add provider…
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+              className="cursor-pointer rounded-none border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
             >
               Cancel
             </button>
@@ -201,14 +180,14 @@ export function ProviderDialog({
                 setAdding(false);
                 setError("");
               }}
-              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+              className="cursor-pointer rounded-none border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
             >
               Back
             </button>
             <button
               type="button"
               onClick={submitForm}
-              className="cursor-pointer rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-contrast transition-opacity hover:opacity-90"
+              className="cursor-pointer rounded-none bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-contrast transition-opacity hover:opacity-90"
             >
               Save & activate
             </button>

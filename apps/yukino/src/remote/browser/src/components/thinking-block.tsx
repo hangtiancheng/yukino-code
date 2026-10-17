@@ -1,4 +1,4 @@
-import { Collapsible } from "./collapsible";
+import { Markdown } from "./markdown";
 
 interface ThinkingBlockProps {
   text: string;
@@ -12,17 +12,14 @@ export function ThinkingBlock({
   streaming = false,
 }: ThinkingBlockProps) {
   return (
-    <Collapsible
-      header={
-        <span className="text-dim italic">
-          {label}
-          {streaming && (
-            <span className="animate-blink ml-1 text-accent not-italic">▎</span>
-          )}
-        </span>
-      }
-    >
-      <span className="italic">{text || "(empty)"}</span>
-    </Collapsible>
+    <details className="my-4 text-thinking italic">
+      <summary className="w-fit cursor-pointer hover:text-accent">
+        {label}
+        {streaming && (
+          <span className="animate-blink ml-1 text-accent not-italic">▎</span>
+        )}
+      </summary>
+      <Markdown className="mt-2" text={text || "(empty)"} />
+    </details>
   );
 }

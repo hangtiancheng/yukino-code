@@ -44,7 +44,7 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
 
   if (item.answered) {
     return (
-      <div className="my-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-dim shadow-xs">
+      <div className="my-3 rounded-none border border-border bg-surface px-4 py-3 text-sm text-dim ">
         <span className="mr-1.5 text-green">✓</span> Answered
       </div>
     );
@@ -53,7 +53,7 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
   return (
     <section
       aria-label="Question from the agent"
-      className="my-3 rounded-xl border border-accent/30 bg-surface p-4 shadow-xs"
+      className="my-3 rounded-none border border-accent/30 bg-surface p-4 "
     >
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-bright">
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/10 text-xs text-accent">
@@ -79,7 +79,7 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
         <button
           type="button"
           onClick={handleSubmit}
-          className="cursor-pointer rounded-lg bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast shadow-xs transition-colors hover:bg-accent-dim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-dim"
+          className="cursor-pointer rounded-none bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast  transition-colors hover:bg-accent-dim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-dim"
         >
           Submit
         </button>
@@ -138,7 +138,7 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
         return (
           <label
             key={opt.label}
-            className={`my-1 flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors ${
+            className={`my-1 flex cursor-pointer items-start gap-2.5 rounded-none border px-3 py-2 transition-colors ${
               checked
                 ? "border-accent/40 bg-accent/6"
                 : "border-transparent hover:border-border hover:bg-bg"
@@ -164,7 +164,7 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
         );
       })}
       <label
-        className={`my-1 flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors ${
+        className={`my-1 flex cursor-pointer items-center gap-2.5 rounded-none border px-3 py-2 transition-colors ${
           draft.useOther
             ? "border-accent/40 bg-accent/6"
             : "border-transparent hover:border-border hover:bg-bg"
@@ -197,7 +197,7 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
             onChange({ other: e.target.value, useOther: true });
           }}
           placeholder="Type a custom answer..."
-          className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 text-[13px] text-bright outline-none placeholder:text-dim/70 focus:border-accent"
+          className="min-w-0 flex-1 rounded-none border border-border bg-bg px-2 py-1 text-[13px] text-bright outline-none placeholder:text-dim focus:border-accent"
         />
       </label>
     </fieldset>

@@ -12,6 +12,111 @@ const originalTty = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 let restoreOutput: (() => void) | undefined;
 
 describe("installTerminalOutput", () => {
+  it("rebuilds revised history once instead of appending a duplicate transcript", async () => {
+    const virtualTerminal = new VirtualTerminal(80, 12);
+    const restore = installTerminalOutput(virtualTerminal.stdout);
+    try {
+      expectStaticTerminalOutput(
+        virtualTerminal.stdout,
+        false,
+        "session:collapsed",
+      );
+      virtualTerminal.stdout.write("Question\nTool summary\n");
+      virtualTerminal.stdout.write("Draft\nFooter\n");
+      await virtualTerminal.flush();
+      expectStaticTerminalOutput(
+        virtualTerminal.stdout,
+        false,
+        "session:expanded",
+      );
+      virtualTerminal.stdout.write("\x1b[2K\x1b[1A\x1b[2K\x1b[1A\x1b[2K\x1b[G");
+      virtualTerminal.stdout.write("Question\nTool summary\nExpanded output\n");
+      virtualTerminal.stdout.write("Draft\nFooter\n");
+      await virtualTerminal.flush();
+      expect(
+        virtualTerminal
+          .bufferLines()
+          .filter((line) => line.includes("Question")),
+      ).toHaveLength(1);
+      expect(
+        virtualTerminal
+          .bufferLines()
+          .filter((line) => line.includes("Expanded output")),
+      ).toHaveLength(1);
+      const start = virtualTerminal.output.length;
+      expectStaticTerminalOutput(
+        virtualTerminal.stdout,
+        false,
+        "session:expanded",
+      );
+      virtualTerminal.stdout.write("Additional message\n");
+      await virtualTerminal.flush();
+      expect(virtualTerminal.output.slice(start).join("")).not.toContain(
+        "\x1b[3J",
+      );
+    } finally {
+      restore();
+      virtualTerminal.dispose();
+    }
+  });
+
+  it("updates only changed rows without scrolling or replaying long history", async () => {
+    const virtualTerminal = new VirtualTerminal(80, 12);
+    const restore = installTerminalOutput(virtualTerminal.stdout);
+    try {
+      expectStaticTerminalOutput(virtualTerminal.stdout, false, "long-session");
+      virtualTerminal.stdout.write(
+        Array.from(
+          { length: 200 },
+          (_, index) => `history-${String(index)}\n`,
+        ).join(""),
+      );
+      const lines = [
+        "Stable heading",
+        "Working 中文",
+        "─".repeat(80),
+        "draft",
+        "─".repeat(80),
+        "model · high",
+      ];
+      const cursor = "\x1b[2A\x1b[6G\x1b[?25h";
+      virtualTerminal.stdout.write(lines.join("\n") + "\n" + cursor);
+      await virtualTerminal.flush();
+      const length = virtualTerminal.terminal.buffer.active.length;
+      virtualTerminal.terminal.scrollToTop();
+      const viewport = virtualTerminal.terminal.buffer.active.viewportY;
+      const start = virtualTerminal.output.length;
+      lines[1] = "Done ✓";
+      virtualTerminal.stdout.write(
+        "\x1b[2B\x1b[2K" +
+          "\x1b[1A\x1b[2K".repeat(6) +
+          "\x1b[G" +
+          lines.join("\n") +
+          "\n" +
+          cursor,
+      );
+      await virtualTerminal.flush();
+      const update = virtualTerminal.output.slice(start).join("");
+      expect(update).toContain("Done ✓");
+      expect(update).not.toContain("Stable heading");
+      expect(update).not.toContain("model · high");
+      expect(update).not.toContain("history-");
+      expect(update).not.toContain("\x1b[2K");
+      expect(Buffer.byteLength(update)).toBeLessThan(180);
+      expect(virtualTerminal.terminal.buffer.active.length).toBe(length);
+      expect(virtualTerminal.terminal.buffer.active.viewportY).toBe(viewport);
+      const output = virtualTerminal.bufferLines();
+      expect(
+        output.filter((line) => line.includes("history-199")),
+      ).toHaveLength(1);
+      expect(output.some((line) => line.includes("Done ✓"))).toBe(true);
+      expect(output.some((line) => line.includes("Working 中文"))).toBe(false);
+    } finally {
+      restore();
+      virtualTerminal.dispose();
+    }
+  });
+
   beforeEach(() => {
     vi.stubEnv("TERM_PROGRAM", "vscode");
     vi.stubEnv("TMUX", "");

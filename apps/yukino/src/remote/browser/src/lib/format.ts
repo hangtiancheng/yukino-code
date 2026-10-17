@@ -2,21 +2,13 @@ import type { ToolArgs } from "@browser/types";
 
 /** Format a token count with K/M suffixes for compact display. */
 export function formatTokens(n: number): string {
-  if (n > 1_000_000) {
+  if (n >= 1_000_000) {
     return `${(n / 1_000_000).toFixed(1)}M`;
   }
-  if (n > 1000) {
-    return `${(n / 1000).toFixed(1)}K`;
+  if (n >= 1000) {
+    return `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`;
   }
   return String(n);
-}
-
-/** Truncate long tool output for display. */
-export function truncateOutput(output: string, max = 5000): string {
-  if (output.length > max) {
-    return `${output.slice(0, max)}\n... (truncated)`;
-  }
-  return output;
 }
 
 /** Pretty-print tool args as indented JSON, or empty string when absent. */

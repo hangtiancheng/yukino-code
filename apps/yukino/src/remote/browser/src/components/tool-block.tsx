@@ -1,34 +1,31 @@
-import { argsPreview, formatArgs, truncateOutput } from "@browser/lib/format";
+import { argsPreview, formatArgs } from "@browser/lib/format";
 import type { ToolItem } from "@browser/types";
 
 import { Collapsible } from "./collapsible";
+import { DiffLines } from "./diff-lines";
 
 interface ToolBlockProps {
   item: ToolItem;
 }
 
-/**
- * Status pill + panel wash, mirroring the TUI tool cards: a running card is
- * amber and pulses, success washes green, failure washes red.
- */
 const STATUS_META: Record<
   ToolItem["status"],
   { label: string; pill: string; panel: string }
 > = {
   running: {
     label: "running…",
-    pill: "bg-yellow/15 text-yellow",
-    panel: "border-yellow/35 bg-yellow/[0.06]",
+    pill: "text-muted",
+    panel: "bg-tool",
   },
   ok: {
     label: "✓",
-    pill: "bg-green/15 text-green",
-    panel: "border-green/25 bg-green/[0.05]",
+    pill: "text-green",
+    panel: "bg-tool-ok",
   },
   err: {
     label: "✗",
-    pill: "bg-red/15 text-red",
-    panel: "border-red/30 bg-red/[0.06]",
+    pill: "text-red",
+    panel: "bg-tool-error",
   },
 };
 
@@ -40,15 +37,41 @@ export function ToolBlock({ item }: ToolBlockProps) {
       : `${meta.label} ${item.elapsed.toFixed(1)}s`;
   const preview = argsPreview(item.args);
   const argsStr = formatArgs(item.args);
-  const output = item.output ? truncateOutput(item.output) : "";
+  const output = item.output ?? "";
+  const lines = output.trimEnd().split("\n");
+  const shell = /^(bash|powershell)$/iu.test(item.toolName);
+  const limit = shell ? 5 : 10;
+  const previewText = (
+    shell ? lines.slice(-limit) : lines.slice(0, limit)
+  ).join("\n");
+  const diff = /^(Write|Edit|WriteFile|EditFile|ApplyPatch)$/iu.test(
+    item.toolName,
+  );
+  const previewOutput = diff ? <DiffLines text={previewText} /> : previewText;
 
   return (
     <Collapsible
       className={meta.panel}
+      preview={
+        output && (
+          <>
+            {previewOutput}
+            {lines.length > limit && (
+              <p className="mt-1 text-dim">
+                … ({String(lines.length - limit)} more lines, click to expand)
+              </p>
+            )}
+          </>
+        )
+      }
       header={
         <>
-          <span className="font-mono font-semibold text-accent">
-            {item.toolName}
+          <span className="shrink-0 font-semibold text-bright">
+            {shell
+              ? item.toolName.toLowerCase() === "bash"
+                ? "$"
+                : ">"
+              : item.toolName}
           </span>
           {preview && (
             <span className="ml-0.5 max-w-105 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-dim">
@@ -56,7 +79,7 @@ export function ToolBlock({ item }: ToolBlockProps) {
             </span>
           )}
           <span
-            className={`ml-auto shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] tabular-nums ${meta.pill} ${item.status === "running" ? "animate-pulse" : ""}`}
+            className={`ml-auto shrink-0 text-xs tabular-nums ${meta.pill}`}
           >
             {statusText}
           </span>
@@ -64,12 +87,12 @@ export function ToolBlock({ item }: ToolBlockProps) {
       }
     >
       {argsStr && (
-        <div className="mb-2 text-accent/90">
+        <div className="mb-2 text-muted">
           Args:{"\n"}
           {argsStr}
         </div>
       )}
-      {output && <div className="text-dim">{output}</div>}
+      {output && (diff ? <DiffLines text={output} /> : <div>{output}</div>)}
     </Collapsible>
   );
 }

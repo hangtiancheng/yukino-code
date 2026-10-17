@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import type { ChatMessage, ToolSummaryItem } from "./chat.js";
+import { stableStreamingPrefix } from "./streaming-markdown.js";
 import type { ToolBlockInfo, ToolCardStatus } from "./tool-display.js";
 
 import type { AgentEvent } from "@/agent/events.js";
@@ -112,6 +113,24 @@ export function useAgentOutput(
 
     const scheduleFlush = () => {
       streamThrottleRef.current ??= setTimeout(() => {
+        const prefix =
+          turnToolCalls.size === 0 ? stableStreamingPrefix(fullText) : "";
+        if (prefix) {
+          const commits: ChatMessage[] = [];
+          if (turnThinkingText || turnThinkingDuration >= 1) {
+            commits.push({
+              role: "turn_summary",
+              content: turnThinkingText,
+              thinkingDuration:
+                turnThinkingDuration > 0 ? turnThinkingDuration : undefined,
+            });
+            resetThinking();
+          }
+          commits.push({ role: "assistant", content: prefix });
+          setMessages((messages) => [...messages, ...commits]);
+          fullText = fullText.slice(prefix.length);
+          streamingTextRef.current = fullText;
+        }
         setStreamingText(streamingTextRef.current);
         setStreamingThinking(streamingThinkingRef.current);
         streamThrottleRef.current = null;

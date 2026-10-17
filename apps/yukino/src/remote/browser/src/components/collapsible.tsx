@@ -3,38 +3,29 @@ import { type ReactNode, useState } from "react";
 interface CollapsibleProps {
   header: ReactNode;
   children: ReactNode;
+  preview?: ReactNode;
   /** Initial open state (uncontrolled); the component manages its own state afterwards. */
   defaultOpen?: boolean;
-  /**
-   * Border/background color classes for the panel, so callers can tint by
-   * status (tool cards wash green/red/amber like the TUI). Structural classes
-   * are fixed; only colors come from here. Defaults to a neutral surface.
-   */
   className?: string;
 }
 
-/**
- * Generic collapsible panel used by tool blocks and thinking blocks.
- * Pure Tailwind utilities — no custom CSS classes.
- */
 export function Collapsible({
   header,
   children,
+  preview,
   defaultOpen = false,
-  className = "border-border bg-surface",
+  className = "bg-tool",
 }: CollapsibleProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div
-      className={`my-2 overflow-hidden rounded-lg border shadow-xs ${className}`}
-    >
+    <div className={`my-4 overflow-hidden py-2 ${className}`}>
       <button
         type="button"
         onClick={() => {
           setOpen((v) => !v);
         }}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors select-none hover:bg-tool/50"
+        className="flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left transition-colors select-none hover:bg-selected/30 sm:px-5"
       >
         <svg
           width="10"
@@ -54,9 +45,9 @@ export function Collapsible({
         </svg>
         {header}
       </button>
-      {open && (
-        <div className="max-h-75 overflow-y-auto border-t border-border/70 px-3 py-2 font-mono text-xs whitespace-pre-wrap text-dim">
-          {children}
+      {(open || preview) && (
+        <div className="overflow-x-auto px-3 py-1 text-xs whitespace-pre-wrap text-tool-output sm:px-5">
+          {open ? children : preview}
         </div>
       )}
     </div>

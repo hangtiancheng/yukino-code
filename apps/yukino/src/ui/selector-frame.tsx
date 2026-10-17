@@ -71,7 +71,7 @@ export function SelectorFrame({
       display={rows > 0 ? "flex" : "none"}
     >
       {chrome.borders && (
-        <Text color={THEME.borderMuted} wrap="truncate-end">
+        <Text color={THEME.border} wrap="truncate-end">
           {rule}
         </Text>
       )}
@@ -100,7 +100,7 @@ export function SelectorFrame({
         )}
       </Box>
       {chrome.borders && (
-        <Text color={THEME.borderMuted} wrap="truncate-end">
+        <Text color={THEME.border} wrap="truncate-end">
           {rule}
         </Text>
       )}

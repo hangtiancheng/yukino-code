@@ -249,7 +249,30 @@ export function App() {
   );
 
   return (
-    <div className="flex h-dvh w-full flex-col bg-bg font-sans text-sm text-base antialiased">
+    <div className="flex h-dvh w-full flex-col bg-bg font-mono text-sm text-base antialiased">
+      <MessageList
+        items={state.items}
+        welcome={welcome}
+        onRespondPermission={handleRespondPermission}
+        onAnswerAsk={handleAnswerAsk}
+      />
+      {state.todos && <TodoProgress todos={state.todos} />}
+      <InputArea
+        streaming={state.streaming}
+        thinkingLevel={state.thinkingLevel}
+        commands={state.commands}
+        steering={state.steering}
+        followUps={state.followUps}
+        history={state.history}
+        fileMatches={state.fileMatches}
+        imageResults={state.imageResults}
+        onSend={handleSend}
+        onCancel={handleCancel}
+        onRequestFileCompletions={handleRequestFileCompletions}
+        onUploadImage={handleUploadImage}
+        onConsumeImageResult={consumeImageResult}
+        onBackgroundShells={handleBackgroundShells}
+      />
       <StatusBar
         connection={state.connection}
         usage={state.usage}
@@ -272,28 +295,6 @@ export function App() {
         onOpenActivity={() => {
           setActivityOpen(true);
         }}
-      />
-      <MessageList
-        items={state.items}
-        welcome={welcome}
-        onRespondPermission={handleRespondPermission}
-        onAnswerAsk={handleAnswerAsk}
-      />
-      {state.todos && <TodoProgress todos={state.todos} />}
-      <InputArea
-        streaming={state.streaming}
-        commands={state.commands}
-        steering={state.steering}
-        followUps={state.followUps}
-        history={state.history}
-        fileMatches={state.fileMatches}
-        imageResults={state.imageResults}
-        onSend={handleSend}
-        onCancel={handleCancel}
-        onRequestFileCompletions={handleRequestFileCompletions}
-        onUploadImage={handleUploadImage}
-        onConsumeImageResult={consumeImageResult}
-        onBackgroundShells={handleBackgroundShells}
       />
       {state.planApproval && (
         <PlanApprovalDialog

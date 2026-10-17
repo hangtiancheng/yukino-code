@@ -625,7 +625,7 @@ describe("session selector", () => {
 
 describe("selector layout", () => {
   it.each(["dark", "light"] satisfies ("dark" | "light")[])(
-    "uses quiet rules and accent titles/focus in %s mode without relying on color",
+    "uses PI border rules and accent titles/focus in %s mode without relying on color",
     (mode) => {
       setThemeMode(mode);
       for (const columns of [1, 20, 32, 48, 80, 120]) {
@@ -658,7 +658,7 @@ describe("selector layout", () => {
             expect(output).toBe(plain);
           } else {
             expect(output).toContain(
-              colors.hex(THEME.borderMuted)("─".repeat(columns)),
+              colors.hex(THEME.border)("─".repeat(columns)),
             );
             if (columns >= 20) {
               expect(output).toContain(

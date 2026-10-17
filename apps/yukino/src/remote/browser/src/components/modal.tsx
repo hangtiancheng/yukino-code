@@ -29,7 +29,31 @@ export function Modal({
   onEscapeRef.current = onEscape;
 
   useEffect(() => {
+    const previousFocus = document.activeElement;
+    const controls = () =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input, textarea, select, a[href], [tabindex="0"]',
+        ) ?? [],
+      ).filter((element) => element.getClientRects().length > 0);
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Tab") {
+        const focusable = controls();
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (
+          !event.shiftKey &&
+          (document.activeElement === last ||
+            document.activeElement === panelRef.current)
+        ) {
+          event.preventDefault();
+          first?.focus();
+        }
+        return;
+      }
       if (event.key !== "Escape") {
         return;
       }
@@ -44,15 +68,18 @@ export function Modal({
       onEscapeRef.current?.();
     };
     window.addEventListener("keydown", onKeyDown);
-    panelRef.current?.focus();
+    (controls()[0] ?? panelRef.current)?.focus();
     return () => {
       window.removeEventListener("keydown", onKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus();
+      }
     };
   }, []);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 backdrop-blur-[2px] sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4"
       role="presentation"
     >
       <div
@@ -61,7 +88,7 @@ export function Modal({
         aria-label={label}
         aria-modal="true"
         tabIndex={-1}
-        className={`animate-modal-in max-h-[85dvh] w-full ${maxWidth} flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-pop outline-none`}
+        className={`animate-modal-in max-h-[85dvh] w-full ${maxWidth} flex flex-col overflow-hidden border-y border-rule bg-bg  outline-none`}
       >
         {children}
       </div>
@@ -77,7 +104,7 @@ interface ModalHeaderProps {
 export function ModalHeader({ title, subtitle }: ModalHeaderProps) {
   return (
     <div className="border-b border-border px-4 sm:px-5 py-4">
-      <h2 className="text-[15px] font-semibold text-bright">{title}</h2>
+      <h2 className="text-[15px] font-semibold text-accent">{title}</h2>
       {subtitle && <p className="mt-0.5 text-xs text-dim">{subtitle}</p>}
     </div>
   );

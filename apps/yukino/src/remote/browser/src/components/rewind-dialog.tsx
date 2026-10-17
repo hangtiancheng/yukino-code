@@ -47,7 +47,7 @@ export function RewindDialog({
                 onClick={() => {
                   setSelected(snap.index);
                 }}
-                className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-none px-3 py-2.5 text-left transition-colors hover:bg-bg"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-bright">
@@ -64,7 +64,7 @@ export function RewindDialog({
             <button
               type="button"
               onClick={onClose}
-              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+              className="cursor-pointer rounded-none border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
             >
               Cancel
             </button>
@@ -87,7 +87,7 @@ export function RewindDialog({
                 onClick={() => {
                   onAction(selected, option.action);
                 }}
-                className="flex w-full cursor-pointer items-center rounded-lg px-3 py-2.5 text-left text-sm text-bright transition-colors hover:bg-bg"
+                className="flex w-full cursor-pointer items-center rounded-none px-3 py-2.5 text-left text-sm text-bright transition-colors hover:bg-bg"
               >
                 {option.label}
               </button>
@@ -99,7 +99,7 @@ export function RewindDialog({
               onClick={() => {
                 setSelected(null);
               }}
-              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+              className="cursor-pointer rounded-none border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
             >
               Back
             </button>

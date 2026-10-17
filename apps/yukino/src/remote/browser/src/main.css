@@ -1,112 +1,191 @@
 @import "tailwindcss";
 
-/*
- * Codex-style monochrome theme: near-black canvas with a white accent in dark
- * mode, white canvas with a black accent in light mode. Hierarchy comes from
- * weight and opacity (white/black overlays), not hue — the same visual grammar
- * as the terminal UI, which this client mirrors in layout and typography.
- * Semantic status colors (success/error/warning) keep the terminal palette so
- * both clients read tool states identically. The active scheme is chosen by
- * the `data-theme` attribute on <html> (system preference by default,
- * user-toggleable and persisted — see hooks/use-theme.ts and the inline
- * bootstrap in index.html).
- *
- * Colors are declared as plain custom properties per scheme, then mapped into
- * Tailwind theme tokens with `@theme inline` so utilities (bg-bg, text-bright,
- * border-border, bg-accent/10, ...) resolve through the active scheme and keep
- * working with opacity modifiers.
- *
- * Two type voices: prose (conversation, dialogs, questions) uses the humanist
- * sans stack; machine output (tools, paths, statuses, code) uses the mono stack
- * via explicit font-mono utilities. The split is informational — it tells readers
- * apart from the agent's raw output at a glance.
- * No custom component classes are defined — only theme tokens, scheme variables,
- * keyframes, and global element rules.
- */
+@yukino-palette;
+
 @theme inline {
-  --color-bg: var(--yukino-bg);
+  --color-bg: var(--yukino-background);
   --color-surface: var(--yukino-surface);
-  --color-tool: var(--yukino-tool);
-  --color-code: var(--yukino-code);
+  --color-tool: var(--yukino-tool-pending-bg);
+  --color-tool-ok: var(--yukino-tool-success-bg);
+  --color-tool-error: var(--yukino-tool-error-bg);
+  --color-tool-output: var(--yukino-tool-output);
+  --color-code: var(--yukino-code-bg);
   --color-base: var(--yukino-text);
   --color-dim: var(--yukino-dim);
+  --color-muted: var(--yukino-muted);
   --color-bright: var(--yukino-bright);
   --color-accent: var(--yukino-accent);
-  --color-accent-dim: var(--yukino-accent-dim);
+  --color-accent-dim: var(--yukino-accent);
   --color-accent-contrast: var(--yukino-accent-contrast);
-  --color-user-bg: var(--yukino-user-bg);
-  --color-user-text: var(--yukino-user-text);
-  --color-green: var(--yukino-green);
-  --color-red: var(--yukino-red);
-  --color-yellow: var(--yukino-yellow);
-  --color-border: var(--yukino-border);
-
-  --font-sans:
-    "Yukino", "Maple Mono", Menlo, "Cascadia Code", "Sarasa Gothic SC",
-    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --color-user-bg: var(--yukino-user-message-bg);
+  --color-user-text: var(--yukino-user-message-text);
+  --color-custom: var(--yukino-custom-message-bg);
+  --color-custom-label: var(--yukino-custom-message-label);
+  --color-selected: var(--yukino-selected-bg);
+  --color-selected-text: var(--yukino-text);
+  --color-thinking: var(--yukino-thinking-text);
+  --color-green: var(--yukino-success);
+  --color-red: var(--yukino-error);
+  --color-yellow: var(--yukino-warning);
+  --color-border: var(--yukino-border-muted);
+  --color-rule: var(--yukino-border);
+  --color-bash: var(--yukino-bash-mode);
   --font-mono:
-    "Yukino", "Maple Mono", Menlo, "Cascadia Code", "Sarasa Gothic SC",
-    "PingFang SC", "Microsoft YaHei", monospace;
-
+    "Yukino", "Maple Mono", "SFMono-Regular", Menlo, "Cascadia Code",
+    "Sarasa Gothic SC", monospace;
+  --font-sans: var(--font-mono);
   --breakpoint-xs: 26rem;
-
   --animate-blink: blink 1s step-end infinite;
-  --animate-modal-in: modal-in 140ms ease-out;
-
-  --shadow-card: var(--yukino-shadow-card);
-  --shadow-pop: var(--yukino-shadow-pop);
+  --animate-modal-in: modal-in 120ms ease-out;
 }
 
-/* Dark scheme (default) — Codex-style near-black with a white accent. */
-:root,
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --yukino-bg: #0d0d0d;
-  --yukino-surface: #141414;
-  --yukino-tool: #1c1c1c;
-  --yukino-code: #161616;
-  --yukino-border: #2b2b2b;
-  --yukino-bright: #f4f4f4;
-  --yukino-text: #b9b9b9;
-  --yukino-dim: #878787;
-  --yukino-accent: #f4f4f4;
-  --yukino-accent-dim: #d6d6d6;
-  --yukino-accent-contrast: #0d0d0d;
-  --yukino-user-bg: #232323;
-  --yukino-user-text: #ededed;
-  --yukino-green: #68b78d;
-  --yukino-red: #ea7f81;
-  --yukino-yellow: #cd9a22;
-  --yukino-scrollbar: #343434;
-  --yukino-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
-  --yukino-shadow-pop:
-    0 4px 12px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.55);
-}
-
-/* Light scheme — Codex-style white with a black accent. */
-:root[data-theme="light"] {
-  color-scheme: light;
-  --yukino-bg: #ffffff;
-  --yukino-surface: #ffffff;
-  --yukino-tool: #f4f4f4;
-  --yukino-code: #f2f2f2;
-  --yukino-border: #e3e3e3;
-  --yukino-bright: #171717;
-  --yukino-text: #454545;
-  --yukino-dim: #757575;
-  --yukino-accent: #171717;
-  --yukino-accent-dim: #404040;
-  --yukino-accent-contrast: #ffffff;
-  --yukino-user-bg: #ededed;
-  --yukino-user-text: #171717;
-  --yukino-green: #2e7d51;
-  --yukino-red: #c22f45;
-  --yukino-yellow: #8a6a12;
-  --yukino-scrollbar: #cccccc;
-  --yukino-shadow-card:
-    0 1px 2px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.05);
-  --yukino-shadow-pop:
-    0 4px 12px rgb(0 0 0 / 0.08), 0 12px 32px rgb(0 0 0 / 0.12);
+@layer components {
+  .markdown {
+    overflow-wrap: anywhere;
+    line-height: 1.65;
+    p {
+      margin-block: 0.65em;
+    }
+    > :first-child {
+      margin-top: 0;
+    }
+    > :last-child {
+      margin-bottom: 0;
+    }
+    a {
+      color: var(--yukino-md-link);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      color: var(--yukino-md-heading);
+      font-size: inherit;
+      margin-block: 1.25em 0.5em;
+    }
+    h1 {
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+    h2,
+    h3 {
+      font-weight: 700;
+    }
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-style: italic;
+    }
+    strong {
+      font-weight: 700;
+    }
+    blockquote {
+      border-left: 1px solid var(--yukino-md-quote-border);
+      color: var(--yukino-md-quote);
+      padding-left: 1em;
+      margin-block: 0.75em;
+    }
+    ul,
+    ol {
+      padding-left: 2em;
+      margin-block: 0.75em;
+    }
+    ul {
+      list-style: disc;
+    }
+    ol {
+      list-style: decimal;
+    }
+    li {
+      margin-block: 0.25em;
+    }
+    li::marker {
+      color: var(--yukino-md-list-bullet);
+    }
+    code {
+      font-family: inherit;
+      color: var(--yukino-md-code);
+    }
+    pre {
+      border-block: 1px solid var(--yukino-md-code-block-border);
+      padding: 0.75em 1em;
+      margin-block: 1em;
+      overflow-x: auto;
+      overflow-wrap: normal;
+      background: var(--yukino-code-bg);
+    }
+    pre code {
+      color: var(--yukino-md-code-block);
+    }
+    table {
+      display: block;
+      width: max-content;
+      max-width: 100%;
+      overflow-x: auto;
+      border-collapse: collapse;
+      margin-block: 1em;
+      font-variant-numeric: tabular-nums;
+    }
+    th,
+    td {
+      border-bottom: 1px solid var(--yukino-border-muted);
+      padding: 0.4em 1em;
+      text-align: left;
+    }
+    th {
+      color: var(--yukino-md-heading);
+      font-weight: 700;
+    }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--yukino-md-hr);
+      margin-block: 1.25em;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+    .shiki,
+    .shiki span {
+      color: var(--shiki-dark);
+      font-style: var(--shiki-dark-font-style);
+      font-weight: var(--shiki-dark-font-weight);
+      text-decoration: var(--shiki-dark-text-decoration);
+    }
+  }
+  :root[data-theme="light"] .markdown .shiki,
+  :root[data-theme="light"] .markdown .shiki span {
+    color: var(--shiki-light);
+    font-style: var(--shiki-light-font-style);
+    font-weight: var(--shiki-light-font-weight);
+    text-decoration: var(--shiki-light-text-decoration);
+  }
+  [role="option"]::before {
+    content: " ";
+    white-space: pre;
+    width: 1ch;
+    flex-shrink: 0;
+  }
+  [aria-selected="true"],
+  [data-selected="true"] {
+    background: var(--yukino-selected-bg);
+    color: var(--yukino-accent);
+  }
+  [aria-selected="true"]::before,
+  [data-selected="true"]::before {
+    content: "→";
+    color: var(--yukino-accent);
+  }
+  .transcript-entry {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 80px;
+  }
 }
 
 @keyframes blink {
@@ -114,62 +193,43 @@
     opacity: 0;
   }
 }
-
 @keyframes modal-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-
 html,
 body,
 #root {
   height: 100%;
 }
-
 body {
   margin: 0;
-  background: var(--yukino-bg);
-  /* Kill the white flash before the scheme variables apply on first paint. */
+  background: var(--yukino-background);
   -webkit-text-size-adjust: 100%;
 }
-
-/* Thin scrollbar styling applied to every scrollable element. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--yukino-scrollbar) transparent;
+  scrollbar-color: var(--yukino-border-muted) transparent;
 }
-
-/* Consistent, visible keyboard focus for every interactive element.
- * Lives in @layer base so utility classes (e.g. focus-visible:outline-none
- * on the input textarea) can override it. */
 @layer base {
   :focus-visible {
-    outline: 2px solid var(--yukino-accent-dim);
+    outline: 2px solid var(--yukino-border-accent);
     outline-offset: 2px;
   }
 }
-
 ::selection {
-  background: color-mix(in oklab, var(--yukino-accent) 30%, transparent);
+  background: var(--yukino-selected-bg);
+  color: var(--yukino-text);
 }
-
-/* Native-feel taps: no grey flash, no accidental text selection on controls. */
 button {
   -webkit-tap-highlight-color: transparent;
 }
-
-/*
- * iOS Safari zooms the page when focusing a control whose font-size is below
- * 16px. Force 16px on phone-width screens to keep the composer stable. This is
- * intentionally unlayered so it wins over the `text-sm` utilities on small
- * screens only; desktop keeps the compact 14px sizing.
- */
 @media (max-width: 640px) {
   input,
   textarea,
@@ -177,8 +237,6 @@ button {
     font-size: 16px;
   }
 }
-
-/* Respect users who prefer minimal motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

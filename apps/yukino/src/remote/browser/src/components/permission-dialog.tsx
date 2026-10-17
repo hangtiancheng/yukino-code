@@ -13,7 +13,7 @@ const RESPONSE_OPTIONS: {
   {
     value: "allow",
     label: "Allow",
-    className: "bg-accent text-accent-contrast shadow-xs hover:bg-accent-dim",
+    className: "bg-accent text-accent-contrast  hover:bg-accent-dim",
   },
   {
     value: "allowAlways",
@@ -37,7 +37,7 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
   return (
     <section
       aria-label={`Permission required for ${item.toolName}`}
-      className="my-3 rounded-xl border border-yellow/35 bg-surface p-4 shadow-xs"
+      className="my-3 rounded-none border border-yellow/35 bg-surface p-4 "
     >
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-yellow">
         <svg
@@ -81,7 +81,7 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
               onClick={() => {
                 onRespond(item.id, opt.value);
               }}
-              className={`w-full cursor-pointer rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors sm:w-auto sm:py-1.5 ${opt.className}`}
+              className={`w-full cursor-pointer rounded-none px-4 py-2 text-[13px] font-semibold transition-colors sm:w-auto sm:py-1.5 ${opt.className}`}
             >
               {opt.label}
             </button>
