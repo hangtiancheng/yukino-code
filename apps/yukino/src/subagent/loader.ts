@@ -7,7 +7,7 @@ import z, { parse } from "zod";
 import { BUILTIN_AGENTS, type AgentDefinition } from "./definition.js";
 
 import { createChildLogger } from "@/logger/index.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 const log = createChildLogger({ module: "subagent" });
 

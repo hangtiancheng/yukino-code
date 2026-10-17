@@ -23,7 +23,7 @@ import type {
   UserBashResult,
 } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
-import { getSessionsDir, sessionPath } from "@/storage/paths.js";
+import { getSessionsDir, sessionPath } from "@/storage/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import {
   normalizeToolResultContentBlock,

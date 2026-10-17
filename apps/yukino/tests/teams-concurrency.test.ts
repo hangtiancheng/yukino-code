@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { FileHistory } from "@/file-history/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { FileMailbox } from "@/teams/file-mailbox.js";
 import { SharedTaskStore } from "@/teams/shared-task.js";
 

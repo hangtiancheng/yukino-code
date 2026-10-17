@@ -18,7 +18,7 @@ import { createDefaultRegistry, parse } from "@/commands/commands.js";
 import { loadConfig } from "@/config/index.js";
 import { globalConfigPath } from "@/config/provider-config.js";
 import { persistModel, saveProvider } from "@/config/provider-login.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 // Point os.homedir() at a temp dir so persistModel writes to an isolated
 // global config instead of the real ~/.yukino/config.yaml.

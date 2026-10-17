@@ -12,7 +12,7 @@ import { dirname, isAbsolute, join } from "path";
 import { promisify } from "util";
 
 import { createChildLogger } from "@/logger/index.js";
-import { yukinoPath, projectKey } from "@/storage/paths.js";
+import { yukinoPath, projectKey } from "@/storage/index.js";
 
 const log = createChildLogger({ module: "worktree" });
 

@@ -25,7 +25,7 @@ import {
   cleanExpiredSessions,
   COMPACT_BOUNDARY,
 } from "@/session/index.js";
-import { getSessionsDir, sessionPath } from "@/storage/paths.js";
+import { getSessionsDir, sessionPath } from "@/storage/index.js";
 import { asString, contentToText } from "@/utils/index.js";
 
 const t0 = Math.floor(Date.now() / 1000);

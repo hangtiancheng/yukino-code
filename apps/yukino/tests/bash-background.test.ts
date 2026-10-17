@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Sandbox, SandboxConfig } from "@/sandbox/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import {
   formatAgentTaskNotification,
   TaskManager,

@@ -47,7 +47,7 @@ import {
   loadSession,
   rebuildFromSession,
 } from "@/session/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { asErrorString } from "@/utils/index.js";
 import { version } from "@/version.js";
 

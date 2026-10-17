@@ -15,7 +15,7 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 
 import type { LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { getSessionsDir, projectPath } from "@/storage/paths.js";
+import { getSessionsDir, projectPath } from "@/storage/index.js";
 
 const tempDirs = new Set<string>();
 

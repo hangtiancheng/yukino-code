@@ -2,13 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
-import * as git from "@/code-review/git.js";
-import * as grouping from "@/code-review/grouping.js";
-import { runCodeReview } from "@/code-review/runner.js";
-import type { FileDiff, ReviewToolEvent } from "@/code-review/types.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import * as llm from "@/llm/client.js";
 import { OpenAIClient } from "@/llm/openai.js";
+import * as git from "@/review/git.js";
+import * as grouping from "@/review/grouping.js";
+import { runCodeReview } from "@/review/runner.js";
+import type { FileDiff, ReviewToolEvent } from "@/review/types.js";
 
 const provider: ProviderConfig = {
   name: "test",

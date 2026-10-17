@@ -16,7 +16,7 @@ import {
   rebuildFromSession,
   saveMessage,
 } from "@/session/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/definition.js";
 import { spawnSubagent } from "@/subagent/spawn.js";

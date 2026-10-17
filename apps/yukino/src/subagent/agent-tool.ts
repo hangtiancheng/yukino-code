@@ -15,7 +15,7 @@ import type { ConversationManager } from "@/conversation/index.js";
 import { createChildLogger, sanitizeNameSegment } from "@/logger/index.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { newSessionId } from "@/session/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import type { TeamManager, RunAgent } from "@/teams/index.js";
 import { isValidTeammateName, LEADER_NAME } from "@/teams/protocol.js";
 import {

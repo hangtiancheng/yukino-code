@@ -9,7 +9,7 @@ import { Agent } from "@/agent/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
 import { PathSandbox, PermissionChecker } from "@/permissions/index.js";
-import { yukinoPath, projectPath } from "@/storage/paths.js";
+import { yukinoPath, projectPath } from "@/storage/index.js";
 
 const tempDirs = new Set<string>();
 let originalHome: string | undefined;

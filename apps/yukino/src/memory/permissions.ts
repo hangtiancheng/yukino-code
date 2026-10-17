@@ -1,7 +1,7 @@
 import { extname, resolve } from "node:path";
 
 import { PermissionChecker, type Decision } from "@/permissions/index.js";
-import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { projectPath, yukinoPath } from "@/storage/index.js";
 import type { ToolCategory } from "@/tools/types.js";
 import { canonicalPath, isPathWithin } from "@/utils/paths.js";
 

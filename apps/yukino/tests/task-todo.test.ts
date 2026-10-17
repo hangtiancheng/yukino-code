@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { PermissionChecker } from "@/permissions/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import {
   cloneRegistryForFork,

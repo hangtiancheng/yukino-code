@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { Skill, SkillMeta } from "./index.js";
 
 import { createChildLogger } from "@/logger/index.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 import { asRecord, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "skills" });

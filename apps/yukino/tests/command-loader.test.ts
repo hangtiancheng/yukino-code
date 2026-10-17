@@ -10,7 +10,7 @@ import {
   parseCommandArgs,
   renderBody,
 } from "@/commands/loader.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 function cmdDir(): string {
   const cwd = mkdtempSync(join(tmpdir(), "yukino-cmd-"));

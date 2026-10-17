@@ -16,7 +16,7 @@ import { redactText } from "@/feedback/redact.js";
 import { fileHistoryDir } from "@/file-history/index.js";
 import { closeLogger, initLogger } from "@/logger/index.js";
 import { saveMessage } from "@/session/index.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 import { spillDir } from "@/tool-result/index.js";
 
 const SESSION = "collect-test-session";

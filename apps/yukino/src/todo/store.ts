@@ -12,7 +12,7 @@ import { dirname } from "node:path";
 import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 
 const log = createChildLogger({ module: "todo" });
 

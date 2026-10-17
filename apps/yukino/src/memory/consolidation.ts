@@ -9,7 +9,7 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import { listSessions } from "@/session/index.js";
-import { projectPath, yukinoPath, getSessionsDir } from "@/storage/paths.js";
+import { projectPath, yukinoPath, getSessionsDir } from "@/storage/index.js";
 import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";

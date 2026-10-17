@@ -20,7 +20,7 @@ import { memoryAge, memoryFreshnessText } from "./memory-age.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
-import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { projectPath, yukinoPath } from "@/storage/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "memory" });

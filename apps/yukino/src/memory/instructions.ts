@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join, dirname, resolve, isAbsolute, relative } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 const log = createChildLogger({ module: "memory" });
 
 /** Maximum recursion depth for @include to prevent infinite nesting */

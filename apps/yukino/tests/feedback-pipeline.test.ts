@@ -20,7 +20,7 @@ import type {
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { saveCompactBoundary, saveMessage } from "@/session/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 
 const mocks = vi.hoisted(() => ({
   detectChannel: vi.fn<() => Promise<FeedbackChannel>>(),

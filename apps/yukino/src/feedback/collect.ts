@@ -49,7 +49,7 @@ import {
   type SessionMessage,
   type ToolResultRecord,
 } from "@/session/index.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 import { spillDir } from "@/tool-result/index.js";
 import { version } from "@/version.js";
 

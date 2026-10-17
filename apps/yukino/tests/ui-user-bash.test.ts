@@ -26,7 +26,7 @@ import {
   messageToKeptRecord,
   saveCompactBoundary,
 } from "@/session/index.js";
-import { yukinoPath, getSessionsDir, sessionPath } from "@/storage/paths.js";
+import { yukinoPath, getSessionsDir, sessionPath } from "@/storage/index.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
 import type { ToolResult } from "@/tools/types.js";

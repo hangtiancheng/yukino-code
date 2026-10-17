@@ -18,7 +18,7 @@ import {
   projectPath,
   getSessionsDir,
   sessionPath,
-} from "@/storage/paths.js";
+} from "@/storage/index.js";
 import { createAgentWorktree } from "@/worktree/index.js";
 
 const tempDirs = new Set<string>();

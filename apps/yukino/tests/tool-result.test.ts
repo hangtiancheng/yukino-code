@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import { afterEach, describe, it, expect } from "vitest";
 
 import type { ToolResultBlock } from "@/conversation/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import {
   applyBudget,
   buildPersistedOutputPreview,

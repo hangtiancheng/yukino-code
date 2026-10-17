@@ -23,7 +23,7 @@ import { MemoryExtractor } from "@/memory/extractor.js";
 import { MemoryPermissionChecker } from "@/memory/permissions.js";
 import { extractWrittenPaths } from "@/memory/written-paths.js";
 import { PermissionChecker } from "@/permissions/index.js";
-import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { projectPath, yukinoPath } from "@/storage/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";

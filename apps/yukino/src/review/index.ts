@@ -13,4 +13,4 @@ export * as Report from "./report.js";
 export * as Resolve from "./resolve.js";
 export * as Runner from "./runner.js";
 export * as Selection from "./selection.js";
-export * as Types from "./types.js";
+export type * from "./types.js";

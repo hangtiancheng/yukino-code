@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { append, load, MAX_HISTORY_ENTRIES } from "@/history/index.js";
-import { getYukinoDir } from "@/storage/paths.js";
+import { getYukinoDir } from "@/storage/index.js";
 
 describe("prompt history", () => {
   it("retains 10,000 prompts and evicts the oldest entry on overflow", () => {

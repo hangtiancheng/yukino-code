@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 export function globalConfigPath(): string {
   return yukinoPath("config.yaml");

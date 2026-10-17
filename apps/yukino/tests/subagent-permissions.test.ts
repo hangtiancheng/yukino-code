@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Agent } from "@/agent/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 import { loadAgentDefinitions } from "@/subagent/loader.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import { ToolRegistry } from "@/tools/registry.js";

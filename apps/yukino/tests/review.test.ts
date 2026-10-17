@@ -1,52 +1,52 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  createDefaultRegistry,
+  parse as parseCommand,
+} from "@/commands/commands.js";
+import type { LLMClient } from "@/llm/client.js";
+import {
   parseComments,
   CommentCollector,
   normalizeCommentPath,
-} from "@/code-review/comment-tool.js";
+} from "@/review/comment-tool.js";
 import {
   parseDiffText,
   parseHunks,
   unquoteGitPath,
-} from "@/code-review/diff-parser.js";
-import { FileReadDiffTool } from "@/code-review/file-read-diff.js";
-import { parseFilterResponse } from "@/code-review/filter.js";
-import { CodeReviewFormSchema } from "@/code-review/form.js";
+} from "@/review/diff-parser.js";
+import { FileReadDiffTool } from "@/review/file-read-diff.js";
+import { parseFilterResponse } from "@/review/filter.js";
+import { CodeReviewFormSchema } from "@/review/form.js";
 import {
   buildChangeFilesExceptGroup,
   buildConcatenatedDiffs,
   buildConfirmedCommentsBlock,
   buildMainTaskMessage,
-} from "@/code-review/format.js";
-import { deriveReviewMode } from "@/code-review/git.js";
+} from "@/review/format.js";
+import { deriveReviewMode } from "@/review/git.js";
 import {
   chunkGroups,
   enforceMaxFilesPerGroup,
   formatDiffEntry,
   parseGroupingResponse,
-} from "@/code-review/grouping.js";
-import { renderTemplate, stripMarkdownFences } from "@/code-review/prompts.js";
-import { extractCodeBlock, relocateWithLlm } from "@/code-review/relocate.js";
+} from "@/review/grouping.js";
+import { renderTemplate, stripMarkdownFences } from "@/review/prompts.js";
+import { extractCodeBlock, relocateWithLlm } from "@/review/relocate.js";
 import {
   relocateAcrossFiles,
   resolveComment,
   resolveFromFileContent,
   resolveFromHunk,
-} from "@/code-review/resolve.js";
-import { finalizeComments, validateReviewInput } from "@/code-review/runner.js";
+} from "@/review/resolve.js";
+import { finalizeComments, validateReviewInput } from "@/review/runner.js";
 import {
   effectivePath,
   estimateTokens,
   selectFiles,
   summarizeSelection,
-} from "@/code-review/selection.js";
-import type { FileDiff, ReviewComment } from "@/code-review/types.js";
-import {
-  createDefaultRegistry,
-  parse as parseCommand,
-} from "@/commands/commands.js";
-import type { LLMClient } from "@/llm/client.js";
+} from "@/review/selection.js";
+import type { FileDiff, ReviewComment } from "@/review/types.js";
 
 const MODIFIED_DIFF = `diff --git a/src/app.ts b/src/app.ts
 index 1234567..89abcde 100644
@@ -900,7 +900,7 @@ describe("file-read-diff tool", () => {
 
 describe("report", () => {
   it("renders findings grouped by file", async () => {
-    const { formatReviewReport } = await import("@/code-review/report.js");
+    const { formatReviewReport } = await import("@/review/report.js");
     const report = formatReviewReport({
       mode: "workspace",
       comments: [
@@ -922,7 +922,7 @@ describe("report", () => {
   });
 
   it("reports a clean run", async () => {
-    const { formatReviewReport } = await import("@/code-review/report.js");
+    const { formatReviewReport } = await import("@/review/report.js");
     const report = formatReviewReport({
       mode: "workspace",
       comments: [],

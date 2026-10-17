@@ -9,7 +9,7 @@ import {
   CodeReviewFormSchema,
   type CodeReviewFormOptions,
   type CodeReviewFormValues,
-} from "@/code-review/form.js";
+} from "@/review/form.js";
 import { THEME } from "@/ui/styles.js";
 
 export interface CodeReviewDialogProps {

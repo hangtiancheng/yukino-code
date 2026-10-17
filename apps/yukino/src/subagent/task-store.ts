@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 import { z } from "zod";
 
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 
 const TaskId = z.string().regex(/^[\w-]+-[1-9]\d*$/u);
 const TaskRecord = z.object({

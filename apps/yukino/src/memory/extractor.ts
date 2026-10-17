@@ -16,7 +16,7 @@ import { extractWrittenPaths } from "./written-paths.js";
 import { Agent } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
-import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { projectPath, yukinoPath } from "@/storage/index.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { GlobTool } from "@/tools/glob.js";

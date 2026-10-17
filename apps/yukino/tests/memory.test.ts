@@ -16,7 +16,7 @@ import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { MemoryManager } from "@/memory/manager.js";
-import { projectPath } from "@/storage/paths.js";
+import { projectPath } from "@/storage/index.js";
 
 const tempDirs = new Set<string>();
 

@@ -21,7 +21,7 @@ import {
   ProviderLoginSchema,
   saveProvider,
 } from "@/config/provider-login.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 // Point os.homedir() at a temp dir so saveProvider/persistThinkingLevel write
 // to an isolated global config instead of the real ~/.yukino/config.yaml.

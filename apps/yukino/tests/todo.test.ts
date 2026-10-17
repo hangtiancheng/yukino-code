@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 
 import { describe, it, expect } from "vitest";
 
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
 

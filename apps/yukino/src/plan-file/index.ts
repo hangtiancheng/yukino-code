@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 import { generateSlug } from "@/utils/slug";
 
 const log = createChildLogger({ module: "plan-file" });

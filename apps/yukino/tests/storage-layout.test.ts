@@ -18,7 +18,7 @@ import {
   listSessions,
   saveMessage,
 } from "@/session/index.js";
-import { getYukinoDir, projectKey } from "@/storage/paths.js";
+import { getYukinoDir, projectKey } from "@/storage/index.js";
 import { TaskStore } from "@/todo/store.js";
 
 describe("global storage", () => {

@@ -6,7 +6,7 @@ import { z, parse } from "zod";
 
 import type { Command } from "./commands.js";
 
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 // Subdirectories namespace command names: sub/dir/foo.md → "sub:dir:foo".
 export function loadUserCommands(): Command[] {

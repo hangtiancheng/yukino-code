@@ -10,7 +10,7 @@ import {
 import { parse, z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
-import { getYukinoDir, yukinoPath } from "@/storage/paths.js";
+import { getYukinoDir, yukinoPath } from "@/storage/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "history" });

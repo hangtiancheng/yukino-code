@@ -9,7 +9,7 @@ import { runExitCleanups } from "@/bootstrap/exit-cleanup.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
-import { getSessionsDir, sessionPath } from "@/storage/paths.js";
+import { getSessionsDir, sessionPath } from "@/storage/index.js";
 import { ReadFileTool } from "@/tools/read-file.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";

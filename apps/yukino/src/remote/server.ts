@@ -26,8 +26,6 @@ import {
   createToolRegistry,
 } from "@/bootstrap/tool-registry.js";
 import { removeMcpTools } from "@/bootstrap/tool-registry.js";
-import { formatReviewReport } from "@/code-review/report.js";
-import { runCodeReview, validateReviewInput } from "@/code-review/runner.js";
 import {
   parse as parseCommand,
   createDefaultRegistry as createCommandRegistry,
@@ -94,6 +92,8 @@ import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
+import { formatReviewReport } from "@/review/report.js";
+import { runCodeReview, validateReviewInput } from "@/review/runner.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import {
   newSessionId,

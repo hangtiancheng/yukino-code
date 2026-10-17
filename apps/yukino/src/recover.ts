@@ -6,7 +6,7 @@ import { runExitCleanups } from "./bootstrap/exit-cleanup.js";
 import { closeLogger, logger } from "./logger/index.js";
 import { captureTelemetryError, shutdownTelemetry } from "./telemetry/index.js";
 
-import { getYukinoDir, yukinoPath } from "@/storage/paths.js";
+import { getYukinoDir, yukinoPath } from "@/storage/index.js";
 
 /**
  * Appends a timestamped entry to the crash log.

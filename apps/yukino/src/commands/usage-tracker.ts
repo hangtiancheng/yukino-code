@@ -4,7 +4,7 @@ import { join, dirname } from "path";
 import { safeParse, z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
-import { getYukinoDir } from "@/storage/paths.js";
+import { getYukinoDir } from "@/storage/index.js";
 import { isRecord } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "commands" });

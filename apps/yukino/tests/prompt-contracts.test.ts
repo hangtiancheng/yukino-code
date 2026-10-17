@@ -32,7 +32,7 @@ import {
 import { buildSkillSection, SkillCatalog } from "@/skills/catalog.js";
 import { runFork, runInline } from "@/skills/executor.js";
 import type { Skill, SkillForkHost } from "@/skills/index.js";
-import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { projectPath, yukinoPath } from "@/storage/index.js";
 import {
   BASH_DESCRIPTION,
   EDIT_FILE_DESCRIPTION,

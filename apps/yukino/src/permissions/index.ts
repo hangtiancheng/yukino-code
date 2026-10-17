@@ -13,7 +13,7 @@ import yaml from "js-yaml";
 import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
-import { projectPath, yukinoPath } from "@/storage/paths.js";
+import { projectPath, yukinoPath } from "@/storage/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/protocol.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";

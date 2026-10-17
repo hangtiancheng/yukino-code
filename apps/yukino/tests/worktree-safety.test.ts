@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
 
-import { yukinoPath, projectKey } from "@/storage/paths.js";
+import { yukinoPath, projectKey } from "@/storage/index.js";
 import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
 import {
   createAgentWorktree,

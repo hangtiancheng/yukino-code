@@ -10,7 +10,7 @@ import {
   isPngBuffer,
   storeClipboardImage,
 } from "@/images/clipboard.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 
 const PNG_BYTES = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),

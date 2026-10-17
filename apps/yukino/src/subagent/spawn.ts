@@ -22,7 +22,7 @@ import {
   newSessionId,
   saveTranscriptMessage,
 } from "@/session/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import { asErrorString } from "@/utils/index.js";

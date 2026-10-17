@@ -11,7 +11,7 @@ import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError } from "@/llm/errors.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
-import { yukinoPath, projectPath } from "@/storage/paths.js";
+import { yukinoPath, projectPath } from "@/storage/index.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";
 

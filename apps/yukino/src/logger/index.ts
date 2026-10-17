@@ -16,7 +16,7 @@ import { join, dirname } from "node:path";
 
 import pino, { type Logger, type LoggerOptions } from "pino";
 
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 /** Execution mode, written into the base field of every log entry. */
 type LoggerMode = "terminal" | "remote" | "teammate";

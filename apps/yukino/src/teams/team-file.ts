@@ -14,7 +14,7 @@ import z from "zod";
 
 import { withFileSyncLock } from "./file-lock.js";
 
-import { projectKey, yukinoPath } from "@/storage/paths.js";
+import { projectKey, yukinoPath } from "@/storage/index.js";
 
 /** Metadata for a single team member. */
 export const TeamMemberEntrySchema = z.object({

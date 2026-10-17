@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterEach, describe, it, expect } from "vitest";
 
 import { loadInstructions } from "@/memory/instructions.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 const tempDirs = new Set<string>();
 

@@ -12,7 +12,7 @@ import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { loadSession, rebuildFromSession } from "@/session/index.js";
-import { sessionPath, getSessionsDir } from "@/storage/paths.js";
+import { sessionPath, getSessionsDir } from "@/storage/index.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolResultContentBlock } from "@/tools/types.js";
 import { asString, isRecord } from "@/utils/index.js";

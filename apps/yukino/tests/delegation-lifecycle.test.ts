@@ -22,7 +22,7 @@ import {
 } from "@/plan-file/index.js";
 import { SkillCatalog } from "@/skills/catalog.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import type { AgentDefinition } from "@/subagent/definition.js";
 import { spawnSubagent } from "@/subagent/spawn.js";

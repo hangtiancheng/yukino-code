@@ -22,7 +22,7 @@ import { MemoryManager } from "@/memory/manager.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { getOrCreatePlanPath } from "@/plan-file/index.js";
 import * as sandbox from "@/sandbox/index.js";
-import { yukinoPath, projectPath } from "@/storage/paths.js";
+import { yukinoPath, projectPath } from "@/storage/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import type { AgentDefinition } from "@/subagent/definition.js";
 import { TaskManager } from "@/subagent/task-manager.js";

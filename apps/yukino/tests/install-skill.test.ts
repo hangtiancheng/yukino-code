@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 
 import { SkillCatalog } from "@/skills/catalog.js";
 import { InstallSkillTool } from "@/skills/install-skill-tool.js";
-import { yukinoPath } from "@/storage/paths.js";
+import { yukinoPath } from "@/storage/index.js";
 
 const SKILL = `---
 name: commit-helper

@@ -10,7 +10,7 @@ import {
   type IssueDraft,
 } from "./types.js";
 
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const FiledRecordsSchema = z.array(FiledIssueRecordSchema);

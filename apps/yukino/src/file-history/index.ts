@@ -12,7 +12,7 @@ import { dirname, join, resolve } from "path";
 import { safeParse, z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
-import { sessionPath } from "@/storage/paths.js";
+import { sessionPath } from "@/storage/index.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "file-history" });
