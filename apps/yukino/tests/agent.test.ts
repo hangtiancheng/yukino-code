@@ -117,11 +117,54 @@ describe("Agent loop", () => {
     expect(last?.content).toBe("hello");
   });
 
-  it("does not add an empty assistant message for an empty end turn", async () => {
-    const { conversation } = await runAgent(new MockClient([[end()]]));
+  it.each(["end_turn", "stop"])(
+    "accepts an empty %s response without retrying",
+    async (stopReason) => {
+      const client = new MockClient([[end(stopReason)]]);
+      const { conversation, events } = await runAgent(client);
 
-    expect(conversation.getMessages()).toHaveLength(1);
-    expect(conversation.getMessages()[0]?.role).toBe("user");
+      expect(conversation.getMessages()).toHaveLength(1);
+      expect(conversation.getMessages()[0]?.role).toBe("user");
+      expect(client.calls).toBe(1);
+      expect(
+        events.some(
+          (event) => event.type === "retry" || event.type === "error",
+        ),
+      ).toBe(false);
+      expect(events.at(-1)).toEqual({ type: "loop_complete", stopReason });
+    },
+  );
+
+  it("accepts an empty completion after tool results without replaying tools", async () => {
+    const execute = vi.fn(() =>
+      Promise.resolve({ output: "echoed", isError: false }),
+    );
+    const client = new MockClient([
+      [
+        ...["first", "second", "third"].map((toolId): StreamEvent => ({
+          type: "tool_call_complete",
+          toolId,
+          toolName: "Echo",
+          arguments: {},
+        })),
+        end("tool_use"),
+      ],
+      [end()],
+    ]);
+    const { conversation, events } = await runAgent(client, {
+      tool: { ...echoTool, execute },
+    });
+
+    expect(client.calls).toBe(2);
+    expect(execute).toHaveBeenCalledTimes(3);
+    expect(conversation.getMessages().at(-1)?.toolResults).toHaveLength(3);
+    expect(
+      events.some((event) => event.type === "retry" || event.type === "error"),
+    ).toBe(false);
+    expect(events.at(-1)).toEqual({
+      type: "loop_complete",
+      stopReason: "end_turn",
+    });
   });
 
   it("keeps the client default when no output ceiling is supplied by the host", async () => {

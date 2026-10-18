@@ -42,6 +42,7 @@ import { writeZipArchive } from "./zip.js";
 
 import type { Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
+import { createChildLogger } from "@/logger/index.js";
 import {
   COMPACT_BOUNDARY,
   loadSession,
@@ -52,6 +53,14 @@ import { asErrorString } from "@/utils/index.js";
 import { version } from "@/version.js";
 
 const MAX_ANALYSIS_LOG_BYTES = 200 * 1024;
+const log = createChildLogger({ module: "feedback" });
+
+interface Attachments {
+  gistUrl?: string;
+  bundlePath?: string;
+  uploadError?: string;
+  names: string[];
+}
 
 function analysisHistory(deps: PipelineDeps): Message[] {
   const saved = loadSession(deps.cwd, deps.sessionId);
@@ -122,7 +131,7 @@ function assembleIssueBody(
   draft: IssueDraft,
   env: EnvironmentSnapshot,
   sessionId: string,
-  attachments: { gistUrl?: string; bundlePath?: string; names: string[] },
+  attachments: Attachments,
 ): string {
   const attachmentLines = attachments.gistUrl
     ? [
@@ -148,6 +157,9 @@ function assembleIssueBody(
     "</details>",
     "",
     ...attachmentLines,
+    ...(attachments.uploadError
+      ? [`Attachment upload failed: ${attachments.uploadError}`]
+      : []),
     "",
     `Reported via /feedback · session ${sessionId} · yukino ${version}`,
   ].join("\n");
@@ -211,8 +223,7 @@ function formatReport(
   channel: FeedbackChannel,
   results: FiledResult[],
   skippedDuplicates: number,
-  gistUrl?: string,
-  bundlePath?: string,
+  attachments: Attachments,
   collected?: CollectOutput,
 ): string {
   const lines: string[] = [];
@@ -238,11 +249,14 @@ function formatReport(
       `Skipped ${String(skippedDuplicates)} issue(s) already filed in this session.`,
     );
   }
-  if (gistUrl) {
-    lines.push(`Attachments (secret Gist): ${gistUrl}`);
+  if (attachments.gistUrl) {
+    lines.push(`Attachments (secret Gist): ${attachments.gistUrl}`);
   }
-  if (bundlePath) {
-    lines.push(`Attachments exported locally: ${bundlePath}`);
+  if (attachments.bundlePath) {
+    lines.push(`Attachments exported locally: ${attachments.bundlePath}`);
+  }
+  if (attachments.uploadError) {
+    lines.push(`Attachment upload failed: ${attachments.uploadError}`);
   }
   if (collected?.skipped.length) {
     lines.push(
@@ -354,15 +368,16 @@ export async function runFeedbackPipeline(
   }
   abortSignal.throwIfAborted();
 
-  let gistUrl: string | undefined;
-  let bundlePath: string | undefined;
+  const attachments: Attachments = {
+    names: collected.files.map((file) => file.name),
+  };
   if (collected.files.length > 0) {
     if (channel === "browser") {
-      bundlePath = await writeBundle(sessionId, collected);
+      attachments.bundlePath = await writeBundle(sessionId, collected);
     } else {
       deps.onProgress("Uploading attachments as a secret Gist…");
       try {
-        gistUrl = await createGist(
+        attachments.gistUrl = await createGist(
           channel,
           collected.files,
           `yukino feedback ${sessionId.slice(0, 8)}`,
@@ -370,27 +385,24 @@ export async function runFeedbackPipeline(
         );
       } catch (err) {
         abortSignal.throwIfAborted();
-        bundlePath = await writeBundle(sessionId, collected);
+        attachments.uploadError = redact(asErrorString(err));
+        log.warn(
+          { error: attachments.uploadError },
+          "Feedback attachment upload failed",
+        );
+        attachments.bundlePath = await writeBundle(sessionId, collected);
         deps.onProgress(
-          `Gist upload failed (${asErrorString(err)}); exported a local bundle instead.`,
+          `Gist upload failed (${attachments.uploadError}); exported a local bundle instead.`,
         );
       }
     }
   }
   abortSignal.throwIfAborted();
 
-  const attachmentNames = collected.files.map((file) => file.name);
   const results = await fileIssues(
     channel,
     fresh,
-    (draft) =>
-      redact(
-        assembleIssueBody(draft, env, sessionId, {
-          gistUrl,
-          bundlePath,
-          names: attachmentNames,
-        }),
-      ),
+    (draft) => redact(assembleIssueBody(draft, env, sessionId, attachments)),
     abortSignal,
     (result) => {
       deps.onProgress(`Filed: ${result.title} — ${result.url}`);
@@ -400,7 +412,7 @@ export async function runFeedbackPipeline(
           title: result.title,
           url: result.url,
           channel,
-          ...(gistUrl ? { gistUrl } : {}),
+          ...(attachments.gistUrl ? { gistUrl: attachments.gistUrl } : {}),
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -408,13 +420,6 @@ export async function runFeedbackPipeline(
   );
 
   return {
-    report: formatReport(
-      channel,
-      results,
-      skipped,
-      gistUrl,
-      bundlePath,
-      collected,
-    ),
+    report: formatReport(channel, results, skipped, attachments, collected),
   };
 }

@@ -72,6 +72,16 @@ function flattenName(name: string): string {
   return name.replace(/[^\w.-]+/g, "_");
 }
 
+function gistContent(content: string): string {
+  return content.trim()
+    ? content
+    : `${JSON.stringify({
+        _note:
+          "Empty or whitespace-only attachment. Original content is JSON-encoded in content.",
+        content,
+      })}\n`;
+}
+
 export async function createGist(
   channel: "gh" | "token",
   files: CollectedFile[],
@@ -81,12 +91,16 @@ export async function createGist(
   if (files.length === 0) {
     throw new Error("No attachment files to upload");
   }
+  const gistFiles: Record<string, { content: string }> = {};
+  for (const file of files) {
+    gistFiles[flattenName(file.name)] = { content: gistContent(file.content) };
+  }
   if (channel === "gh") {
     const dir = mkdtempSync(join(tmpdir(), "yukino-feedback-"));
     try {
       const paths: string[] = [];
-      for (const file of files) {
-        const target = join(dir, flattenName(file.name));
+      for (const [name, file] of Object.entries(gistFiles)) {
+        const target = join(dir, name);
         mkdirSync(dirname(target), { recursive: true });
         writeFileSync(target, file.content);
         paths.push(target);
@@ -109,10 +123,6 @@ export async function createGist(
   const token = githubToken();
   if (!token) {
     throw new Error("No GitHub token available");
-  }
-  const gistFiles: Record<string, { content: string }> = {};
-  for (const file of files) {
-    gistFiles[flattenName(file.name)] = { content: file.content };
   }
   const response = await fetch("https://api.github.com/gists", {
     method: "POST",

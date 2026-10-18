@@ -1,14 +1,19 @@
 import type * as childProcess from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { basename } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   buildIssueUrl,
+  createGist,
   desiredLabels,
   detectChannel,
   FEEDBACK_REPO,
   fetchRepoLabels,
 } from "@/feedback/github.js";
+import type { CollectedFile } from "@/feedback/types.js";
 
 interface ExecFileResult {
   stdout: string;
@@ -51,6 +56,96 @@ vi.mock("node:child_process", async (importOriginal) => {
     },
   );
   return { ...original, execFile: mocked };
+});
+
+describe("createGist", () => {
+  const files: CollectedFile[] = [
+    { name: "log.jsonl", content: "", truncated: false },
+    { name: "whitespace.txt", content: " \r\n\t", truncated: false },
+    {
+      name: "source.ts",
+      content: "export const value = 1;\n",
+      truncated: false,
+    },
+  ];
+
+  beforeEach(() => {
+    execFileImpl.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  function checkUploadedFiles(uploaded: Record<string, { content: string }>) {
+    expect(Object.keys(uploaded).sort()).toEqual(
+      files.map((file) => file.name).sort(),
+    );
+    for (const file of files) {
+      const content = uploaded[file.name].content;
+      expect(content.trim()).not.toBe("");
+      if (file.content.trim()) {
+        expect(content).toBe(file.content);
+      } else {
+        const encoded: unknown = JSON.parse(content);
+        const parsed = z
+          .object({ _note: z.string(), content: z.string() })
+          .parse(encoded);
+        expect(parsed._note.trim()).not.toBe("");
+        expect(parsed.content).toBe(file.content);
+      }
+    }
+  }
+
+  it("uploads blank attachments via gh without losing their original content", async () => {
+    const uploaded: Record<string, { content: string }> = {};
+    const original = structuredClone(files);
+    let paths: string[] = [];
+    execFileImpl.mockImplementation((command, args) => {
+      expect(command).toBe("gh");
+      expect(args.slice(0, 2)).toEqual(["gist", "create"]);
+      paths = args.slice(2, args.indexOf("--desc"));
+      for (const path of paths) {
+        uploaded[basename(path)] = { content: readFileSync(path, "utf-8") };
+      }
+      return Promise.resolve({
+        stdout: "https://gist.github.com/test\n",
+        stderr: "",
+      });
+    });
+
+    expect(await createGist("gh", files, "test")).toBe(
+      "https://gist.github.com/test",
+    );
+    checkUploadedFiles(uploaded);
+    expect(files).toEqual(original);
+    expect(paths.every((path) => !existsSync(path))).toBe(true);
+  });
+
+  it("uploads blank attachments via the API with the same lossless encoding", async () => {
+    vi.stubEnv("GH_TOKEN", "test-token");
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ html_url: "https://gist.github.com/test" }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await createGist("token", files, "test")).toBe(
+      "https://gist.github.com/test",
+    );
+    const payload: unknown = JSON.parse(
+      z.string().parse(fetchMock.mock.calls[0]?.[1]?.body),
+    );
+    const parsed = z
+      .object({
+        public: z.boolean(),
+        files: z.record(z.string(), z.object({ content: z.string() })),
+      })
+      .parse(payload);
+    expect(parsed.public).toBe(false);
+    checkUploadedFiles(parsed.files);
+  });
 });
 
 describe("detectChannel", () => {

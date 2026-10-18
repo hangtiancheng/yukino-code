@@ -1,9 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { feedbackLogPath } from "@/feedback/collect.js";
 import {
   issueFingerprint,
   loadFiledIssues,
@@ -19,6 +26,7 @@ import type {
 } from "@/feedback/types.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
+import { closeLogger, initLogger } from "@/logger/index.js";
 import { saveCompactBoundary, saveMessage } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
 
@@ -287,10 +295,45 @@ describe("runFeedbackPipeline", () => {
     expect(progress).toContain("Gist upload failed");
     expect(report).toContain("issues/4");
     expect(report).toContain("exported locally");
+    expect(report).toContain("Attachment upload failed: gist 422");
     expect(bundleFiles().some((f) => f.endsWith(".zip"))).toBe(true);
     // The issue body points at the local bundle, not a gist.
     const body: string = mocks.createIssue.mock.calls[0][2];
     expect(body).toContain("not uploaded");
+    expect(body).toContain("Attachment upload failed: gist 422");
+  });
+
+  it("redacts and persists attachment upload errors", async () => {
+    const secret = "feedback-upload-secret";
+    mocks.createGist.mockRejectedValue(
+      new Error(`Gist rejected token ${secret}`),
+    );
+    mocks.createIssue.mockResolvedValue({
+      url: "https://github.com/hangtiancheng/yukino-code/issues/4",
+    });
+    const client = fakeClient(
+      analysisReply([{ title: "[tool] Bash hangs", body: "b" }]),
+    );
+    const deps = makeDeps(client, makeProject());
+    initLogger({ sessionId: SESSION, mode: "terminal", skipCleanup: true });
+    try {
+      const { report } = await runFeedbackPipeline(
+        { description: "", attachments: ["env"] },
+        { ...deps, runtime: { ...deps.runtime, config: { api_key: secret } } },
+      );
+      const body: string = mocks.createIssue.mock.calls[0][2];
+      const log = readFileSync(feedbackLogPath(SESSION), "utf-8");
+      const progress = deps.onProgress.mock.calls
+        .map(([message]) => message)
+        .join("\n");
+      for (const output of [report, body, log, progress]) {
+        expect(output).toContain("Gist rejected token <redacted>");
+        expect(output).not.toContain(secret);
+      }
+      expect(log).toContain("Feedback attachment upload failed");
+    } finally {
+      closeLogger();
+    }
   });
 
   it("files the description when the analysis stream itself fails", async () => {
