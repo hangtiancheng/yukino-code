@@ -277,6 +277,22 @@ describe("GlobTool", () => {
 describe("GrepTool catastrophic backtracking", () => {
   const grep = new GrepTool();
 
+  it("stops matching once the output limit is reached", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "yukino-grep-cap-"));
+    writeFileSync(
+      join(dir, "many.txt"),
+      "a\n".repeat(501) + "a".repeat(32) + "!\n",
+    );
+    try {
+      const result = await grep.execute({ cwd: dir }, { pattern: "(a+)+$" });
+      expect(result.isError).toBe(false);
+      expect(result.output).toContain("many.txt:1:a");
+      expect(result.output).toContain("truncated");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("bounds a catastrophic pattern in a worker and reports a diagnosis", async () => {
     const dir = mkdtempSync(join(tmpdir(), "yukino-grep-evil-"));
     writeFileSync(join(dir, "evil.txt"), `${"a".repeat(32)}!\n`);

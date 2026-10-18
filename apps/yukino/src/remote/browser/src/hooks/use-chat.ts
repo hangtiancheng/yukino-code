@@ -248,6 +248,11 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "session_list":
       return { ...state, sessions: msg.data.sessions };
 
+    case "plan_approval_closed":
+      return state.planApproval?.id === msg.data.id
+        ? { ...state, planApproval: null }
+        : state;
+
     case "plan_approval_request":
       return { ...state, planApproval: msg.data };
 
@@ -489,7 +494,9 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       return {
         ...state,
         items: [
-          ...state.items,
+          ...state.items.filter(
+            (item) => item.kind !== "permission" || item.id !== msg.data.id,
+          ),
           {
             kind: "permission",
             id: msg.data.id,
@@ -505,7 +512,9 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       return {
         ...state,
         items: [
-          ...state.items,
+          ...state.items.filter(
+            (item) => item.kind !== "askUser" || item.id !== msg.data.id,
+          ),
           {
             kind: "askUser",
             id: msg.data.id,
@@ -527,7 +536,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
             return {
               ...item,
               responded: true,
-              response: "deny" as const,
+              response: msg.data.response ?? "deny",
             };
           }
           if (

@@ -9,6 +9,7 @@ import {
   parseComments,
   CommentCollector,
   normalizeCommentPath,
+  CodeCommentTool,
 } from "@/review/comment-tool.js";
 import {
   parseDiffText,
@@ -599,11 +600,51 @@ describe("comment-tool", () => {
 
   it("normalizes comment paths", () => {
     expect(normalizeCommentPath("./src/a.ts")).toBe("src/a.ts");
-    expect(normalizeCommentPath("/src/a.ts")).toBe("src/a.ts");
+    expect(normalizeCommentPath("/src/a.ts")).toBeNull();
     expect(normalizeCommentPath("src\\nested\\a.ts")).toBe("src/nested/a.ts");
     expect(normalizeCommentPath("src//double.ts")).toBe("src/double.ts");
     expect(normalizeCommentPath("src/a/../b.ts")).toBe("src/b.ts");
     expect(normalizeCommentPath("")).toBe("");
+  });
+
+  it("rejects paths outside the diff set and accepts renamed old paths", async () => {
+    const diffs = await parseDiffText(RENAMED_DIFF);
+    const collector = new CommentCollector();
+    const tool = new CodeCommentTool({
+      collector,
+      groupDiffs: diffs,
+      allowedPaths: new Set(["src/before.ts", "src/after.ts"]),
+      groupLabel: "rename",
+      resolve: () => Promise.resolve(),
+    });
+    const rejected = await tool.execute(
+      { cwd: "." },
+      {
+        comments: [
+          {
+            path: "unreviewed.ts",
+            content: "issue",
+            existing_code: "const y = 2;",
+          },
+        ],
+      },
+    );
+    expect(rejected.isError).toBe(true);
+    expect(collector.all()).toEqual([]);
+    const accepted = await tool.execute(
+      { cwd: "." },
+      {
+        comments: [
+          {
+            path: "src/before.ts",
+            content: "issue",
+            existing_code: "const y = 2;",
+          },
+        ],
+      },
+    );
+    expect(accepted.isError).toBe(false);
+    expect(collector.all()[0].path).toBe("src/before.ts");
   });
 
   it("rejects comment paths that escape the review root or are drive-qualified", () => {

@@ -551,7 +551,11 @@ describe("remote execution boundaries", () => {
     const abort = vi.fn();
     const registry = new ToolRegistry();
     const dispose = vi.spyOn(registry, "dispose");
-    Reflect.set(server, "agentHandle", { abort, registry });
+    Reflect.set(server, "agentHandle", {
+      abort,
+      registry,
+      dispose: () => registry.dispose(),
+    });
     Reflect.set(
       server,
       "pendingPermissions",

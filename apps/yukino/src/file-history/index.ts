@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import {
   existsSync,
   mkdirSync,
@@ -33,6 +33,7 @@ export const BackupSchema = z.discriminatedUnion("state", [
 export type Backup = z.infer<typeof BackupSchema>;
 
 export const SnapshotSchema = z.object({
+  id: z.string(),
   messageIndex: z.number(),
   userText: z.string(),
   backups: z.record(z.string(), BackupSchema),
@@ -196,6 +197,7 @@ export class FileHistory {
         }
       }
       this.snapshots.push({
+        id: randomUUID(),
         messageIndex,
         userText: text,
         backups,

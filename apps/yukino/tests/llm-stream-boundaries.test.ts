@@ -442,6 +442,43 @@ describe("Responses terminal events", () => {
 });
 
 describe("Chat Completions terminal boundaries", () => {
+  it("rejects unknown finish reasons even after complete tool deltas", async () => {
+    mockStream([
+      {
+        type: "chunk",
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call-1",
+                  type: "function",
+                  function: { name: "ReadFile", arguments: "{}" },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      {
+        type: "chunk",
+        choices: [
+          { index: 0, delta: {}, finish_reason: "unknown_gateway_reason" },
+        ],
+      },
+    ]);
+    const events: StreamEvent[] = [];
+    await expect(
+      collect(
+        new OpenAICompatClient(config("openai-compat"), "system"),
+        events,
+      ),
+    ).rejects.toBeInstanceOf(LLMError);
+    expect(events.some((event) => event.type === "stream_end")).toBe(false);
+  });
   it("rejects EOF without a finish reason", async () => {
     mockStream([
       {

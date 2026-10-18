@@ -18,6 +18,8 @@ import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MCPClient } from "@/mcp/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import * as sessionMod from "@/session/index.js";
+import { FileStateCache } from "@/tools/file-state-cache.js";
 import { App } from "@/ui/app.js";
 import { installTerminalOutput } from "@/ui/terminal-output.js";
 import { checkForUpdate } from "@/update/version-check.js";
@@ -211,6 +213,80 @@ async function start(mcpServers: MCPServerConfig[] = []) {
 }
 
 describe("App steering delivery", () => {
+  it("keeps the read cache when the rewind picker is cancelled", async () => {
+    await start();
+    await finishRequest(0);
+    const clear = vi.spyOn(FileStateCache.prototype, "clear");
+    const conversation = client.requests[0].conversation;
+    const before = conversation.getMessages();
+    await submit("/rewind ");
+    await press("\r");
+    await press("\x1b[A");
+    await press("\r");
+    expect(clear).not.toHaveBeenCalled();
+    expect(conversation.getMessages()).toEqual(before);
+  });
+
+  it("keeps queued input and history after a conversation rewind fails", async () => {
+    await start();
+    await submit("/rewind ");
+    await submit("/queued-after-rewind-failure");
+    await finishRequest(0);
+    const clear = vi.spyOn(FileStateCache.prototype, "clear");
+    vi.spyOn(sessionMod, "truncateSessionLines").mockImplementation(() => {
+      throw new Error("rewind storage unavailable");
+    });
+    const conversation = client.requests[0].conversation;
+    const before = conversation.getMessages();
+    await press("\r");
+    await press("\x1b[B");
+    await press("\r");
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await flush();
+      });
+      expect(terminal.bufferLines().join("\n")).toContain(
+        "Unknown command: /queued-after-rewind-failure",
+      );
+    });
+    expect(clear).not.toHaveBeenCalled();
+    expect(conversation.getMessages()).toEqual(before);
+    expect(terminal.bufferLines().join("\n")).toContain(
+      "Rewind failed: rewind storage unavailable",
+    );
+  });
+
+  it("keeps the original session and queued input if resume cannot touch its transcript", async () => {
+    await start();
+    const targetId = sessionMod.newSessionId();
+    sessionMod.saveMessage(process.cwd(), targetId, {
+      role: "user",
+      content: "RESUME_TARGET",
+      timestamp: 1,
+    });
+    vi.spyOn(sessionMod, "touchSession").mockImplementation(() => {
+      throw new Error("resume storage unavailable");
+    });
+    await submit(`/resume ${targetId}`);
+    await submit("/queued-after-resume-failure");
+    await finishRequest(0);
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await flush();
+      });
+      expect(terminal.bufferLines().join("\n")).toContain(
+        "Unknown command: /queued-after-resume-failure",
+      );
+    });
+    const text = client.requests[0].conversation
+      .getMessages()
+      .map((message) => contentToText(message.content))
+      .join("\n");
+    expect(text).toContain("INITIAL_REQUEST");
+    expect(text).not.toContain("RESUME_TARGET");
+  });
   it.each([5, 12, 24, 40])(
     "renders delivered steering cards after the prior assistant response at %i rows",
     async (rows) => {

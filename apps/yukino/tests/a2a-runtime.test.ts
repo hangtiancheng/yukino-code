@@ -11,6 +11,16 @@ import { MCPManager } from "@/mcp/manager.js";
 import * as remote from "@/remote/server.js";
 
 describe("A2A runtime cleanup", () => {
+  it("reports an expired transcript instead of starting an empty continuation", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-a2a-expired-"));
+    try {
+      await expect(createA2aRuntime(cwd, "expired-12345678")).rejects.toThrow(
+        "transcript is no longer available",
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
   it.each([false, true])(
     "releases owned tools after stopping workers, even on failure: %s",
     async (failWorkers) => {

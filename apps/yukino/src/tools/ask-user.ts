@@ -28,6 +28,7 @@ export type Question = z.infer<typeof QuestionSchema>;
 
 export type Asker = (
   questions: Question[],
+  signal?: AbortSignal,
 ) => Promise<
   Record<string /** question text */, string /** user chosen answer */>
 >;
@@ -151,7 +152,10 @@ export class AskUserQuestionTool implements Tool {
       }
     }
 
-    const answer = await this.ask(questions);
+    if (ctx.abortSignal?.aborted) {
+      return { output: "Error: operation interrupted", isError: true };
+    }
+    const answer = await this.ask(questions, ctx.abortSignal);
     if (Object.keys(answer).length === 0) {
       return {
         output: "User cancelled or did not answer the questions.",

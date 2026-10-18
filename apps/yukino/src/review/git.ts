@@ -89,16 +89,9 @@ function untrackedBinaryDiff(path: string): string {
 // exactly that so the parser/comment tooling see a link and never the (possibly
 // external, possibly secret) target's contents.
 function untrackedSymlinkDiff(relPath: string, target: string): string {
-  const oldPath = quoteDiffPath("a", relPath);
-  const newPath = quoteDiffPath("b", relPath);
-  return (
-    `diff --git ${oldPath} ${newPath}\n` +
-    `new file mode 120000\n` +
-    `--- /dev/null\n` +
-    `+++ ${newPath}\n` +
-    `@@ -0,0 +1 @@\n` +
-    `+${target}\n`
-  );
+  const diff = untrackedFileDiff(relPath, Buffer.from(target));
+  const headerEnd = diff.indexOf("\n");
+  return `${diff.slice(0, headerEnd)}\nnew file mode 120000${diff.slice(headerEnd)}`;
 }
 
 // Over-limit files get their own status rather than being disguised as binary.
@@ -110,8 +103,7 @@ function untrackedTooLargeDiff(relPath: string, size: number): string {
     `new file mode 100644\n` +
     `--- /dev/null\n` +
     `+++ ${newPath}\n` +
-    `@@ -0,0 +1 @@\n` +
-    `+[skipped: ${String(size)} bytes exceeds the ${String(MAX_UNTRACKED_FILE_SIZE)}-byte review read limit]\n`
+    `yukino skipped too-large (${String(size)} bytes)\n`
   );
 }
 
@@ -192,11 +184,17 @@ async function untrackedFileDiffs(
     let content: Buffer | null = null;
     let tooLarge = 0;
     try {
-      const fh = await open(fullPath, constants.O_RDONLY | OPEN_NOFOLLOW);
+      const fh = await open(
+        fullPath,
+        constants.O_RDONLY | OPEN_NOFOLLOW | (constants.O_NONBLOCK ?? 0),
+      );
       try {
         // fstat on the open handle reflects the real size even if the file
         // grew after the lstat, so the bounded read cannot be bypassed.
         const fst = await fh.stat();
+        if (!fst.isFile()) {
+          continue;
+        }
         if (fst.size > MAX_UNTRACKED_FILE_SIZE) {
           tooLarge = fst.size;
         } else {
@@ -346,7 +344,10 @@ export async function collectDiffs(
         if (st.size > MAX_UNTRACKED_FILE_SIZE) {
           return undefined;
         }
-        const fh = await open(fullPath, constants.O_RDONLY | OPEN_NOFOLLOW);
+        const fh = await open(
+          fullPath,
+          constants.O_RDONLY | OPEN_NOFOLLOW | (constants.O_NONBLOCK ?? 0),
+        );
         try {
           const fst = await fh.stat();
           if (!fst.isFile() || fst.size > MAX_UNTRACKED_FILE_SIZE) {

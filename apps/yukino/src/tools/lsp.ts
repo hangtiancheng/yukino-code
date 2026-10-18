@@ -60,7 +60,10 @@ interface DocumentState {
 interface Session {
   client: LspClient;
   documents: Map<string, DocumentState>;
-  diagnostics: Map<string, { version: number; items: unknown[] }>;
+  diagnostics: Map<
+    string,
+    { version: number; items: unknown[]; bytes: number; truncated: boolean }
+  >;
   queue: Promise<void>;
 }
 
@@ -69,6 +72,7 @@ interface Session {
 // queried over a long session.
 const MAX_CACHED_DOCUMENTS = 40;
 const MAX_CACHED_DOCUMENT_BYTES = 8 * 1024 * 1024;
+const MAX_CACHED_DIAGNOSTIC_BYTES = 2 * 1024 * 1024;
 
 // Evict least-recently-used documents until both the count and byte budgets are
 // met. The Map's insertion order is the recency order (refreshed on access), so
@@ -79,7 +83,7 @@ const MAX_CACHED_DOCUMENT_BYTES = 8 * 1024 * 1024;
 function evictDocuments(session: Session, protectUri: string): void {
   let totalBytes = 0;
   for (const doc of session.documents.values()) {
-    totalBytes += doc.text.length;
+    totalBytes += Buffer.byteLength(doc.text);
   }
   while (
     session.documents.size > MAX_CACHED_DOCUMENTS ||
@@ -90,7 +94,7 @@ function evictDocuments(session: Session, protectUri: string): void {
     for (const [uri, doc] of session.documents) {
       if (uri !== protectUri) {
         evicted = uri;
-        evictedBytes = doc.text.length;
+        evictedBytes = Buffer.byteLength(doc.text);
         break;
       }
     }
@@ -189,9 +193,33 @@ export class LspTool implements Tool {
           ) {
             return;
           }
+          const items: unknown[] = [];
+          let bytes = 0;
+          for (const item of params.diagnostics) {
+            const size = Buffer.byteLength(JSON.stringify(item));
+            if (bytes + size > MAX_CACHED_DIAGNOSTIC_BYTES) {
+              break;
+            }
+            items.push(item);
+            bytes += size;
+          }
+          session.diagnostics.delete(params.uri);
+          let totalBytes = bytes;
+          for (const cached of session.diagnostics.values()) {
+            totalBytes += cached.bytes;
+          }
+          for (const [uri, cached] of session.diagnostics) {
+            if (totalBytes <= MAX_CACHED_DIAGNOSTIC_BYTES) {
+              break;
+            }
+            session.diagnostics.delete(uri);
+            totalBytes -= cached.bytes;
+          }
           session.diagnostics.set(params.uri, {
             version: document.version,
-            items: params.diagnostics,
+            items,
+            bytes,
+            truncated: items.length !== params.diagnostics.length,
           });
         });
         try {
@@ -225,8 +253,8 @@ export class LspTool implements Tool {
       throw new Error("LSP server exited; retry to start a fresh server");
     }
     const info = await stat(filePath);
-    if (!info.isFile() || info.size > 10 * 1024 * 1024) {
-      throw new Error("LSP requires a regular file no larger than 10MB");
+    if (!info.isFile() || info.size > MAX_CACHED_DOCUMENT_BYTES) {
+      throw new Error("LSP requires a regular file no larger than 8MB");
     }
     const text = await readFile(filePath, { encoding: "utf8", signal });
     const uri = pathToFileURL(filePath).href;
@@ -296,7 +324,11 @@ export class LspTool implements Tool {
       }
       const current = session.diagnostics.get(uri);
       if (current) {
-        return { items: current.items, pending: false };
+        return {
+          items: current.items,
+          pending: false,
+          truncated: current.truncated,
+        };
       }
       return new Promise((resolvePromise, reject) => {
         const finish = (error?: Error) => {
@@ -310,6 +342,7 @@ export class LspTool implements Tool {
             resolvePromise({
               items: diagnostics?.items ?? [],
               pending: !diagnostics,
+              truncated: diagnostics?.truncated ?? false,
             });
           }
         };

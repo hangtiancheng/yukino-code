@@ -40,6 +40,7 @@ import { appendFileSync } from "node:fs";
  * @property {number} [delay]
  * @property {boolean} [pull]
  * @property {boolean} [silent]
+ * @property {boolean} [largeDiagnostics]
  */
 
 /**
@@ -174,7 +175,9 @@ function receive(message) {
           version: document.version,
           diagnostics: [
             {
-              message: "current diagnostic🙂",
+              message: options.largeDiagnostics
+                ? "large diagnostic ".repeat(150_000)
+                : "current diagnostic🙂",
               severity: 2,
               range: {
                 start: { line: 0, character: 0 },

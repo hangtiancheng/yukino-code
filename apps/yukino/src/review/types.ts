@@ -35,6 +35,7 @@ export interface FileDiff {
   /** New-side file content, used as the fallback line-resolution source. */
   newFileContent?: string;
   isBinary: boolean;
+  tooLarge?: boolean;
   isDeleted: boolean;
   isNew: boolean;
   isRenamed: boolean;

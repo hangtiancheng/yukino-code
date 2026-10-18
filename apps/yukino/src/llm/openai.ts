@@ -1132,7 +1132,7 @@ export class OpenAICompatClient implements LLMClient {
       } else if (
         finishReason === "tool_calls" ||
         finishReason === "function_call" ||
-        toolCalls.size > 0
+        (finishReason === "stop" && toolCalls.size > 0)
       ) {
         stopReason = "tool_use";
       } else if (finishReason === "stop") {

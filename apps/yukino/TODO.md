@@ -1,8 +1,8 @@
 # Yukino 缺陷修复计划
 
-> 本周期仅制作计划，**不实施源码修复**。所有修复项均未开始，复核完成不代表修复完成。
+> 原始计划基线为 `9f13953`。`e7409d2` 实施并勾选了非安全项；本轮复核发现的遗漏、回归及补充修复见第 11 节。SEC-01～16 与 WORK-01 继续保持未完成。
 
-## 1. 基线与裁定规则
+## 1. 原始计划的基线与裁定规则
 
 - 核验日期：2026-10-18；源码基线：当前工作区 `9f13953`。这里的“最新”指本地当前源码，未拉取或假设远端有更新。
 - 输入：[claude](defects-reported-by-claude.md)、[codex](defects-reported-by-codex.md)、[pi](defects-reported-by-pi.md)、[yukino](defects-reported-by-yukino.md) 四份完整报告，包括追加轮次。
@@ -16,7 +16,7 @@
 - **P1**：可稳定触发的权限扩大、数据泄漏/损坏、会话串扰、关键交互悬挂、审查结果失真、核心功能组合失效。
 - **P2**：影响较小、条件受限的正确性/资源/交互/诊断问题；不因修复行数少而升级。
 
-### 本周期实际验证
+### 原始计划阶段的实际验证
 
 - 当前 `permissions`、`feedback-redact`、`memory`、`follow-up-queue`、`lsp` 五份现有测试：**5 个文件、124 个测试通过**。这是基线检查，不能证明报告中的缺口不存在。
 - 对当前函数执行合成数据探针：Bearer 和 Basic 认证头均出现“只删认证类型、保留凭据”；`isSensitiveKey("db.password")` 为 false；`intArg(-0.5)` 为 -1，而字符串 `"-0.5"` 为 0。
@@ -57,7 +57,7 @@
 | claude C27：rename 链必然覆盖 diffByPath                                 | **未确证，不列真实缺陷**                     | Map 双键覆盖机制存在，但报告没有给出当前 collectDiffs 的真实 Git 输出；本周期上述夹具未复现。若能给出合法变更集，需区分 old/new 命名空间后再立项。                                                                          |
 | claude C39.3：connect 后设置 onclose 存在可利用微任务窗口                | **未确证，不列真实缺陷**                     | `await client.connect` 后的赋值很近，报告没有证明具体 SDK/event-loop 时序可漏回调。正常连接期间断连会拒绝初始化，不先按假设改 lifecycle。                                                                                   |
 
-## 3. 实施顺序与完成门槛（供后续周期）
+## 3. 实施顺序与完成门槛
 
 合并后共有 **77 项修复 TODO：P0 3 项、P1 33 项、P2 41 项**；设计意图与未确证结论不计入这些修复项。
 
@@ -67,7 +67,7 @@
 4. 依赖：SEC-03 先统一路径规则，再接 WORK-01 / SEC-10 / SEC-11；LIFE-01 的交互排队与 LIFE-05 的远程 pending 生命周期使用同一“每个请求独立完成”不变量；LIFE-12 配合 LIFE-13，单实例 coalescing 不能替代跨实例写盘防护；REV-01/02 先保证输入安全，REV-03 再保证报告完整性。
 5. 每项只在**针对实际故障的回归用例通过、所有生产入口接线完成、README/过期注释同步**后勾选。多宿主问题至少核对 TUI、print、Remote、ACP、A2A 与派生代理适用路径。
 6. 遵循 ZERO backward compatibility：直接采用正确契约，不增加旧 schema/旧权限行为回退或版本 shim。落盘安全策略的正常 chmod/fchmod 是权限执行，不是旧格式迁移。
-7. 后续源码实施使用 `pnpm lint:fix` 修 ESLint error，忽略 warning；每批最终执行 `pnpm happy:fix`。本周期仅改 Markdown，不运行会全目录格式化/修写源码的 happy:fix，文档单独检查格式与引用。
+7. 后续源码实施使用 `pnpm lint:fix` 修 ESLint error，忽略 warning；每批最终执行 `pnpm happy:fix`。原计划阶段仅改 Markdown，未运行会全目录格式化/修写源码的 happy:fix；后续源码实施仍须执行上述完整管线。
 
 ## 4. 安全与隐私修复 TODO
 
@@ -634,10 +634,37 @@
 - A2A 当前 SDK 的终态契约不靠旧版 final 字段；不因报告提及旧接口加入版本兼容。MCP announcement 以 conversation history 自愈，不能仅凭 Set 未手动清理推断错乱。
 - update 固定 registry、受支持全局包管理器检查、SSRF 地址钉扎、原子写/锁等已验证正确路径保留；修复只针对上面列明的缺口。
 
-## 10. 本周期交付检查
+## 10. 原始计划交付检查（历史记录）
 
 - [x] 四份报告的全部缺陷编号已有追踪与明确裁定，重复项已合并。
 - [x] 真实缺陷各有分类、P0/P1/P2、当前源码依据、修复方向和可执行验收条件。
 - [x] 设计意图、已反证与未确证条目不进入修复实施队列；混合结论已拆分。
-- [x] 仅制作计划，未开展源码实施；所有修复项保持未勾选。
+- [x] 原计划阶段仅制作计划；后续源码实施与复核已按实际结果更新上方修复项。
 - [x] 后续实施按实际验证结果逐项更新，不能将本计划的静态推断写成已完成修复或已通过新回归测试。
+
+## 11. 对 `e7409d2` 的复核与补充修复
+
+复核结论：原提交不能视为全部非安全项均已健壮修复。以下遗漏和回归已补充修正，原安全项未纳入本轮实现。表内测试使用临时文件、假模型或本地协议夹具。
+
+| 关联条目          | 复核发现与本轮修正                                                                                                                                                                                        | 回归验证                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| LIFE-01           | 队列切换只改 questions，React 仍复用上一请求的 reducer；新增请求身份、按身份重挂载与单次结算。提问透传调用者取消信号，已取消调用不能重新打开 modal。                                                      | `ui-selectors.test.ts`、`remote-parity.test.ts`                             |
+| LIFE-03 / LIFE-10 | TUI 取消回滚也会重置读取缓存，失败回滚/恢复会先清空有效队列。现在预先完成可能失败的读取与 touch，取消不改基线，恢复成功后才清理派生态，并把回滚异常转为可见诊断。                                         | `ui-app-steering.test.ts`                                                   |
+| LIFE-05           | 浏览器重放会重复插入同 ID 请求；取消没有向其他客户端广播关闭；成功授权还会被 request_expired 改成 deny。现在去重、广播结算并保留真实授权结果。                                                            | `browser-chat-state.test.ts`、`remote-parity.test.ts`                       |
+| LIFE-06           | 任意 WS 辅助请求失败都会释放另一个仍在运行的 streaming 槽，允许并发修改同一会话。现在仅运行拥有者释放槽，辅助错误只通知请求客户端。                                                                       | `remote-parity.test.ts`                                                     |
+| LIFE-08           | stopAll 失败后仍然 clear/轮换会话，旧 teammate 可跨会话继续运行。现在停止失败则保留原会话并报告失败。                                                                                                     | `remote-parity.test.ts`                                                     |
+| LIFE-09           | Remote 通知轮未重置计划完成状态，cancel 未取消计时器；审批没有请求身份。现在统一清理 pending/timer，审批与关闭事件携带 ID，旧回复无法结算新审批。                                                         | `remote-parity.test.ts`、`browser-chat-state.test.ts`                       |
+| LIFE-12           | Remote 仍重复提取最后 40 条全文，完成回调可能把旧游标写入新会话；按长度的游标在 compact 后失效。新增共同宿主管线，按消息身份消费增量，合并待办并绑定会话/模型生命周期。                                   | `memory-background.test.ts`、`remote-parity.test.ts`                        |
+| LIFE-15           | Remote/ACP/A2A 未接入记忆任务 dispose，TUI 会话切换也未销毁旧任务；Agent 将取消转为正常结束事件后，文本回退仍写盘、consolidation 仍标记成功。现在宿主停止并等待任务，持久化前验证取消，销毁后禁止旧通知。 | `memory-background.test.ts`、`a2a-runtime.test.ts`、`remote-parity.test.ts` |
+| LIFE-18           | 毫秒 timestamp 并不唯一，同一毫秒的快照会定位到第一项；会话间也无身份保证。快照改为持久化 UUID，前后端和 TUI key 使用同一身份。                                                                           | `remote-parity.test.ts`、`file-history-rewind.test.ts`                      |
+| REV-01            | 多行 symlink target 只给第一行添加 diff 前缀，后续内容脱离 hunk。现在按完整链接文本生成多行 hunk，并保留 120000 模式。                                                                                    | `review-git-symlink.test.ts`                                                |
+| REV-02            | 超限文件的占位文本仍被正常分组并计入已审查范围。现在将超限作为结构化状态，经 selection 明确排除；非阻塞打开并再次核对类型以避免替换成 FIFO 后卡住。                                                       | `review-git-symlink.test.ts`                                                |
+| REV-04            | 非法绝对路径被静默改为相对路径；未限制评论属于实际 diff 集。现在拒绝绝对目标并按允许路径集合筛选，同时接受合法 rename 的 old/new 路径。                                                                   | `review.test.ts`                                                            |
+| LLM-02            | 有 tool delta 时，未知 finish_reason 仍被兜底改成 tool_use。现在只允许明确的完成原因产生可执行工具轮。                                                                                                    | `llm-stream-boundaries.test.ts`                                             |
+| TOOL-05           | WS 启动超时先移除 error listener 再 terminate，产生无人处理的 error 事件。消息、错误和关闭监听现在在握手前注册并持续到关闭。                                                                              | `vscode-ws-transport.test.ts`                                               |
+| TOOL-12           | worker 在达到 500 条结果后仍继续扫描，后续慢正则会使已有结果全部变成超时错误；大量换行还会先在主线程生成并克隆庞大数组。现在 worker 按行扫描字符串并在结果上限停止。                                      | `search-tools.test.ts`                                                      |
+| RES-01            | 文档预算用 UTF-16 length 冒充字节，单个保护文档可超过预算，诊断正文也无字节上限。现在按 UTF-8 字节限制文档与诊断，超限诊断显式标记 truncated。                                                            | `lsp.test.ts`                                                               |
+| RES-02            | 第 257 个 context 会删除旧 context→session 映射，恢复时静默开始新会话。逐出元数据前原子保存映射，恢复时读取，transcript 已过期则明确拒绝继续；初始化中/活动请求不逐出，无可用槽时明确拒绝新 context。     | `a2a-executor.test.ts`                                                      |
+| RES-04            | 队列超限静默丢弃最早正文，单条超限消息甚至被丢弃后仍返回 queued；预算还误用字符串长度。现在按 UTF-8 字节拒绝新入队、保留已接受 FIFO，发送失败保留输入并提示重试，离线回答不提前关闭请求。                 | `offline-queue.test.ts`、`browser-chat-state.test.ts`                       |
+
+最终验证：执行 `pnpm happy:fix`（typecheck、format、lint:fix、build、完整测试）。实际结果见本轮复核交付说明；原计划的 124 项基线测试不能代表本轮验证。

@@ -22,7 +22,7 @@ interface InputAreaProps {
   fileMatches: FileCompleteResponsePayload | null;
   /** Settled image uploads (path inserted as an @-ref, or an error hint). */
   imageResults: ImageResultPayload[];
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean;
   onCancel: () => void;
   onRequestFileCompletions: (requestId: string, query: string) => void;
   onUploadImage: (clientId: string, name: string, dataBase64: string) => void;
@@ -264,7 +264,12 @@ export function InputArea({
     if (!text) {
       return;
     }
-    onSend(text);
+    if (!onSend(text)) {
+      flashHint(
+        "Offline message queue is full. Your text is kept; retry after reconnecting.",
+      );
+      return;
+    }
     setValue("");
     setSlashOpen(false);
     setAtDismissed(false);

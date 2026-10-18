@@ -237,6 +237,7 @@ export class MemoryExtractor {
         streamedText += event.text;
       }
     }
+    abortSignal.throwIfAborted();
 
     // Fast path: LLM wrote memory files directly using WriteFile/EditFile tools
     const writtenPaths = extractWrittenPaths(forkedConv.getMessages());

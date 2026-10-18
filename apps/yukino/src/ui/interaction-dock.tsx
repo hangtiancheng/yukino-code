@@ -26,7 +26,7 @@ interface Props {
   rewind?: ComponentProps<typeof RewindDialog>;
   resume?: ComponentProps<typeof SessionSelector>;
   permission?: ComponentProps<typeof PermissionDialog>;
-  askUser?: ComponentProps<typeof AskUserDialog>;
+  askUser?: ComponentProps<typeof AskUserDialog> & { requestId: number };
   feedback?: ComponentProps<typeof FeedbackDialog>;
   issueApproval?: ComponentProps<typeof IssueApprovalDialog>;
   agents?: ComponentProps<typeof AgentsDialog>;
@@ -75,7 +75,7 @@ export function InteractionDock({
     return <PermissionDialog key={permission.requestId} {...permission} />;
   }
   if (askUser) {
-    return <AskUserDialog {...askUser} />;
+    return <AskUserDialog key={askUser.requestId} {...askUser} />;
   }
   if (feedback) {
     return <FeedbackDialog {...feedback} />;

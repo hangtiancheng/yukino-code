@@ -18,6 +18,7 @@ import * as providerLogin from "@/config/provider-login.js";
 import * as historyMod from "@/history/index.js";
 import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
 import { loadSession } from "@/session/index.js";
+import type { Asker } from "@/tools/ask-user.js";
 import { contentToText } from "@/utils/index.js";
 
 interface Broadcast {
@@ -105,6 +106,207 @@ async function setup(cwd: string): Promise<{
 }
 
 describe("remote terminal-UI parity", () => {
+  it("rejects a stale plan approval without consuming the current request", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-plan-identity-"));
+    const { server, handle, broadcasts } = await setup(cwd);
+    try {
+      invokePrivate(server, "broadcastPlanApprovalRequest");
+      const oldId: unknown = Reflect.get(server, "planApprovalId");
+      invokePrivate(server, "broadcastPlanApprovalRequest");
+      const currentId: unknown = Reflect.get(server, "planApprovalId");
+      const timer: unknown = Reflect.get(server, "planApprovalTimer");
+      await invokePrivateAsync(server, "handlePlanApprovalResponse", [
+        oldId,
+        "yolo",
+      ]);
+      expect(Reflect.get(server, "planApprovalId")).toBe(currentId);
+      expect(Reflect.get(server, "planApprovalTimer")).toBe(timer);
+      expect(handle.permissionMode).toBe("default");
+      expect(systemText(broadcasts)).not.toContain("Plan approved");
+    } finally {
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("initializes notification runs without the preceding plan completion state", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-notification-plan-"));
+    const { server } = await setup(cwd);
+    Reflect.set(server, "exitPlanSucceeded", true);
+    Reflect.set(server, "streamAgentRun", () => {
+      expect(Reflect.get(server, "exitPlanSucceeded")).toBe(false);
+      return Promise.resolve();
+    });
+    try {
+      await invokePrivateAsync(server, "runNotificationTurn");
+    } finally {
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+  it("settles only the question belonging to an aborted caller", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-ask-abort-"));
+    const { server, broadcasts } = await setup(cwd);
+    const callback = invokePrivate(server, "createAskUserCallback");
+    if (typeof callback !== "function") {
+      throw new Error("Missing question callback");
+    }
+    const ask: Asker = (questions, signal) => {
+      const answer: unknown = Reflect.apply(callback, server, [
+        questions,
+        signal,
+      ]);
+      if (!(answer instanceof Promise)) {
+        throw new Error("Expected question promise");
+      }
+      return answer.then((value: unknown) =>
+        z.record(z.string(), z.string()).parse(value),
+      );
+    };
+    const controller = new AbortController();
+    try {
+      const answer = ask([], controller.signal);
+      const second = ask([]);
+      controller.abort();
+      await expect(answer).resolves.toEqual({});
+      expect(Reflect.get(server, "pendingAsks")).toHaveProperty("size", 1);
+      expect(
+        broadcasts.filter((message) => message.type === "request_expired"),
+      ).toHaveLength(1);
+      invokePrivate(server, "cancelActiveRun");
+      await expect(second).resolves.toEqual({});
+    } finally {
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+  it("keeps an active run's slot when an unrelated WS request fails", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-slot-"));
+    const { server, broadcasts } = await setup(cwd);
+    Reflect.set(server, "streaming", true);
+    const replies: Broadcast[] = [];
+    Reflect.set(server, "send", (_ws: unknown, message: Broadcast) =>
+      replies.push(message),
+    );
+    Reflect.set(server, "sendFileCompletions", () => {
+      throw new Error("scan failed");
+    });
+    try {
+      await invokePrivateAsync(server, "handleWsMessage", [
+        {},
+        {
+          type: "file_complete_request",
+          data: { requestId: "completion-1", query: "x" },
+        },
+      ]);
+      expect(Reflect.get(server, "streaming")).toBe(true);
+      expect(systemText(replies)).toContain("scan failed");
+      expect(
+        broadcasts.some((message) => message.type === "command_done"),
+      ).toBe(false);
+    } finally {
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("cancels the plan timer and broadcasts settlement for every waiting request", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-cancel-"));
+    const { server, broadcasts } = await setup(cwd);
+    vi.useFakeTimers();
+    const permission = vi.fn();
+    const ask = vi.fn();
+    Reflect.set(
+      server,
+      "pendingPermissions",
+      new Map([["permission-1", permission]]),
+    );
+    Reflect.set(server, "pendingAsks", new Map([["ask-1", ask]]));
+    try {
+      invokePrivate(server, "broadcastPlanApprovalRequest");
+      invokePrivate(server, "cancelActiveRun");
+      expect(Reflect.get(server, "planApprovalTimer")).toBeNull();
+      await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+      expect(systemText(broadcasts)).not.toContain("Plan approval expired");
+      expect(permission).toHaveBeenCalledExactlyOnceWith("deny");
+      expect(ask).toHaveBeenCalledExactlyOnceWith({});
+      expect(
+        broadcasts.filter((message) => message.type === "request_expired"),
+      ).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves the session if teammates cannot stop during clear", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-clear-failure-"));
+    const { server, handle, broadcasts } = await setup(cwd);
+    const oldSession = handle.sessionId;
+    handle.conv.addUserMessage("keep this history");
+    const stop = vi
+      .spyOn(handle.teamManager, "stopAll")
+      .mockRejectedValue(new Error("cannot stop"));
+    try {
+      await invokePrivateAsync(server, "handleUserMessage", ["/clear"]);
+      expect(handle.sessionId).toBe(oldSession);
+      expect(
+        contentToText(handle.conv.getMessages().at(-1)?.content ?? ""),
+      ).toContain("keep this history");
+      expect(broadcasts.some((message) => message.type === "clear")).toBe(
+        false,
+      );
+    } finally {
+      stop.mockRestore();
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("waits for owned memory tasks before clear and server disposal", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-memory-stop-"));
+    const { server, handle } = await setup(cwd);
+    let release: () => void = () => undefined;
+    const dispose = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    Reflect.set(handle, "memoryTasks", { dispose });
+    const oldSession = handle.sessionId;
+    const clearing = handle.clearConversation();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(handle.sessionId).toBe(oldSession);
+    release();
+    await clearing;
+    expect(handle.sessionId).not.toBe(oldSession);
+    const stopped = vi.fn(() => Promise.resolve());
+    Reflect.set(handle, "memoryTasks", { dispose: stopped });
+    await server.stop();
+    expect(stopped).toHaveBeenCalledOnce();
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it("uses unique snapshot identities even within one millisecond", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-snapshot-"));
+    const { server, handle } = await setup(cwd);
+    vi.useFakeTimers();
+    try {
+      handle.fileHistory.makeSnapshot(1, "first");
+      handle.fileHistory.makeSnapshot(2, "second");
+      const [first, second] = handle.fileHistory.getSnapshots();
+      expect(first.timestamp).toBe(second.timestamp);
+      expect(first.id).not.toBe(second.id);
+      invokePrivate(server, "handleRewindAction", [second.id, "code_only"]);
+      expect(handle.fileHistory.getSnapshots()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
   it("runs ! commands through the Bash tool and records them", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-bash-"));
     const { server, handle, broadcasts } = await setup(cwd);
@@ -265,7 +467,7 @@ describe("remote terminal-UI parity", () => {
       handle.fileHistory.makeSnapshot(1, "drop me");
 
       // Rewind resolves by stable snapshot id (timestamp), not array index.
-      const snapshotId = handle.fileHistory.getSnapshots()[0].timestamp;
+      const snapshotId = handle.fileHistory.getSnapshots()[0].id;
       invokePrivate(server, "handleRewindAction", [
         snapshotId,
         "conversation_only",

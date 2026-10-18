@@ -118,17 +118,7 @@ async function createRuntime(
     abort: () => {
       runtime.abort();
     },
-    dispose: async () => {
-      runtime.abort();
-      await Promise.allSettled([
-        runtime.backgroundTaskManager.stopAll(),
-        runtime.teamManager.dispose(),
-      ]);
-      await Promise.allSettled([
-        runtime.mcpManager?.disconnectAll() ?? Promise.resolve(),
-        runtime.registry.dispose(),
-      ]);
-    },
+    dispose: () => runtime.dispose(),
   };
 }
 

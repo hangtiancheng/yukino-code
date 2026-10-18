@@ -49,6 +49,26 @@ export class WebSocketTransport implements Transport {
     });
     this.ws = ws;
 
+    ws.on("message", (data: WebSocket.RawData) => {
+      try {
+        const text = Buffer.isBuffer(data)
+          ? data.toString("utf-8")
+          : Array.isArray(data)
+            ? Buffer.concat(data).toString("utf-8")
+            : Buffer.from(data).toString("utf-8");
+        const raw: unknown = JSON.parse(text);
+        this.onmessage?.(JSONRPCMessageSchema.parse(raw));
+      } catch (err) {
+        this.onerror?.(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+    ws.on("error", (err) => {
+      this.onerror?.(err instanceof Error ? err : new Error(String(err)));
+    });
+    ws.on("close", () => {
+      this.emitClose();
+    });
+
     await new Promise<void>((resolvePromise, rejectPromise) => {
       let settled = false;
       const state: { timer?: NodeJS.Timeout } = {};
@@ -97,26 +117,6 @@ export class WebSocketTransport implements Transport {
           );
         });
       }, START_TIMEOUT_MS);
-    });
-
-    ws.on("message", (data: WebSocket.RawData) => {
-      try {
-        const text = Buffer.isBuffer(data)
-          ? data.toString("utf-8")
-          : Array.isArray(data)
-            ? Buffer.concat(data).toString("utf-8")
-            : Buffer.from(data).toString("utf-8");
-        const raw: unknown = JSON.parse(text);
-        this.onmessage?.(JSONRPCMessageSchema.parse(raw));
-      } catch (err) {
-        this.onerror?.(err instanceof Error ? err : new Error(String(err)));
-      }
-    });
-    ws.on("error", (err) => {
-      this.onerror?.(err instanceof Error ? err : new Error(String(err)));
-    });
-    ws.on("close", () => {
-      this.emitClose();
     });
   }
 

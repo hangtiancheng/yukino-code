@@ -77,8 +77,7 @@ import {
 import { MCPManager } from "@/mcp/manager.js";
 import { decideAndApply } from "@/mcp/strategy.js";
 import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
-import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
+import { BackgroundMemoryTasks } from "@/memory/background.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { MemoryManager } from "@/memory/manager.js";
 import {
@@ -209,6 +208,7 @@ const AskUserResponseSchema = z.object({
 });
 
 const PlanApprovalResponseSchema = z.object({
+  id: z.string(),
   choice: z.enum(["yolo", "manual", "feedback"]),
   feedback: z.string().optional(),
 });
@@ -252,8 +252,7 @@ const ProviderSaveSchema = z.object({
 });
 
 const RewindActionSchema = z.object({
-  // Stable snapshot identity (its timestamp), not the array index the client
-  // saw — the index shifts when FileHistory trims its head.
+  // Snapshot UUIDs remain unique across session changes and head trimming.
   snapshotId: z.string(),
   action: z.enum(["code_and_conversation", "conversation_only", "code_only"]),
 });
@@ -382,7 +381,9 @@ export interface RemoteAgentHandle {
    * session-scoped state (session id, file history, task board, recovery
    * state, MCP announcements) rotates with it.
    */
-  clearConversation(): void;
+  clearConversation(): Promise<void>;
+  stopMemoryTasks(): Promise<void>;
+  dispose(): Promise<void>;
 }
 
 function composeAgentToolFilter(
@@ -448,14 +449,9 @@ class AgentHandleImpl implements RemoteAgentHandle {
   // (compaction, session restore).
   mcpAnnounced = new Set<string>();
 
-  // One consolidator per handle: a fresh instance per loop would reset the
-  // lastScanAt throttle, hammering the lock on every loop_complete.
-  private memoryConsolidator: MemoryConsolidator | null = null;
-  // One extractor per session/model generation, reused across loops so its
-  // built-in coalescing (at most one running + one merged pending) applies, and
-  // a cursor stops the same tail being re-extracted on every loop_complete.
-  private memoryExtractor: MemoryExtractor | null = null;
-  private memoryCursor = 0;
+  private memoryTasks: BackgroundMemoryTasks | null = null;
+  private memoryCleanup: Promise<void> = Promise.resolve();
+  private disposed = false;
 
   private abortController: AbortController | null = null;
   /** Agent receiving steering during the active run. */
@@ -471,6 +467,8 @@ class AgentHandleImpl implements RemoteAgentHandle {
       | "steer"
       | "takeSteeringLeftovers"
       | "clearConversation"
+      | "stopMemoryTasks"
+      | "dispose"
       | "permissionMode"
       | "checker"
       | "goalManager"
@@ -513,6 +511,9 @@ class AgentHandleImpl implements RemoteAgentHandle {
     text: string | Record<string, unknown>[] | null,
     callbacks: RunCallbacks,
   ): AsyncGenerator<AgentEvent> {
+    if (this.disposed) {
+      throw new Error("Agent runtime is disposed");
+    }
     if (typeof text === "string") {
       const command = parseCommand(text);
       if (command?.name === "goal") {
@@ -590,45 +591,19 @@ class AgentHandleImpl implements RemoteAgentHandle {
         ],
         onPermissionRequest: callbacks.onPermissionRequest,
         onLoopComplete: (conv) => {
-          // enable_memory: false disables the whole background memory pipeline
-          if (!this.memoryEnabled) {
+          if (!this.memoryEnabled || this.disposed) {
             return;
           }
-          // Best-effort memory extraction (fire-and-forget). Reuse one extractor
-          // and only summarize messages past the cursor, so concurrent loops
-          // coalesce instead of each spawning a fresh full extraction.
-          if (conv.len() - this.memoryCursor >= 2) {
-            const cursor = conv.len();
-            const summary = conv
-              .getMessages()
-              .slice(-40)
-              .map((m) => `[${m.role}]: ${contentToText(m.content)}`)
-              .filter((s) => s.length > 12)
-              .join("\n");
-            this.memoryExtractor ??= new MemoryExtractor(this.client, this.cwd);
-            this.memoryExtractor
-              .extract(summary)
-              .then(() => {
-                this.memoryCursor = cursor;
-              })
-              .catch(() => {
-                /* non-fatal */
-              });
-          }
-
-          // Background memory consolidation (fire-and-forget)
-          this.memoryConsolidator ??= new MemoryConsolidator(
+          this.memoryTasks ??= new BackgroundMemoryTasks(
             this.client,
             this.cwd,
             {
-              appendSystem: (msg) => {
-                this.conv.addSystemReminder(msg);
+              appendSystem: (message) => {
+                this.conv.addSystemReminder(message);
               },
             },
           );
-          this.memoryConsolidator.maybeRun().catch(() => {
-            /* non-fatal */
-          });
+          this.memoryTasks.run(conv);
         },
       });
 
@@ -661,7 +636,32 @@ class AgentHandleImpl implements RemoteAgentHandle {
     return this.steeringLeftovers.splice(0);
   }
 
-  clearConversation(): void {
+  async stopMemoryTasks(): Promise<void> {
+    const tasks = this.memoryTasks;
+    this.memoryTasks = null;
+    this.memoryCleanup = Promise.all([
+      this.memoryCleanup,
+      tasks?.dispose(),
+    ]).then(() => undefined);
+    await this.memoryCleanup;
+  }
+
+  async dispose(): Promise<void> {
+    this.disposed = true;
+    this.abort();
+    await Promise.allSettled([
+      this.stopMemoryTasks(),
+      this.backgroundTaskManager.stopAll(),
+      this.teamManager.dispose(),
+    ]);
+    await Promise.allSettled([
+      this.mcpManager?.disconnectAll(),
+      this.registry.dispose(),
+    ]);
+  }
+
+  async clearConversation(): Promise<void> {
+    await this.stopMemoryTasks();
     const sessionId = newSessionId();
     this.backgroundTaskManager.useSession(sessionId);
     // Reset in place: AgentTool holds this manager for its fork path, so
@@ -675,11 +675,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.taskList.useStore(new TaskStore(this.sessionId));
     this.recoveryState = new RecoveryState();
     this.mcpAnnounced.clear();
-    // New session generation: stop the old extractor and reset the cursor so a
-    // stale background task cannot write into the new session's memory state.
-    void this.memoryExtractor?.dispose();
-    this.memoryExtractor = null;
-    this.memoryCursor = 0;
   }
 }
 
@@ -1201,7 +1196,7 @@ export class RemoteServer {
   /** Set by cancelActiveRun so steering leftovers are dropped, not re-run. */
   private runCanceled = false;
   /** Whether a plan approval request is awaiting a client response. */
-  private planApprovalPending = false;
+  private planApprovalId: string | null = null;
   private planApprovalTimer: NodeJS.Timeout | null = null;
   private pendingPlanExecution: string | null = null;
 
@@ -1349,7 +1344,7 @@ export class RemoteServer {
           data: { providers: [], current: 0 },
         });
       }
-      if (this.planApprovalPending) {
+      if (this.planApprovalId) {
         this.sendPlanApprovalRequest(ws);
       }
       // Replay in-flight permission/ask requests so this client sees the same
@@ -1443,6 +1438,7 @@ export class RemoteServer {
           const parsed = PlanApprovalResponseSchema.safeParse(msg.data);
           if (parsed.success) {
             await this.handlePlanApprovalResponse(
+              parsed.data.id,
               parsed.data.choice,
               parsed.data.feedback,
             );
@@ -1477,7 +1473,11 @@ export class RemoteServer {
               resolver(parsed.data.response);
               this.broadcast({
                 type: "request_expired",
-                data: { id, kind: "permission" },
+                data: {
+                  id,
+                  kind: "permission",
+                  response: parsed.data.response,
+                },
               });
             }
           }
@@ -1607,17 +1607,13 @@ export class RemoteServer {
     } catch (err) {
       // A throwing handler must not become an unhandled rejection (or escalate
       // to process.exit). Log a safe diagnostic and return a controlled error so
-      // the client leaves its busy state and the server keeps serving the next
-      // message. Also release any streaming state a failed op left behind.
+      // the server keeps serving the next message. Run owners release their
+      // own streaming slot; an unrelated failing request cannot release it.
       log.error({ err, type: msg.type }, "remote WS message handling failed");
-      this.broadcast({
-        type: "error",
+      this.send(ws, {
+        type: "system",
         data: { message: `Request failed: ${asErrorString(err)}` },
       });
-      if (this.streaming) {
-        this.streaming = false;
-        this.broadcast({ type: "command_done", data: null });
-      }
     }
   }
 
@@ -1711,6 +1707,7 @@ export class RemoteServer {
     // same conversation concurrently.
     this.streaming = true;
     this.exitPlanSucceeded = false;
+    this.closePlanApproval();
     this.runCanceled = false;
     // totalTurns in loop_complete describes THIS run, not the process.
     this.turnCount = 0;
@@ -1843,6 +1840,8 @@ export class RemoteServer {
     }
     const handle = this.agentHandle;
     this.streaming = true;
+    this.exitPlanSucceeded = false;
+    this.closePlanApproval();
     this.runCanceled = false;
     this.turnCount = 0;
     const startTime = Date.now();
@@ -2396,10 +2395,14 @@ export class RemoteServer {
             });
           }
         }
+        if (stopResults.some((result) => result.status === "rejected")) {
+          this.broadcast({ type: "command_done", data: null });
+          break;
+        }
         // Reset in place (AgentTool captured the conversation manager) and
         // rotate the session so /resume and the JSONL no longer see the
         // pre-clear history.
-        this.agentHandle.clearConversation();
+        await this.agentHandle.clearConversation();
         this.agentHandle.toolFilter = null;
         this.subagentStates.clear();
         this.broadcastSubagents();
@@ -2685,6 +2688,7 @@ export class RemoteServer {
         updated,
         buildSystemPrompt(environment),
       );
+      await handle.stopMemoryTasks();
       handle.client = client;
       handle.provider = updated;
       handle.contextWindow = getContextWindow(updated);
@@ -2771,6 +2775,7 @@ export class RemoteServer {
         provider,
         buildSystemPrompt(environment),
       );
+      await handle.stopMemoryTasks();
       handle.client = client;
       handle.provider = provider;
       handle.contextWindow = getContextWindow(provider);
@@ -2849,7 +2854,7 @@ export class RemoteServer {
       data: {
         snapshots: fileHistory.getSnapshots().map((snap, index) => ({
           index,
-          id: snap.timestamp,
+          id: snap.id,
           userText: snap.userText,
           timestamp: snap.timestamp,
           fileCount: Object.keys(snap.backups).length,
@@ -2875,13 +2880,13 @@ export class RemoteServer {
       return;
     }
     const fileHistory = handle.fileHistory;
-    // Resolve by stable id (timestamp), not the index the client saw: another
+    // Resolve by snapshot UUID, not the index the client saw: another
     // client's runs can trim the head and shift indices between listing and
     // choosing. A missing id means the checkpoint was trimmed or the session
     // was reset — fail explicitly instead of rewinding to the wrong snapshot.
     const snapshots = fileHistory.getSnapshots();
     const snapshotIndex = snapshots.findIndex(
-      (candidate) => candidate.timestamp === snapshotId,
+      (candidate) => candidate.id === snapshotId,
     );
     if (snapshotIndex < 0) {
       this.broadcast({
@@ -2894,6 +2899,9 @@ export class RemoteServer {
       return;
     }
     const snap = snapshots[snapshotIndex];
+    if (action !== "code_only") {
+      void handle.stopMemoryTasks();
+    }
     const fileList = (changed: string[]): string =>
       changed.length > 0
         ? "\n" + changed.map((file) => "  " + file).join("\n")
@@ -3644,7 +3652,7 @@ export class RemoteServer {
     if (!handle) {
       return {
         type: "plan_approval_request",
-        data: { planPath: "", planContent: "" },
+        data: { id: this.planApprovalId, planPath: "", planContent: "" },
       };
     }
     const planPath = getOrCreatePlanPath(handle);
@@ -3658,7 +3666,7 @@ export class RemoteServer {
     }
     return {
       type: "plan_approval_request",
-      data: { planPath, planContent },
+      data: { id: this.planApprovalId, planPath, planContent },
     };
   }
 
@@ -3666,16 +3674,28 @@ export class RemoteServer {
     this.send(ws, this.planApprovalMessage());
   }
 
-  /** Sends the plan approval request with the current plan file content. */
-  private broadcastPlanApprovalRequest(): void {
-    this.planApprovalPending = true;
-    this.broadcast(this.planApprovalMessage());
+  private closePlanApproval(): void {
+    const id = this.planApprovalId;
+    this.planApprovalId = null;
     if (this.planApprovalTimer) {
       clearTimeout(this.planApprovalTimer);
-    }
-    this.planApprovalTimer = setTimeout(() => {
-      this.planApprovalPending = false;
       this.planApprovalTimer = null;
+    }
+    if (id) {
+      this.broadcast({ type: "plan_approval_closed", data: { id } });
+    }
+  }
+
+  private broadcastPlanApprovalRequest(): void {
+    this.closePlanApproval();
+    const id = nextRequestId("plan");
+    this.planApprovalId = id;
+    this.broadcast(this.planApprovalMessage());
+    this.planApprovalTimer = setTimeout(() => {
+      if (this.planApprovalId !== id) {
+        return;
+      }
+      this.closePlanApproval();
       this.broadcast({
         type: "system",
         data: {
@@ -3691,18 +3711,15 @@ export class RemoteServer {
    * "manual" restores the pre-plan mode, and "feedback" keeps planning.
    */
   private async handlePlanApprovalResponse(
+    id: string,
     choice: "yolo" | "manual" | "feedback",
     feedback?: string,
   ): Promise<void> {
     const handle = this.agentHandle;
-    if (!handle || !this.planApprovalPending) {
+    if (!handle || this.planApprovalId !== id) {
       return;
     }
-    this.planApprovalPending = false;
-    if (this.planApprovalTimer) {
-      clearTimeout(this.planApprovalTimer);
-      this.planApprovalTimer = null;
-    }
+    this.closePlanApproval();
 
     if (choice === "feedback") {
       const text = feedback?.trim() ?? "";
@@ -3980,6 +3997,7 @@ export class RemoteServer {
     }
 
     await handle.backgroundTaskManager.stopAll();
+    await handle.stopMemoryTasks();
     const replay = restoreRemoteSession(handle, targetId, saved);
     touchSession(cwd, targetId);
     this.subagentStates.clear();
@@ -4019,14 +4037,31 @@ export class RemoteServer {
 
   /** Creates the askUser callback closure for createRemoteAgent. */
   private createAskUserCallback(): Asker {
-    return async (questions: Question[]): Promise<Record<string, string>> => {
+    return async (
+      questions: Question[],
+      signal?: AbortSignal,
+    ): Promise<Record<string, string>> => {
+      if (signal?.aborted || this.stopping) {
+        return {};
+      }
       const id = nextRequestId("ask");
       const payload = { id, questions };
       this.pendingAskPayloads.set(id, payload);
       this.broadcast({ type: "ask_user", data: payload });
       return new Promise((resolve) => {
+        const cancel = () => {
+          const pending = this.pendingAsks.get(id);
+          if (this.pendingAsks.delete(id) && pending) {
+            pending({});
+            this.broadcast({
+              type: "request_expired",
+              data: { id, kind: "ask" },
+            });
+          }
+        };
         const timer = setTimeout(() => {
           if (this.pendingAsks.delete(id)) {
+            signal?.removeEventListener("abort", cancel);
             this.pendingAskPayloads.delete(id);
             this.broadcast({
               type: "system",
@@ -4044,9 +4079,14 @@ export class RemoteServer {
         timer.unref();
         this.pendingAsks.set(id, (answers) => {
           clearTimeout(timer);
+          signal?.removeEventListener("abort", cancel);
           this.pendingAskPayloads.delete(id);
           resolve(answers);
         });
+        signal?.addEventListener("abort", cancel, { once: true });
+        if (signal?.aborted) {
+          cancel();
+        }
       });
     };
   }
@@ -4239,6 +4279,7 @@ export class RemoteServer {
     this.followUps = [];
     this.pendingPlanExecution = null;
     this.cancelActiveRun();
+    const handleDisposal = this.agentHandle?.dispose();
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
@@ -4268,33 +4309,11 @@ export class RemoteServer {
       });
     });
     if (this.agentHandle) {
-      try {
-        await this.agentHandle.backgroundTaskManager.stopAll();
-      } catch {
-        // best-effort
-      }
-      try {
-        await this.agentHandle.teamManager.dispose();
-      } catch {
-        // best-effort
-      }
-      const mcp = this.agentHandle.mcpManager;
-      if (mcp) {
-        try {
-          await mcp.disconnectAll();
-        } catch {
-          // best-effort
-        }
-      }
+      await handleDisposal;
       try {
         await this.disposeSandbox();
-      } catch {
-        // best-effort
-      }
-      try {
-        await this.agentHandle.registry.dispose();
       } catch (error) {
-        log.error({ error }, "remote tool cleanup failed");
+        log.error({ error }, "remote sandbox cleanup failed");
       }
     }
     const resolveStopped = this.stoppedResolve;
@@ -4305,20 +4324,25 @@ export class RemoteServer {
   private cancelActiveRun(): void {
     this.runCanceled = true;
     this.steeringHistoryRecorded = [];
-    this.planApprovalPending = false;
+    this.closePlanApproval();
     this.agentHandle?.abort();
     this.compactController?.abort();
     this.reviewController?.abort();
     this.userBashController?.abort();
     this.forkController?.abort();
     // Aborting a provider cannot settle promises owned by the WebSocket UI.
-    for (const resolve of this.pendingPermissions.values()) {
+    for (const [id, resolve] of this.pendingPermissions) {
       resolve("deny");
+      this.broadcast({
+        type: "request_expired",
+        data: { id, kind: "permission" },
+      });
     }
     this.pendingPermissions.clear();
     this.pendingPermissionPayloads.clear();
-    for (const resolve of this.pendingAsks.values()) {
+    for (const [id, resolve] of this.pendingAsks) {
       resolve({});
+      this.broadcast({ type: "request_expired", data: { id, kind: "ask" } });
     }
     this.pendingAsks.clear();
     this.pendingAskPayloads.clear();

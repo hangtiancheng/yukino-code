@@ -534,6 +534,7 @@ async function runGroupAgent(
   registry.register(
     new CodeCommentTool({
       collector: deps.collector,
+      allowedPaths: new Set(deps.diffByPath.keys()),
       groupDiffs: g.diffs,
       groupLabel: g.label,
       resolve: async (comments) => {

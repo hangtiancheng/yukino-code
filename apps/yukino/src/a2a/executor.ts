@@ -1,4 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname } from "node:path";
 
 import { TaskState } from "@a2a-js/sdk";
 import type { Message } from "@a2a-js/sdk";
@@ -38,6 +47,8 @@ import {
   rebuildFromSession,
   saveMessage,
 } from "@/session/index.js";
+import { projectPath } from "@/storage/index.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
 
@@ -68,6 +79,12 @@ export async function createA2aRuntime(
   cwd: string,
   sessionId?: string,
 ): Promise<A2aRuntime> {
+  const saved = sessionId ? loadSession(cwd, sessionId) : [];
+  if (sessionId && saved.length === 0) {
+    throw new Error(
+      "A2A context transcript is no longer available. Start a new context.",
+    );
+  }
   const config = withProjectMcpServers(loadConfig(), cwd);
   const provider = resolveDefaultProvider(
     config.providers,
@@ -93,9 +110,7 @@ export async function createA2aRuntime(
     // Recreation after idle eviction: replay the persisted transcript.
     // createRemoteAgent already injected long-term memory/instructions at the
     // front of the conversation, so appending keeps that ordering intact.
-    runtime.conv.appendMessages(
-      rebuildFromSession(loadSession(cwd, sessionId)),
-    );
+    runtime.conv.appendMessages(rebuildFromSession(saved));
   }
   return {
     sessionId: runtime.sessionId,
@@ -104,17 +119,7 @@ export async function createA2aRuntime(
     abort: () => {
       runtime.abort();
     },
-    dispose: async () => {
-      runtime.abort();
-      await Promise.allSettled([
-        runtime.backgroundTaskManager.stopAll(),
-        runtime.teamManager.dispose(),
-      ]);
-      await Promise.allSettled([
-        runtime.mcpManager?.disconnectAll() ?? Promise.resolve(),
-        runtime.registry.dispose(),
-      ]);
-    },
+    dispose: () => runtime.dispose(),
   };
 }
 
@@ -125,7 +130,7 @@ export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
  * runtime but keeps its contextId→sessionId entry so the transcript can be
  * restored; without a cap a long-running server seeing many distinct contextIds
  * would grow that map until dispose(). Overflow drops the least-recently-used
- * fully-idle entries.
+ * fully-idle entries after persisting their context mapping.
  */
 const MAX_TRACKED_SESSIONS = 256;
 
@@ -170,6 +175,7 @@ interface A2aSession {
   sessionId?: string;
   /** Null before first use and after idle eviction; created lazily. */
   runtimePromise: Promise<A2aRuntime> | null;
+  initializing: boolean;
   run: ActiveRun | null;
   idleTimer: NodeJS.Timeout | null;
 }
@@ -268,7 +274,13 @@ export class YukinoA2aExecutor implements AgentExecutor {
       return;
     }
 
-    const session = existing ?? this.createSession(contextId);
+    let session: A2aSession;
+    try {
+      session = existing ?? this.createSession(contextId);
+    } catch (error) {
+      this.reject(null, eventBus, taskId, contextId, asErrorString(error));
+      return;
+    }
     if (existing) {
       // Refresh recency so overflow eviction drops the least-recently-used.
       this.sessions.delete(contextId);
@@ -382,10 +394,23 @@ export class YukinoA2aExecutor implements AgentExecutor {
 
   private createSession(contextId: string): A2aSession {
     this.evictOverflowSessions();
+    if (this.sessions.size >= MAX_TRACKED_SESSIONS) {
+      throw new Error(
+        "A2A session capacity reached; retry when an active context finishes.",
+      );
+    }
+    const mappingPath = this.contextMappingPath(contextId);
+    const sessionId = existsSync(mappingPath)
+      ? readFileSync(mappingPath, "utf8")
+      : undefined;
+    if (sessionId !== undefined && !/^[A-Za-z0-9_-]+$/u.test(sessionId)) {
+      throw new Error("Invalid persisted A2A context mapping.");
+    }
     const session: A2aSession = {
       contextId,
-      sessionId: undefined,
+      sessionId,
       runtimePromise: null,
+      initializing: false,
       run: null,
       idleTimer: null,
     };
@@ -393,12 +418,20 @@ export class YukinoA2aExecutor implements AgentExecutor {
     return session;
   }
 
+  private contextMappingPath(contextId: string): string {
+    return projectPath(
+      this.cwd,
+      "a2a-contexts",
+      createHash("sha256").update(contextId).digest("hex"),
+    );
+  }
+
   /**
    * Bounds the tracked-session map by dropping the least-recently-used
    * fully-idle sessions (Map iteration order is recency order, refreshed on
    * access). A session with an in-flight or permission-pending run is never
    * evicted. The dropped session's persisted transcript stays on disk; only the
-   * in-memory contextId→sessionId link is released.
+   * in-memory contextId→sessionId link is released after an atomic disk checkpoint.
    */
   private evictOverflowSessions(): void {
     if (this.sessions.size < MAX_TRACKED_SESSIONS) {
@@ -408,8 +441,22 @@ export class YukinoA2aExecutor implements AgentExecutor {
       if (this.sessions.size < MAX_TRACKED_SESSIONS) {
         break;
       }
-      if (session.run && !session.run.finished) {
+      if ((session.run && !session.run.finished) || session.initializing) {
         continue;
+      }
+      const sessionId = session.sessionId;
+      if (sessionId) {
+        const path = this.contextMappingPath(contextId);
+        mkdirSync(dirname(path), { recursive: true });
+        withFileSyncLock(path, () => {
+          const temporary = `${path}.${randomUUID()}.tmp`;
+          try {
+            writeFileSync(temporary, sessionId, { flag: "wx", mode: 0o600 });
+            renameSync(temporary, path);
+          } finally {
+            rmSync(temporary, { force: true });
+          }
+        });
       }
       this.disarmIdleTimer(session);
       const runtimePromise = session.runtimePromise;
@@ -429,6 +476,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
    * the transcript. On failure the slot is cleared so a later message retries.
    */
   private async ensureRuntime(session: A2aSession): Promise<A2aRuntime> {
+    session.initializing = true;
     session.runtimePromise ??= this.runtimeFactory(
       this.cwd,
       session.sessionId,
@@ -441,6 +489,8 @@ export class YukinoA2aExecutor implements AgentExecutor {
     } catch (error) {
       session.runtimePromise = null;
       throw error;
+    } finally {
+      session.initializing = false;
     }
   }
 

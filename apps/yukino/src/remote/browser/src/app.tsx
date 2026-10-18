@@ -67,12 +67,15 @@ export function App() {
 
   const handleSend = useCallback(
     (text: string) => {
-      appendHistory(text);
       const msg: ClientMessage = {
         type: "user_message",
         data: { content: text },
       };
-      send(msg);
+      if (send(msg) === "dropped") {
+        return false;
+      }
+      appendHistory(text);
+      return true;
     },
     [appendHistory, send],
   );
@@ -83,34 +86,43 @@ export function App() {
 
   const handleRespondPermission = useCallback(
     (id: string, response: PermissionResponse) => {
-      respondPermission(id, response);
       const msg: ClientMessage = {
         type: "permission_response",
         data: { id, response },
       };
-      send(msg);
+      if (send(msg) === "sent") {
+        respondPermission(id, response);
+      }
     },
     [respondPermission, send],
   );
 
   const handleAnswerAsk = useCallback(
     (id: string, answers: Record<string, string>) => {
-      markAskAnswered(id);
       const msg: ClientMessage = {
         type: "ask_user_response",
         data: { id, answers },
       };
-      send(msg);
+      if (send(msg) === "sent") {
+        markAskAnswered(id);
+      }
     },
     [markAskAnswered, send],
   );
 
   const handlePlanChoice = useCallback(
     (choice: PlanChoice, feedback?: string) => {
-      closePlanApproval();
-      send({ type: "plan_approval_response", data: { choice, feedback } });
+      if (
+        state.planApproval &&
+        send({
+          type: "plan_approval_response",
+          data: { id: state.planApproval.id, choice, feedback },
+        }) === "sent"
+      ) {
+        closePlanApproval();
+      }
     },
-    [closePlanApproval, send],
+    [closePlanApproval, state.planApproval, send],
   );
 
   const handlePickSession = useCallback(
@@ -311,6 +323,7 @@ export function App() {
       />
       {state.planApproval && (
         <PlanApprovalDialog
+          key={state.planApproval.id}
           request={state.planApproval}
           onChoose={handlePlanChoice}
         />

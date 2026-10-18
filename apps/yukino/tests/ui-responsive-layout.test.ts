@@ -460,6 +460,7 @@ describe("responsive terminal workspace", () => {
     mount(
       createElement(RewindDialog, {
         snapshots: Array.from({ length: 80 }, (_, index) => ({
+          id: String(index),
           timestamp: new Date(index * 1000).toISOString(),
           userText: `Checkpoint-${String(index)}`,
           backups: {},

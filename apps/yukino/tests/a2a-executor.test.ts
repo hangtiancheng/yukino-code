@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { A2aRuntime, A2aRuntimeFactory } from "@/a2a/executor.js";
 import { YukinoA2aExecutor } from "@/a2a/executor.js";
 import type { AgentEvent } from "@/agent/events.js";
+import { projectPath } from "@/storage/index.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 
 interface FakeRuntimeOptions {
@@ -146,6 +147,7 @@ describe("YukinoA2aExecutor", () => {
     while (cwds.length > 0) {
       const dir = cwds.pop();
       if (dir) {
+        rmSync(projectPath(dir), { recursive: true, force: true });
         rmSync(dir, { recursive: true, force: true });
       }
     }
@@ -203,6 +205,45 @@ describe("YukinoA2aExecutor", () => {
       output: "files",
     });
     await executor.dispose();
+  });
+
+  it("restores the same transcript mapping after metadata capacity eviction", async () => {
+    const cwd = makeCwd();
+    const requested: (string | undefined)[] = [];
+    let count = 0;
+    const executor = new YukinoA2aExecutor(
+      (_cwd, sessionId) => {
+        requested.push(sessionId);
+        return Promise.resolve({
+          ...fakeRuntime(cwd),
+          sessionId: sessionId ?? `session-${String(++count)}`,
+        });
+      },
+      cwd,
+      0,
+    );
+    try {
+      for (let index = 0; index < 257; index++) {
+        await executeTurn(
+          executor,
+          userMessage(textParts("hello")),
+          `task-${String(index)}`,
+          `context-${String(index)}`,
+        );
+      }
+      const result = await executeTurn(
+        executor,
+        userMessage(textParts("follow-up")),
+        "task-return",
+        "context-0",
+      );
+      expect(requested.at(-1)).toBe("session-1");
+      expect(statusStates(result.events).at(-1)).toBe(
+        TaskState.TASK_STATE_COMPLETED,
+      );
+    } finally {
+      await executor.dispose();
+    }
   });
 
   it("surfaces permission requests as input-required and resumes on response", async () => {

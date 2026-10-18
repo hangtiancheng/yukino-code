@@ -2,6 +2,8 @@ import type { ClientMessage, ServerMessage } from "@browser/types";
 import { isServerMessage } from "@browser/types";
 import { useCallback, useEffect, useRef } from "react";
 
+import { OfflineMessageQueue } from "./offline-queue";
+
 interface UseWebSocketOptions {
   onMessage: (message: ServerMessage) => void;
   onOpen: () => void;
@@ -22,8 +24,6 @@ const PING_INTERVAL_MS = 10_000;
 // request — so they are dropped offline. Image uploads are large and resolve via
 // a server reply; the caller reports the drop instead of silently queueing it.
 const QUEUEABLE_OFFLINE = new Set<ClientMessage["type"]>(["user_message"]);
-const MAX_PENDING_MESSAGES = 100;
-const MAX_PENDING_BYTES = 1_000_000;
 const RECONNECT_DELAY_MS = 3_000;
 const ACCESS_TOKEN_KEY = "yukino.remote.accessToken";
 
@@ -53,8 +53,7 @@ function readAccessToken(): string | null {
 export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   const { onMessage, onOpen, onClose } = opts;
   const wsRef = useRef<WebSocket | null>(null);
-  const pendingRef = useRef<{ json: string; bytes: number }[]>([]);
-  const pendingBytesRef = useRef(0);
+  const pendingRef = useRef(new OfflineMessageQueue());
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   if (accessTokenRef.current === null) {
@@ -156,10 +155,9 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
       ws.onopen = () => {
         onOpenRef.current();
-        for (const entry of pendingRef.current.splice(0)) {
-          ws.send(entry.json);
+        for (const json of pendingRef.current.drain()) {
+          ws.send(json);
         }
-        pendingBytesRef.current = 0;
         if (pingRef.current) {
           clearInterval(pingRef.current);
         }
@@ -248,21 +246,7 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
       return "dropped";
     }
     const json = JSON.stringify(message);
-    pendingRef.current.push({ json, bytes: json.length });
-    pendingBytesRef.current += json.length;
-    // Bound the offline queue by count and bytes, evicting oldest first so a
-    // long outage cannot grow it without limit.
-    while (
-      pendingRef.current.length > MAX_PENDING_MESSAGES ||
-      pendingBytesRef.current > MAX_PENDING_BYTES
-    ) {
-      const evicted = pendingRef.current.shift();
-      if (!evicted) {
-        break;
-      }
-      pendingBytesRef.current -= evicted.bytes;
-    }
-    return "queued";
+    return pendingRef.current.enqueue(json) ? "queued" : "dropped";
   }, []);
 
   return { send };

@@ -47,8 +47,7 @@ function normalizeSeverity(raw: unknown): CommentSeverity {
 /**
  * Normalize a model-supplied comment path and validate that it stays inside the
  * review target. Backslashes → slashes, collapse `.`/`..` and duplicate
- * separators, strip `./` and a leading `/` (an absolute spelling of a
- * repo-relative path). Returns:
+ * separators, strip `./`. Returns:
  *   - "" for an empty path (the caller applies the group's default file),
  *   - null when the path escapes the review root (a surviving `..` segment) or
  *     is drive-qualified — string normalization alone is not scope validation,
@@ -61,15 +60,12 @@ export function normalizeCommentPath(p: string): string | null {
   }
   let out = trimmed.replace(/\\/g, "/");
   // Reject Windows drive-qualified targets (C:/..., after backslash folding).
-  if (/^[A-Za-z]:/.test(out)) {
+  if (/^[A-Za-z]:/.test(out) || out.startsWith("/")) {
     return null;
   }
   out = posix.normalize(out);
   while (out.startsWith("./")) {
     out = out.slice(2);
-  }
-  while (out.startsWith("/")) {
-    out = out.slice(1);
   }
   // posix.normalize keeps leading ".."; a surviving one escapes the review root.
   if (out === ".." || out.startsWith("../")) {
@@ -206,6 +202,7 @@ export class CommentCollector {
 
 export interface CodeCommentToolDeps {
   collector: CommentCollector;
+  allowedPaths: ReadonlySet<string>;
   /** Diffs of the group this tool instance serves (default-path source). */
   groupDiffs: FileDiff[];
   /**
@@ -314,6 +311,17 @@ export class CodeCommentTool implements Tool {
     const parsed = parseComments(args, defaultPath);
     if (parsed.error) {
       return { output: `Error: ${parsed.error}`, isError: true };
+    }
+    const accepted = parsed.comments.filter((comment) =>
+      this.deps.allowedPaths.has(comment.path),
+    );
+    parsed.droppedEntries += parsed.comments.length - accepted.length;
+    parsed.comments = accepted;
+    if (accepted.length === 0) {
+      return {
+        output: "Error: comment paths must belong to the review diffs",
+        isError: true,
+      };
     }
     for (const cm of parsed.comments) {
       cm.groupLabel = this.deps.groupLabel;

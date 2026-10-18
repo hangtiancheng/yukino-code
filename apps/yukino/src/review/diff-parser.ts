@@ -270,7 +270,12 @@ export async function parseDiffText(
     }
     current.diffText = buf.join("\n").replace(/\n$/, "");
     current.hunks = parseHunks(current.diffText);
-    if (!current.isDeleted && !current.isBinary && current.newPath) {
+    if (
+      !current.isDeleted &&
+      !current.isBinary &&
+      !current.tooLarge &&
+      current.newPath
+    ) {
       current.newFileContent = await options.readNewFileContent?.(
         current.newPath,
       );
@@ -306,6 +311,8 @@ export async function parseDiffText(
     } else if (!inHunk && line.startsWith("index ")) {
       // Object IDs/mode are not useful review context; drop the line.
       continue;
+    } else if (!inHunk && line.startsWith("yukino skipped too-large ")) {
+      current.tooLarge = true;
     } else if (!inHunk && line.startsWith("Binary files ")) {
       current.isBinary = true;
     } else if (line.startsWith("new file mode ")) {

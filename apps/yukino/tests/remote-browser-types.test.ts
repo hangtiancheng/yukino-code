@@ -75,9 +75,13 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
       ],
     },
   },
+  plan_approval_closed: {
+    type: "plan_approval_closed",
+    data: { id: "plan-1" },
+  },
   plan_approval_request: {
     type: "plan_approval_request",
-    data: { planPath: "/tmp/plan", planContent: "steps" },
+    data: { id: "plan-1", planPath: "/tmp/plan", planContent: "steps" },
   },
   session_list: {
     type: "session_list",

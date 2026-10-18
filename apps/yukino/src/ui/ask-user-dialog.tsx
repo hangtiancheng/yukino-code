@@ -307,7 +307,14 @@ function SubmitContent({
   );
 }
 
-export function AskUserDialog({ questions, onComplete }: Props) {
+export function AskUserDialog({ questions, onComplete: complete }: Props) {
+  const completed = useRef(false);
+  const onComplete = (answers: Record<string, string>) => {
+    if (!completed.current) {
+      completed.current = true;
+      complete(answers);
+    }
+  };
   const focusRef = useRef<DOMElement>(null);
   const hideSubmit = questions.length === 1 && !questions[0].multiSelect;
 

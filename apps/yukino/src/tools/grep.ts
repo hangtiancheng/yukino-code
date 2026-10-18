@@ -37,18 +37,31 @@ const MAX_GREP_FILE_BYTES = 25 * 1024 * 1024;
 // line essentially forever. The per-line matching therefore runs in a worker
 // thread: the main loop (UI heartbeat, cancel handling) stays responsive, and a
 // hard per-file budget can terminate the worker instead of hanging.
-const REGEX_WORKER_SOURCE = `
+const REGEX_WORKER_SOURCE = String.raw`
 const { parentPort, workerData } = require('worker_threads');
 const regex = new RegExp(workerData.pattern, workerData.flags);
 parentPort.on('message', (msg) => {
   const matches = [];
-  for (let i = 0; i < msg.lines.length; i++) {
-    if (regex.test(msg.lines[i])) matches.push(i);
+  let start = 0;
+  for (let index = 0; start <= msg.text.length; index++) {
+    const end = msg.text.indexOf('\n', start);
+    const line = msg.text.slice(start, end < 0 ? undefined : end);
+    if (regex.test(line)) {
+      matches.push({ index, line });
+      if (matches.length >= workerData.maxMatches) break;
+    }
+    if (end < 0) break;
+    start = end + 1;
   }
   parentPort.postMessage({ id: msg.id, matches });
 });
 parentPort.postMessage({ ready: true });
 `;
+
+interface RegexMatch {
+  index: number;
+  line: string;
+}
 
 const MATCH_MIN_TIMEOUT_MS = 2000;
 const MATCH_MAX_TIMEOUT_MS = 10000;
@@ -68,14 +81,14 @@ class RegexMatchWorker {
   private nextId = 1;
   private pending = new Map<
     number,
-    { resolve: (v: number[]) => void; reject: (e: unknown) => void }
+    { resolve: (v: RegexMatch[]) => void; reject: (e: unknown) => void }
   >();
   private terminated = false;
 
   constructor(pattern: string, flags: string) {
     this.worker = new Worker(REGEX_WORKER_SOURCE, {
       eval: true,
-      workerData: { pattern, flags },
+      workerData: { pattern, flags, maxMatches: MAX_RESULTS + 1 },
     });
     this.ready = new Promise<void>((resolve, reject) => {
       const onReady = (msg: { ready?: boolean }) => {
@@ -87,16 +100,20 @@ class RegexMatchWorker {
       this.worker.on("message", onReady);
       this.worker.once("error", reject);
     });
-    this.worker.on("message", (msg: { id?: number; matches?: number[] }) => {
-      if (typeof msg.id !== "number") {
-        return;
-      }
-      const waiter = this.pending.get(msg.id);
-      if (waiter) {
-        this.pending.delete(msg.id);
-        waiter.resolve(msg.matches ?? []);
-      }
-    });
+    void this.ready.catch(() => undefined);
+    this.worker.on(
+      "message",
+      (msg: { id?: number; matches?: RegexMatch[] }) => {
+        if (typeof msg.id !== "number") {
+          return;
+        }
+        const waiter = this.pending.get(msg.id);
+        if (waiter) {
+          this.pending.delete(msg.id);
+          waiter.resolve(msg.matches ?? []);
+        }
+      },
+    );
     this.worker.on("error", (err) => {
       for (const waiter of this.pending.values()) {
         waiter.reject(err);
@@ -106,15 +123,22 @@ class RegexMatchWorker {
   }
 
   match(
-    lines: string[],
+    text: string,
     timeoutMs: number,
     signal?: AbortSignal,
-  ): Promise<number[]> {
+  ): Promise<RegexMatch[]> {
+    if (signal?.aborted) {
+      return Promise.reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new Error("operation interrupted"),
+      );
+    }
     if (this.terminated) {
       return Promise.reject(new Error("regex matcher is terminated"));
     }
     const id = this.nextId++;
-    return new Promise<number[]>((resolve, reject) => {
+    return new Promise<RegexMatch[]>((resolve, reject) => {
       const state: { timer?: NodeJS.Timeout } = {};
       const cleanup = () => {
         if (state.timer) {
@@ -147,7 +171,9 @@ class RegexMatchWorker {
       });
       this.ready
         .then(() => {
-          this.worker.postMessage({ id, lines });
+          if (!this.terminated) {
+            this.worker.postMessage({ id, text });
+          }
         })
         .catch(fail);
     });
@@ -307,10 +333,6 @@ export class GrepTool implements Tool {
       }
     }
 
-    // One worker per Grep call, reused across every file; matching is off the
-    // main thread so the UI heartbeat and cancel stay live even on a huge tree.
-    const matcher = new RegexMatchWorker(regex.source, regex.flags);
-
     // dot:true — the walker below surfaces hidden files, so the include
     // filter must match them too (e.g. include "*.yaml" on .github files).
     // matchBase: bare patterns ("*.ts") match the basename at any depth;
@@ -322,6 +344,10 @@ export class GrepTool implements Tool {
     const matchesInclude = (fullPath: string): boolean =>
       includeMatcher === null ||
       includeMatcher.match(relative(ctx.cwd, fullPath).split(sep).join("/"));
+    // One worker per Grep call, reused across every file; matching is off the
+    // main thread so the UI heartbeat and cancel stay live even on a huge tree.
+    const matcher = new RegexMatchWorker(regex.source, regex.flags);
+
     const results = new SearchOutput(MAX_RESULTS);
     let shortenedLines = 0;
     let skippedLargeFiles = 0;
@@ -356,7 +382,7 @@ export class GrepTool implements Tool {
 
           const buf = await file.readFile({ signal: ctx.abortSignal });
           ctx.abortSignal?.throwIfAborted();
-          const lines = buf.toString("utf-8").split("\n");
+          const text = buf.toString("utf-8");
           const rel = relative(ctx.cwd, filePath);
 
           // Matching runs off the main thread under a size-scaled budget so a
@@ -366,13 +392,13 @@ export class GrepTool implements Tool {
             Math.max(MATCH_MIN_TIMEOUT_MS, Math.ceil(fileStat.size / 1024) * 5),
           );
           const matched = await matcher.match(
-            lines,
+            text,
             matchTimeout,
             ctx.abortSignal,
           );
-          for (const i of matched) {
-            const preview = takeUtf8Prefix(lines[i], MAX_MATCH_LINE_BYTES);
-            const shortened = preview.length < lines[i].length;
+          for (const { index: i, line } of matched) {
+            const preview = takeUtf8Prefix(line, MAX_MATCH_LINE_BYTES);
+            const shortened = preview.length < line.length;
             if (
               !results.append(
                 `${rel}:${String(i + 1)}:${preview}${shortened ? "…" : ""}`,

@@ -100,7 +100,9 @@ export class MemoryConsolidator {
 
     this.completion = this.run(memDir, sessionIDs)
       .then(() => {
-        markConsolidationSucceeded(memDir);
+        if (!this.disposed) {
+          markConsolidationSucceeded(memDir);
+        }
       })
       .catch((err: unknown) => {
         log.error({ err }, "memory consolidation failed");
@@ -123,7 +125,20 @@ export class MemoryConsolidator {
     await this.completion;
   }
 
-  async run(memDir: string, sessionIDs: string[]): Promise<void> {
+  run(memDir: string, sessionIDs: string[]): Promise<void> {
+    if (this.disposed || this.controller) {
+      return Promise.reject(
+        new Error("Memory consolidator is disposed or already running"),
+      );
+    }
+    const run = this.execute(memDir, sessionIDs).finally(() => {
+      this.controller = null;
+    });
+    this.completion = run.catch(() => undefined);
+    return run;
+  }
+
+  private async execute(memDir: string, sessionIDs: string[]): Promise<void> {
     const controller = new AbortController();
     this.controller = controller;
     const userMemDir = yukinoPath("memory");
@@ -162,6 +177,7 @@ export class MemoryConsolidator {
         throw event.error;
       }
     }
+    controller.signal.throwIfAborted();
 
     const writtenPaths = extractWrittenPaths(conv.getMessages());
     const memoryPaths = writtenPaths.filter((p) => basename(p) !== "MEMORY.md");

@@ -140,6 +140,7 @@ export interface SessionListPayload {
 }
 
 export interface PlanApprovalPayload {
+  id: string;
   planPath: string;
   planContent: string;
 }
@@ -220,7 +221,7 @@ export interface ProviderListPayload {
 
 export interface RewindSnapshot {
   index: number;
-  /** Stable identity (the snapshot timestamp); survives head-trimming, unlike index. */
+  /** Snapshot UUID, unique across sessions and head trimming. */
   id: string;
   userText: string;
   timestamp: string;
@@ -361,11 +362,20 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     data: z.strictObject({
       id: z.string(),
       kind: z.enum(["permission", "ask"]),
+      response: z.enum(["allow", "deny", "allowAlways"]).optional(),
     }),
   }),
   z.strictObject({
+    type: z.literal("plan_approval_closed"),
+    data: z.strictObject({ id: z.string() }),
+  }),
+  z.strictObject({
     type: z.literal("plan_approval_request"),
-    data: z.strictObject({ planPath: z.string(), planContent: z.string() }),
+    data: z.strictObject({
+      id: z.string(),
+      planPath: z.string(),
+      planContent: z.string(),
+    }),
   }),
   z.strictObject({
     type: z.literal("session_list"),
@@ -588,6 +598,7 @@ export interface AskUserResponsePayload {
 }
 
 export interface PlanApprovalResponsePayload {
+  id: string;
   choice: PlanChoice;
   feedback?: string;
 }

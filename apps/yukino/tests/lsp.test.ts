@@ -48,6 +48,36 @@ function messages(): Record<string, unknown>[] {
 const positionArgs = { file_path: "example.ts", line: 1, character: 3 };
 
 describe("read-only language server tool", () => {
+  it("reports diagnostic truncation instead of retaining oversized pushes", async () => {
+    const configured = tool({ largeDiagnostics: true });
+    const result = await configured.execute(
+      { cwd },
+      { operation: "diagnostics", file_path: "example.ts" },
+    );
+    expect(result.isError).toBe(false);
+    expect(JSON.parse(result.output)).toMatchObject({
+      items: [],
+      pending: false,
+      truncated: true,
+    });
+  });
+
+  it("evicts document text using byte counts rather than UTF-16 length", async () => {
+    const configured = tool({ silent: true });
+    const text = "界".repeat(1_500_000);
+    writeFileSync(join(cwd, "first.ts"), text);
+    writeFileSync(join(cwd, "second.ts"), text);
+    for (const file_path of ["first.ts", "second.ts"]) {
+      const result = await configured.execute(
+        { cwd },
+        { operation: "documentSymbol", file_path },
+      );
+      expect(result.isError).toBe(false);
+    }
+    expect(
+      messages().some((message) => message.method === "textDocument/didClose"),
+    ).toBe(true);
+  });
   it("validates trusted explicit server configuration", () => {
     const base = {
       name: "typescript",

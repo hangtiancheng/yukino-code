@@ -54,6 +54,9 @@ function matchesAny(path: string, patterns: string[]): boolean {
 }
 
 function whyExcluded(d: FileDiff, options: SelectionOptions): ExcludeReason {
+  if (d.tooLarge) {
+    return "too-large";
+  }
   if (d.isBinary) {
     return "binary";
   }

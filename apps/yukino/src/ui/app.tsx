@@ -112,8 +112,7 @@ import {
 import { MCPManager, type ConnectResult } from "@/mcp/manager.js";
 import { applyMode, decideAndApply } from "@/mcp/strategy.js";
 import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
-import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
+import { BackgroundMemoryTasks } from "@/memory/background.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { MemoryManager, type RecallResult } from "@/memory/manager.js";
 import { PermissionChecker, type PermissionMode } from "@/permissions/index.js";
@@ -433,12 +432,17 @@ export function App({
   };
 
   const recoveryStateRef = useRef(new RecoveryState());
-  const memCursorRef = useRef(0);
-  const memExtractingRef = useRef(false);
-  const memExtractorRef = useRef<InstanceType<typeof MemoryExtractor> | null>(
-    null,
-  );
-  const memConsolidatorRef = useRef<MemoryConsolidator | null>(null);
+  const memoryTasksRef = useRef<BackgroundMemoryTasks | null>(null);
+  const memoryCleanupRef = useRef<Promise<void>>(Promise.resolve());
+  const stopMemoryTasks = useCallback(async () => {
+    const tasks = memoryTasksRef.current;
+    memoryTasksRef.current = null;
+    memoryCleanupRef.current = Promise.all([
+      memoryCleanupRef.current,
+      tasks?.dispose(),
+    ]).then(() => undefined);
+    await memoryCleanupRef.current;
+  }, []);
   const memManagerRef = useRef<InstanceType<typeof MemoryManager> | null>(null);
   const activeSkillsRef = useRef(new Map<string, string>());
   const toolFilterRef = useRef<((name: string) => boolean) | null>(null);
@@ -496,6 +500,13 @@ export function App({
   );
   const abortControllerRef = useRef<AbortController | null>(null);
   const exitingRef = useRef(false);
+  useEffect(() => {
+    exitingRef.current = false;
+    return () => {
+      exitingRef.current = true;
+      void stopMemoryTasks();
+    };
+  }, [stopMemoryTasks]);
   const configureBashSandbox = async (bashTool: BashTool): Promise<boolean> => {
     if (!sandboxEnabledRef.current) {
       bashTool.sandbox = null;
@@ -596,12 +607,18 @@ export function App({
   const [permissionRequest, setPermissionRequest] =
     useState<PermissionRequest | null>(null);
   const [askRequest, setAskRequest] = useState<Question[] | null>(null);
+  const [askRequestId, setAskRequestId] = useState(0);
+  const nextAskId = useRef(0);
   // AskUserQuestion is a read-category tool, so several can be in flight at
   // once. Each keeps its own resolver in a FIFO queue and the TUI presents them
   // one at a time; a single resolver slot would let a second call overwrite the
   // first and strand its promise.
   const askQueueRef = useRef<
-    { questions: Question[]; resolve: (a: Record<string, string>) => void }[]
+    {
+      id: number;
+      questions: Question[];
+      resolve: (a: Record<string, string>) => void;
+    }[]
   >([]);
   const settleAskQueue = useCallback(() => {
     for (const pending of askQueueRef.current.splice(0)) {
@@ -609,6 +626,12 @@ export function App({
     }
     setAskRequest(null);
   }, []);
+  useEffect(
+    () => () => {
+      settleAskQueue();
+    },
+    [settleAskQueue],
+  );
   const teammateStates = useTeammateStates(teamManagerRef.current);
   const [agentsDialogOpen, setAgentsDialogOpen] = useState(false);
   const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
@@ -668,6 +691,7 @@ export function App({
 
   const requestExit = useCallback(() => {
     exitingRef.current = true;
+    const memoryStopped = stopMemoryTasks();
     void (async () => {
       interruptAll();
       await userBash.stop();
@@ -677,9 +701,7 @@ export function App({
       const cleanupResults = await Promise.allSettled([
         backgroundTaskManagerRef.current.stopAll(),
         teamManagerRef.current.dispose(),
-        // Stop background memory tasks so they do not outlive the host.
-        memExtractorRef.current?.dispose() ?? Promise.resolve(),
-        memConsolidatorRef.current?.dispose() ?? Promise.resolve(),
+        memoryStopped,
       ]);
       for (const result of cleanupResults) {
         if (result.status === "rejected") {
@@ -939,6 +961,7 @@ export function App({
         env.model = provider.model;
         const systemPrompt = buildSystemPrompt(env);
         const client = await createClient(provider, systemPrompt);
+        await stopMemoryTasks();
         clientRef.current = client;
 
         contextWindowRef.current = getContextWindow(provider);
@@ -988,11 +1011,39 @@ export function App({
 
         registryRef.current.register(
           new AskUserQuestionTool(
-            (questions) =>
+            (questions, signal) =>
               new Promise<Record<string, string>>((resolve) => {
+                if (signal?.aborted || exitingRef.current) {
+                  resolve({});
+                  return;
+                }
                 const wasIdle = askQueueRef.current.length === 0;
-                askQueueRef.current.push({ questions, resolve });
+                const id = ++nextAskId.current;
+                const finish = (answers: Record<string, string>) => {
+                  signal?.removeEventListener("abort", cancel);
+                  resolve(answers);
+                };
+                const cancel = () => {
+                  const index = askQueueRef.current.findIndex(
+                    (request) => request.id === id,
+                  );
+                  if (index < 0) {
+                    return;
+                  }
+                  askQueueRef.current.splice(index, 1);
+                  finish({});
+                  if (index === 0) {
+                    const next = askQueueRef.current[0];
+                    if (next) {
+                      setAskRequestId(next.id);
+                    }
+                    setAskRequest(next?.questions ?? null);
+                  }
+                };
+                askQueueRef.current.push({ id, questions, resolve: finish });
+                signal?.addEventListener("abort", cancel, { once: true });
                 if (wasIdle) {
+                  setAskRequestId(id);
                   setAskRequest(questions);
                 }
               }),
@@ -1337,6 +1388,7 @@ export function App({
           provider,
           buildSystemPrompt(environment),
         );
+        await stopMemoryTasks();
         clientRef.current = client;
         selectedProviderRef.current = provider;
         setSelectedProvider(provider);
@@ -1392,6 +1444,7 @@ export function App({
         updated,
         buildSystemPrompt(environment),
       );
+      await stopMemoryTasks();
       clientRef.current = client;
       selectedProviderRef.current = updated;
       setSelectedProvider(updated);
@@ -1410,10 +1463,6 @@ export function App({
         updated.protocol,
         contextWindowRef.current,
       );
-      // Capability metadata follows the model; drop derived state, stopping any
-      // in-flight extraction against the old client first.
-      void memExtractorRef.current?.dispose();
-      memExtractorRef.current = null;
     } catch (err) {
       setError(`Failed to switch model: ${asErrorString(err)}`);
       return false;
@@ -1779,10 +1828,17 @@ export function App({
           break;
         }
         case "clear": {
+          const instructions = loadInstructions(cwd);
+          const memory = memManagerRef.current?.buildSystemReminder() ?? "";
+          const sessionId = sessionMod.newSessionId();
+          const fileHistory = new FileHistory(sessionId);
           await Promise.all([
             backgroundTaskManagerRef.current.stopAll(),
             teamManagerRef.current.stopAll(),
           ]);
+          await stopMemoryTasks();
+          backgroundTaskManagerRef.current.useSession(sessionId);
+          taskListRef.current.useStore(new TaskStore(sessionId));
           backgroundTaskManagerRef.current.clear();
           setSubagents([]);
           subagentCardsRef.current.clear();
@@ -1798,18 +1854,14 @@ export function App({
           followUpResetRef.current();
           steeringHistoryRecordedRef.current = [];
           announcedSkillsRef.current.clear();
-          conversationRef.current.injectLongTermMemory(
-            loadInstructions(cwd),
-            memManagerRef.current?.buildSystemReminder() ?? "",
-          );
+          conversationRef.current.injectLongTermMemory(instructions, memory);
           // The fresh history holds no MCP announcement any more, so this re-sends
           // the instructions of every connected server.
           if (mcpManagerRef.current) {
             syncMcpInstructions(mcpManagerRef.current);
           }
           // Reset the session ID and the stores derived from it
-          sessionIdRef.current = sessionMod.newSessionId();
-          backgroundTaskManagerRef.current.useSession(sessionIdRef.current);
+          sessionIdRef.current = sessionId;
           planOwner().planFilePath = "";
           interactionStatsRef.current = {
             agentActiveMs: 0,
@@ -1820,12 +1872,9 @@ export function App({
           };
           activeToolIdsRef.current.clear();
           activeToolBatchStartedAtRef.current = null;
-          taskListRef.current.useStore(new TaskStore(sessionIdRef.current));
-          fileHistoryRef.current = new FileHistory(sessionIdRef.current);
+          fileHistoryRef.current = fileHistory;
           output.resetUsage();
           // Reset memory extraction, recall and compact-recovery state
-          memCursorRef.current = 0;
-          memExtractingRef.current = false;
           recentToolsRef.current = [];
           surfacedMemoriesRef.current.clear();
           recoveryStateRef.current = new RecoveryState();
@@ -1952,7 +2001,16 @@ export function App({
           // session contains a compact_boundary it replays the compacted state
           // (summary + inlined keep + post-boundary appends) instead of the full
           // pre-boundary history; with no boundary it replays everything.
+          const instructions = loadInstructions(cwd);
+          const memory = memoryEnabled
+            ? new MemoryManager(cwd).buildSystemReminder()
+            : "";
+          const restored = sessionMod.rebuildFromSession(saved);
+          const fileHistory = new FileHistory(arg);
+          sessionMod.touchSession(cwd, arg);
           await backgroundTaskManagerRef.current.stopAll();
+          await stopMemoryTasks();
+          taskListRef.current.useStore(new TaskStore(arg));
           backgroundTaskManagerRef.current.useSession(arg);
           const conv = conversationRef.current;
           conv.reset();
@@ -1962,11 +2020,7 @@ export function App({
           // Drop follow-ups/steering recorded against the previous conversation.
           followUpResetRef.current();
           steeringHistoryRecordedRef.current = [];
-          conv.injectLongTermMemory(
-            loadInstructions(cwd),
-            memoryEnabled ? new MemoryManager(cwd).buildSystemReminder() : "",
-          );
-          const restored = sessionMod.rebuildFromSession(saved);
+          conv.injectLongTermMemory(instructions, memory);
           conv.appendMessages(
             restored.map((message) => ({
               ...message,
@@ -1984,21 +2038,17 @@ export function App({
           sessionIdRef.current = arg;
           goalManagerRef.current = null;
           planOwner().planFilePath = "";
-          // Mark the session active: expiry sweeping is mtime-based, and a
-          // resumed-but-not-yet-written session still carries its old stamp.
-          sessionMod.touchSession(cwd, arg);
           setResumeDialogActive(false);
           setResumeSessions([]);
           recentToolsRef.current = [];
           surfacedMemoriesRef.current.clear();
           recoveryStateRef.current = new RecoveryState();
-          taskListRef.current.useStore(new TaskStore(arg));
           // Re-key file history to the resumed session. Snapshots persist per
           // session and are reloaded on construction; /rewind after a resume
           // truncates the session log at the snapshot's recorded line count and
           // rebuilds the conversation from it, so stale in-memory message
           // indexes from the previous process are never trusted.
-          fileHistoryRef.current = new FileHistory(arg);
+          fileHistoryRef.current = fileHistory;
           const resumedMessages = transcriptFromRestored(
             sessionMod.rebuildFromSession(saved, {
               includeExcludedUserBash: true,
@@ -2435,44 +2485,16 @@ export function App({
       ],
       onLoopComplete: (conv) => {
         const client = clientRef.current;
-        if (!client || !memoryEnabled || memExtractingRef.current) {
+        if (!client || !memoryEnabled || exitingRef.current) {
           return;
         }
-        if (conv.len() - memCursorRef.current < 2) {
-          return;
-        }
-        memExtractingRef.current = true;
-        const cursor = conv.len();
-        const summary = conv
-          .getMessages()
-          .slice(-40)
-          .map((m) => `[${m.role}]: ${contentToText(m.content)}`)
-          .filter((s) => s.length > 12)
-          .join("\n");
-        // Lazy-init the Memory Extractor (one per logged-in client, reused
-        // across turns and sessions; discarded on re-login)
-        memExtractorRef.current ??= new MemoryExtractor(client, cwd);
-        memExtractorRef.current
-          .extract(summary)
-          .then((saved) => {
-            memCursorRef.current = cursor;
-            if (saved.length > 0) {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  role: "system",
-                  content: `Memory saved: ${saved.join(", ")}`,
-                },
-              ]);
-            }
-          })
-          .catch((err: unknown) => {
-            log.error({ err }, "memory extractor failed");
-          })
-          .finally(() => {
-            memExtractingRef.current = false;
-          });
-        memConsolidatorRef.current ??= new MemoryConsolidator(client, cwd, {
+        memoryTasksRef.current ??= new BackgroundMemoryTasks(client, cwd, {
+          onSaved: (saved) => {
+            setMessages((current) => [
+              ...current,
+              { role: "system", content: `Memory saved: ${saved.join(", ")}` },
+            ]);
+          },
           appendSystem: (message) => {
             setMessages((current) => [
               ...current,
@@ -2480,7 +2502,7 @@ export function App({
             ]);
           },
         });
-        void memConsolidatorRef.current.maybeRun();
+        memoryTasksRef.current.run(conv);
       },
       onPermissionRequest: requestPermission,
     });
@@ -2780,71 +2802,75 @@ export function App({
     (action: RewindAction) => {
       setRewindDialogActive(false);
       const fh = fileHistoryRef.current;
-      if (!fh) {
+      if (!fh || action.type === "cancel") {
         return;
       }
-      // A rewind restores files and/or rolls back the conversation baseline, so
-      // the read-before-edit state must be rebuilt from the new reality.
-      fileStateCacheRef.current.clear();
-
-      switch (action.type) {
-        case "code_and_conversation": {
-          // Conversation baseline changes: drop queued follow-ups and steering
-          // history recorded against the pre-rewind conversation.
-          followUpResetRef.current();
-          steeringHistoryRecordedRef.current = [];
-          const changed = fh.rewind(action.snapshotIndex);
-          const snap = rewindSnapshots[action.snapshotIndex];
-          const transcript = rewindConversation(snap);
-          const fileList =
-            changed.length > 0
-              ? "\n" + changed.map((f) => "  " + f).join("\n")
-              : "";
-          setMessages([
-            ...transcript,
-            {
-              role: "system",
-              content: `⟲ Rewound to checkpoint. Restored ${String(changed.length)} file(s) and conversation.${fileList}`,
-            },
-          ]);
-          setTranscriptRevision((revision) => revision + 1);
-          break;
+      const snapshot = rewindSnapshots[action.snapshotIndex];
+      if (!snapshot) {
+        setError("That checkpoint is no longer available. Reopen /rewind.");
+        return;
+      }
+      try {
+        switch (action.type) {
+          case "code_and_conversation": {
+            const changed = fh.rewind(action.snapshotIndex);
+            fileStateCacheRef.current.clear();
+            const transcript = rewindConversation(snapshot);
+            followUpResetRef.current();
+            steeringHistoryRecordedRef.current = [];
+            void stopMemoryTasks();
+            const fileList =
+              changed.length > 0
+                ? "\n" + changed.map((f) => "  " + f).join("\n")
+                : "";
+            setMessages([
+              ...transcript,
+              {
+                role: "system",
+                content: `⟲ Rewound to checkpoint. Restored ${String(changed.length)} file(s) and conversation.${fileList}`,
+              },
+            ]);
+            setTranscriptRevision((revision) => revision + 1);
+            break;
+          }
+          case "conversation_only": {
+            const transcript = rewindConversation(snapshot);
+            fileStateCacheRef.current.clear();
+            followUpResetRef.current();
+            steeringHistoryRecordedRef.current = [];
+            void stopMemoryTasks();
+            setMessages([
+              ...transcript,
+              {
+                role: "system",
+                content: `⟲ Rewound conversation. Files unchanged.`,
+              },
+            ]);
+            setTranscriptRevision((revision) => revision + 1);
+            break;
+          }
+          case "code_only": {
+            const changed = fh.rewind(action.snapshotIndex);
+            fileStateCacheRef.current.clear();
+            const fileList =
+              changed.length > 0
+                ? "\n" + changed.map((f) => "  " + f).join("\n")
+                : "";
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "system",
+                content: `⟲ Restored ${String(changed.length)} file(s). Conversation unchanged.${fileList}`,
+              },
+            ]);
+            break;
+          }
         }
-        case "conversation_only": {
-          followUpResetRef.current();
-          steeringHistoryRecordedRef.current = [];
-          const snap = rewindSnapshots[action.snapshotIndex];
-          const transcript = rewindConversation(snap);
-          setMessages([
-            ...transcript,
-            {
-              role: "system",
-              content: `⟲ Rewound conversation. Files unchanged.`,
-            },
-          ]);
-          setTranscriptRevision((revision) => revision + 1);
-          break;
-        }
-        case "code_only": {
-          const changed = fh.rewind(action.snapshotIndex);
-          const fileList =
-            changed.length > 0
-              ? "\n" + changed.map((f) => "  " + f).join("\n")
-              : "";
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: `⟲ Restored ${String(changed.length)} file(s). Conversation unchanged.${fileList}`,
-            },
-          ]);
-          break;
-        }
-        case "cancel":
-          break;
+      } catch (error) {
+        setError(`Rewind failed: ${asErrorString(error)}`);
       }
     },
-    [rewindSnapshots],
+    [rewindSnapshots, stopMemoryTasks],
   );
 
   /**
@@ -3182,6 +3208,7 @@ export function App({
     setProviders(saved.providers);
     setError("");
     if (clientRef.current) {
+      await stopMemoryTasks();
       clientRef.current = client;
       selectedProviderRef.current = saved.provider;
       setSelectedProvider(saved.provider);
@@ -3194,8 +3221,6 @@ export function App({
         saved.provider.protocol,
         contextWindowRef.current,
       );
-      void memExtractorRef.current?.dispose();
-      memExtractorRef.current = null;
       setMessages((current) => [
         ...current,
         {
@@ -3439,11 +3464,18 @@ export function App({
           askUser={
             askRequest
               ? {
+                  requestId: askRequestId,
                   questions: askRequest,
                   onComplete: (answers) => {
+                    if (askQueueRef.current[0]?.id !== askRequestId) {
+                      return;
+                    }
                     const head = askQueueRef.current.shift();
                     head?.resolve(answers);
                     const next = askQueueRef.current[0];
+                    if (next) {
+                      setAskRequestId(next.id);
+                    }
                     setAskRequest(next ? next.questions : null);
                   },
                 }

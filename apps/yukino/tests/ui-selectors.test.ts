@@ -16,6 +16,7 @@ import { AskUserQuestionTool } from "@/tools/ask-user.js";
 import { AgentStatus } from "@/ui/agent-status.js";
 import { AgentsDialog } from "@/ui/agents-dialog.js";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
+import { InteractionDock } from "@/ui/interaction-dock.js";
 import { PermissionDialog } from "@/ui/permission-dialog.js";
 import { PlanApprovalDialog } from "@/ui/plan-approval.js";
 import { ProviderSelect } from "@/ui/provider-select.js";
@@ -162,6 +163,66 @@ function backgroundTask(
 }
 
 describe("agents list and detail", () => {
+  it("does not open a question if its tool call was already aborted", async () => {
+    const ask = vi.fn().mockResolvedValue({});
+    const controller = new AbortController();
+    controller.abort();
+    const tool = new AskUserQuestionTool(ask);
+    const result = await tool.execute(
+      { cwd: ".", abortSignal: controller.signal },
+      {
+        questions: [
+          {
+            question: "Continue?",
+            header: "Confirm",
+            multiSelect: false,
+            options: [{ label: "Yes" }, { label: "No" }],
+          },
+        ],
+      },
+    );
+    expect(result.isError).toBe(true);
+    expect(ask).not.toHaveBeenCalled();
+  });
+  it("starts each queued question with fresh state and ignores duplicate completion", () => {
+    const onComplete = vi.fn();
+    const question = (label: string) => ({
+      header: label,
+      question: `${label}?`,
+      options: [{ label: "One" }, { label: "Two" }],
+      multiSelect: false,
+    });
+    mount(
+      createElement(InteractionDock, {
+        composer: { onSubmit: vi.fn() },
+        askUser: { requestId: 1, questions: [question("First")], onComplete },
+      }),
+    );
+    send("", { downArrow: true });
+    send("", { return: true });
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenLastCalledWith({ "First?": "Two" });
+    rerender(
+      createElement(InteractionDock, {
+        composer: { onSubmit: vi.fn() },
+        askUser: {
+          requestId: 2,
+          questions: [question("Second"), question("Third")],
+          onComplete,
+        },
+      }),
+    );
+    expect(frame).toContain("Second?");
+    send("1");
+    send("1");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledTimes(2);
+    expect(onComplete).toHaveBeenLastCalledWith({
+      "Second?": "One",
+      "Third?": "One",
+    });
+  });
   it("lists teammates and background subagents, excludes shells, and routes each action", () => {
     const onClose = vi.fn();
     const onKill = vi.fn();
