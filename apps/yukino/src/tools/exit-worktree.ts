@@ -17,7 +17,10 @@ export class ExitWorktreeTool implements Tool {
   // because class names are not stable after minification — bundlers like
   // Terser/esbuild may rename or mangle them, producing incorrect tool names at runtime.
   name = "ExitWorktree";
-  description = "Exit and optionally cleanup a git worktree";
+  description =
+    "Clean up a git worktree previously created by EnterWorktree, identified by " +
+    "its path. Does not change the working directory. A worktree with " +
+    "uncommitted changes is retained for explicit integration, not deleted.";
 
   category: ToolCategory = "write";
 

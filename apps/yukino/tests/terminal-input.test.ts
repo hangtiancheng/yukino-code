@@ -322,6 +322,37 @@ describe("terminal input report filtering", () => {
     expect(readInput()).toBe("\x1b");
   });
 
+  it("round-trips a multi-MB bracketed paste in bulk (no quadratic slicing)", async () => {
+    const body = "x".repeat(2 * 1024 * 1024);
+    const paste = "\x1b[200~" + body + "\x1b[201~";
+    terminal.stream.write(Buffer.from(paste));
+    let received = "";
+    // A byte-by-byte slice would be O(n^2) and never finish 2 MiB inside this
+    // window; the bulk path settles almost immediately.
+    await vi.waitFor(
+      () => {
+        received += readInput();
+        expect(received).toBe(paste);
+      },
+      { interval: 5, timeout: 5000 },
+    );
+  });
+
+  it("recognizes PASTE_END split across chunks inside a paste", async () => {
+    const body = "y".repeat(1000);
+    terminal.stream.write(Buffer.from("\x1b[200~" + body + "\x1b[20"));
+    await nextTick();
+    terminal.stream.write(Buffer.from("1~"));
+    let received = "";
+    await vi.waitFor(
+      () => {
+        received += readInput();
+        expect(received).toBe("\x1b[200~" + body + "\x1b[201~");
+      },
+      { interval: 5, timeout: 2000 },
+    );
+  });
+
   it("keeps the real provider search empty after late responses and accepts a typed backslash", async () => {
     const theme = detectTerminalTheme(input);
     terminal.stream.write(colorScheme);

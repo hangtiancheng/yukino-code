@@ -41,6 +41,9 @@ export class MemoryConsolidator {
   private minHours: number;
   private minSessions: number;
   private appendSystem?: (msg: string) => void;
+  private controller: AbortController | null = null;
+  private completion: Promise<unknown> = Promise.resolve();
+  private disposed = false;
 
   constructor(
     client: LLMClient,
@@ -63,6 +66,9 @@ export class MemoryConsolidator {
    * Should be called when each agent loop completes.
    */
   maybeRun(): Promise<void> {
+    if (this.disposed) {
+      return Promise.resolve();
+    }
     const memDir = projectPath(this.cwd, "memory");
     if (!existsSync(memDir)) {
       return Promise.resolve();
@@ -92,7 +98,7 @@ export class MemoryConsolidator {
       return Promise.resolve();
     }
 
-    this.run(memDir, sessionIDs)
+    this.completion = this.run(memDir, sessionIDs)
       .then(() => {
         markConsolidationSucceeded(memDir);
       })
@@ -106,7 +112,20 @@ export class MemoryConsolidator {
     return Promise.resolve();
   }
 
+  /**
+   * Stop any in-flight consolidation and await its settlement. Called on host
+   * teardown so a background consolidation cannot outlive its owner; an aborted
+   * run rejects, so it is never marked successful.
+   */
+  async dispose(): Promise<void> {
+    this.disposed = true;
+    this.controller?.abort();
+    await this.completion;
+  }
+
   async run(memDir: string, sessionIDs: string[]): Promise<void> {
+    const controller = new AbortController();
+    this.controller = controller;
     const userMemDir = yukinoPath("memory");
     const transcriptDir = getSessionsDir(this.cwd);
     const prompt = buildConsolidationPrompt(
@@ -135,6 +154,7 @@ export class MemoryConsolidator {
       cwd: this.cwd,
       fileStateCache: new FileStateCache(),
       maxIterations: 15,
+      abortSignal: controller.signal,
     });
 
     for await (const event of subagent.run()) {

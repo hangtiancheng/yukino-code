@@ -14,6 +14,9 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
   // message in a hot loop before `paused` propagates.
   const pausedRef = useRef(false);
   const mounted = useRef(true);
+  // Bumped by reset() so an in-flight dispatch from a previous conversation
+  // baseline cannot re-queue its failure into the new session.
+  const generation = useRef(0);
   const callbacks = useRef({ send, onError });
   callbacks.current = { send, onError };
   const [messages, setMessages] = useState<string[]>([]);
@@ -47,6 +50,18 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
     return message;
   }, []);
 
+  // Drop every queued/in-flight follow-up when the conversation baseline changes
+  // (clear / resume / conversation rewind). A pure code rewind keeps the queue.
+  const reset = useCallback(() => {
+    generation.current += 1;
+    pending.current = [];
+    active.current = false;
+    pausedRef.current = false;
+    setMessages([]);
+    setProcessing(false);
+    setPaused(false);
+  }, []);
+
   useEffect(() => {
     if (
       blocked ||
@@ -61,11 +76,12 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
     active.current = true;
     setMessages(pending.current);
     setProcessing(true);
+    const gen = generation.current;
     void (async () => {
       try {
         await callbacks.current.send(next);
       } catch (error) {
-        if (mounted.current) {
+        if (mounted.current && gen === generation.current) {
           // Re-queue the failed message at the front instead of dropping it:
           // a transient submit error must not silently lose user input. The
           // queue stays paused until the next enqueue lifts the gate, so the
@@ -77,9 +93,11 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
           callbacks.current.onError(error);
         }
       } finally {
-        active.current = false;
-        if (mounted.current) {
-          setProcessing(false);
+        if (gen === generation.current) {
+          active.current = false;
+          if (mounted.current) {
+            setProcessing(false);
+          }
         }
       }
     })();
@@ -91,6 +109,7 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
     takeLast,
     processing,
     paused,
+    reset,
     hasPending: () => pending.current.length > 0,
   };
 }

@@ -19,7 +19,11 @@ export class EnterWorktreeTool implements Tool {
   // Terser/esbuild may rename or mangle them, producing incorrect tool names at runtime.
   name = "EnterWorktree";
 
-  description = "Create and enter a git worktree for isolated work.";
+  description =
+    "Create a git worktree for isolated work and return its absolute path. " +
+    "The working directory is NOT changed: pass the returned path explicitly to " +
+    "later tools (Bash cwd, ReadFile/WriteFile/EditFile paths) to operate " +
+    "inside the worktree.";
 
   category: ToolCategory = "write";
 

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmdirSync,
   statSync,
   unlinkSync,
@@ -62,6 +63,44 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+// Best-effort process-instance identity: the kernel start-time tick of a PID.
+// kill(pid, 0) only proves *some* process holds the PID, which a recycled PID
+// makes ambiguous; the start tick distinguishes the original lock owner from an
+// unrelated later process. Returns undefined where the platform exposes no such
+// marker, in which case liveness safely falls back to kill(pid, 0) alone.
+function processStartTick(pid: number): string | undefined {
+  if (process.platform !== "linux") {
+    return undefined;
+  }
+  try {
+    const stat = readFileSync(`/proc/${String(pid)}/stat`, "utf8");
+    // The comm field (2) is parenthesized and may contain spaces/parens, so
+    // split after the last ')'; starttime is field 22, i.e. index 19 after it.
+    const afterComm = stat.slice(stat.lastIndexOf(")") + 2);
+    return afterComm.split(" ")[19];
+  } catch {
+    return undefined;
+  }
+}
+
+// Owner identity recorded in a contender file: "<pid>" or "<pid>:<startTick>".
+function ownerIdentity(): string {
+  const tick = processStartTick(process.pid);
+  return tick === undefined
+    ? String(process.pid)
+    : `${String(process.pid)}:${tick}`;
+}
+
+function recordedStartTick(entryPath: string): string | undefined {
+  try {
+    const content = readFileSync(entryPath, "utf8");
+    const idx = content.indexOf(":");
+    return idx >= 0 ? content.slice(idx + 1) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function createContender(lockDir: string): LockContender {
   const id = `${String(process.pid)}-${randomBytes(8).toString("hex")}`;
   const choosingPath = join(lockDir, `choosing-${id}`);
@@ -69,7 +108,7 @@ function createContender(lockDir: string): LockContender {
   while (true) {
     mkdirSync(lockDir, { recursive: true });
     try {
-      writeFileSync(choosingPath, String(process.pid), { flag: "wx" });
+      writeFileSync(choosingPath, ownerIdentity(), { flag: "wx" });
       break;
     } catch (err: unknown) {
       const parsed = safeParse(ErrnoExceptionSchema, err);
@@ -87,7 +126,7 @@ function createContender(lockDir: string): LockContender {
         .reduce((max, entry) => Math.max(max, ticketNumber(entry)), 0) + 1;
     const ticketName = `ticket-${String(nextNumber).padStart(16, "0")}-${id}`;
     ticketPath = join(lockDir, ticketName);
-    writeFileSync(ticketPath, String(process.pid), { flag: "wx" });
+    writeFileSync(ticketPath, ownerIdentity(), { flag: "wx" });
     unlinkSync(choosingPath);
     return { choosingPath, ticketPath, ticketName };
   } catch (err) {
@@ -121,10 +160,17 @@ function liveLockEntries(
     try {
       const info = statSync(entryPath);
       const ownerPid = lockOwnerPid(entry);
-      if (
-        now - info.mtimeMs > LOCK_STALE_MS &&
-        (ownerPid === null || !isProcessAlive(ownerPid))
-      ) {
+      // A recorded start tick that no longer matches the PID's current occupant
+      // proves the original owner exited and the PID was recycled — reclaim it
+      // even though kill(pid, 0) now succeeds for the unrelated process.
+      const recorded = recordedStartTick(entryPath);
+      const current =
+        ownerPid === null ? undefined : processStartTick(ownerPid);
+      const pidReused =
+        recorded !== undefined && current !== undefined && recorded !== current;
+      const ownerDead =
+        ownerPid === null || pidReused || !isProcessAlive(ownerPid);
+      if (now - info.mtimeMs > LOCK_STALE_MS && ownerDead) {
         unlinkSync(entryPath);
       }
     } catch {

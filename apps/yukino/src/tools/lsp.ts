@@ -64,6 +64,52 @@ interface Session {
   queue: Promise<void>;
 }
 
+// Bound how much opened-document text a session retains. Without eviction the
+// documents Map (and the language server's own copy) grows for every file ever
+// queried over a long session.
+const MAX_CACHED_DOCUMENTS = 40;
+const MAX_CACHED_DOCUMENT_BYTES = 8 * 1024 * 1024;
+
+// Evict least-recently-used documents until both the count and byte budgets are
+// met. The Map's insertion order is the recency order (refreshed on access), so
+// the front is the LRU candidate. protectUri is the document currently being
+// queried and is never evicted. Eviction sends didClose so the server releases
+// its copy too, and drops cached diagnostics so they cannot leak onto a later
+// re-open of a different file.
+function evictDocuments(session: Session, protectUri: string): void {
+  let totalBytes = 0;
+  for (const doc of session.documents.values()) {
+    totalBytes += doc.text.length;
+  }
+  while (
+    session.documents.size > MAX_CACHED_DOCUMENTS ||
+    totalBytes > MAX_CACHED_DOCUMENT_BYTES
+  ) {
+    let evicted: string | undefined;
+    let evictedBytes = 0;
+    for (const [uri, doc] of session.documents) {
+      if (uri !== protectUri) {
+        evicted = uri;
+        evictedBytes = doc.text.length;
+        break;
+      }
+    }
+    if (evicted === undefined) {
+      break;
+    }
+    session.documents.delete(evicted);
+    session.diagnostics.delete(evicted);
+    try {
+      session.client.notify("textDocument/didClose", {
+        textDocument: { uri: evicted },
+      });
+    } catch {
+      // A closing/closed server need not be told about the eviction.
+    }
+    totalBytes -= evictedBytes;
+  }
+}
+
 function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) {
     return promise;
@@ -187,6 +233,8 @@ export class LspTool implements Tool {
     const previous = session.documents.get(uri);
     if (previous?.text !== text) {
       const version = (previous?.version ?? 0) + 1;
+      // Re-insert so insertion order tracks recency for the eviction below.
+      session.documents.delete(uri);
       session.documents.set(uri, { text, version });
       session.diagnostics.delete(uri);
       if (!previous) {
@@ -204,7 +252,12 @@ export class LspTool implements Tool {
           contentChanges: [{ text }],
         });
       }
+    } else if (previous) {
+      // Unchanged content still counts as a use: refresh its recency.
+      session.documents.delete(uri);
+      session.documents.set(uri, previous);
     }
+    evictDocuments(session, uri);
     const textDocument = { uri };
     const position = {
       line: (args.line ?? 1) - 1,

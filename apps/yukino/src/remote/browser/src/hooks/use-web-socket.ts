@@ -8,11 +8,22 @@ interface UseWebSocketOptions {
   onClose: () => void;
 }
 
+/** Whether an offline send was delivered, held for replay, or dropped. */
+export type SendStatus = "sent" | "queued" | "dropped";
+
 interface UseWebSocketResult {
-  send: (message: ClientMessage) => void;
+  send: (message: ClientMessage) => SendStatus;
 }
 
 const PING_INTERVAL_MS = 10_000;
+// Only a user's chat body is worth replaying after a reconnect. Approvals
+// (permission/ask/plan), pings and transient UI actions are stale by the time
+// the socket returns — replaying them could re-authorize or re-trigger an old
+// request — so they are dropped offline. Image uploads are large and resolve via
+// a server reply; the caller reports the drop instead of silently queueing it.
+const QUEUEABLE_OFFLINE = new Set<ClientMessage["type"]>(["user_message"]);
+const MAX_PENDING_MESSAGES = 100;
+const MAX_PENDING_BYTES = 1_000_000;
 const RECONNECT_DELAY_MS = 3_000;
 const ACCESS_TOKEN_KEY = "yukino.remote.accessToken";
 
@@ -42,7 +53,8 @@ function readAccessToken(): string | null {
 export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   const { onMessage, onOpen, onClose } = opts;
   const wsRef = useRef<WebSocket | null>(null);
-  const pendingRef = useRef<ClientMessage[]>([]);
+  const pendingRef = useRef<{ json: string; bytes: number }[]>([]);
+  const pendingBytesRef = useRef(0);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   if (accessTokenRef.current === null) {
@@ -144,9 +156,10 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
       ws.onopen = () => {
         onOpenRef.current();
-        for (const message of pendingRef.current.splice(0)) {
-          ws.send(JSON.stringify(message));
+        for (const entry of pendingRef.current.splice(0)) {
+          ws.send(entry.json);
         }
+        pendingBytesRef.current = 0;
         if (pingRef.current) {
           clearInterval(pingRef.current);
         }
@@ -225,13 +238,31 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
 
   // Stable identity: app.tsx memoizes its callbacks on [send], so a fresh
   // function per render would defeat every one of them.
-  const send = useCallback((message: ClientMessage): void => {
+  const send = useCallback((message: ClientMessage): SendStatus => {
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
-    } else {
-      pendingRef.current.push(message);
+      return "sent";
     }
+    if (!QUEUEABLE_OFFLINE.has(message.type)) {
+      return "dropped";
+    }
+    const json = JSON.stringify(message);
+    pendingRef.current.push({ json, bytes: json.length });
+    pendingBytesRef.current += json.length;
+    // Bound the offline queue by count and bytes, evicting oldest first so a
+    // long outage cannot grow it without limit.
+    while (
+      pendingRef.current.length > MAX_PENDING_MESSAGES ||
+      pendingBytesRef.current > MAX_PENDING_BYTES
+    ) {
+      const evicted = pendingRef.current.shift();
+      if (!evicted) {
+        break;
+      }
+      pendingBytesRef.current -= evicted.bytes;
+    }
+    return "queued";
   }, []);
 
   return { send };

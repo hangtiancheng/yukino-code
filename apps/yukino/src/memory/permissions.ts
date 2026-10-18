@@ -1,7 +1,7 @@
 import { extname, resolve } from "node:path";
 
 import { PermissionChecker, type Decision } from "@/permissions/index.js";
-import { projectPath, yukinoPath } from "@/storage/index.js";
+import { projectPath, yukinoPath, getSessionsDir } from "@/storage/index.js";
 import type { ToolCategory } from "@/tools/types.js";
 import { canonicalPath, isPathWithin } from "@/utils/paths.js";
 
@@ -41,9 +41,15 @@ export class MemoryPermissionChecker extends PermissionChecker {
               "Background memory writes must stay in the memory directories and use .md files",
           };
     }
+    // allowProjectReads is set only for the consolidator, which the prompt
+    // directs to inspect this project's session transcripts as evidence. Grant
+    // read-only access to the project-scoped sessions directory (never the rest
+    // of ~/.yukino); the extractor (allowProjectReads=false) does not inherit
+    // this scope.
     return insideMemory ||
       (this.allowProjectReads &&
-        isPathWithin(canonicalPath(this.memoryCwd), path))
+        (isPathWithin(canonicalPath(this.memoryCwd), path) ||
+          isPathWithin(canonicalPath(getSessionsDir(this.memoryCwd)), path)))
       ? { effect: "allow", reason: "Memory task read" }
       : { effect: "deny", reason: "Read outside the memory task's scope" };
   }

@@ -49,6 +49,26 @@ afterEach(() => {
 });
 
 describe("session save/load round-trip", () => {
+  it("round-trips thinking and redacted_thinking blocks verbatim", () => {
+    const restored = rebuildFromSession([
+      { role: "user", content: "task", timestamp: t0 },
+      {
+        role: "assistant",
+        content: "answer",
+        timestamp: t1,
+        thinking_blocks: [
+          { type: "thinking", thinking: "visible", signature: "sig-1" },
+          { type: "redacted_thinking", data: "OPAQUE_BLOB" },
+        ],
+      },
+    ]);
+    const assistant = restored.find((m) => m.role === "assistant");
+    expect(assistant?.thinkingBlocks).toEqual([
+      { type: "thinking", thinking: "visible", signature: "sig-1" },
+      { type: "redacted_thinking", data: "OPAQUE_BLOB" },
+    ]);
+  });
+
   it("falls back to the last valid boundary when a later boundary is damaged", () => {
     const restored = rebuildFromSession([
       { role: "user", content: "old task", timestamp: t0 },

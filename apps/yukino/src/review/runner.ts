@@ -44,6 +44,7 @@ import {
   type ProviderConfig,
 } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
+import { redactText } from "@/feedback/redact.js";
 import { createClient, type LLMClient } from "@/llm/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
@@ -146,6 +147,7 @@ export async function runCodeReview(
     excluded: [],
     filteredOut: 0,
     aborted: false,
+    failures: [],
   };
 
   // Step 1: collect and parse diffs.
@@ -324,11 +326,23 @@ export async function runCodeReview(
   result.filesReviewed = outcomes
     .filter((o) => o.completed)
     .reduce((n, o) => n + o.files.length, 0);
+  // Surface failed groups (with a redacted reason) so the run is never
+  // presented as a clean review when part of it did not complete.
+  result.failures = outcomes
+    .filter((o) => o.error !== undefined)
+    .map((o) => ({
+      label: o.label,
+      files: o.files,
+      reason: redactText(o.error ?? ""),
+    }));
+  const failedCount = result.failures.length;
   progress({
     phase: "done",
     message: result.aborted
       ? `Review aborted: ${String(result.comments.length)} finding(s) collected before the interrupt`
-      : `Review complete: ${String(result.comments.length)} finding(s) across ${String(groups.length)} group(s)`,
+      : failedCount > 0
+        ? `Review incomplete: ${String(failedCount)} of ${String(groups.length)} group(s) failed; ${String(result.comments.length)} finding(s) collected from the rest`
+        : `Review complete: ${String(result.comments.length)} finding(s) across ${String(groups.length)} group(s)`,
     progress: 1,
   });
   return result;

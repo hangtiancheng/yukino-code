@@ -17,6 +17,7 @@ import {
 
 import { createChildLogger } from "@/logger/index.js";
 import { LspServerConfigSchema } from "@/lsp/config.js";
+import { asRecord } from "@/utils/index.js";
 
 export * as ProviderConfig from "./provider-config.js";
 export * as ProviderLogin from "./provider-login.js";
@@ -36,8 +37,8 @@ function isKeyofTypeofEnvKeyMap(k: string): k is keyof typeof ENV_KEY_MAP {
 const VALID_PROTOCOLS = new Set(Object.keys(ENV_KEY_MAP));
 
 export class ConfigError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
     this.name = "ConfigError";
   }
 }
@@ -140,9 +141,40 @@ export function memoryEnabled(cfg: AppConfig): boolean {
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 
+// Reports a js-yaml failure as reason + line/column only. The exception's
+// full message embeds a source snippet, which could contain secrets, so it is
+// deliberately not surfaced.
+function yamlErrorDetail(err: unknown): string {
+  if (!err || typeof err !== "object") {
+    return "YAML parse error";
+  }
+  const e = asRecord(err);
+  const reason =
+    typeof e.reason === "string" && e.reason.length > 0
+      ? e.reason
+      : "YAML parse error";
+  const mark = asRecord(e.mark);
+  if (typeof mark.line === "number") {
+    const line = String(mark.line + 1);
+    const column =
+      typeof mark.column === "number"
+        ? `, column ${String(mark.column + 1)}`
+        : "";
+    return `${reason} (line ${line}${column})`;
+  }
+  return reason;
+}
+
 function loadSingleFile(path: string): AppConfig {
   const data = readFileSync(path, "utf-8");
-  const raw: unknown = yaml.load(data);
+  let raw: unknown;
+  try {
+    raw = yaml.load(data);
+  } catch (err) {
+    throw new ConfigError(`Invalid YAML in ${path}: ${yamlErrorDetail(err)}`, {
+      cause: err,
+    });
+  }
   const parsed = safeParse(AppConfigSchema, raw);
   if (!parsed.success) {
     throw new ConfigError(

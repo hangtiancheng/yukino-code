@@ -114,9 +114,13 @@ describe("OpenAI Responses reasoning replay", () => {
         role: "assistant",
         content: "answer",
         thinkingBlocks: [
-          { thinking: "native", signature: "rs_123" },
-          { thinking: "foreign", signature: "anthropic-signature" },
-          { thinking: "compat", signature: "" },
+          { type: "thinking", thinking: "native", signature: "rs_123" },
+          {
+            type: "thinking",
+            thinking: "foreign",
+            signature: "anthropic-signature",
+          },
+          { type: "thinking", thinking: "compat", signature: "" },
         ],
       },
     ]);
@@ -140,7 +144,9 @@ describe("openai-compat chat message building", () => {
       {
         role: "assistant",
         content: "",
-        thinkingBlocks: [{ thinking: "Check the file first", signature: "" }],
+        thinkingBlocks: [
+          { type: "thinking", thinking: "Check the file first", signature: "" },
+        ],
         toolUses: [
           {
             toolUseId: "r1",
@@ -426,5 +432,80 @@ describe("image tool results over OpenAI endpoints", () => {
     const respParts = "content" in responses[0] ? responses[0].content : null;
     expect(Array.isArray(respParts)).toBe(true);
     expect(JSON.stringify(respParts)).toContain("input_image");
+  });
+});
+
+describe("document tool results over OpenAI chat completions", () => {
+  const richJson = (
+    msgs: ReturnType<typeof buildChatCompletionMessages>,
+  ): string => {
+    const synthetic = msgs.find(
+      (m) => m.role === "user" && Array.isArray(m.content),
+    );
+    return JSON.stringify(synthetic?.content ?? []);
+  };
+
+  it("does not silently drop a url document; emits an explicit unsupported note", () => {
+    const history: Message[] = [
+      {
+        role: "assistant",
+        content: "",
+        toolUses: [{ toolUseId: "d1", toolName: "Fetch", arguments: {} }],
+      },
+      {
+        role: "user",
+        content: "",
+        toolResults: [
+          {
+            toolUseId: "d1",
+            content: "[doc]",
+            contentBlocks: [
+              {
+                type: "document",
+                source: { type: "url", url: "https://example.com/file.pdf" },
+              },
+            ],
+            isError: false,
+          },
+        ],
+      },
+    ];
+    const json = richJson(buildChatCompletionMessages(history));
+    expect(json).toContain("not supported");
+    expect(json).toContain("example.com");
+  });
+
+  it("keeps a base64 document as a file part", () => {
+    const data = Buffer.from("pdf-bytes").toString("base64");
+    const history: Message[] = [
+      {
+        role: "assistant",
+        content: "",
+        toolUses: [{ toolUseId: "d2", toolName: "Fetch", arguments: {} }],
+      },
+      {
+        role: "user",
+        content: "",
+        toolResults: [
+          {
+            toolUseId: "d2",
+            content: "[doc]",
+            contentBlocks: [
+              {
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data,
+                },
+              },
+            ],
+            isError: false,
+          },
+        ],
+      },
+    ];
+    const json = richJson(buildChatCompletionMessages(history));
+    expect(json).toContain('"type":"file"');
   });
 });

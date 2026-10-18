@@ -103,8 +103,25 @@ export function coerceBySchema(value: unknown, schema: unknown): unknown {
   ) {
     const props = asRecord(schemaObj.properties ?? {});
     const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) {
-      out[key] = key in props ? coerceBySchema(item, props[key]) : item;
+    for (const [key, item] of Object.entries(asRecord(value))) {
+      // Own-property lookup so inherited keys (toString, constructor) are not
+      // mistaken for declared schema properties.
+      const coerced = Object.hasOwn(props, key)
+        ? coerceBySchema(item, props[key])
+        : item;
+      if (key === "__proto__") {
+        // Plain assignment to out["__proto__"] swaps the prototype instead of
+        // creating an own property, silently dropping a JSON-parsed "__proto__"
+        // field; define it explicitly so the round trip preserves it.
+        Object.defineProperty(out, key, {
+          value: coerced,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      } else {
+        out[key] = coerced;
+      }
     }
     return out;
   }

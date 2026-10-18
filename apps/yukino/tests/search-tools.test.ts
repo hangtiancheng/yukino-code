@@ -273,3 +273,34 @@ describe("GlobTool", () => {
     expect(res.output).toBe("No files matched the pattern.");
   });
 });
+
+describe("GrepTool catastrophic backtracking", () => {
+  const grep = new GrepTool();
+
+  it("bounds a catastrophic pattern in a worker and reports a diagnosis", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "yukino-grep-evil-"));
+    writeFileSync(join(dir, "evil.txt"), `${"a".repeat(32)}!\n`);
+    writeFileSync(join(dir, "ok.txt"), "normal aaa line\n");
+    try {
+      const start = Date.now();
+      const res = await grep.execute(
+        { cwd: dir },
+        { pattern: "(a+)+$", path: dir },
+      );
+      const elapsed = Date.now() - start;
+      expect(res.isError).toBe(true);
+      expect(res.output).toContain("timed out");
+      // The match runs off the main thread under a hard budget, so the runner
+      // is never pinned: it must settle well inside the vitest test timeout.
+      expect(elapsed).toBeLessThan(8000);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+
+  it("still matches normally after a catastrophic pattern was rejected", async () => {
+    const res = await grep.execute(ctx, { pattern: "normal|NEEDLE_LINK" });
+    expect(res.isError).toBe(false);
+    expect(res.output).toContain("links/target.txt:1:NEEDLE_LINK in real file");
+  });
+});

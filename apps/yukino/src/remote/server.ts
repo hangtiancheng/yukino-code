@@ -252,7 +252,9 @@ const ProviderSaveSchema = z.object({
 });
 
 const RewindActionSchema = z.object({
-  snapshotIndex: z.number().int().nonnegative(),
+  // Stable snapshot identity (its timestamp), not the array index the client
+  // saw — the index shifts when FileHistory trims its head.
+  snapshotId: z.string(),
   action: z.enum(["code_and_conversation", "conversation_only", "code_only"]),
 });
 
@@ -343,8 +345,6 @@ export interface RemoteAgentHandle {
   /** Auto memory switch from config.yaml (`enable_memory:`); gates injection, extraction, and consolidation. */
   memoryEnabled: boolean;
   contextWindow: number;
-  longTermMemoryInstructions: string;
-  longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
   cwd: string;
   checker: PermissionChecker;
@@ -424,8 +424,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
   memoryManager: MemoryManager;
   memoryEnabled: boolean;
   contextWindow: number;
-  longTermMemoryInstructions: string;
-  longTermMemoryMemoryContent: string;
   provider: ProviderConfig;
   cwd: string;
   checker: PermissionChecker;
@@ -453,6 +451,11 @@ class AgentHandleImpl implements RemoteAgentHandle {
   // One consolidator per handle: a fresh instance per loop would reset the
   // lastScanAt throttle, hammering the lock on every loop_complete.
   private memoryConsolidator: MemoryConsolidator | null = null;
+  // One extractor per session/model generation, reused across loops so its
+  // built-in coalescing (at most one running + one merged pending) applies, and
+  // a cursor stops the same tail being re-extracted on every loop_complete.
+  private memoryExtractor: MemoryExtractor | null = null;
+  private memoryCursor = 0;
 
   private abortController: AbortController | null = null;
   /** Agent receiving steering during the active run. */
@@ -496,10 +499,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.memoryManager = agentHandleImpl.memoryManager;
     this.memoryEnabled = agentHandleImpl.memoryEnabled;
     this.contextWindow = agentHandleImpl.contextWindow;
-    this.longTermMemoryInstructions =
-      agentHandleImpl.longTermMemoryInstructions;
-    this.longTermMemoryMemoryContent =
-      agentHandleImpl.longTermMemoryMemoryContent;
     this.provider = agentHandleImpl.provider;
     this.cwd = agentHandleImpl.cwd;
     this.checker = new PermissionChecker(this.cwd);
@@ -566,8 +565,12 @@ class AgentHandleImpl implements RemoteAgentHandle {
         ),
         coordinatorActiveFn: () =>
           coordinatorActive(this.enableCoordinatorMode),
-        instructions: this.longTermMemoryInstructions,
-        memoryContent: this.longTermMemoryMemoryContent,
+        // Re-read the current instructions/memory at each (re)injection rather
+        // than a handle-level startup snapshot, so edits to project instructions
+        // or memories take effect after clear/resume/compact.
+        instructions: () => loadInstructions(this.cwd),
+        memoryContent: () =>
+          this.memoryEnabled ? this.memoryManager.buildSystemReminder() : "",
         skillSection: this.skillCatalog
           ? buildSkillSection(this.skillCatalog)
           : "",
@@ -591,18 +594,27 @@ class AgentHandleImpl implements RemoteAgentHandle {
           if (!this.memoryEnabled) {
             return;
           }
-          // Best-effort memory extraction (fire-and-forget)
-          const summary = conv
-            .getMessages()
-            .slice(-40)
-            .map((m) => `[${m.role}]: ${contentToText(m.content)}`)
-            .filter((s) => s.length > 12)
-            .join("\n");
-          new MemoryExtractor(this.client, this.cwd)
-            .extract(summary)
-            .catch(() => {
-              /* non-fatal */
-            });
+          // Best-effort memory extraction (fire-and-forget). Reuse one extractor
+          // and only summarize messages past the cursor, so concurrent loops
+          // coalesce instead of each spawning a fresh full extraction.
+          if (conv.len() - this.memoryCursor >= 2) {
+            const cursor = conv.len();
+            const summary = conv
+              .getMessages()
+              .slice(-40)
+              .map((m) => `[${m.role}]: ${contentToText(m.content)}`)
+              .filter((s) => s.length > 12)
+              .join("\n");
+            this.memoryExtractor ??= new MemoryExtractor(this.client, this.cwd);
+            this.memoryExtractor
+              .extract(summary)
+              .then(() => {
+                this.memoryCursor = cursor;
+              })
+              .catch(() => {
+                /* non-fatal */
+              });
+          }
 
           // Background memory consolidation (fire-and-forget)
           this.memoryConsolidator ??= new MemoryConsolidator(
@@ -663,6 +675,11 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.taskList.useStore(new TaskStore(this.sessionId));
     this.recoveryState = new RecoveryState();
     this.mcpAnnounced.clear();
+    // New session generation: stop the old extractor and reset the cursor so a
+    // stale background task cannot write into the new session's memory state.
+    void this.memoryExtractor?.dispose();
+    this.memoryExtractor = null;
+    this.memoryCursor = 0;
   }
 }
 
@@ -1071,8 +1088,6 @@ export async function createRemoteAgent(
     memoryManager,
     memoryEnabled,
     contextWindow,
-    longTermMemoryInstructions: instructions,
-    longTermMemoryMemoryContent: memReminder,
     provider,
     cwd,
     taskList,
@@ -1197,6 +1212,17 @@ export class RemoteServer {
   private pendingAsks = new Map<
     string,
     (answers: Record<string, string>) => void
+  >();
+  // Replayable payloads for the pending requests above, so a client that
+  // connects (F5, new tab, reconnect) after a request was broadcast still sees
+  // it instead of the tool hanging with no visible prompt.
+  private pendingPermissionPayloads = new Map<
+    string,
+    { id: string; toolName: string; description: string }
+  >();
+  private pendingAskPayloads = new Map<
+    string,
+    { id: string; questions: Question[] }
   >();
 
   // Messages sent while a turn is busy but steering is unavailable (slash
@@ -1326,6 +1352,14 @@ export class RemoteServer {
       if (this.planApprovalPending) {
         this.sendPlanApprovalRequest(ws);
       }
+      // Replay in-flight permission/ask requests so this client sees the same
+      // pending prompts (no tool restart, no timeout reset).
+      for (const permPayload of this.pendingPermissionPayloads.values()) {
+        this.send(ws, { type: "permission_request", data: permPayload });
+      }
+      for (const askPayload of this.pendingAskPayloads.values()) {
+        this.send(ws, { type: "ask_user", data: askPayload });
+      }
 
       ws.on("message", (data: Buffer) => {
         let raw: unknown;
@@ -1390,174 +1424,200 @@ export class RemoteServer {
     ws: WebSocket,
     msg: z.infer<typeof WsInboundSchema>,
   ): Promise<void> {
-    switch (msg.type) {
-      case "user_message": {
-        const parsed = UserMessageSchema.safeParse(msg.data);
-        if (parsed.success) {
-          if (this.streaming) {
-            this.handleSteeringMessage(parsed.data.content);
+    try {
+      switch (msg.type) {
+        case "user_message": {
+          const parsed = UserMessageSchema.safeParse(msg.data);
+          if (parsed.success) {
+            if (this.streaming) {
+              this.handleSteeringMessage(parsed.data.content);
+            } else {
+              await this.handleUserMessage(parsed.data.content);
+            }
           } else {
-            await this.handleUserMessage(parsed.data.content);
+            log.warn("dropping malformed user_message");
           }
-        } else {
-          log.warn("dropping malformed user_message");
+          break;
         }
-        break;
-      }
-      case "plan_approval_response": {
-        const parsed = PlanApprovalResponseSchema.safeParse(msg.data);
-        if (parsed.success) {
-          await this.handlePlanApprovalResponse(
-            parsed.data.choice,
-            parsed.data.feedback,
-          );
-        } else {
-          log.warn({ issues: parsed.error.issues }, "malformed plan approval");
-        }
-        break;
-      }
-      case "code_review_start": {
-        const parsed = CodeReviewStartSchema.safeParse(msg.data);
-        if (parsed.success) {
-          await this.handleCodeReviewStart(parsed.data);
-        } else {
-          log.warn(
-            { issues: parsed.error.issues },
-            "malformed code review request",
-          );
-        }
-        break;
-      }
-      case "permission_response": {
-        const parsed = PermissionResponseSchema.safeParse(msg.data);
-        if (parsed.success) {
-          const resolver = this.pendingPermissions.get(parsed.data.id);
-          if (resolver) {
-            resolver(parsed.data.response);
-            this.pendingPermissions.delete(parsed.data.id);
+        case "plan_approval_response": {
+          const parsed = PlanApprovalResponseSchema.safeParse(msg.data);
+          if (parsed.success) {
+            await this.handlePlanApprovalResponse(
+              parsed.data.choice,
+              parsed.data.feedback,
+            );
+          } else {
+            log.warn(
+              { issues: parsed.error.issues },
+              "malformed plan approval",
+            );
           }
+          break;
         }
-        break;
-      }
-      case "ask_user_response": {
-        const parsed = AskUserResponseSchema.safeParse(msg.data);
-        if (parsed.success) {
-          const resolver = this.pendingAsks.get(parsed.data.id);
-          if (resolver) {
-            resolver(parsed.data.answers);
-            this.pendingAsks.delete(parsed.data.id);
+        case "code_review_start": {
+          const parsed = CodeReviewStartSchema.safeParse(msg.data);
+          if (parsed.success) {
+            await this.handleCodeReviewStart(parsed.data);
+          } else {
+            log.warn(
+              { issues: parsed.error.issues },
+              "malformed code review request",
+            );
           }
+          break;
         }
-        break;
-      }
-      case "cancel": {
-        this.cancelActiveRun();
-        break;
-      }
-      case "ping": {
-        // Reply to the sender only: pong is a keepalive, not a broadcast.
-        this.send(ws, { type: "pong", data: null });
-        break;
-      }
-      case "set_permission_mode": {
-        const parsed = SetPermissionModeSchema.safeParse(msg.data);
-        if (parsed.success) {
-          this.applyPermissionMode(parsed.data.mode);
-        } else {
-          log.warn("dropping malformed set_permission_mode");
+        case "permission_response": {
+          const parsed = PermissionResponseSchema.safeParse(msg.data);
+          if (parsed.success) {
+            const id = parsed.data.id;
+            const resolver = this.pendingPermissions.get(id);
+            // Atomic claim: only the first responder (vs a duplicate answer or
+            // a racing timeout/cancel) completes the request exactly once.
+            if (this.pendingPermissions.delete(id) && resolver) {
+              resolver(parsed.data.response);
+              this.broadcast({
+                type: "request_expired",
+                data: { id, kind: "permission" },
+              });
+            }
+          }
+          break;
         }
-        break;
-      }
-      case "model_list_request": {
-        await this.broadcastModelList();
-        break;
-      }
-      case "model_select": {
-        const parsed = ModelSelectSchema.safeParse(msg.data);
-        if (parsed.success) {
-          await this.changeProviderConfiguration(() =>
-            this.applyModel(parsed.data.model),
-          );
-        } else {
-          log.warn("dropping malformed model_select");
+        case "ask_user_response": {
+          const parsed = AskUserResponseSchema.safeParse(msg.data);
+          if (parsed.success) {
+            const id = parsed.data.id;
+            const resolver = this.pendingAsks.get(id);
+            if (this.pendingAsks.delete(id) && resolver) {
+              resolver(parsed.data.answers);
+              this.broadcast({
+                type: "request_expired",
+                data: { id, kind: "ask" },
+              });
+            }
+          }
+          break;
         }
-        break;
-      }
-      case "provider_list_request": {
-        this.broadcastProviderList();
-        break;
-      }
-      case "provider_select": {
-        const parsed = ProviderSelectSchema.safeParse(msg.data);
-        if (parsed.success) {
-          await this.changeProviderConfiguration(() =>
-            this.applyProviderSwitch(parsed.data.index),
-          );
-        } else {
-          log.warn("dropping malformed provider_select");
+        case "cancel": {
+          this.cancelActiveRun();
+          break;
         }
-        break;
-      }
-      case "provider_save": {
-        const parsed = ProviderSaveSchema.safeParse(msg.data);
-        if (parsed.success) {
-          await this.changeProviderConfiguration(() =>
-            this.handleProviderSave(parsed.data),
-          );
-        } else {
-          log.warn(
-            { issues: parsed.error.issues },
-            "dropping malformed provider_save",
-          );
+        case "ping": {
+          // Reply to the sender only: pong is a keepalive, not a broadcast.
+          this.send(ws, { type: "pong", data: null });
+          break;
         }
-        break;
-      }
-      case "rewind_list_request": {
-        this.broadcastRewindList();
-        break;
-      }
-      case "rewind_action": {
-        const parsed = RewindActionSchema.safeParse(msg.data);
-        if (parsed.success) {
-          this.handleRewindAction(
-            parsed.data.snapshotIndex,
-            parsed.data.action,
-          );
-        } else {
-          log.warn("dropping malformed rewind_action");
+        case "set_permission_mode": {
+          const parsed = SetPermissionModeSchema.safeParse(msg.data);
+          if (parsed.success) {
+            this.applyPermissionMode(parsed.data.mode);
+          } else {
+            log.warn("dropping malformed set_permission_mode");
+          }
+          break;
         }
-        break;
-      }
-      case "file_complete_request": {
-        const parsed = FileCompleteRequestSchema.safeParse(msg.data);
-        if (parsed.success) {
-          this.sendFileCompletions(
-            ws,
-            parsed.data.requestId,
-            parsed.data.query,
-          );
-        } else {
-          log.warn("dropping malformed file_complete_request");
+        case "model_list_request": {
+          await this.broadcastModelList();
+          break;
         }
-        break;
-      }
-      case "image_upload": {
-        const parsed = ImageUploadSchema.safeParse(msg.data);
-        if (parsed.success) {
-          await this.handleImageUpload(parsed.data, (message) => {
-            this.send(ws, message);
-          });
-        } else {
-          log.warn("dropping malformed image_upload");
+        case "model_select": {
+          const parsed = ModelSelectSchema.safeParse(msg.data);
+          if (parsed.success) {
+            await this.changeProviderConfiguration(() =>
+              this.applyModel(parsed.data.model),
+            );
+          } else {
+            log.warn("dropping malformed model_select");
+          }
+          break;
         }
-        break;
+        case "provider_list_request": {
+          this.broadcastProviderList();
+          break;
+        }
+        case "provider_select": {
+          const parsed = ProviderSelectSchema.safeParse(msg.data);
+          if (parsed.success) {
+            await this.changeProviderConfiguration(() =>
+              this.applyProviderSwitch(parsed.data.index),
+            );
+          } else {
+            log.warn("dropping malformed provider_select");
+          }
+          break;
+        }
+        case "provider_save": {
+          const parsed = ProviderSaveSchema.safeParse(msg.data);
+          if (parsed.success) {
+            await this.changeProviderConfiguration(() =>
+              this.handleProviderSave(parsed.data),
+            );
+          } else {
+            log.warn(
+              { issues: parsed.error.issues },
+              "dropping malformed provider_save",
+            );
+          }
+          break;
+        }
+        case "rewind_list_request": {
+          this.broadcastRewindList();
+          break;
+        }
+        case "rewind_action": {
+          const parsed = RewindActionSchema.safeParse(msg.data);
+          if (parsed.success) {
+            this.handleRewindAction(parsed.data.snapshotId, parsed.data.action);
+          } else {
+            log.warn("dropping malformed rewind_action");
+          }
+          break;
+        }
+        case "file_complete_request": {
+          const parsed = FileCompleteRequestSchema.safeParse(msg.data);
+          if (parsed.success) {
+            this.sendFileCompletions(
+              ws,
+              parsed.data.requestId,
+              parsed.data.query,
+            );
+          } else {
+            log.warn("dropping malformed file_complete_request");
+          }
+          break;
+        }
+        case "image_upload": {
+          const parsed = ImageUploadSchema.safeParse(msg.data);
+          if (parsed.success) {
+            await this.handleImageUpload(parsed.data, (message) => {
+              this.send(ws, message);
+            });
+          } else {
+            log.warn("dropping malformed image_upload");
+          }
+          break;
+        }
+        case "background_shells": {
+          this.backgroundForegroundShells();
+          break;
+        }
+        default:
+          log.warn({ type: msg.type }, "unknown WS message type");
       }
-      case "background_shells": {
-        this.backgroundForegroundShells();
-        break;
+    } catch (err) {
+      // A throwing handler must not become an unhandled rejection (or escalate
+      // to process.exit). Log a safe diagnostic and return a controlled error so
+      // the client leaves its busy state and the server keeps serving the next
+      // message. Also release any streaming state a failed op left behind.
+      log.error({ err, type: msg.type }, "remote WS message handling failed");
+      this.broadcast({
+        type: "error",
+        data: { message: `Request failed: ${asErrorString(err)}` },
+      });
+      if (this.streaming) {
+        this.streaming = false;
+        this.broadcast({ type: "command_done", data: null });
       }
-      default:
-        log.warn({ type: msg.type }, "unknown WS message type");
     }
   }
 
@@ -2317,8 +2377,25 @@ export class RemoteServer {
     }
 
     switch (name) {
-      case "clear":
-        await this.agentHandle.backgroundTaskManager.stopAll();
+      case "clear": {
+        // Stop the old teammates AND background tasks before rotating the
+        // session, and wait for both (parity with the TUI clear), so no
+        // teammate keeps running — and billing/notifying — into the new
+        // session. A stop failure is surfaced, never masked as a clean clear.
+        const stopResults = await Promise.allSettled([
+          this.agentHandle.backgroundTaskManager.stopAll(),
+          this.agentHandle.teamManager.stopAll(),
+        ]);
+        for (const result of stopResults) {
+          if (result.status === "rejected") {
+            this.broadcast({
+              type: "error",
+              data: {
+                message: `Clear could not stop all background work: ${asErrorString(result.reason)}`,
+              },
+            });
+          }
+        }
         // Reset in place (AgentTool captured the conversation manager) and
         // rotate the session so /resume and the JSONL no longer see the
         // pre-clear history.
@@ -2337,6 +2414,7 @@ export class RemoteServer {
         this.broadcast({ type: "clear", data: null });
         this.broadcast({ type: "command_done", data: null });
         break;
+      }
 
       case "compact":
         await this.handleCompact(args);
@@ -2771,6 +2849,7 @@ export class RemoteServer {
       data: {
         snapshots: fileHistory.getSnapshots().map((snap, index) => ({
           index,
+          id: snap.timestamp,
           userText: snap.userText,
           timestamp: snap.timestamp,
           fileCount: Object.keys(snap.backups).length,
@@ -2781,7 +2860,7 @@ export class RemoteServer {
 
   /** Restores code and/or conversation to a checkpoint (terminal /rewind parity). */
   private handleRewindAction(
-    snapshotIndex: number,
+    snapshotId: string,
     action: "code_and_conversation" | "conversation_only" | "code_only",
   ): void {
     const handle = this.agentHandle;
@@ -2796,14 +2875,25 @@ export class RemoteServer {
       return;
     }
     const fileHistory = handle.fileHistory;
-    const snap = fileHistory.getSnapshots()[snapshotIndex];
-    if (!snap) {
+    // Resolve by stable id (timestamp), not the index the client saw: another
+    // client's runs can trim the head and shift indices between listing and
+    // choosing. A missing id means the checkpoint was trimmed or the session
+    // was reset — fail explicitly instead of rewinding to the wrong snapshot.
+    const snapshots = fileHistory.getSnapshots();
+    const snapshotIndex = snapshots.findIndex(
+      (candidate) => candidate.timestamp === snapshotId,
+    );
+    if (snapshotIndex < 0) {
       this.broadcast({
         type: "error",
-        data: { message: `Checkpoint ${String(snapshotIndex)} not found.` },
+        data: {
+          message:
+            "That checkpoint is no longer available (the list changed or the session was reset). Reopen /rewind.",
+        },
       });
       return;
     }
+    const snap = snapshots[snapshotIndex];
     const fileList = (changed: string[]): string =>
       changed.length > 0
         ? "\n" + changed.map((file) => "  " + file).join("\n")
@@ -3780,6 +3870,14 @@ export class RemoteServer {
     } finally {
       this.reviewController = null;
       this.streaming = false;
+      // Dispatch follow-ups queued during the review (FIFO), like every other
+      // run exit. Guarded so a drain failure cannot mask the original review
+      // error already reported above.
+      try {
+        await this.drainFollowUps();
+      } catch (err) {
+        log.error({ err }, "follow-up drain after code review failed");
+      }
     }
   }
 
@@ -3923,10 +4021,13 @@ export class RemoteServer {
   private createAskUserCallback(): Asker {
     return async (questions: Question[]): Promise<Record<string, string>> => {
       const id = nextRequestId("ask");
-      this.broadcast({ type: "ask_user", data: { id, questions } });
+      const payload = { id, questions };
+      this.pendingAskPayloads.set(id, payload);
+      this.broadcast({ type: "ask_user", data: payload });
       return new Promise((resolve) => {
         const timer = setTimeout(() => {
           if (this.pendingAsks.delete(id)) {
+            this.pendingAskPayloads.delete(id);
             this.broadcast({
               type: "system",
               data: {
@@ -3943,6 +4044,7 @@ export class RemoteServer {
         timer.unref();
         this.pendingAsks.set(id, (answers) => {
           clearTimeout(timer);
+          this.pendingAskPayloads.delete(id);
           resolve(answers);
         });
       });
@@ -3966,15 +4068,14 @@ export class RemoteServer {
       ]
         .filter(Boolean)
         .join("\n");
-      this.broadcast({
-        type: "permission_request",
-        data: { id, toolName, description: desc },
-      });
+      const payload = { id, toolName, description: desc };
+      this.pendingPermissionPayloads.set(id, payload);
+      this.broadcast({ type: "permission_request", data: payload });
       return new Promise((resolve) => {
         const cancel = () => {
           const pending = this.pendingPermissions.get(id);
-          if (pending) {
-            this.pendingPermissions.delete(id);
+          if (this.pendingPermissions.delete(id) && pending) {
+            this.pendingPermissionPayloads.delete(id);
             this.broadcast({
               type: "request_expired",
               data: { id, kind: "permission" },
@@ -3984,6 +4085,7 @@ export class RemoteServer {
         };
         const timer = setTimeout(() => {
           if (this.pendingPermissions.delete(id)) {
+            this.pendingPermissionPayloads.delete(id);
             this.broadcast({
               type: "system",
               data: {
@@ -4002,6 +4104,7 @@ export class RemoteServer {
         this.pendingPermissions.set(id, (response) => {
           clearTimeout(timer);
           signal?.removeEventListener("abort", cancel);
+          this.pendingPermissionPayloads.delete(id);
           resolve(response);
         });
         signal?.addEventListener("abort", cancel, { once: true });
@@ -4213,9 +4316,11 @@ export class RemoteServer {
       resolve("deny");
     }
     this.pendingPermissions.clear();
+    this.pendingPermissionPayloads.clear();
     for (const resolve of this.pendingAsks.values()) {
       resolve({});
     }
     this.pendingAsks.clear();
+    this.pendingAskPayloads.clear();
   }
 }

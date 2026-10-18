@@ -1,7 +1,7 @@
 export interface ParseRemoteAddressOptions {
   /**
    * Port used when the address omits one (a bare host like "localhost" or an
-   * empty host like ":"). Each server mode passes its own default so a
+   * empty address like ""). Each server mode passes its own default so a
    * bare-host address does not silently fall back to the remote-mode port.
    */
   defaultPort?: number;

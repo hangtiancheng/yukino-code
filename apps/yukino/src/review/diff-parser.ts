@@ -19,6 +19,44 @@ function splitDiffLines(text: string): string[] {
  * (set on every path-emitting invocation in git.ts) suppresses only the
  * non-ASCII quoting.
  */
+// Git C-style path quoting: the exact inverse of unquoteGitPath. With
+// core.quotepath=false (set by the diff driver) Git emits non-ASCII literally
+// and escapes only ", \, and control bytes — so quote byte-wise with octal
+// escapes. JSON.stringify would emit \uXXXX / \b / \f that unquoteGitPath
+// misreads, breaking the diff -> parse -> comment round trip.
+export function quoteGitPath(value: string): string {
+  let out = "";
+  let needsQuotes = false;
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (ch === '"') {
+      out += '\\"';
+      needsQuotes = true;
+    } else if (ch === "\\") {
+      out += "\\\\";
+      needsQuotes = true;
+    } else if (ch === "\n") {
+      out += "\\n";
+      needsQuotes = true;
+    } else if (ch === "\t") {
+      out += "\\t";
+      needsQuotes = true;
+    } else if (ch === "\r") {
+      out += "\\r";
+      needsQuotes = true;
+    } else if (code < 0x20 || code === 0x7f) {
+      out += `\\${code.toString(8).padStart(3, "0")}`;
+      needsQuotes = true;
+    } else if (/\s/u.test(ch)) {
+      out += ch;
+      needsQuotes = true;
+    } else {
+      out += ch;
+    }
+  }
+  return needsQuotes ? `"${out}"` : value;
+}
+
 export function unquoteGitPath(raw: string): string {
   const s = raw.trim();
   if (s.length < 2 || !s.startsWith('"') || !s.endsWith('"')) {

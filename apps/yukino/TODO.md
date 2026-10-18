@@ -171,109 +171,109 @@
 
 ## 5. 会话、交互请求与后台生命周期 TODO
 
-### [ ] LIFE-01 · 并行 AskUserQuestion 不覆盖 TUI resolver · P1
+### [x] LIFE-01 · 并行 AskUserQuestion 不覆盖 TUI resolver · P1
 
 - **判定：真实缺陷；分类：功能正确性 / 生命周期与可靠性。** 来源：yukino F-11；证据：AskUserQuestion 为 read 可并行，`ui/app.tsx` 仅一个 askResolveRef，第二次赋值覆盖第一次。
 - 修复：每个请求持有独立 resolver，TUI 串行呈现或工具按交互类别串行执行；取消/卸载必须结算所有在途和排队请求，不仅当前对话框。
 - 验收：同一轮两个提问依次展示、各收一个结果；回答/取消/中断/退出均不遗留 Promise；覆盖主代理与共享交互入口，不能简单把所有 read 工具串行化。
 
-### [ ] LIFE-02 · FeedbackDialog 单次提交门禁 · P1
+### [x] LIFE-02 · FeedbackDialog 单次提交门禁 · P1
 
 - **判定：真实缺陷；分类：并发与数据完整性 / 交互。** 来源：yukino F-15；证据：`ui/feedback-dialog.tsx` Enter 直接 onSubmit，无同步提交标志。
 - 修复：按键处理前同步认领提交槽，失败后的重试由明确状态管理；审批 resolver 按流水线绑定，不允许第二条流程覆盖第一条。
 - 验收：同一事件批次双 Enter、长按、提交后重渲染最多启动一条流水线和一次审批；取消能完成全部等待；采用 fake uploader，不真实上传/发 issue。
 
-### [ ] LIFE-03 · 会话切换清理 follow-up 与 steering 派生态 · P1
+### [x] LIFE-03 · 会话切换清理 follow-up 与 steering 派生态 · P1
 
 - **判定：真实缺陷；分类：功能正确性 / 会话隔离。** 来源：claude C7；证据：`ui/use-follow-up-queue.ts` 无 reset，`ui/app.tsx` clear/resume/rewind 未清队列。
 - 修复：添加明确会话 generation/reset；成功 clear/resume/对话 rewind 清理 pending 和 steering 历史 marker，在途旧 dispatch 失败也不得重入新队列；纯 code rewind 是否保留待发消息按其未变更上下文的语义处理，不误删输入。
 - 验收：旧会话排队消息不会向新/恢复/回滚会话自动发送；取消切换、resume 失败不丢当前有效队列；同文本 prompt 历史只记一次；失败重排的保留输入策略仍正常。
 
-### [ ] LIFE-04 · TUI fire-and-forget 错误边界和 resume 输入诊断 · P1
+### [x] LIFE-04 · TUI fire-and-forget 错误边界和 resume 输入诊断 · P1
 
 - **判定：真实缺陷；分类：生命周期与可靠性 / 诊断。** 来源：codex N3、pi P15、yukino M-5；证据：`ui/app.tsx.handleSlashCommand` 的若干 void 调用与 `recover.ts` 的 unhandledRejection 退出策略。
 - 修复：在 UI 操作入口集中接管异步异常，CLI 与交互 resume 使用一致 ID 校验；预期文件/配置错误转用户可见消息，失败后状态可再次操作，不降低全局未知崩溃处理能力。
 - 验收：非法 ID、会话不可读/损坏、touch/存储失败显示诊断而非结束整个 TUI；启动 --resume 和对话内 /resume 均覆盖；未处理 rejection 计数为零。
 
-### [ ] LIFE-05 · Remote pending 请求重放、广播结算与去重 · P1
+### [x] LIFE-05 · Remote pending 请求重放、广播结算与去重 · P1
 
 - **判定：真实缺陷；分类：功能正确性 / 生命周期与可靠性。** 来源：claude C29、C35.1；证据：`remote/server.ts.setupWebSocket/createPermissionCallback/createAskUserCallback` 只存 resolver，不存可重放 payload；成功答复不广播关闭。
 - 修复：pending 记录保存 ID/payload/类型/截止时间和完成状态；新连接重放；任一客户端回答后通知其余客户端关闭；超时、cancel、disconnect 与重复答复只能完成一次。
 - 验收：F5、新标签、断线重连能看见原 permission/ask，不重启工具、不重置 10 分钟计时；A 回答后 B 关闭对应 modal；过期请求不复活；多个并发请求各自配对。
 
-### [ ] LIFE-06 · Remote WS 消息处理统一异常边界 · P1
+### [x] LIFE-06 · Remote WS 消息处理统一异常边界 · P1
 
 - **判定：真实缺陷；分类：生命周期与可靠性 / 服务可用性。** 来源：claude C34；证据：`setupWebSocket` void handleWsMessage，provider change/rewind/completion 等路径未统一 catch。
 - 修复：在异步分发入口 catch，记录安全诊断并向适当客户端返回受控错误；各操作 finally 释放 streaming/控制器。不要把正常业务错误升级为 process.exit。
 - 验收：provider 切换、rewind IO、completion scan 等注入异常后服务器继续接收下一条请求；前端解除忙碌态；不产生 unhandledRejection；/clear 本已有内层捕获，不用错误示例证明本条。
 
-### [ ] LIFE-07 · Remote review 释放槽后按 FIFO 派发 follow-up · P1
+### [x] LIFE-07 · Remote review 释放槽后按 FIFO 派发 follow-up · P1
 
 - **判定：真实缺陷；分类：功能正确性 / 调度。** 来源：claude C30；证据：`handleCodeReviewStart` finally 只清 streaming，与其他运行出口不同。
 - 修复：把 follow-up drain 纳入统一运行完成出口，明确成功/失败/取消时的派发政策；避免 finally 中第二个异常覆盖原 review 错误。
 - 验收：review 中排队的普通文本和 slash/bash 在合法结束后自动按 FIFO 运行；新消息不能越过旧队列；用户取消后的消息行为与其他 agent 运行一致。
 
-### [ ] LIFE-08 · Remote clear 停止旧 teammates · P1
+### [x] LIFE-08 · Remote clear 停止旧 teammates · P1
 
 - **判定：真实缺陷；分类：会话隔离 / 生命周期与可靠性。** 来源：claude C31；证据：Remote clear 仅 stopAll background tasks，TUI clear 同时 stop teams。
 - 修复：换 session 前等待旧团队停止、清理旧通知与浏览器活动投影；停止失败不得伪装已完成隔离。
 - 验收：clear 后旧 teammate 不继续执行/计费，不触发新会话通知轮；前端团队面板与运行态一致；私有 TODO/background store 的既有清理仍正常。
 
-### [ ] LIFE-09 · 计划审批状态和定时器属于当前运行 · P2
+### [x] LIFE-09 · 计划审批状态和定时器属于当前运行 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 交互、生命周期。** 来源：claude C32/C33；证据：`runNotificationTurn` 未重置 exitPlanSucceeded，`cancelActiveRun` 未清 planApprovalTimer。
 - 修复：各运行入口统一初始化计划完成状态；所有 cancel/结算路径一起销毁 pending 与 timer，回调按请求身份判断是否仍有效。
 - 验收：过期计划不会因通知轮再次弹审批；cancel 后推进假时钟不再广播过期通知；新审批的 timer 不被旧回调取消。
 
-### [ ] LIFE-10 · TUI 会话边界重置 FileStateCache · P2
+### [x] LIFE-10 · TUI 会话边界重置 FileStateCache · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 编辑前读取约束。** 来源：yukino G-2；证据：`ui/app.tsx` clear/resume/rewind 复用 fileStateCacheRef，而 Remote 的对称路径新建实例。
 - 修复：在成功改变对话基线或回滚文件后重建缓存；不要把旧会话读过的文件当新会话已读；失败/取消切换不提前破坏当前状态。
 - 验收：A 读文件→clear/resume B→未重读编辑被拒；rewind 后按当前文件重新读取；正确新建文件仍不要求先读。
 
-### [ ] LIFE-11 · Remote 上下文重建时读取当前指令与记忆 · P1
+### [x] LIFE-11 · Remote 上下文重建时读取当前指令与记忆 · P1
 
 - **判定：真实缺陷，但范围比 G-1 原文窄；分类：功能正确性 / 上下文。** 来源：yukino G-1；证据：Remote 持有 longTermMemoryInstructions/MemoryContent 启动快照；`ConversationManager.injectLongTermMemory` 以一次性标志控制注入。
 - 修复：在新会话、resume、compact 后等需要重新注入时从当前 cwd/MemoryManager 取内容，消除 handle 级永不刷新的快照；不要每轮重写历史或破坏 prompt cache。
 - 验收：修改项目指令/记忆后 clear、resume、compact 重建均使用当前内容，涵盖 Remote/ACP/A2A；`enable_memory=false` 保持禁用。**不承诺**终端现状每轮重新注入；“运行中热更新追加 delta”如需支持应单独定义产品需求。
 
-### [ ] LIFE-12 · 复用 Remote MemoryExtractor 并绑定会话/模型生命周期 · P1
+### [x] LIFE-12 · 复用 Remote MemoryExtractor 并绑定会话/模型生命周期 · P1
 
 - **判定：真实缺陷；分类：并发与数据完整性 / 成本。** 来源：claude C42；证据：Remote 每次 onLoopComplete new MemoryExtractor，类内 coalescing 只作用于单实例。
 - 修复：handle 持有提取实例及已消费摘要游标；同一序列最多一条在跑、一条合并待办；模型切换与 session 变化显式管理实例与 generation，旧任务不能回写新会话的提示状态。
 - 验收：两次快速结束主轮不会并发启动两条同 handle 提取；摘要不重复全量提取；跨进程/多 handle 的写盘冲突由 LIFE-13 解决，不能宣称单实例守卫解决所有丢数据。
 
-### [ ] LIFE-13 · MemoryExtractor 文本回退原子、加锁且不盲覆盖 · P1
+### [x] LIFE-13 · MemoryExtractor 文本回退原子、加锁且不盲覆盖 · P1
 
 - **判定：真实缺陷；分类：并发与数据完整性。** 来源：claude C44；证据：`memory/extractor.ts.persistTextMemories` 直接 writeFileSync，绕开已有文件读取门禁。
 - 修复：在同一锁内验证作用域/存在性并采用私有临时文件+rename；现有同名主题必须读取后明确合并或拒绝/换名；崩溃和失败不更新索引为成功。拒绝非法格式，不加旧协议迁移层。
 - 验收：写入中途失败保留完整旧版本；并发同名提取不发生静默覆盖或混合内容；临时文件受限、无 symlink 越界；只有成功写入才进入 saved 与重建索引。
 
-### [ ] LIFE-14 · consolidation 对目标 transcript 有精确只读权限 · P1
+### [x] LIFE-14 · consolidation 对目标 transcript 有精确只读权限 · P1
 
 - **判定：真实缺陷；分类：功能正确性 / 取证链路。** 来源：claude C41；证据：`memory/consolidation.ts` prompt 要求读 getSessionsDir，而 checker 只允许 memory/cwd。
 - 修复：向 consolidator 明确授予本项目选定 transcript 的只读范围，extractor 不继承此权；或预先提供限定证据，不扩权为整个 ~/.yukino。取证被拒绝时不可照常标记完整 consolidation 成功。
 - 验收：可搜索/读取列出的本项目会话，不能读别的项目、config、日志或任意 home 文件；写操作仍限 memory .md；读不到证据返回受控状态而非刷掉 24 小时闸门。
 
-### [ ] LIFE-15 · 后台记忆任务可在宿主销毁时停止并被等待 · P2
+### [x] LIFE-15 · 后台记忆任务可在宿主销毁时停止并被等待 · P2
 
 - **判定：真实缺陷（宿主生命周期缺口）；主轮结束后后台继续工作是设计意图。分类：生命周期与可靠性 / 成本。** 来源：claude C45；证据：extractor/consolidator 的 Agent 没有宿主 abortSignal，也没有统一 dispose 接线。
 - 修复：任务由宿主拥有 controller/完成 Promise，退出、dispose、会话废弃时停止或明确等待，释放锁/registry；旧任务通知绑定原 generation。不要简单复用“上一主轮结束即 abort”的信号而让正常后台管线永远做不完。
 - 验收：宿主停止后不再发新模型请求/写记忆/注入旧会话通知；运行中的请求可取消，锁释放；正常主轮完成允许后台任务继续。用户中断是否取消既有独立记忆任务需采用明确一致的产品语义，不能把报告推断当既有承诺。
 
-### [ ] LIFE-16 · 清理 rewind 临时文件必须遵守会话锁 · P2
+### [x] LIFE-16 · 清理 rewind 临时文件必须遵守会话锁 · P2
 
 - **判定：真实缺陷；分类：并发与数据完整性。** 来源：pi P8；证据：`session/index.ts.cleanExpiredSessions` 在锁外删所有 .rewind-tmp，`truncateSessionLines` 持锁写再 rename。
 - 修复：清理前识别所属会话与存活写入者，并在同一会话锁下确认是可回收临时文件；不能只凭后缀删除正在使用的文件。
 - 验收：跨进程清理恰逢 rewind 的写完/rename 之间，不影响重命名提交；崩溃遗留临时文件仍能收敛；主 JSONL 完整可恢复。
 
-### [ ] LIFE-17 · 一次性 pre_send hook 通知写入 transcript · P2
+### [x] LIFE-17 · 一次性 pre_send hook 通知写入 transcript · P2
 
 - **判定：真实缺陷（一次性通知部分）；可再生 skill 列表不是同一缺陷。分类：功能正确性 / 持久化一致性。** 来源：claude C21；证据：`agent/index.ts` 前后两次 drainNotifications 只有前一次调用 persistLastMessage。
 - 修复：保证送入模型的一次性 hook 输出在持久历史中有对应记录且只写一次；可再生的 skillDelta/reminder 不必统一全量落盘。
 - 验收：once pre_send 输出送出后 resume 仍可恢复，不因 drain 丢失；同轮前后 drain 不重复；compact 继续遵循现有上下文重建契约。
 
-### [ ] LIFE-18 · Remote rewind 使用稳定快照身份 · P2
+### [x] LIFE-18 · Remote rewind 使用稳定快照身份 · P2
 
 - **判定：真实缺陷（多客户端列表过期场景）；分类：并发与数据完整性。** 来源：claude C35.2；证据：broadcastRewindList 发数组 index，handleRewindAction 对当前数组再次取 index；FileHistory 会裁剪头部。
 - 修复：将请求绑定 session 和稳定 snapshot ID/列表版本；执行前校验身份，过期请求明确失败。报告“后台子代理必定创建主 FileHistory 快照”的举证未被当前接线支持，不沿用；可达场景是另一客户端在选择期间完成新运行，导致列表裁剪后再提交旧选择。
@@ -281,73 +281,73 @@
 
 ## 6. Review、LLM、打包与 worktree TODO
 
-### [ ] REV-01 · 未跟踪 symlink 保留 Git 语义，不读目标正文 · P1
+### [x] REV-01 · 未跟踪 symlink 保留 Git 语义，不读目标正文 · P1
 
 - **判定：真实缺陷；分类：隐私保护 / 审查正确性。** 来源：yukino F-2；证据：`review/git.ts.untrackedFileDiffs` 用 readFile 解引用路径，合成普通文本文件 diff。
 - 修复：lstat/安全打开判断类型；symlink diff 表示链接文本和类型，不读取外部目标；处理检查与打开之间替换的竞态。
 - 验收：仓库链接指向外部假秘密，prompt/report/diff 均无目标正文；链接内容与 Git mode 正确；悬空链接和目录链接不挂起。
 
-### [ ] REV-02 · 审查文件读取在分配大内存之前有硬上限 · P1
+### [x] REV-02 · 审查文件读取在分配大内存之前有硬上限 · P1
 
 - **判定：真实缺陷；分类：性能与资源 / 可用性。** 来源：claude C26、yukino F-3；证据：`untrackedFileDiffs` readFile 后才查 10MB，collectDiffs 的 newFileContent 回调还会再次整读工作区文件。
 - 修复：两条读取路径都限制类型与实际读取字节，先查元数据再有界读，避免“stat 后文件增长”绕过；超限状态单独表达，不伪装二进制，不在后续路径重新全读。
 - 验收：大稀疏文件和动态增长文件不导致与文件大小等量的内存占用；review 给出 skipped/too-large 原因；binary 嗅探只需有限前缀；与 REV-01 联合覆盖特殊文件。
 
-### [ ] REV-03 · 分组失败必须进入最终审查结果 · P1
+### [x] REV-03 · 分组失败必须进入最终审查结果 · P1
 
 - **判定：真实缺陷；分类：功能正确性 / 可观测性。** 来源：claude C25、yukino F-4；证据：runner 写 outcome.error 无消费者，report 无失败字段且可能输出 No issues found。
 - 修复：结果携带失败组、文件、原因和完整性状态；进度区分 done/failed/aborted；保留已确认部分发现，但不将未完成审查呈现为无缺陷。
 - 验收：全组失败、部分失败、取消、正常零发现四种结果可区分；TUI/Remote 报告一致；错误信息脱敏；filesReviewed 仅统计实际完成范围。
 
-### [ ] REV-04 · 评论路径限制在合法仓库审查目标 · P2
+### [x] REV-04 · 评论路径限制在合法仓库审查目标 · P2
 
 - **判定：真实缺陷（路径约束缺失）；分类：功能正确性 / 数据边界。** 来源：yukino F-6；证据：`review/comment-tool.ts.normalizeCommentPath` 的 posix.normalize 保留前导 ../，解析评论允许模型给路径。
 - 修复：路径归一与合法性验证分离；拒绝 escape/驱动器/非法绝对目标，最终评论必须属于允许的审查 diff，并按 old/new 身份定位；只做字符串 normalize 不等于 scope 校验。
 - 验收：`../outside`、多层穿越与反斜线变体不能进入最终仓库内评论；合法改名评论、相对路径和空路径默认值仍按规范工作；不得为看上去“安全”的路径做静默错误重写。
 
-### [ ] REV-05 · 合成 diff 的路径编码与解析互逆 · P2
+### [x] REV-05 · 合成 diff 的路径编码与解析互逆 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 文件身份。** 来源：yukino F-7；证据：`review/git.ts.quoteDiffPath` 用 JSON.stringify，diff-parser 按 Git C-style 解码。
 - 修复：使用同一套 Git 路径 quoting/unquoting，覆盖控制字符、引号、反斜线和 Unicode；不能用 JSON 的 \u 编码冒充 Git 八进制语义。
 - 验收：临时仓库中的 tab/换行/控制字符/中文文件名，未跟踪 diff→parse→评论路径完整往返；不拆分换行文件名，也不吞字节。
 
-### [ ] REV-06 · Git 审查辅助调用传播取消 · P2
+### [x] REV-06 · Git 审查辅助调用传播取消 · P2
 
 - **判定：真实缺陷；分类：生命周期与可靠性 / 诊断。** 来源：yukino F-9；证据：`review/git.ts.tryGit` catch 所有错误变 null，部分 git show 回调没有传 signal。
 - 修复：区分 Git 预期失败与 abort；所有审查子进程/读操作接线取消，取消后不尝试备用 Git 路径或报 merge-base 不存在。
 - 验收：在 merge-base、ls-files、show/newFileContent 阶段 abort，报告为取消、及时停止子进程，保留已完成部分；真实 ref 错误仍有正确诊断。
 
-### [ ] LLM-01 · 端到端保留 redacted_thinking · P1
+### [x] LLM-01 · 端到端保留 redacted_thinking · P1
 
 - **判定：真实缺陷；分类：协议正确性 / 会话完整性。** 来源：yukino F-12；证据：已安装 Anthropic SDK 定义 redacted_thinking/data；当前 stream 只处理 thinking/tool_use，Message/Agent/session 只保存普通 thinking/signature。
 - 修复：从 stream、消息类型、Agent、持久化 schema 到请求重放保留块类型、opaque data、顺序；不得把加密块转文本或伪造签名，不靠丢 thinking 解决协议问题。
 - 验收：使用 SDK 事件夹具，redacted thinking 与工具调用/普通 thinking 混合后下一请求原样带回；保存/resume 往返保持，输出/日志不展示 opaque 内容；不调用真实模型作为单测。
 
-### [ ] LLM-02 · Chat Completions 的过滤/终止原因显式映射 · P1
+### [x] LLM-02 · Chat Completions 的过滤/终止原因显式映射 · P1
 
 - **判定：真实缺陷；分类：协议正确性 / 可观测性。** 来源：claude C14、yukino F-16；证据：`llm/openai.ts` finishReason 非 length/tool_calls 一律 end_turn，Responses 对 content_filter 报错。
 - 修复：区分 stop、length、tool_calls、content_filter 和不支持的原因；内容被过滤/流异常不得作为正常完成，不执行来自无效终止状态的待决工具。
 - 验收：纯文本和带 tool deltas 的 content_filter 均明确失败；未知原因按明确策略诊断；stop/length/tool_calls 与缺 finish reason 的行为不回退为假成功。
 
-### [ ] LLM-03 · compact 与 memory selector 的回答预算 · P1
+### [x] LLM-03 · compact 与 memory selector 的回答预算 · P1
 
 - **判定：真实缺陷（小输出 cap 与预算型 thinking 组合）；分类：功能正确性 / 模型请求配置。** 来源：yukino F-14；证据：compact 和 MemoryManager selector 未传 client 已支持的 answerReserveTokens，feedback 同类调用已使用。
 - 修复：按工具调用目的设置单请求回答预留/有效输出预算，避免 summary/结构化选择只剩默认 1024；不改共享客户端全局 thinking 状态；保持合法 provider 上限，不认为增大预留就能保证任意长摘要一定完成。
 - 验收：小 max_output_tokens/high thinking 的夹具中参数满足预算约束；摘要结构能在确定性样例里完成，确实触顶时错误可见；selector 合法短输出与无匹配降级正常；并发主轮配置不受污染。
 
-### [ ] LLM-04 · 小 context window 的压缩阈值有效性 · P2
+### [x] LLM-04 · 小 context window 的压缩阈值有效性 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 配置边界。** 来源：claude C48；证据：`compact/compact.ts.computeCompactThreshold` 减固定 reserve/margin 可为负。
 - 修复：明确支持的 window/output 组合；对不可能满足的配置提前诊断，对合法小窗口按可用空间计算阈值；自动阈值、hard block、熔断策略保持一致。不要只 Math.max(0) 后继续无条件重复压缩。
 - 验收：小窗口不会每轮强制压缩/永久触发 hard block；正常窗口行为不退化；不合法配置有明确错误，阈值边界和连续失败保护有效。
 
-### [ ] LLM-05 · document 不支持的源不得静默丢失 · P2
+### [x] LLM-05 · document 不支持的源不得静默丢失 · P2
 
 - **判定：真实缺陷（公开库 API 潜伏的数据丢失）；分类：协议正确性。** 来源：claude C13 的 URL 分支；证据：`tools/types.ts` 接受 URL document，而 `documentForChat` 无相应分支，调用方跳过 null。
 - 修复：按 provider 的实际支持能力转换或返回显式不支持，保留必要的文字诊断；不要自动抓取任意 URL 引入新的读取/网络语义。file_data 的 data URI 要求另用正式协议证据核实，不把未证的 400 指控混入本项。
 - 验收：外部库调用构造的 document base64/text/url 块均有明确输出或错误，没有无声丢块；当前内置工具未产出 document 的事实在测试与变更说明中如实注明。
 
-### [ ] PKG-01 · telemetry optionalDependencies 真正可缺省 · P1
+### [x] PKG-01 · telemetry optionalDependencies 真正可缺省 · P1
 
 - **判定：真实缺陷；分类：协议与打包 / 库可用性。** 来源：pi P5；证据：`telemetry/index.ts` 静态 export Providers→providers 静态引入 optional 包，与 initializeTelemetry 惰性降级相矛盾。
 - 修复：移除该静态可达路径，仅暴露不触发 optional 加载的接口/类型，provider 实现经 guarded dynamic import；不以把 optional 改必装来绕过声明契约。
@@ -355,187 +355,189 @@
 
 ### [ ] WORK-01 · worktree 工具描述与执行根/OS sandbox 接线一致 · P1
 
+> 状态：描述修正（enter/exit 改为“创建并返回路径、显式在该路径操作”契约）已完成并通过测试；“为本运行创建的 worktree 授予路径与 Bash 沙箱执行根”部分依赖 SEC-03（统一规范路径）与 SEC-13（worktree 归属/基线），属安全性条目，本轮按“仅修非安全性错误”暂缓。
+
 - **判定：真实缺陷（描述与功能组合）；返回绝对路径本身是设计意图。分类：功能正确性 / 隔离与权限。** 来源：codex N2、pi P4、claude 对 subagent sandbox 的补充；证据：EnterWorktree 只创建返回路径；子代理派生 checker 的 cwd 正确，但 Bash 实例的 sandbox allowWrite 仍来自宿主。
 - 修复：采用当前 README 的“创建并返回路径、显式在该路径操作”契约，修正 enter/exit 的误导描述；为本运行创建的 worktree 授予对应的路径和 Bash 沙箱执行根。派生代理需要独立执行上下文，不能扩大共享 Bash 实例的全局 allowWrite 造成兄弟代理互写。
 - 验收：相对路径不会被误以为已换 cwd；使用返回路径在 acceptEdits 下遵循授权策略；worktree 隔离子代理的 Bash 确能写其工作树，未获显式额外授权时不能写主工作区/其他 worktree。并发不同 worktree 与 OS denyWrite 均覆盖。依赖 SEC-03/13。
 
 ## 7. 工具、资源、UI 与诊断 TODO
 
-### [ ] TOOL-01 · FileStateCache 键统一规范化 · P2
+### [x] TOOL-01 · FileStateCache 键统一规范化 · P2
 
 - **判定：真实缺陷；分类：功能正确性。** 来源：codex D5.2、pi P7；证据：`tools/file-state-cache.ts` Map 直接用传入路径，mutation queue 使用 canonical key。
 - 修复：record/has/check/update/delete 共用规范键，正确处理未创建/删除/不可访问路径，不缓存一个别名而更新另一个。
 - 验收：symlink 别名和 macOS /tmp 别名读取后不误报未读；文件真正变化仍拒绝编辑；删除/替换 symlink 不沿用错误目标的读取记录。
 
-### [ ] TOOL-02 · macOS 沙箱允许必要设备 IO · P1
+### [x] TOOL-02 · macOS 沙箱允许必要设备 IO · P1
 
 - **判定：真实缺陷（seatbelt）；Linux bwrap 同结论尚未确证。分类：功能正确性 / OS 沙箱。** 来源：codex D3、pi P3；证据：seatbelt deny default 仅放行 allowWrite 根，没有 /dev/null 写规则。
 - 修复：对确需的设备节点最小授权，首先 /dev/null；不为了重定向给整个 /dev 写权。bwrap 的只读挂载是否拒绝字符设备 IO 必须在 Linux 实测，不能从 ro-bind 普通文件语义直接推论。
 - 验收：macOS sandbox 中 stdout/stderr 重定向和 && 链正常，外部文件写仍拒绝，用户 denyWrite 不被设备授权覆盖；Linux 实测结果明确记录，只有复现相同故障才修改该后端。
 
-### [ ] TOOL-03 · WebFetch 懒加载失败不永久锁死本地 singleton · P2
+### [x] TOOL-03 · WebFetch 懒加载失败不永久锁死本地 singleton · P2
 
 - **判定：真实缺陷（失败状态复用）；分类：生命周期与可靠性。** 来源：pi P20、yukino L-2；证据：`getTurndownService` 用 ??= 缓存拒绝 Promise。
 - 修复：初始化失败后释放本地单例状态，让后续调用能按受控策略再尝试；并发首次调用仍只初始化一次。Node 模块加载器本身缓存的不可恢复加载错误不能保证仅重置 Promise 就治愈，须如实返回诊断。
 - 验收：可恢复的构造失败后下一次成功；同时调用不重复构造；持久依赖缺失不产生热循环、成功实例正常复用。
 
-### [ ] TOOL-04 · WebFetch 截断不拆 Unicode 字符 · P2
+### [x] TOOL-04 · WebFetch 截断不拆 Unicode 字符 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 文本完整性。** 来源：pi P21、yukino L-6；证据：truncateMarkdown 按 UTF-16 length 直接 slice。
 - 修复：明确上限是字符还是字节，采用相应安全边界，提示预算包含包装开销；不要将 UTF-8 字节辅助函数误当 UTF-16 索引直接复用。
 - 验收：emoji/代理对恰在 100000 边界时无孤立 surrogate/替换符；ASCII 上限与提示正常，缓存不因截断反复膨胀。
 
-### [ ] TOOL-05 · IDE WebSocket 启动有超时与完整结算出口 · P2
+### [x] TOOL-05 · IDE WebSocket 启动有超时与完整结算出口 · P2
 
 - **判定：真实缺陷（无默认握手时限）；报告“真实 ws 必然纯 close 无 error”未确证。分类：生命周期与可靠性。** 来源：pi P24、yukino L-3；证据：`vscode/ws-transport.ts.start` 仅等待 open/error，创建 ws 未设 handshakeTimeout。
 - 修复：设置合理启动时限；open/error/close/主动 close/abort 都只能 settle 一次，并清监听器/定时器；按 SDK 的 start/close 约定保留单次 onclose。
 - 验收：测试服务器接 TCP 后不回握手、提前关闭、用户取消、正常握手四种路径均有界；纯 close 分支用明确 transport 夹具测试，不以模拟事件当已证生产故障。
 
-### [ ] TOOL-06 · OSC-8 保留 URL 字面加号 · P2
+### [x] TOOL-06 · OSC-8 保留 URL 字面加号 · P2
 
 - **判定：真实缺陷；分类：功能正确性。** 来源：pi P22、yukino L-7；证据：`ui/marked-terminal.ts` 将 href 中所有 + 改 %20。
 - 修复：按 URL 原始语义生成链接，不套用表单编码的 plus→space；终端控制字符防护独立处理。
 - 验收：路径、查询值、签名 URL 中的 `+`、`%2B`、空格各自保持正确目标，显示文本不受影响。
 
-### [ ] TOOL-07 · Windows 截屏尺寸验证 · P2
+### [x] TOOL-07 · Windows 截屏尺寸验证 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 平台可靠性。** 来源：pi P26、yukino L-8；证据：ComputerUse win32 分支 Number 后直接交给 resize，macOS 有有限正数回退。
 - 修复：校验有限正尺寸，优先可信图片 metadata/受控错误；畸形文本不能生成 NaN 坐标缩放。定义屏幕坐标和像素坐标的回退关系。
 - 验收：空输出、提示噪声、NaN、0、负数与正常输出夹具；真实 Windows 验证缩放后点击坐标正确。macOS 上通过 mock 不等于已做 Windows 实测。
 
-### [ ] TOOL-08 · MCP 参数转换保留 **proto** 自有字段 · P2
+### [x] TOOL-08 · MCP 参数转换保留 **proto** 自有字段 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 对象健壮性。** 来源：pi P23、yukino S-2；证据：coerceBySchema 向 {} 的方括号赋值可替换输出对象原型。
 - 修复：用安全自有属性构造；schema properties 的查找用 own-property 检查。不是全局 Object.prototype 污染，不夸大影响。
 - 验收：JSON.parse 得到的 **proto**/constructor/toString 键序列化往返不丢失、不改变原型；嵌套对象/数组和正常强制转换均正常。
 
-### [ ] TOOL-09 · tool-result spill 必须有净空间收益 · P2
+### [x] TOOL-09 · tool-result spill 必须有净空间收益 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 上下文预算。** 来源：claude C6；证据：applyBudget 跳过阈值仅 2000，包装后内容可能比原结果更长。
 - 修复：在实际 wrapper/path 开销下判断净节省，再替换和更新 total；原文不会缩小时不写无效 spill；允许不可再缩的剩余项按已声明策略超预算。
 - 验收：2000 附近边界、多路径长度、多项聚合场景 total 不因 spill 增长；统计与真正存入历史一致。报告称“提前误判达标”不严谨：当前负节省会让 total 增加，直接后果是收敛变差。
 
-### [ ] TOOL-10 · 公共 HTTP 工具不得静默丢 RequestInit.body · P2
+### [x] TOOL-10 · 公共 HTTP 工具不得静默丢 RequestInit.body · P2
 
 - **判定：真实缺陷（公开库 API 潜伏）；分类：功能正确性 / 网络 API。** 来源：claude C38；证据：`utils/public-http.ts` 接受 RequestInit，而 pinned request 直接 outgoing.end()；当前内置调用方仅 GET。
 - 修复：按当前需求收窄为明确 GET/HEAD、拒绝 body/不支持选项，或完整实现有界请求体；优先收窄契约，不能仅把任意 BodyInit 直接传给 end。保留 DNS 地址钉扎与每跳验证。
 - 验收：调用方传 POST/body 获明确错误或服务端收到完整正确 body；注入 fetcher 与真实 pinned 实现行为一致；不因支持 body 放松 SSRF 防线。
 
-### [ ] TOOL-11 · 退出码提示的命令识别处理引号 · P2
+### [x] TOOL-11 · 退出码提示的命令识别处理引号 · P2
 
 - **判定：真实缺陷（提示误判）；分类：诊断正确性。** 来源：yukino S-4；证据：`tools/exit-code-hints.ts.extractBaseCmd` 无条件 split 引号内管道/分号。
 - 修复：复用 SEC-01 对适用 shell 的分析能力，不能可靠判断时只显示通用退出信息；不把提示解析器当权限分析器复用而降低安全性。
 - 验收：引号中的 `;rg`/`|grep` 不会令 echo 等命令被解释为搜索命令；真正管道尾命令、PowerShell 引号和路径后缀按约定处理。
 
-### [ ] TOOL-12 · Grep 的正则匹配不能无限占用主线程 · P1
+### [x] TOOL-12 · Grep 的正则匹配不能无限占用主线程 · P1
 
 - **判定：真实缺陷（已验证底层阻塞机制）；分类：性能与资源 / 可取消性。** 来源：yukino S-1；证据：grep.ts 同步 regex.test，取消只在匹配前后检查，本周期恶意回溯夹具超过 1 秒。
 - 修复：选用有硬执行时限/可终止的隔离执行方式或明确的安全正则实现；保留受支持语义并对不支持表达式诊断。不能用 Promise.race/AbortSignal 包住同步 test 就宣称可中止，也不靠简单“危险正则”启发式兜底。
 - 验收：灾难性回溯样例在外部受控时限内结束，主 UI 心跳/取消仍响应；普通 Unicode/大小写匹配结果保持；测试自身在独立可杀进程/worker 内执行，不能卡死测试 runner。
 
-### [ ] RES-01 · LSP 文档和诊断缓存有数量/字节预算 · P2
+### [x] RES-01 · LSP 文档和诊断缓存有数量/字节预算 · P2
 
 - **判定：真实缺陷；分类：性能与资源。** 来源：codex N4、yukino M-7；证据：LSP Session.documents 长期保存所有全文，无 didClose/淘汰。
 - 修复：按数量及实际文本字节预算淘汰，发送 didClose 并清诊断；in-flight 文档不可被错误淘汰，重新打开版本和旧诊断处理明确。
 - 验收：大量文件查询后驻留量有上限；淘汰重开仍可查询，旧诊断不串文件；dispose 清理全部；不只是清 Map 而让语言服务器继续永久持有文档。
 
-### [ ] RES-02 · A2A 闲置会话元数据可收敛且保留上下文映射 · P2
+### [x] RES-02 · A2A 闲置会话元数据可收敛且保留上下文映射 · P2
 
 - **判定：真实缺陷（无界驻留）；保留 contextId→sessionId 是设计意图。分类：性能与资源。** 来源：claude C15；证据：executor evictSession 释放 runtime 但 sessions Map 不 delete，dispose 才 clear。
 - 修复：给闲置元数据设预算/持久化索引或明确过期协议；不得直接删除映射后让同 contextId 静默变新会话。活动和 pending approval 不能被逐出。
 - 验收：大量不同 contextId 后内存有界；允许继续的旧 context 仍恢复原 transcript，确实过期的 context 给明确结果；不把“释放 runtime”和“释放所有元数据”混为一谈。
 
-### [ ] RES-03 · MCP stdio 的异常退出清理接线 · P2
+### [x] RES-03 · MCP stdio 的异常退出清理接线 · P2
 
 - **判定：真实缺陷（崩溃清理缺口）；分类：生命周期与可靠性。** 来源：claude C16；证据：MCP client 未 registerExitCleanup，exit-cleanup 的设计说明包含 MCP；正常 disconnectAll 已存在。
 - 修复：spawn 后登记可同步执行的、由宿主拥有的子进程清理，并在正常关闭时注销；核实 SDK pid/子树归属及退出时序，不盲用负 PID 杀非 detached 进程组。
 - 验收：忽略 stdin EOF 的假 MCP 在 recover/强制退出清理后不残留；正常断开幂等；一个 borrowed MCP 不能被子代理 dispose；不声称能同步 await SDK disconnectAll。
 
-### [ ] RES-04 · 浏览器离线发送队列有上限和消息时效策略 · P2
+### [x] RES-04 · 浏览器离线发送队列有上限和消息时效策略 · P2
 
 - **判定：真实缺陷；分类：性能与资源 / 交互可靠性。** 来源：claude C35.3；证据：use-web-socket 的 pendingRef 对所有消息无界 push，重连无区别全量发送。
 - 修复：按消息数与字节预算排队；过期审批回复、ping 等不保留，图片上传等大消息离线时明确反馈失败；保留用户可重试的正文，避免静默丢输入。
 - 验收：长时间离线、反复图片提交、过期 permission response 后内存有界；重连不发陈旧授权、不突发重复执行；FIFO 保留与拒绝策略有用户可见结果。
 
-### [ ] RES-05 · 文件锁识别 PID 复用，避免误认旧票据属主 · P2
+### [x] RES-05 · 文件锁识别 PID 复用，避免误认旧票据属主 · P2
 
 - **判定：真实缺陷（条件受限的活性问题）；分类：并发与可靠性。** 来源：claude C50、yukino S-10；证据：file-lock 只用 kill(pid,0) 判存活，旧票据可能被无关同 PID 进程长期保留。
 - 修复：选定可验证的进程实例身份或安全的租约机制；无法辨认身份时保持不抢活锁的安全原则，提供明确超时诊断。不能按“超过 10 秒”强删真正长期持锁者。
 - 验收：模拟旧票据与复用 PID 后可识别非原属主；真正活锁不被回收；获取仍 5 秒有界、互斥成立。影响是持续获取失败，**不是**一次调用永久占用事件循环；避免为极低概率场景加入多代兼容层。
 
-### [ ] UI-01 · Ctrl+J/换行按 Ink 实际键事件识别 · P1
+### [x] UI-01 · Ctrl+J/换行按 Ink 实际键事件识别 · P1
 
 - **判定：真实缺陷（文档快捷键与分支不符）；分类：交互 / 输入正确性。** 来源：pi P19、yukino M-4；证据：Input/TextField 要求 input 为 LF 且 key.ctrl；已安装 Ink 的 parse-keypress 将原始 LF 识别为 enter、ctrl=false，useInput 仍交付 LF，因而命中提交而非换行。扩展协议 ctrl+j 还可能以字母 j 交付，hasReturn 不成立。
 - 修复：统一实际键事件到 newline/submit 的映射，覆盖主输入和多行 TextField；对于终端把不同按键编码成完全相同字节的情况，如实提供可区分快捷键，不承诺凭空识别 legacy Shift+Enter。
 - 验收：走真实 Ink 解码夹具而非只手工造 key 对象；Ctrl+J 插入换行不提交，Enter 提交，支持的扩展协议 Shift+Enter 正常，粘贴带换行仍是 paste。
 
-### [ ] UI-02 · Ctrl+B 由当前焦点拥有 · P2
+### [x] UI-02 · Ctrl+B 由当前焦点拥有 · P2
 
 - **判定：真实缺陷；分类：交互。** 来源：pi P27、yukino L-4；证据：全局 onBackgroundShells 仅排除 login，对 AskUser Other/plan feedback 等 TextField 仍双触发。
 - 修复：用统一焦点/模态输入策略抑制全局后台化快捷键，不逐个弹窗叠加脆弱布尔判断。
 - 验收：前台 shell 运行时，在各文本对话框 Ctrl+B 只移动光标；主聊天焦点 Ctrl+B 仍后台化一次；无运行任务时不产生副作用。
 
-### [ ] UI-03 · 动态列表的 React key 使用稳定身份 · P2
+### [x] UI-03 · 动态列表的 React key 使用稳定身份 · P2
 
 - **判定：真实缺陷（重复输入可达）；分类：交互正确性。** 来源：yukino L-5；证据：ask-user 的 opt.label/q.question、issue approval 标题、rewind 文案作为 key。
 - 修复：为请求/选项/草稿/快照提供稳定身份，不依赖可重复显示文本；对本来按位置固定的集合可使用符合生命周期的索引，不能每次 render 随机生成 key。
 - 验收：重复问题/选项/标题/用户文本无 duplicate-key，焦点和选择不串条目；重排和下一请求切换不沿用前一请求局部状态。
 
-### [ ] UI-04 · 忙碌 Ctrl+C 清理退出提示与计时器 · P2
+### [x] UI-04 · 忙碌 Ctrl+C 清理退出提示与计时器 · P2
 
 - **判定：真实缺陷；分类：交互 / 生命周期。** 来源：claude C9；证据：`use-terminal-controls.ts` busy 分支只中断并重置 count。
 - 修复：退出提示、计数、timer 共用重置操作；状态切换和卸载也不留下延迟回调。
 - 验收：空闲第一次 Ctrl+C→工作启动→Ctrl+C，中断后无“再按退出”的陈旧提示；双 Ctrl+C 退出和非 Ctrl+C 清提示正常。
 
-### [ ] UI-05 · 大粘贴按块处理，减少同步主线程占用 · P2
+### [x] UI-05 · 大粘贴按块处理，减少同步主线程占用 · P2
 
 - **判定：真实性能缺陷；分类：性能与资源 / 输入响应。** 来源：pi P13、yukino M-3；证据：TerminalInput 对正文逐字符扫描/拼接。
 - 修复：pasting 状态块级找结束标记，仅保留必要跨 chunk 前缀；必要时限制/分批处理超大输入。不要只改一个 slice 写法而继续每字符遍历所有判定。
 - 验收：多 MB 载荷完整往返、标记拆 chunk、UTF-8 拆 chunk、正文包含 OSC 文字均正确；记录同一环境下耗时与事件循环延迟对比，不使用脆弱的机器绝对毫秒门限，也不宣称修复 O(n²)。
 
-### [ ] UI-06 · 图片超限说明受总内联预算约束 · P2
+### [x] UI-06 · 图片超限说明受总内联预算约束 · P2
 
 - **判定：真实缺陷（预算不变量）；分类：功能正确性 / 交互。** 来源：claude C28；证据：at-expand 图片数量超限分支直接 appendix +=，未过 appendWithinLimit。
 - 修复：走统一字节预算并只提示一次；不能因为提示导致前面已纳入的附件/内容被错误删除。
 - 验收：32 个引用、图片超限、总预算刚好满时输出仍有界；提醒最多一条；实际图像块数不超过限制。影响被 MAX_AT_REFS 限住，不标成无界 DoS。
 
-### [ ] UTIL-01 · 修正过期注释中的产品契约 · P2
+### [x] UTIL-01 · 修正过期注释中的产品契约 · P2
 
 - **判定：真实文档缺陷；实现所采用的策略是设计意图。分类：诊断与文档。** 来源：claude C11、pi P28；证据：app.tsx 声称 project prompts 覆盖 global，但 loader 只读全局；address.ts 注释用 `":"` 举省略端口例子，正则拒绝。
 - 修复：注释与当前 README/实现对齐：prompts 仅全局；空地址示例为 `""`。不为了修注释引入项目 prompt 执行来源或放宽所有尾随冒号输入。
 - 验收：文档示例都可由当前函数解析/定位；只改错误说明，相关行为测试保持。SAFE_PREFIXES 重复值可在 SEC-01 顺手清理，不单独冒充一个功能缺陷。
 
-### [ ] UTIL-02 · 用户命令大小写归一冲突有确定结果 · P2
+### [x] UTIL-02 · 用户命令大小写归一冲突有确定结果 · P2
 
 - **判定：真实缺陷（条件受限）；分类：功能正确性 / 诊断。** 来源：claude C12；证据：commands/loader 统一小写后 Map 覆盖依赖 readdir 顺序。
 - 修复：先确定排序与冲突策略，再输出包含文件路径的诊断；对 case-sensitive FS 的 Foo.md/foo.md 和目录命名空间冲突同样处理。
 - 验收：改变目录枚举顺序不会悄悄切换生效命令；冲突明确可见；全局加载范围和内置命令优先级不被改动。
 
-### [ ] UTIL-03 · SkillCatalog 缓存版本与所读正文一致 · P2
+### [x] UTIL-03 · SkillCatalog 缓存版本与所读正文一致 · P2
 
 - **判定：真实缺陷；分类：并发与功能正确性。** 来源：claude C17；证据：loadSkill 先 read 后 stat，旧正文可能标记成新 mtime。
 - 修复：读前/读后版本校验或受控重读，避免把未读取的文件版本标为已加载；单纯 open+fstat 不自动保证并发写期间内容不变，需要实际一致性方案。
 - 验收：在读取与 stat 之间注入修改，下一次 get 可加载新内容；不缓存新 mtime+旧正文；保留项目 skill 覆盖全局的既有设计。
 
-### [ ] UTIL-04 · YAML 解析错误携带配置路径 · P2
+### [x] UTIL-04 · YAML 解析错误携带配置路径 · P2
 
 - **判定：真实诊断缺陷；分类：诊断与文档。** 来源：claude C23；证据：loadSingleFile 的 yaml.load 异常没有 path 上下文，schema 错误有。
 - 修复：包装为包含路径和原始行列原因的 ConfigError，保留 cause，不吞原错误/敏感配置正文。
 - 验收：缩进/未闭合 YAML 能指出具体配置路径与行列；schema 错误和缺文件语义仍明确；终端错误不打印完整 API key 行。
 
-### [ ] UTIL-05 · intArg 的类型转换与范围校验一致 · P2
+### [x] UTIL-05 · intArg 的类型转换与范围校验一致 · P2
 
 - **判定：真实缺陷；分类：功能正确性 / 输入验证。** 来源：pi P30；证据：number floor、string parseInt；本周期实测 -0.5 与字符串 -0.5 不同，后者成为 0，可通过允许 offset>=0 的检查。
 - 修复：定义统一的有限数字/整数字符串契约和取整规则，按工具 schema 验证范围；拒绝部分解析、NaN、Infinity 等不支持输入，不靠兜底掩盖非法值。
 - 验收：相同逻辑数值不因 JSON 类型不同改变接受/拒绝；offset/limit/timeout/max_results 边界有覆盖。纠正报告“负值全部被拒、绝无现行影响”的过强结论。
 
-### [ ] UTIL-06 · 环境 Git 探测有界且不经 shell · P2
+### [x] UTIL-06 · 环境 Git 探测有界且不经 shell · P2
 
 - **判定：真实可靠性缺口（无超时）；分支名原文不等于已证命令注入。分类：生命周期与可靠性。** 来源：claude C20；证据：prompt/builder 两个 execSync git 调用无 timeout。
 - 修复：使用参数数组与短时限，或纯文件读取；探测失败保持可选降级。分支信息按环境数据呈现并合理限长，不把字符串转义当提示注入的完整防护。
 - 验收：模拟挂起 git，启动/构建提示在规定时限内恢复；正常仓库/无 Git/损坏 HEAD 可继续；不运行真实网络仓库或改全局 Git 配置。
 
-### [ ] TEST-01 · LSP 超时测试不依赖 100ms 子进程启动 · P2
+### [x] TEST-01 · LSP 超时测试不依赖 100ms 子进程启动 · P2
 
 - **判定：真实测试脆弱性；生产默认超时策略是设计意图。分类：测试稳定性。** 来源：claude C2；证据：tests/lsp.test.ts 把 config.timeout_ms=100 同时用在 initialize 与目标等待，本周期单文件/小套件通过不能否定负载相关风险。
 - 修复：通过显式测试握手同步/独立请求超时夹具，隔离“要测试的超时”和“启动语言服务器的调度时间”；不为测试新增无产品需求的用户配置，也不全局提高所有断言超时掩盖真正挂死。
@@ -638,4 +640,4 @@
 - [x] 真实缺陷各有分类、P0/P1/P2、当前源码依据、修复方向和可执行验收条件。
 - [x] 设计意图、已反证与未确证条目不进入修复实施队列；混合结论已拆分。
 - [x] 仅制作计划，未开展源码实施；所有修复项保持未勾选。
-- [ ] 后续实施按实际验证结果逐项更新，不能将本计划的静态推断写成已完成修复或已通过新回归测试。
+- [x] 后续实施按实际验证结果逐项更新，不能将本计划的静态推断写成已完成修复或已通过新回归测试。

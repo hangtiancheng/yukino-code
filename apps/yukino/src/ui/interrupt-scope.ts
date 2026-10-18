@@ -39,15 +39,15 @@ export interface InterruptDeps {
   permissionQueue: {
     current: { present: () => void; deny: () => void }[];
   };
-  askResolveRef: {
-    current: ((answers: Record<string, string>) => void) | null;
-  };
-  setAskRequest: (request: null) => void;
+  /** Settle every queued/in-flight AskUserQuestion (resolve each + dismiss). */
+  settleAskQueue: () => void;
   /** Pending /feedback issue approval panel (one per feedback round). */
   issueApprovalResolveRef: {
     current: ((confirmation: IssueConfirmation) => void) | null;
   };
   setIssueApprovalRequest: (request: null) => void;
+  /** Plan-approval dialog state; dismissed on interrupt like other pending prompts. */
+  setPlanApprovalActive: (active: boolean) => void;
   /** Background tasks (Bash/PowerShell/background agents). Stopped only via interruptAll (TUI exit). */
   backgroundTasks: { stopAll(): Promise<void> };
   /** Teammates. Stopped only via interruptAll (TUI exit). */
@@ -82,13 +82,16 @@ export function createInterruptHandlers(
     for (const queued of deps.permissionQueue.current.splice(0)) {
       queued.deny();
     }
-    deps.askResolveRef.current?.({});
-    deps.askResolveRef.current = null;
-    deps.setAskRequest(null);
+    // Settle ALL queued/in-flight asks, not just the visible dialog: parallel
+    // AskUserQuestion calls each hold their own resolver.
+    deps.settleAskQueue();
     // Reject (never file) a pending issue-approval panel.
     deps.issueApprovalResolveRef.current?.({ approved: false });
     deps.issueApprovalResolveRef.current = null;
     deps.setIssueApprovalRequest(null);
+    // Dismiss a pending plan-approval dialog so an interrupted run leaves no
+    // stale approval prompt behind.
+    deps.setPlanApprovalActive(false);
   };
   const interruptAll = () => {
     interruptForeground();

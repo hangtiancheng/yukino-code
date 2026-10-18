@@ -197,7 +197,14 @@ describe("read-only language server tool", () => {
     expect(result.output).toContain("current diagnostic🙂");
     expect(result.output).not.toContain("stale");
     expect(result.output).toContain('"pending": false');
-    const pending = await tool({ silent: true }, 100).execute(
+    // The silent fixture never publishes diagnostics, so the tool reports
+    // pending only after its diagnostics wait elapses. A 100ms budget here used
+    // to double as the initialize timeout, racing subprocess startup under
+    // parallel load. Give the handshake a generous budget and complete it with a
+    // warm-up first, so the wait under test is isolated from server startup.
+    const silentLsp = tool({ silent: true }, 4000);
+    await silentLsp.execute({ cwd }, { operation: "hover", ...positionArgs });
+    const pending = await silentLsp.execute(
       { cwd },
       { operation: "diagnostics", file_path: "example.ts" },
     );

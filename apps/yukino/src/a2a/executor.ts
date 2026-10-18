@@ -120,6 +120,14 @@ export async function createA2aRuntime(
 
 /** Idle grace period before an agent runtime is disposed to reclaim resources. */
 export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+/**
+ * Upper bound on tracked contextId sessions. Idle eviction releases a session's
+ * runtime but keeps its contextId→sessionId entry so the transcript can be
+ * restored; without a cap a long-running server seeing many distinct contextIds
+ * would grow that map until dispose(). Overflow drops the least-recently-used
+ * fully-idle entries.
+ */
+const MAX_TRACKED_SESSIONS = 256;
 
 const NO_ACTIVE_RUN = "No active run is awaiting a permission response.";
 
@@ -261,6 +269,11 @@ export class YukinoA2aExecutor implements AgentExecutor {
     }
 
     const session = existing ?? this.createSession(contextId);
+    if (existing) {
+      // Refresh recency so overflow eviction drops the least-recently-used.
+      this.sessions.delete(contextId);
+      this.sessions.set(contextId, session);
+    }
     let runtime: A2aRuntime;
     try {
       runtime = await this.ensureRuntime(session);
@@ -368,6 +381,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
   }
 
   private createSession(contextId: string): A2aSession {
+    this.evictOverflowSessions();
     const session: A2aSession = {
       contextId,
       sessionId: undefined,
@@ -377,6 +391,36 @@ export class YukinoA2aExecutor implements AgentExecutor {
     };
     this.sessions.set(contextId, session);
     return session;
+  }
+
+  /**
+   * Bounds the tracked-session map by dropping the least-recently-used
+   * fully-idle sessions (Map iteration order is recency order, refreshed on
+   * access). A session with an in-flight or permission-pending run is never
+   * evicted. The dropped session's persisted transcript stays on disk; only the
+   * in-memory contextId→sessionId link is released.
+   */
+  private evictOverflowSessions(): void {
+    if (this.sessions.size < MAX_TRACKED_SESSIONS) {
+      return;
+    }
+    for (const [contextId, session] of this.sessions) {
+      if (this.sessions.size < MAX_TRACKED_SESSIONS) {
+        break;
+      }
+      if (session.run && !session.run.finished) {
+        continue;
+      }
+      this.disarmIdleTimer(session);
+      const runtimePromise = session.runtimePromise;
+      session.runtimePromise = null;
+      if (runtimePromise) {
+        void runtimePromise
+          .then((runtime) => runtime.dispose())
+          .catch(() => undefined);
+      }
+      this.sessions.delete(contextId);
+    }
   }
 
   /**

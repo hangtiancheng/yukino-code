@@ -220,6 +220,8 @@ export interface ProviderListPayload {
 
 export interface RewindSnapshot {
   index: number;
+  /** Stable identity (the snapshot timestamp); survives head-trimming, unlike index. */
+  id: string;
   userText: string;
   timestamp: string;
   fileCount: number;
@@ -518,6 +520,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
       snapshots: z.array(
         z.strictObject({
           index: z.number(),
+          id: z.string(),
           userText: z.string(),
           timestamp: z.string(),
           fileCount: z.number(),
@@ -626,7 +629,7 @@ export type RewindChoice =
   "code_and_conversation" | "conversation_only" | "code_only";
 
 export interface RewindActionPayload {
-  snapshotIndex: number;
+  snapshotId: string;
   action: RewindChoice;
 }
 

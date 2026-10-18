@@ -83,6 +83,13 @@ function asTabNumber(tab: number | string) {
   return asTabNumber(tabN);
 }
 
+// OSC-8 hyperlink targets must not contain raw whitespace or control
+// characters, but a literal "+" is a valid URL character (signed URLs, base64
+// query values) and must not be rewritten the way form encoding would.
+function oscSafeHref(href: string): string {
+  return href.replace(/[ \t]/g, "%20").replace(/[\u0000-\u001f\u007f]/g, "");
+}
+
 const DEFAULT_TAB = 4;
 
 // Built per renderer so THEME is only read at render time: evaluating these
@@ -374,7 +381,7 @@ class Renderer {
     if (supportsHyperlinks.stdout) {
       const linkText = text ? this.emojiFn(text) : href;
       const styledLink = this.config.href(linkText);
-      out = ansiEscapes.link(styledLink, href.replace(/\+/g, "%20"));
+      out = ansiEscapes.link(styledLink, oscSafeHref(href));
     } else if (
       token.autolink &&
       token.text !== "" &&

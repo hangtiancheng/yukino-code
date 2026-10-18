@@ -11,6 +11,7 @@ import {
   type StreamableHTTPClientTransportOptions,
 } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import type { MCPServerConfig } from "@/config/index.js";
 import {
   asImageMediaType,
@@ -189,6 +190,7 @@ export class MCPClient {
   private config: MCPServerConfig;
   private client: Client | null = null;
   private transport: MCPTransport | null = null;
+  private unregisterExitCleanup: (() => void) | null = null;
 
   constructor(config: MCPServerConfig) {
     this.name = config.name;
@@ -233,6 +235,24 @@ export class MCPClient {
 
     this.client = new Client({ name: "yukino", version }, {});
     await this.client.connect(this.transport);
+
+    // A crash path (process.exit / uncaught exception) never awaits the async
+    // disconnectAll, so a spawned stdio server would survive as an orphan.
+    // Register a synchronous kill of the exact child PID — the SDK does not
+    // spawn detached, so never signal a process group — and drop the hook on a
+    // clean disconnect.
+    if (this.transport instanceof StdioClientTransport) {
+      const pid = this.transport.pid;
+      if (typeof pid === "number" && pid > 0) {
+        this.unregisterExitCleanup = registerExitCleanup(() => {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            // The server already exited.
+          }
+        });
+      }
+    }
   }
 
   // The server's instructions from the initialize result, if any.
@@ -299,6 +319,8 @@ export class MCPClient {
   }
 
   async disconnect(): Promise<void> {
+    this.unregisterExitCleanup?.();
+    this.unregisterExitCleanup = null;
     const client = this.client;
     const transport = this.transport;
     this.client = null;

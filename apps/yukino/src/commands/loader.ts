@@ -6,7 +6,19 @@ import { z, parse } from "zod";
 
 import type { Command } from "./commands.js";
 
+import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath } from "@/storage/index.js";
+
+const log = createChildLogger({ module: "commands" });
+
+interface LoadedCommand {
+  command: Command;
+  sourcePath: string;
+}
+
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 // Subdirectories namespace command names: sub/dir/foo.md → "sub:dir:foo".
 export function loadUserCommands(): Command[] {
@@ -14,21 +26,33 @@ export function loadUserCommands(): Command[] {
   if (!existsSync(base)) {
     return [];
   }
-  const byName = new Map<string, Command>();
-  for (const cmd of walkDir(base, base)) {
-    byName.set(cmd.name, cmd);
+  const loaded = walkDir(base, base);
+  // Sort by source path so a name collision (e.g. Foo.md vs foo.md, or a file
+  // whose name already contains ":") never resolves by readdir order: the
+  // lexicographically smallest path wins and every loser is reported.
+  loaded.sort((a, b) => compareStrings(a.sourcePath, b.sourcePath));
+  const byName = new Map<string, LoadedCommand>();
+  for (const item of loaded) {
+    const existing = byName.get(item.command.name);
+    if (existing) {
+      log.warn(
+        `User command name collision for '${item.command.name}': keeping '${existing.sourcePath}', ignoring '${item.sourcePath}'`,
+      );
+      continue;
+    }
+    byName.set(item.command.name, item);
   }
-  return [...byName.values()];
+  return [...byName.values()].map((i) => i.command);
 }
 
-function walkDir(base: string, dir: string): Command[] {
+function walkDir(base: string, dir: string): LoadedCommand[] {
   let entries: string[];
   try {
     entries = readdirSync(dir);
   } catch {
     return [];
   }
-  const out: Command[] = [];
+  const out: LoadedCommand[] = [];
   for (const entry of entries) {
     const full = join(dir, entry);
     let st;
@@ -42,7 +66,7 @@ function walkDir(base: string, dir: string): Command[] {
     } else if (entry.endsWith(".md")) {
       const cmd = parseCommandFile(base, full);
       if (cmd) {
-        out.push(cmd);
+        out.push({ command: cmd, sourcePath: full });
       }
     }
   }

@@ -602,6 +602,18 @@ describe("comment-tool", () => {
     expect(normalizeCommentPath("/src/a.ts")).toBe("src/a.ts");
     expect(normalizeCommentPath("src\\nested\\a.ts")).toBe("src/nested/a.ts");
     expect(normalizeCommentPath("src//double.ts")).toBe("src/double.ts");
+    expect(normalizeCommentPath("src/a/../b.ts")).toBe("src/b.ts");
+    expect(normalizeCommentPath("")).toBe("");
+  });
+
+  it("rejects comment paths that escape the review root or are drive-qualified", () => {
+    expect(normalizeCommentPath("../outside.ts")).toBeNull();
+    expect(normalizeCommentPath("../../etc/passwd")).toBeNull();
+    expect(normalizeCommentPath("src/../../outside.ts")).toBeNull();
+    expect(normalizeCommentPath("..")).toBeNull();
+    expect(normalizeCommentPath("..\\..\\windows\\system32")).toBeNull();
+    expect(normalizeCommentPath("C:\\secrets\\key.pem")).toBeNull();
+    expect(normalizeCommentPath("C:/secrets/key.pem")).toBeNull();
   });
 
   it("collector supports snapshot deltas and index removal", () => {
@@ -912,6 +924,7 @@ describe("report", () => {
       excluded: [{ path: "x.lock", reason: "user-rule" }],
       filteredOut: 1,
       aborted: false,
+      failures: [],
     });
     expect(report).toContain("## Code Review");
     expect(report).toContain("### src/app.ts");
@@ -932,7 +945,29 @@ describe("report", () => {
       excluded: [],
       filteredOut: 0,
       aborted: false,
+      failures: [],
     });
     expect(report).toContain("No issues found");
+  });
+
+  it("never reports a clean pass when a group failed", async () => {
+    const { formatReviewReport } = await import("@/review/report.js");
+    const report = formatReviewReport({
+      mode: "workspace",
+      comments: [],
+      filesReviewed: 0,
+      filesChanged: 3,
+      groups: [{ label: "g1", files: ["a.ts"] }],
+      excluded: [],
+      filteredOut: 0,
+      aborted: false,
+      failures: [
+        { label: "g2", files: ["b.ts", "c.ts"], reason: "model overloaded" },
+      ],
+    });
+    expect(report).not.toContain("No issues found");
+    expect(report).toContain("INCOMPLETE");
+    expect(report).toContain("g2");
+    expect(report).toContain("model overloaded");
   });
 });

@@ -83,11 +83,24 @@ function cacheSet(url: string, markdown: string, finalUrl: string): void {
 // the module's default export.
 let turndownServicePromise: Promise<TurndownService> | undefined;
 function getTurndownService(): Promise<TurndownService> {
-  return (turndownServicePromise ??= import("turndown").then(
-    // Strip <script>/<style>: turndown's default rules keep their text content,
-    // which pollutes the markdown with JS/CSS noise.
-    (mod) => new mod.default().remove(["script", "style"]),
-  ));
+  if (!turndownServicePromise) {
+    const pending = import("turndown").then(
+      // Strip <script>/<style>: turndown's default rules keep their text content,
+      // which pollutes the markdown with JS/CSS noise.
+      (mod) => new mod.default().remove(["script", "style"]),
+    );
+    // Release a rejected promise so a later call can retry a recoverable
+    // failure instead of being locked to the first rejection forever. The
+    // current caller still receives this rejection; if the dependency is
+    // genuinely broken the next attempt fails again and reports it honestly.
+    pending.catch(() => {
+      if (turndownServicePromise === pending) {
+        turndownServicePromise = undefined;
+      }
+    });
+    turndownServicePromise = pending;
+  }
+  return turndownServicePromise;
 }
 
 // Text/binary split: everything under text/ plus the structured text formats
@@ -120,7 +133,14 @@ function truncateMarkdown(content: string): string {
   if (content.length <= MAX_MARKDOWN_LENGTH) {
     return content;
   }
-  return `${content.slice(0, MAX_MARKDOWN_LENGTH)}\n\n[Content truncated due to length...]`;
+  // MAX_MARKDOWN_LENGTH counts UTF-16 code units; never cut between a high and
+  // low surrogate or the dangling half renders as U+FFFD.
+  let end = MAX_MARKDOWN_LENGTH;
+  const lastCode = content.charCodeAt(end - 1);
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
+    end -= 1;
+  }
+  return `${content.slice(0, end)}\n\n[Content truncated due to length...]`;
 }
 
 function formatResult(

@@ -17,6 +17,7 @@ import z, { parse } from "zod";
 
 import { memoryAge, memoryFreshnessText } from "./memory-age.js";
 
+import { DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
@@ -33,6 +34,8 @@ const log = createChildLogger({ module: "memory" });
 const MAX_ENTRYPOINT_LINES = 200;
 const MAX_ENTRYPOINT_BYTES = 25_000;
 const MEMORY_INDEX_NAME = "MEMORY.md";
+// Answer space reserved for the memory selector's structured JSON reply.
+const SELECTOR_ANSWER_RESERVE_TOKENS = 4_000;
 
 /**
  * Truncates index content to fit within the byte limit.
@@ -368,7 +371,20 @@ export class MemoryManager {
         SELECT_MEMORIES_SYSTEM_PROMPT + "\n\n" + userMessage,
       );
 
-      const stream = client.stream(conversation, [], abortSignal);
+      // Reserve answer space for the structured selection so a fixed thinking
+      // budget cannot leave only the 1024-token floor for the JSON reply.
+      const budget = client.getOutputBudget?.();
+      const maxOutputTokens = Math.max(
+        1,
+        Math.min(
+          (budget?.thinkingTokens ?? 0) + SELECTOR_ANSWER_RESERVE_TOKENS,
+          budget?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        ),
+      );
+      const stream = client.stream(conversation, [], abortSignal, {
+        maxOutputTokens,
+        answerReserveTokens: SELECTOR_ANSWER_RESERVE_TOKENS,
+      });
       for await (const event of stream) {
         if (event.type === "text_delta") {
           rawResponse += event.text;

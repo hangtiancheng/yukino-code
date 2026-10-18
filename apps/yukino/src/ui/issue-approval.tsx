@@ -75,9 +75,9 @@ export function IssueApprovalDialog({
       subtitle={`${count} issue(s) for hangtiancheng/yukino-code. Full drafts are in the transcript above.`}
       title="File these issues?"
     >
-      {issues.map((issue) => (
+      {issues.map((issue, index) => (
         <Box
-          key={issue.title}
+          key={index}
           flexDirection="column"
           paddingLeft={1}
           paddingRight={1}

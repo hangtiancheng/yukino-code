@@ -1,9 +1,10 @@
 import { execFile } from "child_process";
-import { readFile } from "fs/promises";
+import { constants } from "fs";
+import { lstat, open, readlink } from "fs/promises";
 import { join } from "path";
 import { promisify } from "util";
 
-import { parseDiffText } from "./diff-parser.js";
+import { parseDiffText, quoteGitPath } from "./diff-parser.js";
 import type { FileDiff, ReviewMode } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -14,6 +15,9 @@ const DIFF_CONTEXT_LINES = 3;
 const MAX_UNTRACKED_FILE_SIZE = 10 * 1024 * 1024;
 /** Leading bytes sniffed for NUL to decide binary-ness, matching git's heuristic. */
 const BINARY_SNIFF_WINDOW = 8000;
+// O_NOFOLLOW is undefined on Windows; falling back to 0 keeps the flag a no-op
+// there while POSIX refuses to open a symlink swapped in after lstat.
+const OPEN_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
 const DIFF_FLAGS = [
   "-c",
@@ -48,7 +52,16 @@ async function tryGit(
   try {
     const { stdout } = await runGit(cwd, args, abortSignal);
     return stdout;
-  } catch {
+  } catch (err) {
+    // A cancellation must propagate as such. Swallowing it here would make the
+    // caller treat an aborted `git` as a plain failure and either fall back to
+    // another Git path or report a bogus "no merge-base" error.
+    if (abortSignal?.aborted) {
+      abortSignal.throwIfAborted();
+    }
+    if (err instanceof Error && err.name === "AbortError") {
+      throw err;
+    }
     return null;
   }
 }
@@ -59,8 +72,7 @@ function looksBinary(content: Buffer): boolean {
 }
 
 function quoteDiffPath(prefix: "a" | "b", path: string): string {
-  const value = `${prefix}/${path}`;
-  return /[\s"\\]/u.test(value) ? JSON.stringify(value) : value;
+  return quoteGitPath(`${prefix}/${path}`);
 }
 
 function untrackedBinaryDiff(path: string): string {
@@ -70,6 +82,36 @@ function untrackedBinaryDiff(path: string): string {
     `diff --git ${oldPath} ${newPath}\n` +
     `new file mode 100644\n` +
     `Binary files /dev/null and ${newPath} differ\n`
+  );
+}
+
+// Git stores a symlink as mode 120000 whose blob is the target path. Emit
+// exactly that so the parser/comment tooling see a link and never the (possibly
+// external, possibly secret) target's contents.
+function untrackedSymlinkDiff(relPath: string, target: string): string {
+  const oldPath = quoteDiffPath("a", relPath);
+  const newPath = quoteDiffPath("b", relPath);
+  return (
+    `diff --git ${oldPath} ${newPath}\n` +
+    `new file mode 120000\n` +
+    `--- /dev/null\n` +
+    `+++ ${newPath}\n` +
+    `@@ -0,0 +1 @@\n` +
+    `+${target}\n`
+  );
+}
+
+// Over-limit files get their own status rather than being disguised as binary.
+function untrackedTooLargeDiff(relPath: string, size: number): string {
+  const oldPath = quoteDiffPath("a", relPath);
+  const newPath = quoteDiffPath("b", relPath);
+  return (
+    `diff --git ${oldPath} ${newPath}\n` +
+    `new file mode 100644\n` +
+    `--- /dev/null\n` +
+    `+++ ${newPath}\n` +
+    `@@ -0,0 +1 @@\n` +
+    `+[skipped: ${String(size)} bytes exceeds the ${String(MAX_UNTRACKED_FILE_SIZE)}-byte review read limit]\n`
   );
 }
 
@@ -120,13 +162,62 @@ async function untrackedFileDiffs(
   const files = list.split("\0").filter((f) => f.length > 0);
   const results: string[] = [];
   for (const f of files) {
-    let content: Buffer;
+    abortSignal?.throwIfAborted();
+    const fullPath = join(cwd, f);
+    let st;
     try {
-      content = await readFile(join(cwd, f));
+      st = await lstat(fullPath);
     } catch {
       continue;
     }
-    if (content.length > MAX_UNTRACKED_FILE_SIZE || looksBinary(content)) {
+    if (st.isSymbolicLink()) {
+      // Represent the link itself; never dereference it (the target may point
+      // outside the repo at a secret).
+      try {
+        results.push(untrackedSymlinkDiff(f, await readlink(fullPath)));
+      } catch {
+        // unreadable link → skip
+      }
+      continue;
+    }
+    if (!st.isFile()) {
+      continue;
+    }
+    // Gate on metadata before allocating: never buffer a file just to discover
+    // it is over the limit.
+    if (st.size > MAX_UNTRACKED_FILE_SIZE) {
+      results.push(untrackedTooLargeDiff(f, st.size));
+      continue;
+    }
+    let content: Buffer | null = null;
+    let tooLarge = 0;
+    try {
+      const fh = await open(fullPath, constants.O_RDONLY | OPEN_NOFOLLOW);
+      try {
+        // fstat on the open handle reflects the real size even if the file
+        // grew after the lstat, so the bounded read cannot be bypassed.
+        const fst = await fh.stat();
+        if (fst.size > MAX_UNTRACKED_FILE_SIZE) {
+          tooLarge = fst.size;
+        } else {
+          const buf = Buffer.alloc(fst.size);
+          const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+          content = buf.subarray(0, bytesRead);
+        }
+      } finally {
+        await fh.close();
+      }
+    } catch {
+      continue;
+    }
+    if (tooLarge > 0) {
+      results.push(untrackedTooLargeDiff(f, tooLarge));
+      continue;
+    }
+    if (content === null) {
+      continue;
+    }
+    if (looksBinary(content)) {
       results.push(untrackedBinaryDiff(f));
       continue;
     }
@@ -227,18 +318,53 @@ export async function collectDiffs(
   return parseDiffText(combined, {
     readNewFileContent: async (newPath: string) => {
       if (ref) {
-        const out = await tryGit(cwd, [
-          "-c",
-          "core.quotepath=false",
-          "show",
-          "--end-of-options",
-          `${ref}:${newPath}`,
-        ]);
+        const out = await tryGit(
+          cwd,
+          [
+            "-c",
+            "core.quotepath=false",
+            "show",
+            "--end-of-options",
+            `${ref}:${newPath}`,
+          ],
+          abortSignal,
+        );
         return out ?? undefined;
       }
       try {
-        return await readFile(join(cwd, newPath), "utf8");
-      } catch {
+        const fullPath = join(cwd, newPath);
+        // lstat (not stat): never follow a symlink. A tracked symlink's content
+        // is its target path, which the diff already carries; its target may sit
+        // outside the repo or be a FIFO/device whose read would hang or exhaust
+        // memory. Skip anything that is not a regular file.
+        const st = await lstat(fullPath);
+        if (!st.isFile()) {
+          return undefined;
+        }
+        // Bound the read: check size first, then read through O_NOFOLLOW so a
+        // path swapped for a symlink between lstat and open is not dereferenced.
+        if (st.size > MAX_UNTRACKED_FILE_SIZE) {
+          return undefined;
+        }
+        const fh = await open(fullPath, constants.O_RDONLY | OPEN_NOFOLLOW);
+        try {
+          const fst = await fh.stat();
+          if (!fst.isFile() || fst.size > MAX_UNTRACKED_FILE_SIZE) {
+            return undefined;
+          }
+          const buf = Buffer.alloc(fst.size);
+          const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+          return buf.subarray(0, bytesRead).toString("utf8");
+        } finally {
+          await fh.close();
+        }
+      } catch (err) {
+        if (abortSignal?.aborted) {
+          abortSignal.throwIfAborted();
+        }
+        if (err instanceof Error && err.name === "AbortError") {
+          throw err;
+        }
         return undefined;
       }
     },

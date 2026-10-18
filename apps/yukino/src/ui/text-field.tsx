@@ -165,11 +165,13 @@ export function TextField({
         return;
       }
 
-      // Shift+Enter or Ctrl+J → newline
+      // Shift+Enter or Ctrl+J → newline (see ui/input.tsx: Ink reports the
+      // raw LF of Ctrl+J as a return keypress with input "\n" and ctrl=false,
+      // and extended protocols may deliver it as ctrl+"j").
       if (
         multiline &&
-        hasReturn &&
-        (key.shift || (key.ctrl && input === "\n"))
+        ((hasReturn && (key.shift || input === "\n")) ||
+          (key.ctrl && input === "j"))
       ) {
         const line = lines[cursorLine] ?? "";
         setLines((prev) => {

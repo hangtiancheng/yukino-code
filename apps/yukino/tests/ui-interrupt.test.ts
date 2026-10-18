@@ -118,11 +118,11 @@ describe("createInterruptHandlers (interrupt scope)", () => {
   function mountHandlers() {
     const controller = new AbortController();
     const permissionResolve = vi.fn();
-    const askResolve = vi.fn();
+    const settleAskQueue = vi.fn();
     const issueApprovalResolve = vi.fn();
     const setPermissionRequest = vi.fn();
-    const setAskRequest = vi.fn();
     const setIssueApprovalRequest = vi.fn();
+    const setPlanApprovalActive = vi.fn();
     const stopBackgroundTasks = vi.fn().mockResolvedValue(undefined);
     const stopTeams = vi.fn().mockResolvedValue(undefined);
     const deps: InterruptDeps = {
@@ -130,21 +130,21 @@ describe("createInterruptHandlers (interrupt scope)", () => {
       permissionResolveRef: { current: permissionResolve },
       setPermissionRequest,
       permissionQueue: { current: [] },
-      askResolveRef: { current: askResolve },
-      setAskRequest,
+      settleAskQueue,
       issueApprovalResolveRef: { current: issueApprovalResolve },
       setIssueApprovalRequest,
+      setPlanApprovalActive,
       backgroundTasks: { stopAll: stopBackgroundTasks },
       teams: { stopAll: stopTeams },
     };
     return {
       controller,
       permissionResolve,
-      askResolve,
+      settleAskQueue,
       issueApprovalResolve,
       setPermissionRequest,
-      setAskRequest,
       setIssueApprovalRequest,
+      setPlanApprovalActive,
       stopBackgroundTasks,
       stopTeams,
       deps,
@@ -159,13 +159,14 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     expect(h.permissionResolve).toHaveBeenCalledWith("deny");
     expect(h.deps.permissionResolveRef.current).toBeNull();
     expect(h.setPermissionRequest).toHaveBeenCalledWith(null);
-    expect(h.askResolve).toHaveBeenCalledWith({});
-    expect(h.deps.askResolveRef.current).toBeNull();
-    expect(h.setAskRequest).toHaveBeenCalledWith(null);
+    // Every queued/in-flight ask is settled, not just the visible dialog.
+    expect(h.settleAskQueue).toHaveBeenCalledTimes(1);
     // A pending /feedback issue-approval panel is rejected, never filed.
     expect(h.issueApprovalResolve).toHaveBeenCalledWith({ approved: false });
     expect(h.deps.issueApprovalResolveRef.current).toBeNull();
     expect(h.setIssueApprovalRequest).toHaveBeenCalledWith(null);
+    // A pending plan-approval dialog is dismissed too.
+    expect(h.setPlanApprovalActive).toHaveBeenCalledWith(false);
     // The core regression: a single Ctrl+C must never stop background tasks,
     // background subagents or teammates.
     expect(h.stopBackgroundTasks).not.toHaveBeenCalled();
@@ -195,7 +196,6 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     const h = mountHandlers();
     h.deps.abortControllerRef.current = null;
     h.deps.permissionResolveRef.current = null;
-    h.deps.askResolveRef.current = null;
     expect(() => {
       h.handlers.interruptForeground();
     }).not.toThrow();

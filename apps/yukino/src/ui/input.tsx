@@ -582,8 +582,14 @@ export function InputBox(props: InputBoxProps) {
       return;
     }
 
-    // Shift+Enter or Ctrl+J → newline
-    if (hasReturn && (key.shift || (key.ctrl && input === "\n"))) {
+    // Shift+Enter or Ctrl+J → newline. Ink decodes the raw LF that Ctrl+J
+    // sends as a return keypress carrying "\n" with ctrl=false, while Enter
+    // arrives as "\r"/"\r\n"; some extended protocols deliver Ctrl+J as
+    // ctrl+"j". A lone "\n" is therefore the newline request, never a submit.
+    if (
+      (hasReturn && (key.shift || input === "\n")) ||
+      (key.ctrl && input === "j")
+    ) {
       const line = lines[cursorLine] ?? "";
 
       setLines((prev) => {

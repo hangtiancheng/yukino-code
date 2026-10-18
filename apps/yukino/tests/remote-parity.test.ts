@@ -264,7 +264,12 @@ describe("remote terminal-UI parity", () => {
       handle.conv.addUserMessage("drop me");
       handle.fileHistory.makeSnapshot(1, "drop me");
 
-      invokePrivate(server, "handleRewindAction", [0, "conversation_only"]);
+      // Rewind resolves by stable snapshot id (timestamp), not array index.
+      const snapshotId = handle.fileHistory.getSnapshots()[0].timestamp;
+      invokePrivate(server, "handleRewindAction", [
+        snapshotId,
+        "conversation_only",
+      ]);
 
       const convText = handle.conv
         .getMessages()

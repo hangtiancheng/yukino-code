@@ -157,11 +157,16 @@ export function buildAnthropicMessages(
       const blocks: Anthropic.ContentBlockParam[] = [];
       if (m.thinkingBlocks) {
         for (const tb of m.thinkingBlocks) {
-          blocks.push({
-            type: "thinking",
-            thinking: tb.thinking,
-            signature: tb.signature,
-          });
+          if (tb.type === "redacted_thinking") {
+            // Replay the opaque encrypted block verbatim; never decode it.
+            blocks.push({ type: "redacted_thinking", data: tb.data });
+          } else {
+            blocks.push({
+              type: "thinking",
+              thinking: tb.thinking,
+              signature: tb.signature,
+            });
+          }
         }
       }
 
@@ -385,6 +390,8 @@ export class AnthropicClient implements LLMClient {
     let thinkingAccumulate = "";
     let thinkingSignature = "";
     let inThinking = false;
+    let redactedData = "";
+    let inRedactedThinking = false;
     // Terminal-event guard: a stream cut between message_start and
     // message_stop (gateway dropping the SSE) must not be committed as a
     // complete end_turn turn with near-zero usage.
@@ -414,6 +421,11 @@ export class AnthropicClient implements LLMClient {
               inThinking = true;
               thinkingAccumulate = "";
               thinkingSignature = "";
+            } else if (block.type === "redacted_thinking") {
+              // Opaque encrypted reasoning delivered whole (no deltas);
+              // capture verbatim to replay on the next request.
+              redactedData = block.data;
+              inRedactedThinking = true;
             } else if (block.type === "tool_use") {
               if (!block.id || !block.name) {
                 throw new NetworkError(
@@ -471,6 +483,10 @@ export class AnthropicClient implements LLMClient {
                 signature: thinkingSignature,
               };
               inThinking = false;
+            }
+            if (inRedactedThinking) {
+              yield { type: "redacted_thinking_complete", data: redactedData };
+              inRedactedThinking = false;
             }
 
             if (currentToolName) {

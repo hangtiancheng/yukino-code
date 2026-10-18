@@ -195,11 +195,28 @@ async function fetchPinnedAddresses(
   });
 }
 
+// The pinned path re-issues the request over node:http(s) and streams no
+// request body, so a body would be silently dropped. Narrow the contract to
+// bodyless GET/HEAD up front so an injected fetcher and the pinned
+// implementation behave identically instead of diverging on POST/body.
+function assertBodylessGetOrHead(init: RequestInit): void {
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    throw new Error(
+      `fetchPublicHttpUrl only supports GET or HEAD, received '${method}'`,
+    );
+  }
+  if (init.body !== undefined && init.body !== null) {
+    throw new Error("fetchPublicHttpUrl does not support a request body");
+  }
+}
+
 export async function fetchPublicHttpUrl(
   input: string,
   init: RequestInit,
   dependencies: PublicHttpDependencies = {},
 ): Promise<Response> {
+  assertBodylessGetOrHead(init);
   const fetcher = dependencies.fetcher ?? globalThis.fetch;
   const lookup = dependencies.lookup ?? defaultLookup;
   let url = new URL(input);

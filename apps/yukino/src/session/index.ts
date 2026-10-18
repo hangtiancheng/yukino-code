@@ -73,10 +73,17 @@ const ToolResultRecordSchema = z.object({
 
 export type ToolResultRecord = z.infer<typeof ToolResultRecordSchema>;
 
-const ThinkingBlockSchema = z.object({
-  thinking: z.string(),
-  signature: z.string(),
-});
+const ThinkingBlockSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("thinking"),
+    thinking: z.string(),
+    signature: z.string(),
+  }),
+  z.object({
+    type: z.literal("redacted_thinking"),
+    data: z.string(),
+  }),
+]);
 
 const UserBashResultSchema = z.object({
   command: z.string(),
@@ -647,7 +654,19 @@ export function cleanExpiredSessions(cwd: string): number {
     const entries = readdirSync(dir);
     for (const entry of entries) {
       if (entry.endsWith(".rewind-tmp")) {
-        rmSync(join(dir, entry), { force: true });
+        // A rewind temp file is <session>.<pid>.rewind-tmp, and its writer
+        // holds the session lock across write+rename (truncateSessionLines).
+        // Reclaim it only under that same lock: a leftover seen there is
+        // provably a crash artifact, and an in-flight rewrite is never raced.
+        // Never delete by suffix alone.
+        const base = entry.replace(/\.\d+\.rewind-tmp$/u, "");
+        try {
+          withFileSyncLock(join(dir, base), () => {
+            rmSync(join(dir, entry), { force: true });
+          });
+        } catch (err) {
+          log.error({ err }, "session operation failed");
+        }
       }
     }
     files = entries.filter((f) => f.endsWith(".jsonl"));

@@ -15,7 +15,11 @@ import {
   DEFAULT_MAX_OUTPUT_TOKENS,
 } from "@/config/provider-config.js";
 import type { ConversationManager } from "@/conversation/index.js";
-import type { ToolUseBlock, ToolResultBlock } from "@/conversation/index.js";
+import type {
+  ToolUseBlock,
+  ToolResultBlock,
+  ThinkingBlock,
+} from "@/conversation/index.js";
 import { REJECTED_TOOL_RESULT } from "@/conversation/pairing.js";
 import type { FileHistory } from "@/file-history/index.js";
 import { GoalManager } from "@/goal/index.js";
@@ -125,9 +129,11 @@ export interface AgentConfig {
   // set is narrowed. Like the tool filter it is config-driven and stays in
   // effect for the whole session — it does not end when a team is torn down.
   coordinatorActiveFn?: () => boolean;
-  // Project instructions and memory content, need re-injection after compaction
-  instructions?: string;
-  memoryContent?: string;
+  // Project instructions and memory content, need re-injection after compaction.
+  // A function form re-reads the current content at each (re)injection, so a
+  // long-lived host never injects a stale startup snapshot.
+  instructions?: string | (() => string);
+  memoryContent?: string | (() => string);
   /** Available skill listing. Project-scoped, so injected via the first system-reminder instead of the system prompt */
   skillSection?: string;
   /** Returns newly discovered skills since the last call; previously notified ones are excluded */
@@ -175,8 +181,8 @@ export class Agent {
   private coordinatorActiveFn?: () => boolean;
 
   activeSkills: Map<string, string>;
-  private instructions: string;
-  private memoryContent: string;
+  private instructions: string | (() => string);
+  private memoryContent: string | (() => string);
   private skillSection: string;
   private skillDeltaFn?: () => string;
   private memoryRecallPromise?: Promise<RecallResult>;
@@ -314,11 +320,15 @@ export class Agent {
     ]
       .filter(Boolean)
       .join("\n\n");
-    this.conversation.injectLongTermMemory(
-      this.instructions,
-      this.memoryContent,
-      skills,
-    );
+    const instructions =
+      typeof this.instructions === "function"
+        ? this.instructions()
+        : this.instructions;
+    const memoryContent =
+      typeof this.memoryContent === "function"
+        ? this.memoryContent()
+        : this.memoryContent;
+    this.conversation.injectLongTermMemory(instructions, memoryContent, skills);
   }
 
   async *run(): AsyncGenerator<AgentEvent> {
@@ -394,7 +404,7 @@ export class Agent {
         let fullText = "";
         let receivedThinking = false;
         let receivedEnd = false;
-        const thinkingBlocks: { thinking: string; signature: string }[] = [];
+        const thinkingBlocks: ThinkingBlock[] = [];
         const toolUses: ToolUseBlock[] = [];
         let stopReason = "end_turn";
 
@@ -519,8 +529,12 @@ export class Agent {
         try {
           await this.fireLifecycle("pre_send");
           // Pre-send and turn-start prompts must reach the request they prepare.
+          // Persist these once-notifications too (like the earlier drain) so a
+          // resume does not silently drop output that was already sent to the
+          // model; each drained note is written exactly once.
           for (const note of this.hookEngine?.drainNotifications() ?? []) {
             this.conversation.addSystemReminder(note);
+            this.persistLastMessage();
           }
 
           // Auto-compact when the window fills up.
@@ -622,6 +636,7 @@ export class Agent {
 
                 case "thinking_complete":
                   thinkingBlocks.push({
+                    type: "thinking",
                     thinking: event.thinking,
                     signature: event.signature,
                   });
@@ -630,6 +645,15 @@ export class Agent {
                     thinking: event.thinking,
                     signature: event.signature,
                   };
+                  break;
+
+                case "redacted_thinking_complete":
+                  // Preserve the opaque encrypted block for verbatim replay on
+                  // the next request; never surface its data to the UI or logs.
+                  thinkingBlocks.push({
+                    type: "redacted_thinking",
+                    data: event.data,
+                  });
                   break;
 
                 case "tool_call_start":

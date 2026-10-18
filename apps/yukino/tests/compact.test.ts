@@ -5,6 +5,7 @@ import {
   estimateMessages,
   currentContextTokens,
   computeKeepStartIndex,
+  computeCompactThreshold,
   forceCompact,
   type UsageAnchor,
 } from "@/compact/compact.js";
@@ -414,5 +415,27 @@ describe("RecoveryState retention", () => {
     expect(files.find((file) => file.path === "/tmp/file-0.txt")?.content).toBe(
       "new-content",
     );
+  });
+});
+
+describe("computeCompactThreshold (small context windows)", () => {
+  it("keeps large-window behaviour identical (fixed margins)", () => {
+    // effective = 200000 - min(8000, 20000) = 192000; margins 13000 / 3000
+    expect(computeCompactThreshold(200000, 8000)).toBe(192000 - 13000);
+    expect(computeCompactThreshold(200000, 8000, true)).toBe(192000 - 3000);
+  });
+
+  it("keeps the threshold positive and ordered on a small window", () => {
+    // effective = 16000 - 4000 = 12000; fixed margins would go negative/zero.
+    const auto = computeCompactThreshold(16000, 4000);
+    const hard = computeCompactThreshold(16000, 4000, true);
+    expect(auto).toBeGreaterThan(0);
+    expect(hard).toBeGreaterThan(auto);
+    expect(hard).toBeLessThan(12000);
+  });
+
+  it("rejects a window with no room beyond the summary reserve", () => {
+    expect(() => computeCompactThreshold(20000, 20000)).toThrow(/too small/);
+    expect(() => computeCompactThreshold(10000, 30000)).toThrow(/too small/);
   });
 });

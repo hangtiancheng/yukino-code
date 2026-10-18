@@ -179,15 +179,28 @@ export function applyBudget(
       // the wrapper text would only enlarge it
       continue;
     }
+    // Measure the replacement under the real wrapper + path overhead before
+    // touching disk. Spilling only pays off when the preview is strictly
+    // smaller than the original; otherwise the swap enlarges the message and
+    // pushes total further past the limit.
     let spillPath: string;
     try {
-      spillPath = writeSpill(sessionId, r.toolUseId, content);
+      spillPath = join(spillDir(sessionId), r.toolUseId + ".txt");
+    } catch {
+      // No session id means there is nowhere to spill.
+      continue;
+    }
+    const replacement = buildSpillPreview(content, spillPath);
+    if (replacement.length >= content.length) {
+      continue;
+    }
+    try {
+      writeSpill(sessionId, r.toolUseId, content);
     } catch {
       // On write failure, keep the original text. The message is finalized
       // into history right after, so there will be no retry
       continue;
     }
-    const replacement = buildSpillPreview(content, spillPath);
     total -= content.length - replacement.length;
     replaceToolResultContent(r, replacement);
   }

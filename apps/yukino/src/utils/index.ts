@@ -132,22 +132,37 @@ export function asError(err: unknown) {
   return new Error(String(err));
 }
 
+const NUMERIC_LITERAL = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
+
+// One contract for both JSON numbers and numeric strings: the value must be a
+// finite, fully-parsed number, then it is truncated toward zero. Partial parses
+// ("12abc"), NaN and Infinity fall back instead of leaking a half-parsed value,
+// so the same logical value is accepted or rejected regardless of JSON type.
+function toFiniteInt(v: unknown): number | undefined {
+  let n: number;
+  if (typeof v === "number") {
+    n = v;
+  } else if (typeof v === "string") {
+    const s = v.trim();
+    if (!NUMERIC_LITERAL.test(s)) {
+      return undefined;
+    }
+    n = Number(s);
+  } else {
+    return undefined;
+  }
+  if (!Number.isFinite(n)) {
+    return undefined;
+  }
+  return Math.trunc(n);
+}
+
 export function intArg(
   args: Record<string, unknown>,
   key: string,
   fallback: number,
 ): number {
-  const v = args[key];
-  if (typeof v === "number") {
-    return Math.floor(v);
-  }
-
-  if (typeof v === "string") {
-    const n = Number.parseInt(v, 10);
-    return Number.isNaN(n) ? fallback : n;
-  }
-
-  return fallback;
+  return toFiniteInt(args[key]) ?? fallback;
 }
 export function strList(raw: unknown): string[] {
   if (Array.isArray(raw)) {

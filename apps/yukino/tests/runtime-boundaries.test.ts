@@ -125,7 +125,7 @@ function history() {
   }
   conversation.addAssistantFull(
     "",
-    [{ thinking: "signed thought", signature: "signature" }],
+    [{ type: "thinking", thinking: "signed thought", signature: "signature" }],
     [],
   );
   conversation.addUserMessage("latest constraint");
@@ -404,7 +404,9 @@ describe("runtime boundaries", () => {
     ).toMatchObject({
       role: "assistant",
       content: "",
-      thinkingBlocks: [{ thinking: "thought", signature: "signed" }],
+      thinkingBlocks: [
+        { type: "thinking", thinking: "thought", signature: "signed" },
+      ],
     });
   });
 
@@ -461,7 +463,9 @@ describe("runtime boundaries", () => {
     const replay = rebuildFromSession(loadSession(f.cwd, "session"));
     expect(
       replay.find((message) => message.thinkingBlocks?.length)?.thinkingBlocks,
-    ).toEqual([{ thinking: "signed thought", signature: "signature" }]);
+    ).toEqual([
+      { type: "thinking", thinking: "signed thought", signature: "signature" },
+    ]);
     expect(conversation.getMessages().map(messageToKeptRecord)).toEqual(
       replay.map(messageToKeptRecord),
     );

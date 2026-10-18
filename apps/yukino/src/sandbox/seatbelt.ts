@@ -87,6 +87,11 @@ function buildProfile(config: SandboxConfig): string {
   lines.push("(allow process-fork)");
   lines.push("(allow sysctl-read)");
   lines.push('(allow file-read* (subpath "/"))');
+  // Shell redirections ("> /dev/null", "2>&1", "&&" chains that discard output)
+  // need to open /dev/null for writing. Grant only that node rather than the
+  // whole /dev tree. Linux bwrap character-device behaviour is unverified here
+  // and is intentionally left untouched until reproduced on Linux.
+  lines.push('(allow file-write* (literal "/dev/null"))');
 
   for (const path of config.allowWrite) {
     for (const variant of pathVariants(path)) {

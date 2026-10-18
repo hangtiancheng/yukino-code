@@ -73,6 +73,10 @@ export function FeedbackDialog({
     env: true,
   });
   const focusRef = useRef<DOMElement>(null);
+  // Synchronous single-submit gate: claimed before onSubmit so a double-tap or
+  // key-repeat cannot start a second feedback pipeline / approval flow. The
+  // parent dismisses the dialog on submit; a retry re-mounts it with a fresh gate.
+  const submittingRef = useRef(false);
   const { columns } = useTerminalDimensions();
   // Sizes are computed once on mount; they only decorate the checklist.
   const [sizes] = useState(() =>
@@ -90,6 +94,10 @@ export function FeedbackDialog({
         setChecked((prev) => ({ ...prev, [item.kind]: !prev[item.kind] }));
       }
     } else if (key.return) {
+      if (submittingRef.current) {
+        return;
+      }
+      submittingRef.current = true;
       onSubmit({
         description: description.trim(),
         attachments: ITEMS.filter((item) => checked[item.kind]).map(

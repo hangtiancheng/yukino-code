@@ -118,6 +118,13 @@ export interface CodeReviewOptions {
   skipFilter?: boolean;
 }
 
+/** A review group that failed; its files were not reviewed. */
+export interface ReviewGroupFailure {
+  label: string;
+  files: string[];
+  reason: string;
+}
+
 export interface CodeReviewResult {
   mode: ReviewMode;
   comments: ReviewComment[];
@@ -128,4 +135,9 @@ export interface CodeReviewResult {
   excluded: { path: string; reason: ExcludeReason }[];
   filteredOut: number;
   aborted: boolean;
+  /**
+   * Groups whose review failed. While non-empty the run is incomplete and its
+   * findings must not be presented as a clean "no issues" result.
+   */
+  failures: ReviewGroupFailure[];
 }

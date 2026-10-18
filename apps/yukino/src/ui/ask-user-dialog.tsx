@@ -175,7 +175,7 @@ function QuestionContent({
             : THEME.muted;
         return (
           <Box
-            key={opt.label}
+            key={i}
             ref={isFocused ? focusRef : undefined}
             flexDirection="column"
           >
@@ -258,7 +258,7 @@ function SubmitContent({
         </Text>
       )}
       {questions.map((q, i) => (
-        <Box key={q.question} flexDirection="column" marginBottom={0}>
+        <Box key={i} flexDirection="column" marginBottom={0}>
           <Text>
             <Text color={THEME.dim}>{"  • "}</Text>
             <Text>{q.question}</Text>

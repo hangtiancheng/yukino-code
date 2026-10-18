@@ -199,6 +199,7 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
       snapshots: [
         {
           index: 0,
+          id: "2026-10-01T00:00:00.000Z",
           userText: "fix the bug",
           timestamp: "2026-10-01T00:00:00.000Z",
           fileCount: 2,

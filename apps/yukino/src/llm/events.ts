@@ -45,6 +45,7 @@ export type StreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "thinking_delta"; text: string }
   | { type: "thinking_complete"; thinking: string; signature: string }
+  | { type: "redacted_thinking_complete"; data: string }
   | { type: "tool_call_start"; toolName: string; toolId: string }
   | { type: "tool_call_delta"; text: string }
   | {

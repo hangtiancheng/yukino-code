@@ -564,39 +564,71 @@ function documentForResponses(
   return null;
 }
 
-function documentForChat(
-  block: unknown,
-): OpenAI.ChatCompletionContentPart.File | null {
+// Chat Completions can only carry a document as an inline base64 file. Every
+// accepted document source must still produce explicit parts — a source the
+// protocol cannot represent returns a diagnostic text part rather than being
+// silently dropped (and is never fetched here).
+function documentForChat(block: unknown): OpenAI.ChatCompletionContentPart[] {
   if (
     !isRecord(block) ||
     block.type !== "document" ||
     !isRecord(block.source)
   ) {
-    return null;
+    return [];
   }
   const title =
     typeof block.title === "string" && block.title
       ? block.title
       : "tool-result";
-  if (block.source.type === "base64") {
-    const data = strArg(block.source, "data");
+  const source = block.source;
+  if (source.type === "base64") {
+    const data = strArg(source, "data");
     return data
-      ? { type: "file", file: { file_data: data, filename: `${title}.pdf` } }
-      : null;
+      ? [{ type: "file", file: { file_data: data, filename: `${title}.pdf` } }]
+      : [];
   }
-  if (block.source.type === "text") {
-    const data = strArg(block.source, "data");
+  if (source.type === "text") {
+    const data = strArg(source, "data");
     return data
-      ? {
-          type: "file",
-          file: {
-            file_data: Buffer.from(data, "utf-8").toString("base64"),
-            filename: `${title}.txt`,
+      ? [
+          {
+            type: "file",
+            file: {
+              file_data: Buffer.from(data, "utf-8").toString("base64"),
+              filename: `${title}.txt`,
+            },
           },
-        }
-      : null;
+        ]
+      : [];
   }
-  return null;
+  if (source.type === "url") {
+    const url = strArg(source, "url");
+    return [
+      {
+        type: "text",
+        text: `[Document source "url" (${url || "unknown"}) is not supported by Chat Completions and was not fetched.]`,
+      },
+    ];
+  }
+  if (source.type === "content" && Array.isArray(source.content)) {
+    const parts: OpenAI.ChatCompletionContentPart[] = [];
+    for (const sub of source.content) {
+      const imageUrl = imageDataUrl(sub);
+      if (imageUrl) {
+        parts.push({ type: "image_url", image_url: { url: imageUrl } });
+        continue;
+      }
+      if (
+        isRecord(sub) &&
+        sub.type === "text" &&
+        typeof sub.text === "string"
+      ) {
+        parts.push({ type: "text", text: sub.text });
+      }
+    }
+    return parts;
+  }
+  return [];
 }
 
 function toolOutputForResponses(
@@ -684,10 +716,7 @@ function collectRichParts(
       rich.push({ type: "image_url", image_url: { url: imageUrl } });
       continue;
     }
-    const file = documentForChat(block);
-    if (file) {
-      rich.push(file);
-    }
+    rich.push(...documentForChat(block));
   }
   if (rich.length === 0) {
     return [];
@@ -762,7 +791,7 @@ export function buildOpenAIInput(messages: Message[]): OpenAIMessageParam[] {
   for (const m of messages) {
     if (m.thinkingBlocks) {
       for (const tb of m.thinkingBlocks) {
-        if (!tb.signature.startsWith("rs_")) {
+        if (tb.type !== "thinking" || !tb.signature.startsWith("rs_")) {
           continue;
         }
         result.push({
@@ -1089,13 +1118,29 @@ export class OpenAICompatClient implements LLMClient {
         );
       }
 
+      // Map the raw finish_reason explicitly. content_filter is a blocked
+      // response, not a normal completion, and must fail even when tool deltas
+      // arrived — never run pending tools from an invalid stop state. Unknown
+      // reasons are surfaced rather than silently treated as end_turn.
       let stopReason: string;
-      if (finishReason === "length") {
+      if (finishReason === "content_filter") {
+        throw new LLMError(
+          "Chat Completions response was blocked by the content filter",
+        );
+      } else if (finishReason === "length") {
         stopReason = "max_tokens";
-      } else if (finishReason === "tool_calls" || toolCalls.size > 0) {
+      } else if (
+        finishReason === "tool_calls" ||
+        finishReason === "function_call" ||
+        toolCalls.size > 0
+      ) {
         stopReason = "tool_use";
-      } else {
+      } else if (finishReason === "stop") {
         stopReason = "end_turn";
+      } else {
+        throw new LLMError(
+          `Chat Completions returned an unsupported finish reason: ${finishReason}`,
+        );
       }
 
       yield {
@@ -1175,7 +1220,10 @@ export function buildChatCompletionMessages(
 ): OpenAI.ChatCompletionMessageParam[] {
   const params: OpenAI.ChatCompletionMessageParam[] = [];
   for (const m of messages) {
-    const reasoning = m.thinkingBlocks?.map((tb) => tb.thinking).join("") ?? "";
+    const reasoning =
+      m.thinkingBlocks
+        ?.map((tb) => (tb.type === "thinking" ? tb.thinking : ""))
+        .join("") ?? "";
     const assistantText =
       typeof m.content === "string" ? m.content : contentToText(m.content);
 

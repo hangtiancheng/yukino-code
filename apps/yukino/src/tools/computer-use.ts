@@ -1392,12 +1392,27 @@ export class ComputerUseTool implements Tool {
           if (capture.code !== 0) {
             throw commandError("powershell.exe", capture);
           }
+          const bytes = await readFile(screenshotPath);
           const [width, height] = capture.stdout
             .toString("utf8")
             .trim()
             .split(",")
             .map(Number);
-          return { bytes: await readFile(screenshotPath), width, height };
+          // The PowerShell size line can be empty or noisy; never hand a NaN/
+          // non-positive dimension downstream (it would poison coordinate
+          // scaling). Fall back to the image metadata like the macOS path.
+          const metadata = await sharp(bytes).metadata();
+          return {
+            bytes,
+            width:
+              Number.isFinite(width) && width > 0
+                ? width
+                : (metadata.width ?? 1),
+            height:
+              Number.isFinite(height) && height > 0
+                ? height
+                : (metadata.height ?? 1),
+          };
         }
         case "linux": {
           const backends: [string, string[]][] = [

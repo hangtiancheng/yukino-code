@@ -140,12 +140,33 @@ export class SkillCatalog {
       }
     }
   }
+  private statMtime(filePath: string): number {
+    try {
+      return statSync(filePath).mtimeMs;
+    } catch (err) {
+      log.error({ err }, "skills operation failed");
+      return 0;
+    }
+  }
+
   private loadSkill(filePath: string, sourceDir: string) {
     try {
+      // Stat before reading so the cached stamp never claims a version newer
+      // than the body we hold; otherwise get() would treat stale content as
+      // fresh. Re-stat after the read: if the file changed mid-read the stamps
+      // differ, and keeping the pre-read stamp forces a reload on next access.
+      const mtimeBefore = this.statMtime(filePath);
       const raw = readFileSync(filePath, "utf-8");
       const parsed = parseSkillFile(raw);
       if (!parsed) {
         return;
+      }
+      const mtimeAfter = this.statMtime(filePath);
+      if (mtimeBefore !== mtimeAfter) {
+        log.debug(
+          { filePath },
+          "skill file changed during load; will reload on next access",
+        );
       }
 
       const skill: Skill = {
@@ -154,17 +175,10 @@ export class SkillCatalog {
         sourceDir,
       };
 
-      let mtimeMs = 0;
-      try {
-        mtimeMs = statSync(filePath).mtimeMs;
-      } catch (err) {
-        log.error({ err }, "skills operation failed");
-      }
-
       this.entries.set(skill.meta.name, {
         skill,
         filePath,
-        loadedMtimeMs: mtimeMs,
+        loadedMtimeMs: mtimeBefore,
       });
     } catch (err) {
       log.error({ err }, "skills operation failed");

@@ -50,15 +50,33 @@ export function formatReviewReport(result: CodeReviewResult): string {
       (result.filteredOut > 0
         ? `, ${String(result.filteredOut)} filtered by fact-check`
         : "") +
-      (result.aborted ? " — **aborted early**" : ""),
+      (result.aborted
+        ? " — **aborted early**"
+        : result.failures.length > 0
+          ? " — **incomplete: group failures**"
+          : ""),
     "",
   );
+
+  if (result.failures.length > 0) {
+    lines.push(
+      `⚠️ ${String(result.failures.length)} group(s) failed to review — this result is INCOMPLETE, not a clean pass:`,
+    );
+    for (const failure of result.failures) {
+      lines.push(
+        `- ${failure.label} (${String(failure.files.length)} file(s)): ${failure.reason}`,
+      );
+    }
+    lines.push("");
+  }
 
   if (result.comments.length === 0) {
     lines.push(
       result.aborted
         ? "No findings before the run was aborted."
-        : "✅ No issues found.",
+        : result.failures.length > 0
+          ? "No findings were collected, but the review did not complete (see failures above)."
+          : "✅ No issues found.",
     );
     return lines.join("\n");
   }

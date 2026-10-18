@@ -163,9 +163,9 @@ export function App() {
   );
 
   const handleRewindAction = useCallback(
-    (snapshotIndex: number, action: RewindChoice) => {
+    (snapshotId: string, action: RewindChoice) => {
       closeRewindPicker();
-      send({ type: "rewind_action", data: { snapshotIndex, action } });
+      send({ type: "rewind_action", data: { snapshotId, action } });
     },
     [closeRewindPicker, send],
   );
@@ -187,9 +187,21 @@ export function App() {
 
   const handleUploadImage = useCallback(
     (clientId: string, name: string, dataBase64: string) => {
-      send({ type: "image_upload", data: { clientId, name, dataBase64 } });
+      const status = send({
+        type: "image_upload",
+        data: { clientId, name, dataBase64 },
+      });
+      if (status === "dropped") {
+        // Offline: an upload is never queued (large, and it resolves via a
+        // server reply). Surface a local failure so the pending upload clears
+        // instead of spinning forever.
+        dispatchMessage({
+          type: "image_error",
+          data: { clientId, message: "Image upload failed: not connected." },
+        });
+      }
     },
-    [send],
+    [send, dispatchMessage],
   );
 
   const handleBackgroundShells = useCallback(() => {

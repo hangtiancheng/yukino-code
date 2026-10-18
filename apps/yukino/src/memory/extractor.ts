@@ -4,6 +4,8 @@ import {
   existsSync,
   mkdirSync,
   writeFileSync,
+  renameSync,
+  rmSync,
 } from "node:fs";
 import { join, basename } from "node:path";
 
@@ -16,7 +18,9 @@ import { extractWrittenPaths } from "./written-paths.js";
 import { Agent } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
+import { createChildLogger } from "@/logger/index.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { GlobTool } from "@/tools/glob.js";
@@ -25,6 +29,8 @@ import { ReadFileTool } from "@/tools/read-file.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { WriteFileTool } from "@/tools/write-file.js";
 import { asErrorString } from "@/utils/index.js";
+
+const log = createChildLogger({ module: "memory" });
 
 /** A memory block parsed from LLM streamed text (MEMORY_NAME/MEMORY_TYPE/MEMORY_DESC/MEMORY_BODY). */
 interface ParsedTextMemory {
@@ -48,6 +54,9 @@ export class MemoryExtractor {
   private cwd: string;
   private inProgress = false;
   private pendingContext: string | null = null;
+  private controller: AbortController | null = null;
+  private completion: Promise<unknown> = Promise.resolve();
+  private disposed = false;
 
   constructor(client: LLMClient, cwd: string) {
     this.client = client;
@@ -55,27 +64,47 @@ export class MemoryExtractor {
   }
 
   async extract(conversationSummary: string): Promise<string[]> {
+    if (this.disposed) {
+      return [];
+    }
     if (this.inProgress) {
       this.pendingContext = conversationSummary;
       return [];
     }
-    return this.runExtraction(conversationSummary);
+    const run = this.runExtraction(conversationSummary);
+    this.completion = run.catch(() => undefined);
+    return run;
+  }
+
+  /**
+   * Stop any in-flight extraction and await its settlement. Called on host
+   * teardown (exit / dispose / session abandon) so a background memory task
+   * cannot outlive its owner, keep hitting the model, or write after shutdown.
+   */
+  async dispose(): Promise<void> {
+    this.disposed = true;
+    this.pendingContext = null;
+    this.controller?.abort();
+    await this.completion;
   }
 
   private async runExtraction(conversationSummary: string): Promise<string[]> {
     this.inProgress = true;
+    const controller = new AbortController();
+    this.controller = controller;
     let result: string[] = [];
     let failure: unknown;
 
     try {
-      result = await this.doExtract(conversationSummary);
+      result = await this.doExtract(conversationSummary, controller.signal);
     } catch (err) {
       failure = err;
     } finally {
       this.inProgress = false;
+      this.controller = null;
       const pending = this.pendingContext;
       this.pendingContext = null;
-      if (pending !== null) {
+      if (pending !== null && !this.disposed) {
         try {
           const trailingResult = await this.runExtraction(pending);
           result = [...result, ...trailingResult];
@@ -166,7 +195,10 @@ export class MemoryExtractor {
     ].join("\n");
   }
 
-  private async doExtract(conversationSummary: string): Promise<string[]> {
+  private async doExtract(
+    conversationSummary: string,
+    abortSignal: AbortSignal,
+  ): Promise<string[]> {
     const extractionPrompt = this.buildExtractionPrompt(conversationSummary);
 
     const subRegistry = new ToolRegistry();
@@ -189,6 +221,7 @@ export class MemoryExtractor {
       cwd: this.cwd,
       fileStateCache: new FileStateCache(),
       maxIterations: 5,
+      abortSignal,
     });
 
     // Drive the child agent to completion without propagating events to the UI;
@@ -248,9 +281,41 @@ export class MemoryExtractor {
       ) {
         continue;
       }
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(filePath, this.formatMemoryFile(mem), "utf-8");
-      saved.push(mem.name);
+      const content = this.formatMemoryFile(mem);
+      try {
+        mkdirSync(dir, { recursive: true });
+        // Serialize against concurrent extractors and write atomically (private
+        // temp file + rename) so a crash mid-write never leaves a partial file
+        // and two extractions never mix. Only a successful write is reported as
+        // saved (and thus indexed).
+        withFileSyncLock(filePath, () => {
+          if (existsSync(filePath)) {
+            // An existing same-name topic is read, then explicitly rejected
+            // rather than silently overwritten or merged (which would mix
+            // content).
+            const existing = readFileSync(filePath, "utf-8");
+            if (existing !== content) {
+              log.warn(
+                { filePath },
+                "memory text fallback: refusing to overwrite an existing memory file",
+              );
+            }
+            return;
+          }
+          const tmp = `${filePath}.${String(process.pid)}.mem-tmp`;
+          try {
+            // "wx" refuses to create over an existing path (including a
+            // symlink), so the temp file cannot be redirected elsewhere.
+            writeFileSync(tmp, content, { encoding: "utf-8", flag: "wx" });
+            renameSync(tmp, filePath);
+          } finally {
+            rmSync(tmp, { force: true });
+          }
+          saved.push(mem.name);
+        });
+      } catch (err) {
+        log.error({ err }, "memory text fallback write failed");
+      }
     }
     return saved;
   }

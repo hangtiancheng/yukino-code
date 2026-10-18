@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { platform, arch } from "node:os";
 
 import type { Section, EnvironmentContext } from "./sections.js";
@@ -42,25 +42,35 @@ export function detectEnvironment(cwd: string): EnvironmentContext {
     date: new Date().toISOString().split("T")[0],
   };
 
-  try {
-    const result = execSync("git rev-parse --is-inside-work-tree", {
-      cwd: cwd,
-      stdio: ["pipe", "pipe", "pipe"],
-      encoding: "utf-8",
-    }).trim();
-    if (result === "true") {
-      env.isGitRepo = true;
-      env.gitBranch = execSync("git rev-parse --abbrev-ref HEAD", {
-        cwd: cwd,
-        stdio: ["pipe", "pipe", "pipe"],
-        encoding: "utf-8",
-      }).trim();
+  if (gitProbe(["rev-parse", "--is-inside-work-tree"], cwd) === "true") {
+    env.isGitRepo = true;
+    const branch = gitProbe(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+    if (branch) {
+      env.gitBranch = branch.slice(0, GIT_BRANCH_MAX_LENGTH);
     }
-  } catch (err) {
-    log.debug({ err }, "optional Git environment probe unavailable");
   }
 
   return env;
+}
+
+// Bounded, shell-free Git probe. A hanging git (networked worktree, lock) must
+// not stall prompt construction, so each call uses an argument array (no shell)
+// with a short timeout and degrades to "no git info" on any failure.
+const GIT_PROBE_TIMEOUT_MS = 1500;
+const GIT_BRANCH_MAX_LENGTH = 256;
+
+function gitProbe(args: string[], cwd: string): string | undefined {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf-8",
+      timeout: GIT_PROBE_TIMEOUT_MS,
+    }).trim();
+  } catch (err) {
+    log.debug({ err }, "optional Git environment probe unavailable");
+    return undefined;
+  }
 }
 
 // The system prompt carries the product definitions plus a small environment

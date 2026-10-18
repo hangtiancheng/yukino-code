@@ -5,7 +5,7 @@ import { Modal, ModalHeader } from "./modal";
 
 interface RewindDialogProps {
   snapshots: RewindSnapshot[];
-  onAction: (snapshotIndex: number, action: RewindChoice) => void;
+  onAction: (snapshotId: string, action: RewindChoice) => void;
   onClose: () => void;
 }
 
@@ -29,7 +29,7 @@ export function RewindDialog({
   onAction,
   onClose,
 }: RewindDialogProps) {
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
   return (
     <Modal label="Rewind to a checkpoint" onEscape={onClose}>
@@ -42,10 +42,10 @@ export function RewindDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             {[...snapshots].reverse().map((snap) => (
               <button
-                key={snap.index}
+                key={snap.id}
                 type="button"
                 onClick={() => {
-                  setSelected(snap.index);
+                  setSelected(snap.id);
                 }}
                 className="flex w-full cursor-pointer items-center gap-3 rounded-none px-3 py-2.5 text-left transition-colors hover:bg-bg"
               >
@@ -74,7 +74,7 @@ export function RewindDialog({
         <>
           <ModalHeader
             subtitle={
-              snapshots.find((snap) => snap.index === selected)?.userText ||
+              snapshots.find((snap) => snap.id === selected)?.userText ||
               "(no prompt)"
             }
             title="What should be restored?"

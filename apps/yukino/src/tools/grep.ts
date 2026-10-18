@@ -1,6 +1,7 @@
 import type { Dir, Stats } from "node:fs";
 import { lstat, open, opendir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
+import { Worker } from "node:worker_threads";
 
 import { Minimatch } from "minimatch";
 
@@ -31,6 +32,139 @@ const DEFAULT_MAX_TRAVERSAL_DEPTH = 25;
 // multi-GB file into memory would spike it and block the loop, and the 500-
 // match cap means huge files rarely contribute anything the model needs.
 const MAX_GREP_FILE_BYTES = 25 * 1024 * 1024;
+
+// A catastrophic-backtracking pattern can pin RegExp.prototype.test on a single
+// line essentially forever. The per-line matching therefore runs in a worker
+// thread: the main loop (UI heartbeat, cancel handling) stays responsive, and a
+// hard per-file budget can terminate the worker instead of hanging.
+const REGEX_WORKER_SOURCE = `
+const { parentPort, workerData } = require('worker_threads');
+const regex = new RegExp(workerData.pattern, workerData.flags);
+parentPort.on('message', (msg) => {
+  const matches = [];
+  for (let i = 0; i < msg.lines.length; i++) {
+    if (regex.test(msg.lines[i])) matches.push(i);
+  }
+  parentPort.postMessage({ id: msg.id, matches });
+});
+parentPort.postMessage({ ready: true });
+`;
+
+const MATCH_MIN_TIMEOUT_MS = 2000;
+const MATCH_MAX_TIMEOUT_MS = 10000;
+
+export class GrepPatternTooSlowError extends Error {
+  constructor() {
+    super(
+      "Error: the pattern timed out while matching (likely catastrophic backtracking). Simplify it — avoid nested quantifiers such as (a+)+ — or narrow the path/include filter.",
+    );
+    this.name = "GrepPatternTooSlowError";
+  }
+}
+
+class RegexMatchWorker {
+  private worker: Worker;
+  private ready: Promise<void>;
+  private nextId = 1;
+  private pending = new Map<
+    number,
+    { resolve: (v: number[]) => void; reject: (e: unknown) => void }
+  >();
+  private terminated = false;
+
+  constructor(pattern: string, flags: string) {
+    this.worker = new Worker(REGEX_WORKER_SOURCE, {
+      eval: true,
+      workerData: { pattern, flags },
+    });
+    this.ready = new Promise<void>((resolve, reject) => {
+      const onReady = (msg: { ready?: boolean }) => {
+        if (msg.ready) {
+          this.worker.off("message", onReady);
+          resolve();
+        }
+      };
+      this.worker.on("message", onReady);
+      this.worker.once("error", reject);
+    });
+    this.worker.on("message", (msg: { id?: number; matches?: number[] }) => {
+      if (typeof msg.id !== "number") {
+        return;
+      }
+      const waiter = this.pending.get(msg.id);
+      if (waiter) {
+        this.pending.delete(msg.id);
+        waiter.resolve(msg.matches ?? []);
+      }
+    });
+    this.worker.on("error", (err) => {
+      for (const waiter of this.pending.values()) {
+        waiter.reject(err);
+      }
+      this.pending.clear();
+    });
+  }
+
+  match(
+    lines: string[],
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<number[]> {
+    if (this.terminated) {
+      return Promise.reject(new Error("regex matcher is terminated"));
+    }
+    const id = this.nextId++;
+    return new Promise<number[]>((resolve, reject) => {
+      const state: { timer?: NodeJS.Timeout } = {};
+      const cleanup = () => {
+        if (state.timer) {
+          clearTimeout(state.timer);
+        }
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const fail = (err: unknown) => {
+        cleanup();
+        this.pending.delete(id);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      };
+      const onAbort = () => {
+        this.pending.delete(id);
+        void this.terminate();
+        fail(signal?.reason ?? new Error("operation interrupted"));
+      };
+      state.timer = setTimeout(() => {
+        this.pending.delete(id);
+        void this.terminate();
+        fail(new GrepPatternTooSlowError());
+      }, timeoutMs);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      this.pending.set(id, {
+        resolve: (v) => {
+          cleanup();
+          resolve(v);
+        },
+        reject: fail,
+      });
+      this.ready
+        .then(() => {
+          this.worker.postMessage({ id, lines });
+        })
+        .catch(fail);
+    });
+  }
+
+  async terminate(): Promise<void> {
+    if (this.terminated) {
+      return;
+    }
+    this.terminated = true;
+    for (const waiter of this.pending.values()) {
+      waiter.reject(new Error("operation interrupted"));
+    }
+    this.pending.clear();
+    await this.worker.terminate();
+  }
+}
 
 export interface GrepTraversalLimits {
   maxEntries: number;
@@ -173,6 +307,10 @@ export class GrepTool implements Tool {
       }
     }
 
+    // One worker per Grep call, reused across every file; matching is off the
+    // main thread so the UI heartbeat and cancel stay live even on a huge tree.
+    const matcher = new RegexMatchWorker(regex.source, regex.flags);
+
     // dot:true — the walker below surfaces hidden files, so the include
     // filter must match them too (e.g. include "*.yaml" on .github files).
     // matchBase: bare patterns ("*.ts") match the basename at any depth;
@@ -221,24 +359,36 @@ export class GrepTool implements Tool {
           const lines = buf.toString("utf-8").split("\n");
           const rel = relative(ctx.cwd, filePath);
 
-          for (let i = 0; i < lines.length; i++) {
-            if (regex.test(lines[i])) {
-              const preview = takeUtf8Prefix(lines[i], MAX_MATCH_LINE_BYTES);
-              const shortened = preview.length < lines[i].length;
-              if (
-                !results.append(
-                  `${rel}:${String(i + 1)}:${preview}${shortened ? "…" : ""}`,
-                )
-              ) {
-                break;
-              }
-              shortenedLines += Number(shortened);
+          // Matching runs off the main thread under a size-scaled budget so a
+          // catastrophic pattern is terminated instead of pinning the loop.
+          const matchTimeout = Math.min(
+            MATCH_MAX_TIMEOUT_MS,
+            Math.max(MATCH_MIN_TIMEOUT_MS, Math.ceil(fileStat.size / 1024) * 5),
+          );
+          const matched = await matcher.match(
+            lines,
+            matchTimeout,
+            ctx.abortSignal,
+          );
+          for (const i of matched) {
+            const preview = takeUtf8Prefix(lines[i], MAX_MATCH_LINE_BYTES);
+            const shortened = preview.length < lines[i].length;
+            if (
+              !results.append(
+                `${rel}:${String(i + 1)}:${preview}${shortened ? "…" : ""}`,
+              )
+            ) {
+              break;
             }
+            shortenedLines += Number(shortened);
           }
         } finally {
           await file.close();
         }
       } catch (err) {
+        if (err instanceof GrepPatternTooSlowError) {
+          throw err;
+        }
         ctx.abortSignal?.throwIfAborted();
         log.error({ err }, "tool operation failed");
         // skip unreadable files
@@ -302,11 +452,15 @@ export class GrepTool implements Tool {
           }
         }
       } catch (err) {
+        if (err instanceof GrepPatternTooSlowError) {
+          throw err;
+        }
         ctx.abortSignal?.throwIfAborted();
         log.error({ err }, "tool operation failed");
       }
     };
 
+    let searchError: ToolResult | undefined;
     try {
       const pathStat = await stat(searchPath);
       if (pathStat.isFile()) {
@@ -316,13 +470,22 @@ export class GrepTool implements Tool {
       }
       ctx.abortSignal?.throwIfAborted();
     } catch (err) {
-      log.error({ err }, "tool operation failed");
-      return {
-        output: ctx.abortSignal?.aborted
-          ? "Error: operation interrupted"
-          : `Error: ${asErrorString(err)}`,
-        isError: true,
-      };
+      if (err instanceof GrepPatternTooSlowError) {
+        searchError = { output: err.message, isError: true };
+      } else {
+        log.error({ err }, "tool operation failed");
+        searchError = {
+          output: ctx.abortSignal?.aborted
+            ? "Error: operation interrupted"
+            : `Error: ${asErrorString(err)}`,
+          isError: true,
+        };
+      }
+    } finally {
+      await matcher.terminate();
+    }
+    if (searchError) {
+      return searchError;
     }
 
     const notices: string[] = [];

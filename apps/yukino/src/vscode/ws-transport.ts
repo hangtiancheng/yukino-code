@@ -11,6 +11,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import WebSocket from "ws";
 
+const START_TIMEOUT_MS = 10_000;
+
 export class WebSocketTransport implements Transport {
   private ws: WebSocket | null = null;
   private closeEmitted = false;
@@ -39,16 +41,62 @@ export class WebSocketTransport implements Transport {
     if (this.ws) {
       throw new Error("Start can only be called once per transport.");
     }
-    const ws = new WebSocket(this.url, ["mcp"], { headers: this.headers });
+    const ws = new WebSocket(this.url, ["mcp"], {
+      headers: this.headers,
+      // A server that accepts the TCP connection but never completes the
+      // WebSocket handshake would otherwise leave start() pending forever.
+      handshakeTimeout: START_TIMEOUT_MS,
+    });
     this.ws = ws;
 
     await new Promise<void>((resolvePromise, rejectPromise) => {
-      ws.once("open", () => {
-        resolvePromise();
-      });
-      ws.once("error", (err) => {
-        rejectPromise(err instanceof Error ? err : new Error(String(err)));
-      });
+      let settled = false;
+      const state: { timer?: NodeJS.Timeout } = {};
+      const cleanup = () => {
+        if (state.timer) {
+          clearTimeout(state.timer);
+        }
+        ws.off("open", onOpen);
+        ws.off("error", onError);
+        ws.off("close", onClose);
+      };
+      const settle = (fn: () => void) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        fn();
+      };
+      const onOpen = () => {
+        settle(resolvePromise);
+      };
+      const onError = (err: unknown) => {
+        settle(() => {
+          rejectPromise(err instanceof Error ? err : new Error(String(err)));
+        });
+      };
+      const onClose = () => {
+        settle(() => {
+          rejectPromise(
+            new Error("WebSocket closed before the handshake completed."),
+          );
+        });
+      };
+      ws.on("open", onOpen);
+      ws.on("error", onError);
+      ws.on("close", onClose);
+      // Backstop for the handshake timeout: guarantee start() always settles.
+      state.timer = setTimeout(() => {
+        settle(() => {
+          ws.terminate();
+          rejectPromise(
+            new Error(
+              `WebSocket handshake timed out after ${String(START_TIMEOUT_MS)}ms.`,
+            ),
+          );
+        });
+      }, START_TIMEOUT_MS);
     });
 
     ws.on("message", (data: WebSocket.RawData) => {

@@ -6,6 +6,18 @@ const COLOR_SCHEME = "\x1b[?997;";
 const PASTE_START = "\x1b[200~";
 const PASTE_END = "\x1b[201~";
 
+// Longest suffix of `text` that is also a prefix of `marker` (shorter than the
+// marker itself), so a marker split across chunks is still recognized.
+function partialSuffixLength(text: string, marker: string): number {
+  const max = Math.min(text.length, marker.length - 1);
+  for (let len = max; len > 0; len--) {
+    if (text.endsWith(marker.slice(0, len))) {
+      return len;
+    }
+  }
+  return 0;
+}
+
 /** Remove terminal reports before Ink splits them into individual key events. */
 export class TerminalInput extends Transform {
   readonly stdin: NodeJS.ReadStream;
@@ -74,9 +86,39 @@ export class TerminalInput extends Transform {
         this.pending = this.pending.slice(pasteMarker.length);
         continue;
       }
-      const prefixes = this.pasting
-        ? [PASTE_END]
-        : [OSC_BACKGROUND, COLOR_SCHEME, PASTE_START];
+      if (this.pasting) {
+        // Inside a bracketed paste the body is plain text: forward it in one
+        // slice up to the end marker instead of byte-by-byte, so multi-MB
+        // pastes stay O(n). Keep a tail that could still become a PASTE_END
+        // split across chunks.
+        const endIdx = this.pending.indexOf(PASTE_END);
+        if (endIdx >= 0) {
+          output += this.pending.slice(0, endIdx);
+          this.pending = this.pending.slice(endIdx);
+          continue;
+        }
+        const keep = partialSuffixLength(this.pending, PASTE_END);
+        const flushEnd = this.pending.length - keep;
+        output += this.pending.slice(0, flushEnd);
+        this.pending = this.pending.slice(flushEnd);
+        break;
+      }
+      // Outside a paste every handled report and the paste-start marker begin
+      // with ESC, so forward plain text up to the next ESC in one slice.
+      const escIdx = this.pending.indexOf("\x1b");
+      if (escIdx > 0) {
+        output += this.pending.slice(0, escIdx);
+        this.pending = this.pending.slice(escIdx);
+        continue;
+      }
+      if (escIdx < 0) {
+        output += this.pending;
+        this.pending = "";
+        break;
+      }
+      // pending starts with ESC: hold it while it is still a prefix of a known
+      // report, otherwise emit the ESC and keep parsing (arrows, literal Esc).
+      const prefixes = [OSC_BACKGROUND, COLOR_SCHEME, PASTE_START];
       if (prefixes.some((prefix) => prefix.startsWith(this.pending))) {
         break;
       }

@@ -5,6 +5,7 @@ import {
 } from "./prompts.js";
 import type { RecoveryState } from "./recovery.js";
 
+import { DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
@@ -62,19 +63,41 @@ const MIN_COMPACT_PREFIX = 2;
 const SUMMARY_OUTPUT_RESERVE = 20000;
 const AUTO_COMPACT_SAFETY_MARGIN = 13000;
 const MANUAL_COMPACT_SAFETY_MARGIN = 3000;
+// Reserve enough answer space for a full compaction summary so a fixed thinking
+// budget cannot squeeze the summary down to the 1024-token answer floor.
+const SUMMARY_ANSWER_RESERVE_TOKENS = 16_000;
 
 // effectiveWindow = contextWindow − min(model maxOutput, SUMMARY_OUTPUT_RESERVE).
 // Auto-compact triggers at effectiveWindow − AUTO margin; once token usage crosses
 // effectiveWindow − MANUAL margin (the hard block line) we must force a compaction.
+//
+// The fixed margins assume a large window. On a small window they can exceed the
+// available space and drive the threshold to zero or below, which would force a
+// compaction every turn and keep the hard-block line permanently crossed. The
+// margin is therefore capped to a fraction of the effective window so the
+// threshold stays a meaningful positive headroom, while large windows keep the
+// original fixed-margin behaviour exactly.
+const AUTO_MARGIN_RATIO = 0.25;
+const MANUAL_MARGIN_RATIO = 0.1;
+
 export function computeCompactThreshold(
   contextWindow: number,
   maxOutput: number,
   manual = false,
 ): number {
   const effective = contextWindow - Math.min(maxOutput, SUMMARY_OUTPUT_RESERVE);
-  const margin = manual
+  if (effective <= 0) {
+    throw new Error(
+      `Context window ${String(contextWindow)} is too small to compact: after reserving ${String(
+        Math.min(maxOutput, SUMMARY_OUTPUT_RESERVE),
+      )} tokens for the summary output there is no room left for the conversation.`,
+    );
+  }
+  const fixedMargin = manual
     ? MANUAL_COMPACT_SAFETY_MARGIN
     : AUTO_COMPACT_SAFETY_MARGIN;
+  const ratio = manual ? MANUAL_MARGIN_RATIO : AUTO_MARGIN_RATIO;
+  const margin = Math.min(fixedMargin, Math.floor(effective * ratio));
   return effective - margin;
 }
 
@@ -202,7 +225,8 @@ export function estimateMessages(messages: Message[]): number {
     }
     if (msg.thinkingBlocks) {
       for (const tb of msg.thinkingBlocks) {
-        totalChars += tb.thinking.length;
+        totalChars +=
+          tb.type === "thinking" ? tb.thinking.length : tb.data.length;
       }
     }
   }
@@ -520,7 +544,18 @@ async function collectSummaryAttempt(
   abortSignal?.throwIfAborted();
   let text = "";
   let completed = false;
-  for await (const event of client.stream(conv, tools, abortSignal)) {
+  const budget = client.getOutputBudget?.();
+  const maxOutputTokens = Math.max(
+    1,
+    Math.min(
+      (budget?.thinkingTokens ?? 0) + SUMMARY_ANSWER_RESERVE_TOKENS,
+      budget?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    ),
+  );
+  for await (const event of client.stream(conv, tools, abortSignal, {
+    maxOutputTokens,
+    answerReserveTokens: SUMMARY_ANSWER_RESERVE_TOKENS,
+  })) {
     abortSignal?.throwIfAborted();
     if (
       event.type === "tool_call_start" ||

@@ -44,20 +44,36 @@ function normalizeSeverity(raw: unknown): CommentSeverity {
   return SEVERITIES.find((c) => c === s) ?? "low";
 }
 
-/** Normalize a model-supplied path: backslashes → slashes, collapse `.`/`..`
- * and duplicate separators, strip `./` and leading `/`. */
-export function normalizeCommentPath(p: string): string {
+/**
+ * Normalize a model-supplied comment path and validate that it stays inside the
+ * review target. Backslashes → slashes, collapse `.`/`..` and duplicate
+ * separators, strip `./` and a leading `/` (an absolute spelling of a
+ * repo-relative path). Returns:
+ *   - "" for an empty path (the caller applies the group's default file),
+ *   - null when the path escapes the review root (a surviving `..` segment) or
+ *     is drive-qualified — string normalization alone is not scope validation,
+ *     so these are rejected rather than silently rewritten.
+ */
+export function normalizeCommentPath(p: string): string | null {
   const trimmed = p.trim();
   if (!trimmed) {
     return "";
   }
   let out = trimmed.replace(/\\/g, "/");
+  // Reject Windows drive-qualified targets (C:/..., after backslash folding).
+  if (/^[A-Za-z]:/.test(out)) {
+    return null;
+  }
   out = posix.normalize(out);
   while (out.startsWith("./")) {
     out = out.slice(2);
   }
   while (out.startsWith("/")) {
     out = out.slice(1);
+  }
+  // posix.normalize keeps leading ".."; a surviving one escapes the review root.
+  if (out === ".." || out.startsWith("../")) {
+    return null;
   }
   return out;
 }
@@ -120,7 +136,14 @@ export function parseComments(
       droppedEntries++;
       continue;
     }
-    let path = normalizeCommentPath(strArg(item, "path"));
+    const normalized = normalizeCommentPath(strArg(item, "path"));
+    if (normalized === null) {
+      // Escaping/drive-qualified path: reject the comment instead of rewriting
+      // it into the repo or defaulting it onto the group's primary file.
+      droppedEntries++;
+      continue;
+    }
+    let path = normalized;
     if (!path) {
       path = defaultPath;
       defaultedPaths++;

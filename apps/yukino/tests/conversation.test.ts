@@ -67,7 +67,7 @@ describe("ConversationManager", () => {
     const mgr = new ConversationManager();
     mgr.addAssistantFull(
       "response text",
-      [{ thinking: "let me think...", signature: "sig1" }],
+      [{ type: "thinking", thinking: "let me think...", signature: "sig1" }],
       [{ toolUseId: "tu-1", toolName: "Bash", arguments: { command: "ls" } }],
     );
 
@@ -266,7 +266,7 @@ describe("ConversationManager", () => {
       const mgr = new ConversationManager();
       mgr.addAssistantFull(
         "answer",
-        [{ thinking: "let me think", signature: "sig-1" }],
+        [{ type: "thinking", thinking: "let me think", signature: "sig-1" }],
         [{ toolUseId: "tu-1", toolName: "Bash", arguments: { command: "ls" } }],
       );
       const result = buildAnthropicMessages(mgr.getMessages());
@@ -274,6 +274,37 @@ describe("ConversationManager", () => {
       const content = result[0].content;
       expect(strArg(asRecord(content[0]), "type")).toBe("thinking");
       expect(strArg(asRecord(content[0]), "signature")).toBe("sig-1");
+      expect(strArg(asRecord(content[content.length - 1]), "type")).toBe(
+        "tool_use",
+      );
+    });
+
+    it("replays redacted_thinking verbatim alongside normal thinking, preserving order", () => {
+      const mgr = new ConversationManager();
+      mgr.addAssistantFull(
+        "answer",
+        [
+          { type: "thinking", thinking: "visible", signature: "sig-1" },
+          { type: "redacted_thinking", data: "OPAQUE_ENCRYPTED_BLOB" },
+        ],
+        [
+          {
+            toolUseId: "tu-1",
+            toolName: "Bash",
+            arguments: { command: "ls" },
+          },
+        ],
+      );
+      const result = buildAnthropicMessages(mgr.getMessages());
+      const content = result[0].content;
+      expect(strArg(asRecord(content[0]), "type")).toBe("thinking");
+      expect(strArg(asRecord(content[1]), "type")).toBe("redacted_thinking");
+      // The opaque block is carried as data only — never decoded to text and
+      // never given a fabricated signature.
+      expect(strArg(asRecord(content[1]), "data")).toBe(
+        "OPAQUE_ENCRYPTED_BLOB",
+      );
+      expect(strArg(asRecord(content[1]), "signature")).toBe("");
       expect(strArg(asRecord(content[content.length - 1]), "type")).toBe(
         "tool_use",
       );

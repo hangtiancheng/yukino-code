@@ -21,10 +21,14 @@ export interface ToolResultBlock {
   isError: boolean;
 }
 
-export interface ThinkingBlock {
-  thinking: string;
-  signature: string;
-}
+/**
+ * An assistant reasoning block. "thinking" carries the visible summary plus its
+ * cryptographic signature; "redacted_thinking" carries opaque encrypted data
+ * that must be replayed verbatim and never decoded, logged, or displayed.
+ */
+export type ThinkingBlock =
+  | { type: "thinking"; thinking: string; signature: string }
+  | { type: "redacted_thinking"; data: string };
 
 export interface Message {
   role: "user" | "assistant" | "system";

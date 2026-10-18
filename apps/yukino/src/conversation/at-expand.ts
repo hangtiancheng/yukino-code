@@ -137,6 +137,7 @@ export async function expandAtRefsWithImages(
   let appendix = "";
   const seen = new Set<string>();
   const imageBlocks: Record<string, unknown>[] = [];
+  let imageLimitNoticeAdded = false;
   for (const ref of refs) {
     if (seen.has(ref)) {
       continue;
@@ -151,7 +152,16 @@ export async function expandAtRefsWithImages(
       }
       if (isImagePath(p)) {
         if (imageBlocks.length >= MAX_IMAGES_PER_MESSAGE) {
-          appendix += `\n\nError: too many images attached (limit ${String(MAX_IMAGES_PER_MESSAGE)} per message)`;
+          // Route the notice through the same byte budget as every other
+          // appendix block, and emit it at most once regardless of how many
+          // further images are over the limit.
+          if (!imageLimitNoticeAdded) {
+            imageLimitNoticeAdded = true;
+            appendix = appendWithinLimit(
+              appendix,
+              `\n\nError: too many images attached (limit ${String(MAX_IMAGES_PER_MESSAGE)} per message)`,
+            ).appendix;
+          }
           continue;
         }
         try {

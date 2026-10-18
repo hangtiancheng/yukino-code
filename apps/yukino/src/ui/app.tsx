@@ -584,6 +584,10 @@ export function App({
   // when the text enters the conversation (delivered in-run or re-fed as a
   // follow-up), so the follow-up path records each user prompt exactly once.
   const steeringHistoryRecordedRef = useRef<string[]>([]);
+  // Populated after useFollowUpQueue runs; lets the earlier-defined session
+  // switch handlers (clear/resume/rewind) drop queued follow-ups when the
+  // conversation baseline changes.
+  const followUpResetRef = useRef<() => void>(() => undefined);
   const [resumeSessions, setResumeSessions] = useState<
     sessionMod.SessionInfo[]
   >([]);
@@ -592,9 +596,19 @@ export function App({
   const [permissionRequest, setPermissionRequest] =
     useState<PermissionRequest | null>(null);
   const [askRequest, setAskRequest] = useState<Question[] | null>(null);
-  const askResolveRef = useRef<((a: Record<string, string>) => void) | null>(
-    null,
-  );
+  // AskUserQuestion is a read-category tool, so several can be in flight at
+  // once. Each keeps its own resolver in a FIFO queue and the TUI presents them
+  // one at a time; a single resolver slot would let a second call overwrite the
+  // first and strand its promise.
+  const askQueueRef = useRef<
+    { questions: Question[]; resolve: (a: Record<string, string>) => void }[]
+  >([]);
+  const settleAskQueue = useCallback(() => {
+    for (const pending of askQueueRef.current.splice(0)) {
+      pending.resolve({});
+    }
+    setAskRequest(null);
+  }, []);
   const teammateStates = useTeammateStates(teamManagerRef.current);
   const [agentsDialogOpen, setAgentsDialogOpen] = useState(false);
   const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
@@ -629,10 +643,10 @@ export function App({
         abortControllerRef,
         permissionResolveRef,
         setPermissionRequest,
-        askResolveRef,
-        setAskRequest,
+        settleAskQueue,
         issueApprovalResolveRef,
         setIssueApprovalRequest,
+        setPlanApprovalActive,
         permissionQueue: permissionQueueRef,
         backgroundTasks: backgroundTaskManagerRef.current,
         teams: teamManagerRef.current,
@@ -663,6 +677,9 @@ export function App({
       const cleanupResults = await Promise.allSettled([
         backgroundTaskManagerRef.current.stopAll(),
         teamManagerRef.current.dispose(),
+        // Stop background memory tasks so they do not outlive the host.
+        memExtractorRef.current?.dispose() ?? Promise.resolve(),
+        memConsolidatorRef.current?.dispose() ?? Promise.resolve(),
       ]);
       for (const result of cleanupResults) {
         if (result.status === "rejected") {
@@ -714,17 +731,34 @@ export function App({
       interruptForeground();
     }
   };
+  // Single source of truth for "a modal dialog owns the keyboard": global
+  // shortcuts belonging to the main chat input stand down while it is true, so
+  // individual dialogs (AskUser Other, plan feedback, login, ...) do not each
+  // need their own ad-hoc guard.
+  const modalActive =
+    loginActive ||
+    codeReviewActive ||
+    providerDialogActive ||
+    modelDialogActive ||
+    thinkingDialogActive ||
+    planApprovalActive ||
+    feedbackActive ||
+    issueApprovalRequest !== null ||
+    rewindDialogActive ||
+    resumeDialogActive ||
+    permissionRequest !== null ||
+    askRequest !== null ||
+    agentsDialogOpen;
   const { toolsExpanded, ctrlCHint } = useTerminalControls({
     hasRunningWork: foregroundBusy,
     clearInputRef,
     onInterrupt: interruptUserWork,
     onExit: requestExit,
+    modalActive,
     onBackgroundShells: () => {
-      // Gate the keypress: keep Ctrl+B inert when nothing is backgroundable,
-      // and yield the key to the provider-login form while it is open (that
-      // form binds Ctrl+B to cursor-back — ink dispatches to every mounted
-      // useInput handler, so an ungated handler would double-fire).
-      if (loginActive || !hasAnyForegroundTasks(registryRef.current)) {
+      // Keep Ctrl+B inert when nothing is backgroundable. Modal ownership is
+      // handled centrally via modalActive, not by special-casing dialogs here.
+      if (!hasAnyForegroundTasks(registryRef.current)) {
         return;
       }
       backgroundAllForegroundTasks(registryRef.current);
@@ -956,8 +990,11 @@ export function App({
           new AskUserQuestionTool(
             (questions) =>
               new Promise<Record<string, string>>((resolve) => {
-                askResolveRef.current = resolve;
-                setAskRequest(questions);
+                const wasIdle = askQueueRef.current.length === 0;
+                askQueueRef.current.push({ questions, resolve });
+                if (wasIdle) {
+                  setAskRequest(questions);
+                }
               }),
           ),
         );
@@ -1026,7 +1063,7 @@ export function App({
         );
 
         // Load user-defined slash commands from ~/.yukino/prompts/*.md
-        // (user home, then project — project wins on a name collision).
+        // (global user home only; there is no project-level prompt source).
         for (const cmd of loadUserCommands()) {
           try {
             cmdRegistryRef.current.register(cmd);
@@ -1373,7 +1410,9 @@ export function App({
         updated.protocol,
         contextWindowRef.current,
       );
-      // Capability metadata follows the model; drop derived state.
+      // Capability metadata follows the model; drop derived state, stopping any
+      // in-flight extraction against the old client first.
+      void memExtractorRef.current?.dispose();
       memExtractorRef.current = null;
     } catch (err) {
       setError(`Failed to switch model: ${asErrorString(err)}`);
@@ -1538,7 +1577,7 @@ export function App({
     }
   };
 
-  const handleSlashCommand = async (text: string): Promise<boolean> => {
+  const runSlashCommand = async (text: string): Promise<boolean> => {
     let parsed = parseCommand(text);
     if (!parsed) {
       return false;
@@ -1752,6 +1791,12 @@ export function App({
           // instance would leave it pointing at the discarded history.
           setMessages([]);
           conversationRef.current.reset();
+          // A fresh conversation must not inherit the previous session's
+          // read-before-edit state.
+          fileStateCacheRef.current.clear();
+          // ...nor the old session's queued follow-ups and steering history.
+          followUpResetRef.current();
+          steeringHistoryRecordedRef.current = [];
           announcedSkillsRef.current.clear();
           conversationRef.current.injectLongTermMemory(
             loadInstructions(cwd),
@@ -1911,6 +1956,12 @@ export function App({
           backgroundTaskManagerRef.current.useSession(arg);
           const conv = conversationRef.current;
           conv.reset();
+          // Resumed baseline: files read in the old/other session are not
+          // "already read" for this one.
+          fileStateCacheRef.current.clear();
+          // Drop follow-ups/steering recorded against the previous conversation.
+          followUpResetRef.current();
+          steeringHistoryRecordedRef.current = [];
           conv.injectLongTermMemory(
             loadInstructions(cwd),
             memoryEnabled ? new MemoryManager(cwd).buildSystemReminder() : "",
@@ -2272,6 +2323,24 @@ export function App({
     return false;
   };
 
+  // Central guard for every slash-command entry point (interactive submit,
+  // startup --resume, dialog callbacks): a throwing command surfaces as a
+  // user-visible message and leaves the app re-operable instead of escaping as
+  // an unhandled rejection. This only catches expected command failures — the
+  // global unknown-crash handling in recover.ts is left intact.
+  const handleSlashCommand = async (text: string): Promise<boolean> => {
+    try {
+      return await runSlashCommand(text);
+    } catch (err) {
+      log.error({ err, text }, "slash command failed");
+      setMessages((prev) => [
+        ...prev,
+        { role: "system", content: `Error: ${asErrorString(err)}` },
+      ]);
+      return true;
+    }
+  };
+
   const runAgentLoop = async (modeOverride?: PermissionMode) => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -2550,6 +2619,10 @@ export function App({
     setSubagents([]);
     output.prepareTurn();
     setError(null);
+    // Uniformly (re)initialize the plan-approval state at every run entry so a
+    // stale/expired approval from a previous run never resurfaces on this one
+    // (including notification turns).
+    setPlanApprovalActive(false);
 
     try {
       await prepare?.();
@@ -2710,9 +2783,16 @@ export function App({
       if (!fh) {
         return;
       }
+      // A rewind restores files and/or rolls back the conversation baseline, so
+      // the read-before-edit state must be rebuilt from the new reality.
+      fileStateCacheRef.current.clear();
 
       switch (action.type) {
         case "code_and_conversation": {
+          // Conversation baseline changes: drop queued follow-ups and steering
+          // history recorded against the pre-rewind conversation.
+          followUpResetRef.current();
+          steeringHistoryRecordedRef.current = [];
           const changed = fh.rewind(action.snapshotIndex);
           const snap = rewindSnapshots[action.snapshotIndex];
           const transcript = rewindConversation(snap);
@@ -2731,6 +2811,8 @@ export function App({
           break;
         }
         case "conversation_only": {
+          followUpResetRef.current();
+          steeringHistoryRecordedRef.current = [];
           const snap = rewindSnapshots[action.snapshotIndex];
           const transcript = rewindConversation(snap);
           setMessages([
@@ -2829,6 +2911,7 @@ export function App({
       setError(asErrorString(error));
     },
   });
+  followUpResetRef.current = followUps.reset;
   const pendingMessages = followUps.messages;
 
   useNotificationWakeup({
@@ -3111,6 +3194,7 @@ export function App({
         saved.provider.protocol,
         contextWindowRef.current,
       );
+      void memExtractorRef.current?.dispose();
       memExtractorRef.current = null;
       setMessages((current) => [
         ...current,
@@ -3357,9 +3441,10 @@ export function App({
               ? {
                   questions: askRequest,
                   onComplete: (answers) => {
-                    askResolveRef.current?.(answers);
-                    askResolveRef.current = null;
-                    setAskRequest(null);
+                    const head = askQueueRef.current.shift();
+                    head?.resolve(answers);
+                    const next = askQueueRef.current[0];
+                    setAskRequest(next ? next.questions : null);
                   },
                 }
               : undefined

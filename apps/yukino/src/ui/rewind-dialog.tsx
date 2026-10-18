@@ -90,7 +90,7 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
           const selected = index === cursor;
           return (
             <Box
-              key={snapshot.timestamp}
+              key={index}
               ref={selected ? focusRef : undefined}
               backgroundColor={selected ? THEME.selectedBg : undefined}
               paddingLeft={1}
@@ -126,7 +126,7 @@ function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
         const selected = index === optionCursor;
         return (
           <Box
-            key={option}
+            key={index}
             ref={selected ? focusRef : undefined}
             backgroundColor={selected ? THEME.selectedBg : undefined}
             paddingLeft={1}
