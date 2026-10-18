@@ -22,7 +22,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 **/.idea/
 *.iml
 
-
 .env
 .env.*
 !.env.example
@@ -174,3 +173,4 @@ target
 
 .playwright-cli/
 apps/yukino/coverage
+**/.claude
