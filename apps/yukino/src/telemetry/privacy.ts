@@ -1,26 +1,19 @@
 import { homedir } from "node:os";
 
 import { isRecord } from "@/utils/index.js";
+import { redactCredentials, environmentSecrets } from "@/utils/redact.js";
 
 export function scrubTelemetryPayload(value: unknown): void {
-  const secrets = Object.entries(process.env).flatMap(([key, secret]) =>
-    /(?:API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY|DSN)/iu.test(key) &&
-    secret &&
-    secret.length >= 4
-      ? [secret, encodeURIComponent(secret)]
-      : [],
-  );
+  const secrets = environmentSecrets();
   const redact = (text: string) => {
-    for (const secret of secrets) {
-      text = text.replaceAll(secret, "[redacted]");
-    }
+    text = redactCredentials(text, secrets, "[redacted]");
     const home = homedir();
     if (home && home !== "/") {
       text = text
         .replaceAll(home, "~")
         .replaceAll(encodeURIComponent(home), "~");
     }
-    return text.replace(/\b(Bearer\s+)[\w.+/~=-]+/giu, "$1[redacted]");
+    return text;
   };
   const seen = new WeakSet<object>();
   const visit = (item: unknown): void => {

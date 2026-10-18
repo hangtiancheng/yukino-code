@@ -198,6 +198,9 @@ export class MCPClient {
   }
 
   async connect(): Promise<void> {
+    if (this.config.enabled === false) {
+      throw new Error(`MCP server "${this.config.name}" is disabled`);
+    }
     const config = expandMcpServerConfigEnvironment(this.config);
     if (config.command) {
       const env: NodeJS.ProcessEnv = { ...process.env };

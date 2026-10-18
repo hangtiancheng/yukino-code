@@ -7,14 +7,7 @@ import {
 } from "./prompts.js";
 import type { FileDiff, ReviewComment } from "./types.js";
 
-/** Escape text used inside a double-quoted XML attribute. */
-function escapeXmlAttr(s: string): string {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
+import { escapeXml } from "@/utils/xml.js";
 
 /** Render group diffs as per-file XML elements. */
 export function buildConcatenatedDiffs(diffs: FileDiff[]): string {
@@ -23,10 +16,8 @@ export function buildConcatenatedDiffs(diffs: FileDiff[]): string {
       // Renames: the comment may cite either side of the rename, so both
       // paths must be discoverable on the element.
       const renameAttr =
-        d.oldPath !== d.newPath
-          ? ` old_path="${escapeXmlAttr(d.oldPath)}"`
-          : "";
-      return `<file path="${escapeXmlAttr(d.newPath)}"${renameAttr}>\n${d.diffText}\n</file>`;
+        d.oldPath !== d.newPath ? ` old_path="${escapeXml(d.oldPath)}"` : "";
+      return `<file path="${escapeXml(d.newPath)}"${renameAttr}>\n${escapeXml(d.diffText)}\n</file>`;
     })
     .join("\n\n");
 }
@@ -84,14 +75,14 @@ export function buildConfirmedCommentsBlock(comments: ReviewComment[]): string {
     "<confirmed_findings>",
   ];
   comments.forEach((cm, i) => {
-    parts.push(`${String(i + 1)}. ${cm.path}`);
+    parts.push(`${String(i + 1)}. ${escapeXml(cm.path)}`);
     if (cm.existingCode) {
       parts.push(
-        `   code: ${truncate(flattenOneLine(cm.existingCode), CONFIRMED_MAX_EXISTING_CODE)}`,
+        `   code: ${escapeXml(truncate(flattenOneLine(cm.existingCode), CONFIRMED_MAX_EXISTING_CODE))}`,
       );
     }
     parts.push(
-      `   issue: ${truncate(flattenOneLine(cm.content), CONFIRMED_MAX_CONTENT)}`,
+      `   issue: ${escapeXml(truncate(flattenOneLine(cm.content), CONFIRMED_MAX_CONTENT))}`,
     );
   });
   parts.push("</confirmed_findings>");
@@ -121,11 +112,11 @@ export function buildMainTaskMessage(vars: MainTaskVars): string {
     content = stripEmptyConfirmedBlock(content);
   }
   return renderTemplate(content, {
-    change_files: vars.changeFiles,
+    change_files: escapeXml(vars.changeFiles),
     diffs: vars.diffs,
     current_system_date_time: vars.currentDateTime,
-    requirement_background: vars.background,
-    plan_guidance: vars.planGuidance,
+    requirement_background: escapeXml(vars.background),
+    plan_guidance: escapeXml(vars.planGuidance),
     confirmed_comments: vars.confirmedComments,
   });
 }

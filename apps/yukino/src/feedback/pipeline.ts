@@ -1,4 +1,3 @@
-import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -49,6 +48,7 @@ import {
   rebuildFromSession,
 } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
+import { mkdirPrivateSync as mkdirSync } from "@/storage/private.js";
 import { asErrorString } from "@/utils/index.js";
 import { version } from "@/version.js";
 

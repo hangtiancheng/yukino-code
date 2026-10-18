@@ -1,6 +1,6 @@
 # Yukino 缺陷修复计划
 
-> 原始计划基线为 `9f13953`。`e7409d2` 实施并勾选了非安全项；本轮复核发现的遗漏、回归及补充修复见第 11 节。SEC-01～16 与 WORK-01 继续保持未完成。
+> 原始计划基线为 `9f13953`。`e7409d2` 实施并勾选了非安全项；本轮复核发现的遗漏、回归及补充修复见第 11 节。安全项按本轮用户裁定实施，范围与验证见第 12 节；SEC-14 明确不修复。
 
 ## 1. 原始计划的基线与裁定规则
 
@@ -71,81 +71,87 @@
 
 ## 4. 安全与隐私修复 TODO
 
-### [ ] SEC-01 · 所有模式执行 shell 子命令的显式 deny/ask · P0
+### [x] SEC-01 · 所有模式执行 shell 子命令的显式 deny/ask · P0
 
 - **判定：真实缺陷；分类：安全性 / 权限规则绕过。** 来源：codex D1、pi P1、yukino M-1 的规则部分；证据：`src/permissions/index.ts` 的 globMatch、check Layer 1/3.5。
 - 事实：整串锚定匹配遇换行失配；子命令规则只在 Bash sandbox auto-allow 分支运行，bypassPermissions 也能绕过用户 deny。
 - 修复：将显式规则评估前移到共享路径，覆盖 Bash、PowerShell、全部 permission mode；deny 优先于 ask/allow。定义引号、转义、换行、分隔符、嵌套执行的处理；不能靠给正则加 dotAll 代替子命令检查，也不能把朴素 split 声称为完整 shell 解析。
 - 验收：危险段位于首/中/尾，使用 LF/CRLF、`;`、`&&`、`||`、`|`、`&` 均不能绕过；引号内字面分隔符不误当命令；复杂语法无法安全分析时不靠普通前缀 allow 放行。沙箱开关和 bypass 均保留显式 deny/ask。
 
-### [ ] SEC-02 · 收窄 remembered shell 规则与命令链授权 · P1
+### [x] SEC-02 · 收窄 remembered shell 规则与命令链授权 · P1
 
 - **判定：真实缺陷；分类：安全性 / 持久授权范围。** 来源：codex D2/D5.1、pi P2、yukino M-1；证据：`PermissionChecker.allowAlways` 的前两词加 `*`。
-- 修复：生成带词边界的命令族规则；一条已授权前缀不得覆盖后续任意管道、命令替换或命令链。与 SEC-01 共享分析结果；仅在各可执行段均获授权时使用规则 auto-allow。
-- 验收：批准 `git push origin main` 后，`git pushfoo` 和 `git push … && curl … | sh` 不获得该规则授权；合法同族单命令按新契约工作；显式 deny/ask 始终优先。保留“命令族授权”设计，不退化为所有调用都只能逐次询问。
+- 修复：按用户要求保留前两个词加 `*` 的命令族规则（例如 `Bash(git push*)`，不新增词边界策略）。与 SEC-01 共用引号/转义感知的分析，只有每个可执行段均匹配 allow 时才凭 remembered 规则自动放行；复杂命令不生成可记忆范围。
+- 验收：批准 `git push origin main` 后同族调用仍适用；追加换行、`;`、`&&`、`||`、`|`、`&` 后的未授权命令均单独检查。整条合法命令链可展示并记忆多个范围；显式 deny/ask 优先。
 
-### [ ] SEC-03 · 统一文件规则的规范路径，并受控处理解析错误 · P1
+### [x] SEC-03 · 统一文件规则的规范路径，并受控处理解析错误 · P1
 
 - **判定：真实缺陷；分类：安全性 / 路径授权、功能正确性、可靠性。** 来源：yukino H-1/H-3、codex D4、pi P6/P14、claude C49；证据：`permissions/index.ts.extractContent/check/allowAlways`、`utils/paths.ts.canonicalPath`。
 - 事实：规则对原始路径匹配，而路径沙箱/持久规则使用另一种表示；字面 `allowed/../../outside` 可命中 allow。文件目录族授权本身和显式 allow 授权工作区外路径均是现行设计。
 - 修复：文件类规则创建与匹配共用 cwd/`~` 展开、canonicalization；定义带 glob 的规则如何规范化固定路径部分，不保留“匹配不上就试原始路径”的后门。ELOOP/EACCES 等返回受控拒绝或工具错误，不返回未解析原路径继续授权。
 - 验收：相对/绝对/家目录/符号链接别名对同一文件决策一致；穿越和 symlink 逃逸不能扩大规则范围；用户明确配置的工作区外 allow 仍可生效；解析失败不杀整个工具轮且不漏配 tool_result。
 
-### [ ] SEC-04 · 禁止空匹配内容隐式退化为全工具授权 · P1
+### [x] SEC-04 · 禁止空匹配内容隐式退化为全工具授权 · P1
 
 - **判定：真实缺陷；分类：安全性 / 授权可见性与范围。** 来源：claude C1；证据：`CONTENT_FIELDS`、`allowAlways`；`ui/permission-dialog.tsx` 只展示“allow this pattern”，未展示将持久化的实际 `*`。
 - 修复：建立各工具可记忆的授权目标，审批 UI 展示实际作用域；没有稳定目标的工具不支持 scoped remember，提供单次允许；若产品需要全工具授权，必须明确显示该范围，不能由空串自动推导。
 - 验收：Agent、ExitWorktree、SendMessage 和动态 MCP 工具不再从空串生成未展示的 `Tool(*)`；McpCall 的 server/tool 标识使用完整目标，不截前两词再追加任意后缀；终端/浏览器/协议响应语义一致。
 
-### [ ] SEC-05 · 项目 MCP 连接前建立来源信任门禁 · P0
+### [x] SEC-05 · MCP enabled 开关（按用户指定范围） · P0
 
 - **判定：真实缺陷；分类：安全性 / 供应链、代码执行与凭据暴露。** 来源：codex N1、pi P16、yukino H-2；证据：`config/index.ts.withProjectMcpServers`、`mcp/client.ts.connect`、各宿主自动连接路径。
-- 修复：保留配置来源，项目 `.mcp.json` 在获得该配置的明确授权前不 spawn、不连接网络服务器、不展开/发送环境凭据；信任记录绑定 canonical 项目与有效配置摘要，配置改变重新判定。非交互模式未授权时明确拒绝或跳过并诊断；bypass 工具权限不等于批准仓库启动配置。
-- 验收：使用只会写临时 marker 的假 MCP，未批准时 marker 不出现；不读取真实环境秘密；批准只覆盖已展示配置，reload/修改后不会沿用旧授权；用户全局自配服务器仍遵循受信本地程序策略。覆盖 TUI/print/Remote/ACP/A2A/reload。
+- 修复：采用用户指定的开关方案：`.mcp.json` 支持 boolean `enabled`，默认 true，false 时在环境展开与连接前跳过。用户级配置也支持同一字段，manager 与直接 client 入口均阻止 disabled 连接，reload 会断开已禁用项。
+- 验收：disabled 的 stdio marker 不出现、URL 不连接、缺失 env 不展开；省略 enabled 或 true 继续连接；reload 从 enabled 改为 false 后不重连。
 
-### [ ] SEC-06 · 项目 instructions/include 的读取边界 · P0
+> 本期不实施原计划中的来源信任、配置摘要或人工批准流程。默认 true 的项目 MCP 仍会自动连接，这是用户明确选择的策略。
+
+### [x] SEC-06 · 彻底删除 instructions 的 @include 展开 · P0
 
 - **判定：真实缺陷；分类：安全性 / 供应链、秘密外传。** 来源：codex N6；与 pi 的“绝对 include 是设计”拆分处理；证据：`memory/instructions.ts.discoverInstructions/addSource/expandIncludes`。
-- 修复：按来源授予读取根：受信用户全局 AGENTS 可保留用户明确的绝对/家目录 include；项目来源默认只能读取 canonical 项目范围，越界须来自用户侧明确配置授权。根 AGENTS 本身、嵌套 include 和 symlink 均校验，限深/环检测不能当权限边界。
-- 验收：夹具中的仓库 AGENTS 无法内联仓库外假凭据、`~/` 假密钥、`../` 逃逸或 symlink 目标；项目内合法 include、代码围栏、转义、循环检测仍正常；未授权内容不进入任何宿主的模型请求。
+- 修复：按用户要求删除 expandIncludes、include 解析、递归/环处理代码，不再支持任何来源的 @include。AGENTS 文件按字面读取，原来的 @ 路径行也仅保留字面内容。
+- 验收：用户全局和项目 AGENTS 中的相对、绝对、家目录与 symlink 引用都不会内联目标文件；不保留兼容语法。
 
-### [ ] SEC-07 · 修复反馈认证头、URL 与敏感键脱敏 · P1
+### [x] SEC-07 · 反馈共用 env / Bearer 脱敏（本期范围） · P1
 
 - **判定：真实缺陷；分类：隐私保护 / 凭据泄漏。** 来源：yukino F-1、claude C4/C36/C37；证据：`feedback/redact.ts` 的替换顺序、SENSITIVE_KEY、redactUrl catch。
-- 修复：在一般键值替换破坏认证前缀前完整识别 Bearer/Basic；覆盖大小写、带引号/header 命令文本；点分命名空间参与敏感键边界；URL 解析失败时对明显 userinfo 保守脱敏，不原样透传。
-- 验收：短/长 Bearer、Basic、JSON/JSONL、日志与 curl header；`db.password`/`spring.datasource.password`；非法端口 URL 均不保留合成秘密。断言最终 collect/issue/附件输出，而非只测某个中间正则；非敏感正文可读。
+- 修复：本期仅修 env 值和 Bearer，共用无遥测依赖的 redactCredentials。先完整遮罩短/长、混合大小写和带引号的 Bearer，再执行原有反馈替换，避免一般 Authorization 键值替换留下凭据；保留已有其他脱敏能力。
+- 验收：合成 env 值及编码值、短/长 Bearer、curl header、JSON/JSONL、最终 collect 附件均不保留凭据；不扩展 Basic、点分键、畸形 URL 等原计划范围。
 
-### [ ] SEC-08 · 遥测字符串复用凭据脱敏能力 · P1
+### [x] SEC-08 · 遥测复用 env / Bearer 脱敏（本期范围） · P1
 
 - **判定：真实缺陷；分类：隐私保护。** 来源：claude C5；证据：`telemetry/privacy.ts.scrubTelemetryPayload` 只有 env 值、home、Bearer 处理，未处理任意 URL userinfo。
-- 修复：对嵌套对象/数组的字符串和自由文本内 URL 做安全脱敏，复用无遥测依赖的通用能力；保留循环保护和 home 收敛，不记录被替换值。
-- 验收：未知于 env 的 URL 用户名/密码、嵌套连接串、畸形 URL 不进入 exporter payload；遥测默认关闭这一设计保持。优先依赖 SEC-07 的已验证行为，避免复制另一套不一致规则。
+- 修复：本期与反馈复用 env / Bearer helper，覆盖嵌套对象/数组字符串；保留循环保护、home 收敛和已有敏感键处理，不引入新的 URL/自由文本凭据识别体系。
+- 验收：env 合成值及其编码值、短 Bearer 不进入嵌套 exporter payload；未知于 env 的 URL 凭据不纳入本期修复承诺。
 
-### [ ] SEC-09 · 敏感本地状态使用私有文件和目录权限 · P1
+### [x] SEC-09 · 敏感本地状态使用私有文件和目录权限 · P1
 
 - **判定：真实缺陷；分类：隐私保护 / 本机数据访问。** 来源：codex N5、pi P18、yukino M-6/F-5；证据：session/history/logger/recover/file-history/permissions 等写入没有 mode，storage 根无统一保护。
 - 修复：统一落实敏感目录 0700、文件 0600，覆盖转录、历史、日志、崩溃、spill/备份、计划、任务/团队/邮箱、记忆、授权与临时重命名文件；原子替换前后权限一致，打开已有私有状态时也执行权限策略。不要 chmod 工作区源码或改变恢复源码的权限语义。
 - 验收：POSIX umask 022 下实测新建/追加/重写/rename 后 mode；日志 fd 路径也覆盖；其他用户不能遍历私有根。Windows 另按支持的权限模型验证，不把 POSIX mode 测试当 ACL 结论；不向测试日志输出任何用户内容。
 
-### [ ] SEC-10 · 关闭后台记忆 Glob pattern 越界通道 · P1
+> 用户后续撤销了“不修复及移除 mode”的指令。本期正式实施：恢复原有 mode 设置，并用共用私有状态 I/O 在创建和打开已有状态时落实权限；工作区源文件写入与恢复仍使用原来的权限语义。POSIX 行为有实际测试，Windows ACL 不在已验证范围内。
+
+### [x] SEC-10 · 关闭后台记忆 Glob pattern 越界通道 · P1
 
 - **判定：真实缺陷；分类：安全性 / 受限读作用域。** 来源：claude C43；证据：`memory/permissions.ts` 只看 file_path/path，而 `tools/glob.ts` 接收绝对 pattern。
-- 修复：记忆任务对搜索基目录与实际匹配目标共同限域；拒绝可逃逸的 absolute/`..`/组合 glob，校验结果目标，处理 symlink。**Grep.pattern 是内容正则，不能按路径规则误拦**；普通用户读工具的跨项目读取设计保持。
-- 验收：memory 内 path 配合外部 absolute glob、相对逃逸、brace 变体无法枚举外部假文件名；合规 memory glob、consolidation 获准 transcript 搜索正常；ReadFile 仍不可越界读取正文。
+- 修复：保留 ~/.yukino/memory 与当前项目 memory 的绝对/~/ Glob；整理任务额外保留当前项目和当前项目 sessions 的只读权限。按工具实际使用的 path/pattern 检查固定搜索前缀，拒绝 .. 和可能跨目录的组合语法，遍历时及输出前再次检查 canonical 目标；Grep.pattern 仍是内容正则。
+- 验收：两种记忆根的绝对/家目录 Glob、项目转录搜索正常；外部 absolute、..、brace 越界和文件/目录 symlink 不能泄漏匹配结果或正文；普通用户搜索仍支持项目外路径。
 
-### [ ] SEC-11 · 后台记忆任务尊重显式 deny/ask · P1
+### [x] SEC-11 · 后台记忆任务尊重显式 deny/ask · P1
 
 - **判定：真实缺陷（规则绕过）；忽略主会话模式是设计意图。分类：安全性 / 用户规则边界。** 来源：claude C46；证据：`MemoryPermissionChecker.check` 完全覆盖基类、不使用规则引擎。
 - 修复：提取共享的显式规则决策，后台记忆的 scoped allow 不能覆盖用户 deny；无人审批的后台 ask 受控拒绝/跳过。不要直接用完整 super.check 的 default 矩阵取代 memory allow，也不把主会话 plan/bypass 强行套到独立后台任务。
 - 验收：WriteFile/EditFile/ReadFile/Grep/Glob 的明确 deny/ask 在允许的 memory 根内也生效；无匹配用户规则时仍能完成合法自动记忆；规则 allow 不扩大 memory 根与 .md 写入限制。依赖 SEC-03/10。
 
-### [ ] SEC-12 · teammate shutdown 的 leader 身份校验 · P1
+> 后台任务始终无人审批：用户 ask 与 deny 均转为拒绝/跳过；该检查也覆盖提取清单、文本兜底写入及索引重建，不只覆盖 Agent 工具调用。
+
+### [x] SEC-12 · teammate shutdown 的 leader 身份校验 · P1
 
 - **判定：真实缺陷；分类：安全性 / 团队控制权限。** 来源：claude C40；证据：`teams/index.ts.waitForNextPromptOrShutdown` 与 runPlanApproval 的 sender 检查不同；`teams/tools.ts` 允许任意成员构造 shutdown_request。
 - 修复：生产和消费两端都校验 leader 权限；普通文本的 `[shutdown]` 不得绕过结构化控制消息校验。清除不再需要的旧文本控制兼容路径，不保留旁路。
 - 验收：A 无法通过 typed shutdown 或伪造前缀停 B；leader 正常停队友；等待计划审批与 idle 两条路径一致；合法消息仍按 requestId 关联答复。
 
-### [ ] SEC-13 · ExitWorktree 使用运行时持有的归属与基线 · P1
+### [x] SEC-13 · ExitWorktree 使用运行时持有的归属与基线 · P1
 
 - **判定：真实缺陷；分类：安全性 / 资源归属、数据完整性。** 来源：claude C18；证据：`tools/exit-worktree.ts` 信任模型提交的 path/branch/git_root/head_commit。
 - 修复：由创建时的可信记录提供 worktree 归属、repo、branch、原始 head；工具只引用该记录，不接受模型重新声明清理基线。核对 canonical 路径与 Git 注册身份，默认保留非本运行所有的 worktree。
@@ -157,13 +163,15 @@
 - 修复：补私钥块、明确认证参数、sk_live_ 等已识别的服务秘密格式；短配置值不再无条件全局 replaceAll，采用敏感键/认证位置脱敏。裸 JWT 可能是非机密数据，不能把所有缺少模式的字符串都宣称为已证安全缺陷。
 - 验收：不在 env/config 中的合成私钥、curl 认证信息和服务密钥被遮罩；`token: "1"` 的敏感值受保护但普通行号/日期不全部损毁；记录短值自由文本识别的实际能力边界，不声称万能脱敏。
 
-### [ ] SEC-15 · 引用数据不得破坏 review/团队通知的结构边界 · P2
+> 用户明确裁定本期不修复，保持未勾选；不增加 PEM、curl -u、服务密钥识别或短值自由文本策略。
+
+### [x] SEC-15 · 引用数据不得破坏 review/团队通知的结构边界 · P2
 
 - **判定：真实缺陷（结构完整性）；分类：安全性 / 上下文数据边界。** 来源：yukino F-8、claude C47；证据：`review/format.ts` 与 `teams/index.ts.drainLeaderMailbox` 将原文插入 XML 风格封装。
 - 修复：统一处理属性与正文的转义/不可混淆封装，保留原始代码文本用于 diff 和定位；团队消息的来源由宿主生成，不接受正文闭合标签冒充来源。
 - 验收：含 `</file>`、`</task-notification>`、引号和 `&` 的代码/消息仍是同一个引用数据块；定位文本无损。明确转义只修结构边界，不能宣称由此消除了模型提示注入。
 
-### [ ] SEC-16 · @ 补全扫描不下降进入符号链接目录 · P2
+### [x] SEC-16 · @ 补全扫描不下降进入符号链接目录 · P2
 
 - **判定：真实缺陷；分类：隐私保护 / 搜索范围、性能。** 来源：claude C3；证据：`utils/file-scan.ts` 用 statSync 判断目录，进入指向工作区外或循环的链接目录；TUI 和 Remote 补全共享此实现。
 - 修复：扫描目录用 lstat/受控 realpath，不下降 symlink 目录；保留合理的文件链接候选政策，限制遍历工作量。普通 ReadFile 可访问项目外文件的设计不意味着补全应主动扫描外部目录。
@@ -353,9 +361,9 @@
 - 修复：移除该静态可达路径，仅暴露不触发 optional 加载的接口/类型，provider 实现经 guarded dynamic import；不以把 optional 改必装来绕过声明契约。
 - 验收：构建后的真实 lib 产物在隔离、只含必需依赖的目录可导入和调用普通 API；启用遥测但缺 optional 包可 no-op；安装齐全时初始化正常。不能只 grep 源码或只测 CLI bundle。
 
-### [ ] WORK-01 · worktree 工具描述与执行根/OS sandbox 接线一致 · P1
+### [x] WORK-01 · worktree 工具描述与执行根/OS sandbox 接线一致 · P1
 
-> 状态：描述修正（enter/exit 改为“创建并返回路径、显式在该路径操作”契约）已完成并通过测试；“为本运行创建的 worktree 授予路径与 Bash 沙箱执行根”部分依赖 SEC-03（统一规范路径）与 SEC-13（worktree 归属/基线），属安全性条目，本轮按“仅修非安全性错误”暂缓。
+> 状态：本轮已接入运行时 worktree 归属记录、路径授权和按 checker 隔离的 Bash 写入根；未修改共享 Bash 实例的全局 allowWrite。验证见第 12 节。
 
 - **判定：真实缺陷（描述与功能组合）；返回绝对路径本身是设计意图。分类：功能正确性 / 隔离与权限。** 来源：codex N2、pi P4、claude 对 subagent sandbox 的补充；证据：EnterWorktree 只创建返回路径；子代理派生 checker 的 cwd 正确，但 Bash 实例的 sandbox allowWrite 仍来自宿主。
 - 修复：采用当前 README 的“创建并返回路径、显式在该路径操作”契约，修正 enter/exit 的误导描述；为本运行创建的 worktree 授予对应的路径和 Bash 沙箱执行根。派生代理需要独立执行上下文，不能扩大共享 Bash 实例的全局 allowWrite 造成兄弟代理互写。
@@ -668,3 +676,17 @@
 | RES-04            | 队列超限静默丢弃最早正文，单条超限消息甚至被丢弃后仍返回 queued；预算还误用字符串长度。现在按 UTF-8 字节拒绝新入队、保留已接受 FIFO，发送失败保留输入并提示重试，离线回答不提前关闭请求。                 | `offline-queue.test.ts`、`browser-chat-state.test.ts`                       |
 
 最终验证：执行 `pnpm happy:fix`（typecheck、format、lint:fix、build、完整测试）。实际结果见本轮复核交付说明；原计划的 124 项基线测试不能代表本轮验证。
+
+## 12. 按用户裁定实施剩余安全项
+
+- SEC-01/02：引号与转义感知的简单命令列表分析覆盖 LF/CRLF、`; && || | &`，显式规则覆盖各 permission mode。无法分析的语法不使用 remembered prefix 自动授权；有 deny 时保守拒绝，有 ask 时要求审批。保留“前两个词 + *”。
+- SEC-03/04：统一规范路径，路径和规则读取错误受控拒绝；无稳定目标不生成全工具通配规则。TUI、浏览器和 ACP 展示真实持久范围，McpCall 记忆完整 server/tool 目标。
+- SEC-05/06：MCP enabled 默认 true、false 不连接；彻底移除 @include。没有引入项目信任审批机制。
+- SEC-07/08：共用 env 与 Bearer 脱敏，验证最终反馈附件和嵌套遥测；其余识别能力不扩展。
+- SEC-09：共用私有 I/O 覆盖状态创建、读取、追加、重写和原子替换；POSIX 目录 0700、文件 0600，包括日志 fd。拒绝状态 symlink；工作区源文件模式与恢复语义保留。
+- SEC-10/11：保留两种记忆根及整理所需项目/转录读取；限制 Glob 实际范围与匹配目标；显式 deny/ask 均由后台无人审批地拒绝，文本兜底和索引路径也遵守规则。
+- SEC-12/15/16：停队友仅接受 leader 的结构化请求；引用内容统一 XML 转义且原始 diff 不变；补全扫描不下降 symlink 目录并限制访问数量。
+- SEC-13/WORK-01：清理使用运行时创建时保存的路径、Git 身份、分支与 HEAD；不认领旧树、不接受模型替换基线。隔离代理的路径和 Bash 写根互相独立，显式 OS denyWrite 保留。
+- SEC-14：按用户要求明确不修复。
+
+回归证据：`security-permissions.test.ts`、`security-boundaries.test.ts`、`private-storage.test.ts`、`worktree-safety.test.ts` 及更新后的权限、协议、终端、后台记忆和全量宿主测试。最终执行 `pnpm happy:fix`；通过数量及实际平台限制以交付说明为准。

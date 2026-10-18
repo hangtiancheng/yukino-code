@@ -1,16 +1,14 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, renameSync, rmSync } from "node:fs";
 
 import { parse, z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { getYukinoDir, yukinoPath } from "@/storage/index.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "history" });

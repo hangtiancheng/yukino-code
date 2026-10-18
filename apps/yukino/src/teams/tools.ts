@@ -203,6 +203,12 @@ export class SendMessageTool implements Tool {
             return { output: asErrorString(error), isError: true };
           }
         case MSG_SHUTDOWN_REQUEST:
+          if (this.senderName !== LEADER_NAME) {
+            return {
+              output: "Only the leader can request teammate shutdown.",
+              isError: true,
+            };
+          }
           structured = shutdownRequest(this.senderName, message);
           break;
         case MSG_SHUTDOWN_RESPONSE:

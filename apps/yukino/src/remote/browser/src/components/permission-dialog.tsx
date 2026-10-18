@@ -17,7 +17,7 @@ const RESPONSE_OPTIONS: {
   },
   {
     value: "allowAlways",
-    label: "Allow Pattern for All Project Agents",
+    label: "Remember Scopes for All Project Agents",
     className: "border border-accent/40 text-accent hover:bg-accent/8",
   },
   {
@@ -67,6 +67,14 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
       <div className="mb-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-base">
         {item.description}
       </div>
+      {item.rememberPatterns?.map((pattern) => (
+        <div
+          key={pattern}
+          className="mb-2 font-mono text-xs whitespace-pre-wrap break-all"
+        >
+          Remember scope: {pattern}
+        </div>
+      ))}
       {item.responded ? (
         <div className="text-xs text-dim">
           <span className="mr-1 text-green">✓</span>
@@ -74,7 +82,11 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
         </div>
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          {RESPONSE_OPTIONS.map((opt) => (
+          {RESPONSE_OPTIONS.filter(
+            (option) =>
+              option.value !== "allowAlways" ||
+              (item.rememberPatterns?.length ?? 0) > 0,
+          ).map((opt) => (
             <button
               key={opt.value}
               type="button"

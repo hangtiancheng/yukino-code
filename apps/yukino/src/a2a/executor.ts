@@ -1,12 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, renameSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { TaskState } from "@a2a-js/sdk";
@@ -48,6 +41,11 @@ import {
   saveMessage,
 } from "@/session/index.js";
 import { projectPath } from "@/storage/index.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";

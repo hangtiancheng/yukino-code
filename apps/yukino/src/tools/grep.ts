@@ -18,6 +18,10 @@ import {
 } from "./types.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import {
+  isPrivateStatePath,
+  protectPrivateFileSync,
+} from "@/storage/private.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -360,6 +364,9 @@ export class GrepTool implements Tool {
       knownStat?: Stats,
     ): Promise<void> => {
       ctx.abortSignal?.throwIfAborted();
+      if (ctx.permissionChecker?.canReadSearchPath(filePath) === false) {
+        return;
+      }
       try {
         const fileStat = knownStat ?? (await stat(filePath));
         if (fileStat.size > MAX_GREP_FILE_BYTES) {
@@ -367,6 +374,9 @@ export class GrepTool implements Tool {
           return;
         }
 
+        if (isPrivateStatePath(filePath)) {
+          protectPrivateFileSync(filePath);
+        }
         const file = await open(filePath, "r");
         try {
           ctx.abortSignal?.throwIfAborted();
@@ -451,6 +461,9 @@ export class GrepTool implements Tool {
             continue;
           }
           const fullPath = join(dir, entry.name);
+          if (ctx.permissionChecker?.canReadSearchPath(fullPath) === false) {
+            continue;
+          }
           let fileStat: Stats;
           try {
             fileStat = await lstat(fullPath);

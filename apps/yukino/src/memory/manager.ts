@@ -1,13 +1,10 @@
 import { randomBytes } from "node:crypto";
 import {
-  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
   unlinkSync,
   existsSync,
-  mkdirSync,
-  writeFileSync,
   statSync,
 } from "node:fs";
 import { join, relative, basename } from "node:path";
@@ -21,7 +18,13 @@ import { DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
+import type { PermissionChecker } from "@/permissions/index.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
+import {
+  readPrivateFileSync as readFileSync,
+  mkdirPrivateSync as mkdirSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "memory" });
@@ -131,7 +134,10 @@ export class MemoryManager {
   private projectDir: string;
   private malformedFingerprints = new Map<string, string>();
 
-  constructor(cwd: string) {
+  constructor(
+    cwd: string,
+    private checker?: PermissionChecker,
+  ) {
     this.userDir = yukinoPath("memory");
     this.projectDir = projectPath(cwd, "memory");
   }
@@ -139,6 +145,13 @@ export class MemoryManager {
   private readMemory(
     fullPath: string,
   ): { memory: MemoryFile; mtimeMs: number } | null {
+    if (
+      this.checker &&
+      this.checker.check("ReadFile", "read", { file_path: fullPath }).effect !==
+        "allow"
+    ) {
+      return null;
+    }
     let fingerprint = "unknown";
     try {
       const stat = statSync(fullPath);
@@ -167,7 +180,12 @@ export class MemoryManager {
   private scanAllMemories(): MemoryFile[] {
     const memories: MemoryFile[] = [];
     for (const dir of [this.userDir, this.projectDir]) {
-      if (!existsSync(dir)) {
+      if (
+        !existsSync(dir) ||
+        (this.checker &&
+          this.checker.check("Glob", "read", { path: dir, pattern: "*.md" })
+            .effect !== "allow")
+      ) {
         continue;
       }
       let files: string[];
@@ -300,9 +318,21 @@ export class MemoryManager {
       capEntrypoint(lines.slice(0, MAX_ENTRYPOINT_LINES).join("\n")) + "\n";
     const indexPath = join(this.projectDir, MEMORY_INDEX_NAME);
 
+    if (
+      this.checker &&
+      this.checker.check("WriteFile", "write", { file_path: indexPath })
+        .effect !== "allow"
+    ) {
+      return;
+    }
     withFileSyncLock(indexPath, () => {
       mkdirSync(this.projectDir, { recursive: true });
-      if (existsSync(indexPath)) {
+      if (
+        existsSync(indexPath) &&
+        (!this.checker ||
+          this.checker.check("ReadFile", "read", { file_path: indexPath })
+            .effect === "allow")
+      ) {
         try {
           if (readFileSync(indexPath, "utf-8") === content) {
             return;

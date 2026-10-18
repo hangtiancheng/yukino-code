@@ -208,7 +208,11 @@ describe("fork and restored context", () => {
       projectPath(directory, "permissions.yaml"),
       '- rule: "WriteFile(blocked*)"\n  effect: deny\n',
     );
+    vi.spyOn(worktrees.OwnedWorktrees.prototype, "register").mockResolvedValue(
+      true,
+    );
     vi.spyOn(worktrees, "createAgentWorktree").mockResolvedValue({
+      created: true,
       path: isolated,
       branch: "test-branch",
       headCommit: "test-head",

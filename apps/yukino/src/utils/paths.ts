@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { realpathSync, lstatSync, readlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import {
   basename,
@@ -21,7 +21,10 @@ export function resolveToolPath(cwd: string, path: string): string {
 }
 
 /** Resolve symlinks even when the final file or some parent directories do not exist yet. */
-export function canonicalPath(path: string): string {
+export function canonicalPath(path: string, links = 0): string {
+  if (links >= 40) {
+    throw new Error("Too many symbolic links while resolving path");
+  }
   let current = resolve(path);
   const missing: string[] = [];
   for (;;) {
@@ -31,13 +34,20 @@ export function canonicalPath(path: string): string {
       if (
         !(error instanceof Error) ||
         !("code" in error) ||
-        (error.code !== "ENOENT" && error.code !== "ENOTDIR")
+        error.code !== "ENOENT"
       ) {
         throw error;
       }
+      const info = lstatSync(current, { throwIfNoEntry: false });
+      if (info?.isSymbolicLink()) {
+        return canonicalPath(
+          resolve(dirname(current), readlinkSync(current), ...missing),
+          links + 1,
+        );
+      }
       const parent = dirname(current);
       if (parent === current) {
-        return resolve(path);
+        throw error;
       }
       missing.unshift(basename(current));
       current = parent;

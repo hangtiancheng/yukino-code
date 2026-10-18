@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { fileHistoryDir } from "@/file-history/index.js";
+import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 
 export type SaveClipboardImageResult =
   { ok: true; value: string } | { ok: false; reason: string };
@@ -43,9 +44,9 @@ export async function storeClipboardImage(
     );
   }
   const dir = fileHistoryDir(sessionId);
-  await mkdir(dir, { recursive: true });
+  mkdirPrivateSync(dir);
   const path = join(dir, clipboardImageFileName(bytes));
-  await writeFile(path, bytes);
+  await writePrivateFile(path, bytes);
   return path;
 }
 
@@ -260,14 +261,14 @@ export async function saveClipboardImage(
     let bytes: Buffer;
     switch (process.platform) {
       case "darwin":
-        await mkdir(dir, { recursive: true });
+        mkdirPrivateSync(dir);
         bytes = await readMacClipboard(tempPath);
         break;
       case "linux":
         bytes = await readLinuxClipboard();
         break;
       case "win32":
-        await mkdir(dir, { recursive: true });
+        mkdirPrivateSync(dir);
         bytes = await readWindowsClipboard(tempPath);
         break;
       default:

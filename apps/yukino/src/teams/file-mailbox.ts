@@ -1,11 +1,4 @@
-import {
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  mkdirSync,
-  existsSync,
-  rmSync,
-} from "node:fs";
+import { renameSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import z from "zod";
@@ -13,6 +6,11 @@ import z from "zod";
 import { withFileSyncLock } from "./file-lock.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import {
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+  mkdirPrivateSync as mkdirSync,
+} from "@/storage/private.js";
 
 const log = createChildLogger({ module: "teams" });
 

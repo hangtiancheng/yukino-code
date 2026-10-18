@@ -62,7 +62,7 @@ export class MCPManager {
 
     const pending = [
       ...new Map(configs.map((cfg) => [cfg.name, cfg])).values(),
-    ].filter((cfg) => !this.clients.has(cfg.name));
+    ].filter((cfg) => cfg.enabled !== false && !this.clients.has(cfg.name));
     const connections = await Promise.all(
       pending.map(async (cfg) => {
         const client = new MCPClient(cfg);
@@ -130,7 +130,7 @@ export class MCPManager {
   /** The configured servers that are still not connected. */
   missingServers(configs: MCPServerConfig[]): string[] {
     return configs
-      .filter((cfg) => !this.clients.has(cfg.name))
+      .filter((cfg) => cfg.enabled !== false && !this.clients.has(cfg.name))
       .map((cfg) => cfg.name);
   }
 

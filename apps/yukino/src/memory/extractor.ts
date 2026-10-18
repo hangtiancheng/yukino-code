@@ -1,12 +1,4 @@
-import {
-  readdirSync,
-  readFileSync,
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  renameSync,
-  rmSync,
-} from "node:fs";
+import { readdirSync, existsSync, renameSync, rmSync } from "node:fs";
 import { join, basename } from "node:path";
 
 import yaml from "js-yaml";
@@ -20,6 +12,11 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
+import {
+  readPrivateFileSync as readFileSync,
+  mkdirPrivateSync as mkdirSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
@@ -127,8 +124,13 @@ export class MemoryExtractor {
     const dirs = [projectPath(this.cwd, "memory"), yukinoPath("memory")];
     const entries: string[] = [];
 
+    const checker = new MemoryPermissionChecker(this.cwd);
     for (const dir of dirs) {
-      if (!existsSync(dir)) {
+      if (
+        checker.check("Glob", "read", { path: dir, pattern: "*.md" }).effect !==
+          "allow" ||
+        !existsSync(dir)
+      ) {
         continue;
       }
       try {
@@ -137,6 +139,12 @@ export class MemoryExtractor {
         );
         for (const file of files) {
           try {
+            if (
+              checker.check("ReadFile", "read", { file_path: join(dir, file) })
+                .effect !== "allow"
+            ) {
+              continue;
+            }
             const content = readFileSync(join(dir, file), "utf-8");
             // Line-anchored with optional indent: matches both top-level
             // `type:` (fallback writer) and nested `  type:` (prompt format),
@@ -252,7 +260,7 @@ export class MemoryExtractor {
     }
 
     if (saved.length > 0) {
-      const mgr = new MemoryManager(this.cwd);
+      const mgr = new MemoryManager(this.cwd, subChecker);
       mgr.rebuildIndex();
     }
 
@@ -294,6 +302,13 @@ export class MemoryExtractor {
             // An existing same-name topic is read, then explicitly rejected
             // rather than silently overwritten or merged (which would mix
             // content).
+            if (
+              new MemoryPermissionChecker(this.cwd).check("ReadFile", "read", {
+                file_path: filePath,
+              }).effect !== "allow"
+            ) {
+              return;
+            }
             const existing = readFileSync(filePath, "utf-8");
             if (existing !== content) {
               log.warn(

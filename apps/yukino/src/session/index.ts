@@ -1,9 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
-  readFileSync,
-  writeFileSync,
   readdirSync,
-  mkdirSync,
   renameSync,
   statSync,
   existsSync,
@@ -24,6 +21,11 @@ import type {
 } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
 import { getSessionsDir, sessionPath } from "@/storage/index.js";
+import {
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+  mkdirPrivateSync as mkdirSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import {
   normalizeToolResultContentBlock,

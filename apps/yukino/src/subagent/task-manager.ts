@@ -5,6 +5,7 @@ import {
 
 import { createChildLogger } from "@/logger/index.js";
 import { asErrorString } from "@/utils/index.js";
+import { escapeXml } from "@/utils/xml.js";
 
 const log = createChildLogger({ module: "tasks" });
 
@@ -406,10 +407,12 @@ export class TaskManager {
 
 export function formatAgentTaskNotification(task: AgentTask): string {
   return [
-    `<task-notification task_id="${task.id}" status="${task.status}">`,
-    `name=${task.name}`,
-    ...(task.transcriptPath ? [`transcript_path=${task.transcriptPath}`] : []),
-    task.output,
+    `<task-notification task_id="${escapeXml(task.id)}" status="${escapeXml(task.status)}">`,
+    `name=${escapeXml(task.name)}`,
+    ...(task.transcriptPath
+      ? [`transcript_path=${escapeXml(task.transcriptPath)}`]
+      : []),
+    escapeXml(task.output),
     "</task-notification>",
   ].join("\n");
 }

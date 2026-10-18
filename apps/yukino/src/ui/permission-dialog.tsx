@@ -12,7 +12,7 @@ export type PermissionAction = "allow" | "deny" | "allowAlways";
 const PERMISSION_OPTIONS: { label: string; action: PermissionAction }[] = [
   { label: "Yes", action: "allow" },
   {
-    label: "Yes, allow this pattern for all agents in this project",
+    label: "Yes, remember the scopes above for all agents in this project",
     action: "allowAlways",
   },
   { label: "No", action: "deny" },
@@ -25,6 +25,7 @@ interface PermissionDialogProps {
   toolName: string;
   argsSummary: string;
   reason: string;
+  rememberPatterns?: string[];
   onComplete: (action: PermissionAction) => void;
 }
 
@@ -34,22 +35,22 @@ export function PermissionDialog({
   toolName,
   argsSummary,
   reason,
+  rememberPatterns = [],
   onComplete,
 }: PermissionDialogProps) {
+  const options = PERMISSION_OPTIONS.filter(
+    (option) => option.action !== "allowAlways" || rememberPatterns.length > 0,
+  );
   const [cursor, setCursor] = useState(0);
   const focusRef = useRef<DOMElement>(null);
 
   useInput((_input, key) => {
     if (key.upArrow) {
-      setCursor((current) =>
-        current > 0 ? current - 1 : PERMISSION_OPTIONS.length - 1,
-      );
+      setCursor((current) => (current > 0 ? current - 1 : options.length - 1));
     } else if (key.downArrow) {
-      setCursor((current) =>
-        current < PERMISSION_OPTIONS.length - 1 ? current + 1 : 0,
-      );
+      setCursor((current) => (current < options.length - 1 ? current + 1 : 0));
     } else if (key.return) {
-      const option = PERMISSION_OPTIONS[cursor];
+      const option = options[cursor];
       if (option) {
         onComplete(option.action);
       }
@@ -66,7 +67,12 @@ export function PermissionDialog({
       subtitle={truncateToWidth(detail, 160)}
       title={`${agentName}: ${toolName} requires approval`}
     >
-      {PERMISSION_OPTIONS.map((option, index) => {
+      {rememberPatterns.map((pattern) => (
+        <Text key={pattern} wrap="wrap">
+          Remember scope: {pattern}
+        </Text>
+      ))}
+      {options.map((option, index) => {
         const selected = index === cursor;
         return (
           <Box

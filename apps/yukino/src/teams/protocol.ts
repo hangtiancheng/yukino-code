@@ -38,9 +38,6 @@ export function isValidTeammateName(name: string): boolean {
   return name !== LEADER_NAME && teammateNamePattern.test(name);
 }
 
-/** Text control form used by the leader's stop path and the agents dialog. */
-export const SHUTDOWN_PREFIX = "[shutdown]";
-
 export function newRequestId(): string {
   return `req-${randomBytes(8).toString("hex")}`;
 }
@@ -69,12 +66,7 @@ function typed(
  */
 export function shutdownRequest(from: string, reason = ""): FileMailMessage {
   const why = reason || "team is wrapping up";
-  return typed(
-    from,
-    MSG_SHUTDOWN_REQUEST,
-    newRequestId(),
-    `${SHUTDOWN_PREFIX} ${why}`,
-  );
+  return typed(from, MSG_SHUTDOWN_REQUEST, newRequestId(), why);
 }
 
 /** Teammate's reply to a shutdown request. */
@@ -105,14 +97,8 @@ export function planApprovalResponse(
   return typed(from, MSG_PLAN_APPROVAL_RESPONSE, requestId, feedback, approve);
 }
 
-/**
- * Determines whether a message is a shutdown request.
- *
- * Both the typed protocol and the leader's plain-text stop control are accepted.
- */
 export function isShutdownRequest(m: FileMailMessage): boolean {
-  if (m.type === MSG_SHUTDOWN_REQUEST) {
-    return true;
-  }
-  return (m.text ?? "").trim().startsWith(SHUTDOWN_PREFIX);
+  return (
+    m.from === LEADER_NAME && m.type === MSG_SHUTDOWN_REQUEST && !!m.requestId
+  );
 }

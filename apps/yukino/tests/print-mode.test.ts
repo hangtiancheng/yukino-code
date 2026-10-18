@@ -536,7 +536,11 @@ describe("print mode delegation", () => {
 
   it("passes background, model, cancellation, permissions and isolated cwd to spawn", async () => {
     const isolated = join(cwd, "isolated");
+    vi.spyOn(worktrees.OwnedWorktrees.prototype, "register").mockResolvedValue(
+      true,
+    );
     vi.spyOn(worktrees, "createAgentWorktree").mockResolvedValue({
+      created: true,
       path: isolated,
       branch: "worker",
       headCommit: "head",
@@ -614,7 +618,11 @@ describe("print mode delegation", () => {
 
   it("passes an explicit teammate name and worktree with parent mode precedence", async () => {
     const isolated = join(cwd, "isolated");
+    vi.spyOn(worktrees.OwnedWorktrees.prototype, "register").mockResolvedValue(
+      true,
+    );
     vi.spyOn(worktrees, "createAgentWorktree").mockResolvedValue({
+      created: true,
       path: isolated,
       branch: "worker",
       headCommit: "head",

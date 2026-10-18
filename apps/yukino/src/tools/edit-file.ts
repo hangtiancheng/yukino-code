@@ -14,6 +14,11 @@ import {
 } from "./types.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import {
+  isPrivateStatePath,
+  writePrivateFile,
+  protectPrivateFileSync,
+} from "@/storage/private.js";
 import { asErrorString, boolArg, isRecord, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -232,6 +237,9 @@ export class EditFileTool implements Tool {
 
       let content: string;
       try {
+        if (isPrivateStatePath(filePath)) {
+          protectPrivateFileSync(filePath);
+        }
         content = await readFile(filePath, {
           encoding: "utf-8",
           signal: ctx.abortSignal,
@@ -264,7 +272,9 @@ export class EditFileTool implements Tool {
 
       try {
         ctx.fileHistory?.trackEdit(filePath);
-        await writeFile(filePath, applied.content, "utf-8");
+        await (isPrivateStatePath(filePath)
+          ? writePrivateFile(filePath, applied.content)
+          : writeFile(filePath, applied.content, "utf-8"));
         ctx.fileStateCache?.update(filePath);
         // Include the concrete diff rather than just saying "updated": both the model and UI need to know which lines changed
         const {

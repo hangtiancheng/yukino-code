@@ -80,7 +80,12 @@ vi.mock("ink", async (importOriginal) => {
 vi.mock("fs", async (importOriginal) => ({
   ...(await importOriginal<typeof fs>()),
   readdirSync: () => terminal.files,
-  statSync: () => ({ isDirectory: () => false }),
+  statSync: () => ({ isDirectory: () => false, isFile: () => true }),
+  lstatSync: () => ({
+    isDirectory: () => false,
+    isFile: () => true,
+    isSymbolicLink: () => false,
+  }),
 }));
 
 vi.mock("@/images/clipboard.js", () => ({ saveClipboardImage: vi.fn() }));
@@ -1051,6 +1056,7 @@ describe("persistent composer drafts and input behavior", () => {
           requestId,
           toolName: "WriteFile",
           argsSummary: "same.ts",
+          rememberPatterns: ["WriteFile(/project/*)"],
           reason: "approve",
           onComplete,
         },

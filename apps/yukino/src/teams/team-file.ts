@@ -1,13 +1,5 @@
 import { randomBytes } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import z from "zod";
@@ -15,6 +7,11 @@ import z from "zod";
 import { withFileSyncLock } from "./file-lock.js";
 
 import { projectKey, yukinoPath } from "@/storage/index.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 
 /** Metadata for a single team member. */
 export const TeamMemberEntrySchema = z.object({

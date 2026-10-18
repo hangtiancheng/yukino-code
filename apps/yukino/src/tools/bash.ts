@@ -254,7 +254,9 @@ export class BashTool implements Tool {
             // per-command file (random name that does not exist yet), so a
             // bind-based sandbox can mount it.
             allowWrite: [
-              ...this.sandboxConfig.allowWrite,
+              ...(ctx.permissionChecker?.sandboxWriteRoots(
+                this.sandboxConfig.allowWrite,
+              ) ?? this.sandboxConfig.allowWrite),
               dirname(outputFile.path),
             ],
           },

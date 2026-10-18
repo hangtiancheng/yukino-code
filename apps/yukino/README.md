@@ -44,7 +44,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 - Session-local persistent goals with automatic continuation, explicit pause/resume, token budgets, and completion/blocker audits
 - Automatic context compaction when conversations approach the model's context window
 - Long-term memory extraction and recall across sessions (disable with `enable_memory: false` in `~/.yukino/config.yaml`)
-- Instructions files for persistent guidance: user-global `~/.yukino/AGENTS.md`, plus `AGENTS.md` in every directory from the git root down to the working directory, with `@include` expansion
+- Instructions files for persistent guidance: user-global `~/.yukino/AGENTS.md`, plus `AGENTS.md` in every directory from the git root down to the working directory; instruction files are read literally without `@include` expansion
 
 ### Skills and Commands
 
@@ -116,7 +116,7 @@ pnpm dev
 
 ## Storage
 
-Yukino stores its configuration and runtime state under `~/.yukino`. The current directory (`cwd`) determines where tools execute and which project `/resume` opens. It does not determine the storage root. Directories are created when their features are used.
+Yukino stores its configuration and runtime state under `~/.yukino`. The current directory (`cwd`) determines where tools execute and which project `/resume` opens. It does not determine the storage root. Directories are created when their features are used. On POSIX, Yukino state directories use `0700` and state files use `0600`, including existing files reopened for reading or appending and temporary files used for atomic replacement. This policy covers runtime state, configuration and memory; it does not chmod working-tree source files. State writes reject symbolic links. These mode bits do not establish a Windows ACL policy.
 
 ```text
 ~/.yukino/
@@ -199,7 +199,7 @@ Every Yukino-created worktree is stored at `~/.yukino/worktrees/<repository-key>
 
 For example, a worktree named `fix-login` created from `/workspace/repo/app` is placed in `~/.yukino/worktrees/<SHA-256 of /workspace/repo>/fix-login/`, with branch `worktree-fix-login`. Yukino returns the absolute worktree path to the caller. Git's own worktree metadata remains in the repository's Git directory; `git worktree list` shows the registered paths.
 
-Global configuration, prompts, agent definitions, and installed skills are shared directly with the worktree. Standard project `.agents` resources are copied into it. No project `.yukino` settings are copied. Starting a session in the worktree uses that worktree directory's own project namespace for resume, memory, and permissions.
+Global configuration, prompts, agent definitions, and installed skills are shared directly with the worktree. Standard project `.agents` resources are copied into it. No project `.yukino` settings are copied. `EnterWorktree` also grants that runtime access to the returned tree; it does not change the caller's working directory. `ExitWorktree` accepts only the path and uses the runtime's recorded repository, branch, Git identity and initial HEAD. Existing trees from another runtime and trees with changed contents or commits are retained. Starting a session in the worktree uses that worktree directory's own project namespace for resume, memory, and permissions.
 
 Yukino does not read or create a project `.yukino` directory. Existing project-local state is not automatically migrated; it must be moved to the corresponding global paths before it can be resumed.
 
@@ -333,7 +333,9 @@ hooks:
     on_error: ignore
 ```
 
-Main agents, subagents, and teammates use the same path sandbox policy: read-only tools can access paths outside the working directory without path approval. Writes outside the agent's working directory, the system temp directory, or an explicitly allowed root require approval unless an explicit allow rule applies. `bypassPermissions` disables this path sandbox; switching back restores it. Explicit deny/ask rules and an agent's own plan approval lock still apply. The OS-level Bash sandbox is separate and remains controlled by the `sandbox` configuration or the TUI's `/sandbox` command.
+Main agents, subagents, and teammates use the same path sandbox policy: read-only tools can access paths outside the working directory without path approval. Writes outside the agent's working directory, the system temp directory, or an explicitly allowed root require approval unless an explicit allow rule applies. `bypassPermissions` disables this path sandbox; switching back restores it. Explicit deny/ask rules and an agent's own plan approval lock still apply. The OS-level Bash sandbox is separate and remains controlled by the `sandbox` configuration or the TUI's `/sandbox` command. Isolated worktree agents instead receive their own worktree write root, without the parent workspace or a shared system-temp write grant; per-command output directories remain writable. Explicit OS deny-write entries still take precedence.
+
+Shell rules check every executable segment separated by newlines, `;`, `&&`, `||`, `|`, and `&`, respecting literal quotes and escapes. Remembered shell rules retain the first two words plus `*`; a rule for one segment does not authorize later segments. Substitution, redirection, wrappers and unsupported control syntax cannot use remembered prefixes for automatic approval. With applicable explicit restrictions, uninspectable syntax is conservatively denied or requires approval even in bypass mode. Permission dialogs show the scopes they will remember; tools without a stable scope offer one-time approval only. File rules canonicalize relative, home-relative and symlink paths before matching.
 
 Sandbox configuration applies to TUI, print, Remote/ACP/A2A, and in-process teammates. Enabling it fails closed when the native backend is unavailable. `bypassPermissions` does not disable it. Relative allow/deny write paths resolve against the command's execution directory; home-relative paths use the same resolver as file tools. The policy confines Bash writes and optionally disables all network access; it does not wrap PowerShell, LSP, or MCP executables.
 
@@ -447,6 +449,7 @@ In addition to `mcp_servers` in `config.yaml`, Yukino reads a project-level `.mc
 {
   "mcpServers": {
     "yukino-mcp": {
+      "enabled": true,
       "command": "npx",
       "args": ["-y", "@yukino.js/mcp@latest"],
       "env": { "API_KEY": "${YUKINO_MCP_API_KEY}" }
@@ -459,6 +462,8 @@ In addition to `mcp_servers` in `config.yaml`, Yukino reads a project-level `.mc
   }
 }
 ```
+
+`enabled` defaults to `true`. Set it to `false` to skip a server before expanding its environment references, spawning a process, or making a network connection. The same field is supported on user-level `mcp_servers`. Disabling a server takes effect on `/mcp reload`. Enabled project entries still connect automatically; this switch is not a project trust prompt.
 
 Each entry takes `command`/`args`/`env` (stdio) or `url`/`headers` with `type` of `http` or `sse`. Environment references support `${VAR}`, `${VAR:-default}`, and `$VAR` in commands, arguments, environment values, URLs, and headers; an unset variable without a default prevents that server from connecting. These servers are merged with the user-level `mcp_servers`; on a name collision the user-level entry wins. At startup, a malformed `.mcp.json` is ignored (logged), while an invalid individual server entry is skipped without disabling valid siblings. During `/mcp reload`, invalid config aborts the reload so the current connections remain intact.
 

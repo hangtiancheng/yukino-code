@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -8,6 +8,10 @@ import { z } from "zod";
 
 import type { CollectedFile, FeedbackChannel } from "./types.js";
 
+import {
+  mkdirPrivateSync as mkdirSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 import { version } from "@/version.js";
 
 const execFileAsync = promisify(execFile);

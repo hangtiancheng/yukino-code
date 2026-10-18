@@ -150,7 +150,7 @@ import {
 } from "@/teams/coordinator.js";
 import type { RunAgent } from "@/teams/index.js";
 import { TeamManager } from "@/teams/index.js";
-import { LEADER_NAME, SHUTDOWN_PREFIX } from "@/teams/protocol.js";
+import { LEADER_NAME, shutdownRequest } from "@/teams/protocol.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
@@ -3502,11 +3502,13 @@ export function App({
                   onShutdown: (name, teamName) => {
                     const team = teamManagerRef.current.get(teamName);
                     if (team) {
-                      void team.sendMessage(
+                      const request = shutdownRequest(
                         LEADER_NAME,
-                        name,
-                        `${SHUTDOWN_PREFIX} Please finish and exit`,
+                        "Please finish and exit",
                       );
+                      void team
+                        .getMember(name)
+                        ?.mailbox.send(LEADER_NAME, request.text, request);
                     }
                   },
                 }

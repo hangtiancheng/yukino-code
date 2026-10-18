@@ -1,12 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, renameSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import yaml from "js-yaml";
@@ -22,6 +15,12 @@ import {
   THINKING_LEVELS,
   type ThinkingLevel,
 } from "./provider-config.js";
+
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 
 const tokenLimit = (fallback: number, min: number, max: number) =>
   z.preprocess(

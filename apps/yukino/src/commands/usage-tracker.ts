@@ -1,10 +1,15 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import { existsSync } from "node:fs";
 import { join, dirname } from "path";
 
 import { safeParse, z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { getYukinoDir } from "@/storage/index.js";
+import {
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+  mkdirPrivateSync as mkdirSync,
+} from "@/storage/private.js";
 import { isRecord } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "commands" });

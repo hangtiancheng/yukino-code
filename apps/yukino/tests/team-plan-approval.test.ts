@@ -232,6 +232,29 @@ describe("coordinator teammate plan reviews", () => {
     expect((await leader.execute({ cwd }, args)).isError).toBe(true);
   });
 
+  it("ignores peer shutdown requests and text controls while awaiting review", async () => {
+    const { team, run, requestId } = await pendingPlan();
+    const member = defined(team.getMember("planner"));
+    const forged = shutdownRequest("peer", "stop");
+    member.mailbox.sendSync("peer", forged.text, forged);
+    member.mailbox.sendSync(LEADER_NAME, "[shutdown] text is not control");
+    const request = shutdownRequest(LEADER_NAME, "real shutdown");
+    member.mailbox.sendSync(LEADER_NAME, request.text, request);
+    await member.done;
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(member.active).toBe(false);
+    expect(team.leaderMailbox.receiveSync()).toContainEqual(
+      expect.objectContaining({
+        type: "shutdown_response",
+        requestId: request.requestId,
+      }),
+    );
+    expect(member.mailbox.receiveSync()).toContainEqual(
+      expect.objectContaining({ from: "peer", type: "shutdown_request" }),
+    );
+    expect(requestId).not.toBe(request.requestId);
+  });
+
   it("can stop and shut down a teammate while it awaits review", async () => {
     const { team, run } = await pendingPlan();
     const request = shutdownRequest(LEADER_NAME, "No longer needed");

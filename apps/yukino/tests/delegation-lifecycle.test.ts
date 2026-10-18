@@ -616,9 +616,9 @@ describe("team approval and persistence regressions", () => {
       checker.check("Bash", "command", { command: "pnpm test" }).effect,
     ).toBe("ask");
     const notification = manager.drainLeaderMailbox().join("\n");
-    expect(notification).toContain(`type=${MSG_PLAN_APPROVAL_REQUEST}`);
-    expect(notification).toContain("Only this worker's plan");
-    expect(notification).toMatch(/requestId=req-[a-f0-9]+/);
+    expect(notification).toContain(`type="${MSG_PLAN_APPROVAL_REQUEST}"`);
+    expect(notification).toContain("Only this worker&apos;s plan");
+    expect(notification).toMatch(/requestId="req-[a-f0-9]+"/);
   });
 
   it("persists member removal instead of merging the removed reservation back", () => {

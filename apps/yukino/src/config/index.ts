@@ -17,6 +17,7 @@ import {
 
 import { createChildLogger } from "@/logger/index.js";
 import { LspServerConfigSchema } from "@/lsp/config.js";
+import { readPrivateFileSync } from "@/storage/private.js";
 import { asRecord } from "@/utils/index.js";
 
 export * as ProviderConfig from "./provider-config.js";
@@ -59,6 +60,7 @@ export function resolveAPIKey(p: ProviderConfig): string {
 
 const MCPServerConfigSchema = z.object({
   name: z.string(),
+  enabled: z.boolean().optional(),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
   url: z.string().optional(),
@@ -166,7 +168,7 @@ function yamlErrorDetail(err: unknown): string {
 }
 
 function loadSingleFile(path: string): AppConfig {
-  const data = readFileSync(path, "utf-8");
+  const data = readPrivateFileSync(path, "utf-8");
   let raw: unknown;
   try {
     raw = yaml.load(data);
@@ -270,6 +272,7 @@ function validateMcpServers(config: AppConfig): void {
 const PROJECT_MCP_FILENAME = ".mcp.json";
 
 const McpJsonEntrySchema = z.looseObject({
+  enabled: z.boolean().default(true),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
@@ -344,6 +347,9 @@ export function loadProjectMcpServers(cwd: string): MCPServerConfig[] {
         },
         "skipping invalid .mcp.json server entry",
       );
+      continue;
+    }
+    if (!parsedEntry.data.enabled) {
       continue;
     }
     const server = mcpServerFromJsonEntry(name, parsedEntry.data);

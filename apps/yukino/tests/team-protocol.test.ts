@@ -33,8 +33,8 @@ describe("shutdown negotiation", () => {
     expect(req.requestId).toBeTruthy();
     expect(isShutdownRequest(req)).toBe(true);
 
-    // The leader's stop path also sends plain-text shutdown controls.
-    expect(isShutdownRequest(plain("leader", "[shutdown] stop"))).toBe(true);
+    expect(isShutdownRequest(plain("leader", "[shutdown] stop"))).toBe(false);
+    expect(isShutdownRequest(shutdownRequest("alice", "stop"))).toBe(false);
     expect(
       isShutdownRequest(plain("leader", "keep working on the auth module")),
     ).toBe(false);

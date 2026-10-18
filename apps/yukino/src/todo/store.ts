@@ -1,18 +1,16 @@
 import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, renameSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 
 import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { sessionPath } from "@/storage/index.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 
 const log = createChildLogger({ module: "todo" });
 

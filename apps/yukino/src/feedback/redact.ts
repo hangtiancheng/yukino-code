@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export const REDACTED = "<redacted>";
+import {
+  REDACTED,
+  redactCredentials,
+  environmentSecrets,
+} from "@/utils/redact.js";
+
+export { REDACTED } from "@/utils/redact.js";
 
 // Key names whose values must never leave the machine. camelCase is normalized
 // to snake_case before matching so "apiKey" and "API_KEY" behave alike.
@@ -52,10 +58,6 @@ const TEXT_PATTERNS: { pattern: RegExp; replacement: string }[] = [
   { pattern: /\bgh[a-z]_[A-Za-z0-9_]{30,}/g, replacement: REDACTED },
   { pattern: /\bgithub_pat_[A-Za-z0-9_]{20,}/g, replacement: REDACTED },
   { pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g, replacement: REDACTED },
-  {
-    pattern: /\b(Bearer\s+)[A-Za-z0-9._~+/-]{20,}/gi,
-    replacement: `$1${REDACTED}`,
-  },
 ];
 
 /** Regex-based redaction for free text (transcripts, logs, issue bodies). */
@@ -63,12 +65,7 @@ export function redactText(
   text: string,
   secrets: readonly string[] = [],
 ): string {
-  let out = text;
-  for (const secret of secrets) {
-    if (secret) {
-      out = out.replaceAll(secret, REDACTED);
-    }
-  }
+  let out = redactCredentials(text, [...environmentSecrets(), ...secrets]);
   out = out.replace(
     /^([ \t]*)(["']?)([\w.-]+)\2:[ \t]*[|>][^\n]*\n((?:\1[ \t]+[^\n]*(?:\n|$))*)/gm,
     (match: string, indent: string, quote: string, key: string) =>
@@ -82,7 +79,7 @@ export function redactText(
   out = out.replace(
     /(?<![\w.-])(["']?([\w.-]{1,128})["']?[ \t]*[:=][ \t]*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}\]]+)/g,
     (match: string, prefix: string, key: string, value: string) => {
-      if (!isSensitiveKey(key)) {
+      if (!isSensitiveKey(key) || /^Bearer$/i.test(value)) {
         return match;
       }
       const quote = value.startsWith('"')

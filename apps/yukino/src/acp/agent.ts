@@ -421,11 +421,15 @@ export class YukinoAcpAgent {
             },
             options: [
               { optionId: "allow", name: "Allow once", kind: "allow_once" },
-              {
-                optionId: "allowAlways",
-                name: "Allow pattern for all project agents",
-                kind: "allow_always",
-              },
+              ...(decision.rememberPatterns?.length
+                ? [
+                    {
+                      optionId: "allowAlways",
+                      name: `Remember for all project agents: ${decision.rememberPatterns.join(", ")}`,
+                      kind: "allow_always" as const,
+                    },
+                  ]
+                : []),
               { optionId: "deny", name: "Reject", kind: "reject_once" },
             ],
           },
@@ -452,7 +456,7 @@ export class YukinoAcpAgent {
           return "deny";
         }
         if (response.outcome.optionId === "allowAlways") {
-          return "allowAlways";
+          return decision.rememberPatterns?.length ? "allowAlways" : "allow";
         }
         return response.outcome.optionId === "allow" ? "allow" : "deny";
       },

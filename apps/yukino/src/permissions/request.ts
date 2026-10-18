@@ -25,10 +25,13 @@ export async function requestToolPermission(
     signal?.addEventListener("abort", cancel, { once: true });
   });
   try {
-    return await Promise.race([
+    const response = await Promise.race([
       handler(toolName, args, decision, toolCallId, signal, source),
       cancelled,
     ]);
+    return response === "allowAlways" && !decision.rememberPatterns?.length
+      ? "allow"
+      : response;
   } finally {
     signal?.removeEventListener("abort", cancel);
   }

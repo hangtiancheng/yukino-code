@@ -13,6 +13,11 @@ import { safeParse, z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { sessionPath } from "@/storage/index.js";
+import {
+  mkdirPrivateSync,
+  writePrivateFileSync,
+  readPrivateFileSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "file-history" });
@@ -109,7 +114,7 @@ export class FileHistory {
   constructor(sessionID: string) {
     this.sessionDir = fileHistoryDir(sessionID);
     this.statePath = join(this.sessionDir, "snapshots.json");
-    mkdirSync(this.sessionDir, { recursive: true });
+    mkdirPrivateSync(this.sessionDir, { recursive: true });
     withFileSyncLock(this.statePath, () => {
       this.loadUnlocked();
     });
@@ -149,7 +154,7 @@ export class FileHistory {
 
     const backupPath = join(this.sessionDir, getBaselineBackupName(filePath));
     try {
-      writeFileSync(backupPath, content);
+      writePrivateFileSync(backupPath, content);
       return { state: "existing", backupPath };
     } catch (err) {
       log.error({ err }, "file-history baseline capture failed");
@@ -189,7 +194,7 @@ export class FileHistory {
           continue;
         }
         try {
-          writeFileSync(backupPath, readFileSync(filePath));
+          writePrivateFileSync(backupPath, readFileSync(filePath));
           backups[filePath] = { state: "existing", backupPath, time: now };
         } catch (err) {
           log.error({ err }, "file-history operation failed");
@@ -252,7 +257,7 @@ export class FileHistory {
 
       let backupData: Buffer<ArrayBuffer>;
       try {
-        backupData = readFileSync(backup.backupPath);
+        backupData = readPrivateFileSync(backup.backupPath);
       } catch (err) {
         log.error({ err }, "file-history backup read failed");
         continue;
@@ -289,7 +294,7 @@ export class FileHistory {
       let resolved = false;
       if (baseline?.state === "existing") {
         try {
-          const baselineData = readFileSync(baseline.backupPath);
+          const baselineData = readPrivateFileSync(baseline.backupPath);
           let currentData: Buffer<ArrayBuffer> | null = null;
           try {
             currentData = readFileSync(filePath);
@@ -389,7 +394,7 @@ export class FileHistory {
     };
     const temporary = `${this.statePath}.${String(process.pid)}.tmp`;
     try {
-      writeFileSync(temporary, JSON.stringify(state, null, 2), "utf-8");
+      writePrivateFileSync(temporary, JSON.stringify(state, null, 2), "utf-8");
       renameSync(temporary, this.statePath);
     } catch (err) {
       log.error({ err }, "file-history operation failed");
@@ -411,7 +416,7 @@ export class FileHistory {
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(readFileSync(this.statePath, "utf-8"));
+      raw = JSON.parse(readPrivateFileSync(this.statePath, "utf-8"));
     } catch (err) {
       log.error({ err }, "file-history operation failed");
       return;

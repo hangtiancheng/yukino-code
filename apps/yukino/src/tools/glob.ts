@@ -1,5 +1,5 @@
 import { statSync } from "fs";
-import { join } from "path";
+import { dirname, relative, sep } from "path";
 
 import { globIterate } from "glob";
 
@@ -19,10 +19,6 @@ import { asErrorString, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
-
-// glob's `ignore` patterns are matched against cwd-relative paths, so each
-// skipped directory needs the `**/<name>/**` form to be pruned at any depth.
-const IGNORE = [...SKIP_DIRS].map((dir) => `**/${dir}/**`);
 
 export class GlobTool implements Tool {
   // Use a hardcoded string instead of GlobTool.name.replace("Tool", "")
@@ -65,7 +61,10 @@ export class GlobTool implements Tool {
     if (ctx.abortSignal?.aborted) {
       return { output: "Error: operation interrupted", isError: true };
     }
-    const pattern = strArg(args, "pattern");
+    const rawPattern = strArg(args, "pattern");
+    const pattern = rawPattern.startsWith("~/")
+      ? resolveToolPath(ctx.cwd, rawPattern)
+      : rawPattern;
     if (!pattern) {
       return {
         output: "Error: pattern is required",
@@ -83,12 +82,35 @@ export class GlobTool implements Tool {
         };
       }
       const results = new SearchOutput(maxResults);
+      const absolutePattern = resolveToolPath(basePath, pattern);
+      const magic = absolutePattern.search(/[*?{[(]/u);
+      const scanRoot = dirname(
+        magic < 0 ? absolutePattern : `${absolutePattern.slice(0, magic)}_`,
+      );
+      const ignored = (path: string): boolean => {
+        const segments = relative(scanRoot, path).split(sep);
+        return (
+          segments[0] !== ".." &&
+          segments.some((segment) => SKIP_DIRS.has(segment))
+        );
+      };
       // matchBase: patterns without "/" match the basename at any depth,
       // patterns with "/" match the cwd-relative path. `follow` stays false,
       // so symlinked directories are never descended (cycle-safe).
       for await (const match of globIterate(pattern, {
         cwd: basePath,
-        ignore: IGNORE,
+        ignore: {
+          ignored: (entry) =>
+            ignored(entry.fullpath()) ||
+            (entry.fullpath() !== basePath &&
+              ctx.permissionChecker?.canTraverseSearchPath(entry.fullpath()) ===
+                false),
+          childrenIgnored: (entry) =>
+            ignored(entry.fullpath()) ||
+            (entry.fullpath() !== basePath &&
+              ctx.permissionChecker?.canTraverseSearchPath(entry.fullpath()) ===
+                false),
+        },
         // Agents need hidden-but-tracked paths (.github/workflows, .eslintrc…);
         // SKIP_DIRS already prunes noisy dot dirs like .git.
         dot: true,
@@ -97,6 +119,13 @@ export class GlobTool implements Tool {
         signal: ctx.abortSignal,
       })) {
         ctx.abortSignal?.throwIfAborted();
+        if (
+          ctx.permissionChecker?.canReadSearchPath(
+            resolveToolPath(basePath, match),
+          ) === false
+        ) {
+          continue;
+        }
         if (!results.append(match)) {
           break;
         }
@@ -115,7 +144,7 @@ export class GlobTool implements Tool {
       for (const match of matches) {
         let mtime = 0;
         try {
-          mtime = statSync(join(basePath, match)).mtimeMs;
+          mtime = statSync(resolveToolPath(basePath, match)).mtimeMs;
         } catch {
           // stat failed: sort as oldest (mtime 0)
         }

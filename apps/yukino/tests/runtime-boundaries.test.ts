@@ -662,7 +662,7 @@ describe("MCP dispatch execution boundaries", () => {
     ).toEqual(["McpCall"]);
   });
 
-  it("records allowAlways for every approval-required layer", async () => {
+  it("records only the displayed MCP target scope", async () => {
     const f = setup();
     vi.spyOn(f.checker, "check").mockReturnValue({
       effect: "ask",
@@ -676,8 +676,12 @@ describe("MCP dispatch execution boundaries", () => {
     );
     await collect(new Agent({ ...f, onPermissionRequest }));
     expect(onPermissionRequest).toHaveBeenCalledTimes(1);
-    expect(allowAlways).toHaveBeenCalledTimes(2);
-    expect(allowAlways).toHaveBeenCalledWith(f.target.name, { limit: 3 });
+    expect(allowAlways).toHaveBeenCalledOnce();
+    expect(allowAlways).toHaveBeenCalledWith(
+      "McpCall",
+      { ...f.args, arguments: { limit: 3 } },
+      ["McpCall(server__action)"],
+    );
   });
 
   it("does not let allowAlways override a target denial", async () => {

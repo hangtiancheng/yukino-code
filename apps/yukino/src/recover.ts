@@ -1,12 +1,14 @@
 // Records process lifecycle events (start, exit, crash) for post-mortem analysis.
 
-import { appendFileSync, mkdirSync } from "node:fs";
-
 import { runExitCleanups } from "./bootstrap/exit-cleanup.js";
 import { closeLogger, logger } from "./logger/index.js";
 import { captureTelemetryError, shutdownTelemetry } from "./telemetry/index.js";
 
 import { getYukinoDir, yukinoPath } from "@/storage/index.js";
+import {
+  appendPrivateFileSync as appendFileSync,
+  mkdirPrivateSync as mkdirSync,
+} from "@/storage/private.js";
 
 /**
  * Appends a timestamped entry to the crash log.

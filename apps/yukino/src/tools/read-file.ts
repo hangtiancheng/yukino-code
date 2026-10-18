@@ -18,6 +18,10 @@ import {
   sniffFileMediaType,
 } from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
+import {
+  isPrivateStatePath,
+  protectPrivateFileSync,
+} from "@/storage/private.js";
 import { asErrorString, isRecord } from "@/utils/index.js";
 import { intArg, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
@@ -150,6 +154,9 @@ export class ReadFileTool implements Tool {
     }
 
     try {
+      if (isPrivateStatePath(filePath)) {
+        protectPrivateFileSync(filePath);
+      }
       const content = await readFile(filePath, {
         encoding: "utf-8",
         signal: ctx.abortSignal,

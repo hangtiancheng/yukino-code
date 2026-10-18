@@ -1,5 +1,6 @@
-import { writeFile } from "node:fs/promises";
 import { deflateRawSync } from "node:zlib";
+
+import { writePrivateFile as writeFile } from "@/storage/private.js";
 
 export interface ZipEntry {
   name: string;

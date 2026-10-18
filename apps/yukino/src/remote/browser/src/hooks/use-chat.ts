@@ -502,6 +502,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
             id: msg.data.id,
             toolName: msg.data.toolName,
             description: msg.data.description,
+            rememberPatterns: msg.data.rememberPatterns,
             responded: false,
             response: null,
           },

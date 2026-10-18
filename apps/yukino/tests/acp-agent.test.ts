@@ -88,7 +88,11 @@ describe("Yukino ACP agent", () => {
         const result = await callbacks.onPermissionRequest(
           "WriteFile",
           { file_path: "result.txt" },
-          { effect: "ask", reason: "Mode: default" },
+          {
+            effect: "ask",
+            reason: "Mode: default",
+            rememberPatterns: ["WriteFile(/project/*)"],
+          },
           "tool-1",
         );
         permissionResults.push(result);
@@ -170,7 +174,11 @@ describe("Yukino ACP agent", () => {
           await callbacks.onPermissionRequest(
             "WriteFile",
             { file_path: "result.txt" },
-            { effect: "ask", reason: "Mode: default" },
+            {
+              effect: "ask",
+              reason: "Mode: default",
+              rememberPatterns: ["WriteFile(/project/*)"],
+            },
             "tool-2",
           ),
         );

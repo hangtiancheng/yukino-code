@@ -65,6 +65,7 @@ export interface PermissionRequestPayload {
   id: string;
   toolName: string;
   description: string;
+  rememberPatterns?: string[];
 }
 
 export interface QuestionOption {
@@ -348,6 +349,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
       id: z.string(),
       toolName: z.string(),
       description: z.string(),
+      rememberPatterns: z.array(z.string()).optional(),
     }),
   }),
   z.strictObject({
@@ -732,6 +734,7 @@ export interface PermissionItem {
   id: string;
   toolName: string;
   description: string;
+  rememberPatterns?: string[];
   responded: boolean;
   response: PermissionResponse | null;
 }

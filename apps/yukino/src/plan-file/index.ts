@@ -1,8 +1,13 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath } from "@/storage/index.js";
+import {
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+  mkdirPrivateSync as mkdirSync,
+} from "@/storage/private.js";
 import { generateSlug } from "@/utils/slug";
 
 const log = createChildLogger({ module: "plan-file" });

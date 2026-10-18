@@ -1,18 +1,15 @@
 import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { z } from "zod";
 
 import { sessionPath } from "@/storage/index.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 
 const TaskId = z.string().regex(/^[\w-]+-[1-9]\d*$/u);
 const TaskRecord = z.object({

@@ -1,4 +1,4 @@
-import { existsSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
 
 import { MemoryPermissionChecker } from "./permissions.js";
@@ -10,6 +10,7 @@ import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import { listSessions } from "@/session/index.js";
 import { projectPath, yukinoPath, getSessionsDir } from "@/storage/index.js";
+import { writePrivateFileSync as writeFileSync } from "@/storage/private.js";
 import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";

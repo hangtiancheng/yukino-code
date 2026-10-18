@@ -10,6 +10,7 @@ export interface PermissionRequest {
   toolName: string;
   argsSummary: string;
   reason: string;
+  rememberPatterns?: string[];
 }
 
 interface QueuedPermission {
@@ -49,6 +50,7 @@ export function createPermissionRequestHandler(deps: {
             toolName,
             argsSummary: formatToolArgs(args),
             reason: decision.reason,
+            rememberPatterns: decision.rememberPatterns,
           });
         },
         deny: () => {

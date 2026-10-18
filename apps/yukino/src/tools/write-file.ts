@@ -14,6 +14,7 @@ import {
 } from "./types.js";
 
 import { createChildLogger } from "@/logger/index.js";
+import { isPrivateStatePath, writePrivateFile } from "@/storage/private.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -116,7 +117,9 @@ export class WriteFileTool implements Tool {
           }
         }
         ctx.fileHistory?.trackEdit(filePath);
-        await writeFile(filePath, content, "utf-8");
+        await (isPrivateStatePath(filePath)
+          ? writePrivateFile(filePath, content)
+          : writeFile(filePath, content, "utf-8"));
         ctx.fileStateCache?.update(filePath);
         const lineCount =
           content.length === 0

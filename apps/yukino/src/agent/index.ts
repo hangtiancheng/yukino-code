@@ -1349,6 +1349,15 @@ export class Agent {
       const decisions = permissionCalls.map((call) =>
         this.checker.check(call.name, call.category, call.args),
       );
+      if (
+        target &&
+        decisions[0].effect === "allow" &&
+        decisions[0].reason === "Permission rule: allow" &&
+        decisions[1].effect === "ask" &&
+        decisions[1].reason.startsWith("Mode:")
+      ) {
+        decisions[1] = decisions[0];
+      }
       const decision =
         decisions.find((d) => d.effect === "deny") ??
         decisions.find((d) => d.effect === "ask") ??
@@ -1381,6 +1390,11 @@ export class Agent {
       if (decision.effect === "ask" && this.onPermissionRequest) {
         let response: "allow" | "deny" | "allowAlways";
         try {
+          const patterns = this.checker.rememberPatterns(
+            tu.toolName,
+            tu.arguments,
+          );
+          decision.rememberPatterns = [...patterns];
           response = await requestToolPermission(
             this.onPermissionRequest,
             tu.toolName,
@@ -1391,11 +1405,8 @@ export class Agent {
             { agentName: this.agentName, cwd: this.cwd },
           );
           if (response === "allowAlways" && !this.abortSignal?.aborted) {
-            for (const [index, call] of permissionCalls.entries()) {
-              if (decisions[index].effect === "ask") {
-                this.checker.allowAlways(call.name, call.args);
-              }
-            }
+            // Persist exactly the displayed scopes; path aliases may change while approval is pending.
+            this.checker.allowAlways(tu.toolName, tu.arguments, patterns);
           }
         } catch (err) {
           yield {

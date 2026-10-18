@@ -3,12 +3,15 @@
 // line recorded into the conversation.
 
 import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type { UserBashResult } from "./index.js";
 
+import {
+  mkdirPrivateSync as mkdirSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 import { spillDir } from "@/tool-result/index.js";
 import type { BashTool } from "@/tools/bash.js";
 import type { ToolContext, ToolResult } from "@/tools/types.js";

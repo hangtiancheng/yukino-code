@@ -1,13 +1,9 @@
 import { readFileSync, existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, dirname, resolve, isAbsolute, relative } from "node:path";
+import { join, dirname, resolve, relative } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath } from "@/storage/index.js";
 const log = createChildLogger({ module: "memory" });
-
-/** Maximum recursion depth for @include to prevent infinite nesting */
-const MAX_INCLUDE_DEPTH = 5;
 
 export interface InstructionSource {
   path: string;
@@ -23,11 +19,6 @@ export interface InstructionSource {
  *  2. Project: AGENTS.md in every
  *     directory from the git root down to cwd
  *
- * Supports @include directives:
- *  - @./relative/path, @../relative/path, @~/home/path, @/absolute/path
- *  - Resolved relative to the directory of the containing file
- *  - Ignored inside fenced code blocks
- *  - Cycle detection (the same absolute path is never included twice)
  */
 export function loadInstructions(cwd: string): string {
   const sources = discoverInstructions(cwd);
@@ -79,7 +70,7 @@ export function discoverInstructions(cwd: string): InstructionSource[] {
   return sources;
 }
 
-/** Attempts to read an instruction file and add it to the list, supporting @include expansion */
+/** Attempts to read an instruction file and add it to the list. */
 function addSource(
   out: InstructionSource[],
   seen: Set<string>,
@@ -108,133 +99,7 @@ function addSource(
     return;
   }
   seen.add(abs);
-  const content = expandIncludes(data, dirname(abs), seen, 0);
-  out.push({ path: abs, content });
-}
-
-/**
- * Recursively expands @include directives.
- * Lines starting with @ inside fenced code blocks are ignored.
- * The same absolute path will not be included twice (cycle-safe).
- */
-function expandIncludes(
-  content: string,
-  baseDir: string,
-  seen: Set<string>,
-  depth: number,
-): string {
-  if (depth > MAX_INCLUDE_DEPTH) {
-    return content;
-  }
-
-  const lines = content.split("\n");
-  const out: string[] = [];
-  let codeFence: { marker: "`" | "~"; length: number } | undefined;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const fence = /^(`{3,}|~{3,})/u.exec(trimmed)?.[1];
-    if (!codeFence && fence) {
-      codeFence = {
-        marker: fence.startsWith("`") ? "`" : "~",
-        length: fence.length,
-      };
-      out.push(line);
-      continue;
-    }
-    if (
-      codeFence &&
-      new RegExp(
-        `^${codeFence.marker === "`" ? "`" : "~"}{${String(codeFence.length)},}\\s*$`,
-        "u",
-      ).test(trimmed)
-    ) {
-      codeFence = undefined;
-      out.push(line);
-      continue;
-    }
-
-    if (!codeFence) {
-      const includePath = parseInclude(trimmed);
-      if (includePath) {
-        const resolved = resolveInclude(includePath, baseDir);
-        if (resolved) {
-          let abs: string;
-          try {
-            abs = resolve(resolved);
-          } catch (err) {
-            log.error({ err }, "memory operation failed");
-            out.push(line);
-            continue;
-          }
-          if (!seen.has(abs)) {
-            try {
-              const data = readFileSync(abs, "utf-8");
-              seen.add(abs);
-              out.push(`<!-- included from ${includePath} -->`);
-              out.push(expandIncludes(data, dirname(abs), seen, depth + 1));
-              continue;
-            } catch (err) {
-              log.error({ err }, "memory operation failed");
-              // On read failure, keep the original line visible to the user
-            }
-          }
-        }
-        // Unresolvable or already included; keep the original line
-      }
-    }
-
-    out.push(line);
-  }
-
-  return out.join("\n");
-}
-
-/**
- * Parses @include lines: @./path, @../path, @~/path, @/abs/path.
- * Other @-tokens (e.g., @username) are ignored to avoid false positives.
- */
-function parseInclude(trimmed: string): string {
-  // Must start with @, but @@ is an escape and should be ignored
-  if (!trimmed.startsWith("@") || trimmed.startsWith("@@")) {
-    return "";
-  }
-
-  const rest = trimmed.slice(1);
-  if (!rest) {
-    return "";
-  }
-  // Cannot contain spaces or tabs: the include must occupy the whole line
-  if (/[\s\t]/.test(rest)) {
-    return "";
-  }
-
-  // Only accept relative paths, ~/ paths, and absolute paths
-  if (
-    rest.startsWith("./") ||
-    rest.startsWith("../") ||
-    rest.startsWith("~/") ||
-    rest.startsWith("/")
-  ) {
-    return rest;
-  }
-  return "";
-}
-
-/** Resolves an include path to an absolute path */
-function resolveInclude(p: string, baseDir: string): string {
-  if (p.startsWith("~/")) {
-    try {
-      return join(homedir(), p.slice(2));
-    } catch (err) {
-      log.error({ err }, "memory operation failed");
-      return "";
-    }
-  }
-  if (isAbsolute(p)) {
-    return p;
-  }
-  return join(baseDir, p);
+  out.push({ path: abs, content: data });
 }
 
 /**

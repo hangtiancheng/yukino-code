@@ -1,9 +1,13 @@
-import { writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 
 import type { ToolResultBlock } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
 import { getSessionArtifactsDir } from "@/session/index.js";
+import {
+  writePrivateFileSync as writeFileSync,
+  mkdirPrivateSync as mkdirSync,
+  protectPrivateFileSync,
+} from "@/storage/private.js";
 import { isObject } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -24,6 +28,14 @@ export function spillDir(sessionId: string): string {
   return join(getSessionArtifactsDir(sessionId), "tool-results");
 }
 
+function resultPath(sessionId: string, toolUseId: string): string {
+  // Provider call IDs are opaque data, never filesystem paths.
+  return join(
+    spillDir(sessionId),
+    `${encodeURIComponent(toolUseId).replaceAll("*", "%2A")}.txt`,
+  );
+}
+
 // Persist the full text of a tool result to disk. tool_use_id is unique per
 // invocation and its content is deterministic, so when the file already
 // exists we reuse it instead of writing again.
@@ -34,12 +46,13 @@ function writeSpill(
 ): string {
   const dir = spillDir(sessionId);
   mkdirSync(dir, { recursive: true });
-  const path = join(dir, toolUseId + ".txt");
+  const path = resultPath(sessionId, toolUseId);
   try {
     writeFileSync(path, content, { encoding: "utf-8", flag: "wx" });
   } catch (err: unknown) {
     log.error({ err }, "tool-result operation failed");
     if (isObject(err) && "code" in err && err.code === "EEXIST") {
+      protectPrivateFileSync(path);
       return path;
     }
     throw err;
@@ -185,7 +198,7 @@ export function applyBudget(
     // pushes total further past the limit.
     let spillPath: string;
     try {
-      spillPath = join(spillDir(sessionId), r.toolUseId + ".txt");
+      spillPath = resultPath(sessionId, r.toolUseId);
     } catch {
       // No session id means there is nowhere to spill.
       continue;

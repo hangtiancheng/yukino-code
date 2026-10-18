@@ -382,7 +382,7 @@ describe("teams orchestration", () => {
     expect(
       mgr
         .drainLeaderMailbox()
-        .some((d) => d.includes("from=w2: findings: X confirmed")),
+        .some((d) => d.includes('from="w2">findings: X confirmed')),
     ).toBe(true);
 
     const rejected = await tool.execute(

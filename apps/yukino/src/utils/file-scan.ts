@@ -1,7 +1,7 @@
 // Shallow workspace file scan shared by the terminal @-mention completion and
 // the remote server's browser completion endpoint.
 
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, lstatSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
@@ -12,8 +12,10 @@ const log = createChildLogger({ module: "file-scan" });
 /** Lists cwd-relative file paths (max entries, skipping hidden/SKIP_DIRS). */
 export function scanCwdFiles(root: string, max = 2000): string[] {
   const out: string[] = [];
+  let visited = 0;
+  const budget = Math.max(2000, max * 10);
   const walk = (dir: string, rel: string): void => {
-    if (out.length >= max) {
+    if (out.length >= max || visited >= budget) {
       return;
     }
     let names: string[];
@@ -24,9 +26,10 @@ export function scanCwdFiles(root: string, max = 2000): string[] {
       return;
     }
     for (const name of names) {
-      if (out.length >= max) {
+      if (out.length >= max || visited >= budget) {
         return;
       }
+      visited++;
       if (name.startsWith(".") || SKIP_DIRS.has(name)) {
         continue;
       }
@@ -34,7 +37,17 @@ export function scanCwdFiles(root: string, max = 2000): string[] {
       const relPath = rel ? `${rel}/${name}` : name;
       let isDir = false;
       try {
-        isDir = statSync(full).isDirectory();
+        const info = lstatSync(full);
+        if (info.isSymbolicLink()) {
+          if (statSync(full).isFile()) {
+            out.push(relPath);
+          }
+          continue;
+        }
+        if (!info.isDirectory() && !info.isFile()) {
+          continue;
+        }
+        isDir = info.isDirectory();
       } catch (err) {
         log.error({ err }, "cwd scan failed");
         continue;

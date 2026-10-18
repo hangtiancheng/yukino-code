@@ -4,7 +4,6 @@
 import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname, normalize } from "node:path";
@@ -113,6 +112,7 @@ import {
 } from "@/skills/executor.js";
 import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
+import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/definition.js";
 import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
@@ -1213,7 +1213,12 @@ export class RemoteServer {
   // it instead of the tool hanging with no visible prompt.
   private pendingPermissionPayloads = new Map<
     string,
-    { id: string; toolName: string; description: string }
+    {
+      id: string;
+      toolName: string;
+      description: string;
+      rememberPatterns?: string[];
+    }
   >();
   private pendingAskPayloads = new Map<
     string,
@@ -1470,13 +1475,19 @@ export class RemoteServer {
             // Atomic claim: only the first responder (vs a duplicate answer or
             // a racing timeout/cancel) completes the request exactly once.
             if (this.pendingPermissions.delete(id) && resolver) {
-              resolver(parsed.data.response);
+              const response =
+                parsed.data.response === "allowAlways" &&
+                !this.pendingPermissionPayloads.get(id)?.rememberPatterns
+                  ?.length
+                  ? "allow"
+                  : parsed.data.response;
+              resolver(response);
               this.broadcast({
                 type: "request_expired",
                 data: {
                   id,
                   kind: "permission",
-                  response: parsed.data.response,
+                  response,
                 },
               });
             }
@@ -3209,7 +3220,7 @@ export class RemoteServer {
               ? ".gif"
               : ".webp";
       const dir = fileHistoryDir(handle.sessionId);
-      await mkdir(dir, { recursive: true });
+      mkdirPrivateSync(dir);
       const safeName = upload.name
         .replace(/[^a-zA-Z0-9._-]/gu, "_")
         .replace(/\.[^.]*$/u, "")
@@ -3218,7 +3229,7 @@ export class RemoteServer {
         dir,
         `upload-${randomUUID()}-${safeName || "image"}${ext}`,
       );
-      await writeFile(path, bytes, { mode: 0o600 });
+      await writePrivateFile(path, bytes);
       reply({
         type: "image_saved",
         data: { clientId: upload.clientId, path },
@@ -4108,7 +4119,12 @@ export class RemoteServer {
       ]
         .filter(Boolean)
         .join("\n");
-      const payload = { id, toolName, description: desc };
+      const payload = {
+        id,
+        toolName,
+        description: desc,
+        rememberPatterns: decision.rememberPatterns,
+      };
       this.pendingPermissionPayloads.set(id, payload);
       this.broadcast({ type: "permission_request", data: payload });
       return new Promise((resolve) => {

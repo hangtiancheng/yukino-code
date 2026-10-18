@@ -22,7 +22,7 @@ export class EnterWorktreeTool implements Tool {
   description =
     "Create a git worktree for isolated work and return its absolute path. " +
     "The working directory is NOT changed: pass the returned path explicitly to " +
-    "later tools (Bash cwd, ReadFile/WriteFile/EditFile paths) to operate " +
+    "later tools (Bash cd commands, ReadFile/WriteFile/EditFile paths) to operate " +
     "inside the worktree.";
 
   category: ToolCategory = "write";
@@ -69,6 +69,7 @@ export class EnterWorktreeTool implements Tool {
 
     try {
       const result = await createAgentWorktree(slug, undefined, ctx.cwd);
+      await ctx.permissionChecker?.registerWorktree(result);
       return {
         output: `Worktree created at ${result.path}\nBranch: ${result.branch}\nHead: ${result.headCommit}`,
         isError: false,

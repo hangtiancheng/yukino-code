@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { z } from "zod";
@@ -11,6 +11,11 @@ import {
 } from "./types.js";
 
 import { sessionPath } from "@/storage/index.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const FiledRecordsSchema = z.array(FiledIssueRecordSchema);

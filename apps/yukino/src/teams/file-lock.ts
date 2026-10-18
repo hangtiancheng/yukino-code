@@ -1,16 +1,19 @@
 import { randomBytes } from "node:crypto";
 import {
-  mkdirSync,
   readdirSync,
   readFileSync,
   rmdirSync,
   statSync,
   unlinkSync,
-  writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { safeParse, z } from "zod";
+
+import {
+  mkdirPrivateSync as mkdirSync,
+  writePrivateFileSync as writeFileSync,
+} from "@/storage/private.js";
 
 const LOCK_ACQUIRE_TIMEOUT_MS = 5_000;
 const LOCK_STALE_MS = 10_000;

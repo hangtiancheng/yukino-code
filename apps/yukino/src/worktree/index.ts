@@ -8,17 +8,19 @@ import {
   stat,
   symlink,
 } from "fs/promises";
-import { dirname, isAbsolute, join } from "path";
+import { dirname, isAbsolute, join, resolve } from "path";
 import { promisify } from "util";
 
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath, projectKey } from "@/storage/index.js";
+import { canonicalPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "worktree" });
 
 const execFileAsync = promisify(execFile);
 
 export interface WorktreeResult {
+  created: boolean;
   path: string;
   branch: string;
   headCommit: string;
@@ -330,7 +332,13 @@ export async function createAgentWorktree(
     }
     const head = await readWorktreeHeadSha(worktreeDir);
     if (head) {
-      return { path: worktreeDir, branch, headCommit: head, gitRoot: root };
+      return {
+        path: worktreeDir,
+        branch,
+        headCommit: head,
+        gitRoot: root,
+        created: false,
+      };
     }
     // Fallback to git subprocess if filesystem read fails
     const { stdout: headFallback } = await execFileAsync(
@@ -345,6 +353,7 @@ export async function createAgentWorktree(
       branch,
       headCommit: headFallback.trim(),
       gitRoot: root,
+      created: false,
     };
   }
 
@@ -367,7 +376,13 @@ export async function createAgentWorktree(
   // Prefer filesystem read for HEAD in newly created worktrees
   const head = await readWorktreeHeadSha(worktreeDir);
   if (head) {
-    return { path: worktreeDir, branch, headCommit: head, gitRoot: root };
+    return {
+      path: worktreeDir,
+      branch,
+      headCommit: head,
+      gitRoot: root,
+      created: true,
+    };
   }
   // Fallback to subprocess
   const { stdout: headFallback } = await execFileAsync(
@@ -383,7 +398,90 @@ export async function createAgentWorktree(
     branch,
     headCommit: headFallback.trim(),
     gitRoot: root,
+    created: true,
   };
+}
+
+interface OwnedWorktree extends WorktreeResult {
+  gitDir: string;
+  commonDir: string;
+}
+
+export class OwnedWorktrees {
+  private records = new Map<string, Readonly<OwnedWorktree>>();
+
+  async register(worktree: WorktreeResult): Promise<boolean> {
+    const path = canonicalPath(worktree.path);
+    if (this.records.has(path)) {
+      return true;
+    }
+    if (!worktree.created) {
+      return false;
+    }
+    const gitDir = canonicalPath(await resolveGitDir(path));
+    const { stdout } = await execFileAsync(
+      "git",
+      ["rev-parse", "--git-common-dir"],
+      { cwd: path },
+    );
+    this.records.set(
+      path,
+      Object.freeze({
+        ...worktree,
+        path,
+        gitRoot: canonicalPath(worktree.gitRoot),
+        gitDir,
+        commonDir: canonicalPath(resolve(path, stdout.trim())),
+      }),
+    );
+    return true;
+  }
+
+  async cleanup(requested: string): Promise<string> {
+    const path = canonicalPath(requested);
+    const record = this.records.get(path);
+    if (!record) {
+      throw new Error(
+        `Worktree is not owned by this runtime; kept at: ${path}`,
+      );
+    }
+    const { stdout: common } = await execFileAsync(
+      "git",
+      ["rev-parse", "--git-common-dir"],
+      { cwd: path },
+    );
+    if (
+      canonicalPath(await resolveGitDir(path)) !== record.gitDir ||
+      canonicalPath(resolve(path, common.trim())) !== record.commonDir
+    ) {
+      throw new Error("Worktree Git identity changed; refusing cleanup");
+    }
+    const backlink = (
+      await readFile(join(record.gitDir, "gitdir"), "utf8")
+    ).trim();
+    const { stdout: repositoryCommon } = await execFileAsync(
+      "git",
+      ["rev-parse", "--git-common-dir"],
+      { cwd: record.gitRoot },
+    );
+    if (
+      canonicalPath(resolve(record.gitDir, backlink)) !==
+        canonicalPath(join(path, ".git")) ||
+      canonicalPath(resolve(record.gitRoot, repositoryCommon.trim())) !==
+        record.commonDir ||
+      (await getCurrentBranch(path)) !== record.branch
+    ) {
+      throw new Error(
+        "Worktree registration or branch changed; refusing cleanup",
+      );
+    }
+    if (await hasWorktreeChanges(path, record.headCommit)) {
+      return `Worktree has changes, kept at: ${path}\nBranch: ${record.branch}`;
+    }
+    await removeAgentWorktree(path, record.branch, record.gitRoot);
+    this.records.delete(path);
+    return `Worktree cleaned up (no changes): ${path}`;
+  }
 }
 
 export async function removeAgentWorktree(

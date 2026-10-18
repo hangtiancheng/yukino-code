@@ -1,24 +1,25 @@
-import {
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  renameSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { lstatSync, renameSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, dirname } from "node:path";
+import { resolve, dirname, sep } from "node:path";
 
 import yaml from "js-yaml";
 import z, { parse } from "zod";
 
+import { analyzeShell } from "./shell.js";
+
 import { createChildLogger } from "@/logger/index.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
+import {
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+  mkdirPrivateSync as mkdirSync,
+} from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/protocol.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";
-import { isObject, isRecord, strArg } from "@/utils/index.js";
+import { asErrorString, isObject, isRecord, strArg } from "@/utils/index.js";
 import { canonicalPath, isPathWithin, resolveToolPath } from "@/utils/paths.js";
+import { OwnedWorktrees, type WorktreeResult } from "@/worktree/index.js";
 
 export * as Request from "./request.js";
 
@@ -32,6 +33,7 @@ export type NonPlanPermissionMode = Exclude<PermissionMode, "plan">;
 export interface Decision {
   effect: DecisionEffect;
   reason: string;
+  rememberPatterns?: string[];
 }
 
 type RuleEffect = DecisionEffect;
@@ -149,6 +151,51 @@ const CONTENT_FIELDS: Record<string, string> = {
   InstallSkill: "source",
 };
 
+const FILE_TOOLS = new Set(["ReadFile", "WriteFile", "EditFile", "LSP"]);
+
+function escapeRuleLiteral(content: string): string {
+  return content.replace(/[\\*?]/gu, "\\$&");
+}
+
+function normalizePathPattern(cwd: string, pattern: string): string {
+  if (sep === "\\") {
+    pattern = pattern.replaceAll("\\", "/");
+  }
+  if (pattern === "*") {
+    return pattern;
+  }
+  let wildcard = -1;
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === "\\") {
+      i++;
+    } else if (pattern[i] === "*" || pattern[i] === "?") {
+      wildcard = i;
+      break;
+    }
+  }
+  const literal = (text: string) => text.replace(/\\(.)/gu, "$1");
+  if (wildcard < 0) {
+    return escapeRuleLiteral(
+      canonicalPath(resolveToolPath(cwd, literal(pattern)))
+        .split(sep)
+        .join("/"),
+    );
+  }
+  const slash = pattern.lastIndexOf("/", wildcard);
+  const fixed = slash < 0 ? "." : pattern.slice(0, slash + 1);
+  const suffix = pattern.slice(slash + 1);
+  if (suffix.split("/").includes("..")) {
+    throw new Error(
+      "Permission path patterns cannot traverse after a wildcard",
+    );
+  }
+  return `${escapeRuleLiteral(
+    canonicalPath(resolveToolPath(cwd, literal(fixed)))
+      .split(sep)
+      .join("/"),
+  ).replace(/\/$/u, "")}/${suffix}`;
+}
+
 const PLAN_COORDINATION_TOOLS = new Set([
   "AskUserQuestion",
   "EnterPlanMode",
@@ -199,11 +246,11 @@ export class PathSandbox {
   private allowedRoots: string[];
   private projectDir: string;
 
-  constructor(projectDir: string) {
+  constructor(projectDir: string, includeTemp = true) {
     // Use os.tmpdir() instead of hardcoded "/tmp" — on macOS the temp dir
     // is /var/folders/..., not /tmp.
     this.projectDir = resolve(projectDir);
-    this.allowedRoots = [this.projectDir, tmpdir()];
+    this.allowedRoots = [this.projectDir, ...(includeTemp ? [tmpdir()] : [])];
   }
 
   addRoot(root: string): void {
@@ -227,23 +274,34 @@ export class PathSandbox {
 // Glob match where `*` matches any run of characters (including /) and `?`
 // matches any single character — suited to matching shell commands rather
 // than paths, so it deliberately deviates from filepath.Match semantics.
-function globMatch(pattern: string, content: string): boolean {
-  const re =
-    "^" +
-    pattern
-      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-      .replace(/\*/g, ".*")
-      .replace(/\?/g, ".") +
-    "$";
+function globMatch(
+  pattern: string,
+  content: string,
+  insensitive = false,
+): boolean {
+  let re = "^";
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+    if (char === "\\" && i + 1 < pattern.length) {
+      re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    } else if (char === "*") {
+      re += "[\\s\\S]*";
+    } else if (char === "?") {
+      re += "[\\s\\S]";
+    } else {
+      re += char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  re += "$";
   try {
-    return new RegExp(re).test(content);
+    return new RegExp(re, insensitive ? "i" : "").test(content);
   } catch (err) {
     log.error({ err }, "permissions operation failed");
     return false;
   }
 }
 
-const RULE_RE = /^(\w+)\((.+)\)$/;
+const RULE_RE = /^(\w+|\*)\(([\s\S]+)\)$/;
 
 function isNodeJSErrnoException(err: unknown): err is NodeJS.ErrnoException {
   return isObject(err) && "code" in err && typeof err.code === "string";
@@ -256,10 +314,10 @@ function loadRulesFile(path: string): Rule[] {
   try {
     data = readFileSync(path, "utf-8");
   } catch (err) {
-    if (isNodeJSErrnoException(err) && err.code !== "ENOENT") {
-      log.error({ err }, "permissions operation failed");
+    if (isNodeJSErrnoException(err) && err.code === "ENOENT") {
+      return [];
     }
-    return [];
+    throw err;
   }
   const YamlEntrySchema = z.object({
     rule: z.string().optional(),
@@ -269,10 +327,12 @@ function loadRulesFile(path: string): Rule[] {
   let yamlData: YamlEntry[];
   try {
     const parsed: unknown = yaml.load(data);
+    if (parsed === undefined || parsed === null) {
+      return [];
+    }
     yamlData = parse(z.array(YamlEntrySchema), parsed);
   } catch (err) {
-    log.error({ err }, "permissions operation failed");
-    return [];
+    throw new Error("Cannot parse permission rules", { cause: err });
   }
   const rules: Rule[] = [];
   for (const entry of yamlData) {
@@ -304,7 +364,14 @@ export function evaluateRules(
     if (r.tool !== toolName && r.tool !== "*") {
       continue;
     }
-    if (!globMatch(r.pattern, content)) {
+    if (
+      !globMatch(
+        r.pattern,
+        content,
+        toolName === "PowerShell" ||
+          (sep === "\\" && (FILE_TOOLS.has(toolName) || toolName === "Glob")),
+      )
+    ) {
       continue;
     }
     // deny is the strictest effect and cannot be overridden; return immediately
@@ -346,10 +413,16 @@ export class RuleEngine {
     let st;
     try {
       st = statSync(path, { bigint: true });
-    } catch {
-      // File missing or unreadable — treat as empty rules and clear any stale cache entry
+    } catch (error) {
       this.cache.delete(path);
-      return [];
+      if (
+        isNodeJSErrnoException(error) &&
+        error.code === "ENOENT" &&
+        !lstatSync(path, { throwIfNoEntry: false })
+      ) {
+        return [];
+      }
+      throw error;
     }
 
     const cached = this.cache.get(path);
@@ -471,6 +544,9 @@ export class PermissionChecker {
   sandboxAutoAllow = false;
   private sandbox: PathSandbox;
   private ruleEngine: RuleEngine;
+  worktrees = new OwnedWorktrees();
+  private extraRoots: string[] = [];
+  private isolatedRoot?: string;
 
   constructor(
     private readonly cwd: string,
@@ -554,6 +630,16 @@ export class PermissionChecker {
     checker.parent = this.parent;
     checker.planFilePath = this.planFilePath;
     checker.ruleEngine = this.ruleEngine;
+    checker.worktrees = this.worktrees;
+    checker.extraRoots = [...this.extraRoots];
+    checker.isolatedRoot = this.isolatedRoot;
+    checker.sandbox = new PathSandbox(
+      this.isolatedRoot ?? cwd,
+      !this.isolatedRoot,
+    );
+    for (const root of checker.extraRoots) {
+      checker.sandbox.addRoot(root);
+    }
     checker.teammate = this.teammate;
     checker.readOnly = this.readOnly;
     checker.requiresLeaderPlanApproval = this.requiresLeaderPlanApproval;
@@ -574,6 +660,21 @@ export class PermissionChecker {
   }
 
   check(
+    toolName: string,
+    category: "read" | "write" | "command",
+    args: Record<string, unknown>,
+  ): Decision {
+    try {
+      return this.checkAction(toolName, category, args);
+    } catch (error) {
+      return {
+        effect: "deny",
+        reason: `Permission path resolution failed: ${asErrorString(error)}`,
+      };
+    }
+  }
+
+  private checkAction(
     toolName: string,
     category: "read" | "write" | "command",
     args: Record<string, unknown>,
@@ -604,20 +705,10 @@ export class PermissionChecker {
       };
     }
 
-    // Layer 1: explicit rules, evaluated first so a deny/ask also gates the
-    // Layer-0 plan-file write exception. The snapshot is taken lazily and shared
-    // with the Layer-3.5 sub-command checks. Only deny/ask short-circuit here:
-    // an explicit allow deliberately falls through so the dangerous-command
-    // and per-subcommand checks below can still take precedence, and
-    // is returned at Layer 5 if none fires.
-    let snapshot: Rule[] | null = null;
-    const rules = (): Rule[] => (snapshot ??= this.ruleEngine.snapshot());
-    const explicitEffect = evaluateRules(rules(), toolName, content);
-    if (explicitEffect === "deny" || explicitEffect === "ask") {
-      return {
-        effect: explicitEffect,
-        reason: `Permission rule: ${explicitEffect}`,
-      };
+    const explicit = this.checkExplicitRules(toolName, args);
+    const explicitEffect = explicit?.effect;
+    if (explicit && explicit.effect !== "allow") {
+      return explicit;
     }
 
     if (planControl) {
@@ -654,44 +745,29 @@ export class PermissionChecker {
       };
     }
 
+    if ((toolName === "Bash" || toolName === "PowerShell") && !content.trim()) {
+      return {
+        effect: "ask",
+        reason:
+          "Approval requires a non-empty Bash command or PowerShell command",
+      };
+    }
+
+    if (
+      (toolName === "Bash" || toolName === "PowerShell") &&
+      !analyzeShell(content, toolName === "PowerShell").complete &&
+      this.mode !== "bypassPermissions"
+    ) {
+      return {
+        effect: "ask",
+        reason: "Complex shell syntax requires approval",
+      };
+    }
+
     // Layer 3.5: Sandbox auto-allow — OS sandbox already isolates writes; non-dangerous commands can skip human confirmation.
-    // Split compound commands and check deny/ask rules individually to prevent bypassing permission checks via command chaining.
     // Only Bash is wrapped by the configured OS sandbox; other command tools
     // (e.g. PowerShell) never inherit this auto-allow.
     if (this.sandboxEnabled && this.sandboxAutoAllow && toolName === "Bash") {
-      const command = strArg(args, "command").trim();
-      if (!command) {
-        return {
-          effect: "ask",
-          reason: "Sandbox auto-allow requires a non-empty Bash command",
-        };
-      }
-      // Split on every chaining separator — single & (backgrounding still
-      // runs the next command), newlines, and the compound operators — so an
-      // anchored deny/ask rule cannot be dodged by hiding a subcommand in a
-      // segment the splitter kept whole. (isSafeCommand already rejects raw
-      // & / newline / ; / | commands upstream; this keeps the layers
-      // consistent regardless.)
-      const subcommands = command
-        .split(/\s*(?:&&|\|\||&|[;|\n\r])\s*/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      let hasAsk = false;
-      for (const sub of subcommands) {
-        const ruleResult = evaluateRules(rules(), toolName, sub);
-        if (ruleResult === "deny") {
-          return { effect: "deny", reason: "Permission rule: deny" };
-        }
-        if (ruleResult === "ask") {
-          hasAsk = true;
-        }
-      }
-      if (hasAsk) {
-        return {
-          effect: "ask",
-          reason: "Permission rule: ask (sandbox does not override)",
-        };
-      }
       return {
         effect: "allow",
         reason: "Sandbox auto-allow: OS sandbox active",
@@ -723,37 +799,193 @@ export class PermissionChecker {
 
   // Allow writes to an extra directory outside the project + os.tmpdir().
   allowExtraRoot(path: string): void {
-    this.sandbox.addRoot(path);
+    const root = canonicalPath(resolveToolPath(this.cwd, path));
+    this.extraRoots.push(root);
+    this.sandbox.addRoot(root);
   }
 
-  // Persist a scoped "allow always" rule.
-  // - File path: parent directory + `/*` (a directory path uses itself + `/*`).
-  // - Command: first 1-2 words + `*` so it allows that command family.
-  allowAlways(toolName: string, args: Record<string, unknown>): void {
-    const content = extractContent(toolName, args);
-    const isFilePath =
-      toolName === "ReadFile" ||
-      toolName === "WriteFile" ||
-      toolName === "EditFile";
-    let pattern: string;
-    if (isFilePath && content) {
-      const abs = resolveToolPath(this.cwd, content);
-      let isDir = false;
-      try {
-        isDir = statSync(abs).isDirectory();
-      } catch {
-        // Path may not exist yet (e.g. WriteFile creating a new file) — treat as file.
-      }
-      pattern = join(isDir ? abs : dirname(abs), "*");
-    } else {
-      const words = content.trim().split(/\s+/).slice(0, 2);
-      pattern = words.join(" ") + "*";
+  async registerWorktree(worktree: WorktreeResult): Promise<void> {
+    if (await this.worktrees.register(worktree)) {
+      this.allowExtraRoot(worktree.path);
     }
-    this.ruleEngine.appendProjectRule({
-      tool: toolName,
-      pattern,
-      effect: "allow",
-    });
+  }
+
+  async forWorktree(worktree: WorktreeResult): Promise<PermissionChecker> {
+    const checker = this.forCwd(worktree.path);
+    checker.isolatedRoot = canonicalPath(worktree.path);
+    checker.sandbox = new PathSandbox(checker.isolatedRoot, false);
+    checker.extraRoots = [];
+    checker.worktrees = new OwnedWorktrees();
+    if (!(await checker.worktrees.register(worktree))) {
+      throw new Error(
+        "Cannot claim an existing worktree for an isolated agent",
+      );
+    }
+    return checker;
+  }
+
+  sandboxWriteRoots(fallback: readonly string[]): string[] {
+    return [
+      ...new Set([
+        ...(this.isolatedRoot ? [this.isolatedRoot] : fallback),
+        ...this.extraRoots,
+      ]),
+    ];
+  }
+
+  canReadSearchPath(_path: string): boolean {
+    return true;
+  }
+
+  canTraverseSearchPath(path: string): boolean {
+    return this.canReadSearchPath(path);
+  }
+
+  checkExplicitRules(
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Decision | null {
+    try {
+      const rules = this.ruleEngine
+        .snapshot()
+        .filter((rule) => rule.tool === toolName || rule.tool === "*")
+        .map((rule) => ({
+          ...rule,
+          pattern:
+            FILE_TOOLS.has(rule.tool) || rule.tool === "Glob"
+              ? normalizePathPattern(this.cwd, rule.pattern)
+              : rule.pattern,
+        }));
+      const rawContent = extractContent(toolName, args);
+      let effect: RuleEffect | null;
+      if (toolName === "Bash" || toolName === "PowerShell") {
+        const analysis = analyzeShell(rawContent, toolName === "PowerShell");
+        const effects = [
+          evaluateRules(rules, toolName, rawContent),
+          ...analysis.commands.flatMap((command) => [
+            evaluateRules(rules, toolName, command.content),
+            evaluateRules(
+              rules.filter((rule) => rule.effect !== "allow"),
+              toolName,
+              [
+                command.words[0].split(/[\\/]/u).at(-1),
+                ...command.words.slice(1),
+              ].join(" "),
+            ),
+          ]),
+        ];
+        if (effects.includes("deny")) {
+          effect = "deny";
+        } else if (!analysis.complete) {
+          const restrictive = rules.filter(
+            (rule) =>
+              (rule.tool === toolName || rule.tool === "*") &&
+              rule.effect !== "allow",
+          );
+          effect = restrictive.some((rule) => rule.effect === "deny")
+            ? "deny"
+            : "ask";
+          if (!restrictive.length) {
+            effect = null;
+          }
+        } else if (effects.includes("ask")) {
+          effect = "ask";
+        } else {
+          effect =
+            analysis.commands.length > 0 &&
+            analysis.commands.every(
+              (command) =>
+                evaluateRules(rules, toolName, command.content) === "allow",
+            )
+              ? "allow"
+              : null;
+        }
+      } else {
+        const content =
+          FILE_TOOLS.has(toolName) && rawContent
+            ? canonicalPath(resolveToolPath(this.cwd, rawContent))
+                .split(sep)
+                .join("/")
+            : toolName === "Glob" && rawContent
+              ? normalizePathPattern(
+                  resolveToolPath(this.cwd, strArg(args, "path", ".")),
+                  rawContent,
+                )
+              : rawContent;
+        effect = evaluateRules(rules, toolName, content);
+      }
+      return effect ? { effect, reason: `Permission rule: ${effect}` } : null;
+    } catch (error) {
+      return {
+        effect: "deny",
+        reason: `Permission path resolution failed: ${asErrorString(error)}`,
+      };
+    }
+  }
+
+  rememberPatterns(toolName: string, args: Record<string, unknown>): string[] {
+    const content = extractContent(toolName, args);
+    if (!content) {
+      return [];
+    }
+    if (FILE_TOOLS.has(toolName)) {
+      const abs = canonicalPath(resolveToolPath(this.cwd, content));
+      const isDir = statSync(abs, { throwIfNoEntry: false })?.isDirectory();
+      return [
+        `${toolName}(${escapeRuleLiteral((isDir ? abs : dirname(abs)).split(sep).join("/")).replace(/\/$/u, "")}/*)`,
+      ];
+    }
+    if (toolName === "Bash" || toolName === "PowerShell") {
+      const analysis = analyzeShell(content, toolName === "PowerShell");
+      if (
+        !analysis.complete ||
+        analysis.commands.some((command) =>
+          command.words.slice(0, 2).some((word) => /[\s*?\\]/u.test(word)),
+        )
+      ) {
+        return [];
+      }
+      return [
+        ...new Set(
+          analysis.commands.map(
+            (command) =>
+              `${toolName}(${escapeRuleLiteral(command.words.slice(0, 2).join(" "))}*)`,
+          ),
+        ),
+      ];
+    }
+    if (
+      toolName === "McpCall" &&
+      (!strArg(args, "server") || !strArg(args, "tool"))
+    ) {
+      return [];
+    }
+    if (
+      toolName === "McpCall" ||
+      toolName === "WebFetch" ||
+      toolName === "InstallSkill" ||
+      toolName === "TaskOutput"
+    ) {
+      return [`${toolName}(${escapeRuleLiteral(content)})`];
+    }
+    return [];
+  }
+
+  allowAlways(
+    toolName: string,
+    args: Record<string, unknown>,
+    patterns = this.rememberPatterns(toolName, args),
+  ): void {
+    for (const pattern of patterns) {
+      const match = RULE_RE.exec(pattern);
+      if (match?.[1] === toolName) {
+        this.ruleEngine.appendProjectRule({
+          tool: match[1],
+          pattern: match[2],
+          effect: "allow",
+        });
+      }
+    }
   }
 
   /**

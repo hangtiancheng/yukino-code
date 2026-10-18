@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { FileMailbox, type FileMailMessage } from "./file-mailbox.js";
@@ -15,7 +15,6 @@ import {
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_TEXT,
-  SHUTDOWN_PREFIX,
   isValidTeammateName,
   isShutdownRequest,
   planApprovalRequest,
@@ -39,9 +38,14 @@ import { createChildLogger } from "@/logger/index.js";
 import type { PermissionChecker } from "@/permissions/index.js";
 import { createPlanPath } from "@/plan-file/index.js";
 import { buildTeammatePrompt } from "@/prompt/delegation.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+} from "@/storage/private.js";
 import type { SubagentProgressEvent } from "@/subagent/spawn.js";
 import { asErrorString } from "@/utils/index.js";
 import { canonicalPath } from "@/utils/paths.js";
+import { escapeXml } from "@/utils/xml.js";
 
 // Submodule namespaces for library consumers (Teams.<Sub>.*).
 export * as Coordinator from "./coordinator.js";
@@ -220,7 +224,6 @@ export class Team {
   static readonly IDLE_POLL_INTERVAL_MS = 500;
   // The leader writes a mailbox message with this prefix to notify
   // teammates to exit.
-  static readonly SHUTDOWN_PREFIX = SHUTDOWN_PREFIX;
 
   spawnTeammate(
     name: string,
@@ -687,14 +690,7 @@ export class Team {
         `Teammate '${to}' is ${member.uiState.status} and cannot receive work`,
       );
     }
-    // A shutdown notice means the recipient is on its way out; showing it as
-    // "running" would misrepresent the state the UI settles on moments later.
-    if (
-      member.active &&
-      member.uiState &&
-      !member.pendingPlanApproval &&
-      !content.startsWith(Team.SHUTDOWN_PREFIX)
-    ) {
+    if (member.active && member.uiState && !member.pendingPlanApproval) {
       member.uiState.status = "running";
     }
     await member.mailbox.send(from, content);
@@ -996,18 +992,17 @@ export class TeamManager {
         continue;
       }
       const lines: string[] = [];
-      lines.push(`<task-notification team="${team.name}">`);
+      lines.push(`<task-notification team="${escapeXml(team.name)}">`);
       for (const msg of msgs) {
         const metadata = [
-          msg.type ? `type=${msg.type}` : "",
-          msg.requestId ? `requestId=${msg.requestId}` : "",
-          msg.approve === undefined ? "" : `approve=${String(msg.approve)}`,
+          `from="${escapeXml(msg.from)}"`,
+          msg.type ? `type="${escapeXml(msg.type)}"` : "",
+          msg.requestId ? `requestId="${escapeXml(msg.requestId)}"` : "",
+          msg.approve === undefined ? "" : `approve="${String(msg.approve)}"`,
         ]
           .filter(Boolean)
           .join(" ");
-        lines.push(
-          `from=${msg.from}${metadata ? ` ${metadata}` : ""}: ${msg.text}`,
-        );
+        lines.push(`<message ${metadata}>${escapeXml(msg.text)}</message>`);
       }
       lines.push("</task-notification>");
       out.push(lines.join("\n"));

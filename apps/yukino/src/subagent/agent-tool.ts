@@ -381,6 +381,12 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
           ctx.cwd,
         );
         cwdOverride = wt.path;
+        ctx = {
+          ...ctx,
+          permissionChecker: await (
+            ctx.permissionChecker ?? new PermissionChecker(ctx.cwd)
+          ).forWorktree(wt),
+        };
         effectivePrompt = `${buildWorktreeNotice(this.cwd, wt.path)}
 
 ${prompt}`;
@@ -576,6 +582,7 @@ ${prompt}`;
     // (setMemberMeta below) for the Leader/user to merge manually.
     let teammatePrompt = prompt;
     let memberCwd = ctx.cwd;
+    let worktreeChecker: PermissionChecker | undefined;
     if (worktreeIsolation) {
       try {
         const wt = await createAgentWorktree(
@@ -584,6 +591,9 @@ ${prompt}`;
           ctx.cwd,
         );
         memberCwd = wt.path;
+        worktreeChecker = await (
+          ctx.permissionChecker ?? new PermissionChecker(ctx.cwd)
+        ).forWorktree(wt);
         teammatePrompt = `${buildWorktreeNotice(this.cwd, wt.path)}
 
 ${prompt}`;
@@ -600,7 +610,7 @@ ${prompt}`;
     const parentChecker =
       ctx.permissionChecker ?? new PermissionChecker(this.cwd);
     this.teamManager.setPermissionChecker(parentChecker);
-    const checker = parentChecker.forSubagent(
+    const checker = (worktreeChecker ?? parentChecker).forSubagent(
       memberCwd,
       teammatePermissionMode,
     );
@@ -723,7 +733,9 @@ ${prompt}`;
         ctx = {
           ...ctx,
           cwd: worktree.path,
-          permissionChecker: ctx.permissionChecker?.forCwd(worktree.path),
+          permissionChecker: await (
+            ctx.permissionChecker ?? new PermissionChecker(ctx.cwd)
+          ).forWorktree(worktree),
         };
       }
       const { cloneRegistryForFork } = await import("./tool-filter.js");

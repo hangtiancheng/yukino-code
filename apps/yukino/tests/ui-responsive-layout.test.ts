@@ -390,6 +390,7 @@ describe("responsive terminal workspace", () => {
       createElement(PermissionDialog, {
         toolName: "Bash",
         argsSummary: "long command ".repeat(40),
+        rememberPatterns: ["Bash(git push*)"],
         reason: "Approval needed",
         onComplete: vi.fn(),
       }),

@@ -3,8 +3,6 @@ import {
   closeSync,
   constants as fsConstants,
   fstatSync,
-  mkdirSync,
-  openSync,
   readSync,
   statSync,
   unlinkSync,
@@ -20,6 +18,10 @@ import { formatShellOutput, MAX_SHELL_OUTPUT_BYTES } from "./shell-output.js";
 import { TaskOutputTool } from "./task-output.js";
 import type { ToolResult } from "./types.js";
 
+import {
+  mkdirPrivateSync as mkdirSync,
+  openPrivateFileSync as openSync,
+} from "@/storage/private.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import {
   buildPersistedOutputPreview,
