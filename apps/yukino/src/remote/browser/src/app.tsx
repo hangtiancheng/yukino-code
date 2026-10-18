@@ -25,12 +25,10 @@ import type {
   RewindChoice,
 } from "./types";
 
-/** Terminal PERMISSION_MODE_CYCLE: default → acceptEdits → bypassPermissions → plan. */
-const MODE_CYCLE: PermissionModeChoice[] = [
+const MODE_CYCLE: Exclude<PermissionModeChoice, "plan">[] = [
   "default",
   "acceptEdits",
   "bypassPermissions",
-  "plan",
 ];
 
 export function App() {

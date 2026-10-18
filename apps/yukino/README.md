@@ -214,7 +214,7 @@ Print, remote, ACP, and A2A modes require at least one configured provider; the 
 ```yaml
 # Initial permission mode. Enum: default (ask per write/command) | acceptEdits (auto-approve
 # file edits) | bypassPermissions (approve everything).
-# Other values fall back to default. Shift+Tab cycles these modes and plan mode.
+# Other values fall back to default. Shift+Tab cycles only these three modes.
 permission_mode: bypassPermissions
 
 # Model providers. At least one is required.
@@ -623,7 +623,7 @@ Inside the UI, these commands are available:
 | /skills              | List available skills                                                                                                                                                                       |
 | /skills reload       | Hot-reload skills from disk                                                                                                                                                                 |
 | /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`; `/skill reload` routes to `/skills reload`)                                                                                            |
-| /plan                | Enter plan mode (read-only investigation)                                                                                                                                                   |
+| /plan [task]         | Enter plan mode (read-only investigation); optionally start planning the given task immediately                                                                                             |
 | /goal [args]         | Set or view a persistent goal; pause, resume, replace, complete, clear, or continue after the turn limit                                                                                    |
 | /compact             | Force conversation compaction                                                                                                                                                               |
 | /clear               | Reset the session and clear the terminal                                                                                                                                                    |
@@ -654,7 +654,9 @@ Commands can run while the model is streaming, with at most one user command at 
 | ↓         | On the last input line, view all teammates and background subagents                 |
 | Ctrl+B    | Move running foreground Bash/PowerShell tasks to the background                     |
 | Ctrl+V    | Paste a clipboard image (Alt+V on Windows)                                          |
-| Shift+Tab | Cycle default → acceptEdits → bypassPermissions → plan                              |
+| Shift+Tab | Cycle default → acceptEdits → bypassPermissions → default                           |
+
+Enter plan mode with `/plan`, or use `/plan <task>` to enter and start planning immediately. In interactive terminal and browser sessions, the main agent can also call `EnterPlanMode` when a task needs planning. `Shift+Tab` and the browser's permission-mode badge only cycle the three execution permission modes; from plan mode, they return to `default`.
 
 Press ↓ on the last visual row of the input to view all teammates and background subagents, including while the foreground agent is streaming. Completion menus and prompt-history navigation take precedence. Enter opens an agent's details, Escape returns or closes the list, and the unsent draft and cursor are preserved. Teammate spawn cards scroll with the transcript like background subagent cards; current progress is available in the Agents list.
 

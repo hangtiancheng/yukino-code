@@ -502,15 +502,13 @@ describe("App plan approval", () => {
       message: "Entered YOLO mode.",
     },
   ])(
-    "uses $mode after $approval for a plan entered with Shift+Tab",
+    "uses $mode after $approval for a plan entered with /plan",
     async ({ keys, mode, effect, message }) => {
       vi.stubEnv("YUKINO_BYPASS_PERMISSIONS", "");
       const entered = vi.spyOn(PermissionChecker.prototype, "enterPlanMode");
       await start();
       await finishRequest(0);
-      for (let index = 0; index < 3; index++) {
-        await press("\x1b[Z");
-      }
+      await submit("/plan ");
       expect(entered).toHaveBeenCalledOnce();
       const checker = entered.mock.contexts[0];
       if (!(checker instanceof PermissionChecker)) {

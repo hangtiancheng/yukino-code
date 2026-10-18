@@ -3558,9 +3558,7 @@ export function App({
                       : undefined,
             permMode,
             onModeChange: (mode) => {
-              if (mode === "plan") {
-                enterPlanModeUI();
-              } else if (permModeRef.current === "plan") {
+              if (permModeRef.current === "plan") {
                 const planPath = checkerRef.current?.planFilePath ?? "";
                 conversationRef.current.addSystemReminder(
                   buildPlanModeExitReminder(

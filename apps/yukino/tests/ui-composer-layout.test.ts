@@ -1592,7 +1592,7 @@ describe("persistent composer drafts and input behavior", () => {
   it.each([
     ["default", "acceptEdits"],
     ["acceptEdits", "bypassPermissions"],
-    ["bypassPermissions", "plan"],
+    ["bypassPermissions", "default"],
     ["plan", "default"],
   ] as const)(
     "retains Tab completion while Shift+Tab switches %s to %s",

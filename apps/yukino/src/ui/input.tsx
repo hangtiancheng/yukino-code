@@ -36,7 +36,10 @@ import {
 import { parseUserBashCommand } from "@/conversation/user-bash.js";
 import { saveClipboardImage } from "@/images/clipboard.js";
 import { createChildLogger } from "@/logger/index.js";
-import type { PermissionMode } from "@/permissions/index.js";
+import type {
+  NonPlanPermissionMode,
+  PermissionMode,
+} from "@/permissions/index.js";
 import { ICONS, THEME } from "@/ui/styles.js";
 import { scanCwdFiles } from "@/utils/file-scan.js";
 
@@ -61,11 +64,10 @@ const SPINNER_FRAMES = [
 
 export type { InputDraft } from "./input-draft.js";
 
-const PERMISSION_MODE_CYCLE: PermissionMode[] = [
+const PERMISSION_MODE_CYCLE: NonPlanPermissionMode[] = [
   "default",
   "acceptEdits",
   "bypassPermissions",
-  "plan",
 ];
 
 interface InputBoxProps {
@@ -83,7 +85,7 @@ interface InputBoxProps {
   statusLabel?: string;
   usageTracker?: CommandUsageTracker;
   permMode?: PermissionMode;
-  onModeChange?: (mode: PermissionMode) => void;
+  onModeChange?: (mode: NonPlanPermissionMode) => void;
   cwd?: string;
   sessionId?: string;
   /** Bumped by the parent when workspace file facts change (file writes, agent
@@ -655,7 +657,7 @@ export function InputBox(props: InputBoxProps) {
     }
 
     if ((input === "\x1b[Z" || (key.tab && key.shift)) && onModeChange) {
-      const idx = PERMISSION_MODE_CYCLE.indexOf(permMode);
+      const idx = PERMISSION_MODE_CYCLE.findIndex((mode) => mode === permMode);
       const next =
         PERMISSION_MODE_CYCLE[(idx + 1) % PERMISSION_MODE_CYCLE.length];
       onModeChange(next);
