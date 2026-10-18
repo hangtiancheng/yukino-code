@@ -306,7 +306,7 @@ export async function createAgentWorktree(
     ).stdout.trim();
 
   const worktreeDir = yukinoPath("worktrees", projectKey(root), slug);
-  const branch = `worktree-${slug}`;
+  const branch = `worktree/${slug}/work`;
 
   // Validate that an existing directory is really a worktree root before reusing
   // it: git otherwise searches parent directories and would report the main
@@ -405,6 +405,8 @@ export async function createAgentWorktree(
 interface OwnedWorktree extends WorktreeResult {
   gitDir: string;
   commonDir: string;
+  writeRoots: readonly string[];
+  tempDir: string;
 }
 
 export class OwnedWorktrees {
@@ -424,6 +426,17 @@ export class OwnedWorktrees {
       ["rev-parse", "--git-common-dir"],
       { cwd: path },
     );
+    const commonDir = canonicalPath(resolve(path, stdout.trim()));
+    const branchDirectory = dirname(worktree.branch);
+    if (!isSafeRefName(worktree.branch) || branchDirectory === ".") {
+      throw new Error("Worktree branch requires an isolated ref directory");
+    }
+    const refDir = join(commonDir, "refs", "heads", branchDirectory);
+    const logDir = join(commonDir, "logs", "refs", "heads", branchDirectory);
+    const tempDir = join(gitDir, "yukino-tmp");
+    await mkdir(refDir, { recursive: true });
+    await mkdir(logDir, { recursive: true });
+    await mkdir(tempDir, { recursive: true, mode: 0o700 });
     this.records.set(
       path,
       Object.freeze({
@@ -431,10 +444,29 @@ export class OwnedWorktrees {
         path,
         gitRoot: canonicalPath(worktree.gitRoot),
         gitDir,
-        commonDir: canonicalPath(resolve(path, stdout.trim())),
+        commonDir,
+        // Git needs its per-tree index, shared object store and this tree's
+        // ref locks. Never grant the common Git directory or sibling refs.
+        writeRoots: Object.freeze([
+          gitDir,
+          canonicalPath(join(commonDir, "objects")),
+          canonicalPath(refDir),
+          canonicalPath(logDir),
+        ]),
+        tempDir,
       }),
     );
     return true;
+  }
+
+  sandboxWriteRoots(): string[] {
+    return [...this.records.values()].flatMap((record) => [
+      ...record.writeRoots,
+    ]);
+  }
+
+  tempDirectory(path: string): string | undefined {
+    return this.records.get(canonicalPath(path))?.tempDir;
   }
 
   async cleanup(requested: string): Promise<string> {

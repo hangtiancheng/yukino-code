@@ -829,8 +829,15 @@ export class PermissionChecker {
       ...new Set([
         ...(this.isolatedRoot ? [this.isolatedRoot] : fallback),
         ...this.extraRoots,
+        ...this.worktrees.sandboxWriteRoots(),
       ]),
     ];
+  }
+
+  sandboxTempDirectory(): string | undefined {
+    return this.isolatedRoot
+      ? this.worktrees.tempDirectory(this.isolatedRoot)
+      : undefined;
   }
 
   canReadSearchPath(_path: string): boolean {

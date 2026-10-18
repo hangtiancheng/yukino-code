@@ -73,7 +73,7 @@ export function analyzeShell(
         !words[0] ||
         COMPLEX_COMMANDS.has(executable.replace(/\.exe$/u, "")) ||
         /[\s*?[\]~]/u.test(words[0]) ||
-        /^[\w]+=/u.test(words[0])
+        /^[a-zA-Z_][a-zA-Z0-9_]*\+?=/u.test(words[0])
       ) {
         complete = false;
       }

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -26,6 +27,7 @@ import { GlobTool } from "@/tools/glob.js";
 import { GrepTool } from "@/tools/grep.js";
 import { ReadFileTool } from "@/tools/read-file.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import { canonicalPath } from "@/utils/paths.js";
 
 const directories: string[] = [];
 const cwd = () => {
@@ -52,6 +54,25 @@ const modes: PermissionMode[] = [
 const separators = ["\n", "\r\n", ";", "&&", "||", "|", "&"];
 
 describe("shell explicit rules", () => {
+  it("does not hide an executable behind Bash append assignments", () => {
+    const directory = cwd();
+    rules(directory, [{ rule: "Bash(printf *)", effect: "deny" }]);
+    const command = "REVIEW_PROBE+=x printf marker";
+    expect(execFileSync("bash", ["-c", command], { encoding: "utf8" })).toBe(
+      "marker",
+    );
+    expect(analyzeShell(command).complete).toBe(false);
+    for (const mode of modes) {
+      const checker = new PermissionChecker(directory, mode);
+      for (const sandbox of [false, true]) {
+        checker.sandboxEnabled = checker.sandboxAutoAllow = sandbox;
+        expect(checker.check("Bash", "command", { command }).effect).toBe(
+          "deny",
+        );
+      }
+    }
+  });
+
   it.each(separators)(
     "checks every segment separated by %j in every mode",
     (separator) => {
@@ -146,6 +167,7 @@ describe("shell explicit rules", () => {
     "r[m] target",
     'bash -c "rm target"',
     "echo ok > target",
+    "REVIEW_PROBE+=x rm target",
   ])("does not let prefixes authorize uninspectable syntax: %s", (command) => {
     const directory = cwd();
     rules(directory, [
@@ -312,7 +334,7 @@ describe("canonical file rules", () => {
     checker.allowAlways("WriteFile", { file_path: "alias/new.md" });
     expect(
       checker.rememberPatterns("WriteFile", { file_path: "alias/new.md" }),
-    ).toEqual([`WriteFile(${join(directory, "allowed")}/*)`]);
+    ).toEqual([`WriteFile(${canonicalPath(join(directory, "allowed"))}/*)`]);
   });
 
   it("preserves explicit outside-root grants and rejects malformed rules without crashing", () => {

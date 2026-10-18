@@ -15,6 +15,7 @@ import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
 
 import { PermissionChecker } from "@/permissions/index.js";
 import type { SandboxConfig } from "@/sandbox/index.js";
+import { SeatbeltSandbox } from "@/sandbox/seatbelt.js";
 import { yukinoPath, projectKey } from "@/storage/index.js";
 import { BashTool } from "@/tools/bash.js";
 import { EnterWorktreeTool } from "@/tools/enter-worktree.js";
@@ -178,12 +179,12 @@ describe("worktree creation safety", () => {
     );
     expect(existsSync(join(directory, ".git"))).toBe(false);
     expect(git(repo, "rev-parse", "HEAD")).toBe(head);
-    expect(git(repo, "branch", "--list", "worktree-ordinary")).toBe("");
+    expect(git(repo, "branch", "--list", "worktree/ordinary/work")).toBe("");
   });
 
   it("reuses a residual branch without resetting its unmerged commit", async () => {
     const repo = initRepo();
-    git(repo, "switch", "-c", "worktree-residual");
+    git(repo, "switch", "-c", "worktree/residual/work");
     writeFileSync(join(repo, "unique.txt"), "preserve this work\n");
     git(repo, "add", "unique.txt");
     git(repo, "commit", "-q", "-m", "unique work");
@@ -193,7 +194,7 @@ describe("worktree creation safety", () => {
 
     const worktree = await createAgentWorktree("residual", repo);
     expect(worktree.headCommit).toBe(tip);
-    expect(git(repo, "rev-parse", "worktree-residual")).toBe(tip);
+    expect(git(repo, "rev-parse", "worktree/residual/work")).toBe(tip);
     expect(readFileSync(join(worktree.path, "unique.txt"), "utf-8")).toBe(
       "preserve this work\n",
     );
@@ -369,7 +370,9 @@ describe("runtime worktree ownership and sandbox roots", () => {
       { slug: "entered" },
     );
     expect(entered.isError).toBe(false);
-    const enteredPath = yukinoPath("worktrees", projectKey(repo), "entered");
+    const enteredPath = realpathSync(
+      yukinoPath("worktrees", projectKey(repo), "entered"),
+    );
     expect(parent.sandboxWriteRoots([repo])).toContain(enteredPath);
     const first = await createAgentWorktree("first", repo);
     const second = await createAgentWorktree("second", repo);
@@ -417,14 +420,80 @@ describe("runtime worktree ownership and sandbox roots", () => {
       ),
     ]);
     expect(results.every((result) => !result.isError)).toBe(true);
-    expect(captured[0].allowWrite).toContain(first.path);
-    expect(captured[0].allowWrite).not.toContain(second.path);
-    expect(captured[1].allowWrite).toContain(second.path);
+    expect(captured[0].allowWrite).toContain(realpathSync(first.path));
+    expect(captured[0].allowWrite).not.toContain(realpathSync(second.path));
+    expect(captured[1].allowWrite).toContain(realpathSync(second.path));
     for (const config of captured) {
       expect(config.allowWrite).not.toContain(repo);
+      expect(config.allowWrite).not.toContain(join(repo, ".git"));
       expect(config.allowWrite).not.toContain(tmpdir());
       expect(config.denyWrite).toEqual(tool.sandboxConfig.denyWrite);
     }
+    expect(captured[0].allowWrite).toContain(
+      join(repo, ".git", "worktrees", "first"),
+    );
+    expect(captured[0].allowWrite).not.toContain(
+      join(repo, ".git", "worktrees", "second"),
+    );
+    expect(captured[0].allowWrite).toContain(
+      join(repo, ".git", "refs", "heads", "worktree", "first"),
+    );
+    expect(captured[0].allowWrite).not.toContain(
+      join(repo, ".git", "refs", "heads"),
+    );
     expect(tool.sandboxConfig.allowWrite).toEqual([repo, tmpdir()]);
   });
+
+  it.skipIf(process.platform !== "darwin")(
+    "can stage and commit in a native sandbox without granting parent or sibling writes",
+    async () => {
+      const repo = initRepo();
+      const initial = git(repo, "rev-parse", "HEAD");
+      const first = await createAgentWorktree("native-first", repo);
+      const second = await createAgentWorktree("native-second", repo);
+      const checker = await new PermissionChecker(
+        repo,
+        "acceptEdits",
+      ).forWorktree(first);
+      const tool = new BashTool();
+      tool.sandbox = new SeatbeltSandbox();
+      tool.sandboxConfig = {
+        allowWrite: [repo, tmpdir()],
+        denyWrite: [join(first.path, "protected")],
+        networkEnabled: false,
+      };
+      mkdirSync(join(first.path, "protected"));
+      const ctx = {
+        cwd: first.path,
+        permissionChecker: checker,
+        sessionId: "native-worktree",
+      };
+      const result = await tool.execute(ctx, {
+        command:
+          "printf 'changed\\n' > tracked.txt && git -c core.fsmonitor=false add tracked.txt && git -c commit.gpgsign=false -c gc.auto=0 commit -qm update && mktemp",
+      });
+      expect(result.isError, result.output).toBe(false);
+      expect(result.output).toContain(checker.sandboxTempDirectory());
+      expect(git(first.path, "rev-parse", "HEAD")).not.toBe(initial);
+      expect(git(repo, "rev-parse", "HEAD")).toBe(initial);
+      expect(git(second.path, "rev-parse", "HEAD")).toBe(initial);
+      const quote = (path: string) => `'${path.replaceAll("'", "'\\''")}'`;
+      for (const path of [
+        join(repo, "blocked.txt"),
+        join(second.path, "blocked.txt"),
+        join(first.path, "protected", "blocked.txt"),
+      ]) {
+        const denied = await tool.execute(ctx, {
+          command: `touch ${quote(path)}`,
+        });
+        expect(denied.isError, denied.output).toBe(true);
+        expect(existsSync(path)).toBe(false);
+      }
+      const mainRef = await tool.execute(ctx, {
+        command: "git update-ref refs/heads/main HEAD",
+      });
+      expect(mainRef.isError, mainRef.output).toBe(true);
+      expect(git(repo, "rev-parse", "HEAD")).toBe(initial);
+    },
+  );
 });

@@ -266,6 +266,16 @@ export class BashTool implements Tool {
             commandId: ctx.toolCallId,
           },
         );
+        const tempDirectory = ctx.permissionChecker?.sandboxTempDirectory();
+        if (tempDirectory) {
+          prepared.env = {
+            ...process.env,
+            ...prepared.env,
+            TMPDIR: tempDirectory,
+            TMP: tempDirectory,
+            TEMP: tempDirectory,
+          };
+        }
       } catch (error) {
         discardOutputFile();
         return {

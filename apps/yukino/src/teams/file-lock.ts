@@ -109,8 +109,8 @@ function createContender(lockDir: string): LockContender {
   const choosingPath = join(lockDir, `choosing-${id}`);
 
   while (true) {
-    mkdirSync(lockDir, { recursive: true });
     try {
+      mkdirSync(lockDir, { recursive: true });
       writeFileSync(choosingPath, ownerIdentity(), { flag: "wx" });
       break;
     } catch (err: unknown) {
