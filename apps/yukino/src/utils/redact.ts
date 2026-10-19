@@ -4,7 +4,9 @@ export function environmentSecrets(): string[] {
   return Object.entries(process.env).flatMap(([key, value]) =>
     /api[_-]?key|token|secret|password|private[_-]?key|credential|dsn/iu.test(
       key,
-    ) && value
+    ) &&
+    value &&
+    value.length > 3
       ? [value, encodeURIComponent(value)]
       : [],
   );

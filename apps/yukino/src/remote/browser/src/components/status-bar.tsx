@@ -48,7 +48,7 @@ export function StatusBar(props: StatusBarProps) {
         ? "text-yellow"
         : "text-red";
   return (
-    <footer className="shrink-0 px-3 pb-2 text-xs text-muted [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))] sm:px-5">
+    <footer className="shrink-0 px-3 pb-2 text-xs text-muted sm:px-5">
       <div className="flex min-w-0 items-baseline gap-3">
         <span className="min-w-0 flex-1 truncate" title={props.cwd}>
           {props.cwd || "Yukino"}
