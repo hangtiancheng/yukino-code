@@ -73,6 +73,7 @@ describe("custom subagent permission modes", () => {
         "default",
         "acceptEdits",
         "bypassPermissions",
+        "plan",
       ] as const) {
         await spawnSubagent(
           definition,
@@ -88,9 +89,10 @@ describe("custom subagent permission modes", () => {
         );
       }
       expect(observed).toEqual([
-        mode === "bypassPermissions" ? "default" : mode,
-        "acceptEdits",
+        mode,
+        mode === "bypassPermissions" ? "bypassPermissions" : "acceptEdits",
         "bypassPermissions",
+        mode,
       ]);
     },
   );

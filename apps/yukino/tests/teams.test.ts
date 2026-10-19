@@ -314,7 +314,7 @@ describe("teams orchestration", () => {
     await mgr.deleteAll();
   });
 
-  it("inherits the parent's live permission mode, including plan", async () => {
+  it("inherits live parent execution modes and maps parent plan to default", async () => {
     const project = cwd();
     const mgr = new TeamManager(project);
     mgr.create("squad");
@@ -340,10 +340,10 @@ describe("teams orchestration", () => {
       },
     );
     try {
-      expect(captured[0].mode).toBe("plan");
+      expect(captured[0].mode).toBe("default");
       expect(
         captured[0].check("Bash", "command", { command: "pnpm test" }).effect,
-      ).toBe("deny");
+      ).toBe("ask");
       parent.mode = "default";
       expect(
         captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,
@@ -353,7 +353,7 @@ describe("teams orchestration", () => {
         captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,
       ).toBe("allow");
       parent.mode = "plan";
-      expect(captured[0].mode).toBe("plan");
+      expect(captured[0].mode).toBe("default");
       expect(readTeamFile(project, "squad")?.permissionMode).toBe("plan");
     } finally {
       await mgr.deleteAll();

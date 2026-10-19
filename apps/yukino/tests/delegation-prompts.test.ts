@@ -139,9 +139,15 @@ describe("delegated prompt contracts", () => {
     },
   );
 
-  it.each([false, true])(
+  it.each([
+    undefined,
+    "default",
+    "acceptEdits",
+    "plan",
+    "bypassPermissions",
+  ] as const)(
     "uses live parent permissions with configured mode overrides (%s)",
-    async (readOnly) => {
+    async (permissionMode) => {
       const dir = cwd();
       const parent = new PermissionChecker(dir);
       const executed: string[] = [];
@@ -198,7 +204,7 @@ describe("delegated prompt contracts", () => {
         {
           name: "worker",
           description: "work",
-          ...(readOnly ? { permissionMode: "plan" as const } : {}),
+          ...(permissionMode ? { permissionMode } : {}),
         },
         "work",
         client,
@@ -210,7 +216,12 @@ describe("delegated prompt contracts", () => {
         undefined,
         parent,
       );
-      expect(executed).toEqual(["acceptEdits", "bypassPermissions"]);
+      expect(executed).toEqual(
+        permissionMode === "acceptEdits" ||
+          permissionMode === "bypassPermissions"
+          ? modes
+          : ["acceptEdits", "bypassPermissions"],
+      );
       expect(parent.mode).toBe("default");
     },
   );

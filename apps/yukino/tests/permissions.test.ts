@@ -245,7 +245,7 @@ describe.each(["main", "subagent", "teammate"] as const)(
       expect(pathCheck).not.toHaveBeenCalled();
     });
 
-    it("follows live parent mode changes including plan", () => {
+    it("follows live parent execution modes and handles parent plan mode", () => {
       const parent = new PermissionChecker(makeTmpDir(), "acceptEdits");
       const checker = forAgent(parent);
       const args = { file_path: outsideFile() };
@@ -253,7 +253,10 @@ describe.each(["main", "subagent", "teammate"] as const)(
       parent.mode = "bypassPermissions";
       expect(checker.check("WriteFile", "write", args).effect).toBe("allow");
       parent.mode = "plan";
-      expect(checker.check("WriteFile", "write", args).effect).toBe("deny");
+      expect(checker.mode).toBe(kind === "main" ? "plan" : "default");
+      expect(checker.check("WriteFile", "write", args).effect).toBe(
+        kind === "main" ? "deny" : "ask",
+      );
       parent.mode = "default";
       expect(checker.check("WriteFile", "write", args).effect).toBe("ask");
       expect(checker.check("ReadFile", "read", args).effect).toBe("allow");
@@ -280,7 +283,7 @@ describe.each(["main", "subagent", "teammate"] as const)(
           expect(
             checker.check("WriteFile", "write", { file_path: outsideFile() }),
           ).toEqual(
-            mode === "plan"
+            mode === "plan" && kind === "main"
               ? { effect: "deny", reason: "Plan mode forbids mutations" }
               : { effect, reason: `Permission rule: ${effect}` },
           );
@@ -422,49 +425,78 @@ describe("delegated permission modes", () => {
   const modes = [
     "default",
     "acceptEdits",
-    "plan",
     "bypassPermissions",
+    "plan",
   ] as const;
-  it.each(modes)("inherits %s when no mode is configured", (mode) => {
-    const parent = new PermissionChecker(makeTmpDir(), mode);
-    const child = parent.forSubagent(makeTmpDir());
-    expect(child.mode).toBe(mode);
-    for (const next of modes) {
-      parent.mode = next;
-      expect(child.mode).toBe(next);
-    }
-  });
-  it.each(modes)(
-    "resolves every configured mode under parent %s",
-    (parentMode) => {
-      const parent = new PermissionChecker(makeTmpDir(), parentMode);
-      for (const configured of modes) {
-        const child = parent.forSubagent(makeTmpDir(), configured);
-        const expected =
-          parentMode === "acceptEdits" ||
-          parentMode === "bypassPermissions" ||
-          configured === "bypassPermissions"
-            ? parentMode
-            : configured;
-        expect(child.mode).toBe(expected);
-        expect(child.forCwd(makeTmpDir()).mode).toBe(expected);
+  const configuredModes = [
+    [undefined, ["default", "acceptEdits", "bypassPermissions", "default"]],
+    ["default", ["default", "acceptEdits", "bypassPermissions", "default"]],
+    [
+      "acceptEdits",
+      ["acceptEdits", "acceptEdits", "bypassPermissions", "acceptEdits"],
+    ],
+    [
+      "bypassPermissions",
+      [
+        "bypassPermissions",
+        "bypassPermissions",
+        "bypassPermissions",
+        "bypassPermissions",
+      ],
+    ],
+    ["plan", ["plan", "acceptEdits", "bypassPermissions", "plan"]],
+  ] as const;
+  it.each(
+    [false, true].flatMap((teammate) =>
+      configuredModes.map(([configured, expected]) => ({
+        teammate,
+        configured,
+        expected,
+      })),
+    ),
+  )(
+    "resolves $configured across live parent changes (teammate=$teammate)",
+    ({ teammate, configured, expected }) => {
+      const parent = new PermissionChecker(makeTmpDir());
+      const child = parent.forSubagent(makeTmpDir(), configured);
+      child.teammate = teammate;
+      const scoped = child.forCwd(makeTmpDir());
+      for (const [index, mode] of modes.entries()) {
+        parent.mode = mode;
+        expect(child.mode).toBe(expected[index]);
+        expect(scoped.mode).toBe(expected[index]);
       }
     },
   );
-  it("keeps child transitions local and removes bypass when the parent exits it", () => {
-    const parent = new PermissionChecker(makeTmpDir());
-    const child = parent.forSubagent(makeTmpDir(), "plan");
-    const sibling = parent.forSubagent(makeTmpDir());
-    child.mode = "acceptEdits";
-    expect(parent.mode).toBe("default");
-    expect(sibling.mode).toBe("default");
-    child.mode = "bypassPermissions";
-    expect(child.mode).toBe("default");
-    parent.mode = "bypassPermissions";
-    expect(child.mode).toBe("bypassPermissions");
-    parent.mode = "plan";
-    expect(child.mode).toBe("plan");
-  });
+  it.each([false, true])(
+    "keeps child transitions local and retains explicit bypass across parent changes (teammate=%s)",
+    (teammate) => {
+      const parent = new PermissionChecker(makeTmpDir());
+      const child = parent.forSubagent(makeTmpDir(), "plan");
+      child.teammate = teammate;
+      const sibling = parent.forSubagent(makeTmpDir());
+      child.mode = "acceptEdits";
+      expect(parent.mode).toBe("default");
+      expect(sibling.mode).toBe("default");
+      child.mode = "bypassPermissions";
+      expect(child.mode).toBe("bypassPermissions");
+      parent.mode = "acceptEdits";
+      expect(child.mode).toBe("bypassPermissions");
+      expect(
+        child.check("Bash", "command", { command: "pnpm test" }).effect,
+      ).toBe("allow");
+      parent.mode = "bypassPermissions";
+      expect(child.mode).toBe("bypassPermissions");
+      for (const mode of ["default", "plan"] as const) {
+        parent.mode = mode;
+        expect(child.mode).toBe("bypassPermissions");
+        expect(sibling.mode).toBe("default");
+        expect(
+          child.check("WriteFile", "write", { file_path: "a.ts" }).effect,
+        ).toBe("allow");
+      }
+    },
+  );
   it.each(["allow", "ask"])(
     "plan rejects writes despite an explicit %s rule or sandbox auto-allow",
     (effect) => {

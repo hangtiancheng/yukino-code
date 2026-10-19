@@ -412,7 +412,7 @@ describe("remote execution boundaries", () => {
         captured[0].check("Bash", "command", { command: "pnpm test" }).effect,
       ).toBe("allow");
       handle.permissionMode = "plan";
-      expect(captured[0].mode).toBe("plan");
+      expect(captured[0].mode).toBe("default");
       handle.permissionMode = "default";
       expect(
         captured[0].check("WriteFile", "write", { file_path: "a.ts" }).effect,

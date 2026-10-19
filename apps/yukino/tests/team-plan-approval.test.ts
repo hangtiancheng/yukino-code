@@ -376,6 +376,16 @@ describe("coordinator teammate plan reviews", () => {
       expect(modes).toHaveLength(2);
     });
     expect(modes).toEqual(["plan", "bypassPermissions"]);
+    const checker = defined(
+      defined(defined(manager.get("squad")).getMember("planner")).checker,
+    );
+    for (const mode of ["default", "acceptEdits", "plan"] as const) {
+      parent.mode = mode;
+      expect(checker.mode).toBe("bypassPermissions");
+      expect(
+        checker.check("WriteFile", "write", { file_path: "project.ts" }).effect,
+      ).toBe("allow");
+    }
   });
 });
 

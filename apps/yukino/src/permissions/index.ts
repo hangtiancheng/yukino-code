@@ -576,11 +576,14 @@ export class PermissionChecker {
       return "plan";
     }
     const parentMode = this.parent.mode;
-    if (parentMode === "acceptEdits" || parentMode === "bypassPermissions") {
-      return parentMode;
-    }
     const mode = this.modeState.value;
-    return mode === "bypassPermissions" ? parentMode : (mode ?? parentMode);
+    if (parentMode === "bypassPermissions" || mode === "bypassPermissions") {
+      return "bypassPermissions";
+    }
+    if (parentMode === "acceptEdits") {
+      return "acceptEdits";
+    }
+    return mode ?? "default";
   }
 
   set mode(mode: PermissionMode) {
