@@ -581,6 +581,7 @@ export function App({
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
   const [feedbackActive, setFeedbackActive] = useState(false);
   const [feedbackDescription, setFeedbackDescription] = useState("");
+  const [feedbackProgress, setFeedbackProgress] = useState<string | null>(null);
   const [issueApprovalRequest, setIssueApprovalRequest] = useState<
     IssueDraft[] | null
   >(null);
@@ -3138,9 +3139,7 @@ export function App({
       },
       contextWindow: contextWindowRef.current,
       abortSignal: controller.signal,
-      onProgress: (message) => {
-        setMessages((prev) => [...prev, { role: "system", content: message }]);
-      },
+      onProgress: setFeedbackProgress,
       confirmIssues: (issues) =>
         new Promise<IssueConfirmation>((resolve) => {
           setMessages((prev) => [
@@ -3168,6 +3167,7 @@ export function App({
         setMessages((prev) => [...prev, { role: "system", content: message }]);
       })
       .finally(() => {
+        setFeedbackProgress(null);
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
         }
@@ -3300,6 +3300,13 @@ export function App({
             isAsking={askRequest !== null}
             expanded={toolsExpanded}
           />
+          {feedbackProgress && !issueApprovalRequest ? (
+            <Box paddingLeft={1}>
+              <Text color={THEME.muted} wrap="truncate-end">
+                {feedbackProgress}
+              </Text>
+            </Box>
+          ) : null}
           {userBash.tool && (
             <ToolBlock tool={userBash.tool} expanded={toolsExpanded} />
           )}

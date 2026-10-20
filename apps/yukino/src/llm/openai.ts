@@ -235,7 +235,7 @@ export class OpenAIClient implements LLMClient {
     const input: OpenAI.Responses.ResponseCreateParamsStreaming["input"] = [];
     input.push({
       role: "system" as const,
-      content: this.systemPrompt,
+      content: options?.systemPrompt ?? this.systemPrompt,
     });
 
     for (const message of messages) {
@@ -945,7 +945,7 @@ export class OpenAICompatClient implements LLMClient {
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       {
         role: "system",
-        content: this.systemPrompt,
+        content: options?.systemPrompt ?? this.systemPrompt,
       },
 
       ...buildChatCompletionMessages(

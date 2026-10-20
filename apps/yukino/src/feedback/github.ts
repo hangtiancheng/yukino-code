@@ -1,27 +1,74 @@
 import { execFile, spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { promisify } from "node:util";
+import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { promisify, stripVTControlCharacters } from "node:util";
 
 import { z } from "zod";
 
 import {
   DESIRED_LABELS,
   FEEDBACK_REPO,
+  GITHUB_ERROR_DETAIL_CHARS,
+  GIST_FILENAME,
+  GIST_MAX_ATTEMPTS,
+  GIST_RETRY_DELAY_MS,
+  GIST_UPLOAD_TOO_LARGE_MESSAGE,
+  GH_COMMAND_FAILED_MESSAGE,
   GH_UPLOAD_TIMEOUT_MS,
   GITHUB_URL_LIMIT,
+  MAX_GIST_BYTES,
   NETWORK_TIMEOUT_MS,
   PROBE_TIMEOUT_MS,
 } from "@/feedback/constants.js";
 import type { CollectedFile, FeedbackChannel } from "@/feedback/types.js";
-import {
-  mkdirPrivateSync as mkdirSync,
-  writePrivateFileSync as writeFileSync,
-} from "@/storage/private.js";
+import { writePrivateFileSync as writeFileSync } from "@/storage/private.js";
 import { version } from "@/version.js";
 
 const execFileAsync = promisify(execFile);
+
+class GitHubRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
+
+const GhErrorSchema = z.object({
+  stderr: z.string().optional(),
+  code: z.union([z.string(), z.number()]).optional(),
+});
+
+function conciseDetail(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, GITHUB_ERROR_DETAIL_CHARS);
+}
+
+async function runGh(
+  args: string[],
+  options: { timeout: number; signal?: AbortSignal },
+): Promise<{ stdout: string }> {
+  try {
+    return await execFileAsync("gh", args, options);
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    const parsed = GhErrorSchema.safeParse(error);
+    const stderr = parsed.success ? parsed.data.stderr : undefined;
+    const status = /\bHTTP\s+(\d{3})\b/i.exec(stderr ?? "");
+    const detail = stderr
+      ? conciseDetail(stderr)
+      : `${GH_COMMAND_FAILED_MESSAGE}${parsed.success && parsed.data.code ? ` (${String(parsed.data.code)})` : ""}`;
+    throw new GitHubRequestError(
+      detail,
+      status ? Number(status[1]) : undefined,
+    );
+  }
+}
 
 function githubToken(): string | undefined {
   return process.env.GH_TOKEN || process.env.GITHUB_TOKEN || undefined;
@@ -63,51 +110,23 @@ function apiHeaders(token: string): Record<string, string> {
 async function errorDetail(response: Response): Promise<string> {
   const text = await response.text().catch(() => "");
   return text
-    ? `${String(response.status)} ${text.slice(0, 200)}`
+    ? `${String(response.status)} ${conciseDetail(text)}`
     : String(response.status);
 }
 
-/** Gist file names cannot contain path separators. */
-function flattenName(name: string): string {
-  return name.replace(/[^\w.-]+/g, "_");
-}
-
-function gistContent(content: string): string {
-  return content.trim()
-    ? content
-    : `${JSON.stringify({
-        _note:
-          "Empty or whitespace-only attachment. Original content is JSON-encoded in content.",
-        content,
-      })}\n`;
-}
-
-export async function createGist(
+async function uploadGist(
   channel: "gh" | "token",
-  files: CollectedFile[],
+  content: string,
   description: string,
   abortSignal?: AbortSignal,
 ): Promise<string> {
-  if (files.length === 0) {
-    throw new Error("No attachment files to upload");
-  }
-  const gistFiles: Record<string, { content: string }> = {};
-  for (const file of files) {
-    gistFiles[flattenName(file.name)] = { content: gistContent(file.content) };
-  }
   if (channel === "gh") {
     const dir = mkdtempSync(join(tmpdir(), "yukino-feedback-"));
     try {
-      const paths: string[] = [];
-      for (const [name, file] of Object.entries(gistFiles)) {
-        const target = join(dir, name);
-        mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, file.content);
-        paths.push(target);
-      }
-      const { stdout } = await execFileAsync(
-        "gh",
-        ["gist", "create", ...paths, "--desc", description],
+      const target = join(dir, GIST_FILENAME);
+      writeFileSync(target, content);
+      const { stdout } = await runGh(
+        ["gist", "create", target, "--desc", description],
         { timeout: GH_UPLOAD_TIMEOUT_MS, signal: abortSignal },
       );
       const url = stdout.trim().split("\n").pop() ?? "";
@@ -127,11 +146,18 @@ export async function createGist(
   const response = await fetch("https://api.github.com/gists", {
     method: "POST",
     headers: apiHeaders(token),
-    body: JSON.stringify({ description, public: false, files: gistFiles }),
+    body: JSON.stringify({
+      description,
+      public: false,
+      files: { [GIST_FILENAME]: { content } },
+    }),
     signal: networkSignal(abortSignal),
   });
   if (!response.ok) {
-    throw new Error(`Gist creation failed: ${await errorDetail(response)}`);
+    throw new GitHubRequestError(
+      `Gist creation failed: ${await errorDetail(response)}`,
+      response.status,
+    );
   }
   const json: unknown = await response.json().catch(() => null);
   const parsed = z.object({ html_url: z.string() }).safeParse(json);
@@ -139,6 +165,42 @@ export async function createGist(
     throw new Error("Gist response missing html_url");
   }
   return parsed.data.html_url;
+}
+
+export async function createGist(
+  channel: "gh" | "token",
+  files: CollectedFile[],
+  description: string,
+  abortSignal?: AbortSignal,
+): Promise<string> {
+  abortSignal?.throwIfAborted();
+  if (files.length === 0) {
+    throw new Error("No attachment files to upload");
+  }
+  const content = `${JSON.stringify({ files })}\n`;
+  if (Buffer.byteLength(content) > MAX_GIST_BYTES) {
+    throw new Error(GIST_UPLOAD_TOO_LARGE_MESSAGE);
+  }
+  for (let attempt = 1; ; attempt++) {
+    abortSignal?.throwIfAborted();
+    try {
+      return await uploadGist(channel, content, description, abortSignal);
+    } catch (error) {
+      abortSignal?.throwIfAborted();
+      if (
+        !(error instanceof GitHubRequestError) ||
+        !error.status ||
+        error.status < 500 ||
+        error.status >= 600 ||
+        attempt >= GIST_MAX_ATTEMPTS
+      ) {
+        throw error;
+      }
+      await delay(GIST_RETRY_DELAY_MS * 2 ** (attempt - 1), undefined, {
+        signal: abortSignal,
+      });
+    }
+  }
 }
 
 const LabelsPageSchema = z.array(z.object({ name: z.string() }));
@@ -152,8 +214,7 @@ export async function fetchRepoLabels(
 ): Promise<string[]> {
   try {
     if (channel === "gh") {
-      const { stdout } = await execFileAsync(
-        "gh",
+      const { stdout } = await runGh(
         [
           "api",
           `repos/${FEEDBACK_REPO}/labels?per_page=100`,
@@ -208,8 +269,7 @@ export async function createIssue(
 ): Promise<IssueResult> {
   if (channel === "gh") {
     const labelArgs = labels.flatMap((label) => ["--label", label]);
-    const { stdout } = await execFileAsync(
-      "gh",
+    const { stdout } = await runGh(
       [
         "issue",
         "create",

@@ -5,10 +5,15 @@ import { basename } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { FEEDBACK_REPO } from "@/feedback/constants.js";
+import {
+  FEEDBACK_REPO,
+  GIST_FILENAME,
+  MAX_GIST_BYTES,
+} from "@/feedback/constants.js";
 import {
   buildIssueUrl,
   createGist,
+  createIssue,
   desiredLabels,
   detectChannel,
   fetchRepoLabels,
@@ -78,23 +83,9 @@ describe("createGist", () => {
   });
 
   function checkUploadedFiles(uploaded: Record<string, { content: string }>) {
-    expect(Object.keys(uploaded).sort()).toEqual(
-      files.map((file) => file.name).sort(),
-    );
-    for (const file of files) {
-      const content = uploaded[file.name].content;
-      expect(content.trim()).not.toBe("");
-      if (file.content.trim()) {
-        expect(content).toBe(file.content);
-      } else {
-        const encoded: unknown = JSON.parse(content);
-        const parsed = z
-          .object({ _note: z.string(), content: z.string() })
-          .parse(encoded);
-        expect(parsed._note.trim()).not.toBe("");
-        expect(parsed.content).toBe(file.content);
-      }
-    }
+    expect(Object.keys(uploaded)).toEqual([GIST_FILENAME]);
+    const capture: unknown = JSON.parse(uploaded[GIST_FILENAME].content);
+    expect(capture).toEqual({ files });
   }
 
   it("uploads blank attachments via gh without losing their original content", async () => {
@@ -119,6 +110,7 @@ describe("createGist", () => {
     );
     checkUploadedFiles(uploaded);
     expect(files).toEqual(original);
+    expect(paths).toHaveLength(1);
     expect(paths.every((path) => !existsSync(path))).toBe(true);
   });
 
@@ -145,6 +137,157 @@ describe("createGist", () => {
       .parse(payload);
     expect(parsed.public).toBe(false);
     checkUploadedFiles(parsed.files);
+  });
+
+  function ghFailure(status: number): Error {
+    return Object.assign(
+      new Error(
+        `Command failed: gh gist create /var/folders/private/feedback.json --desc test\nFailed to create gist: HTTP ${String(status)}`,
+      ),
+      {
+        stderr: `Failed to create gist: HTTP ${String(status)} (https://api.github.com/gists)\n`,
+        code: 1,
+      },
+    );
+  }
+
+  it("packs hundreds of snapshots without filename collisions or argument growth", async () => {
+    const snapshots: CollectedFile[] = [
+      { name: "file-history/a", content: "first", truncated: false },
+      { name: "file-history_a", content: "second", truncated: true },
+      ...Array.from({ length: 300 }, (_, i) => ({
+        name: `file-history/snapshot-${String(i)}`,
+        content: `snapshot ${String(i)}`,
+        truncated: false,
+      })),
+    ];
+    execFileImpl.mockImplementation((_command, args) => {
+      expect(args).toHaveLength(5);
+      const capture: unknown = JSON.parse(readFileSync(args[2], "utf-8"));
+      expect(capture).toEqual({ files: snapshots });
+      return Promise.resolve({
+        stdout: "https://gist.github.com/test\n",
+        stderr: "",
+      });
+    });
+    await expect(createGist("gh", snapshots, "test")).resolves.toContain(
+      "gist.github.com",
+    );
+  });
+
+  it("retries gh HTTP 500 and succeeds", async () => {
+    execFileImpl.mockRejectedValueOnce(ghFailure(500)).mockResolvedValueOnce({
+      stdout: "https://gist.github.com/test\n",
+      stderr: "",
+    });
+    const result = createGist("gh", files, "test");
+    await expect(result).resolves.toBe("https://gist.github.com/test");
+    expect(execFileImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("bounds gh retries and reports stderr without command arguments", async () => {
+    execFileImpl.mockRejectedValue(ghFailure(500));
+    const result = expect(createGist("gh", files, "test")).rejects.toThrow(
+      /^Failed to create gist: HTTP 500 \(https:\/\/api.github.com\/gists\)$/,
+    );
+    await result;
+    expect(execFileImpl).toHaveBeenCalledTimes(3);
+    for (const [, args] of execFileImpl.mock.calls) {
+      expect(existsSync(args[2])).toBe(false);
+    }
+  });
+
+  it("retries API server errors before succeeding", async () => {
+    vi.stubEnv("GH_TOKEN", "test-token");
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ message: "temporary" }, { status: 500 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ message: "unavailable" }, { status: 503 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ html_url: "https://gist.github.com/test" }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const result = createGist("token", files, "test");
+    await expect(result).resolves.toContain("gist.github.com/test");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([403, 422])("does not retry gh HTTP %i", async (status) => {
+    execFileImpl.mockRejectedValue(ghFailure(status));
+    await expect(createGist("gh", files, "test")).rejects.toThrow(
+      `HTTP ${String(status)}`,
+    );
+    expect(execFileImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([403, 422])("does not retry API HTTP %i", async (status) => {
+    vi.stubEnv("GH_TOKEN", "test-token");
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ message: "rejected" }, { status }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createGist("token", files, "test")).rejects.toThrow(
+      String(status),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels the backoff before another upload starts", async () => {
+    const controller = new AbortController();
+    execFileImpl.mockRejectedValue(ghFailure(500));
+    const result = expect(
+      createGist("gh", files, "test", controller.signal),
+    ).rejects.toThrow();
+    await vi.waitFor(() => {
+      expect(execFileImpl).toHaveBeenCalledTimes(1);
+    });
+    controller.abort();
+    await result;
+    expect(execFileImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["gh", "token"] as const)(
+    "rejects oversized %s uploads before any network request",
+    async (channel) => {
+      const fetchMock = vi.fn<typeof fetch>();
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(
+        createGist(
+          channel,
+          [
+            {
+              name: "large.log",
+              content: "x".repeat(MAX_GIST_BYTES),
+              truncated: false,
+            },
+          ],
+          "test",
+        ),
+      ).rejects.toThrow("upload budget");
+      expect(execFileImpl).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("createIssue", () => {
+  it("omits the command and issue body from gh failures", async () => {
+    execFileImpl.mockRejectedValue(
+      Object.assign(
+        new Error("Command failed: gh issue create --body PRIVATE_BODY"),
+        {
+          stderr: "\u001b[31mHTTP 403: Resource not accessible\u001b[0m\n",
+          code: 1,
+        },
+      ),
+    );
+    await expect(
+      createIssue("gh", "title", "PRIVATE_BODY", []),
+    ).rejects.toThrow(/^HTTP 403: Resource not accessible$/);
   });
 });
 

@@ -16,7 +16,7 @@ import {
   type EnvironmentSnapshot,
   type RuntimeInfo,
 } from "@/feedback/collect.js";
-import { MAX_ANALYSIS_LOG_BYTES } from "@/feedback/constants.js";
+import { GIST_FILENAME, MAX_ANALYSIS_LOG_BYTES } from "@/feedback/constants.js";
 import {
   filterDuplicateDrafts,
   issueFingerprint,
@@ -32,7 +32,7 @@ import {
   fetchRepoLabels,
   openInBrowser,
 } from "@/feedback/github.js";
-import { redactJsonLines, redactText } from "@/feedback/redact.js";
+import { redactJsonLines } from "@/feedback/redact.js";
 import type {
   FeedbackChannel,
   FeedbackOptions,
@@ -58,7 +58,7 @@ interface Attachments {
   gistUrl?: string;
   bundlePath?: string;
   uploadError?: string;
-  names: string[];
+  count: number;
 }
 
 function analysisHistory(deps: PipelineDeps): Message[] {
@@ -135,16 +135,15 @@ function assembleIssueBody(
   const attachmentLines = attachments.gistUrl
     ? [
         `Attachments (secret Gist): ${attachments.gistUrl}`,
-        `Included: ${attachments.names.join(", ")}`,
+        `${String(attachments.count)} files in ${GIST_FILENAME} (original names and contents preserved).`,
       ]
     : attachments.bundlePath
       ? [
-          `Attachments exported locally (not uploaded): ${attachments.bundlePath}`,
-          `Included: ${attachments.names.join(", ")}`,
-          "Please attach the zip manually if you can.",
+          `Attachments: ${String(attachments.count)} files saved locally (not uploaded).`,
+          "Please attach the ZIP manually if you can.",
         ]
       : ["Attachments: none selected"];
-  const body = [
+  return [
     draft.body.trim(),
     "",
     "<details><summary>Environment</summary>",
@@ -162,7 +161,6 @@ function assembleIssueBody(
     "",
     `Reported via /feedback · session ${sessionId} · yukino ${version}`,
   ].join("\n");
-  return redactText(body);
 }
 
 interface FiledResult {
@@ -259,15 +257,13 @@ function formatReport(
   }
   if (collected?.skipped.length) {
     lines.push(
-      `Skipped unavailable or oversized attachments: ${collected.skipped.join(", ")}`,
+      `Skipped ${String(collected.skipped.length)} unavailable or oversized attachment(s).`,
     );
   }
   const truncated =
-    collected?.files
-      .filter((file) => file.truncated)
-      .map((file) => file.name) ?? [];
-  if (truncated.length > 0) {
-    lines.push(`Truncated attachments: ${truncated.join(", ")}`);
+    collected?.files.filter((file) => file.truncated).length ?? 0;
+  if (truncated > 0) {
+    lines.push(`Truncated ${String(truncated)} attachment(s).`);
   }
   return lines.join("\n");
 }
@@ -368,13 +364,15 @@ export async function runFeedbackPipeline(
   abortSignal.throwIfAborted();
 
   const attachments: Attachments = {
-    names: collected.files.map((file) => file.name),
+    count: collected.files.length,
   };
   if (collected.files.length > 0) {
     if (channel === "browser") {
       attachments.bundlePath = await writeBundle(sessionId, collected);
     } else {
-      deps.onProgress("Uploading attachments as a secret Gist…");
+      deps.onProgress(
+        `Uploading ${String(attachments.count)} diagnostic file(s) as one secret Gist…`,
+      );
       try {
         attachments.gistUrl = await createGist(
           channel,

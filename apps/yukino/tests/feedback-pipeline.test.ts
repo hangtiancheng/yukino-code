@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,6 +25,7 @@ import type {
   FeedbackChannel,
   IssueDraft,
 } from "@/feedback/types.js";
+import { fileHistoryDir } from "@/file-history/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { closeLogger, initLogger } from "@/logger/index.js";
@@ -143,6 +145,42 @@ beforeEach(() => {
 });
 
 describe("runFeedbackPipeline", () => {
+  it("keeps attachment inventories out of reports even with hundreds of snapshots", async () => {
+    const dir = fileHistoryDir(SESSION);
+    mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < 250; i++) {
+      writeFileSync(join(dir, `source-${String(i)}@s1`), "const count = 1;\n");
+    }
+    mocks.createIssue.mockResolvedValue({
+      url: "https://github.com/test/issues/1",
+    });
+    const deps = makeDeps(
+      fakeClient(
+        analysisReply([
+          {
+            title: "1 tool failure",
+            body: "1 reproducible failure in version 0.0.17",
+          },
+        ]),
+      ),
+      makeProject(),
+    );
+    const { report } = await runFeedbackPipeline(
+      { description: "", attachments: ["env", "file-history"] },
+      { ...deps, runtime: { ...deps.runtime, config: { api_key: "1" } } },
+    );
+    const body = mocks.createIssue.mock.calls[0][2];
+    expect(mocks.createGist.mock.calls[0][1]).toHaveLength(251);
+    expect(body).toContain("251 files in feedback.json");
+    expect(body).toContain("1 reproducible failure in version 0.0.17");
+    expect(body).toContain("https://gist.github.com/gist123");
+    expect(report).toContain("1 tool failure");
+    for (const output of [body, report]) {
+      expect(output).not.toContain("source-0@s1");
+      expect(output.length).toBeLessThan(2000);
+    }
+  });
+
   it("files one issue per detected defect via gh with a gist attachment", async () => {
     mocks.createIssue
       .mockResolvedValueOnce({

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
@@ -66,6 +67,38 @@ const usage = {
   input_tokens_details: { cached_tokens: 5 },
   output_tokens_details: { reasoning_tokens: 0 },
 };
+
+describe("request-scoped system prompt", () => {
+  it.each(["anthropic", "openai", "openai-compat"] as const)(
+    "isolates a %s analysis request from the coding prompt",
+    async (protocol) => {
+      mockStream([]);
+      const client =
+        protocol === "anthropic"
+          ? new AnthropicClient(config(protocol), "coding system")
+          : protocol === "openai"
+            ? new OpenAIClient(config(protocol), "coding system")
+            : new OpenAICompatClient(config(protocol), "coding system");
+      const conversation = new ConversationManager();
+      conversation.addUserMessage("session evidence");
+      for (const systemPrompt of ["feedback system", undefined]) {
+        await expect(
+          client.stream(conversation, [], undefined, { systemPrompt }).next(),
+        ).rejects.toThrow();
+      }
+      const fetchMock = vi.mocked(fetch);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const payloads = fetchMock.mock.calls.map(([, options]) => {
+        const payload: unknown = JSON.parse(z.string().parse(options?.body));
+        return JSON.stringify(payload);
+      });
+      expect(payloads[0]).toContain("feedback system");
+      expect(payloads[0]).not.toContain("coding system");
+      expect(payloads[1]).toContain("coding system");
+      expect(payloads[1]).not.toContain("feedback system");
+    },
+  );
+});
 
 describe("Responses terminal events", () => {
   it.each([

@@ -80,6 +80,20 @@ describe("redactText", () => {
     expect(redactText(text)).toBe(text);
   });
 
+  it("preserves evidence and links when configured credentials are short placeholders", () => {
+    const text =
+      "yukino 0.0.17; step 1; TODO 1/4; node v24.16.0; https://gist.github.com/test/a1b2c3";
+    expect(redactText(text, ["1", "on", "true"])).toBe(text);
+    const out = redactText(
+      'api_key: "1"\npassword=x\nhttps://user:x@example.com/?token=1',
+      ["1", "x"],
+    );
+    expect(out).toContain('api_key: "<redacted>"');
+    expect(out).toContain("password=<redacted>");
+    expect(out).toContain("token=%3Credacted%3E");
+    expect(out).not.toContain("user:x");
+  });
+
   it("redacts arbitrary named credentials and embedded credential URLs", () => {
     const text =
       'api_key: opaque-key\napiKey="another-key"\nGET https://user:pass@example.com/?api_key=query-key';

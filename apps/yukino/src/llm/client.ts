@@ -8,6 +8,7 @@ import { registerLlmClient } from "@/telemetry/instrumentation.js";
 import type { ProviderToolSchema, ToolProtocol } from "@/tools/types.js";
 
 export interface LLMStreamOptions {
+  systemPrompt?: string;
   maxOutputTokens?: number;
   /** Answer space to preserve when the provider uses a fixed thinking budget. */
   answerReserveTokens?: number;

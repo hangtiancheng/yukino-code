@@ -29,20 +29,24 @@ const ITEMS: {
     hint: "full conversation JSONL",
   },
   {
+    kind: "log",
+    label: "Warnings and errors",
+    hint: "yukino diagnostic log",
+  },
+  {
+    kind: "env",
+    label: "Environment info",
+    hint: "runtime, provider, terminal and config",
+  },
+  {
     kind: "tools",
-    label: "Tool output",
-    hint: "tool calls with arguments and results",
+    label: "Detailed tool output",
+    hint: "tool trace and full saved output; optional",
   },
   {
     kind: "file-history",
     label: "File history",
-    hint: "rewind snapshots and file backups",
-  },
-  { kind: "log", label: "Log", hint: "yukino warnings and errors" },
-  {
-    kind: "env",
-    label: "Environment info",
-    hint: "OS/CPU, node/V8, memory, terminal, config, git",
+    hint: "source snapshots and backups; optional",
   },
 ];
 
@@ -66,15 +70,12 @@ export function FeedbackDialog({
   const [cursor, setCursor] = useState(0);
   const [checked, setChecked] = useState<Record<AttachmentKind, boolean>>({
     session: true,
-    tools: true,
-    "file-history": true,
+    tools: false,
+    "file-history": false,
     log: true,
     env: true,
   });
   const focusRef = useRef<DOMElement>(null);
-  // Synchronous single-submit gate: claimed before onSubmit so a double-tap or
-  // key-repeat cannot start a second feedback pipeline / approval flow. The
-  // parent dismisses the dialog on submit; a retry re-mounts it with a fresh gate.
   const submittingRef = useRef(false);
   const { columns } = useTerminalDimensions();
   // Sizes are computed once on mount; they only decorate the checklist.
@@ -111,20 +112,23 @@ export function FeedbackDialog({
   const trimmed = description.trim();
   const subtitle = trimmed
     ? truncateToWidth(trimmed.split("\n")[0] ?? "", Math.max(10, columns - 8))
-    : "no description — the model will analyze the session anyway";
+    : "Scan this session for yukino problems";
+  const count = Object.values(checked).filter(Boolean).length;
   return (
     <SelectorFrame
       focusRef={focusRef}
-      hint="Space toggle · Enter submit · Escape cancel"
+      hint="↑↓ navigate · Space toggle · Enter review · Esc cancel"
       subtitle={subtitle}
-      title="Feedback attachments"
+      title="Feedback"
     >
+      <Box paddingX={1}>
+        <Text color={THEME.muted} wrap="truncate-end">
+          {`${String(count)} attachment group(s) selected`}
+        </Text>
+      </Box>
       {ITEMS.map((item, index) => {
         const selected = index === cursor;
         const size = sizes[index];
-        const detail = [item.hint, size !== null ? formatBytes(size) : null]
-          .filter((part): part is string => part !== null)
-          .join(" · ");
         return (
           <Box
             key={item.kind}
@@ -134,22 +138,35 @@ export function FeedbackDialog({
             paddingRight={1}
             width="100%"
           >
-            <Text
-              color={selected ? THEME.accent : THEME.text}
-              wrap="truncate-end"
-            >
-              {selected ? "› " : "  "}
-              {checked[item.kind] ? "☑ " : "☐ "}
-              {item.label}
-              <Text color={THEME.muted}>{` · ${detail}`}</Text>
-            </Text>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text
+                color={selected ? THEME.accent : THEME.text}
+                wrap="truncate-end"
+              >
+                {selected ? "› " : "  "}
+                {checked[item.kind] ? "☑ " : "☐ "}
+                {item.label}
+              </Text>
+            </Box>
+            {size !== null && columns >= 40 ? (
+              <Box flexShrink={0} width={11} justifyContent="flex-end">
+                <Text color={THEME.muted} wrap="truncate-end">
+                  {`~${formatBytes(size)}`}
+                </Text>
+              </Box>
+            ) : null}
           </Box>
         );
       })}
+      <Box paddingX={1}>
+        <Text color={THEME.muted} wrap="truncate-end">
+          {ITEMS[cursor]?.hint}
+        </Text>
+      </Box>
       <Box paddingLeft={1} paddingRight={1} width="100%">
         <Text color={THEME.dim} wrap="truncate-end">
           {truncateToWidth(
-            "Secrets are redacted. Review and approve the issue drafts before anything is uploaded or filed.",
+            "Secrets redacted. Review drafts before uploading or filing.",
             Math.max(10, columns - 4),
           )}
         </Text>

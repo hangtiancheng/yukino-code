@@ -4,15 +4,19 @@ import { ConversationManager, type Message } from "@/conversation/index.js";
 import { ANSWER_RESERVE_TOKENS, MAX_ISSUES } from "@/feedback/constants.js";
 import {
   analysisOutputTokens,
+  ANALYSIS_SYSTEM,
   buildAnalysisPrompt,
+  buildAnalysisRetryPrompt,
 } from "@/feedback/prompts.js";
-import type { FiledIssueRecord, IssueDraft } from "@/feedback/types.js";
+import {
+  IssueDraftSchema,
+  type FiledIssueRecord,
+  type IssueDraft,
+} from "@/feedback/types.js";
 import type { LLMClient } from "@/llm/client.js";
 
 const AnalysisSchema = z.object({
-  issues: z
-    .array(z.object({ title: z.string().min(1), body: z.string() }))
-    .max(MAX_ISSUES),
+  issues: z.array(IssueDraftSchema).max(MAX_ISSUES),
 });
 
 export interface AnalyzeInput {
@@ -36,6 +40,7 @@ async function collectAnalysisText(
   let completed = false;
   let truncated = false;
   for await (const event of client.stream(conv, [], abortSignal, {
+    systemPrompt: ANALYSIS_SYSTEM,
     maxOutputTokens: outputTokens,
     answerReserveTokens: ANSWER_RESERVE_TOKENS,
   })) {
@@ -84,10 +89,7 @@ function parseAnalysis(text: string): IssueDraft[] | null {
     if (!parsed.success) {
       return null;
     }
-    return parsed.data.issues.map((issue) => ({
-      title: issue.title.trim().slice(0, 120),
-      body: issue.body,
-    }));
+    return parsed.data.issues;
   } catch {
     return null;
   }
@@ -129,22 +131,7 @@ export async function analyzeHarnessAnomalies(
     return drafts;
   }
 
-  // The stream does not append the assistant reply to conv, so quote the bad
-  // response in the retry nudge.
-  conv.addUserMessage(
-    first.truncated
-      ? [
-          "Your previous reply hit the output token limit and was cut off before it finished.",
-          "Respond again far more concisely: at most 3 issues, each body under 600 characters, omit unknown sections.",
-          'Respond with ONLY the JSON object {"issues":[{"title":"...","body":"..."}]}, no prose, no code fences.',
-        ].join("\n")
-      : [
-          "Your previous reply was not valid JSON:",
-          first.text.slice(0, 2000),
-          "",
-          'Respond with ONLY the JSON object {"issues":[{"title":"...","body":"..."}]}, no prose, no code fences.',
-        ].join("\n"),
-  );
+  conv.addUserMessage(buildAnalysisRetryPrompt(first.truncated));
   const retry = await collectAnalysisText(
     input.client,
     conv,
@@ -154,9 +141,6 @@ export async function analyzeHarnessAnomalies(
   const retried = parseAnalysis(retry.text);
   if (retried) {
     return retried;
-  }
-  if (input.description.trim()) {
-    return [descriptionFallbackDraft(input.description)];
   }
   throw new Error(
     retry.truncated

@@ -702,19 +702,10 @@ export function summarizeEnvironment(
 ): Record<string, unknown> {
   return {
     yukino: env.yukino.version,
-    userAgent: env.yukino.userAgent,
     platform: env.os.platform,
     arch: env.os.arch,
-    machine: env.os.machine,
     osRelease: env.os.release,
-    cpu: env.cpu.model,
-    logicalCores: env.cpu.logicalCores,
-    totalMemoryBytes: env.os.totalMemoryBytes,
     node: env.node.version,
-    v8: env.node.versions.v8,
-    rss: env.memory.process.rss,
-    heapUsed: env.memory.process.heapUsed,
-    heapTotal: env.memory.process.heapTotal,
     terminal: env.terminal.program ?? env.terminal.term,
     tmux: env.terminal.tmux,
     ssh: env.terminal.ssh,
@@ -722,7 +713,6 @@ export function summarizeEnvironment(
     permissionMode: env.runtime.permissionMode,
     sandbox: env.runtime.sandbox,
     configStatus: env.configFile.status,
-    git: env.git,
   };
 }
 

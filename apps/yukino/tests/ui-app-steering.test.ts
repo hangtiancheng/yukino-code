@@ -434,12 +434,7 @@ describe("App feedback approval", () => {
     async (rows) => {
       terminal.resize(120, rows);
       await openFeedback();
-      expect(feedbackMock.mock.calls[0][0].attachments).toEqual([
-        "tools",
-        "file-history",
-        "log",
-        "env",
-      ]);
+      expect(feedbackMock.mock.calls[0][0].attachments).toEqual(["log", "env"]);
       expect(terminal.bufferLines().join("\n")).toContain("TOOL_EVIDENCE_END");
       expect(terminal.bufferLines().join("\n")).toContain(
         "CONCRETE_UI_FAILURE",

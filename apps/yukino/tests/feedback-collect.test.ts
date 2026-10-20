@@ -187,7 +187,9 @@ describe("buildEnvironment", () => {
     const summary = summarizeEnvironment(env);
     expect(summary.yukino).toBe(env.yukino.version);
     expect(summary.platform).toBe(env.os.platform);
-    expect(summary.cpu).toBe(env.cpu.model);
+    expect(summary.node).toBe(env.node.version);
+    expect(summary).not.toHaveProperty("cpu");
+    expect(summary).not.toHaveProperty("git");
     expect(summary).not.toHaveProperty("argv");
     expect(summary).not.toHaveProperty("heapSpaces");
   });

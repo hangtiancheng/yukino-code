@@ -345,7 +345,7 @@ export class AnthropicClient implements LLMClient {
       system: [
         {
           type: "text",
-          text: this.systemPrompt,
+          text: options?.systemPrompt ?? this.systemPrompt,
           cache_control: {
             type: "ephemeral",
           },

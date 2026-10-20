@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { ATTACHMENT_KINDS } from "@/feedback/constants.js";
+import {
+  ATTACHMENT_KINDS,
+  MAX_ISSUE_BODY_CHARS,
+  MAX_ISSUE_TITLE_CHARS,
+} from "@/feedback/constants.js";
 
 export const AttachmentKindSchema = z.enum(ATTACHMENT_KINDS);
 export type AttachmentKind = z.infer<typeof AttachmentKindSchema>;
@@ -11,8 +15,8 @@ export interface FeedbackOptions {
 }
 
 export const IssueDraftSchema = z.object({
-  title: z.string().min(1),
-  body: z.string(),
+  title: z.string().trim().min(1).max(MAX_ISSUE_TITLE_CHARS),
+  body: z.string().max(MAX_ISSUE_BODY_CHARS),
 });
 export type IssueDraft = z.infer<typeof IssueDraftSchema>;
 

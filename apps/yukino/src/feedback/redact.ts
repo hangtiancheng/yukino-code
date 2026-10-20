@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { SENSITIVE_KEY, TEXT_PATTERNS } from "@/feedback/constants.js";
+import {
+  MIN_GLOBAL_SECRET_LENGTH,
+  SENSITIVE_KEY,
+  TEXT_PATTERNS,
+} from "@/feedback/constants.js";
 import { REDACTED } from "@/utils/constants.js";
 import { redactCredentials, environmentSecrets } from "@/utils/redact.js";
 const UnknownArraySchema = z.array(z.unknown());
@@ -44,7 +48,14 @@ export function redactText(
   text: string,
   secrets: readonly string[] = [],
 ): string {
-  let out = redactCredentials(text, [...environmentSecrets(), ...secrets]);
+  // Short config values (e.g. api_key: "1") must not erase numbers in evidence.
+  // Named fields and URL credentials are still redacted regardless of length.
+  let out = redactCredentials(
+    text,
+    [...environmentSecrets(), ...secrets].filter(
+      (secret) => secret.length >= MIN_GLOBAL_SECRET_LENGTH,
+    ),
+  );
   out = out.replace(
     /^([ \t]*)(["']?)([\w.-]+)\2:[ \t]*[|>][^\n]*\n((?:\1[ \t]+[^\n]*(?:\n|$))*)/gm,
     (match: string, indent: string, quote: string, key: string) =>

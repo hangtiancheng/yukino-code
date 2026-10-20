@@ -4,9 +4,7 @@ import { REDACTED } from "@/utils/constants.js";
 export const CHARS_PER_TOKEN = 3.5;
 // Share of the REAL context window available to the whole analysis request.
 export const CONTEXT_BUDGET_RATIO = 0.8;
-// The analysis request also carries the coding-agent system prompt and must
-// leave room for the model's reply; reserve headroom for both.
-export const SYSTEM_PROMPT_RESERVE_TOKENS = 8_000;
+export const SYSTEM_PROMPT_RESERVE_TOKENS = 1_000;
 export const ANSWER_RESERVE_TOKENS = 8_000;
 export const INSTRUCTIONS_RESERVE_TOKENS = 1_000;
 // Even tiny windows get a minimal well-formed prompt; whether the provider
@@ -15,7 +13,21 @@ export const MIN_ANALYSIS_BUDGET_TOKENS = 2_000;
 // The log shares the budget: at most a quarter of it, under an absolute cap.
 export const LOG_BUDGET_RATIO = 0.25;
 export const MAX_LOG_CHARS = 200_000;
-export const MAX_ISSUES = 10;
+export const MAX_ANALYSIS_INPUT_TOKENS = 32_000;
+export const MAX_ISSUES = 3;
+export const MAX_ISSUE_TITLE_CHARS = 90;
+export const MAX_ISSUE_BODY_CHARS = 2_000;
+
+export const GIST_FILENAME = "feedback.json";
+// Product upload budget; larger captures remain available in the local ZIP.
+export const MAX_GIST_BYTES = 2 * 1024 * 1024;
+export const GIST_MAX_ATTEMPTS = 3;
+export const GIST_RETRY_DELAY_MS = 500;
+export const GITHUB_ERROR_DETAIL_CHARS = 240;
+export const MIN_GLOBAL_SECRET_LENGTH = 8;
+export const GIST_UPLOAD_TOO_LARGE_MESSAGE =
+  "Attachments exceed the 2 MB upload budget; use the local ZIP.";
+export const GH_COMMAND_FAILED_MESSAGE = "GitHub CLI failed";
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 20 * 1024 * 1024;

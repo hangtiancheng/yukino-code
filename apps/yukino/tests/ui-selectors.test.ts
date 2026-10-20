@@ -17,7 +17,9 @@ import { AgentStatus } from "@/ui/agent-status.js";
 import { AgentsDialog } from "@/ui/agents-dialog.js";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
 import { ICONS, THEME } from "@/ui/constants.js";
+import { FeedbackDialog } from "@/ui/feedback-dialog.js";
 import { InteractionDock } from "@/ui/interaction-dock.js";
+import { IssueApprovalDialog } from "@/ui/issue-approval.js";
 import { PermissionDialog } from "@/ui/permission-dialog.js";
 import { PlanApprovalDialog } from "@/ui/plan-approval.js";
 import { ProviderSelect } from "@/ui/provider-select.js";
@@ -1033,6 +1035,66 @@ function mountAskOther(onComplete: (answers: Record<string, string>) => void) {
   send("2");
   send("", { return: true });
 }
+
+describe("Feedback dialogs", () => {
+  it.each([20, 40, 80])("fits attachment choices in %i columns", (columns) => {
+    resize(columns, 24);
+    const output = staticFrame(
+      createElement(FeedbackDialog, {
+        cwd: "/tmp",
+        sessionId: "feedback-layout",
+        description: "Feedback about terminal rendering",
+        onSubmit: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+      columns,
+    );
+    expect(output).toContain("Feedback");
+    expect(output.split("\n").length).toBeLessThanOrEqual(24);
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(columns);
+    }
+  });
+
+  it("keeps detailed captures optional and submits once even on repeated Enter", () => {
+    const onSubmit = vi.fn();
+    mount(
+      createElement(FeedbackDialog, {
+        cwd: "/tmp",
+        sessionId: "feedback-layout",
+        description: "  UI issue  ",
+        onSubmit,
+        onCancel: vi.fn(),
+      }),
+    );
+    expect(frame).toContain("3 attachment group(s) selected");
+    for (let i = 0; i < 3; i++) {
+      send("", { downArrow: true });
+    }
+    send(" ");
+    expect(frame).toContain("4 attachment group(s) selected");
+    send("", { return: true });
+    send("", { return: true });
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({
+      description: "UI issue",
+      attachments: ["session", "log", "env", "tools"],
+    });
+  });
+
+  it("commits an approval only once", () => {
+    const onSelect = vi.fn();
+    mount(
+      createElement(IssueApprovalDialog, {
+        issues: [{ title: "UI issue", body: "## Problem\nLost input" }],
+        onSelect,
+      }),
+    );
+    send("", { return: true });
+    send("", { return: true });
+    send("", { escape: true });
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("approve", undefined);
+  });
+});
 
 describe("AskUser multi-select answers", () => {
   it.each([

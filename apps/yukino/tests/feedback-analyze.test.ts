@@ -5,7 +5,7 @@ import type { ProviderConfig } from "@/config/provider-config.js";
 import type { Message } from "@/conversation/index.js";
 import { analyzeHarnessAnomalies } from "@/feedback/analyze.js";
 import type { AnalyzeInput } from "@/feedback/analyze.js";
-import { buildAnalysisPrompt } from "@/feedback/prompts.js";
+import { ANALYSIS_SYSTEM, buildAnalysisPrompt } from "@/feedback/prompts.js";
 import { AnthropicClient } from "@/llm/anthropic.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
@@ -90,7 +90,7 @@ describe("buildAnalysisPrompt budget", () => {
     expect(prompt).not.toContain('"line":0,');
     const logMatch = /<yukino-log>\n([\s\S]*?)\n<\/yukino-log>/.exec(prompt);
     expect(logMatch).toBeTruthy();
-    expect(logMatch?.[1].length).toBeLessThanOrEqual(2_000);
+    expect(logMatch?.[1].length).toBeLessThanOrEqual(2_100);
   });
 
   it("caps the log at MAX_LOG_CHARS for very large windows", () => {
@@ -107,6 +107,20 @@ describe("buildAnalysisPrompt budget", () => {
     // 100k filler + ~4k log; the cap (200k) trims the filler, keeps the tail.
     expect(logMatch?.[1].length).toBeLessThanOrEqual(200_000);
     expect(logMatch?.[1]).toContain('"line":49');
+  });
+
+  it("caps large sessions independently of a million-token provider window", () => {
+    const prompt = buildAnalysisPrompt(
+      promptInput({
+        contextWindow: 1_000_000,
+        messages: makeMessages(10_000),
+        logContent: makeLog(10_000),
+      }),
+    );
+    expect(prompt.length).toBeLessThan(115_000);
+    expect(prompt).toContain("msg-9999");
+    expect(prompt).not.toContain("msg-0 ");
+    expect(prompt).not.toContain(ANALYSIS_SYSTEM);
   });
 
   it("still produces a well-formed prompt for a minimal window", () => {
@@ -138,7 +152,7 @@ describe("buildAnalysisPrompt budget", () => {
       }),
     );
     expect(prompt).toContain("[tool] Bash retry storm");
-    expect(prompt).toContain("One issue per distinct defect");
+    expect(ANALYSIS_SYSTEM).toContain("One issue per distinct defect");
   });
 
   it("bounds a single oversized tool result and user report", () => {
@@ -263,18 +277,18 @@ describe("analyzeHarnessAnomalies", () => {
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the description when both attempts are truncated", async () => {
+  it("leaves description fallback to the pipeline when both attempts are truncated", async () => {
     const client = stubClient();
     vi.spyOn(client, "stream").mockImplementation(async function* () {
       await Promise.resolve();
       yield { type: "text_delta", text: '{"issues":[{"title":"' };
       yield endEvent("max_tokens");
     });
-    const issues = await analyzeHarnessAnomalies(
-      promptInput({ client, description: "权限弹窗卡死" }),
-    );
-    expect(issues).toHaveLength(1);
-    expect(issues[0]?.title).toContain("权限弹窗卡死");
+    await expect(
+      analyzeHarnessAnomalies(
+        promptInput({ client, description: "权限弹窗卡死" }),
+      ),
+    ).rejects.toThrow("max_tokens after retry");
   });
 
   it.each(["max_tokens", "end_turn"])(
@@ -449,6 +463,7 @@ describe("analysis SDK request budgets", () => {
       const payload = z
         .object({
           max_tokens: z.number(),
+          system: z.array(z.object({ text: z.string() })),
           thinking: z.object({
             type: z.string(),
             budget_tokens: z.number().optional(),
@@ -456,6 +471,9 @@ describe("analysis SDK request budgets", () => {
         })
         .parse(raw);
       expect(payload.max_tokens).toBe(output);
+      expect(payload.system.map((block) => block.text)).toEqual([
+        ANALYSIS_SYSTEM,
+      ]);
       expect(payload.thinking).toEqual(
         thinking > 0
           ? { type: "enabled", budget_tokens: thinking }
