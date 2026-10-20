@@ -3,7 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { append, load, MAX_HISTORY_ENTRIES } from "@/history/index.js";
+import { MAX_HISTORY_ENTRIES } from "@/history/constants.js";
+import { append, load } from "@/history/index.js";
 import { getYukinoDir } from "@/storage/index.js";
 
 describe("prompt history", () => {

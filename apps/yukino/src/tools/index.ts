@@ -31,6 +31,6 @@ export * as Snippets from "@/tools/snippets.js";
 export * as SyntheticOutput from "@/tools/synthetic-output.js";
 export * as TaskOutput from "@/tools/task-output.js";
 export * as ToolSearch from "@/tools/tool-search.js";
-export type * from "@/tools/types.js";
 export * as WebFetch from "@/tools/web-fetch.js";
 export * as WriteFile from "@/tools/write-file.js";
+export type * from "@/tools/types.js";

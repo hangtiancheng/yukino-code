@@ -6,7 +6,7 @@ import { createChildLogger } from "@/logger/index.js";
 import { asErrorString } from "@/utils/index.js";
 import { strArg } from "@/utils/index.js";
 
-export * from "@/hooks/constants.js";
+export * as Constants from "@/hooks/constants.js";
 
 const log = createChildLogger({ module: "hooks" });
 

@@ -4,11 +4,13 @@ import { createChildLogger } from "@/logger/index.js";
 import { NUMERIC_LITERAL } from "@/utils/constants.js";
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
+export * as Constants from "@/utils/constants.js";
 export * as FileScan from "@/utils/file-scan.js";
 export * as Paths from "@/utils/paths.js";
 export * as PublicHttp from "@/utils/public-http.js";
+export * as Redact from "@/utils/redact.js";
 export * as Slug from "@/utils/slug.js";
-export * from "@/utils/constants.js";
+export * as XML from "@/utils/xml.js";
 
 const log = createChildLogger({ module: "utils" });
 

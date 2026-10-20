@@ -14,7 +14,7 @@ import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "history" });
 
-export * from "@/history/constants.js";
+export * as Constants from "@/history/constants.js";
 
 const JSONLSchema = z.looseObject({ text: z.string() });
 export function load(): string[] {

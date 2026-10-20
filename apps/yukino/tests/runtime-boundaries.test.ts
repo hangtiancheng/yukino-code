@@ -18,8 +18,8 @@ import { ContextTooLongError } from "@/llm/errors.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { buildMcpToolName } from "@/mcp/tool-wrapper.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { COMPACT_BOUNDARY } from "@/session/constants.js";
 import {
-  COMPACT_BOUNDARY,
   loadSession,
   messageToKeptRecord,
   rebuildFromSession,

@@ -13,7 +13,7 @@ import { createChildLogger } from "@/logger/index.js";
 
 // Submodule namespaces for library consumers (Images.<Sub>.*).
 export * as Clipboard from "@/images/clipboard.js";
-export * from "@/images/constants.js";
+export * as Constants from "@/images/constants.js";
 
 const log = createChildLogger({ module: "images" });
 

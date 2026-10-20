@@ -42,11 +42,8 @@ import type {
 import { writeZipArchive } from "@/feedback/zip.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
-import {
-  COMPACT_BOUNDARY,
-  loadSession,
-  rebuildFromSession,
-} from "@/session/index.js";
+import { COMPACT_BOUNDARY } from "@/session/constants.js";
+import { loadSession, rebuildFromSession } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
 import { mkdirPrivateSync as mkdirSync } from "@/storage/private.js";
 import { asErrorString } from "@/utils/index.js";

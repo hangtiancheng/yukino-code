@@ -11,7 +11,7 @@ import {
 } from "@/storage/private.js";
 import { generateSlug } from "@/utils/slug";
 
-export * from "@/plan-file/constants.js";
+export * as Constants from "@/plan-file/constants.js";
 
 const log = createChildLogger({ module: "plan-file" });
 

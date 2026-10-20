@@ -20,8 +20,8 @@ import {
   SHARED_AGENTS_ENTRIES,
 } from "@/worktree/constants.js";
 
-export * from "@/worktree/constants.js";
-export * from "@/worktree/prompts.js";
+export * as Constants from "@/worktree/constants.js";
+export * as Prompts from "@/worktree/prompts.js";
 
 const log = createChildLogger({ module: "worktree" });
 

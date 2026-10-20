@@ -10,16 +10,17 @@ import sharp, { type Sharp } from "sharp";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
+  MAX_DIMENSION_PX,
+  MAX_IMAGE_BYTES_PASSTHROUGH,
+} from "@/images/constants.js";
+import {
   isImagePath,
   getMediaType,
   sniffMediaType,
   ImageTooLargeError,
-  MAX_DIMENSION_PX,
-  MAX_IMAGE_BYTES_PASSTHROUGH,
   loadImageAttachment,
   maybeResizeAndDownsampleImage,
 } from "@/images/index.js";
-
 const TEST_PNG_PATH = join(dirname(fileURLToPath(import.meta.url)), "test.png");
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

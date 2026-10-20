@@ -7,11 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
-import {
-  GoalManager,
-  handleGoalCommand,
-  MAX_GOAL_TURNS,
-} from "@/goal/index.js";
+import { MAX_GOAL_TURNS } from "@/goal/constants.js";
+import { GoalManager, handleGoalCommand } from "@/goal/index.js";
 import { HookEngine } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError, RateLimitError } from "@/llm/errors.js";

@@ -7,11 +7,8 @@ import {
   MAX_INLINE_TOTAL_BYTES,
   MAX_RANGE_FILE_BYTES,
 } from "@/conversation/constants.js";
-import {
-  isImagePath,
-  MAX_IMAGES_PER_MESSAGE,
-  loadImageAttachment,
-} from "@/images/index.js";
+import { MAX_IMAGES_PER_MESSAGE } from "@/images/constants.js";
+import { isImagePath, loadImageAttachment } from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "at-expand" });

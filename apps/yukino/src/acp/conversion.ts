@@ -12,7 +12,8 @@ import type {
 } from "@agentclientprotocol/sdk";
 
 import type { AgentEvent } from "@/agent/events.js";
-import { COMPACT_BOUNDARY, type SessionMessage } from "@/session/index.js";
+import { COMPACT_BOUNDARY } from "@/session/constants.js";
+import { type SessionMessage } from "@/session/index.js";
 import { contentToText, strArg } from "@/utils/index.js";
 
 export function promptToText(prompt: ContentBlock[]): string {

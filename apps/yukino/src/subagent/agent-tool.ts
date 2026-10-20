@@ -42,7 +42,8 @@ import type {
   ToolSchema,
 } from "@/tools/types.js";
 import { asErrorString, boolArg, strArg } from "@/utils/index.js";
-import { buildWorktreeNotice, createAgentWorktree } from "@/worktree/index.js";
+import { createAgentWorktree } from "@/worktree/index.js";
+import { buildWorktreeNotice } from "@/worktree/prompts.js";
 
 const log = createChildLogger({ module: "subagent" });
 

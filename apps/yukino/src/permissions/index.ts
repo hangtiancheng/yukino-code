@@ -28,8 +28,9 @@ import { asErrorString, isObject, isRecord, strArg } from "@/utils/index.js";
 import { canonicalPath, isPathWithin, resolveToolPath } from "@/utils/paths.js";
 import { OwnedWorktrees, type WorktreeResult } from "@/worktree/index.js";
 
+export * as Constants from "@/permissions/constants.js";
 export * as Request from "@/permissions/request.js";
-export * from "@/permissions/constants.js";
+export * as Shell from "@/permissions/shell.js";
 
 const log = createChildLogger({ module: "permissions" });
 

@@ -10,7 +10,8 @@ import {
 } from "@/storage/constants.js";
 import { canonicalPath } from "@/utils/paths.js";
 
-export * from "@/storage/constants.js";
+export * as Constants from "@/storage/constants.js";
+export * as Private from "@/storage/private.js";
 
 export function getYukinoDir(): string {
   return join(homedir(), YUKINO_DIR_NAME);

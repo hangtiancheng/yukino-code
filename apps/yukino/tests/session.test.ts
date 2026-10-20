@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, it, expect } from "vitest";
 
+import { COMPACT_BOUNDARY } from "@/session/constants.js";
 import {
   saveMessage,
   loadSession,
@@ -23,7 +24,6 @@ import {
   toolUsesToRecords,
   toolResultsToRecords,
   cleanExpiredSessions,
-  COMPACT_BOUNDARY,
 } from "@/session/index.js";
 import { getSessionsDir, sessionPath } from "@/storage/index.js";
 import { asString, contentToText } from "@/utils/index.js";

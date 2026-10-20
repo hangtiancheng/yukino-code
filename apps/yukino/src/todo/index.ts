@@ -6,11 +6,11 @@ import {
 import type { StoredTaskStatus, TaskStore } from "@/todo/store.js";
 
 // Submodule namespaces for library consumers (Todo.<Sub>.*).
-export * as Store from "@/todo/store.js";
-export * as Tools from "@/todo/tools.js";
 export * as Dependencies from "@/todo/dependencies.js";
 export * as Progress from "@/todo/progress.js";
 export * as Prompts from "@/todo/prompts.js";
+export * as Store from "@/todo/store.js";
+export * as Tools from "@/todo/tools.js";
 
 export interface Task {
   id: string;

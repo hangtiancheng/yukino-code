@@ -17,7 +17,7 @@ import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tool-result" });
 
-export * from "@/tool-result/constants.js";
+export * as Constants from "@/tool-result/constants.js";
 
 export function spillDir(sessionId: string): string {
   if (!sessionId) {
