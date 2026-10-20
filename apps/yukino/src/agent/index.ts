@@ -1495,6 +1495,7 @@ export class Agent {
       toolName: r.toolName,
       toolId: r.toolId,
       output: r.result.output,
+      ...(r.result.mcpApp ? { mcpApp: r.result.mcpApp } : {}),
       ...(r.result.contentBlocks?.length
         ? { contentBlocks: r.result.contentBlocks }
         : {}),

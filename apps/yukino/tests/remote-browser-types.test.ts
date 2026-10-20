@@ -6,6 +6,10 @@ import {
 } from "@/remote/browser/src/types.js";
 
 const validMessages: Record<ServerMessage["type"], ServerMessage> = {
+  mcp_app_response: {
+    type: "mcp_app_response",
+    data: { requestId: "r1", result: {} },
+  },
   connected: {
     type: "connected",
     data: { session: "s1", cwd: "/repo", streaming: false },

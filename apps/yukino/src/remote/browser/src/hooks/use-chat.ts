@@ -469,6 +469,7 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
             output: msg.data.output,
             isError: msg.data.isError,
             elapsed: msg.data.elapsed,
+            mcpApp: msg.data.mcpApp,
           };
         }
         return it;
@@ -486,9 +487,13 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
         output: msg.data.output,
         isError: msg.data.isError,
         elapsed: msg.data.elapsed,
+        mcpApp: msg.data.mcpApp,
       };
       return { ...state, items: [...state.items, item] };
     }
+
+    case "mcp_app_response":
+      return state;
 
     case "permission_request":
       return {

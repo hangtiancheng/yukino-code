@@ -15,6 +15,7 @@ import { TodoProgress } from "#/components/todo-progress.js";
 import { useChat } from "#/hooks/use-chat.js";
 import { useTheme } from "#/hooks/use-theme.js";
 import { useWebSocket } from "#/hooks/use-web-socket.js";
+import { McpAppContext } from "#/lib/mcp-app-context.js";
 import type {
   ClientMessage,
   CodeReviewStartPayload,
@@ -53,7 +54,7 @@ export function App() {
   const { theme, toggleTheme } = useTheme();
   const [activityOpen, setActivityOpen] = useState(false);
 
-  const { send } = useWebSocket({
+  const { send, requestApp } = useWebSocket({
     onMessage: dispatchMessage,
     onOpen: () => {
       setConnection("connected");
@@ -272,13 +273,17 @@ export function App() {
 
   return (
     <div className="flex h-dvh w-full flex-col bg-bg font-mono text-sm text-base antialiased">
-      <MessageList
-        items={state.items}
-        revision={state.transcriptRevision}
-        welcome={welcome}
-        onRespondPermission={handleRespondPermission}
-        onAnswerAsk={handleAnswerAsk}
-      />
+      <McpAppContext.Provider
+        value={{ request: requestApp, sendMessage: handleSend, theme }}
+      >
+        <MessageList
+          items={state.items}
+          revision={state.transcriptRevision}
+          welcome={welcome}
+          onRespondPermission={handleRespondPermission}
+          onAnswerAsk={handleAnswerAsk}
+        />
+      </McpAppContext.Provider>
       {state.todos && <TodoProgress todos={state.todos} />}
       <InputArea
         streaming={state.streaming}

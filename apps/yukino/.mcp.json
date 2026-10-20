@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "yukino-mcp": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["-F", "@yukino.js/mcp", "dev"]
+    }
+  }
+}

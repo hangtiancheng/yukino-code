@@ -65,6 +65,7 @@ import { createClient, type LLMClient } from "@/llm/client.js";
 import { discoverModels } from "@/llm/model-discovery.js";
 import { createChildLogger } from "@/logger/index.js";
 import type { LspServerConfig } from "@/lsp/config.js";
+import { McpAppRequestSchema, McpAppToolResultSchema } from "@/mcp/apps.js";
 import {
   retractMcpInstructions,
   syncMcpInstructions as announceMcpInstructions,
@@ -89,6 +90,7 @@ import {
 import { parseRemoteAddress } from "@/remote/address.js";
 import {
   BROWSER_DIST,
+  MCP_APP_AGENT_DISCONNECTED,
   FILE_CACHE_TTL_MS,
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_STALE_MS,
@@ -98,6 +100,7 @@ import {
   PENDING_REQUEST_TIMEOUT_MS,
 } from "@/remote/constants.js";
 import { AgentEventLogger } from "@/remote/log.js";
+import { RemoteMcpApps } from "@/remote/mcp-apps.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
 import { formatReviewReport } from "@/review/report.js";
 import { runCodeReview, validateReviewInput } from "@/review/runner.js";
@@ -1014,7 +1017,7 @@ export async function createRemoteAgent(
   let mcpManager: MCPManager | null = null;
 
   if (mcpConfigs && mcpConfigs.length > 0) {
-    const mgr = new MCPManager();
+    const mgr = new MCPManager(true);
     mcpManager = mgr;
 
     const result = await mgr.connectAll(mcpConfigs);
@@ -1138,6 +1141,7 @@ interface RemoteServerOptions {
 }
 
 export class RemoteServer {
+  private readonly mcpApps = new RemoteMcpApps();
   private app: Express;
   private server: ReturnType<typeof createServer>;
   private wss: WebSocketServer;
@@ -1322,6 +1326,9 @@ export class RemoteServer {
         data: { entries: historyMod.load().slice(-200) },
       });
       this.sendUsageSnapshot(ws);
+      for (const payload of this.mcpApps.entries()) {
+        this.send(ws, { type: "tool_result", data: payload });
+      }
       if (this.opts.providers.length === 0) {
         this.send(ws, {
           type: "provider_list",
@@ -1405,6 +1412,46 @@ export class RemoteServer {
   ): Promise<void> {
     try {
       switch (msg.type) {
+        case "mcp_app_request": {
+          const parsed = McpAppRequestSchema.safeParse(msg.data);
+          if (!parsed.success) {
+            break;
+          }
+          const controller = new AbortController();
+          const close = () => {
+            controller.abort();
+          };
+          ws.once("close", close);
+          try {
+            if (!this.agentHandle) {
+              throw new Error(MCP_APP_AGENT_DISCONNECTED);
+            }
+            const result = await this.mcpApps.request(
+              parsed.data,
+              this.agentHandle,
+              this.createPermissionCallback(),
+              AbortSignal.any([
+                controller.signal,
+                AbortSignal.timeout(PENDING_REQUEST_TIMEOUT_MS),
+              ]),
+            );
+            this.send(ws, {
+              type: "mcp_app_response",
+              data: { requestId: parsed.data.requestId, result },
+            });
+          } catch (error) {
+            this.send(ws, {
+              type: "mcp_app_response",
+              data: {
+                requestId: parsed.data.requestId,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            });
+          } finally {
+            ws.off("close", close);
+          }
+          break;
+        }
         case "user_message": {
           const parsed = UserMessageSchema.safeParse(msg.data);
           if (parsed.success) {
@@ -2043,6 +2090,7 @@ export class RemoteServer {
             toolId: ev.toolId,
             toolName: ev.toolName,
             output: ev.output,
+            ...(ev.mcpApp ? { mcpApp: ev.mcpApp } : {}),
             isError: ev.isError,
             elapsed: ev.elapsed,
           },
@@ -3089,7 +3137,7 @@ export class RemoteServer {
       });
       return;
     }
-    const mgr = handle.mcpManager ?? new MCPManager();
+    const mgr = handle.mcpManager ?? new MCPManager(true);
     handle.mcpManager = mgr;
     this.broadcast({
       type: "system",
@@ -4179,6 +4227,15 @@ export class RemoteServer {
 
   /** Broadcasts a message to all connected WebSocket clients. */
   private broadcast(msg: WsOutbound): void {
+    if (msg.type === "clear") {
+      this.mcpApps.clear();
+    }
+    if (msg.type === "tool_result" && this.agentHandle) {
+      const payload = McpAppToolResultSchema.safeParse(msg.data);
+      if (payload.success) {
+        this.mcpApps.register(payload.data, this.agentHandle);
+      }
+    }
     if (this.clients.size === 0) {
       return;
     }
@@ -4271,6 +4328,7 @@ export class RemoteServer {
    */
   async stop(): Promise<void> {
     this.stopping = true;
+    this.mcpApps.clear();
     this.followUps = [];
     this.pendingPlanExecution = null;
     this.cancelActiveRun();

@@ -10,6 +10,10 @@ import {
   StreamableHTTPClientTransport,
   type StreamableHTTPClientTransportOptions,
 } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+  CallToolResultSchema,
+  type CallToolResult,
+} from "@modelcontextprotocol/sdk/types.js";
 
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import type { MCPServerConfig } from "@/config/index.js";
@@ -18,7 +22,11 @@ import {
   maybeResizeAndDownsampleImage,
 } from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
-import { MCP_IMAGE_MEDIA_TYPES } from "@/mcp/constants.js";
+import {
+  MCP_APPS_EXTENSION,
+  MCP_APP_MIME_TYPE,
+  MCP_IMAGE_MEDIA_TYPES,
+} from "@/mcp/constants.js";
 import type {
   ToolResult,
   ToolResultContentBlock,
@@ -36,6 +44,7 @@ export interface MCPTool {
   name: string;
   description: string;
   inputSchema: ToolSchema["input_schema"];
+  _meta?: Record<string, unknown>;
 }
 
 // Claude-compatible environment expansion. Missing required variables fail the
@@ -182,10 +191,13 @@ export class MCPClient {
   private client: Client | null = null;
   private transport: MCPTransport | null = null;
   private unregisterExitCleanup: (() => void) | null = null;
+  private tools = new Map<string, MCPTool>();
+  readonly appsEnabled: boolean;
 
-  constructor(config: MCPServerConfig) {
+  constructor(config: MCPServerConfig, appsEnabled = false) {
     this.name = config.name;
     this.config = config;
+    this.appsEnabled = appsEnabled;
   }
 
   async connect(): Promise<void> {
@@ -227,7 +239,18 @@ export class MCPClient {
       );
     }
 
-    this.client = new Client({ name: "yukino", version }, {});
+    this.client = new Client(
+      { name: "yukino", version },
+      {
+        capabilities: this.appsEnabled
+          ? {
+              extensions: {
+                [MCP_APPS_EXTENSION]: { mimeTypes: [MCP_APP_MIME_TYPE] },
+              },
+            }
+          : {},
+      },
+    );
     await this.client.connect(this.transport);
 
     // A crash path (process.exit / uncaught exception) never awaits the async
@@ -268,10 +291,16 @@ export class MCPClient {
       );
       tools.push(
         ...result.tools.map(
-          ({ name, description, inputSchema: { properties, ...rest } }) => ({
+          ({
+            name,
+            description,
+            _meta,
+            inputSchema: { properties, ...rest },
+          }) => ({
             name,
             description: description ?? "",
             inputSchema: { ...rest, properties: properties ?? {} },
+            ...(_meta ? { _meta } : {}),
           }),
         ),
       );
@@ -285,7 +314,42 @@ export class MCPClient {
         seenCursors.add(cursor);
       }
     } while (cursor !== undefined);
-    return tools;
+    this.tools = new Map(tools.map((tool) => [tool.name, tool]));
+    return tools.filter((tool) => {
+      const ui = tool._meta?.ui;
+      const visibility = isRecord(ui) ? ui.visibility : undefined;
+      return !Array.isArray(visibility) || visibility.includes("model");
+    });
+  }
+
+  getTool(name: string): MCPTool | undefined {
+    return this.tools.get(name);
+  }
+
+  async readResource(uri: string, signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    if (!this.client) {
+      throw new Error("Not connected");
+    }
+    return this.client.readResource({ uri }, { signal });
+  }
+
+  async callToolResult(
+    name: string,
+    args: Record<string, unknown>,
+    abortSignal?: AbortSignal,
+  ): Promise<CallToolResult> {
+    abortSignal?.throwIfAborted();
+    if (!this.client) {
+      throw new Error("Not connected");
+    }
+    return CallToolResultSchema.parse(
+      await this.client.callTool(
+        { name, arguments: args },
+        CallToolResultSchema,
+        { signal: abortSignal },
+      ),
+    );
   }
 
   /** Calls a tool and preserves both its text fallback and provider-native rich content. */
@@ -294,22 +358,27 @@ export class MCPClient {
     args: Record<string, unknown>,
     abortSignal?: AbortSignal,
   ): Promise<ToolResult> {
-    abortSignal?.throwIfAborted();
-    if (!this.client) {
-      throw new Error("Not connected");
-    }
-    const result = await this.client.callTool(
-      { name, arguments: args },
-      undefined,
-      {
-        signal: abortSignal,
-      },
-    );
-    const converted =
-      result.content && Array.isArray(result.content)
-        ? await mcpContentToToolOutput(result.content)
-        : { output: JSON.stringify(result) };
-    return { ...converted, isError: result.isError === true };
+    const result = await this.callToolResult(name, args, abortSignal);
+    const converted = await mcpContentToToolOutput(result.content);
+    const ui = this.tools.get(name)?._meta?.ui;
+    const resourceUri = isRecord(ui) ? ui.resourceUri : undefined;
+    return {
+      ...converted,
+      isError: result.isError === true,
+      ...(this.appsEnabled &&
+      typeof resourceUri === "string" &&
+      resourceUri.startsWith("ui://")
+        ? {
+            mcpApp: {
+              serverName: this.name,
+              toolName: name,
+              resourceUri,
+              arguments: args,
+              result,
+            },
+          }
+        : {}),
+    };
   }
 
   async disconnect(): Promise<void> {

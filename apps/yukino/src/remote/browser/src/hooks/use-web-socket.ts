@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { OfflineMessageQueue } from "#/hooks/offline-queue.js";
+import { McpAppRequests, type RequestApp } from "#/lib/mcp-app-requests.js";
 import type { ClientMessage, ServerMessage } from "#/types.js";
 import { isServerMessage } from "#/types.js";
 
@@ -15,6 +16,7 @@ export type SendStatus = "sent" | "queued" | "dropped";
 
 interface UseWebSocketResult {
   send: (message: ClientMessage) => SendStatus;
+  requestApp: RequestApp;
 }
 
 const PING_INTERVAL_MS = 10_000;
@@ -53,6 +55,7 @@ function readAccessToken(): string | null {
 export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
   const { onMessage, onOpen, onClose } = opts;
   const wsRef = useRef<WebSocket | null>(null);
+  const appRequests = useRef(new McpAppRequests());
   const pendingRef = useRef(new OfflineMessageQueue());
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -83,6 +86,9 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
       }
     };
     const receive = (message: ServerMessage) => {
+      if (appRequests.current.receive(message)) {
+        return;
+      }
       if (
         message.type !== "stream_text" &&
         message.type !== "thinking_text" &&
@@ -169,6 +175,7 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
       };
 
       ws.onclose = () => {
+        appRequests.current.close();
         flushIncoming();
         onCloseRef.current();
         if (pingRef.current) {
@@ -249,5 +256,17 @@ export function useWebSocket(opts: UseWebSocketOptions): UseWebSocketResult {
     return pendingRef.current.enqueue(json) ? "queued" : "dropped";
   }, []);
 
-  return { send };
+  const requestApp: RequestApp = useCallback(
+    (appId, operation) => appRequests.current.request(appId, operation, send),
+    [send],
+  );
+
+  useEffect(() => {
+    const requests = appRequests.current;
+    return () => {
+      requests.close();
+    };
+  }, []);
+
+  return { send, requestApp };
 }

@@ -1,5 +1,6 @@
 import { Collapsible } from "#/components/collapsible.js";
 import { DiffLines } from "#/components/diff-lines.js";
+import { McpAppView } from "#/components/mcp-app.js";
 import { argsPreview, formatArgs } from "#/lib/format.js";
 import type { ToolItem } from "#/types.js";
 
@@ -49,49 +50,52 @@ export function ToolBlock({ item }: ToolBlockProps) {
   const previewOutput = diff ? <DiffLines text={previewText} /> : previewText;
 
   return (
-    <Collapsible
-      className={meta.panel}
-      preview={
-        output && (
+    <>
+      <Collapsible
+        className={meta.panel}
+        preview={
+          output && (
+            <>
+              {previewOutput}
+              {lines.length > limit && (
+                <p className="mt-1 text-dim">
+                  … ({String(lines.length - limit)} more lines, click to expand)
+                </p>
+              )}
+            </>
+          )
+        }
+        header={
           <>
-            {previewOutput}
-            {lines.length > limit && (
-              <p className="mt-1 text-dim">
-                … ({String(lines.length - limit)} more lines, click to expand)
-              </p>
-            )}
-          </>
-        )
-      }
-      header={
-        <>
-          <span className="shrink-0 font-semibold text-bright">
-            {shell
-              ? item.toolName.toLowerCase() === "bash"
-                ? "$"
-                : ">"
-              : item.toolName}
-          </span>
-          {preview && (
-            <span className="ml-0.5 max-w-105 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-dim">
-              {preview}
+            <span className="shrink-0 font-semibold text-bright">
+              {shell
+                ? item.toolName.toLowerCase() === "bash"
+                  ? "$"
+                  : ">"
+                : item.toolName}
             </span>
-          )}
-          <span
-            className={`ml-auto shrink-0 text-xs tabular-nums ${meta.pill}`}
-          >
-            {statusText}
-          </span>
-        </>
-      }
-    >
-      {argsStr && (
-        <div className="mb-2 text-muted">
-          Args:{"\n"}
-          {argsStr}
-        </div>
-      )}
-      {output && (diff ? <DiffLines text={output} /> : <div>{output}</div>)}
-    </Collapsible>
+            {preview && (
+              <span className="ml-0.5 max-w-105 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-dim">
+                {preview}
+              </span>
+            )}
+            <span
+              className={`ml-auto shrink-0 text-xs tabular-nums ${meta.pill}`}
+            >
+              {statusText}
+            </span>
+          </>
+        }
+      >
+        {argsStr && (
+          <div className="mb-2 text-muted">
+            Args:{"\n"}
+            {argsStr}
+          </div>
+        )}
+        {output && (diff ? <DiffLines text={output} /> : <div>{output}</div>)}
+      </Collapsible>
+      {item.mcpApp && <McpAppView appId={item.toolId} app={item.mcpApp} />}
+    </>
   );
 }

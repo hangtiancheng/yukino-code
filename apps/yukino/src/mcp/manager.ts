@@ -14,6 +14,7 @@ export interface ConnectResult {
 }
 
 export class MCPManager {
+  constructor(private readonly appsEnabled = false) {}
   private clients = new Map<string, MCPClient>();
   private operation = Promise.resolve();
 
@@ -64,7 +65,7 @@ export class MCPManager {
     ].filter((cfg) => cfg.enabled !== false && !this.clients.has(cfg.name));
     const connections = await Promise.all(
       pending.map(async (cfg) => {
-        const client = new MCPClient(cfg);
+        const client = new MCPClient(cfg, this.appsEnabled);
         try {
           await client.connect();
           const tools = await client.listTools();

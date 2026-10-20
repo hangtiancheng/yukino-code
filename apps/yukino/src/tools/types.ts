@@ -3,6 +3,7 @@ import type OpenAI from "openai";
 
 import type { FileHistory } from "@/file-history/index.js";
 import type { GoalManager } from "@/goal/index.js";
+import type { McpApp } from "@/mcp/apps.js";
 import type { Decision, PermissionChecker } from "@/permissions/index.js";
 import type { TaskManager } from "@/subagent/task-manager.js";
 import { IMAGE_MEDIA_TYPES } from "@/tools/constants.js";
@@ -180,6 +181,7 @@ export function isToolResultContentBlock(
 
 export interface ToolResult {
   output: string;
+  mcpApp?: McpApp;
   contentBlocks?: ToolResultContentBlock[];
   isError: boolean;
 }

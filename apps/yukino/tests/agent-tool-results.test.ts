@@ -104,7 +104,7 @@ async function runBatch(
   const results =
     conversation.getMessages().findLast((message) => message.toolResults)
       ?.toolResults ?? [];
-  return { conversation, results };
+  return { conversation, results, events };
 }
 
 function spillPath(content: string) {
@@ -116,6 +116,26 @@ function spillPath(content: string) {
 }
 
 describe("agent tool-result artifacts", () => {
+  it("publishes App metadata to UI events without adding UI-only results to model context", async () => {
+    const cwd = makeCwd();
+    const mcpApp = {
+      serverName: "apps",
+      toolName: "create_app",
+      resourceUri: "ui://app/view.html",
+      arguments: {},
+      result: { content: [], _meta: { html: "private-ui-result" } },
+    };
+    const tool = outputTool("App", "App rendered");
+    tool.execute = () =>
+      Promise.resolve({ output: "App rendered", isError: false, mcpApp });
+    const { conversation, events } = await runBatch(cwd, [tool]);
+    expect(events.find((event) => event.type === "tool_result")).toMatchObject({
+      mcpApp,
+    });
+    expect(JSON.stringify(conversation.getMessages())).not.toContain(
+      "private-ui-result",
+    );
+  });
   it("spills anonymous outputs into isolated namespaces without creating resumable sessions", async () => {
     const cwd = makeCwd();
     const firstOutput = "a".repeat(60_000);

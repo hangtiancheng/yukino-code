@@ -1,4 +1,5 @@
 import type { UsageInfo } from "@/llm/events.js";
+import type { McpApp } from "@/mcp/apps.js";
 import type { CompactBoundaryPayload } from "@/session/index.js";
 import type { ToolResultContentBlock } from "@/tools/types.js";
 
@@ -17,6 +18,7 @@ export type AgentEvent =
       toolName: string;
       toolId: string;
       output: string;
+      mcpApp?: McpApp;
       contentBlocks?: ToolResultContentBlock[];
       isError: boolean;
       elapsed: number;

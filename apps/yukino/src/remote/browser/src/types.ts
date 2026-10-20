@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { McpAppSchema } from "@/mcp/apps.js";
+import type { McpApp, McpAppRequest } from "@/mcp/apps.js";
+
 /**
  * Strict type definitions for the Yukino Remote web client.
  *
@@ -59,6 +62,7 @@ export interface ToolResultPayload {
   output: string;
   isError: boolean;
   elapsed: number;
+  mcpApp?: McpApp;
 }
 
 export interface PermissionRequestPayload {
@@ -268,6 +272,14 @@ const toolArgsSchema = z.record(z.string(), z.unknown()).nullable();
 /** Complete runtime schema for frames crossing the WebSocket boundary. */
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({
+    type: z.literal("mcp_app_response"),
+    data: z.strictObject({
+      requestId: z.string(),
+      result: z.unknown().optional(),
+      error: z.string().optional(),
+    }),
+  }),
+  z.strictObject({
     type: z.literal("connected"),
     data: z.strictObject({
       session: z.string(),
@@ -341,6 +353,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
       output: z.string(),
       isError: z.boolean(),
       elapsed: z.number(),
+      mcpApp: McpAppSchema.optional(),
     }),
   }),
   z.strictObject({
@@ -658,6 +671,7 @@ export interface ImageUploadPayload {
 }
 
 export type ClientMessage =
+  | { type: "mcp_app_request"; data: McpAppRequest }
   | { type: "user_message"; data: UserMessagePayload }
   | { type: "permission_response"; data: PermissionResponsePayload }
   | { type: "ask_user_response"; data: AskUserResponsePayload }
@@ -727,6 +741,7 @@ export interface ToolItem {
   output: string;
   isError: boolean;
   elapsed: number;
+  mcpApp?: McpApp;
 }
 
 export interface PermissionItem {

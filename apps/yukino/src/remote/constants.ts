@@ -3,6 +3,12 @@ import { join } from "node:path";
 
 /** Max characters of tool output kept in a log line. */
 export const TEXT_PREVIEW_CHARS = 800;
+export const MCP_APP_EXPIRED =
+  "This app is no longer connected to its MCP server. Generate it again.";
+export const MCP_APP_TOOL_UNAVAILABLE =
+  "This tool is not available to the app.";
+export const MCP_APP_PERMISSION_DENIED = "Permission denied.";
+export const MCP_APP_AGENT_DISCONNECTED = "Agent is not connected.";
 
 // Permission/ask requests with no client response settle after this long, so
 // a closed browser tab cannot pin the streaming slot (and the run) forever.
