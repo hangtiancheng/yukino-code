@@ -155,6 +155,7 @@ describe("tool completion streaming", () => {
             toolName: "Agent",
             arguments: {
               subagent_type: "general-purpose",
+              fork: false,
               prompt: "do work",
               description: "work",
             },

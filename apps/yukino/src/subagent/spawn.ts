@@ -51,7 +51,10 @@ export interface SubagentRunOptions {
   background?: boolean;
   onPermissionRequest?: AgentConfig["onPermissionRequest"];
   permissionMode?: PermissionChecker["mode"];
+  /** Persistent teammate history; the caller supplies its scoped registry. */
   conversation?: ConversationManager;
+  /** Inherited context for a definition run; definition tool restrictions still apply. */
+  contextSnapshot?: ConversationManager;
   /**
    * Whether this run gets a per-run background task manager (default true).
    * In-process teammate turns pass false: a teammate loop is one run per task
@@ -93,9 +96,8 @@ export async function spawnSubagent(
       ? await createClient(provider, systemPrompt)
       : parentClient;
 
-  // Build the subagent tool registry. Fork runs (options.conversation set)
-  // reuse the caller's already-filtered registry (cloneRegistryForFork);
-  // definition runs apply multi-layer filtering here.
+  // Persistent teammates reuse their prepared registry. One-shot runs apply
+  // role restrictions equally to inherited and fresh conversations.
   const registry = options.conversation
     ? parentRegistry
     : filterToolsForAgent(
@@ -121,8 +123,15 @@ export async function spawnSubagent(
       ? inheritedChecker.forCwd(cwd)
       : inheritedChecker.forSubagent(cwd, definition.permissionMode);
     checker.readOnly ||= definition.readOnly ?? false;
-    const conversation = options.conversation ?? new ConversationManager();
-    if (!options.conversation || conversation.getMessages().length === 0) {
+    const conversation =
+      options.conversation ??
+      options.contextSnapshot ??
+      new ConversationManager();
+    const initialize = conversation.getMessages().length === 0;
+    if (initialize && options.conversation && options.contextSnapshot) {
+      conversation.appendMessages(options.contextSnapshot.getMessages());
+    }
+    if (!options.conversation || initialize) {
       conversation.addSystemReminder(buildSubagentInstructions(definition));
     }
     conversation.addUserMessage(prompt);

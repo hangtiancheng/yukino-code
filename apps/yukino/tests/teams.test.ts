@@ -214,7 +214,7 @@ describe("teams orchestration", () => {
           {
             cwd: cwd(),
           },
-          { team_name: "t1" },
+          { team_name: "t1", fork: false },
         )
       ).output,
     ).toContain("created");
@@ -288,6 +288,7 @@ describe("teams orchestration", () => {
       { cwd: project },
       {
         team_name: "squad",
+        fork: false,
         name: "w1",
         description: "worker",
         prompt: "task A",
@@ -334,6 +335,7 @@ describe("teams orchestration", () => {
       { cwd: project, permissionChecker: parent },
       {
         team_name: "squad",
+        fork: false,
         name: "w1",
         description: "worker",
         prompt: "task",
@@ -405,7 +407,10 @@ describe("teams orchestration", () => {
     const mgr = new TeamManager(project);
 
     // A live team with a spawned teammate.
-    await new TeamCreateTool(mgr).execute({ cwd: cwd() }, { team_name: "old" });
+    await new TeamCreateTool(mgr).execute(
+      { cwd: cwd() },
+      { team_name: "old", fork: false },
+    );
     mgr
       .get("old")
       ?.spawnTeammate("w1", "task A", (task: string) =>
@@ -421,7 +426,7 @@ describe("teams orchestration", () => {
 
     const result = await new TeamCreateTool(mgr).execute(
       { cwd: cwd() },
-      { team_name: "fresh" },
+      { team_name: "fresh", fork: false },
     );
 
     expect(result.isError).toBe(false);

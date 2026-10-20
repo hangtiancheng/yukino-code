@@ -106,11 +106,19 @@ async function setup(cwd: string): Promise<{
 }
 
 describe("remote terminal-UI parity", () => {
-  it.each(["complete", "cancel", "fail"] as const)(
-    "runs /review as a synchronous child through the browser command path (%s)",
-    async (outcome) => {
+  it.each([
+    { agent: "review", outcome: "complete" },
+    { agent: "review", outcome: "cancel" },
+    { agent: "review", outcome: "fail" },
+    { agent: "plan", outcome: "complete" },
+    { agent: "plan", outcome: "cancel" },
+    { agent: "plan", outcome: "fail" },
+  ])(
+    "runs /$agent as a synchronous child through the browser command path ($outcome)",
+    async ({ agent, outcome }) => {
       const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-review-"));
       const { server, handle, broadcasts } = await setup(cwd);
+      handle.conv.addUserMessage("PARENT_CONTEXT");
       let release!: () => void;
       const waiting = new Promise<void>((resolve) => {
         release = resolve;
@@ -120,6 +128,13 @@ describe("remote terminal-UI parity", () => {
       ) {
         const conversation: unknown = Reflect.get(this, "conversation");
         expect(conversation).not.toBe(handle.conv);
+        expect(JSON.stringify(conversation).includes("PARENT_CONTEXT")).toBe(
+          agent === "plan",
+        );
+        if (agent === "plan") {
+          const checker: unknown = Reflect.get(this, "checker");
+          expect(checker).toMatchObject({ readOnly: true });
+        }
         const signal: unknown = Reflect.get(this, "abortSignal");
         if (!(signal instanceof AbortSignal)) {
           throw new Error("Missing review cancellation signal");
@@ -144,7 +159,7 @@ describe("remote terminal-UI parity", () => {
       });
       try {
         const pending = invokePrivateAsync(server, "handleUserMessage", [
-          "/review 42",
+          `/${agent} 42`,
         ]);
         await vi.waitFor(() => {
           expect(run).toHaveBeenCalledOnce();
@@ -155,7 +170,7 @@ describe("remote terminal-UI parity", () => {
         )?.data;
         expect(toolUse).toMatchObject({
           toolName: "Agent",
-          args: { subagent_type: "review", run_in_background: false },
+          args: { subagent_type: agent, run_in_background: false },
         });
         const input = z
           .object({ args: z.object({ prompt: z.string() }) })
@@ -173,10 +188,15 @@ describe("remote terminal-UI parity", () => {
         expect(Reflect.get(server, "streaming")).toBe(false);
         expect(run).toHaveBeenCalledOnce();
         expect(
+          broadcasts.some(
+            (message) => message.type === "plan_approval_request",
+          ),
+        ).toBe(agent === "plan" && outcome === "complete");
+        expect(
           loadSession(cwd, handle.sessionId)
             .filter((message) => message.role === "user")
             .map((message) => message.content),
-        ).toEqual(["/review 42"]);
+        ).toEqual([`/${agent} 42`]);
         expect(
           broadcasts.find((message) => message.type === "loop_complete")?.data,
         ).toMatchObject({

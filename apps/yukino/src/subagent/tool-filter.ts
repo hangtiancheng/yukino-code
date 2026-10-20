@@ -1,9 +1,7 @@
 import type { PermissionMode } from "@/permissions/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
 import {
   ASYNC_AGENT_ALLOWED_TOOLS,
-  MAIN_AGENT_ONLY_TOOLS,
   SUBAGENT_DISALLOWED_TOOLS,
 } from "@/subagent/constants.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
@@ -117,24 +115,4 @@ export function cloneRegistryForTeammate(
     registerScopedTool(teammate, tool, tasks);
   }
   return teammate;
-}
-
-export function cloneRegistryForFork(registry: ToolRegistry): ToolRegistry {
-  const forked = new ToolRegistry();
-  const tasks = new TaskList();
-  forked.copyLoadingStateFrom(registry);
-  for (const tool of registry.listTools()) {
-    if (MAIN_AGENT_ONLY_TOOLS.has(tool.name)) {
-      continue;
-    }
-    if (["TeamCreate", "TeamDelete", "SendMessage"].includes(tool.name)) {
-      continue;
-    }
-    if (tool instanceof AgentTool) {
-      forked.register(tool.forFork(forked));
-    } else {
-      registerScopedTool(forked, tool, tasks);
-    }
-  }
-  return forked;
 }

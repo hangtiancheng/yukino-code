@@ -254,9 +254,8 @@ enable_memory: false
 # (team/task management) so all actual work is delegated to teammates.
 enable_coordinator_mode: false
 
-# Whether an Agent call without subagent_type forks the current conversation (child inherits
-# the full history). Default: true; only an explicit false disables it — disabled calls spawn
-# a fresh general-purpose subagent instead.
+# Default value of the Agent tool's fork parameter, independent of subagent_type.
+# Default: true. Each call can explicitly set fork: true or fork: false to override it.
 enable_fork: true
 
 # User-level MCP servers. Merged with the project-level .mcp.json; on a name collision the
@@ -508,11 +507,22 @@ The common built-in registry is used by terminal, print, Remote/ACP/A2A, and in-
 
 ### Worker lifecycle
 
+`Agent` selects its role and context independently: `subagent_type` defaults to `"general-purpose"`, while `fork` defaults to `true` (or the configured `enable_fork` value). An explicit `fork` value overrides the configuration for every role.
+
+| Parameters                           | Role            | Initial context                 |
+| ------------------------------------ | --------------- | ------------------------------- |
+| `subagent_type: "plan", fork: true`  | plan            | Copy of the parent conversation |
+| `subagent_type: "plan", fork: false` | plan            | Fresh conversation              |
+| `fork: true`                         | general-purpose | Copy of the parent conversation |
+| `fork: false`                        | general-purpose | Fresh conversation              |
+
+The same combinations work for other built-in and user-defined roles. Role tool restrictions, permissions, models, and `max_turns` apply in either context mode. `run_in_background` separately controls one-shot scheduling. For persistent teammates, `fork` seeds the initial conversation once; later assignments reuse the teammate's own history. Forking copies the conversation without sharing subsequent changes, and closes pending parent tool calls only in the copied transcript.
+
 Ordinary subagents run once. On completion, failure, or interruption, the host waits for their owned background commands to stop and releases their scoped tool registry. Parent-owned LSP/MCP tools are borrowed, not shut down by a child. Background task records and subagent transcripts persist under `~/.yukino/sessions/artifacts/`; `TaskOutput` includes the transcript path and timestamps. Finished results remain queryable from disk after the in-memory retention limit, and delivered notifications are recorded in the leader's session. Resuming restores terminal outcomes and reports abandoned running tasks as interrupted failures. Iteration-limit and model failures preserve partial text alongside the error and transcript. Cancellation callbacks are discarded when runners settle. A fork cannot create or replace teams, or stop parent-owned work.
 
-An explicit `run_in_background: false` overrides a predefined agent's `background: true`; when omitted, the definition supplies the default. Forks default to foreground execution. Role files accept a UTF-8 BOM before frontmatter. Delegated agents cannot manage the main session's persistent goal.
+An explicit `run_in_background: false` overrides a predefined agent's `background: true`; when omitted, the definition supplies the default, independently of `fork`. Role files accept a UTF-8 BOM before frontmatter. Delegated agents cannot manage the main session's persistent goal.
 
-Ordinary subagents have no default model-turn limit. Role files can set a positive `max_turns` to impose one. Forks have a 200-model-turn limit. Foreground and background execution use the same limits. Reaching a configured limit reports failure with partial output and a transcript path; it does not mark the assignment complete.
+Ordinary subagents have no default model-turn limit. Role files can set a positive `max_turns` to impose one. Fresh and inherited conversations, foreground and background execution all use the selected role's limit. Reaching a configured limit reports failure with partial output and a transcript path; it does not mark the assignment complete.
 
 Persistent teammates become idle after each turn. They keep conversation and private checklist context for follow-up assignments, but must send findings with `SendMessage`; final text is not automatically forwarded to the leader. They exit on explicit shutdown, cancellation, failure, or loss of the leader. Exit clears live permission/cancellation references, releases owned tools, and resets unfinished owned tasks to unassigned/pending. Completed and cancelled records remain intact. Teammate task ownership is not released merely because a turn becomes idle.
 
@@ -666,7 +676,7 @@ Inside the UI, these commands are available:
 | /skills              | List available skills                                                                                                                                                                       |
 | /skills reload       | Hot-reload skills from disk                                                                                                                                                                 |
 | /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`; `/skill reload` routes to `/skills reload`)                                                                                            |
-| /plan [task]         | Enter plan mode (read-only investigation); optionally start planning the given task immediately                                                                                             |
+| /plan [task]         | Run the built-in read-only plan agent synchronously with the main conversation context                                                                                                      |
 | /goal [args]         | Set or view a persistent goal; pause, resume, replace, complete, clear, or continue after the turn limit                                                                                    |
 | /compact             | Force conversation compaction                                                                                                                                                               |
 | /clear               | Reset the session and clear the terminal                                                                                                                                                    |
@@ -699,7 +709,9 @@ Commands can run while the model is streaming, with at most one user command at 
 | Ctrl+V    | Paste a clipboard image (Alt+V on Windows)                                          |
 | Shift+Tab | Cycle default → acceptEdits → bypassPermissions → default                           |
 
-Enter plan mode with `/plan`, or use `/plan <task>` to enter and start planning immediately. In interactive terminal and browser sessions, the main agent can also call `EnterPlanMode` when a task needs planning. `Shift+Tab` and the browser's permission-mode badge only cycle the three execution permission modes; from plan mode, they return to `default`.
+Run `/plan` to plan the current task, or `/plan <task>` to specify a planning request. In interactive terminal and browser sessions, both `/plan` and the main agent's `EnterPlanMode` tool run the built-in read-only `plan` agent synchronously in the foreground with a fork of the main conversation. The host saves the returned plan and presents it for user approval before implementation. Failed or cancelled planning does not open approval. `Shift+Tab` and the browser's permission-mode badge only cycle the three execution permission modes; from plan mode, they return to `default`.
+
+In the interactive terminal, `/feedback [description]` runs session analysis synchronously in the built-in `general-purpose` agent with a fork of the main conversation. Select diagnostic attachments, review the prepared issues, and approve them before the host uploads attachments or files issues. Cancelling feedback stops the foreground worker.
 
 Press ↓ on the last visual row of the input to view all teammates and background subagents, including while the foreground agent is streaming. Completion menus and prompt-history navigation take precedence. Enter opens an agent's details, Escape returns or closes the list, and the unsent draft and cursor are preserved. Teammate spawn cards scroll with the transcript like background subagent cards; current progress is available in the Agents list.
 

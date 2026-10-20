@@ -40,7 +40,6 @@ import type {
   IssueDraft,
 } from "@/feedback/types.js";
 import { writeZipArchive } from "@/feedback/zip.js";
-import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import { COMPACT_BOUNDARY } from "@/session/constants.js";
 import { loadSession, rebuildFromSession } from "@/session/index.js";
@@ -80,7 +79,7 @@ function analysisHistory(deps: PipelineDeps): Message[] {
 export interface PipelineDeps {
   cwd: string;
   sessionId: string;
-  client: LLMClient;
+  runAgent: (prompt: string) => Promise<string>;
   messages: Message[];
   runtime?: RuntimeInfo;
   contextWindow: number;
@@ -285,7 +284,7 @@ export async function runFeedbackPipeline(
   let drafts: IssueDraft[];
   try {
     drafts = await analyzeHarnessAnomalies({
-      client: deps.client,
+      runAgent: deps.runAgent,
       messages: analysisHistory(deps),
       logContent,
       description: options.description,

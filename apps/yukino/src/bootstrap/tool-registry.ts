@@ -91,7 +91,7 @@ export function createToolRegistry(
     options.enableModelPlanMode ??
     options.interactionMode !== "non-interactive"
   ) {
-    registry.register(new EnterPlanModeTool());
+    registry.register(new EnterPlanModeTool(registry));
   }
   registry.register(new EnterWorktreeTool());
   registry.register(new ExitPlanModeTool());

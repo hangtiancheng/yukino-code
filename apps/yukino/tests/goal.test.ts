@@ -22,10 +22,7 @@ import {
   getSessionFilePath,
   truncateSessionLines,
 } from "@/session/index.js";
-import {
-  cloneRegistryForFork,
-  filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
+import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import { GoalTool } from "@/tools/goal.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { ProviderToolSchema } from "@/tools/types.js";
@@ -643,7 +640,9 @@ describe("persistent goals", () => {
   it("prevents delegated agents from completing or replacing the parent's goal", async () => {
     const registry = new ToolRegistry();
     registry.register(new GoalTool());
-    expect(cloneRegistryForFork(registry).get("Goal")).toBeUndefined();
+    expect(
+      filterToolsForAgent(registry, undefined, undefined, false).get("Goal"),
+    ).toBeUndefined();
     expect(
       filterToolsForAgent(registry, undefined, undefined, false).get("Goal"),
     ).toBeUndefined();

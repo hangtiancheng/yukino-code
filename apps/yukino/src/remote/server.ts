@@ -125,7 +125,7 @@ import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/constants.js";
+import { BUILTIN_AGENTS } from "@/subagent/constants.js";
 import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
 import {
   TaskManager,
@@ -894,6 +894,7 @@ export async function createRemoteAgent(
         {
           abortSignal,
           backgroundTasks: false,
+          contextSnapshot: options?.contextSnapshot,
           agentName: options?.agentName,
           conversation,
           onPermissionRequest: options?.onPermissionRequest,
@@ -916,7 +917,15 @@ export async function createRemoteAgent(
   const agentTool = new AgentTool(
     cwd,
     registry,
-    async (def, prompt, background, modelOverride?, cwdOverride?, context?) => {
+    async (
+      def,
+      prompt,
+      background,
+      modelOverride?,
+      cwdOverride?,
+      context?,
+      contextSnapshot?,
+    ) => {
       const toolCallId = context?.toolCallId ?? nextRequestId("subagent");
       return trackSubagent(
         toolCallId,
@@ -939,6 +948,7 @@ export async function createRemoteAgent(
               : context?.permissionChecker,
             {
               sessionId: context?.subagentSessionId,
+              contextSnapshot,
               abortSignal: context?.abortSignal,
               background,
               onPermissionRequest: context?.onPermissionRequest,
@@ -948,40 +958,9 @@ export async function createRemoteAgent(
       );
     },
     conv,
-    async (prompt, forkConv, forkRegistry, modelOverride?, context?) => {
-      const forkCwd = context?.cwd ?? cwd;
-      const toolCallId = context?.toolCallId ?? nextRequestId("fork");
-      return trackSubagent(
-        toolCallId,
-        "fork",
-        false,
-        context?.abortSignal,
-        (onEvent) =>
-          spawnSubagent(
-            FORK_AGENT,
-            prompt,
-            handle.client,
-            forkRegistry,
-            handle.provider,
-            forkCwd,
-            undefined,
-            onEvent,
-            modelOverride,
-            context?.permissionChecker ?? handle.checker,
-            {
-              agentName: "fork",
-              conversation: forkConv,
-              sessionId: context?.subagentSessionId,
-              memoryContent: memReminder,
-              abortSignal: context?.abortSignal,
-              onPermissionRequest: context?.onPermissionRequest,
-            },
-          ),
-      );
-    },
     backgroundTaskManager,
   );
-  agentTool.forkDisabled = forkDisabled ?? false;
+  agentTool.defaultFork = !(forkDisabled ?? false);
   // Wire the team manager into AgentTool so the team_name teammate path takes
   // effect (teammates receive shared team task-board tools).
   agentTool.setTeamManager(teamManager, teamRunAgentFactory);
@@ -2073,7 +2052,10 @@ export class RemoteServer {
             elapsed: ev.elapsed,
           },
         });
-        if (ev.toolName === "ExitPlanMode" && !ev.isError) {
+        if (
+          (ev.toolName === "ExitPlanMode" || ev.toolName === "EnterPlanMode") &&
+          !ev.isError
+        ) {
           this.exitPlanSucceeded = true;
         }
         if (ev.toolName === "EnterPlanMode" && !ev.isError) {
@@ -2112,7 +2094,7 @@ export class RemoteServer {
           },
         });
         // Plan approval gate (parity with the terminal UI): after a run in
-        // plan mode where ExitPlanMode succeeded, ask the user to approve.
+        // plan mode where planning succeeded, ask the user to approve.
         if (
           this.agentHandle?.permissionMode === "plan" &&
           this.exitPlanSucceeded
@@ -2247,28 +2229,39 @@ export class RemoteServer {
         const displayText = args ? `/${name} ${args}` : `/${name}`;
 
         if (cmd.agent) {
+          this.exitPlanSucceeded = false;
+          this.runCanceled = false;
           const controller = new AbortController();
           this.subagentController = controller;
           const startTime = Date.now();
           try {
-            await runSubagentCommand(cmd.agent, prompt, displayText, {
-              cwd: handle.cwd,
-              sessionId: handle.sessionId,
-              registry: handle.registry,
-              conversation: handle.conv,
-              permissionChecker: handle.checker,
-              onPermissionRequest: this.createPermissionCallback(),
-              abortSignal: controller.signal,
-              onEvent: (event) => {
-                this.bridgeEvent(event, startTime, () => {});
-                if (event.type === "stream_text") {
-                  this.broadcast({
-                    type: "stream_end",
-                    data: { text: event.text },
-                  });
-                }
+            const result = await runSubagentCommand(
+              cmd.agent,
+              prompt,
+              displayText,
+              {
+                cwd: handle.cwd,
+                sessionId: handle.sessionId,
+                registry: handle.registry,
+                conversation: handle.conv,
+                permissionChecker: handle.checker,
+                onPermissionRequest: this.createPermissionCallback(),
+                abortSignal: controller.signal,
+                onEvent: (event) => {
+                  this.bridgeEvent(event, startTime, () => {});
+                  if (event.type === "stream_text") {
+                    this.broadcast({
+                      type: "stream_end",
+                      data: { text: event.text },
+                    });
+                  }
+                },
               },
-            });
+            );
+            if (cmd.agent === "plan" && !result.isError) {
+              this.broadcastStatus();
+              this.broadcastPlanApprovalRequest();
+            }
           } finally {
             this.subagentController = null;
             this.broadcast({ type: "command_done", data: null });
@@ -2467,10 +2460,6 @@ export class RemoteServer {
 
       case "compact":
         await this.handleCompact(args);
-        break;
-
-      case "plan":
-        await this.handlePlan(args);
         break;
 
       case "feedback":
@@ -3545,80 +3534,6 @@ export class RemoteServer {
       });
     } finally {
       this.compactController = null;
-      this.broadcast({ type: "command_done", data: null });
-    }
-  }
-
-  /** Handles /plan command: enter plan mode, optionally with args. */
-  private async handlePlan(args: string): Promise<void> {
-    if (!this.agentHandle) {
-      return;
-    }
-    const handle = this.agentHandle;
-    const cwd = handle.cwd;
-    const planPath = getOrCreatePlanPath(handle);
-
-    handle.checker.enterPlanMode();
-    this.broadcast({
-      type: "system",
-      data: {
-        message:
-          `Entered plan mode (read-only). Plan file: ${planPath}\n` +
-          "Investigate and design your approach. The agent will call ExitPlanMode when the plan is ready.",
-      },
-    });
-    this.broadcastStatus();
-
-    // Re-enter plan mode: if a plan file already exists, rebuild the reminder
-    // (parity with the terminal UI).
-    if (this.hasExitedPlanMode && planExists(handle)) {
-      const reentryMsg = buildPlanModeReentryReminder(planPath, true);
-      if (reentryMsg) {
-        handle.conv.addSystemReminder(reentryMsg);
-        this.broadcast({ type: "system", data: { message: reentryMsg } });
-      }
-      this.hasExitedPlanMode = false;
-    }
-
-    if (args) {
-      this.exitPlanSucceeded = false;
-      this.runCanceled = false;
-      saveMessage(cwd, handle.sessionId, {
-        role: "user",
-        content: `/plan ${args}`,
-        timestamp: Math.floor(Date.now() / 1000),
-      });
-
-      const startTime = Date.now();
-      try {
-        const callbacks: RunCallbacks = {
-          onPermissionRequest: this.createPermissionCallback(),
-        };
-
-        let streamBuf = "";
-        for await (const ev of handle.run(args, callbacks)) {
-          if (
-            ev.type === "tool_result" ||
-            ev.type === "turn_complete" ||
-            ev.type === "loop_complete"
-          ) {
-            if (streamBuf) {
-              this.broadcast({ type: "stream_end", data: { text: streamBuf } });
-              streamBuf = "";
-            }
-          }
-          this.bridgeEvent(ev, startTime, (t) => {
-            streamBuf += t;
-          });
-        }
-      } catch (err) {
-        log.error({ err }, "agent stream error in plan command");
-        this.broadcast({
-          type: "error",
-          data: { message: err instanceof Error ? err.message : String(err) },
-        });
-      }
-    } else {
       this.broadcast({ type: "command_done", data: null });
     }
   }

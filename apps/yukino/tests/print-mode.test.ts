@@ -246,6 +246,7 @@ function failingBackgroundClient(dispatchFromLeader: boolean): OpenAIClient {
         description: "original dispatch",
         prompt: "unique-child-assignment",
         subagent_type: "general-purpose",
+        fork: false,
         run_in_background: true,
       });
     } else {
@@ -319,7 +320,7 @@ describe("durable background outcomes across hosts", () => {
             prompt: "unique-child-assignment",
             run_in_background: true,
             ...(route === "defined"
-              ? { subagent_type: "general-purpose" }
+              ? { subagent_type: "general-purpose", fork: false }
               : {}),
           },
         );
@@ -513,9 +514,11 @@ describe("print mode delegation", () => {
     expect(requests).toHaveLength(3);
     expect(requests[0]).toContain("Keep the project constraint.");
     expect(requests[1]).toContain("Parent task");
-    expect(requests[1]).toContain("fork_boilerplate");
+    expect(requests[1]).toContain("general-purpose");
     expect(requests[2]).toContain("worker evidence");
-    expect(requests[2]).not.toContain("fork_boilerplate");
+    expect(requests[2]).not.toContain(
+      "Complete the assigned task and return your result to the parent agent.",
+    );
     expect(process.exitCode).toBe(0);
   });
 
@@ -529,7 +532,7 @@ describe("print mode delegation", () => {
       turns = [delegate({}), [end]];
       await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
       expect(spawn).toHaveBeenCalledOnce();
-      expect(Boolean(spawn.mock.calls[0]?.[10]?.conversation)).toBe(fork);
+      expect(Boolean(spawn.mock.calls[0]?.[10]?.contextSnapshot)).toBe(fork);
       expect(spawn.mock.calls[0]?.[9]?.mode).toBe("bypassPermissions");
     },
   );
@@ -569,6 +572,7 @@ describe("print mode delegation", () => {
     turns = [
       delegate({
         subagent_type: "general-purpose",
+        fork: false,
         run_in_background: true,
         isolation: "worktree",
         model: "worker-model",
@@ -785,7 +789,11 @@ describe("print mode completion", () => {
         });
       });
     turns = [
-      delegate({ subagent_type: "explore", run_in_background: true }),
+      delegate({
+        subagent_type: "explore",
+        fork: false,
+        run_in_background: true,
+      }),
       [end],
     ];
     await runPrintMode({ prompt: "Parent task", outputFormat: "text" });

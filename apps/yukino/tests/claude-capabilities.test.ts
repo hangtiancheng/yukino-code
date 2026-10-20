@@ -67,7 +67,18 @@ describe("Claude capability contracts", () => {
     const checker = new PermissionChecker(cwd, "acceptEdits");
     const listener = vi.fn();
     checker.subscribeMode(listener);
-    const tool = new EnterPlanModeTool();
+    const registry = new ToolRegistry();
+    const conversation = new ConversationManager();
+    conversation.addUserMessage("Plan the implementation");
+    registry.register(
+      new AgentTool(
+        cwd,
+        registry,
+        () => Promise.resolve("A concrete plan."),
+        conversation,
+      ),
+    );
+    const tool = new EnterPlanModeTool(registry);
 
     expect(tool.schema().input_schema).toMatchObject({
       properties: {},
@@ -98,7 +109,7 @@ describe("Claude capability contracts", () => {
 
   it("rejects EnterPlanMode from delegated agents", async () => {
     const checker = new PermissionChecker(cwd);
-    const result = await new EnterPlanModeTool().execute(
+    const result = await new EnterPlanModeTool(new ToolRegistry()).execute(
       { cwd, permissionChecker: checker, subagentSessionId: "child" },
       {},
     );
@@ -146,7 +157,6 @@ describe("Claude capability contracts", () => {
       new ToolRegistry(),
       spawn,
       undefined,
-      undefined,
       tasks,
     );
     const result = await tool.execute(
@@ -155,6 +165,7 @@ describe("Claude capability contracts", () => {
         description: "Task",
         prompt: "Work",
         subagent_type: "worker",
+        fork: false,
         run_in_background: false,
       },
     );

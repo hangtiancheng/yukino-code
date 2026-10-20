@@ -12,10 +12,7 @@ import { PermissionChecker } from "@/permissions/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import { TaskManager } from "@/subagent/task-manager.js";
-import {
-  cloneRegistryForFork,
-  filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
+import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import { TeamManager } from "@/teams/index.js";
 import { getNameRegistry } from "@/teams/registry.js";
 import { SharedTaskStore } from "@/teams/shared-task.js";
@@ -329,6 +326,7 @@ describe("persistent teammate cleanup boundaries", () => {
       description: "worker",
       prompt: "work",
       team_name: "squad",
+      fork: false,
       name: "alice",
     };
     await agent.execute({ cwd: directory }, args);
@@ -361,6 +359,7 @@ describe("persistent teammate cleanup boundaries", () => {
         description: "worker",
         prompt: "work",
         team_name: "squad",
+        fork: false,
         name: "alice",
       },
     );
@@ -503,7 +502,7 @@ describe("delegation authority", () => {
       await parent.dispose();
     },
   );
-  it("strips team creation from a fork's Agent and isolates TaskStop from the parent", async () => {
+  it("strips Agent from child registries and isolates TaskStop from the parent", async () => {
     const parent = new ToolRegistry();
     const tasks = new TaskManager();
     const child = new AgentTool(
@@ -515,16 +514,10 @@ describe("delegation authority", () => {
     child.setTeamManager(manager, () => () => Promise.resolve("worker"));
     parent.register(child);
     parent.register(new TaskStopTool(manager, tasks));
-    const fork = cloneRegistryForFork(parent);
+    const fork = filterToolsForAgent(parent, undefined, undefined, false);
     const existing = manager.create("squad");
     existing.addMember("alice");
-    const result = await fork
-      .get("Agent")
-      ?.execute(
-        { cwd: directory },
-        { description: "bad", prompt: "bad", team_name: "replacement" },
-      );
-    expect(result?.isError).toBe(true);
+    expect(fork.get("Agent")).toBeUndefined();
     expect(manager.get("squad")).toBe(existing);
     const stop = await fork
       .get("TaskStop")
@@ -541,7 +534,7 @@ describe("delegation authority", () => {
     agent.setTeamManager(manager, () => () => Promise.resolve("worker"));
     const result = await agent.execute(
       { cwd: directory },
-      { description: "worker", prompt: "work", team_name: "typo" },
+      { description: "worker", prompt: "work", team_name: "typo", fork: false },
     );
     expect(result.isError).toBe(true);
     expect(manager.list()).toEqual([existing]);
@@ -585,7 +578,7 @@ describe("task board correctness", () => {
         .map((task) => task.subject),
     ).toEqual(["shared"]);
     expect(registry.get("TaskUpdate")?.schema()).toEqual(schema);
-    const fork = cloneRegistryForFork(registry);
+    const fork = filterToolsForAgent(registry, undefined, undefined, false);
     await fork
       .get("TaskCreate")
       ?.execute({ cwd: directory }, { subject: "child", description: "" });

@@ -28,7 +28,6 @@ import type { AgentDefinition } from "@/subagent/definition.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import {
-  cloneRegistryForFork,
   cloneRegistryForTeammate,
   filterToolsForAgent,
 } from "@/subagent/tool-filter.js";
@@ -137,7 +136,6 @@ describe("delegated lifecycle regressions", () => {
           return run(context);
         },
         conversation,
-        (_prompt, _conversation, _registry, _model, context) => run(context),
         tasks,
       );
       registry.register(agentTool);
@@ -157,7 +155,7 @@ describe("delegated lifecycle regressions", () => {
                   prompt: `Handle ${id}`,
                   run_in_background: false,
                   ...(kind === "defined"
-                    ? { subagent_type: "general-purpose" }
+                    ? { subagent_type: "general-purpose", fork: false }
                     : {}),
                 },
               };
@@ -227,6 +225,7 @@ describe("delegated lifecycle regressions", () => {
         description: "nested worker",
         prompt: "work",
         subagent_type: "general-purpose",
+        fork: false,
       },
     );
     expect(spawn).toHaveBeenCalledWith(
@@ -236,6 +235,7 @@ describe("delegated lifecycle regressions", () => {
       undefined,
       isolated,
       expect.objectContaining({ cwd: isolated }),
+      undefined,
     );
   });
   it("interrupts an agent waiting on a host approval that never resolves", async () => {
@@ -431,12 +431,16 @@ describe("delegated lifecycle regressions", () => {
       new ToolRegistry(),
       spawn,
       undefined,
-      undefined,
       hostTasks,
     );
     const result = await agent.execute(
       { cwd: directory, taskManager: localTasks },
-      { description: "worker", prompt: "work", subagent_type: "async-worker" },
+      {
+        description: "worker",
+        prompt: "work",
+        subagent_type: "async-worker",
+        fork: false,
+      },
     );
     expect(result.output).toContain("task_id:");
     expect(hostTasks.list()).toHaveLength(0);
@@ -458,6 +462,7 @@ describe("delegated lifecycle regressions", () => {
         description: "worker",
         prompt: "work",
         team_name: "squad",
+        fork: false,
         subagent_type: "general-purpose",
       },
     );
@@ -481,7 +486,6 @@ describe("delegated lifecycle regressions", () => {
           );
         }),
       undefined,
-      undefined,
       tasks,
     );
     await agent.execute(
@@ -490,6 +494,7 @@ describe("delegated lifecycle regressions", () => {
         description: "worker",
         prompt: "work",
         subagent_type: "general-purpose",
+        fork: false,
         run_in_background: true,
       },
     );
@@ -506,7 +511,7 @@ describe("team approval and persistence regressions", () => {
     manager.create("existing");
     const result = await new TeamCreateTool(manager).execute(
       { cwd: directory },
-      { team_name: "  " },
+      { team_name: "  ", fork: false },
     );
     expect(result.isError).toBe(true);
     expect(manager.get("existing")).toBeDefined();
@@ -548,6 +553,7 @@ describe("team approval and persistence regressions", () => {
         description: "plan worker",
         prompt: "review",
         team_name: "squad",
+        fork: false,
         name: "planner",
         subagent_type: "plan",
         model: "chosen-model",
@@ -582,6 +588,7 @@ describe("team approval and persistence regressions", () => {
         description: "worker",
         prompt: "work",
         team_name: "squad",
+        fork: false,
         name: "worker",
       },
     );
@@ -764,7 +771,7 @@ describe("delegated tool boundaries", () => {
       registry.markDiscovered("LocalDeferred");
       const scoped =
         kind === "fork"
-          ? cloneRegistryForFork(registry)
+          ? filterToolsForAgent(registry, undefined, undefined, false)
           : kind === "teammate"
             ? cloneRegistryForTeammate(registry)
             : filterToolsForAgent(registry, undefined, ["mcp__blocked"], false);
@@ -795,7 +802,7 @@ describe("delegated tool boundaries", () => {
       registry.register(tool(name));
     }
     for (const scoped of [
-      cloneRegistryForFork(registry),
+      filterToolsForAgent(registry, undefined, undefined, false),
       filterToolsForAgent(registry, undefined, undefined, false),
     ]) {
       expect(scoped.get("SendMessage")).toBeUndefined();

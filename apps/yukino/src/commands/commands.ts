@@ -1,5 +1,5 @@
 import { REVIEW_COMMAND_DESCRIPTION } from "@/commands/constants.js";
-import { buildReviewPrompt } from "@/commands/prompts.js";
+import { buildPlanPrompt, buildReviewPrompt } from "@/commands/prompts.js";
 import { THINKING_LEVELS } from "@/config/constants.js";
 import {
   isValidThinkingLevel,
@@ -205,9 +205,10 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "plan",
-    type: "local_ui",
-    description: "Enter plan mode",
-    handler: () => "plan",
+    type: "prompt",
+    agent: "plan",
+    description: "Plan the current task in a foreground agent",
+    handler: (ctx) => buildPlanPrompt(ctx.args),
   });
   registry.register({
     name: "goal",
@@ -291,7 +292,7 @@ export function createDefaultRegistry(): CommandRegistry {
     name: "feedback",
     type: "local_ui",
     description:
-      "Report a problem (describe it inline as /feedback <text>); analyzes the session and auto-files harness issues to the yukino repo",
+      "Report a problem with /feedback <text>; analyze the session in a foreground agent and review issues before filing them to the yukino repo",
     handler: () => "feedback",
   });
 

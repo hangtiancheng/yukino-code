@@ -25,6 +25,7 @@ import { extractWrittenPaths } from "@/memory/written-paths.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
+import type { AgentDefinition } from "@/subagent/definition.js";
 import { EditFileTool } from "@/tools/edit-file.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { ReadFileTool } from "@/tools/read-file.js";
@@ -220,13 +221,14 @@ describe("fork and restored context", () => {
     });
     const handler = vi.fn(
       (
+        _definition: AgentDefinition,
         _prompt: string,
-        _conversation: ConversationManager,
-        _registry: ToolRegistry,
+        _background: boolean,
         _model?: string,
+        childCwd?: string,
         context?: ToolContext,
       ) => {
-        expect(context?.cwd).toBe(isolated);
+        expect(childCwd).toBe(isolated);
         expect(
           context?.permissionChecker?.check("WriteFile", "write", {
             file_path: "blocked.ts",
@@ -237,13 +239,7 @@ describe("fork and restored context", () => {
     );
     const parent = new ConversationManager();
     parent.addUserMessage("parent task");
-    const tool = new AgentTool(
-      directory,
-      new ToolRegistry(),
-      () => Promise.resolve("unused"),
-      parent,
-      handler,
-    );
+    const tool = new AgentTool(directory, new ToolRegistry(), handler, parent);
     const result = await tool.execute(
       {
         cwd: directory,
@@ -267,23 +263,30 @@ describe("fork and restored context", () => {
     parent.injectLongTermMemory("project constraints", "");
     parent.addUserMessage([{ type: "text", text: "parent attachment" }]);
     const before = structuredClone(parent.getMessages());
-    const handler = vi.fn((_prompt: string, snapshot: ConversationManager) => {
-      snapshot.injectLongTermMemory("duplicate", "");
-      expect(snapshot.getMessages()).toEqual(before);
-      const content = snapshot.getMessages().at(-1)?.content;
-      if (Array.isArray(content)) {
-        content[0].text = "child change";
-      }
-      snapshot.addAssistantFull("worker result", [], []);
-      return Promise.resolve("verified worker result");
-    });
-    const tool = new AgentTool(
-      cwd(),
-      new ToolRegistry(),
-      () => Promise.resolve("unused"),
-      parent,
-      handler,
+    const handler = vi.fn(
+      (
+        _definition: AgentDefinition,
+        _prompt: string,
+        _background: boolean,
+        _model?: string,
+        _cwd?: string,
+        _context?: ToolContext,
+        snapshot?: ConversationManager,
+      ) => {
+        if (!snapshot) {
+          throw new Error("Missing inherited context");
+        }
+        snapshot.injectLongTermMemory("duplicate", "");
+        expect(snapshot.getMessages()).toEqual(before);
+        const content = snapshot.getMessages().at(-1)?.content;
+        if (Array.isArray(content)) {
+          content[0].text = "child change";
+        }
+        snapshot.addAssistantFull("worker result", [], []);
+        return Promise.resolve("verified worker result");
+      },
     );
+    const tool = new AgentTool(cwd(), new ToolRegistry(), handler, parent);
     const result = await tool.execute(
       { cwd: cwd() },
       { description: "audit", prompt: "Inspect this" },

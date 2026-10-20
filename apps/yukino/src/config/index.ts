@@ -112,9 +112,8 @@ const AppConfigSchema = z.looseObject({
   sandbox: SandboxYamlConfigSchema.optional(),
   enable_coordinator_mode: z.boolean().optional(),
   /**
-   * Whether to fork when subagent_type is omitted. Enabled by default, so this
-   * field is left as undefined to represent "not specified in config"; only an
-   * explicit `false` disables forking (see forkEnabled).
+   * Default for the Agent tool's independent fork parameter. Defaults to true;
+   * an explicit fork argument overrides this setting for any agent role.
    */
   enable_fork: z.boolean().optional(),
   /**
@@ -128,7 +127,7 @@ const AppConfigSchema = z.looseObject({
   enable_memory: z.boolean().optional(),
 });
 
-/** Whether fork is available. Defaults to enabled when not specified in config. */
+/** Default context inheritance for Agent calls. Defaults to true when unset. */
 export function forkEnabled(cfg: AppConfig): boolean {
   return cfg.enable_fork !== false;
 }

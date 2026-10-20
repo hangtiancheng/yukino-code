@@ -398,6 +398,7 @@ describe("agent output hook", () => {
         args: {
           description: "background review",
           subagent_type: "explore",
+          fork: false,
           run_in_background: true,
         },
       },
@@ -441,6 +442,7 @@ describe("agent output hook", () => {
           description: "fix bug",
           prompt: "fix it",
           subagent_type: "general-purpose",
+          fork: false,
         },
       },
       {
@@ -451,6 +453,7 @@ describe("agent output hook", () => {
           description: "survey code",
           prompt: "survey",
           subagent_type: "explore",
+          fork: false,
         },
       },
       {

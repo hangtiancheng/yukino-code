@@ -3,20 +3,23 @@ import { randomBytes } from "node:crypto";
 import z from "zod";
 
 import type { ConversationManager } from "@/conversation/index.js";
-import { createChildLogger, sanitizeNameSegment } from "@/logger/index.js";
+import { sanitizeNameSegment } from "@/logger/index.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { newSessionId } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
 import {
-  FORK_BOILERPLATE_TAG,
-  FORK_QUERY_SOURCE,
+  BUILTIN_AGENTS,
   GENERAL_PURPOSE_AGENT_TYPE,
+  FORK_CONTEXT_REQUIRED_ERROR,
 } from "@/subagent/constants.js";
 import type { AgentDefinition } from "@/subagent/definition.js";
 import { loadAgentDefinitions } from "@/subagent/loader.js";
 import {
   AGENT_TOOL_DESCRIPTION,
-  FORK_BOILERPLATE,
+  buildAgentToolDescription,
+  FORK_PARAMETER_DESCRIPTION,
+  SUBAGENT_TYPE_DESCRIPTION,
+  INHERITED_TOOL_RESULT,
 } from "@/subagent/prompts.js";
 import { TaskFailure, TaskManager } from "@/subagent/task-manager.js";
 import {
@@ -45,8 +48,6 @@ import { asErrorString, boolArg, strArg } from "@/utils/index.js";
 import { createAgentWorktree } from "@/worktree/index.js";
 import { buildWorktreeNotice } from "@/worktree/prompts.js";
 
-const log = createChildLogger({ module: "subagent" });
-
 /** Worktree directory name. Uses a random string instead of the task description — spaces and non-ASCII characters in descriptions cannot be used directly as branch names. */
 function newAgentSlug(): string {
   return `agent-a${randomBytes(4).toString("hex").slice(0, 7)}`;
@@ -57,6 +58,15 @@ export interface TeammateRunOptions {
   definition: AgentDefinition;
   modelOverride?: string;
   onPermissionRequest?: ToolContext["onPermissionRequest"];
+  contextSnapshot?: ConversationManager;
+}
+
+interface AgentRunOptions {
+  description: string;
+  fork: boolean;
+  background: boolean;
+  modelOverride?: string;
+  isolate?: boolean;
 }
 
 export class AgentTool implements Tool {
@@ -73,20 +83,10 @@ export class AgentTool implements Tool {
   private conversation?: ConversationManager;
   private taskManager: TaskManager;
 
-  // Identifies the derived context of the current AgentTool instance;
-  // re-forking is prohibited when non-empty and equal to FORK_QUERY_SOURCE
-  querySource = "";
-
   /** Optional: Team manager, enables the team_name parameter. */
   private teamManager?: TeamManager;
   private cwd: string;
-  /**
-   * When fork is disabled, omitting subagent_type no longer forks but falls back to the
-   * general-purpose agent. The "disabled" semantics (rather than "enabled") are used so
-   * that the default value represents the default behavior (fork available), and each
-   * construction site does not need to explicitly assign it.
-   */
-  forkDisabled = false;
+  defaultFork = true;
   /**
    * Optional: factory that produces a per-teammate RunAgent. Receives a
    * teammate-scoped tool registry (with shared task-board tools injected)
@@ -106,14 +106,7 @@ export class AgentTool implements Tool {
     modelOverride?: string,
     cwdOverride?: string,
     context?: ToolContext,
-  ) => Promise<string>;
-
-  private forkHandler?: (
-    prompt: string,
-    conversation: ConversationManager,
-    registry: ToolRegistry,
-    modelOverride?: string,
-    context?: ToolContext,
+    contextSnapshot?: ConversationManager,
   ) => Promise<string>;
 
   constructor(
@@ -126,15 +119,9 @@ export class AgentTool implements Tool {
       modelOverride?: string,
       cwdOverride?: string,
       context?: ToolContext,
+      contextSnapshot?: ConversationManager,
     ) => Promise<string>,
     conversation?: ConversationManager,
-    forkHandler?: (
-      prompt: string,
-      conversation: ConversationManager,
-      registry: ToolRegistry,
-      modelOverride?: string,
-      context?: ToolContext,
-    ) => Promise<string>,
     taskManager = new TaskManager(),
   ) {
     this.definitions = loadAgentDefinitions();
@@ -142,7 +129,6 @@ export class AgentTool implements Tool {
     this.registry = registry;
     this.spawnHandler = spawnHandler;
     this.conversation = conversation;
-    this.forkHandler = forkHandler;
     this.taskManager = taskManager;
   }
 
@@ -163,24 +149,59 @@ export class AgentTool implements Tool {
     this.teamRunAgentFactory = runAgentFactory;
   }
 
-  forFork(registry: ToolRegistry): AgentTool {
-    const agent = new AgentTool(
-      this.cwd,
-      registry,
-      this.spawnHandler,
-      this.conversation,
-      this.forkHandler,
-    );
-    agent.querySource = FORK_QUERY_SOURCE;
-    agent.forkDisabled = this.forkDisabled;
-    return agent;
+  private forkConversation(): ConversationManager {
+    if (!this.conversation) {
+      throw new Error(FORK_CONTEXT_REQUIRED_ERROR);
+    }
+    const snapshot = this.conversation.fork();
+    const pending = new Set<string>();
+    for (const message of snapshot.getMessages()) {
+      for (const tool of message.toolUses ?? []) {
+        pending.add(tool.toolUseId);
+      }
+      for (const result of message.toolResults ?? []) {
+        pending.delete(result.toolUseId);
+      }
+    }
+    if (pending.size > 0) {
+      snapshot.addToolResultsMessage(
+        [...pending].map((toolUseId) => ({
+          toolUseId,
+          content: INHERITED_TOOL_RESULT,
+          isError: false,
+        })),
+      );
+    }
+    return snapshot;
+  }
+
+  runBuiltin(
+    name: string,
+    ctx: ToolContext,
+    prompt: string,
+  ): Promise<ToolResult> {
+    const definition = BUILTIN_AGENTS.find((agent) => agent.name === name);
+    if (!definition) {
+      return Promise.resolve({
+        output: `Unknown built-in agent: ${name}`,
+        isError: true,
+      });
+    }
+    return this.runDefinition(ctx, definition, prompt, {
+      description: name,
+      fork: true,
+      background: false,
+    });
   }
 
   schema(): ToolSchema {
     const agentTypes = this.definitions.map((d) => d.name);
     return {
       name: this.name,
-      description: this.buildDescription(),
+      description: buildAgentToolDescription(
+        this.definitions,
+        this.defaultFork,
+      ),
       input_schema: {
         type: "object",
         properties: {
@@ -200,9 +221,13 @@ export class AgentTool implements Tool {
           subagent_type: {
             type: "string",
             enum: agentTypes,
-            description: this.forkDisabled
-              ? "Agent role. Defaults to general-purpose."
-              : "Agent role. Omit to fork the current conversation snapshot.",
+            description: SUBAGENT_TYPE_DESCRIPTION,
+            default: GENERAL_PURPOSE_AGENT_TYPE,
+          },
+          fork: {
+            type: "boolean",
+            description: FORK_PARAMETER_DESCRIPTION,
+            default: this.defaultFork,
           },
           model: {
             type: "string",
@@ -243,24 +268,6 @@ export class AgentTool implements Tool {
     };
   }
 
-  private buildDescription(): string {
-    const context = this.forkDisabled
-      ? "Omitting subagent_type selects general-purpose."
-      : "Omitting subagent_type forks a snapshot of the current conversation.";
-    const roles = this.definitions.map(
-      (definition) => `- ${definition.name}: ${definition.description}`,
-    );
-    return `Delegate a bounded task to a subagent. ${context} A named role receives a fresh conversation, so include the goal, relevant files, constraints, whether edits are allowed, and the expected result.
-
-Available roles (pass a role as subagent_type, not as a tool name):
-${roles.join("\n")}
-
-Foreground calls return results inline. With run_in_background=true, the call returns a task ID immediately and the final result arrives through a task notification. Use team_name for persistent teammates and SendMessage for their follow-up assignments. Do not predict results before receiving them.
-Named roles have no default model-turn limit; their max_turns configuration supplies an explicit limit. Forks are limited to 200 model turns. Reaching a limit is unfinished work, not successful task completion.
-
-Launch independent tasks together; avoid concurrent writes to the same files. Review returned evidence and integrate it before reporting completion. Worktree isolation separates edits but does not merge them.`;
-  }
-
   async execute(
     ctx: ToolContext,
     args: Record<string, unknown>,
@@ -277,14 +284,22 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
       };
     }
 
-    // The routing when subagent_type is omitted is determined by configuration: if fork is
-    // enabled, it inherits the parent conversation; if disabled, it is treated as unspecified
-    // and falls back to the general-purpose agent. No error is thrown here — the model simply
-    // did not provide an optional parameter, and aborting the call for that is not worthwhile;
-    // the general-purpose agent can get the job done just as well.
     const subagentType =
-      strArg(args, "subagent_type") ||
-      (this.forkDisabled ? GENERAL_PURPOSE_AGENT_TYPE : "");
+      strArg(args, "subagent_type") || GENERAL_PURPOSE_AGENT_TYPE;
+    const forkArg = z.boolean().optional().safeParse(args.fork);
+    if (!forkArg.success) {
+      return { output: "Error: fork must be a boolean", isError: true };
+    }
+    const fork = forkArg.data ?? this.defaultFork;
+    const definition = this.definitions.find(
+      (entry) => entry.name === subagentType,
+    );
+    if (!definition) {
+      return {
+        output: `Error: unknown agent type '${subagentType}'. Available: ${this.definitions.map((entry) => entry.name).join(", ")}`,
+        isError: true,
+      };
+    }
     const modelOverride = strArg(args, "model") || undefined;
     const backgroundArg = z
       .boolean()
@@ -296,23 +311,19 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
         isError: true,
       };
     }
-    const background = backgroundArg.data ?? false;
     ctx = { ...ctx, subagentSessionId: newSessionId() };
     const teamName = strArg(args, "team_name");
     const teammateName = strArg(args, "name");
     const isolation = strArg(args, "isolation");
 
-    // Team-member path: team_name takes precedence over fork/subagent. Runs the agent as a
+    // Team-member path: team_name runs the selected role as a
     // persistent teammate and notifies the leader via SendMessage / mailbox upon completion.
     if (teamName && this.teamManager && this.teamRunAgentFactory) {
-      const definition = this.definitions.find(
-        (d) => d.name === (subagentType || GENERAL_PURPOSE_AGENT_TYPE),
-      );
-      if (!definition) {
-        return {
-          output: `Error: unknown agent type '${subagentType}'.`,
-          isError: true,
-        };
+      let contextSnapshot: ConversationManager | undefined;
+      try {
+        contextSnapshot = fork ? this.forkConversation() : undefined;
+      } catch (error) {
+        return { output: asErrorString(error), isError: true };
       }
       return await this.runAsTeammate(
         teamName,
@@ -324,6 +335,7 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
         ctx,
         definition,
         modelOverride,
+        contextSnapshot,
       );
     }
     if (teamName) {
@@ -334,45 +346,37 @@ Launch independent tasks together; avoid concurrent writes to the same files. Re
       };
     }
 
-    if (!subagentType) {
-      if (background && this.conversation && this.forkHandler) {
-        const snapshot = this.conversation.fork();
-        return this.startBackground(description, ctx, (backgroundContext) =>
-          this.runFork(
-            prompt,
-            description,
-            modelOverride,
-            backgroundContext,
-            isolation === "worktree",
-            snapshot,
-            true,
-          ),
-        );
-      }
-      return this.runFork(
-        prompt,
-        description,
-        modelOverride,
-        ctx,
-        isolation === "worktree",
-      );
-    }
+    return this.runDefinition(ctx, definition, prompt, {
+      description,
+      fork,
+      background: backgroundArg.data ?? definition.background ?? false,
+      modelOverride,
+      isolate: isolation === "worktree",
+    });
+  }
 
-    const definition = this.definitions.find((d) => d.name === subagentType);
-    if (!definition) {
-      return {
-        output: `Error: unknown agent type '${subagentType}'. Available: ${this.definitions.map((d) => d.name).join(", ")}`,
-        isError: true,
-      };
+  private async runDefinition(
+    ctx: ToolContext,
+    definition: AgentDefinition,
+    prompt: string,
+    options: AgentRunOptions,
+  ): Promise<ToolResult> {
+    ctx = {
+      ...ctx,
+      subagentSessionId: ctx.subagentSessionId ?? newSessionId(),
+    };
+    let contextSnapshot: ConversationManager | undefined;
+    try {
+      ctx.abortSignal?.throwIfAborted();
+      contextSnapshot = options.fork ? this.forkConversation() : undefined;
+    } catch (error) {
+      return { output: asErrorString(error), isError: true };
     }
-    const runInBackground =
-      backgroundArg.data ?? definition.background ?? false;
-
     // Worktree isolation: provision a separate working copy for the child agent; its changes
     // land on its own branch and cannot collide with the parent or other parallel child agents.
     let effectivePrompt = prompt;
     let cwdOverride: string | undefined;
-    if (isolation === "worktree" || definition.isolation === "worktree") {
+    if (options.isolate || definition.isolation === "worktree") {
       try {
         const wt = await createAgentWorktree(
           newAgentSlug(),
@@ -402,11 +406,12 @@ ${prompt}`;
         const output = await this.spawnHandler(
           definition,
           effectivePrompt,
-          runInBackground,
-          modelOverride,
+          options.background,
+          options.modelOverride,
           cwdOverride ??
             (runContext.cwd !== this.cwd ? runContext.cwd : undefined),
           runContext,
+          contextSnapshot,
         );
         return {
           output: cwdOverride
@@ -422,8 +427,8 @@ ${prompt}`;
       }
     };
 
-    return runInBackground
-      ? this.startBackground(description, ctx, run)
+    return options.background
+      ? this.startBackground(options.description, ctx, run)
       : run(ctx);
   }
 
@@ -479,6 +484,7 @@ ${prompt}`;
     ctx: ToolContext,
     definition: AgentDefinition,
     modelOverride?: string,
+    contextSnapshot?: ConversationManager,
   ): Promise<ToolResult> {
     if (!this.teamManager) {
       return {
@@ -623,6 +629,7 @@ ${prompt}`;
         memberCwd,
         {
           agentName: memberName,
+          contextSnapshot,
           definition,
           modelOverride,
           onPermissionRequest: ctx.onPermissionRequest,
@@ -670,98 +677,6 @@ ${prompt}`;
         output: `Error spawning teammate: ${asErrorString(error)}${memberCwd !== this.cwd ? `\nWorktree retained at: ${memberCwd}` : ""}`,
         isError: true,
       };
-    }
-  }
-
-  /**
-   * Fork mode: Inherits a snapshot of parent conversation context.
-   * Unlike definition mode, the forked subagent can see the full history of the parent conversation,
-   * achieving byte alignment for the prompt-cache prefix to improve cache hit rate.
-   */
-  private async runFork(
-    prompt: string,
-    description: string,
-    modelOverride: string | undefined,
-    ctx: ToolContext,
-    isolate: boolean,
-    conversationSnapshot?: ConversationManager,
-    isAsync = false,
-  ): Promise<ToolResult> {
-    if (!this.conversation || !this.forkHandler) {
-      return {
-        output: "Error: fork requires parent conversation context",
-        isError: true,
-      };
-    }
-
-    // Nested fork detection — dual-layer protection:
-    // (1) Primary check: querySource flag (detectable even if the conversation is compressed)
-    // (2) Fallback: scan conversation history for fork markers
-    if (this.querySource === FORK_QUERY_SOURCE) {
-      return {
-        output:
-          "Error: cannot fork from a forked agent. Use subagent_type to spawn a definition-based agent instead.",
-        isError: true,
-      };
-    }
-    for (const msg of this.conversation.getMessages()) {
-      if (
-        typeof msg.content === "string" &&
-        msg.content.includes(FORK_BOILERPLATE_TAG)
-      ) {
-        return {
-          output:
-            "Error: cannot fork from a forked agent. Use subagent_type to spawn a definition-based agent instead.",
-          isError: true,
-        };
-      }
-    }
-
-    let worktreePath: string | undefined;
-    let forkedRegistry: ToolRegistry | undefined;
-    try {
-      if (isolate) {
-        ctx.abortSignal?.throwIfAborted();
-        const worktree = await createAgentWorktree(
-          newAgentSlug(),
-          undefined,
-          ctx.cwd,
-        );
-        worktreePath = worktree.path;
-        prompt = `${buildWorktreeNotice(ctx.cwd, worktree.path)}\n\n${prompt}`;
-        ctx = {
-          ...ctx,
-          cwd: worktree.path,
-          permissionChecker: await (
-            ctx.permissionChecker ?? new PermissionChecker(ctx.cwd)
-          ).forWorktree(worktree),
-        };
-      }
-      const { cloneRegistryForFork } = await import("./tool-filter.js");
-      const clonedRegistry = cloneRegistryForFork(this.registry);
-      forkedRegistry = isAsync
-        ? filterToolsForAgent(clonedRegistry, undefined, undefined, true)
-        : clonedRegistry;
-      const snapshot = conversationSnapshot ?? this.conversation.fork();
-      const output = await this.forkHandler(
-        `${FORK_BOILERPLATE}\n\nYour task:\n${prompt}`,
-        snapshot,
-        forkedRegistry,
-        modelOverride,
-        ctx,
-      );
-      return {
-        output: `Forked agent "${description}":\n${output}${worktreePath ? `\nWorktree retained at: ${worktreePath}` : ""}`,
-        isError: false,
-      };
-    } catch (err) {
-      log.error({ err }, "subagent operation failed");
-      return {
-        output: `Fork error: ${asErrorString(err)}${worktreePath ? `\nWorktree retained at: ${worktreePath}` : ""}`,
-        isError: true,
-      };
-    } finally {
-      await forkedRegistry?.dispose();
     }
   }
 }

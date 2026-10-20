@@ -17,7 +17,6 @@ import { PermissionChecker } from "@/permissions/index.js";
 import { sessionPath } from "@/storage/index.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import {
-  cloneRegistryForFork,
   cloneRegistryForTeammate,
   filterToolsForAgent,
 } from "@/subagent/tool-filter.js";
@@ -240,7 +239,7 @@ describe("atomic task/TODO list", () => {
       const root = createToolRegistry("/tmp", rootList);
       const clone = () =>
         kind === "fork"
-          ? cloneRegistryForFork(root)
+          ? filterToolsForAgent(root, undefined, undefined, false)
           : kind === "teammate"
             ? cloneRegistryForTeammate(root)
             : filterToolsForAgent(

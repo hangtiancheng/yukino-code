@@ -275,7 +275,7 @@ describe("coordinator teammate plan reviews", () => {
   it("runs the real teammate ExitPlanMode path without changing the leader's mode or bypassing review", async () => {
     const parent = new PermissionChecker(cwd, "bypassPermissions");
     const registry = new ToolRegistry();
-    registry.register(new EnterPlanModeTool());
+    registry.register(new EnterPlanModeTool(registry));
     registry.register(new ExitPlanModeTool());
     const tool = new AgentTool(cwd, registry, () => Promise.resolve("unused"));
     const modes: string[] = [];
@@ -335,6 +335,7 @@ describe("coordinator teammate plan reviews", () => {
           { cwd, permissionChecker: parent },
           {
             team_name: "squad",
+            fork: false,
             name: "planner",
             prompt: "Plan then execute",
             description: "planner",
@@ -429,6 +430,7 @@ describe("permanently read-only teammates", () => {
             { cwd, permissionChecker: parent },
             {
               team_name: "squad",
+              fork: false,
               name: "researcher",
               description: "research",
               prompt: "Investigate",
@@ -565,7 +567,7 @@ describe("one-shot planning subagents", () => {
     const parent = new PermissionChecker(cwd);
     parent.enterPlanMode();
     const registry = new ToolRegistry();
-    registry.register(new EnterPlanModeTool());
+    registry.register(new EnterPlanModeTool(registry));
     registry.register(new ExitPlanModeTool());
     const approve = vi.fn(() => Promise.resolve("allow" as const));
     let calls = 0;

@@ -18,7 +18,7 @@ import {
 } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/constants.js";
+import { BUILTIN_AGENTS } from "@/subagent/constants.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import {
   formatAgentTaskNotification,
@@ -130,7 +130,7 @@ describe("background agent durable recovery", () => {
     },
   );
   it.each([false, true])(
-    "keeps the fork's explicit 200-turn limit (background=%s)",
+    "honors the role's explicit 200-turn limit with inherited context (background=%s)",
     async (background) => {
       const worker = client(
         Array.from({ length: 201 }, (_, index): StreamEvent[] => [
@@ -147,7 +147,7 @@ describe("background agent durable recovery", () => {
       const stream = vi.spyOn(worker, "stream");
       await expect(
         spawnSubagent(
-          FORK_AGENT,
+          { ...BUILTIN_AGENTS[0], maxTurns: 200 },
           "Continue verification",
           worker,
           new ToolRegistry(),
@@ -157,7 +157,7 @@ describe("background agent durable recovery", () => {
           undefined,
           undefined,
           undefined,
-          { background, conversation: new ConversationManager() },
+          { background, contextSnapshot: new ConversationManager() },
         ),
       ).rejects.toThrow("maximum iterations (200)");
       expect(stream).toHaveBeenCalledTimes(200);
@@ -400,7 +400,6 @@ describe("background agent durable recovery", () => {
           { background, sessionId: context?.subagentSessionId },
         ),
       undefined,
-      undefined,
       tasks,
     );
     await tool.execute(
@@ -409,6 +408,7 @@ describe("background agent durable recovery", () => {
         description: "original assignment",
         prompt: "work",
         subagent_type: "general-purpose",
+        fork: false,
         run_in_background: true,
       },
     );

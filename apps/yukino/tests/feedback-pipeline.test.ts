@@ -19,15 +19,13 @@ import {
 } from "@/feedback/dedup.js";
 import type * as feedbackGithub from "@/feedback/github.js";
 import type { IssueResult } from "@/feedback/github.js";
-import { runFeedbackPipeline } from "@/feedback/pipeline.js";
+import { runFeedbackPipeline, type PipelineDeps } from "@/feedback/pipeline.js";
 import type {
   CollectedFile,
   FeedbackChannel,
   IssueDraft,
 } from "@/feedback/types.js";
 import { fileHistoryDir } from "@/file-history/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { closeLogger, initLogger } from "@/logger/index.js";
 import { saveCompactBoundary, saveMessage } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
@@ -67,46 +65,23 @@ vi.mock("@/feedback/github.js", async (importOriginal) => {
 
 const SESSION = "pipeline-test-session";
 
-const USAGE: UsageInfo = {
-  inputTokens: 10,
-  outputTokens: 10,
-  cacheReadInputTokens: 0,
-  cacheCreationInputTokens: 0,
-};
-
-/** Client whose every stream call replies with the same canned text. */
-function fakeClient(reply: string): LLMClient {
-  return {
-    stream: async function* (): AsyncGenerator<StreamEvent> {
-      await Promise.resolve();
-      yield { type: "text_delta", text: reply };
-      yield { type: "stream_end", stopReason: "end_turn", usage: USAGE };
-    },
-    setSystemPrompt: vi.fn(),
-  };
+function fakeAgent(reply: string): PipelineDeps["runAgent"] {
+  return vi.fn(() => Promise.resolve(reply));
 }
 
-/** Client whose stream always fails on the first pull. */
-function explodingClient(): LLMClient {
-  return {
-    stream: async function* (): AsyncGenerator<StreamEvent> {
-      await Promise.resolve();
-      yield* [];
-      throw new Error("provider exploded");
-    },
-    setSystemPrompt: vi.fn(),
-  };
+function explodingAgent(): PipelineDeps["runAgent"] {
+  return vi.fn(() => Promise.reject(new Error("provider exploded")));
 }
 
 function analysisReply(issues: { title: string; body: string }[]): string {
   return JSON.stringify({ issues });
 }
 
-function makeDeps(client: LLMClient, cwd: string) {
+function makeDeps(runAgent: PipelineDeps["runAgent"], cwd: string) {
   return {
     cwd,
     sessionId: SESSION,
-    client,
+    runAgent,
     messages: [],
     runtime: {
       provider: { name: "anthropic", model: "claude-sonnet-x" },
@@ -155,7 +130,7 @@ describe("runFeedbackPipeline", () => {
       url: "https://github.com/test/issues/1",
     });
     const deps = makeDeps(
-      fakeClient(
+      fakeAgent(
         analysisReply([
           {
             title: "1 tool failure",
@@ -191,7 +166,7 @@ describe("runFeedbackPipeline", () => {
         url: "https://github.com/hangtiancheng/yukino-code/issues/2",
         number: 2,
       });
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([
         { title: "[tool] Bash retry storm", body: "## What happened\nLoop." },
         { title: "[ui] Render corruption", body: "## What happened\nGarbled." },
@@ -199,7 +174,7 @@ describe("runFeedbackPipeline", () => {
     );
     const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
-      makeDeps(client, makeProject()),
+      makeDeps(runAgent, makeProject()),
     );
 
     expect(report).toContain("Filed 2 issue(s) via gh");
@@ -227,10 +202,10 @@ describe("runFeedbackPipeline", () => {
   });
 
   it("files nothing when no anomalies and no description", async () => {
-    const client = fakeClient(analysisReply([]));
+    const runAgent = fakeAgent(analysisReply([]));
     const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
-      makeDeps(client, makeProject()),
+      makeDeps(runAgent, makeProject()),
     );
     expect(report).toContain("No yukino harness anomalies detected");
     expect(mocks.createIssue).not.toHaveBeenCalled();
@@ -248,14 +223,14 @@ describe("runFeedbackPipeline", () => {
         createdAt: new Date().toISOString(),
       },
     ]);
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([
         { title: "tool bash RETRY storm!", body: "same defect again" },
       ]),
     );
     const { report } = await runFeedbackPipeline(
       { description: "", attachments: [] },
-      makeDeps(client, makeProject()),
+      makeDeps(runAgent, makeProject()),
     );
     expect(report).toContain("already filed in this session");
     expect(mocks.createIssue).not.toHaveBeenCalled();
@@ -263,14 +238,14 @@ describe("runFeedbackPipeline", () => {
 
   it("opens prefilled browser pages and exports a zip on the browser channel", async () => {
     mocks.detectChannel.mockResolvedValue("browser");
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([
         { title: "[context] Compaction loses messages", body: "b" },
       ]),
     );
     const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
-      makeDeps(client, makeProject()),
+      makeDeps(runAgent, makeProject()),
     );
 
     expect(mocks.createIssue).not.toHaveBeenCalled();
@@ -291,7 +266,7 @@ describe("runFeedbackPipeline", () => {
     expect(loadFiledIssues(SESSION)).toEqual([]);
     await runFeedbackPipeline(
       { description: "", attachments: [] },
-      makeDeps(client, makeProject()),
+      makeDeps(runAgent, makeProject()),
     );
     expect(mocks.openInBrowser).toHaveBeenCalledTimes(2);
   });
@@ -301,10 +276,10 @@ describe("runFeedbackPipeline", () => {
       url: "https://github.com/hangtiancheng/yukino-code/issues/3",
       number: 3,
     });
-    const client = fakeClient("I looked but cannot say anything definitive.");
+    const runAgent = fakeAgent("I looked but cannot say anything definitive.");
     const { report } = await runFeedbackPipeline(
       { description: "权限弹窗在 tmux 里卡死", attachments: [] },
-      makeDeps(client, makeProject()),
+      makeDeps(runAgent, makeProject()),
     );
     expect(mocks.createIssue).toHaveBeenCalledTimes(1);
     const title: string = mocks.createIssue.mock.calls[0][1];
@@ -319,10 +294,10 @@ describe("runFeedbackPipeline", () => {
       url: "https://github.com/hangtiancheng/yukino-code/issues/4",
       number: 4,
     });
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([{ title: "[tool] Bash hangs", body: "b" }]),
     );
-    const deps = makeDeps(client, makeProject());
+    const deps = makeDeps(runAgent, makeProject());
     const { report } = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
       deps,
@@ -349,10 +324,10 @@ describe("runFeedbackPipeline", () => {
     mocks.createIssue.mockResolvedValue({
       url: "https://github.com/hangtiancheng/yukino-code/issues/4",
     });
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([{ title: "[tool] Bash hangs", body: "b" }]),
     );
-    const deps = makeDeps(client, makeProject());
+    const deps = makeDeps(runAgent, makeProject());
     initLogger({ sessionId: SESSION, mode: "terminal", skipCleanup: true });
     try {
       const { report } = await runFeedbackPipeline(
@@ -381,7 +356,7 @@ describe("runFeedbackPipeline", () => {
     });
     const { report } = await runFeedbackPipeline(
       { description: "compact 之后工具调用配对错乱", attachments: [] },
-      makeDeps(explodingClient(), makeProject()),
+      makeDeps(explodingAgent(), makeProject()),
     );
     expect(mocks.createIssue).toHaveBeenCalledTimes(1);
     expect(report).toContain("issues/5");
@@ -391,36 +366,22 @@ describe("runFeedbackPipeline", () => {
     await expect(
       runFeedbackPipeline(
         { description: "", attachments: [] },
-        makeDeps(explodingClient(), makeProject()),
+        makeDeps(explodingAgent(), makeProject()),
       ),
     ).rejects.toThrow("provider exploded");
   });
 
-  it.each(["max_tokens", "end_turn"])(
-    "does not report no anomalies after two unusable %s replies",
-    async (stopReason) => {
-      const client = fakeClient("");
-      const stream = vi
-        .spyOn(client, "stream")
-        .mockImplementation(async function* () {
-          await Promise.resolve();
-          yield { type: "text_delta", text: '{"issues":[{"title":"' };
-          yield { type: "stream_end", stopReason, usage: USAGE };
-        });
-      const deps = makeDeps(client, makeProject());
-      await expect(
-        runFeedbackPipeline({ description: "", attachments: [] }, deps),
-      ).rejects.toThrow(
-        stopReason === "max_tokens"
-          ? "max_tokens after retry"
-          : "valid issue JSON after retry",
-      );
-      expect(stream).toHaveBeenCalledTimes(2);
-      expect(deps.confirmIssues).not.toHaveBeenCalled();
-      expect(mocks.detectChannel).not.toHaveBeenCalled();
-      expect(mocks.createIssue).not.toHaveBeenCalled();
-    },
-  );
+  it("does not report no anomalies after two unusable agent replies", async () => {
+    const runAgent = vi.fn(() => Promise.resolve('{"issues":[{"title":"'));
+    const deps = makeDeps(runAgent, makeProject());
+    await expect(
+      runFeedbackPipeline({ description: "", attachments: [] }, deps),
+    ).rejects.toThrow("valid issue JSON after retry");
+    expect(runAgent).toHaveBeenCalledTimes(2);
+    expect(deps.confirmIssues).not.toHaveBeenCalled();
+    expect(mocks.detectChannel).not.toHaveBeenCalled();
+    expect(mocks.createIssue).not.toHaveBeenCalled();
+  });
 
   it("asks for approval once per round and files all issues when approved", async () => {
     mocks.createIssue
@@ -432,7 +393,7 @@ describe("runFeedbackPipeline", () => {
         url: "https://github.com/hangtiancheng/yukino-code/issues/22",
         number: 22,
       });
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([
         { title: "[tool] Bash retry storm", body: "b1" },
         { title: "[ui] Render corruption", body: "b2" },
@@ -441,7 +402,7 @@ describe("runFeedbackPipeline", () => {
     const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
       Promise.resolve({ approved: true }),
     );
-    const deps = makeDeps(client, makeProject());
+    const deps = makeDeps(runAgent, makeProject());
     const { report, rejection } = await runFeedbackPipeline(
       { description: "", attachments: [] },
       { ...deps, confirmIssues },
@@ -461,7 +422,7 @@ describe("runFeedbackPipeline", () => {
   });
 
   it("files nothing and reports the reason when the user rejects", async () => {
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([{ title: "[tool] Bash retry storm", body: "b" }]),
     );
     const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
@@ -470,7 +431,7 @@ describe("runFeedbackPipeline", () => {
         reason: "这是我项目代码的问题，不是 yukino 的缺陷",
       }),
     );
-    const deps = makeDeps(client, makeProject());
+    const deps = makeDeps(runAgent, makeProject());
     const result = await runFeedbackPipeline(
       { description: "", attachments: ["env"] },
       { ...deps, confirmIssues },
@@ -490,13 +451,13 @@ describe("runFeedbackPipeline", () => {
   });
 
   it("rejects cleanly without a reason", async () => {
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([{ title: "[tool] Bash retry storm", body: "b" }]),
     );
     const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
       Promise.resolve({ approved: false }),
     );
-    const deps = makeDeps(client, makeProject());
+    const deps = makeDeps(runAgent, makeProject());
     const result = await runFeedbackPipeline(
       { description: "", attachments: [] },
       { ...deps, confirmIssues },
@@ -516,7 +477,7 @@ describe("runFeedbackPipeline", () => {
         createdAt: new Date().toISOString(),
       },
     ]);
-    const client = fakeClient(
+    const runAgent = fakeAgent(
       analysisReply([
         { title: "tool bash retry storm", body: "dup" },
         { title: "[ui] Render corruption", body: "fresh" },
@@ -525,7 +486,7 @@ describe("runFeedbackPipeline", () => {
     const confirmIssues = vi.fn((_issues: IssueDraft[]) =>
       Promise.resolve({ approved: false }),
     );
-    const deps = makeDeps(client, makeProject());
+    const deps = makeDeps(runAgent, makeProject());
     await runFeedbackPipeline(
       { description: "", attachments: [] },
       { ...deps, confirmIssues },
@@ -546,7 +507,7 @@ describe("runFeedbackPipeline", () => {
         { description: "", attachments: ["env"] },
         {
           ...makeDeps(
-            fakeClient(analysisReply([{ title: "[ui] Hang", body: "b" }])),
+            fakeAgent(analysisReply([{ title: "[ui] Hang", body: "b" }])),
             makeProject(),
           ),
           abortSignal: controller.signal,
@@ -571,7 +532,7 @@ describe("runFeedbackPipeline", () => {
         { description: "", attachments: [] },
         {
           ...makeDeps(
-            fakeClient(
+            fakeAgent(
               analysisReply([
                 { title: "[tool] First defect", body: "b1" },
                 { title: "[ui] Second defect", body: "b2" },
@@ -601,13 +562,12 @@ describe("runFeedbackPipeline", () => {
       summary: "Compacted task summary",
       keep: [],
     });
-    const client = fakeClient(analysisReply([]));
-    const stream = vi.spyOn(client, "stream");
+    const runAgent = fakeAgent(analysisReply([]));
     await runFeedbackPipeline(
       { description: "", attachments: [] },
-      makeDeps(client, cwd),
+      makeDeps(runAgent, cwd),
     );
-    const prompt = stream.mock.calls[0][0].getMessages()[0].content;
+    const prompt = vi.mocked(runAgent).mock.calls[0][0];
     expect(prompt).toContain("PRE_COMPACTION_HARNESS_FAILURE");
     expect(mocks.createGist).not.toHaveBeenCalled();
   });

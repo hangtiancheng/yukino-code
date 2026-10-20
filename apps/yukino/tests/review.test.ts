@@ -95,6 +95,7 @@ describe("/review", () => {
         permissionChecker: checker,
         abortSignal: controller.signal,
       }),
+      undefined,
     );
     expect(events.map((event) => event.type)).toEqual(["tool_use"]);
     expect(conversation.getMessages()).toEqual([

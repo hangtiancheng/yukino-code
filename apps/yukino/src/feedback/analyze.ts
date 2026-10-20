@@ -1,10 +1,9 @@
 import { z } from "zod";
 
-import { ConversationManager, type Message } from "@/conversation/index.js";
-import { ANSWER_RESERVE_TOKENS, MAX_ISSUES } from "@/feedback/constants.js";
+import type { Message } from "@/conversation/index.js";
+import { MAX_ISSUES } from "@/feedback/constants.js";
 import {
-  analysisOutputTokens,
-  ANALYSIS_SYSTEM,
+  ANALYSIS_INSTRUCTIONS,
   buildAnalysisPrompt,
   buildAnalysisRetryPrompt,
 } from "@/feedback/prompts.js";
@@ -13,14 +12,13 @@ import {
   type FiledIssueRecord,
   type IssueDraft,
 } from "@/feedback/types.js";
-import type { LLMClient } from "@/llm/client.js";
 
 const AnalysisSchema = z.object({
   issues: z.array(IssueDraftSchema).max(MAX_ISSUES),
 });
 
 export interface AnalyzeInput {
-  client: LLMClient;
+  runAgent: (prompt: string) => Promise<string>;
   messages: Message[];
   logContent: string | null;
   description: string;
@@ -28,49 +26,6 @@ export interface AnalyzeInput {
   contextWindow: number;
   maxOutputTokens?: number;
   abortSignal: AbortSignal;
-}
-
-async function collectAnalysisText(
-  client: LLMClient,
-  conv: ConversationManager,
-  abortSignal: AbortSignal,
-  outputTokens: number,
-): Promise<{ text: string; truncated: boolean }> {
-  let text = "";
-  let completed = false;
-  let truncated = false;
-  for await (const event of client.stream(conv, [], abortSignal, {
-    systemPrompt: ANALYSIS_SYSTEM,
-    maxOutputTokens: outputTokens,
-    answerReserveTokens: ANSWER_RESERVE_TOKENS,
-  })) {
-    abortSignal.throwIfAborted();
-    if (event.type === "tool_call_start") {
-      throw new Error("Feedback analysis attempted a tool call");
-    }
-    if (event.type === "text_delta") {
-      text += event.text;
-    }
-    if (event.type === "stream_end") {
-      completed = true;
-      if (event.stopReason === "max_tokens") {
-        // The answer was cut off; salvage what arrived and let the caller retry.
-        truncated = true;
-      } else if (
-        event.stopReason !== "end_turn" &&
-        event.stopReason !== "stop"
-      ) {
-        throw new Error(
-          `Feedback analysis did not finish: ${event.stopReason}`,
-        );
-      }
-    }
-  }
-  abortSignal.throwIfAborted();
-  if (!completed) {
-    throw new Error("Feedback analysis stream ended before completion");
-  }
-  return { text, truncated };
 }
 
 function parseAnalysis(text: string): IssueDraft[] | null {
@@ -113,38 +68,28 @@ export function descriptionFallbackDraft(description: string): IssueDraft {
   };
 }
 
-/** Ask the session model to identify yukino harness defects in this session. */
+/** Ask a foreground worker to identify yukino harness defects in this session. */
 export async function analyzeHarnessAnomalies(
   input: AnalyzeInput,
 ): Promise<IssueDraft[]> {
-  const outputTokens = analysisOutputTokens(input);
-  const conv = new ConversationManager();
-  conv.addUserMessage(buildAnalysisPrompt(input));
-  const first = await collectAnalysisText(
-    input.client,
-    conv,
-    input.abortSignal,
-    outputTokens,
-  );
-  const drafts = parseAnalysis(first.text);
+  input.abortSignal.throwIfAborted();
+  const prompt = `${ANALYSIS_INSTRUCTIONS}\n\n${buildAnalysisPrompt(input)}`;
+  const first = await input.runAgent(prompt);
+  input.abortSignal.throwIfAborted();
+  const drafts = parseAnalysis(first);
   if (drafts) {
     return drafts;
   }
 
-  conv.addUserMessage(buildAnalysisRetryPrompt(first.truncated));
-  const retry = await collectAnalysisText(
-    input.client,
-    conv,
-    input.abortSignal,
-    outputTokens,
+  const retry = await input.runAgent(
+    `${prompt}\n\n${buildAnalysisRetryPrompt()}`,
   );
-  const retried = parseAnalysis(retry.text);
+  input.abortSignal.throwIfAborted();
+  const retried = parseAnalysis(retry);
   if (retried) {
     return retried;
   }
   throw new Error(
-    retry.truncated
-      ? "Feedback analysis did not finish: max_tokens after retry"
-      : "Feedback analysis did not return valid issue JSON after retry",
+    "Feedback analysis did not return valid issue JSON after retry",
   );
 }

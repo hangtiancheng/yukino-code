@@ -28,7 +28,7 @@ import {
   messageToKeptRecord,
 } from "@/session/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/constants.js";
+import { BUILTIN_AGENTS } from "@/subagent/constants.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import {
   TaskManager,
@@ -174,7 +174,15 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   const agentTool = new AgentTool(
     cwd,
     registry,
-    (def, prompt, background, modelOverride, cwdOverride, context) =>
+    (
+      def,
+      prompt,
+      background,
+      modelOverride,
+      cwdOverride,
+      context,
+      contextSnapshot,
+    ) =>
       spawnSubagent(
         def,
         prompt,
@@ -190,6 +198,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
           : context?.permissionChecker,
         {
           sessionId: context?.subagentSessionId,
+          contextSnapshot,
           abortSignal: context?.abortSignal,
           background,
           onPermissionRequest: context?.onPermissionRequest,
@@ -197,29 +206,9 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         },
       ),
     conv,
-    (prompt, conversation, forkRegistry, modelOverride, context) =>
-      spawnSubagent(
-        FORK_AGENT,
-        prompt,
-        client,
-        forkRegistry,
-        provider,
-        context?.cwd ?? cwd,
-        undefined,
-        undefined,
-        modelOverride,
-        context?.permissionChecker,
-        {
-          agentName: "fork",
-          conversation,
-          sessionId: context?.subagentSessionId,
-          abortSignal: context?.abortSignal,
-          onPermissionRequest: context?.onPermissionRequest,
-        },
-      ),
     backgroundTaskManager,
   );
-  agentTool.forkDisabled = !forkEnabled(cfg);
+  agentTool.defaultFork = forkEnabled(cfg);
   agentTool.setTeamManager(
     teamManager,
     (teamRegistry, teamChecker, memberCwd = cwd, options) => {
@@ -240,6 +229,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
           {
             abortSignal,
             backgroundTasks: false,
+            contextSnapshot: options?.contextSnapshot,
             conversation,
             agentName: options?.agentName,
             onPermissionRequest: options?.onPermissionRequest,

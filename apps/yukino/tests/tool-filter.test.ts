@@ -5,7 +5,6 @@ import {
   SUBAGENT_DISALLOWED_TOOLS,
 } from "@/subagent/constants.js";
 import {
-  cloneRegistryForFork,
   cloneRegistryForTeammate,
   filterToolsForAgent,
 } from "@/subagent/tool-filter.js";
@@ -63,8 +62,13 @@ describe("main-agent-only tool policy", () => {
     }
   });
 
-  it("strips every main-agent-only tool from forks, but keeps TaskStop and Agent", () => {
-    const forked = cloneRegistryForFork(buildRegistry(ALL));
+  it("strips main-agent authority and recursive Agent calls while keeping scoped TaskStop", () => {
+    const forked = filterToolsForAgent(
+      buildRegistry(ALL),
+      undefined,
+      undefined,
+      false,
+    );
     const names = new Set(forked.listTools().map((t) => t.name));
 
     for (const name of [
@@ -75,8 +79,8 @@ describe("main-agent-only tool policy", () => {
     ]) {
       expect(names.has(name)).toBe(false);
     }
-    // TaskStop is scoped to owned background tasks; Agent delegates without team authority.
-    for (const name of ["TaskStop", "Agent", "ReadFile", "Bash"]) {
+    expect(names.has("Agent")).toBe(false);
+    for (const name of ["TaskStop", "ReadFile", "Bash"]) {
       expect(names.has(name)).toBe(true);
     }
   });

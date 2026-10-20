@@ -6,10 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { buildToolGuidance } from "@/prompt/tools.js";
-import {
-  cloneRegistryForFork,
-  filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
+import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import { TeamManager } from "@/teams/index.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskCreateTool, TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
@@ -118,7 +115,7 @@ describe("tracking tool modes", () => {
       const parent = registry("non-interactive", list);
       const clone = () =>
         kind === "fork"
-          ? cloneRegistryForFork(parent)
+          ? filterToolsForAgent(parent, undefined, undefined, false)
           : filterToolsForAgent(
               parent,
               undefined,

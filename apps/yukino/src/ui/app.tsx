@@ -83,10 +83,7 @@ import { MemoryManager, type RecallResult } from "@/memory/manager.js";
 import { PermissionChecker, type PermissionMode } from "@/permissions/index.js";
 import { getOrCreatePlanPath, planExists } from "@/plan-file/index.js";
 import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
-import {
-  buildPlanModeExitReminder,
-  buildPlanModeReentryReminder,
-} from "@/prompt/plan-mode.js";
+import { buildPlanModeExitReminder } from "@/prompt/plan-mode.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import * as sessionMod from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
@@ -97,7 +94,7 @@ import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import {
   BUILTIN_AGENTS,
-  FORK_AGENT,
+  GENERAL_PURPOSE_AGENT_TYPE,
   SUBAGENT_INTERRUPTED_MARKER,
 } from "@/subagent/constants.js";
 import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
@@ -283,7 +280,6 @@ export function App({
   // Memory paths already injected this session; pre-filtered before recall to avoid
   // the same memory occupying a slot every turn
   const surfacedMemoriesRef = useRef<Set<string>>(new Set());
-  const hasExitedPlanModeRef = useRef(false);
   const permModeRef = useRef(permMode);
   const [mcpInfo, setMcpInfo] = useState<{
     servers: string[];
@@ -1077,6 +1073,7 @@ export function App({
               {
                 abortSignal,
                 backgroundTasks: false,
+                contextSnapshot: options?.contextSnapshot,
                 agentName: options?.agentName,
                 conversation,
                 onPermissionRequest: requestPermission,
@@ -1244,7 +1241,15 @@ export function App({
         const agentTool = new AgentTool(
           cwd,
           registryRef.current,
-          (def, prompt, background, modelOverride?, cwdOverride?, context?) => {
+          (
+            def,
+            prompt,
+            background,
+            modelOverride?,
+            cwdOverride?,
+            context?,
+            contextSnapshot?,
+          ) => {
             const toolCallId =
               context?.toolCallId ??
               `subagent-${String(++subagentIdRef.current)}`;
@@ -1271,6 +1276,7 @@ export function App({
                     : context?.permissionChecker,
                   {
                     sessionId: context?.subagentSessionId,
+                    contextSnapshot,
                     abortSignal: context?.abortSignal,
                     background,
                     onPermissionRequest: context?.onPermissionRequest,
@@ -1280,42 +1286,9 @@ export function App({
             );
           },
           conversationRef.current,
-          (prompt, conversation, registry, modelOverride, context) => {
-            const toolCallId =
-              context?.toolCallId ??
-              `subagent-${String(++subagentIdRef.current)}`;
-            return trackSubagent(
-              {
-                toolCallId,
-                role: BUILTIN_AGENTS[0].name,
-                taskId: context?.backgroundTaskId,
-                abortSignal: context?.abortSignal,
-              },
-              (onEvent) =>
-                spawnSubagent(
-                  FORK_AGENT,
-                  prompt,
-                  clientRef.current ?? client,
-                  registry,
-                  selectedProviderRef.current,
-                  context?.cwd ?? cwd,
-                  undefined,
-                  onEvent,
-                  modelOverride,
-                  context?.permissionChecker,
-                  {
-                    agentName: "fork",
-                    conversation,
-                    sessionId: context?.subagentSessionId,
-                    abortSignal: context?.abortSignal,
-                    onPermissionRequest: context?.onPermissionRequest,
-                  },
-                ),
-            );
-          },
           backgroundTaskManagerRef.current,
         );
-        agentTool.forkDisabled = forkDisabled ?? false;
+        agentTool.defaultFork = !(forkDisabled ?? false);
         // Wire the team manager into AgentTool to enable the team_name teammate path (teammates receive shared task-board tools)
         agentTool.setTeamManager(teamManagerRef.current, teamRunAgentFactory);
         registryRef.current.register(agentTool);
@@ -1599,30 +1572,6 @@ export function App({
     return out;
   };
 
-  const enterPlanModeUI = () => {
-    const checker = planOwner();
-    checker.enterPlanMode();
-    const planPath = getOrCreatePlanPath(checker);
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "system",
-        content: `Entered plan mode (read-only). Plan file: ${planPath}`,
-      },
-    ]);
-    if (hasExitedPlanModeRef.current && planExists(planOwner())) {
-      const reentryMsg = buildPlanModeReentryReminder(planPath, true);
-      if (reentryMsg) {
-        conversationRef.current.addSystemReminder(reentryMsg);
-        setMessages((prev) => [
-          ...prev,
-          { role: "system", content: reentryMsg },
-        ]);
-      }
-      hasExitedPlanModeRef.current = false;
-    }
-  };
-
   const runSlashCommand = async (text: string): Promise<boolean> => {
     let parsed = parseCommand(text);
     if (!parsed) {
@@ -1880,13 +1829,6 @@ export function App({
         case "quit":
           requestExit();
           break;
-        case "plan": {
-          enterPlanModeUI();
-          if (parsed.args) {
-            await runUserTurn(parsed.args, "plan");
-          }
-          break;
-        }
         case "compact":
           if (clientRef.current) {
             const controller = new AbortController();
@@ -2240,6 +2182,7 @@ export function App({
 
     if (cmd.type === "prompt") {
       if (cmd.agent) {
+        setPlanApprovalActive(false);
         const controller = new AbortController();
         abortControllerRef.current = controller;
         setError(null);
@@ -2248,7 +2191,7 @@ export function App({
         setSubagents([]);
         output.prepareTurn();
         try {
-          await runSubagentCommand(
+          const result = await runSubagentCommand(
             cmd.agent,
             cmd.handler({ cwd, args: parsed.args }),
             text,
@@ -2265,6 +2208,9 @@ export function App({
               ),
             },
           );
+          if (cmd.agent === "plan" && !result.isError) {
+            setPlanApprovalActive(true);
+          }
         } finally {
           if (abortControllerRef.current === controller) {
             abortControllerRef.current = null;
@@ -2419,7 +2365,7 @@ export function App({
     );
 
     // modeOverride avoids a stale-closure read of permMode right after a
-    // setPermMode call (e.g. `/plan <args>` entering plan mode in the same tick).
+    // setPermMode call in the same tick.
     const checker = checkerRef.current ?? new PermissionChecker(cwd);
     checker.mode = modeOverride ?? permModeRef.current;
     checkerRef.current = checker;
@@ -2556,7 +2502,11 @@ export function App({
             } else {
               interactionStatsRef.current.successfulToolCalls += 1;
             }
-            if (event.toolName === "ExitPlanMode" && !event.isError) {
+            if (
+              (event.toolName === "ExitPlanMode" ||
+                event.toolName === "EnterPlanMode") &&
+              !event.isError
+            ) {
               exitPlanSucceeded = true;
             }
             // @-mention completion must see files the agent just wrote.
@@ -2738,7 +2688,6 @@ export function App({
       }
 
       if (choice === "yolo") {
-        hasExitedPlanModeRef.current = true;
         planOwner().exitPlanMode("bypassPermissions");
 
         conversationRef.current.addSystemReminder(
@@ -2752,7 +2701,6 @@ export function App({
           handleSubmit(`Execute this plan:\n\n${planContent}`);
         }
       } else if (choice === "manual") {
-        hasExitedPlanModeRef.current = true;
         planOwner().exitPlanMode("default");
         conversationRef.current.addSystemReminder(
           buildPlanModeExitReminder(planPath, !!planContent),
@@ -3051,6 +2999,7 @@ export function App({
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setIsStreaming(true);
+    setSubagents([]);
     const provider = selectedProviderRef.current;
     const sessionId = sessionIdRef.current;
 
@@ -3058,7 +3007,30 @@ export function App({
     void runFeedbackPipeline(options, {
       cwd,
       sessionId,
-      client,
+      runAgent: async (prompt) => {
+        const agent = registryRef.current.get("Agent");
+        if (!(agent instanceof AgentTool)) {
+          throw new Error("The built-in feedback agent is unavailable.");
+        }
+        const result = await agent.runBuiltin(
+          GENERAL_PURPOSE_AGENT_TYPE,
+          {
+            cwd,
+            permissionChecker: checkerRef.current ?? undefined,
+            abortSignal: controller.signal,
+            onPermissionRequest: requestPermission,
+          },
+          prompt,
+        );
+        controller.signal.throwIfAborted();
+        if (
+          result.isError ||
+          result.output.includes(SUBAGENT_INTERRUPTED_MARKER)
+        ) {
+          throw new Error(result.output);
+        }
+        return result.output;
+      },
       messages: conversationRef.current.getMessages(),
       runtime: {
         config: {
@@ -3527,7 +3499,6 @@ export function App({
                     !!planPath && planExists(planOwner()),
                   ),
                 );
-                hasExitedPlanModeRef.current = true;
                 planOwner().exitPlanMode(mode);
               } else {
                 planOwner().mode = mode;

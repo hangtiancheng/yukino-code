@@ -993,12 +993,12 @@ export class Agent {
             // combined overflow. Process the entire batch before it enters history
             // so the message is in its final form from the start.
             applyBudget(toolResults, toolResultSessionId, exemptIds);
-            // Only end the loop when ExitPlanMode actually succeeded: an errored
-            // call (e.g. invoked outside plan mode) must flow back to the model as
-            // a normal tool_result so it can self-correct instead of the turn
-            // ending on a dangling error.
+            // Successful planning pauses execution for user approval.
             const exitPlanSucceeded = toolUses.some((tu) => {
-              if (tu.toolName !== "ExitPlanMode") {
+              if (
+                tu.toolName !== "ExitPlanMode" &&
+                tu.toolName !== "EnterPlanMode"
+              ) {
                 return false;
               }
               const result = results.get(tu.toolUseId);

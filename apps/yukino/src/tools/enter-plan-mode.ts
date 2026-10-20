@@ -1,9 +1,7 @@
-import { getOrCreatePlanPath } from "@/plan-file/index.js";
-import {
-  PLAN_MODE_DELEGATED_ERROR,
-  PLAN_MODE_UNAVAILABLE_ERROR,
-} from "@/tools/constants.js";
+import { runPlanAgent } from "@/subagent/plan.js";
+import { PLAN_AGENT_PROMPT } from "@/subagent/prompts.js";
 import { ENTER_PLAN_MODE_DESCRIPTION } from "@/tools/prompts.js";
+import type { ToolRegistry } from "@/tools/registry.js";
 import type {
   Tool,
   ToolCategory,
@@ -16,6 +14,12 @@ export class EnterPlanModeTool implements Tool {
   name = "EnterPlanMode";
   description = ENTER_PLAN_MODE_DESCRIPTION;
   category: ToolCategory = "read";
+
+  constructor(private registry: ToolRegistry) {}
+
+  isConcurrencySafe(): boolean {
+    return false;
+  }
 
   schema(): ToolSchema {
     return {
@@ -35,34 +39,6 @@ export class EnterPlanModeTool implements Tool {
     ctx: ToolContext,
     _args: Record<string, unknown>,
   ): Promise<ToolResult> {
-    const checker = ctx.permissionChecker;
-    if (!checker) {
-      return Promise.resolve({
-        output: PLAN_MODE_UNAVAILABLE_ERROR,
-        isError: true,
-      });
-    }
-    if (ctx.subagentSessionId || checker.isSubagent || checker.teammate) {
-      return Promise.resolve({
-        output: PLAN_MODE_DELEGATED_ERROR,
-        isError: true,
-      });
-    }
-    if (checker.mode === "plan") {
-      return Promise.resolve({
-        output:
-          "Already in plan mode. Continue exploring and update the plan file before calling ExitPlanMode.",
-        isError: false,
-      });
-    }
-
-    checker.enterPlanMode();
-    const planPath = getOrCreatePlanPath(checker);
-    return Promise.resolve({
-      output:
-        `Entered plan mode. Plan file: ${planPath}\n\n` +
-        "Focus on read-only exploration and design. Do not modify project files. Write the final plan to the plan file, then call ExitPlanMode for user approval.",
-      isError: false,
-    });
+    return runPlanAgent(this.registry, ctx, PLAN_AGENT_PROMPT);
   }
 }

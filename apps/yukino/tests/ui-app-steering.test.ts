@@ -1,4 +1,3 @@
-import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { render, type Instance } from "ink";
@@ -19,6 +18,7 @@ import type { StreamEvent } from "@/llm/events.js";
 import { MCPClient } from "@/mcp/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import * as sessionMod from "@/session/index.js";
+import { AgentTool } from "@/subagent/agent-tool.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { App } from "@/ui/app.js";
 import { installTerminalOutput } from "@/ui/terminal-output.js";
@@ -49,6 +49,7 @@ class ControlledClient implements LLMClient {
     schemas: unknown[];
     signal?: AbortSignal;
     finish: () => void;
+    fail: (error: Error) => void;
   }[] = [];
 
   setSystemPrompt = vi.fn<(prompt: string) => void>();
@@ -59,6 +60,7 @@ class ControlledClient implements LLMClient {
     signal?: AbortSignal,
   ): AsyncGenerator<StreamEvent> {
     let finish = (): void => undefined;
+    let fail = (_error: Error): void => undefined;
     const waiting = new Promise<void>((resolve, reject) => {
       const abort = () => {
         reject(new DOMException("Interrupted", "AbortError"));
@@ -66,6 +68,10 @@ class ControlledClient implements LLMClient {
       finish = () => {
         signal?.removeEventListener("abort", abort);
         resolve();
+      };
+      fail = (error) => {
+        signal?.removeEventListener("abort", abort);
+        reject(error);
       };
       signal?.addEventListener("abort", abort, { once: true });
       if (signal?.aborted) {
@@ -83,6 +89,7 @@ class ControlledClient implements LLMClient {
         .map((message) => contentToText(message.content)),
       signal,
       finish,
+      fail,
     });
     yield {
       type: "text_delta",
@@ -180,7 +187,7 @@ async function submit(text: string) {
   await press("\r");
 }
 
-async function start(mcpServers: MCPServerConfig[] = []) {
+async function start(mcpServers: MCPServerConfig[] = [], forkDisabled = false) {
   await act(async () => {
     instance = render(
       createElement(App, {
@@ -195,6 +202,7 @@ async function start(mcpServers: MCPServerConfig[] = []) {
         mcpServers,
         hooks: [],
         memoryEnabled: false,
+        forkDisabled,
       }),
       {
         stdout: terminal.stdout,
@@ -455,8 +463,8 @@ describe("App feedback approval", () => {
     });
   });
 
-  async function openFeedback() {
-    await start();
+  async function openFeedback(forkDisabled = false) {
+    await start([], forkDisabled);
     await finishRequest(0);
     await submit("/feedback observed failures");
     await press(" ");
@@ -467,6 +475,87 @@ describe("App feedback approval", () => {
     await flush();
     expect(filed).not.toHaveBeenCalled();
   }
+
+  it.each(["complete", "cancel", "fail"])(
+    "runs feedback analysis in a synchronous general-purpose child with inherited context (%s)",
+    async (outcome) => {
+      const runBuiltin = vi.spyOn(AgentTool.prototype, "runBuiltin");
+      feedbackMock.mockImplementation(async (_options, deps) => {
+        const report = await deps.runAgent(
+          "Investigate the reported Yukino failure using inherited context.",
+        );
+        const confirmation = await deps.confirmIssues(issues);
+        deps.abortSignal.throwIfAborted();
+        if (confirmation.approved) {
+          filed(issues);
+        }
+        return { report };
+      });
+      await openFeedback(true);
+      await waitForRequests(2);
+      const parent = client.requests[0].conversation;
+      const child = client.requests[1];
+      expect(child.conversation).not.toBe(parent);
+      expect(child.users).toContain("INITIAL_REQUEST");
+      expect(
+        child.messages.some((message) =>
+          contentToText(message.content).includes('role "general-purpose"'),
+        ),
+      ).toBe(true);
+      expect(child.users.join("\n")).toContain("reported Yukino failure");
+      expect(runBuiltin).toHaveBeenCalledWith(
+        "general-purpose",
+        expect.objectContaining({
+          abortSignal: feedbackMock.mock.calls[0][1].abortSignal,
+        }),
+        expect.any(String),
+      );
+      expect(terminal.bufferLines().join("\n")).not.toContain(
+        "TOOL_EVIDENCE_END",
+      );
+      expect(filed).not.toHaveBeenCalled();
+      if (outcome === "cancel") {
+        await press("\x03");
+        expect(child.signal?.aborted).toBe(true);
+      } else if (outcome === "fail") {
+        await act(async () => {
+          child.fail(new Error("Feedback worker failed"));
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        });
+      } else {
+        await finishRequest(1);
+        await vi.waitFor(() => {
+          expect(terminal.bufferLines().join("\n")).toContain(
+            "TOOL_EVIDENCE_END",
+          );
+        });
+        expect(filed).not.toHaveBeenCalled();
+        await press("\r");
+        await vi.waitFor(() => {
+          expect(filed).toHaveBeenCalledWith(issues);
+        });
+      }
+      if (outcome !== "complete") {
+        await vi.waitFor(() => {
+          expect(terminal.bufferLines().join("\n")).toContain(
+            outcome === "cancel" ? "Feedback cancelled." : "Feedback failed:",
+          );
+        });
+        expect(filed).not.toHaveBeenCalled();
+      }
+      await submit("Continue after feedback");
+      await waitForRequests(3);
+      expect(client.requests[2].conversation).toBe(parent);
+      expect(
+        parent
+          .getMessages()
+          .some((message) =>
+            contentToText(message.content).includes('role "general-purpose"'),
+          ),
+      ).toBe(false);
+      await finishRequest(2);
+    },
+  );
 
   it.each([8, 24])(
     "shows all drafts and requires approval at %i rows",
@@ -549,39 +638,29 @@ describe("App plan approval", () => {
         throw new Error("Plan mode owner was not captured");
       }
       expect(checker.mode).toBe("plan");
-      const plan = "A concrete test plan.";
-      vi.spyOn(client, "stream").mockImplementationOnce(async function* () {
-        await writeFile(checker.planFilePath, plan);
-        yield {
-          type: "tool_call_start",
-          toolId: "exit-plan",
-          toolName: "ExitPlanMode",
-        };
-        yield {
-          type: "tool_call_complete",
-          toolId: "exit-plan",
-          toolName: "ExitPlanMode",
-          arguments: {},
-        };
-        yield {
-          type: "stream_end",
-          stopReason: "tool_use",
-          usage: {
-            inputTokens: 1,
-            outputTokens: 1,
-            cacheReadInputTokens: 0,
-            cacheCreationInputTokens: 0,
-          },
-        };
-      });
-      await submit("Finish the plan");
+      await waitForRequests(2);
+      const parent = client.requests[0].conversation;
+      const child = client.requests[1];
+      expect(child.conversation).not.toBe(parent);
+      expect(child.users).toContain("INITIAL_REQUEST");
+      expect(
+        child.messages.some((message) =>
+          contentToText(message.content).includes('role "plan"'),
+        ),
+      ).toBe(true);
+      expect(JSON.stringify(child.schemas)).not.toContain('"name":"WriteFile"');
+      expect(JSON.stringify(child.schemas)).not.toContain(
+        '"name":"ExitPlanMode"',
+      );
+      const plan = "NEXT_REPLY_1";
+      await finishRequest(1);
       await vi.waitFor(() => {
         expect(terminal.bufferLines().join("\n")).toContain("Plan complete");
       });
       for (const key of keys) {
         await press(key);
       }
-      await waitForRequests(2);
+      await waitForRequests(3);
       expect(terminal.bufferLines().join("\n")).toContain(message);
       expect(checker.mode).toBe(mode);
       expect(
@@ -589,10 +668,11 @@ describe("App plan approval", () => {
           file_path: join(process.cwd(), "plan-approval-test.txt"),
         }).effect,
       ).toBe(effect);
-      expect(client.requests[1]?.users.at(-1)).toBe(
+      expect(client.requests[2]?.users.at(-1)).toBe(
         `Execute this plan:\n\n${plan}`,
       );
-      await finishRequest(1);
+      expect(client.requests[2].conversation).toBe(parent);
+      await finishRequest(2);
     },
   );
 });

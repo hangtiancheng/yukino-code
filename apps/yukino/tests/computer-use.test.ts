@@ -12,10 +12,7 @@ import { ConversationManager } from "@/conversation/index.js";
 import { AnthropicClient } from "@/llm/anthropic.js";
 import { OpenAIClient } from "@/llm/openai.js";
 import { extractContent } from "@/permissions/index.js";
-import {
-  cloneRegistryForFork,
-  filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
+import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import { TaskList } from "@/todo/index.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
 import { ToolRegistry } from "@/tools/registry.js";
@@ -693,7 +690,7 @@ describe("ComputerUse availability", () => {
     const filtered = filterToolsForAgent(main, ["*"], undefined, false);
     expect(filtered.get("ComputerUse")).toBeUndefined();
 
-    const forked = cloneRegistryForFork(main);
+    const forked = filterToolsForAgent(main, undefined, undefined, false);
     expect(forked.get("ComputerUse")).toBeUndefined();
   });
 

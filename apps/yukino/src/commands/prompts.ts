@@ -1,3 +1,11 @@
+import { PLAN_AGENT_PROMPT } from "@/subagent/prompts.js";
+
+export function buildPlanPrompt(args: string): string {
+  return args.trim()
+    ? `${PLAN_AGENT_PROMPT}\n\nPlanning request: ${args}`
+    : PLAN_AGENT_PROMPT;
+}
+
 export function buildReviewPrompt(args: string): string {
   return `You are an expert code reviewer. Review the requested pull request.
 

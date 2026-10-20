@@ -61,7 +61,7 @@ export const ASK_USER_QUESTION_DESCRIPTION = `
   Set multiSelect=true when the user may choose multiple options, or false for one mutually exclusive choice. Ask only for missing information that changes the task; do not re-request authorization already given.
   `;
 
-export const ENTER_PLAN_MODE_DESCRIPTION = `Use this tool proactively before a non-trivial implementation when the right approach is genuinely unclear and user review would prevent significant rework. It enters a read-only exploration phase where you inspect the codebase, compare approaches, write a concrete plan, and then call ExitPlanMode for approval.
+export const ENTER_PLAN_MODE_DESCRIPTION = `Use this tool proactively before a non-trivial implementation when the right approach is genuinely unclear and user review would prevent significant rework. It runs the built-in plan agent synchronously in the foreground with a fork of your conversation. The read-only agent investigates and returns a concrete plan; the host saves the plan and presents it for user approval. A successful call ends this turn. Do not implement until the user approves.
 
 Use it for significant architectural ambiguity, unclear requirements that require exploration, or high-impact restructuring. Skip it when the task is straightforward, the user has already specified the implementation, the fix is obvious after diagnosis, or the request is pure research. Do not use it from delegated agents. This tool takes no parameters.`;
 

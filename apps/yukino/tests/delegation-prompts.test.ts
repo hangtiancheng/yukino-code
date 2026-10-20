@@ -301,7 +301,12 @@ describe("delegated prompt contracts", () => {
     );
     const result = await tool.execute(
       { cwd: directory },
-      { description: "explore", prompt: "read only", subagent_type: "explore" },
+      {
+        description: "explore",
+        prompt: "read only",
+        subagent_type: "explore",
+        fork: false,
+      },
     );
     expect(result.isError).toBe(false);
     expect(create).not.toHaveBeenCalled();
@@ -329,20 +334,29 @@ describe("delegated prompt contracts", () => {
     ).not.toContain("undefined");
   });
 
-  it("describes omitted roles according to the actual fork setting", () => {
+  it("describes role and context defaults independently", () => {
     const tool = new AgentTool(cwd(), new ToolRegistry(), () =>
       Promise.resolve("done"),
     );
     expect(tool.category).toBe("command");
-    expect(tool.schema().description).toContain("forks a snapshot");
+    expect(tool.schema().description).toContain(
+      "subagent_type selects the role (default general-purpose)",
+    );
+    expect(tool.schema().input_schema.properties.fork).toHaveProperty(
+      "default",
+      true,
+    );
     expect(
       JSON.stringify(tool.schema().input_schema.properties.name),
     ).toContain("stable teammate name");
-    tool.forkDisabled = true;
-    expect(tool.schema().description).toContain("selects general-purpose");
+    tool.defaultFork = false;
+    expect(tool.schema().input_schema.properties.fork).toHaveProperty(
+      "default",
+      false,
+    );
     expect(tool.schema().input_schema.properties.subagent_type).toHaveProperty(
-      "description",
-      "Agent role. Defaults to general-purpose.",
+      "default",
+      "general-purpose",
     );
   });
 
@@ -359,7 +373,6 @@ describe("delegated prompt contracts", () => {
       new ToolRegistry(),
       spawn,
       undefined,
-      undefined,
       manager,
     );
 
@@ -369,6 +382,7 @@ describe("delegated prompt contracts", () => {
         description: "inspect",
         prompt: "inspect files",
         subagent_type: "explore",
+        fork: false,
         run_in_background: true,
       },
     );
@@ -387,6 +401,7 @@ describe("delegated prompt contracts", () => {
         toolCallId: "outer-agent",
         backgroundTaskId: task.id,
       }),
+      undefined,
     );
 
     finish("background result");

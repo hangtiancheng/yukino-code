@@ -4,8 +4,9 @@ import type { AgentEvent } from "@/agent/events.js";
 import { SUBAGENT_COMMAND_UNAVAILABLE } from "@/commands/constants.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import { saveMessage } from "@/session/index.js";
+import { runPlanAgent } from "@/subagent/plan.js";
 import type { ToolRegistry } from "@/tools/registry.js";
-import type { ToolContext } from "@/tools/types.js";
+import type { ToolContext, ToolResult } from "@/tools/types.js";
 
 interface SubagentCommandContext extends ToolContext {
   registry: ToolRegistry;
@@ -19,7 +20,7 @@ export async function runSubagentCommand(
   prompt: string,
   input: string,
   context: SubagentCommandContext,
-): Promise<void> {
+): Promise<ToolResult> {
   context.abortSignal?.throwIfAborted();
   const agent = context.registry.get("Agent");
   if (!agent) {
@@ -42,13 +43,18 @@ export async function runSubagentCommand(
   const toolId = randomUUID();
   const args = {
     subagent_type: agentName,
+    fork: agentName === "plan",
     description: input,
     prompt,
     run_in_background: false,
   };
   const start = Date.now();
   context.onEvent({ type: "tool_use", toolName: "Agent", toolId, args });
-  const result = await agent.execute({ ...context, toolCallId: toolId }, args);
+  const toolContext = { ...context, toolCallId: toolId };
+  const result =
+    agentName === "plan"
+      ? await runPlanAgent(context.registry, toolContext, prompt)
+      : await agent.execute(toolContext, args);
   record("assistant", result.output);
   context.onEvent({
     type: "tool_result",
@@ -67,4 +73,5 @@ export async function runSubagentCommand(
         ? "error"
         : "end_turn",
   });
+  return result;
 }
