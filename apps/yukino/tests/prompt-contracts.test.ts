@@ -66,8 +66,9 @@ describe("system prompt contracts", () => {
     expect(guidance).toContain("Mark TODO items in_progress");
     expect(guidance).toContain("A set goal is already active");
     expect(guidance).toContain(
-      "never send in_progress, active, or paused as a Goal update",
+      "report in_progress/complete/blocked with a reason",
     );
+    expect(guidance).toContain("it cannot resume a paused or stopped goal");
     expect(buildToolGuidance(["Goal"])).not.toContain("Mark TODO items");
     expect(buildToolGuidance(["TaskUpdate"])).not.toContain("Goal manages");
   });

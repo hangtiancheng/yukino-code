@@ -286,9 +286,9 @@ export const GOAL_MAIN_SESSION_ONLY =
 export const GOAL_UPDATE_REQUIRES_STATUS_REASON =
   "Updating a goal requires status and reason.";
 export const GOAL_INVALID_STATUS_ERROR =
-  "Goal update accepts only 'complete' or 'blocked'. A goal is active as soon as the user sets it; there is no in_progress transition. Only the user can pause or resume a goal.";
+  "Goal update accepts only 'in_progress', 'complete', or 'blocked'. A goal is active as soon as the user sets it. Only the user can pause or resume a goal.";
 export const GOAL_INVALID_ARGS_ERROR =
-  "Goal expects action 'get' or 'update'. Updating requires status 'complete' or 'blocked' and a non-empty reason; no other fields are accepted.";
+  "Goal expects action 'get' or 'update'. Updating requires status 'in_progress', 'complete', or 'blocked' and a non-empty reason; no other fields are accepted.";
 export const LSP_DISPOSED_ERROR = "LSP tool is disposed";
 export const LSP_INTERRUPTED_ERROR = "LSP operation interrupted";
 export const LSP_SERVER_EXITED_ERROR =

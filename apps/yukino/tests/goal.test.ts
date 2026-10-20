@@ -112,7 +112,7 @@ const complete: StreamEvent = {
 };
 
 describe("persistent goals", () => {
-  it.each(["in_progress", "active", "paused"])(
+  it.each(["active", "paused"])(
     "explains why the agent cannot set goal status %s without changing state",
     async (status) => {
       const manager = new GoalManager(cwd, "one");
@@ -124,10 +124,73 @@ describe("persistent goals", () => {
       );
       expect(result.isError).toBe(true);
       expect(result.output).toContain(
-        "Goal update accepts only 'complete' or 'blocked'",
+        "Goal update accepts only 'in_progress', 'complete', or 'blocked'",
       );
       expect(result.output).toContain("active as soon as the user sets it");
       expect(result.output).not.toContain("invalid_value");
+      expect(manager.get()).toEqual(before);
+    },
+  );
+  it("reports in_progress, persists a fresh blocker audit, and keeps tracking active work", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const manager = new GoalManager(cwd, "one");
+    manager.set("Finish", 100);
+    manager.beginTurn();
+    manager.addTokens(14);
+    manager.update("blocked", "Service unavailable");
+    manager.beginTurn();
+    manager.update("blocked", "Service unavailable");
+    expect(manager.get()?.blockedAttempts).toBe(2);
+    vi.advanceTimersByTime(3000);
+    const tool = new GoalTool();
+    expect(tool.schema().input_schema.properties?.status).toMatchObject({
+      enum: ["in_progress", "complete", "blocked"],
+    });
+    const result = await tool.execute(
+      { cwd, goalManager: manager },
+      { action: "update", status: "in_progress", reason: "Service recovered" },
+    );
+    expect(result.isError).toBe(false);
+    expect(result.output).toContain("Status: active");
+    expect(new GoalManager(cwd, "one").get()).toMatchObject({
+      status: "active",
+      tokenBudget: 100,
+      tokensUsed: 14,
+      turnsExecuted: 2,
+      activeMs: 3000,
+      blockedAttempts: 0,
+      lastBlockReason: null,
+      lastBlockedTurn: null,
+    });
+    expect(manager.continuation()).toContain("Finish");
+    vi.advanceTimersByTime(2000);
+    manager.addTokens(14);
+    manager.endRun();
+    expect(manager.get()).toMatchObject({ activeMs: 5000, tokensUsed: 28 });
+    manager.beginTurn();
+    manager.update("blocked", "Service unavailable");
+    expect(manager.get()?.blockedAttempts).toBe(1);
+  });
+  it.each([
+    "paused",
+    "blocked",
+    "complete",
+    "budget_limited",
+    "max_turns",
+  ] as const)(
+    "does not let in_progress reactivate a %s goal",
+    async (status) => {
+      const manager = new GoalManager(cwd, "one");
+      manager.set("Finish");
+      manager.transition(status);
+      const before = manager.get();
+      const result = await new GoalTool().execute(
+        { cwd, goalManager: manager },
+        { action: "update", status: "in_progress", reason: "More work" },
+      );
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("Only an active goal can be updated");
       expect(manager.get()).toEqual(before);
     },
   );
@@ -141,6 +204,7 @@ describe("persistent goals", () => {
     for (const args of [
       { action: "set", objective: "Finish" },
       { action: "update", status: "complete", reason: " " },
+      { action: "update", status: "in_progress", reason: " " },
       { action: "get", unexpected: true },
     ]) {
       const result = await tool.execute({ cwd, goalManager: manager }, args);
@@ -148,6 +212,12 @@ describe("persistent goals", () => {
       expect(result.output).toContain("Goal expects");
       expect(result.output).not.toContain("invalid_");
     }
+    expect(manager.get()).toBeNull();
+    const progress = await tool.execute(
+      { cwd, goalManager: manager },
+      { action: "update", status: "in_progress", reason: "Start work" },
+    );
+    expect(progress.isError).toBe(true);
     expect(manager.get()).toBeNull();
   });
   it("persists a session-local goal through compaction and a clear tombstone", () => {

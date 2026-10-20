@@ -42,14 +42,6 @@ export class TaskCreateTool implements Tool {
         properties: {
           subject: { type: "string", description: "Brief task title" },
           description: { type: "string", description: "What needs to be done" },
-          activeForm: {
-            type: "string",
-            description: "Present continuous form for spinner",
-          },
-          metadata: {
-            type: "object",
-            description: "Task-specific structured context",
-          },
         },
         required: ["subject", "description"],
         additionalProperties: false,
@@ -65,18 +57,16 @@ export class TaskCreateTool implements Tool {
       .object({
         subject: z.string().trim().min(1),
         description: z.string(),
-        activeForm: z.string().optional(),
-        metadata: z.record(z.string(), z.unknown()).optional(),
       })
       .strict()
       .safeParse(args);
     if (!parsed.success) {
       return Promise.resolve({ output: parsed.error.message, isError: true });
     }
-    const { subject, description, activeForm, metadata } = parsed.data;
+    const { subject, description } = parsed.data;
     try {
       ctx.abortSignal?.throwIfAborted();
-      const task = this.list.create(subject, description, activeForm, metadata);
+      const task = this.list.create(subject, description);
       return Promise.resolve({
         output: `Task #${task.id} created successfully: ${task.subject}\n${taskProgress(this.list.list()).label}`,
         isError: false,
@@ -227,16 +217,7 @@ export class TaskUpdateTool implements Tool {
           subject: { type: "string", description: "New subject" },
           description: { type: "string", description: "New description" },
           owner: { type: "string", description: "New owner" },
-          activeForm: {
-            type: "string",
-            description: "Present continuous form for progress display",
-          },
           priority: { type: "string", enum: ["high", "medium", "low"] },
-          metadata: {
-            type: "object",
-            description:
-              "Merge structured context; null deletes a metadata key",
-          },
           addBlocks: {
             type: "array",
             items: { type: "string" },
@@ -314,9 +295,7 @@ const TaskUpdateArgsSchema = z
     description: z.string().optional(),
     status: z.enum([...StoredTaskStatusSchema.options, "deleted"]).optional(),
     owner: z.string().optional(),
-    activeForm: z.string().optional(),
     priority: z.enum(["high", "medium", "low"]).optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
     addBlocks: z.array(z.string().trim().min(1)).optional(),
     addBlockedBy: z.array(z.string().trim().min(1)).optional(),
   })

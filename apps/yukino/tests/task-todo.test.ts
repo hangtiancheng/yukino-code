@@ -56,7 +56,6 @@ describe("atomic task/TODO list", () => {
         status: "in_progress",
         addBlocks: [second.id],
         priority: "high",
-        metadata: { evidence: "tests" },
       },
     );
     expect(result.isError).toBe(false);

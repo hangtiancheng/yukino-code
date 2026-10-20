@@ -21,7 +21,7 @@ import { TeamTaskUpdateTool } from "@/teams/task-tools.js";
 import { readTeamFile } from "@/teams/team-file.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
-import { TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
+import { TodoWriteTool } from "@/todo/tools.js";
 import { BashTool } from "@/tools/bash.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolContext } from "@/tools/types.js";
@@ -671,10 +671,7 @@ describe("task board correctness", () => {
     });
     const second = list.create("second", "");
     list.update(second.id, { addBlockedBy: [first.id] });
-    await new TaskUpdateTool(list).execute(
-      { cwd: directory },
-      { taskId: first.id, metadata: { add: 2, remove: null } },
-    );
+    list.update(first.id, { metadata: { add: 2, remove: null } });
     expect(list.get(first.id)?.metadata).toEqual({ keep: 1, add: 2 });
     const before = list.list();
     const result = await new TodoWriteTool(list).execute(

@@ -80,7 +80,14 @@ export const EXIT_WORKTREE_DESCRIPTION =
   "uncommitted changes is retained for explicit integration, not deleted.";
 
 export const GOAL_DESCRIPTION =
-  "Get the user-set persistent goal, or report complete or blocked with a reason. These are the only statuses the model can set. A goal is active automatically when the user sets it; do not mark it in progress. Only the user can set, replace, pause, resume, or clear goals. Complete only when all requirements are achieved and verified. Record the same blocker on three consecutive continuation turns before stopping; multiple calls in one turn count once.";
+  "Get the user-set persistent goal, or report in_progress, complete, or blocked with a reason. A goal is active automatically when the user sets it; in_progress reports progress and resets the blocker audit while keeping it active. Only the user can set, replace, pause, resume, or clear goals. Complete only when all requirements are achieved and verified. Record the same blocker on three consecutive continuation turns before stopping; multiple calls in one turn count once.";
+
+export const GOAL_ACTION_DESCRIPTION =
+  "Read goal status, or report progress, completion, or blockage.";
+export const GOAL_STATUS_DESCRIPTION =
+  "Required for update. Use in_progress to report progress and reset the blocker audit on an active goal, complete when verified, or blocked for an unavoidable blocker.";
+export const GOAL_REASON_DESCRIPTION =
+  "Required for update. Describe progress, evidence of completion, or the specific blocker.";
 
 export const LSP_DESCRIPTION =
   "Query a configured language server for definitions, references, hover, symbols, implementations, type definitions, call hierarchy, or diagnostics. file_path resolves against the current working directory; line and character are 1-based UTF-16 positions. Returned ranges use the LSP standard (0-based UTF-16) and file URIs. This tool cannot edit files or run arbitrary commands. Servers must be explicitly configured in lsp_servers; no automatic installation.";

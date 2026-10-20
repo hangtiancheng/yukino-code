@@ -6,7 +6,12 @@ import {
   GOAL_MAIN_SESSION_ONLY,
   GOAL_UPDATE_REQUIRES_STATUS_REASON,
 } from "@/tools/constants.js";
-import { GOAL_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  GOAL_ACTION_DESCRIPTION,
+  GOAL_DESCRIPTION,
+  GOAL_REASON_DESCRIPTION,
+  GOAL_STATUS_DESCRIPTION,
+} from "@/tools/prompts.js";
 import type {
   Tool,
   ToolContext,
@@ -17,7 +22,7 @@ import type {
 const Args = z
   .object({
     action: z.enum(["get", "update"]),
-    status: z.enum(["complete", "blocked"]).optional(),
+    status: z.enum(["in_progress", "complete", "blocked"]).optional(),
     reason: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -39,18 +44,16 @@ export class GoalTool implements Tool {
           action: {
             type: "string",
             enum: ["get", "update"],
-            description: "Read goal status, or report completion/blockage.",
+            description: GOAL_ACTION_DESCRIPTION,
           },
           status: {
             type: "string",
-            enum: ["complete", "blocked"],
-            description:
-              "Required for update. Only complete or blocked are accepted; a set goal is already active.",
+            enum: ["in_progress", "complete", "blocked"],
+            description: GOAL_STATUS_DESCRIPTION,
           },
           reason: {
             type: "string",
-            description:
-              "Required for update. Evidence of completion or the specific blocker.",
+            description: GOAL_REASON_DESCRIPTION,
           },
         },
         required: ["action"],

@@ -217,13 +217,23 @@ export class GoalManager {
     }
   }
 
-  update(status: "complete" | "blocked", reason: string): string {
+  update(
+    status: "in_progress" | "complete" | "blocked",
+    reason: string,
+  ): string {
     const goal = this.state;
     if (goal?.status !== "active") {
       throw new Error("Only an active goal can be updated by the agent.");
     }
     if (!reason.trim()) {
       throw new Error("A reason is required.");
+    }
+    if (status === "in_progress") {
+      goal.blockedAttempts = 0;
+      goal.lastBlockReason = null;
+      goal.lastBlockedTurn = null;
+      this.persist();
+      return this.format();
     }
     if (status === "complete") {
       this.transition("complete");

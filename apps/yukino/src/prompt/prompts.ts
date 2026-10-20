@@ -112,7 +112,7 @@ export const READFILE_OFFSETS_RULE =
 export const TODO_TOOLS_RULE =
   "Use the available TODO tools for complex work, not trivial requests. Mark TODO items in_progress before starting, and completed only after validation; use blocked or cancelled honestly. Tracking records work; Agent executes it. Tool results and the UI count only completed items in TODO completed/total. Completed items remain stored until explicitly deleted or replaced. Ordinary subagents and forks have independent private lists.";
 export const GOAL_RULE =
-  "Goal manages a user-set persistent objective, separately from TODO items. A set goal is already active. Use Goal only to get status or report complete/blocked with a reason; never send in_progress, active, or paused as a Goal update. Only the user can set, replace, pause, resume, or clear it.";
+  "Goal manages a user-set persistent objective, separately from TODO items. A set goal is already active. Use Goal to get status or report in_progress/complete/blocked with a reason. in_progress reports progress and resets the blocker audit while keeping the goal active; it cannot resume a paused or stopped goal. Only the user can set, replace, pause, resume, or clear it.";
 export const TASK_TOOLS_RULE =
   "Task tools update individual items. Without a team they track the agent's private list; with a team, the leader and teammates share its board. Dependencies refer to existing items and must not form cycles. Only completed dependencies unblock work; cancelled dependencies remain unresolved until explicitly removed. Use subject/taskId/owner/addBlocks/addBlockedBy consistently.";
 export const TODO_WRITE_RULE =

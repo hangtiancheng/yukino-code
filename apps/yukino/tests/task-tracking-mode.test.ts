@@ -48,6 +48,59 @@ function trackingNames(registry: ToolRegistry) {
 }
 
 describe("tracking tool modes", () => {
+  it.each(["private", "shared"])(
+    "rejects removed Task fields on the %s board without mutating tasks",
+    async (board) => {
+      const list = new TaskList();
+      const tools = registry("interactive", list);
+      if (board === "shared") {
+        manager.create("squad");
+      }
+      const tasks = () =>
+        board === "shared"
+          ? manager.getTaskStore("squad").listTasks()
+          : list.list();
+      const create = tools.get("TaskCreate");
+      const update = tools.get("TaskUpdate");
+      if (!create || !update) {
+        throw new Error("Missing task tools");
+      }
+      for (const tool of [create, update]) {
+        const properties = tool.schema().input_schema.properties;
+        expect(properties).not.toHaveProperty("activeForm");
+        expect(properties).not.toHaveProperty("metadata");
+      }
+      for (const fields of [
+        { activeForm: "Working" },
+        { metadata: { evidence: "tests" } },
+      ]) {
+        const result = await create.execute(
+          { cwd },
+          { subject: "removed", description: "", ...fields },
+        );
+        expect(result.isError).toBe(true);
+        expect(tasks()).toEqual([]);
+      }
+      expect(
+        (await create.execute({ cwd }, { subject: "work", description: "" }))
+          .isError,
+      ).toBe(false);
+      const before = tasks();
+      expect(before[0]?.id).toBe("1");
+      for (const fields of [
+        { activeForm: "Working" },
+        { metadata: { evidence: "tests" } },
+      ]) {
+        const result = await update.execute(
+          { cwd },
+          { taskId: "1", status: "completed", ...fields },
+        );
+        expect(result.isError).toBe(true);
+        expect(tasks()).toEqual(before);
+      }
+    },
+  );
+
   it.each(["interactive", "non-interactive"] as const)(
     "exposes only the %s tracking interface and scoped guidance",
     (mode) => {
@@ -157,10 +210,7 @@ describe("tracking tool modes", () => {
     const create = new TaskCreateTool(tasks);
     const update = new TaskUpdateTool(tasks);
     const write = new TodoWriteTool(todos);
-    await create.execute(
-      { cwd },
-      { subject: "first", description: "", activeForm: "Working" },
-    );
+    await create.execute({ cwd }, { subject: "first", description: "" });
     await create.execute({ cwd }, { subject: "second", description: "" });
     await update.execute({ cwd }, { taskId: "1", status: "completed" });
     await update.execute(
@@ -171,7 +221,7 @@ describe("tracking tool modes", () => {
       { cwd },
       {
         todos: [
-          { subject: "first", status: "completed", activeForm: "Working" },
+          { subject: "first", status: "completed" },
           { subject: "second", status: "blocked", priority: "high" },
         ],
       },
