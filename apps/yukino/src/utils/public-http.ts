@@ -69,7 +69,7 @@ export function isPublicIpAddress(address: string): boolean {
 }
 
 const defaultLookup: HostLookup = async (hostname) =>
-  await dnsLookup(hostname, { all: true, verbatim: true });
+  await dnsLookup(hostname, { all: true, order: "verbatim" });
 
 function normalizedHostname(url: URL): string {
   return url.hostname.startsWith("[") && url.hostname.endsWith("]")
