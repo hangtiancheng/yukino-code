@@ -1,0 +1,53 @@
+{
+  "name": "@yukino.js/app",
+  "version": "0.0.1",
+  "description": "TODO",
+  "main": "./out/main/index.js",
+  "author": "github.com/hangtiancheng",
+  "homepage": "https://hangtiancheng.github.io/yukino-code",
+  "scripts": {
+    "format": "prettier -w . --experimental-cli",
+    "lint": "eslint --cache . --quiet",
+    "lint:fix": "eslint --cache . --fix --quiet",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "postinstall": "install-electron && electron-builder install-app-deps",
+    "build:unpack": "npm run build && electron-builder --dir",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:linux": "electron-vite build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "electron-updater": "^6.8.9",
+    "@yukino.js/yukino": "workspace:*"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-ts": "^4.0.0",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^44.9.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^6.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4"
+  }
+}
