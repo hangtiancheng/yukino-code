@@ -172,20 +172,7 @@ export function coerceBySchema(value: unknown, schema: unknown): unknown {
  */
 export function mcpCallPermissionContent(server: string, tool: string): string {
   if (tool.startsWith(MCP_TOOL_PREFIX)) {
-    const rest = tool.slice(MCP_TOOL_PREFIX.length);
-    const lengthMatch = /^(\d+)_/u.exec(rest);
-    if (lengthMatch) {
-      const serverStart = lengthMatch[0].length;
-      const serverLength = Number.parseInt(lengthMatch[1], 10);
-      const separatorStart = serverStart + serverLength;
-      if (rest.slice(separatorStart, separatorStart + 2) === MCP_NAME_SEP) {
-        return (
-          rest.slice(serverStart, separatorStart) +
-          MCP_NAME_SEP +
-          rest.slice(separatorStart + MCP_NAME_SEP.length)
-        );
-      }
-    }
+    return tool.slice(MCP_TOOL_PREFIX.length);
   }
   return sanitizeSegment(server) + MCP_NAME_SEP + sanitizeSegment(tool);
 }

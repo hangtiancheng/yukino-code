@@ -487,13 +487,13 @@ describe("beta header for native deferred loading", () => {
 describe("tool naming", () => {
   test("double underscore separator", () => {
     expect(buildMcpToolName("linear", "create_issue")).toBe(
-      "mcp__6_linear__create_issue",
+      "mcp__linear__create_issue",
     );
   });
 
   test("hyphens and dots become underscores, consistent with Go/Python", () => {
     expect(buildMcpToolName("chrome-devtools", "take.snapshot")).toBe(
-      "mcp__15_chrome_devtools__take_snapshot",
+      "mcp__chrome_devtools__take_snapshot",
     );
   });
 

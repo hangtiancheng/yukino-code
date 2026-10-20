@@ -1,0 +1,1651 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yukino CLI 工具图鉴</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <style>
+      body {
+        font-family: "Noto Sans SC", sans-serif;
+      }
+      .mono {
+        font-family: "Geist Mono", "Maple Mono", monospace;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+      .glow {
+        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.1);
+      }
+      .card-enter {
+        animation: fadeUp 0.35s ease both;
+      }
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .en-block {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      details > summary {
+        list-style: none;
+        cursor: pointer;
+      }
+      details > summary::-webkit-details-marker {
+        display: none;
+      }
+      details[open] .chev {
+        transform: rotate(90deg);
+      }
+      .chev {
+        transition: transform 0.2s;
+      }
+      .grid-bg {
+        background-image: radial-gradient(
+          rgba(100, 116, 139, 0.1) 1px,
+          transparent 1px
+        );
+        background-size: 22px 22px;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-700 min-h-screen grid-bg">
+    <!-- ============ Header ============ -->
+    <header
+      class="border-b border-slate-200 bg-white/85 backdrop-blur sticky top-0 z-40"
+    >
+      <div class="max-w-7xl mx-auto px-6 py-5">
+        <div class="flex flex-wrap items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-black text-xl glow"
+          >
+            雪
+          </div>
+          <div>
+            <h1 class="text-2xl font-black tracking-tight text-slate-900">
+              Yukino CLI 工具图鉴
+            </h1>
+            <p class="text-xs text-slate-500 mt-0.5 mono">
+              apps/yukino · 所有
+              <span class="text-indigo-600">implements Tool</span>
+              的工具类全解析
+            </p>
+          </div>
+          <div class="ml-auto flex gap-2 text-center">
+            <div
+              class="px-4 py-2 rounded-xl bg-white border border-slate-200 shadow-sm"
+            >
+              <div class="text-2xl font-black text-slate-900" id="statTotal">
+                33
+              </div>
+              <div class="text-[10px] text-slate-400">工具总数</div>
+            </div>
+            <div
+              class="px-4 py-2 rounded-xl bg-white border border-slate-200 shadow-sm"
+            >
+              <div class="text-2xl font-black text-sky-600" id="statRead">
+                19
+              </div>
+              <div class="text-[10px] text-slate-400">read 读取</div>
+            </div>
+            <div
+              class="px-4 py-2 rounded-xl bg-white border border-slate-200 shadow-sm"
+            >
+              <div class="text-2xl font-black text-amber-600" id="statWrite">
+                5
+              </div>
+              <div class="text-[10px] text-slate-400">write 写入</div>
+            </div>
+            <div
+              class="px-4 py-2 rounded-xl bg-white border border-slate-200 shadow-sm"
+            >
+              <div class="text-2xl font-black text-rose-600" id="statCmd">
+                9
+              </div>
+              <div class="text-[10px] text-slate-400">command 命令</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- filters -->
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <div class="relative flex-1 min-w-[220px] max-w-md">
+            <input
+              id="search"
+              type="text"
+              placeholder="搜索工具名 / 参数 / 中文说明…（如 sandbox、file_path、后台）"
+              class="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400"
+            />
+            <svg
+              class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          <div class="flex gap-1.5 flex-wrap" id="catFilters">
+            <button
+              data-cat="all"
+              class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold border bg-indigo-600 text-white border-indigo-600"
+            >
+              全部
+            </button>
+            <button
+              data-cat="read"
+              class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white text-slate-600 border-slate-300 hover:bg-slate-100"
+            >
+              read
+            </button>
+            <button
+              data-cat="write"
+              class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white text-slate-600 border-slate-300 hover:bg-slate-100"
+            >
+              write
+            </button>
+            <button
+              data-cat="command"
+              class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white text-slate-600 border-slate-300 hover:bg-slate-100"
+            >
+              command
+            </button>
+          </div>
+          <button
+            id="expandAll"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-300"
+          >
+            全部展开
+          </button>
+          <button
+            id="collapseAll"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-300"
+          >
+            全部收起
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-6">
+      <!-- ============ 架构总览 ============ -->
+      <section
+        class="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm glow"
+      >
+        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <span
+            class="w-1.5 h-5 rounded bg-gradient-to-b from-indigo-500 to-fuchsia-500 inline-block"
+          ></span>
+          Tool 接口与执行架构总览
+        </h2>
+        <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
+          <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+            <div class="font-bold text-indigo-600 mb-2 mono text-xs">
+              interface Tool
+              <span class="text-slate-400 font-normal"
+                >src/tools/types.ts:291</span
+              >
+            </div>
+            <ul class="space-y-1 text-slate-600 text-[13px] leading-relaxed">
+              <li>
+                <span class="mono text-emerald-700">name</span> —
+                工具名（硬编码字符串，防压缩混淆）
+              </li>
+              <li>
+                <span class="mono text-emerald-700">description</span> —
+                面向模型的英文描述
+              </li>
+              <li>
+                <span class="mono text-emerald-700">category</span> —
+                <span class="mono">read | write | command</span
+                >，决定权限矩阵与默认并发策略
+              </li>
+              <li>
+                <span class="mono text-emerald-700">deferred?</span> —
+                延迟加载（仅 MCP 包装器为 true，须先经 ToolSearch 发现）
+              </li>
+              <li>
+                <span class="mono text-emerald-700"
+                  >isConcurrencySafe?(args)</span
+                >
+                — 按实际参数判断本次调用可否并发；未实现时按 category 回退
+              </li>
+              <li>
+                <span class="mono text-emerald-700">schema()</span> — 返回
+                ToolSchema（input_schema / description）
+              </li>
+              <li>
+                <span class="mono text-emerald-700">execute(ctx, args)</span> —
+                执行并返回 ToolResult
+              </li>
+              <li>
+                <span class="mono text-emerald-700">dispose?()</span> —
+                释放会话级资源（如 Bash 的沙箱）
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+            <div class="font-bold text-fuchsia-600 mb-2 mono text-xs">
+              ToolResult / ToolContext
+            </div>
+            <ul class="space-y-1 text-slate-600 text-[13px] leading-relaxed">
+              <li>
+                <span class="mono text-emerald-700">output</span> —
+                文本结果（必有）
+              </li>
+              <li>
+                <span class="mono text-emerald-700">contentBlocks?</span> — 图像
+                / 文档 / search_result 等富内容块
+              </li>
+              <li>
+                <span class="mono text-emerald-700">mcpApp?</span> — MCP
+                内联应用（create_app）
+              </li>
+              <li>
+                <span class="mono text-emerald-700">isError</span> —
+                是否作为错误回传给模型
+              </li>
+              <li class="pt-1 border-t border-slate-200 mt-1">
+                Context 注入：<span class="mono text-sky-700"
+                  >cwd · abortSignal · taskManager · permissionChecker ·
+                  onPermissionRequest · fileStateCache · fileHistory ·
+                  goalManager · sessionId · onOutput</span
+                >
+                等
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+            <div class="font-bold text-amber-600 mb-2 mono text-xs">
+              沙箱与权限分层
+              <span class="text-slate-400 font-normal"
+                >src/permissions · src/sandbox</span
+              >
+            </div>
+            <ul class="space-y-1 text-slate-600 text-[13px] leading-relaxed">
+              <li>
+                🛡️ <b>OS 沙箱</b>：仅包裹 <span class="mono">Bash</span> — macOS
+                seatbelt（<span class="mono">/usr/bin/sandbox-exec</span>）/
+                Linux bubblewrap；配置
+                <span class="mono"
+                  >sandbox.enabled · auto_allow · network_enabled</span
+                >；含 allowWrite / denyWrite 白黑名单
+              </li>
+              <li>
+                📁 <b>PathSandbox</b>：权限层对 write 类工具做路径校验（项目根 +
+                tmpdir + extraRoots 之外 → 询问）
+              </li>
+              <li>
+                ⚖️ <b>决策层</b>：显式规则 → 计划文件豁免 → 安全命令放行 →
+                危险命令拦截 → 沙箱 auto-allow（仅 Bash）→ 写路径校验 → 规则引擎
+                → 模式矩阵
+              </li>
+            </ul>
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-400 leading-relaxed">
+          注册入口
+          <span class="mono text-slate-500">createToolRegistry()</span
+          >（src/bootstrap/tool-registry.ts）：交互模式注册
+          TaskCreate/Get/List/Update 四件套，非交互模式注册 TodoWrite；带
+          teamManager 时以 TeamTask*（继承 Task*，共享任务板）替换。 MCP
+          服务器工具经
+          <span class="mono text-slate-500">MCPToolWrapper</span>（implements
+          MCPToolLike extends Tool）动态包装，是唯一 deferred=true
+          的工具形态；<span class="mono">ToolSearch</span>/<span class="mono"
+            >McpCall</span
+          >
+          仅在 native/dispatch 加载模式下暴露。
+        </p>
+      </section>
+
+      <!-- ============ 工具卡片容器 ============ -->
+      <div id="groups"></div>
+      <div id="empty" class="hidden text-center py-20 text-slate-400">
+        <div class="text-4xl mb-3">🔍</div>
+        没有匹配的工具
+      </div>
+    </main>
+
+    <footer
+      class="border-t border-slate-200 mt-10 py-6 text-center text-xs text-slate-400"
+    >
+      数据来源：yukino-code/apps/yukino 源码静态导出（schema() 实测）· 生成于
+      2026-10-20
+    </footer>
+
+    <script>
+      const GROUPS = [
+        {
+          id: "file",
+          icon: "📁",
+          title: "文件操作",
+          desc: "读写、编辑与文件搜索",
+        },
+        {
+          id: "shell",
+          icon: "⚡",
+          title: "命令执行",
+          desc: "Shell 与桌面控制（含 OS 沙箱）",
+        },
+        {
+          id: "intel",
+          icon: "🧠",
+          title: "代码智能与网络",
+          desc: "LSP 语义查询与网页抓取",
+        },
+        {
+          id: "task",
+          icon: "✅",
+          title: "任务与目标",
+          desc: "TODO 任务板、后台任务与持久目标",
+        },
+        {
+          id: "team",
+          icon: "👥",
+          title: "团队与子代理",
+          desc: "多代理协作、消息与任务委派",
+        },
+        {
+          id: "plan",
+          icon: "🗺️",
+          title: "计划模式",
+          desc: "只读规划与计划提交审批",
+        },
+        {
+          id: "wt",
+          icon: "🌿",
+          title: "Git Worktree",
+          desc: "隔离工作区创建与清理",
+        },
+        {
+          id: "skill",
+          icon: "🎓",
+          title: "技能系统",
+          desc: "SOP 技能加载与安装",
+        },
+        {
+          id: "io",
+          icon: "💬",
+          title: "交互与输出",
+          desc: "用户提问与结构化输出",
+        },
+        {
+          id: "mcp",
+          icon: "🔌",
+          title: "MCP 集成",
+          desc: "延迟工具搜索与 MCP 调用分发",
+        },
+      ];
+
+      const TOOLS = [
+        {
+          n: "ReadFile",
+          cls: "ReadFileTool",
+          f: "src/tools/read-file.ts",
+          g: "file",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "读取文本文件并显示 1-based 行号，或将图片（png/jpg/jpeg/gif/webp）作为视觉内容返回；不能读目录。file_path 支持绝对路径或相对 Agent 工作目录。offset 为 0-based 跳过行数（显示第 101 行对应 offset=100），limit 默认 2000 行，且受 50KB 文本输出上限约束。图片忽略 offset/limit。成功读取会刷新 EditFile/WriteFile 依赖的文件状态缓存；出现外部修改错误后必须重读。",
+          en: "Read text with 1-based display line numbers, or images (png, jpg, jpeg, gif, webp) as visual content; not directories.\n- file_path is absolute or relative to the Agent's working directory. offset skips lines (0-based, default 0); limit defaults to 2000 lines, with a 50KB text output cap. Displayed line 101 starts at offset=100. Follow continuation/readback instructions for partial output.\n- Images ignore offset/limit. A successful read refreshes the file-state cache used by EditFile/WriteFile; re-read after an external-change error.",
+          sbx: "无 OS 沙箱。read 类别在权限矩阵中默认放行，不触发写路径校验（PathSandbox 仅检查 write 类）。",
+          params: [
+            {
+              n: "file_path",
+              t: "string",
+              r: 1,
+              d: "文件路径（绝对或相对工作目录）；支持文本与图片",
+            },
+            {
+              n: "offset",
+              t: "integer",
+              r: 0,
+              d: "0",
+              e: "min 0",
+              x: "跳过的文本行数（0-based）；图片忽略",
+            },
+            {
+              n: "limit",
+              t: "integer",
+              r: 0,
+              d: "2000",
+              e: "min 1",
+              x: "最多返回的文本行数，受 50KB 输出上限约束；图片忽略",
+            },
+          ],
+          out: "带 1-based 显示行号的文本（超出时附截断/续读提示）；图片以 contentBlocks 中的 image 块（base64）返回。错误：目录（提示改用 Glob）、非常规文件、路径缺失等。",
+        },
+        {
+          n: "WriteFile",
+          cls: "WriteFileTool",
+          f: "src/tools/write-file.ts",
+          g: "file",
+          cat: "write",
+          conc: "回退（write→独占）",
+          zh: "将完整 UTF-8 内容写入 file_path：自动创建父目录、整体覆盖已有内容。用于新建文件或完全重写；做定向小修改应优先 EditFile。已存在的文件必须先 ReadFile（防止盲写覆盖），缓存过期须重读。content 包含所需的结尾换行；空字符串会创建或截断出空文件。避免写无关文件或未经请求的文档。",
+          en: "Write complete UTF-8 content to file_path, creating parent directories and overwriting existing content. Use for new files or complete rewrites; prefer EditFile for targeted changes.\n- file_path is absolute or relative to the Agent's working directory. Existing files require ReadFile first; re-read if the cached state is stale.\n- content includes any desired trailing newline; an empty string creates or truncates an empty file. Avoid unrelated files or unsolicited documentation.",
+          sbx: "📁 PathSandbox 写路径校验：目标在项目根 + os.tmpdir() + extraRoots（含 worktree 根）之外时触发人工确认；plan mode 下写计划文件豁免（Layer 0）。写入进入文件互斥队列并记录 FileHistory。",
+          params: [
+            {
+              n: "file_path",
+              t: "string",
+              r: 1,
+              d: "目标文件路径；缺失的父目录会被创建；已存在文件须先 ReadFile",
+            },
+            {
+              n: "content",
+              t: "string",
+              r: 1,
+              d: "完整 UTF-8 文件内容；空字符串创建/截断为空文件",
+            },
+          ],
+          out: "`Successfully wrote to <path> (<N> lines)`；错误：未先读、内容缺失、被中断、权限拒绝等。",
+        },
+        {
+          n: "EditFile",
+          cls: "EditFileTool",
+          f: "src/tools/edit-file.ts",
+          g: "file",
+          cat: "write",
+          conc: "回退（write→独占）",
+          zh: "对已有文件做精确文本替换并返回 diff。优先于整文件重写；把多个互不重叠的修改合并进一个 edits 数组，一次读盘一次写盘。必须先 ReadFile；文件状态过期报错后需重读并修正编辑。每条 edit 含 old_string / new_string 与可选 replace_all：所有匹配都基于原始文件内容，重叠编辑在写入前整体拒绝。old_string 必须非空且唯一（除非 replace_all=true，默认 false）；LF/CRLF 行尾等价匹配，失败时自动去除两侧游离回车符重试。new_string 必须不同于 old_string；空串表示删除匹配文本。保留文件行尾与未变更文本。",
+          en: "Replace exact text in an existing file and return a diff. Prefer this over whole-file rewrites; batch disjoint changes in one edits array to read and write the file once.\n- file_path is absolute or relative to the Agent's working directory. ReadFile is required first; stale file-state errors require a fresh read and revised edit.\n- Each edits entry contains old_string and new_string, with optional replace_all. All matches use the original file; overlapping edits are rejected before writing. Merge overlapping changes into one entry.\n- old_string must be non-empty and unique unless replace_all=true (default false). LF and CRLF line endings match equivalently. Use enough context to disambiguate; preserve all other whitespace and exclude display line numbers. If matching fails, stray carriage returns in both edit strings are removed before retrying.\n- new_string must differ from old_string; an empty string deletes the match. The file's line endings and unchanged text are preserved.",
+          sbx: "📁 PathSandbox 写路径校验（同 WriteFile）+ plan 文件豁免；带编辑诊断（edit-file-diagnostics）帮助模型修正失败的匹配。",
+          params: [
+            {
+              n: "file_path",
+              t: "string",
+              r: 1,
+              d: "已有文件路径；须先 ReadFile",
+            },
+            {
+              n: "edits",
+              t: "array",
+              r: 1,
+              d: "minItems 1",
+              x: "针对原始文件的定向替换组；重叠编辑写入前被拒绝",
+            },
+            {
+              n: "edits[].old_string",
+              t: "string",
+              r: 1,
+              d: "原文匹配串（非空、默认须唯一；行尾等价匹配）",
+            },
+            {
+              n: "edits[].new_string",
+              t: "string",
+              r: 1,
+              d: "替换文本；空串=删除匹配；须与 old_string 不同",
+            },
+            {
+              n: "edits[].replace_all",
+              t: "boolean",
+              r: 0,
+              d: "false",
+              x: "替换全部出现次数",
+            },
+          ],
+          out: "变更摘要 + 具体 diff 文本（模型与 UI 都需要知道改了哪些行）；错误：old_string 不唯一/未找到、edits 重叠、文件过期、被中断等。",
+        },
+        {
+          n: "Glob",
+          cls: "GlobTool",
+          f: "src/tools/glob.ts",
+          g: "file",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: '按 glob 模式查找文件（如 "**/*.ts"、"*.{ts,tsx}"），返回相对 path 的路径列表，按修改时间从新到旧排序。path 默认 "."，绝不搜索文件系统根。包含点文件；固定跳过 .git、.agents、.yukino、node_modules、dist、__pycache__ 目录（不遵循 .gitignore 规则）。最多返回 1000 条；结果被截断时应缩小搜索而不是当作完整结果。优先于 shell 的 find/ls。',
+          en: 'Find files by glob pattern (e.g. "**/*.ts", "*.{ts,tsx}"). Return paths relative to path, sorted newest modification first.\n- path is absolute or relative to the Agent\'s working directory (default "."); never search the filesystem root.\n- Includes dotfiles; traversal skips fixed directories such as .git, .agents, .yukino, node_modules, dist, and __pycache__, not rules from .gitignore.\n- At most 1000 matches; narrow limited searches rather than treating them as exhaustive. Prefer this over shell find/ls.',
+          sbx: "无沙箱限制；read 类别默认放行。",
+          params: [
+            {
+              n: "pattern",
+              t: "string",
+              r: 1,
+              d: "相对 path 的文件名 glob，如 **/*.ts 递归、*.{ts,tsx} 仅直接子级",
+            },
+            {
+              n: "path",
+              t: "string",
+              r: 0,
+              d: '"."',
+              e: "",
+              x: "搜索基准目录；返回的文件名相对于它",
+            },
+          ],
+          out: '相对路径列表（新→旧）；无匹配时 "No files matched the pattern."；截断时提示缩小范围。',
+        },
+        {
+          n: "Grep",
+          cls: "GrepTool",
+          f: "src/tools/grep.ts",
+          g: "file",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: '用大小写不敏感的 JavaScript 风格正则逐行搜索文件内容，返回 file:line:content（1-based 行号、相对工作目录路径）。path 可为文件或目录（默认 "."）；JSON 中正则反斜杠需转义；不支持多行匹配和完整 PCRE。include 为可选 glob 过滤："*.ts" 匹配任意深度文件名，带 "/" 的模式匹配相对工作目录的路径；直接给文件路径时忽略该过滤。遍历含点文件但跳过固定目录（.git、node_modules、dist 等），跳过二进制/不可读文件，不穿越目录符号链接。最多 500 条匹配行。用 ReadFile 看上下文，用本工具替代 shell grep/rg。',
+          en: 'Search file content with a case-insensitive, line-by-line JavaScript-style regex pattern; return file:line:content with 1-based lines and working-directory-relative paths.\n- path is a file or directory, absolute or relative to the Agent\'s working directory (default "."). Escape regex backslashes in JSON. No multiline matching or general PCRE support.\n- include is an optional glob: "*.ts" matches names at any depth; patterns with "/" match working-directory-relative paths. A direct file path is searched without this filter.\n- Traversal includes dotfiles but skips fixed directories such as .git, .agents, .yukino, node_modules, dist, and __pycache__, not .gitignore rules. Binary/unreadable files are skipped; directory symlinks are not traversed.\n- At most 500 matching lines. Narrow searches; never search the filesystem root. Use ReadFile for context and this tool instead of shell grep/rg.',
+          sbx: "无沙箱限制；read 类别默认放行。内部使用 worker 线程执行搜索（grep worker source）。",
+          params: [
+            {
+              n: "pattern",
+              t: "string",
+              r: 1,
+              d: "逐行匹配的大小写不敏感正则；JSON 中反斜杠要转义",
+            },
+            {
+              n: "path",
+              t: "string",
+              r: 0,
+              d: '"."',
+              e: "",
+              x: "文件或目录；缩小范围以减少输出",
+            },
+            {
+              n: "include",
+              t: "string",
+              r: 0,
+              d: "可选文件名 glob（*.ts 任意深度；含 / 匹配相对路径）",
+            },
+          ],
+          out: "file:line:content 匹配行列表（≤500 条）；正则非法、path 非目录等报错。",
+        },
+        {
+          n: "Bash",
+          cls: "BashTool",
+          f: "src/tools/bash.ts",
+          g: "shell",
+          cat: "command",
+          conc: "✔ 实现 isConcurrencySafe(args)：仅权限层安全命令白名单（isSafeCommand，如 ls/cat/git status；排除重定向、管道、链式命令、命令替换）允许并发",
+          zh: '在 Bash 中执行命令，返回 stdout 与 stderr。Windows 上优先用 PowerShell。timeout 单位为秒：默认 120、最大 600。每次调用都在 Agent 工作目录启动全新的独立 shell——cd、变量、函数、选项都不跨调用保留。含空格路径要加引号；切换目录须在同一次调用里 cd "path" && command。独立命令分开调用，依赖命令用 && 串联而非 ;。优先用专用文件/搜索工具而非 cat/head/tail/sed/awk/echo/find；搜索限定目录、绝不扫文件系统根。Git：仅在被要求时 commit/push；破坏性操作（push --force、reset --hard、checkout .、clean -f、branch -D）、amend、跳过钩子/签名需显式授权；提交附 Co-Authored-By: Yukino。当宿主注入 TaskManager 且未设 YUKINO_DISABLE_BACKGROUND_TASKS=1 时，schema 追加 run_in_background 参数：后台调用立即返回任务 ID，结果稍后以任务通知送达（勿轮询）；前台命令超时会【自动转入后台】而非被杀；TaskStop 可提前终止；Ctrl+B 可手动将前台命令转后台。',
+          en: 'Execute command in Bash; return stdout and stderr. Prefer PowerShell on Windows.\n- timeout is in seconds: default 120, maximum 600. Each call starts a fresh, independent shell in the Agent\'s working directory; cd, variables, functions, and options do not persist.\n- Quote paths with spaces. To change directory, use cd "path" && command in the same call. Separate independent commands; chain dependent commands with &&, not ;.\n- Prefer dedicated file/search tools over cat, head, tail, sed, awk, echo, or find. Scope searches to a directory, never the filesystem root. Diagnose failures rather than retrying in sleep loops.\nGit: commit or push only when requested. Destructive operations (push --force, reset --hard, checkout ., clean -f, branch -D), amending, or skipping hooks/signing require explicit authorization; never bypass permission/hook denials. Prefer new commits. When committing, include Co-Authored-By: Yukino.\n[背景可用时追加] Set run_in_background to true to run the command in the background…',
+          sbx: "🛡️ 唯一被 OS 级沙箱包裹的工具。macOS 用 seatbelt（/usr/bin/sandbox-exec），Linux 用 bubblewrap（bwrap）。config.yaml 的 sandbox.enabled/auto_allow/network_enabled 控制；SandboxConfig = { allowWrite[], denyWrite[], networkEnabled }，写白名单动态并入 worktree 根与输出目录。沙箱开启 + auto_allow 时非危险 Bash 命令跳过人工确认（权限层 Layer 3.5）；sandboxRequired 但沙箱不可用 → 拒绝执行。子进程 stdout/stderr 以 fd 直写会话输出文件（不经 JS 内存），5GB 磁盘水位 watchdog；POSIX 下进程组 SIGTERM→SIGKILL 级联清理，dispose() 释放沙箱资源。",
+          params: [
+            { n: "command", t: "string", r: 1, d: "要执行的 shell 命令" },
+            {
+              n: "timeout",
+              t: "integer",
+              r: 0,
+              d: "120",
+              e: "max 600",
+              x: "超时秒数；超时命令自动转后台（背景可用时）否则终止",
+            },
+            {
+              n: "run_in_background",
+              t: "boolean",
+              r: 0,
+              d: "false",
+              e: "仅背景可用时出现",
+              x: "后台运行：立即返回任务 ID，结果稍后经任务通知送达",
+            },
+          ],
+          out: "`$ <command>` 回显 + 按时间交织的 stdout/stderr + `Exit code N`（非零时附 exit-code 提示）；被信号终止/中断/超时/超输出上限均有标注；沙箱模式下 stderr 可附违规注解（annotateStderr）；后台模式返回任务 ID 与提示文本。isError=true 当退出码非零或 spawn 失败。",
+        },
+        {
+          n: "PowerShell",
+          cls: "PowerShellTool",
+          f: "src/tools/powershell.ts",
+          g: "shell",
+          cat: "command",
+          conc: "回退（command→独占）",
+          zh: '在 PowerShell 中执行命令，返回 stdout 与 stderr。Windows 推荐（powershell.exe），其他平台用 pwsh。timeout 秒为单位：默认 120、最大 600；每次调用是全新独立 shell，位置/变量/选项不保留。含空格路径加引号；切目录用同一次调用中的 Set-Location -LiteralPath "path"。独立命令分开；依赖关系用 $LASTEXITCODE（原生命令）与 -ErrorAction Stop（cmdlet）检查——; 不会在失败时停止。不要假设 PowerShell 7 语法。优先用专用文件/搜索工具而非 Get-Content/Select-String/Write-Output；递归限定目录而非盘符根。Git 约束与 Bash 相同。同样支持 run_in_background 后台模式（TaskManager 注入时）。',
+          en: 'Execute command in PowerShell; return stdout and stderr. Recommended on Windows (powershell.exe); uses pwsh elsewhere.\n- timeout is in seconds: default 120, maximum 600. Each call starts a fresh, independent shell in the Agent\'s working directory; location, variables, and options do not persist.\n- Quote paths with spaces; use Set-Location -LiteralPath "path" in the same call. Separate independent commands. For dependencies, check $LASTEXITCODE for native commands and use -ErrorAction Stop for cmdlets; ; does not stop on failure. Do not assume PowerShell 7 syntax.\n- Prefer dedicated file/search tools over Get-Content, Select-String, or Write-Output. Scope recursion to a directory, not a drive root.\nGit: …（同 Bash）\n[背景可用时追加 run_in_background 说明]',
+          sbx: "❌ 无 OS 沙箱包裹——两种沙箱实现（seatbelt/bwrap）都只包 bash -c，且 Windows（本工具主平台）没有 OS 沙箱支持。仍受权限规则引擎、危险命令检测与复杂语法询问（analyzeShell）约束；沙箱 auto-allow 层明确排除 PowerShell。启动参数 -NoProfile -NonInteractive（Windows 另加 -ExecutionPolicy Bypass 与 UTF-8 输出编码）。",
+          params: [
+            { n: "command", t: "string", r: 1, d: "要执行的 PowerShell 命令" },
+            {
+              n: "timeout",
+              t: "integer",
+              r: 0,
+              d: "120",
+              e: "max 600",
+              x: "超时秒数",
+            },
+            {
+              n: "run_in_background",
+              t: "boolean",
+              r: 0,
+              d: "false",
+              e: "仅背景可用时出现",
+              x: "后台运行，立即返回任务 ID",
+            },
+          ],
+          out: "`PS> <command>` 回显 + 输出 + Exit code N；超时自动转后台（背景可用）；Windows 用 taskkill /T（宽限后 /F）杀进程树，POSIX 用进程组。pwsh 缺失时报错并提示安装 PowerShell Core。",
+        },
+        {
+          n: "ComputerUse",
+          cls: "ComputerUseTool",
+          f: "src/tools/computer-use.ts",
+          g: "shell",
+          cat: "command",
+          conc: "✘ isConcurrencySafe 恒为 false——独占驱动单块物理屏幕/鼠标/键盘",
+          zh: "控制当前计算机：截图、鼠标、键盘、滚动、等待与缩放。选坐标前先 screenshot，关键操作后再截图验证。支持两种调用风格：Anthropic 式单动作（action + coordinate/scroll_amount/scroll_direction/start_coordinate/region/text），以及 OpenAI 式批量 actions[]（带类型的动作序列，含 x/y/button/keys/path/scrollX/scrollY/text，可附 pendingSafetyChecks 与 status；批量执行后返回截图）。也接受扁平 OpenAI 别名（action=click/drag/keypress/move）。环境（mac/windows）注入 description 动态生成。",
+          en: "Control the current {mac|windows} computer with screenshots, mouse, keyboard, scrolling, waiting, and zoom. Use screenshot before choosing coordinates and verify consequential actions with another screenshot. Two call styles are supported: Anthropic-style single actions (action + coordinate/scroll_amount/scroll_direction/start_coordinate/region/text), and OpenAI-style batches (actions[] of typed actions with x/y/button/keys/path/scrollX/scrollY/text, plus pendingSafetyChecks and status; a screenshot is returned after the batch). Flat OpenAI aliases (action=click/drag/keypress/move) are also accepted.",
+          sbx: "无 OS 沙箱；command 类别走权限矩阵（默认询问），且并发恒不安全（单物理设备）。平台助手二进制按需惰性构建（macHelper/windowsHelper）。",
+          params: [
+            {
+              n: "action",
+              t: "string",
+              r: 0,
+              d: "枚举 21 种",
+              e: "key/hold_key/type/cursor_position/mouse_move/left_mouse_down/left_mouse_up/left_click/left_click_drag/right_click/middle_click/double_click/triple_click/scroll/wait/screenshot/zoom/click/drag/keypress/move",
+              x: "Anthropic 式单动作；与 actions 二选一",
+            },
+            {
+              n: "actions",
+              t: "array",
+              r: 0,
+              d: "1–100 项",
+              e: "",
+              x: "OpenAI 式有序批量动作（click/double_click/drag/keypress/move/screenshot/scroll/type/wait）",
+            },
+            {
+              n: "pendingSafetyChecks",
+              t: "array",
+              r: 0,
+              d: "OpenAI 式安全检查项，在工具结果中确认",
+            },
+            {
+              n: "status",
+              t: "string",
+              r: 0,
+              d: "枚举",
+              e: "in_progress/completed/incomplete",
+              x: "OpenAI 式调用状态，原样回显",
+            },
+            {
+              n: "coordinate",
+              t: "array",
+              r: 0,
+              d: "[x,y]",
+              e: "2 项",
+              x: "Anthropic 式坐标（最新截图坐标系）",
+            },
+            {
+              n: "start_coordinate",
+              t: "array",
+              r: 0,
+              d: "[x,y]",
+              e: "",
+              x: "拖拽起点",
+            },
+            {
+              n: "duration",
+              t: "number",
+              r: 0,
+              d: "0–60 秒",
+              e: "",
+              x: "hold_key 或 wait 时长",
+            },
+            {
+              n: "region",
+              t: "array",
+              r: 0,
+              d: "[x1,y1,x2,y2]",
+              e: "4 项",
+              x: "zoom 缩放区域",
+            },
+            {
+              n: "scroll_amount",
+              t: "number",
+              r: 0,
+              d: "滚轮格数（Anthropic 式）",
+            },
+            {
+              n: "scroll_direction",
+              t: "string",
+              r: 0,
+              d: "枚举",
+              e: "up/down/left/right",
+              x: "",
+            },
+            {
+              n: "text",
+              t: "string",
+              r: 0,
+              d: "要输入的文本，或 + 连接的组合键",
+            },
+            {
+              n: "x / y",
+              t: "integer",
+              r: 0,
+              d: "min 0",
+              e: "",
+              x: "OpenAI 式坐标",
+            },
+            {
+              n: "button",
+              t: "string",
+              r: 0,
+              d: "枚举",
+              e: "left/right/wheel/middle/back/forward",
+              x: "click 动作的按键",
+            },
+            {
+              n: "keys",
+              t: "array",
+              r: 0,
+              d: "≤8 项",
+              e: "",
+              x: "按住或按下的键",
+            },
+            {
+              n: "path",
+              t: "array",
+              r: 0,
+              d: "2–200 点",
+              e: "",
+              x: "OpenAI 式拖拽路径",
+            },
+            {
+              n: "scroll_x / scroll_y",
+              t: "number",
+              r: 0,
+              d: "OpenAI 式滚动增量",
+            },
+          ],
+          out: "截图（image contentBlocks，可视觉回传模型）+ 动作执行结果文本；坐标按截图空间自动缩放（coordinateScaleX/Y）。",
+        },
+        {
+          n: "LSP",
+          cls: "LspTool",
+          f: "src/tools/lsp.ts",
+          g: "intel",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "查询已配置的语言服务器：定义、引用、悬停、文档/工作区符号、实现、类型定义、调用层级、诊断。file_path 相对当前工作目录解析；line/character 为 1-based UTF-16 位置；返回的范围遵循 LSP 标准（0-based UTF-16）与 file URI。本工具不能编辑文件或执行任意命令。语言服务器必须在 lsp_servers 中显式配置，不会自动安装。",
+          en: "Query a configured language server for definitions, references, hover, symbols, implementations, type definitions, call hierarchy, or diagnostics. file_path resolves against the current working directory; line and character are 1-based UTF-16 positions. Returned ranges use the LSP standard (0-based UTF-16) and file URIs. This tool cannot edit files or run arbitrary commands. Servers must be explicitly configured in lsp_servers; no automatic installation.",
+          sbx: "无沙箱；只读语义查询，read 类别默认放行。构造时注入 lspServers 配置列表。",
+          params: [
+            {
+              n: "operation",
+              t: "string",
+              r: 1,
+              d: "枚举 11 种",
+              e: "definition/references/hover/documentSymbol/workspaceSymbol/implementation/typeDefinition/prepareCallHierarchy/incomingCalls/outgoingCalls/diagnostics",
+              x: "",
+            },
+            {
+              n: "file_path",
+              t: "string",
+              r: 1,
+              d: "目标文件（相对工作目录解析）",
+            },
+            {
+              n: "line",
+              t: "integer",
+              r: 0,
+              d: "min 1",
+              e: "",
+              x: "1-based UTF-16 行号（位置类操作需要）",
+            },
+            {
+              n: "character",
+              t: "integer",
+              r: 0,
+              d: "min 1",
+              e: "",
+              x: "1-based UTF-16 列号",
+            },
+            {
+              n: "query",
+              t: "string",
+              r: 0,
+              d: "workspaceSymbol 的符号查询词",
+            },
+          ],
+          out: "LSP 结果 JSON（位置/范围/符号/悬停内容/诊断列表）；diagnostics 带 pending=true 不代表通过。",
+        },
+        {
+          n: "WebFetch",
+          cls: "WebFetchTool",
+          f: "src/tools/web-fetch.ts",
+          g: "intel",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "通过 HTTP(S) 抓取 URL 并以 Markdown 返回内容，用于获取和分析网页。url 必须是完整的 http/https URL；自动跟随重定向，最终 URL 不同时会报告。HTML 转 Markdown；其他文本格式（纯文本、JSON、XML、Markdown）原样返回；二进制内容（图片、PDF、压缩包）被拒绝。响应超过 10MB 拒绝；结果在 100K 字符处截断。成功抓取缓存 15 分钟。",
+          en: "Fetch a URL over HTTP(S) and return its content as Markdown. Use it to retrieve and analyze web pages.\n- url must be a fully-formed http or https URL; redirects are followed automatically and the final URL is reported when it differs.\n- HTML is converted to Markdown; other text formats (plain text, JSON, XML, Markdown) are returned as-is. Binary content (images, PDFs, archives) are rejected.\n- Responses over 10MB are rejected and results are truncated at 100K characters. Successful fetches are cached for 15 minutes.",
+          sbx: "无 OS 沙箱；网络访问由权限规则引擎按 URL 内容匹配约束（可配置 allow/deny/ask 规则）。",
+          params: [
+            { n: "url", t: "string", r: 1, d: "要抓取的 http/https URL" },
+          ],
+          out: "formatResult 包装的 Markdown 正文 +（重定向时）最终 URL；错误：无效 URL、非 http(s) 协议、HTTP 状态码、超过 10MB、二进制内容、被中断等。",
+        },
+        {
+          n: "TaskCreate",
+          cls: "TaskCreateTool",
+          f: "src/todo/tools.ts",
+          g: "task",
+          cat: "read",
+          conc: "✔ isConcurrencySafe 恒 true（任务板内存操作）",
+          zh: "在当前任务板创建一个 pending 条目。这只是工作跟踪，不会启动 Agent 或后台任务。交互模式下注册；有 teamManager 时被 TeamTaskCreateTool（继承本类、共享团队任务板）替代。构造注入 TaskBoard。",
+          en: "Create a pending item on the current task board. This tracks work; it does not launch an Agent or a background task.",
+          sbx: "无沙箱；category=read 且属于协作类工具（权限层 Layer 1.5 teammate coordination 直接放行）。",
+          params: [
+            { n: "subject", t: "string", r: 1, d: "简短任务标题" },
+            { n: "description", t: "string", r: 1, d: "需要完成的内容" },
+            {
+              n: "activeForm",
+              t: "string",
+              r: 0,
+              d: "现在进行时形式，用于 spinner 展示",
+            },
+            { n: "metadata", t: "object", r: 0, d: "任务专属结构化上下文" },
+          ],
+          out: "`Task #<id> created successfully: <subject>` + 任务板进度标签（completed/total）。",
+        },
+        {
+          n: "TaskGet",
+          cls: "TaskGetTool",
+          f: "src/todo/tools.ts",
+          g: "task",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "按 ID 获取单个任务的完整信息。",
+          en: "Get a task by its ID.",
+          sbx: "无沙箱；协作类工具直接放行。",
+          params: [{ n: "taskId", t: "string", r: 1, d: "任务 ID" }],
+          out: '任务对象 JSON（2 空格缩进）；未找到时 "Task not found"（isError）。',
+        },
+        {
+          n: "TaskList",
+          cls: "TaskListTool",
+          f: "src/todo/tools.ts",
+          g: "task",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "列出任务板上的所有任务。",
+          en: "List all tasks.",
+          sbx: "无沙箱；协作类工具直接放行。",
+          params: [],
+          out: '进度标签 + 每任务一行的列表；空板时 "No tasks found" + 进度。',
+        },
+        {
+          n: "TaskUpdate",
+          cls: "TaskUpdateTool",
+          f: "src/todo/tools.ts",
+          g: "task",
+          cat: "read",
+          conc: "✔ isConcurrencySafe 恒 true",
+          zh: "原子化更新任务板的字段与依赖关系。依赖 ID 必须已存在；自依赖、循环依赖、启动被阻塞的工作都会被拒绝。队友以自身名字认领 in_progress 任务。status=deleted 会移除任务及其依赖链接。metadata 传 null 删除对应键。",
+          en: "Atomically update the current task board's fields and dependencies. Dependency IDs must already exist; self-dependencies, cycles, and starting blocked work are rejected. Teammates claim in_progress tasks under their own name. deleted removes the task and its links.",
+          sbx: "无沙箱；协作类工具直接放行。",
+          params: [
+            { n: "taskId", t: "string", r: 1, d: "任务 ID" },
+            {
+              n: "status",
+              t: "string",
+              r: 0,
+              d: "枚举",
+              e: "pending/in_progress/completed/blocked/cancelled/deleted",
+              x: "新状态；deleted 移除条目与依赖链接",
+            },
+            { n: "subject", t: "string", r: 0, d: "新标题" },
+            { n: "description", t: "string", r: 0, d: "新描述" },
+            { n: "owner", t: "string", r: 0, d: "新负责人" },
+            { n: "activeForm", t: "string", r: 0, d: "进度展示用现在进行时" },
+            {
+              n: "priority",
+              t: "string",
+              r: 0,
+              d: "枚举",
+              e: "high/medium/low",
+              x: "",
+            },
+            {
+              n: "metadata",
+              t: "object",
+              r: 0,
+              d: "合并结构化上下文；null 删除键",
+            },
+            {
+              n: "addBlocks",
+              t: "array",
+              r: 0,
+              d: "本任务阻塞的已有任务 ID 列表",
+            },
+            {
+              n: "addBlockedBy",
+              t: "array",
+              r: 0,
+              d: "阻塞本任务的已有 ID 列表",
+            },
+          ],
+          out: "更新后的任务 JSON / 删除确认 + 进度标签；错误：校验失败（循环依赖等）原样返回。",
+        },
+        {
+          n: "TodoWrite",
+          cls: "TodoWriteTool",
+          f: "src/todo/tools.ts",
+          g: "task",
+          cat: "read",
+          conc: "✔ isConcurrencySafe 恒 true",
+          zh: "一次原子操作替换本代理的整个私有 TODO 列表。要保留的条目必须全部包含在提交中；复用返回的 ID 才能保住 metadata 与依赖链接。返回带 ID 的 todos 与 completed/total 进度。空数组清空列表；全部完成仍保留条目。只用于跟踪复杂工作而非琐碎请求；本工具从不启动实际工作。仅非交互模式（trackingMode=todos）注册，交互模式用 Task* 四件套。",
+          en: "Replace this agent's entire private TODO list in one atomic update. Include all items to retain; reuse returned IDs to preserve metadata and dependency links. Returns todos with IDs and TODO completed/total progress. An empty array clears the list; completing all items retains them. Track complex work, not trivial requests; this tool never launches work.",
+          sbx: "无沙箱；协作类工具直接放行。",
+          params: [
+            {
+              n: "todos",
+              t: "array",
+              r: 1,
+              d: "maxItems 200",
+              e: "",
+              x: "完整 TODO 列表（含要保留的旧条目，复用 ID）",
+            },
+          ],
+          out: "带 ID 的 todos 数组 + TODO completed/total 进度。",
+        },
+        {
+          n: "TaskOutput",
+          cls: "TaskOutputTool",
+          f: "src/tools/task-output.ts",
+          g: "task",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "按 task_id 检查后台 Agent/Bash/PowerShell 任务，或一次性等待至多 timeout_ms（上限 60000ms）。不会消费完成通知，也不会取消超时任务。优先依赖自动任务通知而非反复轮询。TaskCreate 的 ID 属于另一套 TODO 列表，不能用于这里。",
+          en: "Inspect a background Agent/Bash/PowerShell task by its task_id, or wait once for at most timeout_ms (maximum 60000). This does not consume completion notifications or cancel timed-out tasks. Prefer automatic task notifications over repeated polling. TaskCreate IDs belong to the separate TODO list and cannot be used here.",
+          sbx: "无沙箱；只读检查任务注册表。",
+          params: [
+            {
+              n: "task_id",
+              t: "string",
+              r: 1,
+              d: "后台任务 ID（Agent/Bash/PowerShell）",
+            },
+            {
+              n: "wait",
+              t: "boolean",
+              r: 0,
+              d: "false",
+              e: "",
+              x: "是否等待一次",
+            },
+            {
+              n: "timeout_ms",
+              t: "integer",
+              r: 0,
+              d: "30000",
+              e: "0–60000",
+              x: "单次等待上限",
+            },
+          ],
+          out: "任务状态 JSON（status、output 等）；任务不存在时报错（提示 ID 属于 TODO 列表等）。",
+        },
+        {
+          n: "TaskStop",
+          cls: "TaskStopTool",
+          f: "src/teams/task-stop.ts",
+          g: "task",
+          cat: "command",
+          conc: "回退（command→独占；subagent 变体为 read）",
+          zh: "停止正在运行的队友或后台任务（Agent、Bash、PowerShell）。leader 变体：teammate 与 task_id 二选一（恰好一个）。subagent 变体（forSubagent()）：只能停自己的后台任务，仅接受 task_id，且 category 降为 read、description 精简。Bash 后台任务被停时立即 SIGKILL（无 SIGTERM 宽限），保证 CLI 关闭期间也能落地。",
+          en: "Stop a running teammate or background task (Agent, Bash, PowerShell). Pass exactly one of teammate or task_id.\n[subagent 变体] Stop one of this agent's own background tasks (Agent, Bash, PowerShell). Pass task_id.",
+          sbx: "无 OS 沙箱；leader 变体走 command 权限矩阵，subagent 变体 read 放行。停止 Bash/PowerShell 后台任务时触发其 kill 回调（进程组 SIGKILL / taskkill /T /F）。",
+          params: [
+            {
+              n: "teammate",
+              t: "string",
+              r: 0,
+              d: "要停止的队友名（与 task_id 二选一；leader 变体）",
+            },
+            {
+              n: "task_id",
+              t: "string",
+              r: 0,
+              d: "后台任务 ID（Agent/Bash/PowerShell）",
+            },
+          ],
+          out: '停止确认；错误："pass exactly one of teammate or task_id"、任务未找到等。',
+        },
+        {
+          n: "Goal",
+          cls: "GoalTool",
+          f: "src/tools/goal.ts",
+          g: "task",
+          cat: "read",
+          conc: "✘ isConcurrencySafe 恒 false——目标状态机是共享可变状态（blocked 三振计数、tokensUsed、activeMs），并发写会互相覆盖",
+          zh: "获取用户设置的持久目标，或以理由报告 complete / blocked——这是模型唯二能设置的状态。用户设定目标即自动激活，不要标记 in progress；只有用户能设置、替换、暂停、恢复或清除目标。仅当所有要求达成并验证后才报 complete。同一障碍需连续三个继续轮次记录后才可停止；同轮多次调用只计一次。依赖 ctx.goalManager 注入。",
+          en: "Get the user-set persistent goal, or report complete or blocked with a reason. These are the only statuses the model can set. A goal is active automatically when the user sets it; do not mark it in progress. Only the user can set, replace, pause, resume, or clear goals. Complete only when all requirements are achieved and verified. Record the same blocker on three consecutive continuation turns before stopping; multiple calls in one turn count once.",
+          sbx: "无沙箱；read + 计划协调类工具直接放行。",
+          params: [
+            {
+              n: "action",
+              t: "string",
+              r: 1,
+              d: "枚举",
+              e: "get/update",
+              x: "读取目标状态，或报告完成/受阻",
+            },
+            {
+              n: "status",
+              t: "string",
+              r: 0,
+              d: "枚举（update 必填）",
+              e: "complete/blocked",
+              x: "被设置的目标已处于激活态，不接受 in_progress",
+            },
+            {
+              n: "reason",
+              t: "string",
+              r: 0,
+              d: "update 必填",
+              e: "",
+              x: "完成的证据或具体障碍",
+            },
+          ],
+          out: "action=get → goalManager.format() 的目标状态文本；action=update → 状态更新确认；参数缺失/非法 → Error。",
+        },
+        {
+          n: "Agent",
+          cls: "AgentTool",
+          f: "src/subagent/agent-tool.ts",
+          g: "team",
+          cat: "command",
+          conc: "✔ isConcurrencySafe 恒 true（独立委派互不干扰）",
+          zh: "把有边界的任务委派给子代理。subagent_type 选择角色（默认 general-purpose）；fork 独立控制是否继承父对话快照（默认 true）——任何角色都可用两种上下文模式；fork=false 时 prompt 必须自带目标、相关文件、约束、是否允许编辑与期望结果。内置角色：general-purpose（研究复杂问题/探索代码库/多步任务）、plan（只读调研并提出实现计划）、explore（定位代码、追踪调用路径、报告 file:line 证据）、review（评审 PR：正确性/规范/性能/测试/安全）。前台调用内联返回结果；run_in_background=true 立即返回任务 ID、最终结果经任务通知送达。team_name（须先 TeamCreate）把代理孵化为持久队友，后续用 SendMessage 派活；fork 设置只为队友播种初始对话。isolation='worktree' 让一次性子代理在独立 Git worktree 中运行避免编辑冲突（隔离≠自动合并）。plan_mode_required 仅与 team_name 联用有意义，请求规划阶段。收到结果前不得预测结果；独立任务应并行发起，避免并发写同一文件。角色工具限制与 max_turns 对 fork 两种模式同等生效；角色无默认轮次上限，达到上限=工作未完成而非成功。schema 描述由 buildAgentToolDescription(definitions, defaultFork) 动态生成。",
+          en: "Delegate a bounded task to a subagent. subagent_type selects the role (default general-purpose); fork independently selects whether to inherit a snapshot of the parent conversation (default true). Any role can use either context mode. With fork=false, include the goal, relevant files, constraints, whether edits are allowed, and the expected result.\n\nAvailable roles: general-purpose / plan / explore / review …\n\nForeground calls return results inline. With run_in_background=true, the call returns a task ID immediately and the final result arrives through a task notification. Use team_name for persistent teammates and SendMessage for their follow-up assignments. …\n\nLaunch independent tasks together; avoid concurrent writes to the same files. Review returned evidence and integrate it before reporting completion. Worktree isolation separates edits but does not merge them.",
+          sbx: "无自身 OS 沙箱；子代理运行在自己的权限检查器与（可选）worktree 隔离根内，Bash 子代理可再配置沙箱。setTeamManager 注入后 schema 才出现 team_name 参数。",
+          params: [
+            {
+              n: "description",
+              t: "string",
+              r: 1,
+              d: "代理将做什么的简短描述",
+            },
+            {
+              n: "prompt",
+              t: "string",
+              r: 1,
+              d: "交给代理执行的任务（fork=false 时须自包含全部上下文）",
+            },
+            {
+              n: "subagent_type",
+              t: "string",
+              r: 0,
+              d: "枚举，默认 general-purpose",
+              e: "general-purpose/plan/explore/review",
+              x: "角色（也可来自 .yukino/agents 自定义定义）",
+            },
+            {
+              n: "fork",
+              t: "boolean",
+              r: 0,
+              d: "true",
+              e: "",
+              x: "true=复制父对话快照；false=全新对话",
+            },
+            {
+              n: "name",
+              t: "string",
+              r: 0,
+              d: "team_name 场景下的稳定队友名（字母/数字/下划线/连字符）",
+            },
+            {
+              n: "team_name",
+              t: "string",
+              r: 0,
+              d: "创建队友必填；作为该团队下的长驻队友孵化（需先 TeamCreate）",
+            },
+            { n: "model", t: "string", r: 0, d: "为该代理覆盖模型" },
+            {
+              n: "run_in_background",
+              t: "boolean",
+              r: 0,
+              d: "false",
+              e: "",
+              x: "异步运行一次性子代理，立即返回任务 ID",
+            },
+            {
+              n: "isolation",
+              t: "string",
+              r: 0,
+              d: "枚举",
+              e: "worktree",
+              x: "在独立 Git worktree 中运行，编辑不与父级/并行代理冲突",
+            },
+            {
+              n: "plan_mode_required",
+              t: "boolean",
+              r: 0,
+              d: "仅与 team_name 联用；请求规划阶段，运行时自动批准计划后继续执行",
+            },
+          ],
+          out: "前台：子代理的最终回复文本（fork 模式的证据须由父级审阅整合）；后台：任务 ID + 通知约定；队友：孵化确认；错误：未知角色（列出可用）、参数非法、被中断等。",
+        },
+        {
+          n: "TeamCreate",
+          cls: "TeamCreateTool",
+          f: "src/teams/tools.ts",
+          g: "team",
+          cat: "command",
+          conc: "回退（command→独占）",
+          zh: "创建用于协调多个代理的团队。同一时间至多存在一个团队：创建新团队会删除其他任何团队并停止其成员。构造注入 TeamManager。",
+          en: "Create a team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.",
+          sbx: "无沙箱；command 类别走权限矩阵。团队文件落盘（TeamFile/FileMailbox/FileLock 协调）。",
+          params: [
+            { n: "team_name", t: "string", r: 1, d: "团队名称" },
+            { n: "description", t: "string", r: 0, d: "团队要完成的工作" },
+          ],
+          out: "团队创建确认信息；错误：team_name 缺失等。",
+        },
+        {
+          n: "SendMessage",
+          cls: "SendMessageTool",
+          f: "src/teams/tools.ts",
+          g: "team",
+          cat: "command",
+          conc: "回退（command→独占）",
+          zh: "向队友或 leader 信箱发送消息。to='leader' 发给协调者，to='*' 广播全体队友。coordinator 模式下只有 leader 能发 plan_approval_response：需复制 request_id、设置 approve，并把评审意见写进 content。type 支持 text（默认）/ shutdown_request（要求队友收尾，其以 shutdown_response 回复）/ shutdown_response。发送者身份由构造参数 senderName 决定（默认 leader），队友可经花名册自证团队。",
+          en: "Send a message to a teammate or to the leader mailbox. Use to='leader' for the coordinator and to='*' to broadcast to all teammates. In coordinator mode, only the leader can send plan_approval_response; copy request_id, set approve, and give review feedback in content.",
+          sbx: "无沙箱；权限层 Layer 1.5 协作类工具（团队内部通信与共享任务板）——显式 deny/ask 规则仍优先生效。",
+          params: [
+            {
+              n: "to",
+              t: "string",
+              r: 1,
+              d: "队友名 / 'leader' / '*'（广播）",
+            },
+            {
+              n: "content",
+              t: "string",
+              r: 1,
+              d: "消息内容、关闭原因或 leader 的计划评审意见",
+            },
+            {
+              n: "type",
+              t: "string",
+              r: 0,
+              d: "枚举，默认 text",
+              e: "text/shutdown_request/shutdown_response",
+              x: "消息类型",
+            },
+            {
+              n: "request_id",
+              t: "string",
+              r: 0,
+              d: "响应 shutdown/计划审批请求时复制其 requestId",
+            },
+            {
+              n: "approve",
+              t: "boolean",
+              r: 0,
+              d: "shutdown_response 与 plan_approval_response 必填：是否接受",
+            },
+          ],
+          out: "投递确认（如 `Plan approval sent to '<to>'.`）；错误：队友不存在、无活动团队、仅 leader 可审批/请求关闭、缺 approve 等。",
+        },
+        {
+          n: "ListTeams",
+          cls: "ListTeamsTool",
+          f: "src/teams/tools.ts",
+          g: "team",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "列出所有团队及其成员。",
+          en: "List teams and their members.",
+          sbx: "无沙箱；协作类只读放行。",
+          params: [],
+          out: "团队与成员花名册文本。",
+        },
+        {
+          n: "TeamDelete",
+          cls: "TeamDeleteTool",
+          f: "src/teams/tools.ts",
+          g: "team",
+          cat: "command",
+          conc: "回退（command→独占）",
+          zh: "删除团队并停止其所有成员。",
+          en: "Delete a team and stop its members.",
+          sbx: "无沙箱；command 权限矩阵。删除是破坏性协作操作（成员进程被停止）。",
+          params: [{ n: "name", t: "string", r: 1, d: "团队名" }],
+          out: "删除确认；团队不存在等错误。",
+        },
+        {
+          n: "EnterPlanMode",
+          cls: "EnterPlanModeTool",
+          f: "src/tools/enter-plan-mode.ts",
+          g: "plan",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "在非平凡实现前、当正确方案确实不明确且用户评审能避免大量返工时主动使用。它会以当前对话的 fork 在前台同步运行内置 plan 代理：只读代理完成调研并返回具体计划，宿主保存计划并呈交用户审批。调用成功即结束本轮。用户批准前不得实施。适用：重大架构歧义、需探索的不明需求、高影响重构。跳过：任务直接明了、用户已指定实现、诊断后修复显然、纯研究请求。委派代理（子代理）不可使用。无参数。构造注入 ToolRegistry；仅当 enableModelPlanMode（默认交互模式）时注册。",
+          en: "Use this tool proactively before a non-trivial implementation when the right approach is genuinely unclear and user review would prevent significant rework. It runs the built-in plan agent synchronously in the foreground with a fork of your conversation. The read-only agent investigates and returns a concrete plan; the host saves the plan and presents it for user approval. A successful call ends this turn. Do not implement until the user approves.\n\nUse it for significant architectural ambiguity, unclear requirements that require exploration, or high-impact restructuring. Skip it when the task is straightforward, the user has already specified the implementation, the fix is obvious after diagnosis, or the request is pure research. Do not use it from delegated agents. This tool takes no parameters.",
+          sbx: "无沙箱；计划协调类工具（planControl）直接放行。plan 代理本身只读（写工具被过滤器禁用，仅豁免计划文件写入）。",
+          params: [],
+          out: "进入计划模式：plan 代理产出计划 → 宿主保存并呈交审批 → 本轮结束。",
+        },
+        {
+          n: "ExitPlanMode",
+          cls: "ExitPlanModeTool",
+          f: "src/tools/exit-plan-mode.ts",
+          g: "plan",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "提交计划文件中已完成的计划。主代理：呈交用户审批；队友：遵循宿主的团队审批策略（coordinator 模式由 leader 评审，否则自动批准）；一次性子代理：计划返回给父代理。宿主批准执行前不得开始实施。无参数。",
+          en: "Submit the completed plan from the plan file. The main agent presents it for user approval; a teammate follows the host's team approval policy (leader review in coordinator mode, automatic approval otherwise); a one-shot subagent returns it to the parent. Do not implement until the host approves execution.",
+          sbx: "无沙箱；计划协调类工具直接放行。",
+          params: [],
+          out: "主代理/队友：`Plan submitted. Request ID: <id>.` + 审批流转说明（leader 评审需留在 plan mode 等待；自动批准则恢复执行）；子代理：`Plan ready for the parent agent:` + 计划全文。错误：不在 plan mode、无计划文件、无审批处理器。",
+        },
+        {
+          n: "EnterWorktree",
+          cls: "EnterWorktreeTool",
+          f: "src/tools/enter-worktree.ts",
+          g: "wt",
+          cat: "write",
+          conc: "回退（write→独占）",
+          zh: "创建用于隔离工作的 git worktree 并返回其绝对路径。工作目录【不会】被改变：后续工具（Bash 的 cd 命令、ReadFile/WriteFile/EditFile 的路径）必须显式传入返回的路径才能在 worktree 内操作。slug 会作为分支名后缀（随机串规避空格/非 ASCII）。",
+          en: "Create a git worktree for isolated work and return its absolute path. The working directory is NOT changed: pass the returned path explicitly to later tools (Bash cd commands, ReadFile/WriteFile/EditFile paths) to operate inside the worktree.",
+          sbx: "worktree 根被动态加入 PathSandbox 写白名单（sandboxWriteRoots）与权限检查器 extraRoots，使 Bash 沙箱可挂载、写工具可直达；本身是 write 类别，路径校验后放行。",
+          params: [
+            {
+              n: "slug",
+              t: "string",
+              r: 1,
+              d: "worktree 短标识（分支名后缀）",
+            },
+          ],
+          out: "`Worktree created at <path>\\nBranch: <branch>\\nHead: <commit>`；错误：slug 缺失/非法、创建失败。",
+        },
+        {
+          n: "ExitWorktree",
+          cls: "ExitWorktreeTool",
+          f: "src/tools/exit-worktree.ts",
+          g: "wt",
+          cat: "write",
+          conc: "回退（write→独占）",
+          zh: "清理先前由 EnterWorktree 创建的 git worktree（以路径标识）。不会改变工作目录。有未提交变更的 worktree 会被保留以供显式整合，而不是被删除。",
+          en: "Clean up a git worktree previously created by EnterWorktree, identified by its path. Does not change the working directory. A worktree with uncommitted changes is retained for explicit integration, not deleted.",
+          sbx: "经 permissionChecker.worktrees.cleanup(path) 执行：清理同时把该根从沙箱写白名单移除；write 类别路径校验。",
+          params: [{ n: "path", t: "string", r: 1, d: "worktree 路径" }],
+          out: "清理结果消息（删除成功 / 因未提交变更保留）；错误：路径缺失、清理失败。",
+        },
+        {
+          n: "LoadSkill",
+          cls: "LoadSkillTool",
+          f: "src/skills/load-skill-tool.ts",
+          g: "skill",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "按名称激活技能，返回完整 SOP 正文供模型遵循执行。当用户请求与 available-skills 列出的技能匹配时调用。技能名不带前导斜杠。mode=fork 的技能经注入的 forkHost 在隔离子代理中运行；宿主未集成子代理运行时（forkHost 缺省）回退为 inline 执行以保证可用。forDelegatedAgent() 生成委派代理用的精简实例。",
+          en: "Activate a skill by name. Returns the full SOP body so you can follow its instructions. Call this when the user's request matches one of the available Skills listed in the available-skills section. Pass the Skill name without a leading slash.",
+          sbx: "无沙箱；read 放行。构造注入 SkillCatalog 与 SkillHost（activateSkill 回调）。",
+          params: [
+            {
+              n: "name",
+              t: "string",
+              r: 1,
+              d: "要激活的技能名（不带 / 前缀）",
+            },
+          ],
+          out: "`Skill '<name>' activated.\\n\\n<SOP 正文>`；fork 技能返回子代理执行结果；未找到时列出可用技能。",
+        },
+        {
+          n: "InstallSkill",
+          cls: "InstallSkillTool",
+          f: "src/skills/install-skill-tool.ts",
+          g: "skill",
+          cat: "write",
+          conc: "回退（write→独占）",
+          zh: "从本地文件路径或 http(s) URL（必须是 raw SKILL.md，而非 HTML 页面或仓库页）安装技能到 ~/.yukino/skills。可注入网络依赖（PublicHttpDependencies）用于抓取远程技能。",
+          en: "Install a skill from a local file path or an http(s) URL into ~/.yukino/skills.",
+          sbx: "无 OS 沙箱；write 类别 → 目标在 ~/.yukino/skills（项目外），PathSandbox 校验触发人工确认（除非显式 allow 规则）。",
+          params: [
+            {
+              n: "source",
+              t: "string",
+              r: 1,
+              d: "本地文件路径或 raw SKILL.md URL（非 HTML/仓库页）",
+            },
+            {
+              n: "name",
+              t: "string",
+              r: 0,
+              d: "可选技能名覆盖；限字母、数字、点、下划线、连字符",
+            },
+          ],
+          out: "`Skill '<name>' installed to <destination>`；错误：抓取失败（HTTP 状态）、内容非法、安装异常。",
+        },
+        {
+          n: "AskUserQuestion",
+          cls: "AskUserQuestionTool",
+          f: "src/tools/ask-user.ts",
+          g: "io",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "向用户提出 1–4 个单选或多选问题并等待回答。每题需 2–4 个选项；系统自动追加“Other”自定义输入项。multiSelect=true 表示可多选，false 表示互斥单选。只询问会改变任务走向的缺失信息；不要重复请求已给出的授权。实际提问委托给注入的 asker（UI 对话框），与 onPermissionRequest 同一模式。",
+          en: 'Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 2 to 4 options; an "Other" option for custom input is added automatically.\nSet multiSelect=true when the user may choose multiple options, or false for one mutually exclusive choice. Ask only for missing information that changes the task; do not re-request authorization already given.',
+          sbx: "无沙箱；read 类别。阻塞等待用户输入（受 abortSignal 控制）。",
+          params: [
+            {
+              n: "questions",
+              t: "array",
+              r: 1,
+              d: "1–4 题",
+              e: "minItems 1, maxItems 4",
+              x: "问题数组",
+            },
+            { n: "questions[].question", t: "string", r: 1, d: "问题文本" },
+            {
+              n: "questions[].header",
+              t: "string",
+              r: 1,
+              d: "短标签/分类（≤12 字符）",
+            },
+            {
+              n: "questions[].options",
+              t: "array",
+              r: 1,
+              d: "2–4 项 {label, description?}",
+              e: "",
+              x: "选项；Other 自动追加",
+            },
+            {
+              n: "questions[].multiSelect",
+              t: "boolean",
+              r: 1,
+              d: "true=多选 / false=单选",
+            },
+          ],
+          out: "Record<问题文本, 用户所选答案> 映射；用户中断/无 asker 时相应处理。",
+        },
+        {
+          n: "SyntheticOutput",
+          cls: "SyntheticOutputTool",
+          f: "src/tools/synthetic-output.ts",
+          g: "io",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: "以 JSON 结构化数据返回最终结果。用于非交互模式与 coordinator 模式会话——调用方需要可直接解析的 JSON，而非埋在自然语言里的片段。构造可传入 jsonSchema（可选）：设置后 output 会按与调用方约定的结构校验。",
+          en: "Return structured output in JSON format. Use this tool to return your final response as structured data in non-interactive or coordinator mode sessions.",
+          sbx: "无沙箱；read 类别纯数据返回。",
+          params: [
+            {
+              n: "output",
+              t: "any",
+              r: 1,
+              d: "结构化结果：对象、数组或纯字符串（可选受 jsonSchema 校验）",
+            },
+          ],
+          out: "结构化结果直接作为会话最终输出交还调用方。",
+        },
+        {
+          n: "ToolSearch",
+          cls: "ToolSearchTool",
+          f: "src/tools/tool-search.ts",
+          g: "mcp",
+          cat: "read",
+          conc: "回退（read→可并发）",
+          zh: '按名称或关键词搜索并加载延迟（deferred）工具。query 支持 "select:name1,name2" 语法按名精确加载，或用关键词模糊搜索（匹配名称与描述）。只有 MCP 加载模式为 native/dispatch（registry.exposeToolSearch=true）时才进入 tools[]——eager 模式下没有延迟工具，暴露它只会浪费 token。native 模式返回 tool_reference 让服务端展开 schema；dispatch 模式返回完整 schema 供 McpCall 使用。',
+          en: "Search for and load deferred tools by name or keyword.",
+          sbx: "无沙箱；read 类别。仅在 exposeToolSearch 时对模型可见（注册表可见性谓词统一裁决）。",
+          params: [
+            {
+              n: "query",
+              t: "string",
+              r: 1,
+              d: '搜索词；"select:name1,name2" 按名加载，关键词模糊搜索',
+            },
+            {
+              n: "max_results",
+              t: "integer",
+              r: 0,
+              d: "5",
+              e: "",
+              x: "最多返回条数",
+            },
+          ],
+          out: '匹配工具的 schema（dispatch）或 tool_reference 内容块（native）；无匹配时 "No deferred tools matched the query."；发现的工具被 markDiscovered 后进入常规 tools[]。',
+        },
+        {
+          n: "McpCall",
+          cls: "McpCallTool",
+          f: "src/tools/mcp-call.ts",
+          g: "mcp",
+          cat: "command",
+          conc: "回退（command→独占）",
+          zh: "调用已连接 MCP 服务器上的工具。先经 ToolSearch 加载目标工具的 schema，再在此严格按该 schema 传参（JSON 类型必须一致）。仅在 dispatch 模式（exposeMcpCall=true）暴露——此类端点既不支持 defer_loading 也不支持 tool_reference，MCP 工具完全不进 tools[]，统一走本工具分发。tool 使用完整名（如 mcp__linear__create_issue）。参数查找用自有属性（防止 toString 等继承键误匹配）。",
+          en: "Invoke a tool on a connected MCP server. Call ToolSearch first to load the tool's schema, then pass its arguments here exactly as that schema requires, using the same JSON types.",
+          sbx: "无自身沙箱；command 类别走权限矩阵——MCP 工具的每次调用按 server+tool 名接受权限规则约束。目标 MCPToolWrapper 的 execute 被间接触发。",
+          params: [
+            { n: "server", t: "string", r: 1, d: "MCP 服务器名，如 'linear'" },
+            {
+              n: "tool",
+              t: "string",
+              r: 1,
+              d: "ToolSearch 返回的完整工具名，如 'mcp__linear__create_issue'",
+            },
+            {
+              n: "arguments",
+              t: "object",
+              r: 1,
+              d: "目标工具的参数；必须与其 input_schema 完全一致（含 JSON 类型）",
+            },
+          ],
+          out: "MCP 工具结果透传：文本 output、contentBlocks（图像/资源）或 mcpApp（内联应用）；错误：未知工具（附可用工具提示）、arguments 缺失、服务器执行失败。",
+        },
+      ];
+
+      const CAT_STYLE = {
+        read: {
+          bg: "bg-sky-50",
+          text: "text-sky-700",
+          border: "border-sky-200",
+          dot: "bg-sky-500",
+          label: "read · 读取",
+        },
+        write: {
+          bg: "bg-amber-50",
+          text: "text-amber-700",
+          border: "border-amber-200",
+          dot: "bg-amber-500",
+          label: "write · 写入",
+        },
+        command: {
+          bg: "bg-rose-50",
+          text: "text-rose-700",
+          border: "border-rose-200",
+          dot: "bg-rose-500",
+          label: "command · 命令",
+        },
+      };
+      const BAR = {
+        read: "from-sky-500 to-cyan-400",
+        write: "from-amber-500 to-yellow-400",
+        command: "from-rose-500 to-pink-500",
+      };
+
+      function esc(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function paramRows(t) {
+        if (!t.params.length)
+          return '<div class="text-sm text-slate-400 italic py-2">无参数 — 该工具不接受任何输入。</div>';
+        let rows = t.params
+          .map(
+            (p) => `
+    <tr class="border-t border-slate-200 align-top">
+      <td class="py-2 pr-3"><code class="mono text-[12.5px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">${esc(p.n)}</code>${p.r ? '<span class="ml-1.5 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded px-1 align-middle">必填</span>' : ""}</td>
+      <td class="py-2 pr-3 mono text-[12px] text-slate-500 whitespace-nowrap">${esc(p.t)}${p.d !== undefined && p.d !== "" ? `<div class="text-slate-400 mt-0.5">默认: ${esc(p.d)}</div>` : ""}${p.e ? `<div class="text-indigo-500 mt-0.5 break-all">${esc(p.e)}</div>` : ""}</td>
+      <td class="py-2 text-[13px] text-slate-600 leading-relaxed">${esc(p.x || "")}</td>
+    </tr>`,
+          )
+          .join("");
+        return `<table class="w-full text-left"><thead><tr class="text-[11px] uppercase tracking-wider text-slate-400">
+      <th class="pb-1.5 pr-3 font-semibold">参数</th><th class="pb-1.5 pr-3 font-semibold">类型 / 约束</th><th class="pb-1.5 font-semibold">说明</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+      }
+
+      function toolCard(t, idx) {
+        const c = CAT_STYLE[t.cat];
+        return `
+  <div class="tool-card card-enter rounded-2xl border ${c.border} bg-white shadow-sm overflow-hidden" data-cat="${t.cat}"
+       data-search="${esc((t.n + " " + t.cls + " " + t.f + " " + t.zh + " " + t.en + " " + t.sbx + " " + t.out + " " + t.params.map((p) => p.n + " " + (p.x || "")).join(" ")).toLowerCase())}">
+    <div class="h-1 w-full bg-gradient-to-r ${BAR[t.cat]}"></div>
+    <div class="p-5">
+      <div class="flex flex-wrap items-start gap-3">
+        <div class="flex-1 min-w-[240px]">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h3 class="mono text-xl font-bold text-slate-900">${esc(t.n)}</h3>
+            <span class="text-[10.5px] font-bold px-2 py-0.5 rounded-full ${c.bg} ${c.text} border ${c.border}">${c.label}</span>
+            <span class="text-[10.5px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 mono">${esc(t.cls)}</span>
+          </div>
+          <div class="mt-1 text-[11.5px] text-slate-400 mono">📄 ${esc(t.f)}</div>
+        </div>
+        <button class="toggle-btn shrink-0 text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 font-semibold">展开详情 ▾</button>
+      </div>
+
+      <p class="mt-3 text-[13.5px] leading-relaxed text-slate-600">${esc(t.zh.length > 180 ? t.zh.slice(0, 180) + "…" : t.zh)}</p>
+
+      <div class="tool-detail hidden mt-4 space-y-4">
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <div class="text-xs font-bold text-slate-500 mb-1.5">📖 完整中文说明</div>
+          <p class="text-[13px] leading-relaxed text-slate-600 whitespace-pre-wrap">${esc(t.zh)}</p>
+        </div>
+
+        <div class="rounded-xl bg-indigo-50 border border-indigo-100 p-4">
+          <div class="text-xs font-bold text-indigo-600 mb-1.5">🛡️ 沙箱 / 权限</div>
+          <p class="text-[13px] leading-relaxed text-slate-700">${esc(t.sbx)}</p>
+        </div>
+
+        <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
+          <div class="text-xs font-bold text-emerald-600 mb-1.5">🔀 并发安全（isConcurrencySafe）</div>
+          <p class="text-[13px] leading-relaxed text-slate-700">${esc(t.conc)}</p>
+        </div>
+
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <div class="text-xs font-bold text-slate-500 mb-2">⌨️ 输入参数（input_schema.properties）</div>
+          ${paramRows(t)}
+        </div>
+
+        <div class="rounded-xl bg-fuchsia-50 border border-fuchsia-100 p-4">
+          <div class="text-xs font-bold text-fuchsia-600 mb-1.5">📤 输出（ToolResult）</div>
+          <p class="text-[13px] leading-relaxed text-slate-700">${esc(t.out)}</p>
+        </div>
+
+        <details class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <summary class="text-xs font-bold text-slate-500 flex items-center gap-1.5"><span class="chev inline-block">▸</span> 英文原始 description（发送给模型的实际文本）</summary>
+          <p class="en-block mt-2.5 text-[12px] leading-relaxed text-slate-400 mono">${esc(t.en)}</p>
+        </details>
+      </div>
+    </div>
+  </div>`;
+      }
+
+      function render() {
+        let html = "";
+        for (const g of GROUPS) {
+          const tools = TOOLS.filter((t) => t.g === g.id);
+          if (!tools.length) continue;
+          html += `
+    <section class="group-section mb-8" data-group="${g.id}">
+      <div class="flex items-center gap-2.5 mb-3">
+        <span class="text-xl">${g.icon}</span>
+        <h2 class="text-base font-bold text-slate-900">${g.title}</h2>
+        <span class="text-[11px] text-slate-400 mono">${tools.length} 个工具</span>
+        <span class="text-xs text-slate-400 hidden sm:inline">· ${g.desc}</span>
+        <div class="flex-1 h-px bg-slate-200"></div>
+      </div>
+      <div class="grid lg:grid-cols-2 gap-4">
+        ${tools.map((t, i) => toolCard(t, i)).join("")}
+      </div>
+    </section>`;
+        }
+        $("#groups").html(html);
+      }
+
+      $(function () {
+        render();
+
+        // stats
+        $("#statTotal").text(TOOLS.length);
+        $("#statRead").text(TOOLS.filter((t) => t.cat === "read").length);
+        $("#statWrite").text(TOOLS.filter((t) => t.cat === "write").length);
+        $("#statCmd").text(TOOLS.filter((t) => t.cat === "command").length);
+
+        let curCat = "all";
+        function applyFilter() {
+          const q = $("#search").val().trim().toLowerCase();
+          let visible = 0;
+          $(".tool-card").each(function () {
+            const okCat = curCat === "all" || $(this).data("cat") === curCat;
+            const okQ = !q || String($(this).data("search")).includes(q);
+            const show = okCat && okQ;
+            $(this).toggle(show);
+            if (show) visible++;
+          });
+          $(".group-section").each(function () {
+            $(this).toggle($(this).find(".tool-card:visible").length > 0);
+          });
+          $("#empty").toggle(visible === 0);
+        }
+
+        $("#search").on("input", applyFilter);
+        const CAT_BTN_BASE =
+          "cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold border ";
+        function styleCatBtns() {
+          $(".cat-btn").each(function () {
+            const on = $(this).data("cat") === curCat;
+            $(this).attr(
+              "class",
+              CAT_BTN_BASE +
+                (on
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100"),
+            );
+          });
+        }
+        $(document).on("click", ".cat-btn", function () {
+          curCat = $(this).data("cat");
+          styleCatBtns();
+          applyFilter();
+        });
+
+        $(document).on("click", ".toggle-btn", function () {
+          const d = $(this).closest(".tool-card").find(".tool-detail");
+          const open = !d.hasClass("hidden");
+          d.toggleClass("hidden", open);
+          $(this).text(open ? "展开详情 ▾" : "收起 ▴");
+        });
+
+        $("#expandAll").on("click", () => {
+          $(".tool-detail").removeClass("hidden");
+          $(".toggle-btn").text("收起 ▴");
+        });
+        $("#collapseAll").on("click", () => {
+          $(".tool-detail").addClass("hidden");
+          $(".toggle-btn").text("展开详情 ▾");
+        });
+      });
+    </script>
+  </body>
+</html>
