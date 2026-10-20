@@ -10,8 +10,8 @@
     "git:commit:skip": "git add -A && git commit -m \"feat: Introduce new features [skip ci]\"",
     "git:push": "pnpm git:commit && git push origin main",
     "git:push:skip": "pnpm git:commit:skip && git push origin main",
-    "format": "concurrently \"pnpm --filter docs format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
-    "build": "concurrently \"pnpm --filter docs build\" \"pnpm --filter @yukino.js/mcp build\" \"pnpm --filter @yukino.js/yukino build\"",
+    "format": "concurrently \"pnpm --filter docs format\" \"pnpm --filter @yukino.js/app format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
+    "build": "concurrently \"pnpm --filter docs build\" \"pnpm --filter @yukino.js/app build\" \"pnpm --filter @yukino.js/mcp build\" \"pnpm --filter @yukino.js/yukino build\"",
     "prepare": "husky"
   },
   "keywords": [

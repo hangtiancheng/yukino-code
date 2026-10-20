@@ -1,15 +1,24 @@
-import { app, shell, BrowserWindow, ipcMain } from "electron";
+import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
+import { YukinoBridge } from "@main/yukino-bridge";
+
+// The yukino library bridge owns the agent runtime and IPC registration.
+const bridge = new YukinoBridge();
 
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1040,
+    height: 760,
+    minWidth: 760,
+    minHeight: 540,
     show: false,
     autoHideMenuBar: true,
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : undefined,
+    trafficLightPosition: { x: 16, y: 16 },
+    backgroundColor: "#0a0a0a",
     ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
@@ -40,7 +49,11 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId("com.electron");
+  electronApp.setAppUserModelId("com.yukino.app");
+
+  // Follow the OS dark/light preference unless the user picked one.
+  bridge.applyTheme();
+  bridge.registerIpc();
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -48,9 +61,6 @@ app.whenReady().then(() => {
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
-
-  // IPC test
-  ipcMain.on("ping", () => console.log("pong"));
 
   createWindow();
 
@@ -70,5 +80,6 @@ app.on("window-all-closed", () => {
   }
 });
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+app.on("before-quit", () => {
+  void bridge.dispose();
+});

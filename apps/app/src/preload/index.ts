@@ -1,8 +1,60 @@
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
+import type {
+  BridgeEvent,
+  InitState,
+  PermissionResponse,
+  ResumeResult,
+  SessionSummary,
+} from "@shared/ipc-types";
 
-// Custom APIs for renderer
-const api = {};
+/**
+ * Typed facade over the main-process yukino bridge. Exposed as `window.api`.
+ * Every method is a thin wrapper around an ipcRenderer.invoke/on call so the
+ * renderer never touches Node or Electron internals directly.
+ */
+const api = {
+  init: (): Promise<InitState> => ipcRenderer.invoke("yukino:init"),
+  send: (text: string): Promise<void> =>
+    ipcRenderer.invoke("yukino:send", text),
+  abort: (): Promise<void> => ipcRenderer.invoke("yukino:abort"),
+  newSession: (): Promise<{ sessionId: string }> =>
+    ipcRenderer.invoke("yukino:new-session"),
+  listSessions: (): Promise<SessionSummary[]> =>
+    ipcRenderer.invoke("yukino:list-sessions"),
+  resumeSession: (sessionId: string): Promise<ResumeResult> =>
+    ipcRenderer.invoke("yukino:resume-session", sessionId),
+  selectFolder: (): Promise<{ cwd: string | null }> =>
+    ipcRenderer.invoke("yukino:select-folder"),
+  respondPermission: (
+    id: string,
+    response: PermissionResponse,
+  ): Promise<void> =>
+    ipcRenderer.invoke("yukino:respond-permission", id, response),
+  respondAsk: (id: string, answers: Record<string, string>): Promise<void> =>
+    ipcRenderer.invoke("yukino:respond-ask", id, answers),
+  getTheme: (): Promise<{
+    mode: "system" | "light" | "dark";
+    dark: boolean;
+  }> => ipcRenderer.invoke("yukino:get-theme"),
+  setTheme: (mode: "system" | "light" | "dark"): Promise<void> =>
+    ipcRenderer.invoke("yukino:set-theme", mode),
+
+  /** Subscribe to the agent event stream. Returns an unsubscribe function. */
+  onEvent: (callback: (event: BridgeEvent) => void): (() => void) => {
+    const listener = (_: unknown, event: BridgeEvent): void => callback(event);
+    ipcRenderer.on("yukino:event", listener);
+    return () => ipcRenderer.removeListener("yukino:event", listener);
+  },
+
+  /** Subscribe to native theme changes. Returns an unsubscribe function. */
+  onTheme: (callback: (theme: "dark" | "light") => void): (() => void) => {
+    const listener = (_: unknown, theme: "dark" | "light"): void =>
+      callback(theme);
+    ipcRenderer.on("yukino:theme", listener);
+    return () => ipcRenderer.removeListener("yukino:theme", listener);
+  },
+};
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise
@@ -15,8 +67,13 @@ if (process.contextIsolated) {
     console.error(error);
   }
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI;
-  // @ts-ignore (define in dts)
-  window.api = api;
+  // Context isolation disabled: the global Window augmentation lives in
+  // index.d.ts, which tsc ignores here (same basename as index.ts), so the
+  // assignment goes through a cast.
+  const target = window as unknown as {
+    electron: typeof electronAPI;
+    api: typeof api;
+  };
+  target.electron = electronAPI;
+  target.api = api;
 }
