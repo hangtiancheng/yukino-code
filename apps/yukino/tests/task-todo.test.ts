@@ -122,7 +122,7 @@ describe("atomic task/TODO list", () => {
   });
   it("preserves identity and metadata when replacing TODOs, rejecting duplicate and unknown IDs", async () => {
     const list = new TaskList();
-    const a = list.create("a", "description", "Working");
+    const a = list.create("a", "description");
     list.update(a.id, {
       owner: "leader",
       metadata: { count: 2 },
@@ -144,7 +144,6 @@ describe("atomic task/TODO list", () => {
       description: "description",
       metadata: { count: 2 },
       priority: "high",
-      activeForm: "Working",
     });
     expect(list.list()[1]?.id).toBe("2");
     const before = list.list();
@@ -291,7 +290,7 @@ describe("atomic task/TODO list", () => {
     const list = new TaskList();
     list.replace([
       { subject: "done", status: "completed" },
-      { subject: "work", activeForm: "Testing", status: "in_progress" },
+      { subject: "Testing", status: "in_progress" },
       { subject: "stuck", status: "blocked" },
       { subject: "dropped", status: "cancelled" },
     ]);
@@ -309,8 +308,7 @@ describe("atomic task/TODO list", () => {
     const list = new TaskList();
     list.replace([
       {
-        subject: "work",
-        activeForm: "Testing\n\u001b[31mprogress🙂\u001b[0m\tfiles\u0007",
+        subject: "Testing\n\u001b[31mprogress🙂\u001b[0m\tfiles\u0007",
         status: "in_progress",
       },
     ]);

@@ -12,7 +12,6 @@ export interface AskQuestionOption {
 
 export interface AskQuestion {
   question: string;
-  header: string;
   options: AskQuestionOption[];
   multiSelect: boolean;
 }

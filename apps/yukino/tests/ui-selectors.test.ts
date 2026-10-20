@@ -177,7 +177,6 @@ describe("agents list and detail", () => {
         questions: [
           {
             question: "Continue?",
-            header: "Confirm",
             multiSelect: false,
             options: [{ label: "Yes" }, { label: "No" }],
           },
@@ -190,7 +189,6 @@ describe("agents list and detail", () => {
   it("starts each queued question with fresh state and ignores duplicate completion", () => {
     const onComplete = vi.fn();
     const question = (label: string) => ({
-      header: label,
       question: `${label}?`,
       options: [{ label: "One" }, { label: "Two" }],
       multiSelect: false,
@@ -976,19 +974,42 @@ describe("search input boundaries and independent dialog controls", () => {
     expect(onSelect).toHaveBeenCalledWith("feedback", "あnew steps");
   });
 
+  it.each([32, 80])(
+    "uses sequential question labels when navigating at %i columns",
+    (columns) => {
+      resize(columns, 24);
+      mount(
+        createElement(AskUserDialog, {
+          questions: Array.from({ length: 4 }, (_, index) => ({
+            question: `Question ${String(index + 1)}?`,
+            options: [{ label: "Yes" }, { label: "No" }],
+            multiSelect: false,
+          })),
+          onComplete: vi.fn(),
+        }),
+      );
+      for (const label of ["Q1", "Q2", "Q3", "Q4"]) {
+        expect(frame).toContain(`☐ ${label}`);
+        send("", { tab: true });
+      }
+      expect(frame).toContain("✓ Submit");
+      expect(frame).toContain("Review your answers");
+      send("", { tab: true, shift: true });
+      expect(frame).toContain("☐ Q4");
+    },
+  );
+
   it("preserves AskUser numeric shortcuts, free text and tab navigation", () => {
     const onComplete = vi.fn();
     mount(
       createElement(AskUserDialog, {
         questions: [
           {
-            header: "First",
             question: "First choice?",
             options: [{ label: "One", description: "First option" }],
             multiSelect: false,
           },
           {
-            header: "Second",
             question: "Second choice?",
             options: [{ label: "Two", description: "Second option" }],
             multiSelect: false,
@@ -997,11 +1018,14 @@ describe("search input boundaries and independent dialog controls", () => {
         onComplete,
       }),
     );
+    expect(frame).toContain("☐ Q1");
+    expect(frame).toContain("☐ Q2");
     send("2");
     send("", { return: true });
     send("custom 123");
     send("", { return: true });
     expect(frame).toContain("Second choice?");
+    expect(frame).toContain("☑ Q1");
     send("", { tab: true, shift: true });
     expect(frame).toContain("First choice?");
     send("", { tab: true });
@@ -1021,7 +1045,6 @@ function mountAskOther(onComplete: (answers: Record<string, string>) => void) {
     createElement(AskUserDialog, {
       questions: [
         {
-          header: "Choice",
           question: "Pick one",
           options: [{ label: "One", description: "First option" }],
           multiSelect: false,
@@ -1108,7 +1131,6 @@ describe("AskUser multi-select answers", () => {
     async ({ selected, text, expected }) => {
       const questions = [
         {
-          header: "Choice",
           question: "Pick options",
           options: [{ label: "One" }, { label: "Two" }],
           multiSelect: true,

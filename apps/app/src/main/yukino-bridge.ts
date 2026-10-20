@@ -259,7 +259,6 @@ export class YukinoBridge {
         id,
         questions: questions.map((question) => ({
           question: question.question,
-          header: question.header,
           multiSelect: question.multiSelect,
           options: question.options.map((option) => ({
             label: option.label,

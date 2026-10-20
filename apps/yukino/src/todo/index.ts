@@ -18,7 +18,6 @@ export interface Task {
   description: string;
   status: StoredTaskStatus;
   owner?: string;
-  activeForm?: string;
   blocks: string[];
   blockedBy: string[];
   metadata: Record<string, unknown>;
@@ -30,7 +29,6 @@ export interface TodoInput {
   subject: string;
   description?: string;
   status: StoredTaskStatus;
-  activeForm?: string;
   priority?: Task["priority"];
 }
 
@@ -43,7 +41,6 @@ export interface TaskBoard {
   create(
     subject: string,
     description: string,
-    activeForm?: string,
     metadata?: Record<string, unknown>,
   ): Task;
   get(id: string): Task | undefined;
@@ -135,7 +132,6 @@ export class TaskList {
   create(
     subject: string,
     description: string,
-    activeForm?: string,
     metadata: Record<string, unknown> = {},
   ): Task {
     const task: Task = {
@@ -143,7 +139,6 @@ export class TaskList {
       subject,
       description,
       status: "pending",
-      activeForm,
       blocks: [],
       blockedBy: [],
       metadata: structuredClone(metadata),
@@ -252,7 +247,6 @@ export class TaskList {
         subject: todo.subject,
         description: todo.description ?? previous?.description ?? "",
         status: todo.status,
-        activeForm: todo.activeForm ?? previous?.activeForm,
         priority: todo.priority ?? previous?.priority,
       });
     }

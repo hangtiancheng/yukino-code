@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import z from "zod";
 
 import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { buildToolGuidance } from "@/prompt/tools.js";
@@ -49,7 +50,7 @@ function trackingNames(registry: ToolRegistry) {
 
 describe("tracking tool modes", () => {
   it.each(["private", "shared"])(
-    "rejects removed Task fields on the %s board without mutating tasks",
+    "rejects unsupported Task fields on the %s board without mutating tasks",
     async (board) => {
       const list = new TaskList();
       const tools = registry("interactive", list);
@@ -65,13 +66,22 @@ describe("tracking tool modes", () => {
       if (!create || !update) {
         throw new Error("Missing task tools");
       }
-      for (const tool of [create, update]) {
-        const properties = tool.schema().input_schema.properties;
-        expect(properties).not.toHaveProperty("activeForm");
-        expect(properties).not.toHaveProperty("metadata");
-      }
+      expect(Object.keys(create.schema().input_schema.properties)).toEqual([
+        "subject",
+        "description",
+      ]);
+      expect(Object.keys(update.schema().input_schema.properties)).toEqual([
+        "taskId",
+        "status",
+        "subject",
+        "description",
+        "owner",
+        "priority",
+        "addBlocks",
+        "addBlockedBy",
+      ]);
       for (const fields of [
-        { activeForm: "Working" },
+        { unknownField: "unsupported" },
         { metadata: { evidence: "tests" } },
       ]) {
         const result = await create.execute(
@@ -88,7 +98,7 @@ describe("tracking tool modes", () => {
       const before = tasks();
       expect(before[0]?.id).toBe("1");
       for (const fields of [
-        { activeForm: "Working" },
+        { unknownField: "unsupported" },
         { metadata: { evidence: "tests" } },
       ]) {
         const result = await update.execute(
@@ -100,6 +110,39 @@ describe("tracking tool modes", () => {
       }
     },
   );
+
+  it("exposes only supported TODO fields and rejects unknown fields atomically", async () => {
+    const list = new TaskList();
+    list.create("existing", "");
+    const tool = new TodoWriteTool(list);
+    const schema = z
+      .object({
+        items: z.object({ properties: z.record(z.string(), z.unknown()) }),
+      })
+      .parse(tool.schema().input_schema.properties.todos);
+    expect(Object.keys(schema.items.properties)).toEqual([
+      "id",
+      "subject",
+      "description",
+      "status",
+      "priority",
+    ]);
+    const before = list.list();
+    const result = await tool.execute(
+      { cwd },
+      {
+        todos: [
+          {
+            subject: "invalid",
+            status: "pending",
+            unknownField: "unsupported",
+          },
+        ],
+      },
+    );
+    expect(result.isError).toBe(true);
+    expect(list.list()).toEqual(before);
+  });
 
   it.each(["interactive", "non-interactive"] as const)(
     "exposes only the %s tracking interface and scoped guidance",

@@ -79,7 +79,6 @@ export interface QuestionOption {
 
 export interface Question {
   question: string;
-  header: string;
   options: QuestionOption[];
   multiSelect: boolean;
 }
@@ -157,7 +156,6 @@ export interface SteeringPayload {
 export interface TodoTask {
   id: string;
   subject: string;
-  activeForm: string | null;
   status: string;
 }
 
@@ -248,7 +246,6 @@ const slashCommandSchema = z.strictObject({
 });
 const questionSchema = z.strictObject({
   question: z.string(),
-  header: z.string(),
   options: z.array(
     z.strictObject({ label: z.string(), description: z.string().optional() }),
   ),
@@ -443,7 +440,6 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
         z.strictObject({
           id: z.string(),
           subject: z.string(),
-          activeForm: z.string().nullable(),
           status: z.string(),
         }),
       ),

@@ -423,8 +423,7 @@ describe("responsive terminal workspace", () => {
     resize(32, 8);
     mount(
       createElement(AskUserDialog, {
-        questions: Array.from({ length: 3 }, (_, index) => ({
-          header: `Question-${String(index)}`,
+        questions: Array.from({ length: 3 }, () => ({
           question: "A detailed question 日本語 ".repeat(40),
           options: [
             { label: "First", description: "A long description ".repeat(40) },

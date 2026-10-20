@@ -17,9 +17,8 @@ const QuestionOptionSchema = z.object({
 
 export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 
-const QuestionSchema = z.object({
+const QuestionSchema = z.strictObject({
   question: z.string(),
-  header: z.string().max(12),
   options: z.array(QuestionOptionSchema),
   multiSelect: z.boolean(),
 });
@@ -65,11 +64,6 @@ export class AskUserQuestionTool implements Tool {
                 type: "string" as const,
                 description: "The question to ask",
               },
-              header: {
-                type: "string" as const,
-                description: "Short label/category (<=12 chars)",
-                maxLength: 12,
-              },
               options: {
                 type: "array" as const,
                 description: "options",
@@ -96,7 +90,8 @@ export class AskUserQuestionTool implements Tool {
                   "Set to true for multiple-choice, false for single-choice",
               },
             },
-            required: ["question", "header", "options", "multiSelect"],
+            required: ["question", "options", "multiSelect"],
+            additionalProperties: false,
           },
         },
       },

@@ -3380,7 +3380,6 @@ export class RemoteServer {
             tasks: tasks.map((task) => ({
               id: task.id,
               subject: task.subject,
-              activeForm: task.activeForm ?? null,
               status: task.status,
             })),
           },

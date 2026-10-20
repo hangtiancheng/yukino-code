@@ -142,7 +142,6 @@ export class SharedTaskStore {
     blocks: string[] = [],
     blockedBy: string[] = [],
     createdBy = "",
-    activeForm?: string,
     metadata: Record<string, unknown> = {},
   ): SharedTask {
     return this.mutate(() => {
@@ -152,7 +151,6 @@ export class SharedTaskStore {
         description,
         status: "pending",
         owner,
-        activeForm,
         metadata: structuredClone(metadata),
         blocks: [...blocks],
         blockedBy: [...blockedBy],
@@ -222,9 +220,6 @@ export class SharedTaskStore {
       }
       if (fields.subject !== undefined) {
         task.subject = z.string().trim().min(1).parse(fields.subject);
-      }
-      if (fields.activeForm !== undefined) {
-        task.activeForm = fields.activeForm;
       }
       if (fields.priority !== undefined) {
         task.priority = fields.priority;

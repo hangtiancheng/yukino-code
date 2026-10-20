@@ -332,7 +332,6 @@ export class TodoWriteTool implements Tool {
                   type: "string",
                   enum: StoredTaskStatusSchema.options,
                 },
-                activeForm: { type: "string" },
                 priority: { type: "string", enum: ["high", "medium", "low"] },
               },
               required: ["subject", "status"],
@@ -359,7 +358,6 @@ export class TodoWriteTool implements Tool {
                 subject: z.string().trim().min(1),
                 description: z.string().optional(),
                 status: StoredTaskStatusSchema,
-                activeForm: z.string().optional(),
                 priority: z.enum(["high", "medium", "low"]).optional(),
               })
               .strict(),

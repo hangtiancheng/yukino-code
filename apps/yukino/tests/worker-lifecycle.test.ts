@@ -668,7 +668,7 @@ describe("task board correctness", () => {
 
   it("merges metadata, clears null keys, and cannot bypass dependencies with TodoWrite", async () => {
     const list = new TaskList();
-    const first = list.create("first", "", undefined, {
+    const first = list.create("first", "", {
       keep: 1,
       remove: true,
     });

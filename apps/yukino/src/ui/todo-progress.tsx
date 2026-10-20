@@ -43,9 +43,7 @@ export function TodoProgress({ tasks }: { tasks: readonly Task[] }) {
         {label}
         {cancelled ? ` · ${String(cancelled)} cancelled` : ""}
         {blocked ? ` · ${String(blocked)} blocked` : ""}
-        {current
-          ? ` · ${plainTerminalLine(current.activeForm || current.subject)}`
-          : ""}
+        {current ? ` · ${plainTerminalLine(current.subject)}` : ""}
         {active.length > 1 ? ` (+${String(active.length - 1)} active)` : ""}
       </Text>
     </Box>

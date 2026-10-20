@@ -31,7 +31,7 @@ class TeamTaskBoard implements TaskBoard {
     const store = this.manager.getTaskStore(team.name);
     const actor = this.agentName === LEADER_NAME ? undefined : this.agentName;
     return {
-      create: (subject, description, activeForm, metadata) =>
+      create: (subject, description, metadata) =>
         store.create(
           subject,
           description,
@@ -39,7 +39,6 @@ class TeamTaskBoard implements TaskBoard {
           [],
           [],
           this.agentName,
-          activeForm,
           metadata,
         ),
       get: (id) => store.get(id),
@@ -76,10 +75,9 @@ class TeamTaskBoard implements TaskBoard {
   create(
     subject: string,
     description: string,
-    activeForm?: string,
     metadata?: Record<string, unknown>,
   ): Task {
-    return this.board().create(subject, description, activeForm, metadata);
+    return this.board().create(subject, description, metadata);
   }
   get(id: string): Task | undefined {
     return this.board().get(id);

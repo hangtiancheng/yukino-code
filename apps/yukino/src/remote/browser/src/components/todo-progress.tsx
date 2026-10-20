@@ -56,7 +56,7 @@ export function TodoProgress({ todos }: TodoProgressProps) {
           {`${String(completed)}/${String(tasks.length)} tasks`}
           {cancelled ? ` · ${String(cancelled)} cancelled` : ""}
           {blocked ? ` · ${String(blocked)} blocked` : ""}
-          {current ? ` · ${current.activeForm || current.subject}` : ""}
+          {current ? ` · ${current.subject}` : ""}
           {active.length > 1 ? ` (+${String(active.length - 1)} active)` : ""}
         </p>
       </div>

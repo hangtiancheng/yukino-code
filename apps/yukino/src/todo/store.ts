@@ -30,7 +30,6 @@ export const StoredTaskSchema = z.object({
   description: z.string(),
   status: StoredTaskStatusSchema,
   owner: z.string().optional(),
-  activeForm: z.string().optional(),
   blocks: z.array(z.string()),
   blockedBy: z.array(z.string()),
   metadata: z.record(z.string(), z.unknown()),

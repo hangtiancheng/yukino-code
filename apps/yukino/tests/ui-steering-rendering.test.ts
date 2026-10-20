@@ -80,7 +80,6 @@ function Scene({
             id: "1",
             subject: "检查引用",
             description: "",
-            activeForm: "清点引用",
             status: "in_progress",
             metadata: {},
             blockedBy: [],

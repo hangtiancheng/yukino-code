@@ -74,12 +74,15 @@ function NavigationBar({
   const isFirst = currentIndex === 0;
   const isLast = currentIndex >= total - 1;
   const { columns } = useTerminalDimensions();
-  const labels = questions.map((q) => q.header).join("  ");
-  if (visibleWidth(labels) + questions.length * 5 + 16 > columns - 2) {
-    const question = questions[currentIndex];
-    const label = question
-      ? `${states[currentIndex].answer !== undefined ? "☑" : "☐"} ${question.header}`
-      : "✓ Submit";
+  const labels = questions.map((_, i) => `Q${String(i + 1)}`);
+  if (
+    visibleWidth(labels.join("  ")) + questions.length * 5 + 16 >
+    columns - 2
+  ) {
+    const label =
+      currentIndex < questions.length
+        ? `${states[currentIndex].answer !== undefined ? "☑" : "☐"} ${labels[currentIndex]}`
+        : "✓ Submit";
     return (
       <Text color={THEME.accent} wrap="truncate-end">
         {truncateToWidth(
@@ -93,7 +96,7 @@ function NavigationBar({
   return (
     <Box flexDirection="row" marginBottom={1}>
       <Text color={isFirst ? THEME.dim : THEME.text}>{" ← "}</Text>
-      {questions.map((q, i) => {
+      {labels.map((label, i) => {
         const active = currentIndex === i;
         const answered = states[i].answer !== undefined;
         const check = answered ? "☑" : "☐";
@@ -105,13 +108,13 @@ function NavigationBar({
               color={THEME.text}
               bold
             >
-              {` ${check} ${q.header} `}
+              {` ${check} ${label} `}
             </Text>
           );
         }
         return (
           <Text key={i} color={answered ? THEME.success : THEME.dim}>
-            {` ${check} ${q.header} `}
+            {` ${check} ${label} `}
           </Text>
         );
       })}

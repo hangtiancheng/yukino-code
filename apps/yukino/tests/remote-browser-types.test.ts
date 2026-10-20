@@ -72,7 +72,6 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
       questions: [
         {
           question: "Continue?",
-          header: "Confirm",
           options: [{ label: "Yes", description: "Continue" }],
           multiSelect: false,
         },
@@ -128,9 +127,7 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
     type: "todo_update",
     data: {
       boardId: "private:0",
-      tasks: [
-        { id: "1", subject: "task", activeForm: null, status: "pending" },
-      ],
+      tasks: [{ id: "1", subject: "task", status: "pending" }],
     },
   },
   subagents: {
@@ -249,7 +246,6 @@ describe("server WebSocket message validation", () => {
           questions: [
             {
               question: "Continue?",
-              header: "Confirm",
               options: [{ label: "Yes" }],
               multiSelect: false,
             },
@@ -293,7 +289,6 @@ describe("server WebSocket message validation", () => {
         questions: [
           {
             question: "Continue?",
-            header: "Confirm",
             options: [],
           },
         ],

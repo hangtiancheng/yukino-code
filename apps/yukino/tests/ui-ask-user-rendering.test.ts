@@ -151,7 +151,6 @@ describe("answered question rendering", () => {
       const questions: Question[] = Array.from(
         { length: questionCount },
         (_, index) => ({
-          header: `Database ${String(index + 1)}`,
           question: `QUESTION_${String(index)} 哪一种数据库配置适合这个项目? ${detail}`,
           options: [
             {

@@ -129,7 +129,7 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
   return (
     <fieldset className="mb-3">
       <legend className="mb-2 text-sm font-medium text-bright">
-        {question.question || question.header}
+        {question.question}
         {question.multiSelect && (
           <span className="ml-2 text-xs text-dim">(select all that apply)</span>
         )}

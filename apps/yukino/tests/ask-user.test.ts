@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
+import z from "zod";
 
 import { AskUserQuestionTool, type Question } from "@/tools/ask-user.js";
 import type { ToolContext } from "@/tools/types.js";
@@ -16,7 +17,6 @@ const toolContext: ToolContext = {
 function q(overrides: Partial<Question> = {}): Question {
   return {
     question: "Pick one",
-    header: "Choice",
     options: [
       { label: "A", description: "Option A" },
       { label: "B", description: "Option B" },
@@ -67,23 +67,32 @@ describe("AskUserQuestionTool", () => {
     expect(tooMany.isError).toBe(true);
   });
 
-  it("enforces the 12-character header contract in schema and runtime", async () => {
+  it("exposes only supported question fields and rejects unknown fields before asking", async () => {
     const asker = vi.fn(() => Promise.resolve({}));
     const tool = new AskUserQuestionTool(asker);
 
-    expect(tool.schema().input_schema).toMatchObject({
-      properties: {
-        questions: {
-          items: {
-            properties: { header: { maxLength: 12 } },
-          },
-        },
-      },
-    });
+    const schema = z
+      .object({
+        items: z.object({ properties: z.record(z.string(), z.unknown()) }),
+      })
+      .parse(tool.schema().input_schema.properties.questions);
+    expect(Object.keys(schema.items.properties)).toEqual([
+      "question",
+      "options",
+      "multiSelect",
+    ]);
+    expect(tool.schema().input_schema).toHaveProperty(
+      "properties.questions.items.required",
+      ["question", "options", "multiSelect"],
+    );
+    expect(tool.schema().input_schema).toHaveProperty(
+      "properties.questions.items.additionalProperties",
+      false,
+    );
     expect(
       (
         await tool.execute(toolContext, {
-          questions: [q({ header: "1234567890123" })],
+          questions: [{ ...q(), unknownField: "unsupported" }],
         })
       ).isError,
     ).toBe(true);
