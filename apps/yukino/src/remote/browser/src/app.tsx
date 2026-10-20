@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ActivityPanel } from "./components/activity-panel";
-import { CodeReviewDialog } from "./components/code-review-dialog";
-import { InputArea } from "./components/input-area";
-import { MessageList } from "./components/message-list";
-import { ModelPicker } from "./components/model-picker";
-import { PlanApprovalDialog } from "./components/plan-approval-dialog";
-import { ProviderDialog } from "./components/provider-dialog";
-import { RewindDialog } from "./components/rewind-dialog";
-import { SessionPicker } from "./components/session-picker";
-import { StatusBar } from "./components/status-bar";
-import { ThinkingPicker } from "./components/thinking-picker";
-import { TodoProgress } from "./components/todo-progress";
-import { useChat } from "./hooks/use-chat";
-import { useTheme } from "./hooks/use-theme";
-import { useWebSocket } from "./hooks/use-web-socket";
+import { ActivityPanel } from "#/components/activity-panel.js";
+import { CodeReviewDialog } from "#/components/code-review-dialog.js";
+import { InputArea } from "#/components/input-area.js";
+import { MessageList } from "#/components/message-list.js";
+import { ModelPicker } from "#/components/model-picker.js";
+import { PlanApprovalDialog } from "#/components/plan-approval-dialog.js";
+import { ProviderDialog } from "#/components/provider-dialog.js";
+import { RewindDialog } from "#/components/rewind-dialog.js";
+import { SessionPicker } from "#/components/session-picker.js";
+import { StatusBar } from "#/components/status-bar.js";
+import { ThinkingPicker } from "#/components/thinking-picker.js";
+import { TodoProgress } from "#/components/todo-progress.js";
+import { useChat } from "#/hooks/use-chat.js";
+import { useTheme } from "#/hooks/use-theme.js";
+import { useWebSocket } from "#/hooks/use-web-socket.js";
 import type {
   ClientMessage,
   CodeReviewStartPayload,
@@ -23,7 +23,7 @@ import type {
   PlanChoice,
   ProviderSavePayload,
   RewindChoice,
-} from "./types";
+} from "#/types.js";
 
 const MODE_CYCLE: Exclude<PermissionModeChoice, "plan">[] = [
   "default",

@@ -1,6 +1,5 @@
-import type { PermissionAction } from "./permission-dialog.js";
-
 import type { PermissionRequestHandler } from "@/tools/types.js";
+import type { PermissionAction } from "@/ui/permission-dialog.js";
 import { formatToolArgs } from "@/utils/index.js";
 
 export interface PermissionRequest {

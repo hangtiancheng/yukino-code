@@ -11,7 +11,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import WebSocket from "ws";
 
-const START_TIMEOUT_MS = 10_000;
+import { START_TIMEOUT_MS } from "@/vscode/constants.js";
 
 export class WebSocketTransport implements Transport {
   private ws: WebSocket | null = null;

@@ -2,13 +2,13 @@ import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import { SelectorFrame } from "./selector-frame.js";
-import { THEME } from "./styles.js";
-import { truncateToWidth } from "./terminal-text.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
-
 import { attachmentSizePreview } from "@/feedback/collect.js";
 import type { AttachmentKind, FeedbackOptions } from "@/feedback/types.js";
+import { THEME } from "@/ui/constants.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { truncateToWidth } from "@/ui/terminal-text.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
+
 
 interface Props {
   cwd: string;

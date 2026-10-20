@@ -13,9 +13,9 @@ import sliceAnsi from "slice-ansi";
 import stringWidth from "string-width";
 import supportsHyperlinks from "supports-hyperlinks";
 
-import { THEME } from "./styles.js";
-import { highlightCode } from "./syntax-highlight.js";
-import { fitTableToWidth, renderTable } from "./table-layout.js";
+import { THEME } from "@/ui/constants.js";
+import { highlightCode } from "@/ui/syntax-highlight.js";
+import { fitTableToWidth, renderTable } from "@/ui/table-layout.js";
 
 type StyleFn = (...text: string[]) => string;
 

@@ -1,6 +1,7 @@
-import { renderMarkdownBlock, tokenizeMarkdown } from "@browser/lib/markdown";
 import type { Token } from "marked";
 import { memo, useEffect, useMemo, useState } from "react";
+
+import { renderMarkdownBlock, tokenizeMarkdown } from "#/lib/markdown.js";
 
 export const Markdown = memo(function Markdown({
   text,

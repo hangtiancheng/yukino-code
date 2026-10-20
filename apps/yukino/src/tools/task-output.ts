@@ -1,8 +1,13 @@
 import z from "zod";
 
-import type { Tool, ToolContext, ToolResult, ToolSchema } from "./types.js";
-
 import type { TaskManager } from "@/subagent/task-manager.js";
+import { TASK_OUTPUT_DESCRIPTION } from "@/tools/prompts.js";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
 
 const Args = z
@@ -15,8 +20,7 @@ const Args = z
 
 export class TaskOutputTool implements Tool {
   name = "TaskOutput";
-  description =
-    "Inspect a background Agent/Bash/PowerShell task by its task_id, or wait once for at most timeout_ms (maximum 60000). This does not consume completion notifications or cancel timed-out tasks. Prefer automatic task notifications over repeated polling. TaskCreate IDs belong to the separate TODO list and cannot be used here.";
+  description = TASK_OUTPUT_DESCRIPTION;
   category = "read" as const;
   constructor(private manager?: TaskManager) {}
   schema(): ToolSchema {

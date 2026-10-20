@@ -1,4 +1,4 @@
-import { Markdown } from "./markdown";
+import { Markdown } from "#/components/markdown.js";
 
 interface SystemMessageProps {
   content: string;

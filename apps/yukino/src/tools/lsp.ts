@@ -4,10 +4,26 @@ import { pathToFileURL } from "node:url";
 
 import z from "zod";
 
-import type { Tool, ToolContext, ToolResult, ToolSchema } from "./types.js";
-
 import { LspClient } from "@/lsp/client.js";
 import type { LspServerConfig } from "@/lsp/config.js";
+import {
+  LSP_DISPOSED_ERROR,
+  LSP_DOCUMENT_TOO_LARGE_ERROR,
+  LSP_FILE_TOO_LARGE_ERROR,
+  LSP_INTERRUPTED_ERROR,
+  LSP_POSITION_OUT_OF_RANGE_ERROR,
+  LSP_SERVER_EXITED_ERROR,
+  MAX_CACHED_DIAGNOSTIC_BYTES,
+  MAX_CACHED_DOCUMENT_BYTES,
+  MAX_CACHED_DOCUMENTS,
+} from "@/tools/constants.js";
+import { LSP_DESCRIPTION } from "@/tools/prompts.js";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, isRecord } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -67,13 +83,6 @@ interface Session {
   queue: Promise<void>;
 }
 
-// Bound how much opened-document text a session retains. Without eviction the
-// documents Map (and the language server's own copy) grows for every file ever
-// queried over a long session.
-const MAX_CACHED_DOCUMENTS = 40;
-const MAX_CACHED_DOCUMENT_BYTES = 8 * 1024 * 1024;
-const MAX_CACHED_DIAGNOSTIC_BYTES = 2 * 1024 * 1024;
-
 // Evict least-recently-used documents until both the count and byte budgets are
 // met. The Map's insertion order is the recency order (refreshed on access), so
 // the front is the LRU candidate. protectUri is the document currently being
@@ -121,7 +130,7 @@ function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   signal.throwIfAborted();
   return new Promise((resolvePromise, reject) => {
     const abort = () => {
-      reject(new Error("LSP operation interrupted"));
+      reject(new Error(LSP_INTERRUPTED_ERROR));
     };
     signal.addEventListener("abort", abort, { once: true });
     promise
@@ -135,8 +144,7 @@ function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 
 export class LspTool implements Tool {
   name = "LSP";
-  description =
-    "Query a configured language server for definitions, references, hover, symbols, implementations, type definitions, call hierarchy, or diagnostics. file_path resolves against the current working directory; line and character are 1-based UTF-16 positions. Returned ranges use the LSP standard (0-based UTF-16) and file URIs. This tool cannot edit files or run arbitrary commands. Servers must be explicitly configured in lsp_servers; no automatic installation.";
+  description = LSP_DESCRIPTION;
   category = "read" as const;
   private sessions = new Map<string, Promise<Session>>();
   private disposed = false;
@@ -163,7 +171,7 @@ export class LspTool implements Tool {
 
   private session(config: LspServerConfig, cwd: string): Promise<Session> {
     if (this.disposed) {
-      throw new Error("LSP tool is disposed");
+      throw new Error(LSP_DISPOSED_ERROR);
     }
     const key = JSON.stringify([cwd, config.name]);
     let promise = this.sessions.get(key);
@@ -250,11 +258,11 @@ export class LspTool implements Tool {
   ): Promise<unknown> {
     signal?.throwIfAborted();
     if (session.client.isClosed) {
-      throw new Error("LSP server exited; retry to start a fresh server");
+      throw new Error(LSP_SERVER_EXITED_ERROR);
     }
     const info = await stat(filePath);
     if (!info.isFile() || info.size > MAX_CACHED_DOCUMENT_BYTES) {
-      throw new Error("LSP requires a regular file no larger than 8MB");
+      throw new Error(LSP_DOCUMENT_TOO_LARGE_ERROR);
     }
     const text = await readFile(filePath, { encoding: "utf8", signal });
     const uri = pathToFileURL(filePath).href;
@@ -297,7 +305,7 @@ export class LspTool implements Tool {
         position.line >= lines.length ||
         position.character > (lines[position.line]?.length ?? 0)
       ) {
-        throw new Error("LSP position is outside the document");
+        throw new Error(LSP_POSITION_OUT_OF_RANGE_ERROR);
       }
     }
     if (args.operation === "workspaceSymbol") {
@@ -347,7 +355,7 @@ export class LspTool implements Tool {
           }
         };
         const abort = () => {
-          finish(new Error("LSP operation interrupted"));
+          finish(new Error(LSP_INTERRUPTED_ERROR));
         };
         const timer = setTimeout(
           () => {
@@ -431,7 +439,7 @@ export class LspTool implements Tool {
       }
       const info = await stat(filePath);
       if (!info.isFile() || info.size > 10 * 1024 * 1024) {
-        throw new Error("LSP requires a regular file no larger than 10MB");
+        throw new Error(LSP_FILE_TOO_LARGE_ERROR);
       }
       const key = JSON.stringify([cwd, config.name]);
       const activeSession = this.session(config, cwd);

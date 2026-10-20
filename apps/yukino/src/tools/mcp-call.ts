@@ -29,21 +29,23 @@
  * model than a local type error.
  */
 
-import type { ToolRegistry } from "./registry.js";
+import { MCP_NAME_SEP, MCP_TOOL_PREFIX } from "@/mcp/constants.js";
+import { buildMcpToolName, sanitizeSegment } from "@/mcp/tool-wrapper.js";
+import {
+  INTEGER_PATTERN,
+  MCP_CALL_ARGUMENTS_REQUIRED,
+  MCP_CALL_TOOL_REQUIRED,
+  NUMBER_PATTERN,
+} from "@/tools/constants.js";
+import { MCP_CALL_DESCRIPTION } from "@/tools/prompts.js";
+import type { ToolRegistry } from "@/tools/registry.js";
 import type {
   MCPToolLike,
   Tool,
   ToolContext,
   ToolResult,
   ToolSchema,
-} from "./types.js";
-
-import {
-  MCP_NAME_SEP,
-  MCP_TOOL_PREFIX,
-  buildMcpToolName,
-  sanitizeSegment,
-} from "@/mcp/tool-wrapper.js";
+} from "@/tools/types.js";
 import { asRecord, strArg } from "@/utils/index.js";
 
 function coerceScalar(value: unknown, want: string): unknown {
@@ -65,10 +67,7 @@ function coerceScalar(value: unknown, want: string): unknown {
     // Only accept when the whole string is numeric; "5abc" is left untouched.
     // integer further requires no fractional part, and "5.7" is not truncated —
     // it's passed through as-is so the MCP server reports its own domain error
-    const shape =
-      want === "integer"
-        ? /^[+-]?\d+$/
-        : /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+    const shape = want === "integer" ? INTEGER_PATTERN : NUMBER_PATTERN;
     if (!shape.test(text)) {
       return value;
     }
@@ -197,10 +196,7 @@ export function isMcpToolLike(tool: Tool): tool is MCPToolLike {
 
 export class McpCallTool implements Tool {
   name = "McpCall";
-  description =
-    "Invoke a tool on a connected MCP server. Call ToolSearch first to load the " +
-    "tool's schema, then pass its arguments here exactly as that schema requires, " +
-    "using the same JSON types.";
+  description = MCP_CALL_DESCRIPTION;
   category = "command" as const;
   // This tool must stay in tools[] itself, otherwise the model has no entry point
   deferred = false;
@@ -284,7 +280,7 @@ export class McpCallTool implements Tool {
     const server = strArg(args, "server", "");
     const tool = strArg(args, "tool", "");
     if (tool === "") {
-      return { output: "McpCall requires a 'tool' name", isError: true };
+      return { output: MCP_CALL_TOOL_REQUIRED, isError: true };
     }
 
     const target = this.resolveTarget(args);
@@ -303,8 +299,7 @@ export class McpCallTool implements Tool {
       Array.isArray(args.arguments)
     ) {
       return {
-        output:
-          "McpCall requires an 'arguments' object matching the target schema",
+        output: MCP_CALL_ARGUMENTS_REQUIRED,
         isError: true,
       };
     }

@@ -1,2 +1,2 @@
-export * as Config from "./config.js";
-export * as Client from "./client.js";
+export * as Config from "@/lsp/config.js";
+export * as Client from "@/lsp/client.js";

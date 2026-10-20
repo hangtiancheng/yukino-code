@@ -1,15 +1,24 @@
 import { execFile, spawn } from "node:child_process";
 import { statSync } from "node:fs";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
+import { TaskFailure, type TaskManager } from "@/subagent/task-manager.js";
+import {
+  BACKGROUND_NOTIFICATION_BYTES,
+  COMMAND_INTERRUPTED_ERROR,
+  COMMAND_REQUIRED_ERROR,
+  KILL_GRACE_MS,
+  MAX_SHELL_OUTPUT_FILE_BYTES,
+  MAX_TIMEOUT,
+  SIZE_WATCHDOG_INTERVAL_MS,
+  TIMEOUT_INVALID_ERROR,
+} from "@/tools/constants.js";
+import { withCommandExecution } from "@/tools/execution-coordinator.js";
 import {
   POWERSHELL_BACKGROUND_DESCRIPTION,
   POWERSHELL_DESCRIPTION,
-} from "./descriptions.js";
-import { withCommandExecution } from "./execution-coordinator.js";
+} from "@/tools/prompts.js";
 import {
-  BACKGROUND_NOTIFICATION_BYTES,
-  MAX_SHELL_OUTPUT_FILE_BYTES,
-  SIZE_WATCHDOG_INTERVAL_MS,
   backgroundMessage,
   backgroundTaskName,
   buildShellResult,
@@ -19,17 +28,14 @@ import {
   type BackgroundReason,
   type CommandHandle,
   type ShellExit,
-} from "./shell-background.js";
+} from "@/tools/shell-background.js";
 import {
   type Tool,
   type ToolCategory,
   type ToolContext,
   type ToolResult,
   type ToolSchema,
-} from "./types.js";
-
-import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
-import { TaskFailure, type TaskManager } from "@/subagent/task-manager.js";
+} from "@/tools/types.js";
 import {
   asErrorString,
   asRecord,
@@ -37,10 +43,6 @@ import {
   intArg,
   strArg,
 } from "@/utils/index.js";
-
-const MAX_TIMEOUT = 600;
-// Grace period between the graceful kill and the forced-kill escalation.
-const KILL_GRACE_MS = 3000;
 
 export class PowerShellTool implements Tool {
   // Use a hardcoded string instead of PowerShellTool.name.replace("Tool", "")
@@ -141,7 +143,7 @@ export class PowerShellTool implements Tool {
     const command = strArg(args, "command");
     if (!command) {
       return {
-        output: "Error: command is required",
+        output: COMMAND_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -149,7 +151,7 @@ export class PowerShellTool implements Tool {
     let timeout = intArg(args, "timeout", 120);
     if (!Number.isFinite(timeout) || timeout <= 0) {
       return {
-        output: "Error: timeout must be a finite number greater than 0 seconds",
+        output: TIMEOUT_INVALID_ERROR,
         isError: true,
       };
     }
@@ -186,7 +188,7 @@ export class PowerShellTool implements Tool {
       discardFd(outputFile.fd);
       unlinkQuiet(outputFile.path);
       return {
-        output: "Error: command interrupted",
+        output: COMMAND_INTERRUPTED_ERROR,
         isError: true,
       };
     }

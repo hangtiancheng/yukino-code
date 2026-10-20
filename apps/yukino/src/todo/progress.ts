@@ -1,4 +1,4 @@
-import type { Task } from "./index.js";
+import type { Task } from "@/todo/index.js";
 
 export function taskProgress(tasks: readonly Task[]): {
   completed: number;

@@ -1,15 +1,7 @@
 import type { AgentCard, AgentInterface } from "@a2a-js/sdk";
 
+import { DESCRIPTION, SKILL_DESCRIPTION } from "@/a2a/prompts.js";
 import { version } from "@/version.js";
-
-const DESCRIPTION =
-  "Yukino is a terminal-based AI coding agent. It reads, edits, and creates " +
-  "files, runs shell commands, and drives multi-step coding tasks from " +
-  "natural language instructions.";
-
-const SKILL_DESCRIPTION =
-  "Executes software engineering tasks: answering questions about a codebase, " +
-  "writing and refactoring code, running commands, and fixing bugs.";
 
 /**
  * Builds the agent card for the given base URL. Both the JSON-RPC endpoint

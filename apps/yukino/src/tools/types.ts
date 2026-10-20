@@ -1,12 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
 
-import type { FileStateCache } from "./file-state-cache.js";
 
 import type { FileHistory } from "@/file-history/index.js";
 import type { GoalManager } from "@/goal/index.js";
 import type { Decision, PermissionChecker } from "@/permissions/index.js";
 import type { TaskManager } from "@/subagent/task-manager.js";
+import { IMAGE_MEDIA_TYPES } from "@/tools/constants.js";
+import type { FileStateCache } from "@/tools/file-state-cache.js";
 
 export type ToolCategory = "read" | "write" | "command";
 
@@ -32,13 +33,6 @@ type ImageMediaType = Extract<
   ImageToolResultBlock["source"],
   { type: "base64" }
 >["media_type"];
-
-const IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
 
 function isImageMediaType(value: string): value is ImageMediaType {
   return IMAGE_MEDIA_TYPES.has(value);
@@ -328,15 +322,3 @@ export interface Tool {
   execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult>;
   dispose?(): Promise<void>;
 }
-
-export const SKIP_DIRS = new Set([
-  ".agents",
-  ".git",
-  ".yukino",
-  ".next",
-  ".venv",
-  ".mypy_cache",
-  "__pycache__",
-  "dist",
-  "node_modules",
-]);

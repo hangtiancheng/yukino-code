@@ -4,8 +4,11 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 import { z, parse } from "zod";
 
-import type { Command } from "./commands.js";
-
+import type { Command } from "@/commands/commands.js";
+import {
+  COMMAND_FILE_EXTENSION,
+  PROMPTS_DIR_NAME,
+} from "@/commands/constants.js";
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath } from "@/storage/index.js";
 
@@ -22,7 +25,7 @@ function compareStrings(a: string, b: string): number {
 
 // Subdirectories namespace command names: sub/dir/foo.md → "sub:dir:foo".
 export function loadUserCommands(): Command[] {
-  const base = yukinoPath("prompts");
+  const base = yukinoPath(PROMPTS_DIR_NAME);
   if (!existsSync(base)) {
     return [];
   }
@@ -63,7 +66,7 @@ function walkDir(base: string, dir: string): LoadedCommand[] {
     }
     if (st.isDirectory()) {
       out.push(...walkDir(base, full));
-    } else if (entry.endsWith(".md")) {
+    } else if (entry.endsWith(COMMAND_FILE_EXTENSION)) {
       const cmd = parseCommandFile(base, full);
       if (cmd) {
         out.push({ command: cmd, sourcePath: full });

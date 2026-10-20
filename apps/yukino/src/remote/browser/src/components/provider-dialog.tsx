@@ -1,8 +1,8 @@
-import type { ProviderListPayload, ProviderSavePayload } from "@browser/types";
 import { useState } from "react";
 
-import { Modal, ModalHeader } from "./modal";
-import { PickerList } from "./picker-list";
+import { Modal, ModalHeader } from "#/components/modal.js";
+import { PickerList } from "#/components/picker-list.js";
+import type { ProviderListPayload, ProviderSavePayload } from "#/types.js";
 
 interface ProviderDialogProps {
   state: ProviderListPayload;

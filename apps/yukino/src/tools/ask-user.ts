@@ -1,12 +1,14 @@
 import { safeParseAsync, z } from "zod";
 
+import { QUESTION_COUNT_ERROR } from "@/tools/constants.js";
+import { ASK_USER_QUESTION_DESCRIPTION } from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
   ToolContext,
   ToolResult,
   ToolSchema,
-} from "./types.js";
+} from "@/tools/types.js";
 
 const QuestionOptionSchema = z.object({
   label: z.string(),
@@ -42,10 +44,7 @@ export class AskUserQuestionTool implements Tool {
   // Terser/esbuild may rename or mangle them, producing incorrect tool names at runtime.
   name = "AskUserQuestion";
 
-  description = `
-  Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 2 to 4 options; an "Other" option for custom input is added automatically.
-  Set multiSelect=true when the user may choose multiple options, or false for one mutually exclusive choice. Ask only for missing information that changes the task; do not re-request authorization already given.
-  `;
+  description = ASK_USER_QUESTION_DESCRIPTION;
 
   category: ToolCategory = "read";
   constructor(private ask: Asker) {}
@@ -136,7 +135,7 @@ export class AskUserQuestionTool implements Tool {
       questions.length < 1 ||
       questions.length > 4
     ) {
-      return { output: "Error: must have 1-4 questions", isError: true };
+      return { output: QUESTION_COUNT_ERROR, isError: true };
     }
 
     for (const q of questions) {

@@ -1,7 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { platform, arch } from "node:os";
 
-import type { Section, EnvironmentContext } from "./sections.js";
+import { createChildLogger } from "@/logger/index.js";
+import {
+  GIT_BRANCH_MAX_LENGTH,
+  GIT_PROBE_TIMEOUT_MS,
+} from "@/prompt/constants.js";
+import type { Section, EnvironmentContext } from "@/prompt/sections.js";
 import {
   identitySection,
   systemSection,
@@ -11,9 +16,8 @@ import {
   toneStyleSection,
   outputEfficiencySection,
   environmentSection,
-} from "./sections.js";
+} from "@/prompt/sections.js";
 
-import { createChildLogger } from "@/logger/index.js";
 const log = createChildLogger({ module: "prompt" });
 
 export class PromptBuilder {
@@ -52,12 +56,6 @@ export function detectEnvironment(cwd: string): EnvironmentContext {
 
   return env;
 }
-
-// Bounded, shell-free Git probe. A hanging git (networked worktree, lock) must
-// not stall prompt construction, so each call uses an argument array (no shell)
-// with a short timeout and degrades to "no git info" on any failure.
-const GIT_PROBE_TIMEOUT_MS = 1500;
-const GIT_BRANCH_MAX_LENGTH = 256;
 
 function gitProbe(args: string[], cwd: string): string | undefined {
   try {

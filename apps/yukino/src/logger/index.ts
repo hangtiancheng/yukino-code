@@ -16,11 +16,18 @@ import { join, dirname } from "node:path";
 
 import pino, { type Logger, type LoggerOptions } from "pino";
 
+import {
+  CAUSE_MAX_DEPTH,
+  LOG_LEVEL,
+  RESERVED_KEYS,
+} from "@/logger/constants.js";
 import { yukinoPath } from "@/storage/index.js";
 import {
   openPrivateFileSync as openSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
+
+export * from "@/logger/constants.js";
 
 /** Execution mode, written into the base field of every log entry. */
 type LoggerMode = "terminal" | "remote" | "teammate";
@@ -80,9 +87,6 @@ function flushDestination(dest: unknown): void {
     fn.call(dest);
   }
 }
-
-// Only warn level and above (warn, error, fatal) are recorded, by design.
-const LOG_LEVEL = "warn";
 
 /**
  * Initialize the root logger. Creates the log file, opens the fd, and builds
@@ -320,9 +324,6 @@ interface SerializedError {
   cause?: SerializedError | { message: string };
   [key: string]: unknown;
 }
-
-const CAUSE_MAX_DEPTH = 5;
-const RESERVED_KEYS = new Set(["name", "message", "stack", "cause"]);
 
 /** Recursively serialize an Error instance (including its cause chain). */
 function serializeErrorInstance(err: Error, depth: number): SerializedError {

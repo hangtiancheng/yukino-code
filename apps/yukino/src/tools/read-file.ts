@@ -1,17 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 
-import { READ_FILE_DESCRIPTION } from "./descriptions.js";
-import { utf8ByteLength } from "./shell-output.js";
-import {
-  type Tool,
-  type ToolCategory,
-  type ToolContext,
-  type ToolResult,
-  type ToolResultContentBlock,
-  type ToolSchema,
-} from "./types.js";
-
 import {
   isImagePath,
   loadImageAttachment,
@@ -22,15 +11,29 @@ import {
   isPrivateStatePath,
   protectPrivateFileSync,
 } from "@/storage/private.js";
+import {
+  DEFAULT_LIMIT,
+  FILE_PATH_REQUIRED_ERROR,
+  MAX_READ_BYTES,
+  MAX_READ_FILE_BYTES,
+  OFFSET_LIMIT_INVALID_ERROR,
+  OPERATION_INTERRUPTED_ERROR,
+} from "@/tools/constants.js";
+import { READ_FILE_DESCRIPTION } from "@/tools/prompts.js";
+import { utf8ByteLength } from "@/tools/shell-output.js";
+import {
+  type Tool,
+  type ToolCategory,
+  type ToolContext,
+  type ToolResult,
+  type ToolResultContentBlock,
+  type ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, isRecord } from "@/utils/index.js";
 import { intArg, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
-const DEFAULT_LIMIT = 2000;
-const MAX_READ_BYTES = 50 * 1024;
-// Whole-file read admission cap (memory bound; see the fileStat.size check).
-const MAX_READ_FILE_BYTES = 10 * 1024 * 1024;
 
 export class ReadFileTool implements Tool {
   // Use a hardcoded string instead of ReadFileTool.name.replace("Tool", "")
@@ -82,14 +85,14 @@ export class ReadFileTool implements Tool {
     const requestedPath = strArg(args, "file_path");
     if (!requestedPath) {
       return {
-        output: "Error: file_path is required",
+        output: FILE_PATH_REQUIRED_ERROR,
         isError: true,
       };
     }
 
     const filePath = resolveToolPath(ctx.cwd, requestedPath);
     if (ctx.abortSignal?.aborted) {
-      return { output: "Error: operation interrupted", isError: true };
+      return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
     }
     let fileStat: Awaited<ReturnType<typeof stat>>;
     try {
@@ -125,7 +128,7 @@ export class ReadFileTool implements Tool {
     } catch (error) {
       return {
         output: ctx.abortSignal?.aborted
-          ? "Error: operation interrupted"
+          ? OPERATION_INTERRUPTED_ERROR
           : `Error reading file: ${asErrorString(error)}`,
         isError: true,
       };
@@ -148,7 +151,7 @@ export class ReadFileTool implements Tool {
     const limit = intArg(args, "limit", DEFAULT_LIMIT);
     if (offset < 0 || limit < 1) {
       return {
-        output: "Error: offset must be >= 0 and limit must be >= 1",
+        output: OFFSET_LIMIT_INVALID_ERROR,
         isError: true,
       };
     }
@@ -204,7 +207,7 @@ export class ReadFileTool implements Tool {
         };
       }
       if (ctx.abortSignal?.aborted) {
-        return { output: "Error: operation interrupted", isError: true };
+        return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
       }
       ctx.fileStateCache?.record(filePath, fileStat.mtimeMs);
 
@@ -223,7 +226,7 @@ export class ReadFileTool implements Tool {
       log.error({ err }, "tool operation failed");
       return {
         output: ctx.abortSignal?.aborted
-          ? "Error: operation interrupted"
+          ? OPERATION_INTERRUPTED_ERROR
           : `Error reading file: ${asErrorString(err)}`,
         isError: true,
       };
@@ -246,7 +249,7 @@ export class ReadFileTool implements Tool {
         };
       }
       if (ctx.abortSignal?.aborted) {
-        return { output: "Error: operation interrupted", isError: true };
+        return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
       }
       ctx.fileStateCache?.record(filePath, mtimeMs);
       const imageBlock = {
@@ -266,7 +269,7 @@ export class ReadFileTool implements Tool {
       log.error({ err }, "image read failed");
       return {
         output: ctx.abortSignal?.aborted
-          ? "Error: operation interrupted"
+          ? OPERATION_INTERRUPTED_ERROR
           : `Error reading image ${basename(filePath)}: ${asErrorString(err)}`,
         isError: true,
       };

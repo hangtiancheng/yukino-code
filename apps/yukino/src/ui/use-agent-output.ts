@@ -6,12 +6,11 @@ import {
   type SetStateAction,
 } from "react";
 
-import type { ChatMessage, ToolSummaryItem } from "./chat.js";
-import { stableStreamingPrefix } from "./streaming-markdown.js";
-import type { ToolBlockInfo, ToolCardStatus } from "./tool-display.js";
-
 import type { AgentEvent } from "@/agent/events.js";
 import { toDisplayPreview } from "@/tool-result/index.js";
+import type { ChatMessage, ToolSummaryItem } from "@/ui/chat.js";
+import { stableStreamingPrefix } from "@/ui/streaming-markdown.js";
+import type { ToolBlockInfo, ToolCardStatus } from "@/ui/tool-display.js";
 import { formatToolArgs } from "@/utils/index.js";
 
 /**

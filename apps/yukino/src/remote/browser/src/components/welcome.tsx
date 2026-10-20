@@ -1,4 +1,4 @@
-import type { ConnectionStatus } from "@browser/types";
+import type { ConnectionStatus } from "#/types.js";
 
 export interface WelcomeInfo {
   session: string;

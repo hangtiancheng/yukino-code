@@ -1,4 +1,4 @@
-import type { ReviewItem } from "@browser/types";
+import type { ReviewItem } from "#/types.js";
 
 interface ReviewProgressProps {
   item: ReviewItem;

@@ -4,13 +4,15 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import type { FileMailMessage } from "@/teams/file-mailbox.js";
-import { TeamManager } from "@/teams/index.js";
 import {
   MSG_PLAN_APPROVAL_REQUEST,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
+} from "@/teams/constants.js";
+import type { FileMailMessage } from "@/teams/file-mailbox.js";
+import { TeamManager } from "@/teams/index.js";
+import {
   isShutdownRequest,
   newRequestId,
   planApprovalRequest,

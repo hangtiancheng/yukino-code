@@ -2,22 +2,30 @@ import { randomBytes } from "node:crypto";
 
 import z from "zod";
 
-import type { AgentDefinition } from "./definition.js";
-import { loadAgentDefinitions } from "./loader.js";
-import { TaskFailure, TaskManager } from "./task-manager.js";
-import {
-  cloneRegistryForTeammate,
-  filterToolsForAgent,
-  FORK_QUERY_SOURCE,
-} from "./tool-filter.js";
-
 import type { ConversationManager } from "@/conversation/index.js";
 import { createChildLogger, sanitizeNameSegment } from "@/logger/index.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { newSessionId } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
+import {
+  FORK_BOILERPLATE_TAG,
+  FORK_QUERY_SOURCE,
+  GENERAL_PURPOSE_AGENT_TYPE,
+} from "@/subagent/constants.js";
+import type { AgentDefinition } from "@/subagent/definition.js";
+import { loadAgentDefinitions } from "@/subagent/loader.js";
+import {
+  AGENT_TOOL_DESCRIPTION,
+  FORK_BOILERPLATE,
+} from "@/subagent/prompts.js";
+import { TaskFailure, TaskManager } from "@/subagent/task-manager.js";
+import {
+  cloneRegistryForTeammate,
+  filterToolsForAgent,
+} from "@/subagent/tool-filter.js";
+import { LEADER_NAME } from "@/teams/constants.js";
 import type { TeamManager, RunAgent } from "@/teams/index.js";
-import { isValidTeammateName, LEADER_NAME } from "@/teams/protocol.js";
+import { isValidTeammateName } from "@/teams/protocol.js";
 import {
   TeamTaskCreateTool,
   TeamTaskGetTool,
@@ -37,21 +45,11 @@ import { asErrorString, boolArg, strArg } from "@/utils/index.js";
 import { buildWorktreeNotice, createAgentWorktree } from "@/worktree/index.js";
 
 const log = createChildLogger({ module: "subagent" });
-/** Fallback target when subagent_type is omitted and fork is disabled */
-const GENERAL_PURPOSE_AGENT_TYPE = "general-purpose";
 
 /** Worktree directory name. Uses a random string instead of the task description — spaces and non-ASCII characters in descriptions cannot be used directly as branch names. */
 function newAgentSlug(): string {
   return `agent-a${randomBytes(4).toString("hex").slice(0, 7)}`;
 }
-
-// Leading marker for forked child Agents — used for nested fork detection
-const FORK_BOILERPLATE_TAG = "<fork_boilerplate>";
-// System instructions injected into forked child Agents
-const FORK_BOILERPLATE = `${FORK_BOILERPLATE_TAG}
-You are a forked Yukino worker, not the parent agent. The inherited conversation is background context; work only on the assignment that follows.
-Do not fork again or ask the user for confirmation. Respect current permissions and report blockers to the parent. Return a concise account of findings or changes, relevant paths, checks actually run, and remaining work.
-</fork_boilerplate>`;
 
 export interface TeammateRunOptions {
   agentName: string;
@@ -62,7 +60,7 @@ export interface TeammateRunOptions {
 
 export class AgentTool implements Tool {
   name = "Agent";
-  description = "Launch a subagent to handle complex, multi-step tasks.";
+  description = AGENT_TOOL_DESCRIPTION;
   category = "command" as const;
 
   isConcurrencySafe(): boolean {

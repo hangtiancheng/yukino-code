@@ -1,20 +1,20 @@
 import { useRef, type ComponentProps } from "react";
 
-import { AgentsDialog } from "./agents-dialog.js";
-import { AskUserDialog } from "./ask-user-dialog.js";
-import { CodeReviewDialog } from "./code-review-dialog.js";
-import { FeedbackDialog } from "./feedback-dialog.js";
-import type { InputDraft } from "./input-draft.js";
-import { InputBox } from "./input.js";
-import { IssueApprovalDialog } from "./issue-approval.js";
-import { ModelSelect } from "./model-select.js";
-import { PermissionDialog } from "./permission-dialog.js";
-import { PlanApprovalDialog } from "./plan-approval.js";
-import { ProviderLogin } from "./provider-login.js";
-import { ProviderSelect } from "./provider-select.js";
-import RewindDialog from "./rewind-dialog.js";
-import { SessionSelector } from "./session-selector.js";
-import { ThinkingSelect } from "./thinking-select.js";
+import { AgentsDialog } from "@/ui/agents-dialog.js";
+import { AskUserDialog } from "@/ui/ask-user-dialog.js";
+import { CodeReviewDialog } from "@/ui/code-review-dialog.js";
+import { FeedbackDialog } from "@/ui/feedback-dialog.js";
+import type { InputDraft } from "@/ui/input-draft.js";
+import { InputBox } from "@/ui/input.js";
+import { IssueApprovalDialog } from "@/ui/issue-approval.js";
+import { ModelSelect } from "@/ui/model-select.js";
+import { PermissionDialog } from "@/ui/permission-dialog.js";
+import { PlanApprovalDialog } from "@/ui/plan-approval.js";
+import { ProviderLogin } from "@/ui/provider-login.js";
+import { ProviderSelect } from "@/ui/provider-select.js";
+import RewindDialog from "@/ui/rewind-dialog.js";
+import { SessionSelector } from "@/ui/session-selector.js";
+import { ThinkingSelect } from "@/ui/thinking-select.js";
 
 interface Props {
   login?: ComponentProps<typeof ProviderLogin>;

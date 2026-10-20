@@ -13,34 +13,3 @@ export interface AgentDefinition {
   isolation?: "worktree";
   initialPrompt?: string;
 }
-
-export const FORK_AGENT: AgentDefinition = {
-  name: "fork",
-  description:
-    "Complete the assigned task using the inherited conversation context.",
-  maxTurns: 200,
-};
-
-export const BUILTIN_AGENTS: AgentDefinition[] = [
-  {
-    name: "general-purpose",
-    description:
-      "General-purpose agent for researching complex questions, exploring codebase, and executing multi-step tasks.",
-  },
-  {
-    name: "plan",
-    description:
-      "Investigate the existing architecture and propose a concrete implementation plan with relevant files, constraints, and verification steps. Read-only: do not create, edit, or delete files. Return unresolved questions to the parent agent.",
-    disallowedTools: ["EditFile", "WriteFile", "ExitPlanMode"],
-    permissionMode: "plan",
-    readOnly: true,
-  },
-  {
-    name: "explore",
-    description:
-      "Find code, trace relevant call paths, and report evidence with file paths and line numbers. Use Glob, Grep, ReadFile, and read-only shell commands. Do not modify files; return missing context or blockers to the parent agent.",
-    disallowedTools: ["EditFile", "WriteFile", "ExitPlanMode"],
-    permissionMode: "plan",
-    readOnly: true,
-  },
-];

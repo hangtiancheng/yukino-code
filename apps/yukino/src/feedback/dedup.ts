@@ -8,8 +8,7 @@ import {
   FiledIssueRecordSchema,
   type FiledIssueRecord,
   type IssueDraft,
-} from "./types.js";
-
+} from "@/feedback/types.js";
 import { sessionPath } from "@/storage/index.js";
 import {
   mkdirPrivateSync as mkdirSync,

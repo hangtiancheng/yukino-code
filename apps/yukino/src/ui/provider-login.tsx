@@ -2,20 +2,13 @@ import { Box, Text, useInput, usePaste } from "ink";
 import type { DOMElement } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { CursorText } from "./cursor-text.js";
-import { SelectorFrame } from "./selector-frame.js";
-import {
-  cursorWindow,
-  nextGraphemeBoundary,
-  previousGraphemeBoundary,
-  truncateToWidth,
-} from "./terminal-text.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
 
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,
   DEFAULT_THINKING_LEVEL,
+} from "@/config/constants.js";
+import {
   getSupportedThinkingLevels,
   getThinkingLevel,
   type ProviderConfig,
@@ -27,7 +20,16 @@ import {
   modelListUrl,
   type DiscoveredModel,
 } from "@/llm/model-discovery.js";
-import { THEME } from "@/ui/styles.js";
+import { THEME } from "@/ui/constants.js";
+import { CursorText } from "@/ui/cursor-text.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import {
+  cursorWindow,
+  nextGraphemeBoundary,
+  previousGraphemeBoundary,
+  truncateToWidth,
+} from "@/ui/terminal-text.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 
 const PROTOCOLS = ["anthropic", "openai", "openai-compat"] as const;
 const FIELD_KEYS = [

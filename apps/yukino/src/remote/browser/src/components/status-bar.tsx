@@ -1,5 +1,5 @@
-import { formatTokens } from "@browser/lib/format";
-import type { ConnectionStatus, UsagePayload } from "@browser/types";
+import { formatTokens } from "#/lib/format.js";
+import type { ConnectionStatus, UsagePayload } from "#/types.js";
 
 interface StatusBarProps {
   connection: ConnectionStatus;

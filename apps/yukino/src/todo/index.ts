@@ -1,16 +1,17 @@
+import { createChildLogger } from "@/logger/index.js";
 import {
   unresolvedTaskDependencies,
   validateTaskDependencies,
-} from "./dependencies.js";
-import type { StoredTaskStatus, TaskStore } from "./store.js";
+} from "@/todo/dependencies.js";
+import type { StoredTaskStatus, TaskStore } from "@/todo/store.js";
 
-import { createChildLogger } from "@/logger/index.js";
 
 // Submodule namespaces for library consumers (Todo.<Sub>.*).
-export * as Store from "./store.js";
-export * as Tools from "./tools.js";
-export * as Dependencies from "./dependencies.js";
-export * as Progress from "./progress.js";
+export * as Store from "@/todo/store.js";
+export * as Tools from "@/todo/tools.js";
+export * as Dependencies from "@/todo/dependencies.js";
+export * as Progress from "@/todo/progress.js";
+export * as Prompts from "@/todo/prompts.js";
 
 export interface Task {
   id: string;

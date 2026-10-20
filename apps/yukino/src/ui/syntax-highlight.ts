@@ -62,9 +62,9 @@ import yaml from "shiki/langs/yaml.mjs";
 import zig from "shiki/langs/zig.mjs";
 import type { LanguageRegistration } from "shiki/types";
 
-import { defaultSyntaxTheme } from "../theme/syntax.js";
-
-import { getThemeMode, THEME } from "./styles.js";
+import { defaultSyntaxTheme } from "@/theme/syntax.js";
+import { THEME} from "@/ui/constants.js"
+import { getThemeMode } from "@/ui/styles.js";
 
 const GRAMMAR_MODULES: LanguageRegistration[][] = [
   bash,

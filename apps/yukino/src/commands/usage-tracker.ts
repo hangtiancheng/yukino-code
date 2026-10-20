@@ -3,6 +3,7 @@ import { join, dirname } from "path";
 
 import { safeParse, z } from "zod";
 
+import { COMMAND_USAGE_FILE_NAME } from "@/commands/constants.js";
 import { createChildLogger } from "@/logger/index.js";
 import { getYukinoDir } from "@/storage/index.js";
 import {
@@ -27,7 +28,7 @@ export class CommandUsageTracker {
 
   constructor() {
     const dir = getYukinoDir();
-    this.filePath = join(dir, "command_usage.json");
+    this.filePath = join(dir, COMMAND_USAGE_FILE_NAME);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }

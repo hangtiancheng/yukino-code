@@ -19,27 +19,17 @@
  * cache hit rate from 99.4% to 9.5%, effectively recomputing the whole history.
  */
 
-import { MCP_TOOL_PREFIX } from "./tool-wrapper.js";
-
 import type { ProviderConfig } from "@/config/provider-config.js";
+import {
+  CHARS_PER_TOKEN,
+  DEFAULT_EAGER_THRESHOLD_PERCENT,
+  ENV_OVERRIDE,
+  MCP_TOOL_PREFIX,
+  OFFICIAL_HOSTS,
+} from "@/mcp/constants.js";
 import { isMcpToolLike } from "@/tools/mcp-call.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type { McpLoadingMode } from "@/tools/types.js";
-
-/** Below this share of the context window, skip deferral and load everything eagerly. */
-export const DEFAULT_EAGER_THRESHOLD_PERCENT = 10;
-
-/**
- * Estimation ratio used when real token counts are unavailable. MCP schemas are JSON
- * with high symbol density, so they have fewer characters per token than natural language.
- */
-export const CHARS_PER_TOKEN = 2.5;
-
-/** Beta header for official endpoints; defer_loading and tool_reference both require it. */
-export const NATIVE_TOOL_USE_BETA = "advanced-tool-use-2025-11-20";
-
-const OFFICIAL_HOSTS = new Set(["api.anthropic.com"]);
-const ENV_OVERRIDE = "YUKINO_MCP_LOADING";
 
 /**
  * An empty baseUrl means the SDK default address, i.e. the official one.

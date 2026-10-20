@@ -1,4 +1,4 @@
-export const REDACTED = "<redacted>";
+import { REDACTED } from "@/utils/constants.js";
 
 export function environmentSecrets(): string[] {
   return Object.entries(process.env).flatMap(([key, value]) =>

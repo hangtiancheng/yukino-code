@@ -14,18 +14,18 @@ import {
 } from "@a2a-js/sdk/server/express";
 import express from "express";
 
-import { buildAgentCard } from "./card.js";
+import { buildAgentCard } from "@/a2a/card.js";
+import {
+  A2A_DEFAULT_PORT,
+  DEFAULT_ADDRESS,
+  LOOPBACK_HOSTS,
+} from "@/a2a/constants.js";
 import {
   createA2aRuntime,
   YukinoA2aExecutor,
   type A2aRuntimeFactory,
-} from "./executor.js";
-
+} from "@/a2a/executor.js";
 import { parseRemoteAddress } from "@/remote/address.js";
-
-const A2A_DEFAULT_PORT = 18890;
-const DEFAULT_ADDRESS = `127.0.0.1:${String(A2A_DEFAULT_PORT)}`;
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 export interface A2aServerHandle {
   /** Base URL of the running server, e.g. `http://127.0.0.1:18890/`. */

@@ -7,11 +7,11 @@ import { expect, it, vi } from "vitest";
 
 import { TaskManager } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
+import type * as toolsConstants from "@/tools/constants.js";
 import { PowerShellTool } from "@/tools/powershell.js";
-import type * as shellBackground from "@/tools/shell-background.js";
 
-vi.mock("@/tools/shell-background.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof shellBackground>()),
+vi.mock("@/tools/constants.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof toolsConstants>()),
   MAX_SHELL_OUTPUT_FILE_BYTES: 1024,
 }));
 

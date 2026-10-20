@@ -3,8 +3,9 @@ import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
+import { THEME } from "@/ui/constants.js";
 import { renderInteractionSummary } from "@/ui/interaction-summary.js";
-import { setThemeMode, THEME } from "@/ui/styles.js";
+import { setThemeMode } from "@/ui/styles.js";
 import { visibleWidth } from "@/ui/terminal-text.js";
 
 const summary: InteractionSummary = {

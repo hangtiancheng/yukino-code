@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
 
+import { BWRAP_BINARY_NAME } from "@/sandbox/constants.js";
 import type {
   Sandbox,
   SandboxConfig,
   SandboxExecutionContext,
-} from "./index.js";
-
+} from "@/sandbox/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
 /**
@@ -22,7 +22,7 @@ export class BwrapSandbox implements Sandbox {
       return this.detected;
     }
     try {
-      execFileSync("which", ["bwrap"], { stdio: "ignore" });
+      execFileSync("which", [BWRAP_BINARY_NAME], { stdio: "ignore" });
       this.detected = true;
     } catch {
       this.detected = false;
@@ -66,6 +66,6 @@ export class BwrapSandbox implements Sandbox {
     // "--" ends option parsing; the command runs via bash inside the sandbox
     args.push("--", "bash", "-c", command);
 
-    return { executable: "bwrap", args };
+    return { executable: BWRAP_BINARY_NAME, args };
   }
 }

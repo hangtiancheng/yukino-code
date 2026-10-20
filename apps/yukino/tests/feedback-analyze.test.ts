@@ -3,11 +3,9 @@ import { z } from "zod";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
 import type { Message } from "@/conversation/index.js";
-import {
-  analyzeHarnessAnomalies,
-  buildAnalysisPrompt,
-} from "@/feedback/analyze.js";
+import { analyzeHarnessAnomalies } from "@/feedback/analyze.js";
 import type { AnalyzeInput } from "@/feedback/analyze.js";
+import { buildAnalysisPrompt } from "@/feedback/prompts.js";
 import { AnthropicClient } from "@/llm/anthropic.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";

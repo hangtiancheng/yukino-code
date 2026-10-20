@@ -4,10 +4,11 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 import z, { parse } from "zod";
 
-import { BUILTIN_AGENTS, type AgentDefinition } from "./definition.js";
-
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath } from "@/storage/index.js";
+import { BUILTIN_AGENTS } from "@/subagent/constants.js";
+import type { AgentDefinition } from "@/subagent/definition.js";
+
 
 const log = createChildLogger({ module: "subagent" });
 

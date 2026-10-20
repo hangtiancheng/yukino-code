@@ -4,19 +4,17 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { fileHistoryDir } from "@/file-history/index.js";
+import {
+  CLIPBOARD_TIMEOUT_MS,
+  MAX_CLIPBOARD_IMAGE_BYTES,
+  MAX_STDERR_BYTES,
+  NO_IMAGE_MESSAGE,
+  PNG_SIGNATURE,
+} from "@/images/constants.js";
 import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 
 export type SaveClipboardImageResult =
   { ok: true; value: string } | { ok: false; reason: string };
-
-const CLIPBOARD_TIMEOUT_MS = 5_000;
-const MAX_CLIPBOARD_IMAGE_BYTES = 32 * 1024 * 1024;
-const MAX_STDERR_BYTES = 16 * 1024;
-const NO_IMAGE_MESSAGE = "The clipboard does not contain an image.";
-
-const PNG_SIGNATURE = Buffer.from([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-]);
 
 export function isPngBuffer(bytes: Buffer): boolean {
   return (

@@ -2,6 +2,7 @@ import { existsSync, renameSync, rmSync } from "node:fs";
 
 import { parse, z } from "zod";
 
+import { FILENAME, MAX_HISTORY_ENTRIES } from "@/history/constants.js";
 import { createChildLogger } from "@/logger/index.js";
 import { getYukinoDir, yukinoPath } from "@/storage/index.js";
 import {
@@ -13,8 +14,7 @@ import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "history" });
 
-export const MAX_HISTORY_ENTRIES = 10_000;
-const FILENAME = "prompt_history.jsonl";
+export * from "@/history/constants.js";
 
 const JSONLSchema = z.looseObject({ text: z.string() });
 export function load(): string[] {

@@ -1,14 +1,13 @@
 import { Box, Text } from "ink";
 import React, { useRef } from "react";
 
-import { renderMarkdown, renderStreamingMarkdown } from "./markdown.js";
-import { expandTabs, plainTerminalLine } from "./terminal-text.js";
-import { ThinkingBlock } from "./thinking-block.js";
-import { ToolCard, type ToolCardStatus } from "./tool-display.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
-
 import { parseSkillPrompt } from "@/skills/executor.js";
-import { THEME } from "@/ui/styles.js";
+import { THEME } from "@/ui/constants.js";
+import { renderMarkdown, renderStreamingMarkdown } from "@/ui/markdown.js";
+import { expandTabs, plainTerminalLine } from "@/ui/terminal-text.js";
+import { ThinkingBlock } from "@/ui/thinking-block.js";
+import { ToolCard, type ToolCardStatus } from "@/ui/tool-display.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 import { plainTerminalText } from "@/utils/index.js";
 
 export interface ToolSummaryItem {

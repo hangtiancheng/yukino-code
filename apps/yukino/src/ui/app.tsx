@@ -4,43 +4,6 @@ import { tmpdir } from "node:os";
 import { Box, Text, useApp } from "ink";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
-import { AgentActivity, type SubagentProgress } from "./agent-activity.js";
-import { AgentStatus } from "./agent-status.js";
-import { ChatView, type ChatMessage, type ToolSummaryItem } from "./chat.js";
-import { Footer } from "./footer.js";
-import { InteractionDock } from "./interaction-dock.js";
-import {
-  createInterruptHandlers,
-  isForegroundBusy,
-} from "./interrupt-scope.js";
-import type { IssueApprovalChoice } from "./issue-approval.js";
-import type { ModelPickerState } from "./model-select.js";
-import { PendingQueue } from "./pending-queue.js";
-import {
-  createPermissionRequestHandler,
-  type PermissionRequest,
-} from "./permission-request.js";
-import type { PlanChoice } from "./plan-approval.js";
-import { ProviderLogin } from "./provider-login.js";
-import { ProviderSelect } from "./provider-select.js";
-import type { RewindAction } from "./rewind-dialog.js";
-import { TerminalLayout } from "./terminal-layout.js";
-import { TodoProgress } from "./todo-progress.js";
-import { ToolBlock } from "./tool-display.js";
-import { Transcript } from "./transcript.js";
-import { UpdateNotice } from "./update-notice.js";
-import {
-  useAgentOutput,
-  type AgentCardDecoration,
-} from "./use-agent-output.js";
-import { useTaskProgress } from "./use-task-progress.js";
-import { useTerminalControls } from "./use-terminal-controls.js";
-import { useUpdateNotice } from "./use-update-notice.js";
-import {
-  useUserBash,
-  useUserBashHistory,
-  userBashCard,
-} from "./use-user-bash.js";
 
 import { Agent } from "@/agent/index.js";
 import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
@@ -59,6 +22,10 @@ import { loadUserCommands } from "@/commands/loader.js";
 import { CommandUsageTracker } from "@/commands/usage-tracker.js";
 import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_THINKING_LEVEL,
+} from "@/config/constants.js";
 import type {
   AppConfig,
   MCPServerConfig,
@@ -68,8 +35,6 @@ import type {
 import { loadConfig, withProjectMcpServers } from "@/config/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import {
-  DEFAULT_CONTEXT_WINDOW,
-  DEFAULT_THINKING_LEVEL,
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
@@ -133,24 +98,25 @@ import type { SkillHost, SkillForkHost } from "@/skills/index.js";
 import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/definition.js";
 import {
-  spawnSubagent,
+  BUILTIN_AGENTS,
+  FORK_AGENT,
   SUBAGENT_INTERRUPTED_MARKER,
-  type AgentEventSink,
-} from "@/subagent/spawn.js";
+} from "@/subagent/constants.js";
+import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
 import {
   TaskManager,
   formatAgentTaskNotification,
   type AgentTask,
 } from "@/subagent/task-manager.js";
+import { LEADER_NAME } from "@/teams/constants.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,
 } from "@/teams/coordinator.js";
 import type { RunAgent } from "@/teams/index.js";
 import { TeamManager } from "@/teams/index.js";
-import { LEADER_NAME, shutdownRequest } from "@/teams/protocol.js";
+import { shutdownRequest } from "@/teams/protocol.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
@@ -172,11 +138,49 @@ import {
 } from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
-import { activityStatusColor, THEME, thinkingLevelColor } from "@/ui/styles.js";
+import { AgentActivity, type SubagentProgress } from "@/ui/agent-activity.js";
+import { AgentStatus } from "@/ui/agent-status.js";
+import { ChatView, type ChatMessage, type ToolSummaryItem } from "@/ui/chat.js";
+import { THEME } from "@/ui/constants.js";
+import { Footer } from "@/ui/footer.js";
+import { InteractionDock } from "@/ui/interaction-dock.js";
+import {
+  createInterruptHandlers,
+  isForegroundBusy,
+} from "@/ui/interrupt-scope.js";
+import type { IssueApprovalChoice } from "@/ui/issue-approval.js";
+import type { ModelPickerState } from "@/ui/model-select.js";
+import { PendingQueue } from "@/ui/pending-queue.js";
+import {
+  createPermissionRequestHandler,
+  type PermissionRequest,
+} from "@/ui/permission-request.js";
+import type { PlanChoice } from "@/ui/plan-approval.js";
+import { ProviderLogin } from "@/ui/provider-login.js";
+import { ProviderSelect } from "@/ui/provider-select.js";
+import type { RewindAction } from "@/ui/rewind-dialog.js";
+import { activityStatusColor, thinkingLevelColor } from "@/ui/styles.js";
+import { TerminalLayout } from "@/ui/terminal-layout.js";
+import { TodoProgress } from "@/ui/todo-progress.js";
+import { ToolBlock } from "@/ui/tool-display.js";
+import { Transcript } from "@/ui/transcript.js";
+import { UpdateNotice } from "@/ui/update-notice.js";
+import {
+  useAgentOutput,
+  type AgentCardDecoration,
+} from "@/ui/use-agent-output.js";
 import { useFollowUpQueue } from "@/ui/use-follow-up-queue.js";
 import { useIdeInput } from "@/ui/use-ide-input.js";
 import { useNotificationWakeup } from "@/ui/use-notification-wakeup.js";
+import { useTaskProgress } from "@/ui/use-task-progress.js";
 import { useTeammateStates } from "@/ui/use-teammate-states.js";
+import { useTerminalControls } from "@/ui/use-terminal-controls.js";
+import { useUpdateNotice } from "@/ui/use-update-notice.js";
+import {
+  useUserBash,
+  useUserBashHistory,
+  userBashCard,
+} from "@/ui/use-user-bash.js";
 import {
   asErrorString,
   asRecord,

@@ -1,8 +1,5 @@
 import { existsSync } from "node:fs";
 
-import type { AgentDefinition } from "./definition.js";
-import { formatAgentTaskNotification, TaskManager } from "./task-manager.js";
-import { filterToolsForAgent } from "./tool-filter.js";
 
 import { Agent, type AgentConfig } from "@/agent/index.js";
 import {
@@ -16,23 +13,23 @@ import { createClient } from "@/llm/client.js";
 import { loadInstructions } from "@/memory/instructions.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
-import { buildSubagentInstructions } from "@/prompt/delegation.js";
+import { buildSubagentInstructions } from "@/prompt/prompts.js";
 import {
   messageToKeptRecord,
   newSessionId,
   saveTranscriptMessage,
 } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
+import { SUBAGENT_INTERRUPTED_MARKER } from "@/subagent/constants.js";
+import type { AgentDefinition } from "@/subagent/definition.js";
+import {
+  formatAgentTaskNotification,
+  TaskManager,
+} from "@/subagent/task-manager.js";
+import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import { asErrorString } from "@/utils/index.js";
-
-/**
- * Marker appended to a subagent's output when its run was interrupted. Shared
- * with the UI so restored transcripts can render interrupted Agent cards with
- * the same "stopped" styling as live ones.
- */
-export const SUBAGENT_INTERRUPTED_MARKER = "[Interrupted]";
 
 export type SubagentProgressEvent =
   | {

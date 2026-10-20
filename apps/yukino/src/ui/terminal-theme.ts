@@ -1,4 +1,4 @@
-import type { TerminalInput } from "./terminal-input.js";
+import type { TerminalInput } from "@/ui/terminal-input.js";
 
 export type TerminalTheme = "dark" | "light";
 

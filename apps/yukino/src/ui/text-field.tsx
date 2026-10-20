@@ -3,21 +3,21 @@ import type { DOMElement } from "ink";
 import { useMemo, useRef } from "react";
 import type { SetStateAction } from "react";
 
-import { CursorText } from "./cursor-text.js";
-import { useInputDraft } from "./input-draft.js";
-import type { InputDraft } from "./input-draft.js";
+import { THEME } from "@/ui/constants.js";
+import { CursorText } from "@/ui/cursor-text.js";
+import { useInputDraft } from "@/ui/input-draft.js";
+import type { InputDraft } from "@/ui/input-draft.js";
 import {
   layoutInputRows,
   locateInputCursor,
   moveInputVertically,
-} from "./input-navigation.js";
-import { inputBoundary } from "./input-paste.js";
-import { THEME } from "./styles.js";
-import { visibleWidth } from "./terminal-text.js";
+} from "@/ui/input-navigation.js";
+import { inputBoundary } from "@/ui/input-paste.js";
+import { visibleWidth } from "@/ui/terminal-text.js";
 import {
   useAvailableRows,
   useTerminalDimensions,
-} from "./use-terminal-layout.js";
+} from "@/ui/use-terminal-layout.js";
 
 interface TextFieldProps {
   /** Draft restored when the field mounts (e.g. re-entering "Other" mode). */

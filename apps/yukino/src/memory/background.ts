@@ -1,9 +1,9 @@
-import { MemoryConsolidator } from "./consolidation.js";
-import { MemoryExtractor } from "./extractor.js";
 
 import type { ConversationManager, Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
+import { MemoryConsolidator } from "@/memory/consolidation.js";
+import { MemoryExtractor } from "@/memory/extractor.js";
 import { contentToText } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "memory" });

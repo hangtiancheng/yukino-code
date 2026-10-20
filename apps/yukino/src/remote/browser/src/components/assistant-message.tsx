@@ -1,12 +1,7 @@
-import {
-  isOpenThinking,
-  splitThinking,
-  stripThinkOpen,
-} from "@browser/lib/format";
-
-import { Markdown } from "./markdown";
-import { StreamingCursor } from "./streaming-cursor";
-import { ThinkingBlock } from "./thinking-block";
+import { Markdown } from "#/components/markdown.js";
+import { StreamingCursor } from "#/components/streaming-cursor.js";
+import { ThinkingBlock } from "#/components/thinking-block.js";
+import { isOpenThinking, splitThinking, stripThinkOpen } from "#/lib/format.js";
 
 export function AssistantMessage({
   content,

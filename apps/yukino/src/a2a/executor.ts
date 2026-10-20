@@ -12,6 +12,11 @@ import type {
 } from "@a2a-js/sdk/server";
 
 import {
+  DEFAULT_IDLE_TIMEOUT_MS,
+  MAX_TRACKED_SESSIONS,
+  NO_ACTIVE_RUN,
+} from "@/a2a/constants.js";
+import {
   agentEventToMessage,
   agentMessage,
   dataPart,
@@ -23,8 +28,7 @@ import {
   type PermissionDecision,
   type PermissionRequestData,
   type PermissionResponseData,
-} from "./conversion.js";
-
+} from "@/a2a/conversion.js";
 import type { AgentEvent } from "@/agent/events.js";
 import {
   forkEnabled,
@@ -120,19 +124,6 @@ export async function createA2aRuntime(
     dispose: () => runtime.dispose(),
   };
 }
-
-/** Idle grace period before an agent runtime is disposed to reclaim resources. */
-export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-/**
- * Upper bound on tracked contextId sessions. Idle eviction releases a session's
- * runtime but keeps its contextId→sessionId entry so the transcript can be
- * restored; without a cap a long-running server seeing many distinct contextIds
- * would grow that map until dispose(). Overflow drops the least-recently-used
- * fully-idle entries after persisting their context mapping.
- */
-const MAX_TRACKED_SESSIONS = 256;
-
-const NO_ACTIVE_RUN = "No active run is awaiting a permission response.";
 
 interface Deferred {
   promise: Promise<void>;

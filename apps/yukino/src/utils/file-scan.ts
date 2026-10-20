@@ -5,7 +5,7 @@ import { readdirSync, lstatSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
-import { SKIP_DIRS } from "@/tools/types.js";
+import { SKIP_DIRS } from "@/tools/constants.js";
 
 const log = createChildLogger({ module: "file-scan" });
 

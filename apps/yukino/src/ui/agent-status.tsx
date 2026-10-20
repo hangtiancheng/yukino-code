@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 
-import { THEME } from "@/ui/styles.js";
+import { THEME } from "@/ui/constants.js";
 
 interface AgentStatusProps {
   teammates: number;

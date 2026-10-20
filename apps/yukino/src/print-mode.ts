@@ -1,54 +1,54 @@
-import type { AgentEvent } from "./agent/events.js";
-import { Agent } from "./agent/index.js";
-import { configureBashSandbox } from "./bootstrap/sandbox.js";
-import { createToolRegistry } from "./bootstrap/tool-registry.js";
-import { parse as parseCommand } from "./commands/commands.js";
+import type { AgentEvent } from "@/agent/events.js";
+import { Agent } from "@/agent/index.js";
+import { configureBashSandbox } from "@/bootstrap/sandbox.js";
+import { createToolRegistry } from "@/bootstrap/tool-registry.js";
+import { parse as parseCommand } from "@/commands/commands.js";
 import {
   forkEnabled,
   loadConfig,
   withProjectMcpServers,
-} from "./config/index.js";
+} from "@/config/index.js";
 import {
   getContextWindow,
   getMaxOutputTokens,
   resolveDefaultProvider,
-} from "./config/provider-config.js";
-import { ConversationManager } from "./conversation/index.js";
-import { GoalManager, handleGoalCommand } from "./goal/index.js";
-import { createClient } from "./llm/client.js";
-import { MCPManager } from "./mcp/manager.js";
-import { decideAndApply } from "./mcp/strategy.js";
-import { MCPToolWrapper } from "./mcp/tool-wrapper.js";
-import { loadInstructions } from "./memory/instructions.js";
-import { PermissionChecker } from "./permissions/index.js";
-import { buildSystemPrompt, detectEnvironment } from "./prompt/builder.js";
+} from "@/config/provider-config.js";
+import { ConversationManager } from "@/conversation/index.js";
+import { GoalManager, handleGoalCommand } from "@/goal/index.js";
+import { createClient } from "@/llm/client.js";
+import { MCPManager } from "@/mcp/manager.js";
+import { decideAndApply } from "@/mcp/strategy.js";
+import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
+import { loadInstructions } from "@/memory/instructions.js";
+import { PermissionChecker } from "@/permissions/index.js";
+import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
 import {
   newSessionId,
   saveMessage,
   messageToKeptRecord,
-} from "./session/index.js";
-import { AgentTool } from "./subagent/agent-tool.js";
-import { BUILTIN_AGENTS, FORK_AGENT } from "./subagent/definition.js";
-import { spawnSubagent } from "./subagent/spawn.js";
+} from "@/session/index.js";
+import { AgentTool } from "@/subagent/agent-tool.js";
+import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/constants.js";
+import { spawnSubagent } from "@/subagent/spawn.js";
 import {
   TaskManager,
   formatAgentTaskNotification,
-} from "./subagent/task-manager.js";
+} from "@/subagent/task-manager.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,
-} from "./teams/coordinator.js";
-import { TeamManager } from "./teams/index.js";
-import { TaskStopTool } from "./teams/task-stop.js";
+} from "@/teams/coordinator.js";
+import { TeamManager } from "@/teams/index.js";
+import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
   SendMessageTool,
   TeamDeleteTool,
-} from "./teams/tools.js";
-import { TaskList } from "./todo/index.js";
-import { FileStateCache } from "./tools/file-state-cache.js";
-import { attachBackgroundTaskManager } from "./tools/shell-background.js";
-import { SyntheticOutputTool } from "./tools/synthetic-output.js";
+} from "@/teams/tools.js";
+import { TaskList } from "@/todo/index.js";
+import { FileStateCache } from "@/tools/file-state-cache.js";
+import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
+import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
 
 export type OutputFormat = "text" | "stream-json";
 

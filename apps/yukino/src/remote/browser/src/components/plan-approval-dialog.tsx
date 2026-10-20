@@ -1,8 +1,8 @@
-import type { PlanApprovalPayload, PlanChoice } from "@browser/types";
 import { useState } from "react";
 
-import { Markdown } from "./markdown";
-import { Modal, ModalHeader } from "./modal";
+import { Markdown } from "#/components/markdown.js";
+import { Modal, ModalHeader } from "#/components/modal.js";
+import type { PlanApprovalPayload, PlanChoice } from "#/types.js";
 
 interface PlanApprovalDialogProps {
   request: PlanApprovalPayload;

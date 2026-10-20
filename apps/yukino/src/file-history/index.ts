@@ -11,6 +11,10 @@ import { dirname, join, resolve } from "path";
 
 import { safeParse, z } from "zod";
 
+import {
+  MAX_SNAPSHOTS,
+  MAX_SUMMARY_TEXT_LENGTH,
+} from "@/file-history/constants.js";
 import { createChildLogger } from "@/logger/index.js";
 import { sessionPath } from "@/storage/index.js";
 import {
@@ -20,10 +24,9 @@ import {
 } from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
-const log = createChildLogger({ module: "file-history" });
+export * from "@/file-history/constants.js";
 
-const MAX_SNAPSHOTS = 100;
-const MAX_SUMMARY_TEXT_LENGTH = 60;
+const log = createChildLogger({ module: "file-history" });
 
 export const BackupSchema = z.discriminatedUnion("state", [
   z.object({

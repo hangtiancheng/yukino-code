@@ -1,7 +1,5 @@
-import { NetworkError, RateLimitError, ServerError } from "./errors.js";
-
-const MAX_RETRIES = 3;
-const MAX_DELAY_MS = 60_000;
+import { MAX_DELAY_MS, MAX_RETRIES } from "@/llm/constants.js";
+import { NetworkError, RateLimitError, ServerError } from "@/llm/errors.js";
 
 function retryAfterDelay(header: string | undefined, fallback: number): number {
   const value = header?.trim();

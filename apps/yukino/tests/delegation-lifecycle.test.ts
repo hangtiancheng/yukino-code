@@ -32,9 +32,9 @@ import {
   cloneRegistryForTeammate,
   filterToolsForAgent,
 } from "@/subagent/tool-filter.js";
+import { MSG_PLAN_APPROVAL_REQUEST } from "@/teams/constants.js";
 import { FileMailbox } from "@/teams/file-mailbox.js";
 import { TeamManager } from "@/teams/index.js";
-import { MSG_PLAN_APPROVAL_REQUEST } from "@/teams/protocol.js";
 import { getNameRegistry } from "@/teams/registry.js";
 import { SharedTaskStore } from "@/teams/shared-task.js";
 import { readTeamFile } from "@/teams/team-file.js";

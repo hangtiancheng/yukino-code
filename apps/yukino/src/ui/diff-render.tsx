@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 
-import { THEME } from "@/ui/styles.js";
+import { THEME } from "@/ui/constants.js";
 
 /**
  * Renders the line-numbered diff text produced by buildDiff(), coloring each

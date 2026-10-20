@@ -1,0 +1,2 @@
+export const DEFAULT_EXPORT_INTERVAL_MS = 60_000;
+export const SHUTDOWN_TIMEOUT_MS = 2_000;

@@ -1,6 +1,28 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-import type { LLMClient, LLMOutputBudget, LLMStreamOptions } from "./client.js";
+
+import {
+  MIN_THINKING_ANSWER_TOKENS,
+  MIN_THINKING_BUDGET_TOKENS,
+} from "@/config/constants.js";
+import { resolveAPIKey } from "@/config/index.js";
+import {
+  clampThinkingLevel,
+  getMaxOutputTokens,
+  getSupportedThinkingLevels,
+  getThinkingLevel,
+  type ProviderConfig,
+  type ThinkingLevel,
+  thinkingBudgetForProvider,
+  toAnthropicThinkingEffort,
+} from "@/config/provider-config.js";
+import type { ConversationManager, Message } from "@/conversation/index.js";
+import { ensureToolPairing } from "@/conversation/pairing.js";
+import type {
+  LLMClient,
+  LLMOutputBudget,
+  LLMStreamOptions,
+} from "@/llm/client.js";
 import {
   AuthenticationError,
   containsContextLengthError,
@@ -9,29 +31,11 @@ import {
   NetworkError,
   RateLimitError,
   ServerError,
-} from "./errors.js";
-import { parseToolArguments, type StreamEvent } from "./events.js";
-
-import { resolveAPIKey } from "@/config/index.js";
-import {
-  clampThinkingLevel,
-  getMaxOutputTokens,
-  getSupportedThinkingLevels,
-  getThinkingLevel,
-  MIN_THINKING_ANSWER_TOKENS,
-  MIN_THINKING_BUDGET_TOKENS,
-  type ProviderConfig,
-  type ThinkingLevel,
-  thinkingBudgetForProvider,
-  toAnthropicThinkingEffort,
-} from "@/config/provider-config.js";
-import type { ConversationManager, Message } from "@/conversation/index.js";
-import { ensureToolPairing } from "@/conversation/pairing.js";
+} from "@/llm/errors.js";
+import { parseToolArguments, type StreamEvent } from "@/llm/events.js";
 import { createChildLogger } from "@/logger/index.js";
-import {
-  isOfficialAnthropicEndpoint,
-  NATIVE_TOOL_USE_BETA,
-} from "@/mcp/strategy.js";
+import { NATIVE_TOOL_USE_BETA } from "@/mcp/constants.js";
+import { isOfficialAnthropicEndpoint } from "@/mcp/strategy.js";
 import { normalizeToolResultContentBlock } from "@/tools/types.js";
 import type {
   AnthropicToolSchema,

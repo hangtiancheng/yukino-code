@@ -1,18 +1,21 @@
+import { createChildLogger } from "@/logger/index.js";
 import {
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
   MSG_TEXT,
-  shutdownRequest,
-  shutdownResponse,
-} from "./protocol.js";
-import { getNameRegistry } from "./registry.js";
-import { sanitizeTeamName } from "./team-file.js";
-
-import type { TeamManager, Team } from "./index.js";
-
-import { createChildLogger } from "@/logger/index.js";
+} from "@/teams/constants.js";
+import type { TeamManager, Team } from "@/teams/index.js";
+import {
+  LIST_TEAMS_TOOL_DESCRIPTION,
+  SEND_MESSAGE_TOOL_DESCRIPTION,
+  TEAM_CREATE_TOOL_DESCRIPTION,
+  TEAM_DELETE_TOOL_DESCRIPTION,
+} from "@/teams/prompts.js";
+import { shutdownRequest, shutdownResponse } from "@/teams/protocol.js";
+import { getNameRegistry } from "@/teams/registry.js";
+import { sanitizeTeamName } from "@/teams/team-file.js";
 import type {
   Tool,
   ToolContext,
@@ -24,8 +27,7 @@ import { asErrorString, strArg } from "@/utils/index.js";
 const log = createChildLogger({ module: "teams" });
 export class TeamCreateTool implements Tool {
   name = "TeamCreate";
-  description =
-    "Create a team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.";
+  description = TEAM_CREATE_TOOL_DESCRIPTION;
   category = "command" as const;
   constructor(private mgr: TeamManager) {}
   schema(): ToolSchema {
@@ -85,8 +87,7 @@ export class TeamCreateTool implements Tool {
 
 export class SendMessageTool implements Tool {
   name = "SendMessage";
-  description =
-    "Send a message to a teammate or to the leader mailbox. Use to='leader' for the coordinator and to='*' to broadcast to all teammates. In coordinator mode, only the leader can send plan_approval_response; copy request_id, set approve, and give review feedback in content.";
+  description = SEND_MESSAGE_TOOL_DESCRIPTION;
   category = "command" as const;
   constructor(
     private mgr: TeamManager,
@@ -288,7 +289,7 @@ export class SendMessageTool implements Tool {
 
 export class ListTeamsTool implements Tool {
   name = "ListTeams";
-  description = "List teams and their members.";
+  description = LIST_TEAMS_TOOL_DESCRIPTION;
   category = "read" as const;
   constructor(private mgr: TeamManager) {}
   schema(): ToolSchema {
@@ -328,7 +329,7 @@ export class ListTeamsTool implements Tool {
 
 export class TeamDeleteTool implements Tool {
   name = "TeamDelete";
-  description = "Delete a team and stop its members.";
+  description = TEAM_DELETE_TOOL_DESCRIPTION;
   category = "command" as const;
   constructor(private mgr: TeamManager) {}
   schema(): ToolSchema {

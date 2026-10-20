@@ -22,8 +22,8 @@ import type {
   TodoUpdatePayload,
   ToolItem,
   UsagePayload,
-} from "../types";
-import { toolKey } from "../types";
+} from "#/types.js";
+import { toolKey } from "#/types.js";
 
 /** Monotonic id generator for newly created chat items. */
 let idCounter = 0;

@@ -1,3 +1,5 @@
+import { COMPLEX_COMMANDS } from "@/permissions/constants.js";
+
 export interface ShellCommand {
   content: string;
   words: string[];
@@ -7,44 +9,6 @@ export interface ShellAnalysis {
   commands: ShellCommand[];
   complete: boolean;
 }
-
-const COMPLEX_COMMANDS = new Set([
-  "if",
-  "then",
-  "else",
-  "elif",
-  "fi",
-  "for",
-  "while",
-  "until",
-  "do",
-  "done",
-  "case",
-  "esac",
-  "function",
-  "select",
-  "coproc",
-  "!",
-  "time",
-  "eval",
-  "exec",
-  "source",
-  ".",
-  "command",
-  "builtin",
-  "env",
-  "sudo",
-  "bash",
-  "sh",
-  "zsh",
-  "dash",
-  "ksh",
-  "fish",
-  "pwsh",
-  "powershell",
-  "xargs",
-  "find",
-]);
 
 // Analyze literal simple commands and lists; expansion, redirection and control
 // syntax deliberately require a separate approval instead of prefix authority.

@@ -1,7 +1,5 @@
-import { LEADER_NAME } from "./protocol.js";
-
-import type { Team, TeamManager } from "./index.js";
-
+import { LEADER_NAME } from "@/teams/constants.js";
+import type { Team, TeamManager } from "@/teams/index.js";
 import type { Task, TaskBoard, TaskList, TaskUpdates } from "@/todo/index.js";
 import {
   TaskCreateTool,

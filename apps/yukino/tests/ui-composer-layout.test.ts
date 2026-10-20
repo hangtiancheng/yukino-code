@@ -12,12 +12,12 @@ import type { MockInstance } from "vitest";
 
 import type { Command } from "@/commands/commands.js";
 import { saveClipboardImage } from "@/images/clipboard.js";
+import { ICONS, THEME } from "@/ui/constants.js";
 import { Footer } from "@/ui/footer.js";
 import { InputBox } from "@/ui/input.js";
 import type { InputDraft } from "@/ui/input.js";
 import { InteractionDock } from "@/ui/interaction-dock.js";
 import { StatusBorder } from "@/ui/status-border.js";
-import { ICONS, THEME } from "@/ui/styles.js";
 import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
 
 const terminal = vi.hoisted(() => {

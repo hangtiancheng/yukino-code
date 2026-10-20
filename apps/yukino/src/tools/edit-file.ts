@@ -1,24 +1,27 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-import { EDIT_FILE_DESCRIPTION } from "./descriptions.js";
-import { buildEditDiff, type TextReplacement } from "./diff.js";
-import { describeEditMismatch } from "./edit-file-diagnostics.js";
-import { withWorkspaceMutation } from "./execution-coordinator.js";
-import { withFileMutationQueue } from "./file-mutation-queue.js";
-import {
-  type Tool,
-  type ToolCategory,
-  type ToolContext,
-  type ToolResult,
-  type ToolSchema,
-} from "./types.js";
-
 import { createChildLogger } from "@/logger/index.js";
 import {
   isPrivateStatePath,
   writePrivateFile,
   protectPrivateFileSync,
 } from "@/storage/private.js";
+import {
+  FILE_PATH_REQUIRED_ERROR,
+  OPERATION_INTERRUPTED_ERROR,
+} from "@/tools/constants.js";
+import { buildEditDiff, type TextReplacement } from "@/tools/diff.js";
+import { describeEditMismatch } from "@/tools/edit-file-diagnostics.js";
+import { withWorkspaceMutation } from "@/tools/execution-coordinator.js";
+import { withFileMutationQueue } from "@/tools/file-mutation-queue.js";
+import { EDIT_FILE_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  type Tool,
+  type ToolCategory,
+  type ToolContext,
+  type ToolResult,
+  type ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, boolArg, isRecord, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -191,7 +194,7 @@ export class EditFileTool implements Tool {
 
     if (!requestedPath) {
       return {
-        output: "Error: file_path is required",
+        output: FILE_PATH_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -226,7 +229,7 @@ export class EditFileTool implements Tool {
 
     return withFileMutationQueue(filePath, async () => {
       if (ctx.abortSignal?.aborted) {
-        return { output: "Error: operation interrupted", isError: true };
+        return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
       }
       if (ctx.fileStateCache) {
         const gate = ctx.fileStateCache.check(filePath);
@@ -248,7 +251,7 @@ export class EditFileTool implements Tool {
         log.error({ err }, "tool operation failed");
         return {
           output: ctx.abortSignal?.aborted
-            ? "Error: operation interrupted"
+            ? OPERATION_INTERRUPTED_ERROR
             : `Error reading file: ${asErrorString(err)}`,
           isError: true,
         };
@@ -261,7 +264,7 @@ export class EditFileTool implements Tool {
         return { output: `Error: ${asErrorString(err)}`, isError: true };
       }
       if (ctx.abortSignal?.aborted) {
-        return { output: "Error: operation interrupted", isError: true };
+        return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
       }
       if (ctx.fileStateCache) {
         const gate = ctx.fileStateCache.check(filePath);

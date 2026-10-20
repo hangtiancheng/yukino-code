@@ -1,13 +1,13 @@
 import { Box } from "ink";
 
+
+import type { AgentTask } from "@/subagent/task-manager.js";
+import { formatTokens, type TeammateUIState } from "@/teams/progress.js";
 import {
   ToolBlock,
   type ToolBlockInfo,
   type ToolCardStatus,
-} from "./tool-display.js";
-
-import type { AgentTask } from "@/subagent/task-manager.js";
-import { formatTokens, type TeammateUIState } from "@/teams/progress.js";
+} from "@/ui/tool-display.js";
 import { strArg } from "@/utils/index.js";
 
 export interface SubagentProgress {

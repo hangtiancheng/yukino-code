@@ -1,12 +1,17 @@
+import { createChildLogger } from "@/logger/index.js";
+import {
+  SLUG_INVALID_ERROR,
+  SLUG_REQUIRED_ERROR,
+  WORKTREE_SLUG_PATTERN,
+} from "@/tools/constants.js";
+import { ENTER_WORKTREE_DESCRIPTION } from "@/tools/prompts.js";
 import {
   type Tool,
   type ToolCategory,
   type ToolContext,
   type ToolResult,
   type ToolSchema,
-} from "./types.js";
-
-import { createChildLogger } from "@/logger/index.js";
+} from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
 import { strArg } from "@/utils/index.js";
 import { createAgentWorktree } from "@/worktree/index.js";
@@ -19,11 +24,7 @@ export class EnterWorktreeTool implements Tool {
   // Terser/esbuild may rename or mangle them, producing incorrect tool names at runtime.
   name = "EnterWorktree";
 
-  description =
-    "Create a git worktree for isolated work and return its absolute path. " +
-    "The working directory is NOT changed: pass the returned path explicitly to " +
-    "later tools (Bash cd commands, ReadFile/WriteFile/EditFile paths) to operate " +
-    "inside the worktree.";
+  description = ENTER_WORKTREE_DESCRIPTION;
 
   category: ToolCategory = "write";
 
@@ -54,15 +55,14 @@ export class EnterWorktreeTool implements Tool {
     const slug = strArg(args, "slug");
     if (!slug) {
       return Promise.resolve({
-        output: "Error: slug is required",
+        output: SLUG_REQUIRED_ERROR,
         isError: true,
       });
     }
 
-    if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+    if (!WORKTREE_SLUG_PATTERN.test(slug)) {
       return Promise.resolve({
-        output:
-          "Error: slug must contain only alphanumeric, hyphen, underscore",
+        output: SLUG_INVALID_ERROR,
         isError: true,
       });
     }

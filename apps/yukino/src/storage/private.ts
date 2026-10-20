@@ -15,18 +15,17 @@ import { open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
+import { PUBLIC_STATE_SEGMENTS, YUKINO_DIR_NAME } from "@/storage/constants.js";
 import { isPathWithin } from "@/utils/paths.js";
 
 export function isPrivateStatePath(path: string): boolean {
-  const root = join(homedir(), ".yukino");
+  const root = join(homedir(), YUKINO_DIR_NAME);
   const absolute = resolve(path);
   if (!isPathWithin(root, absolute)) {
     return false;
   }
   const first = relative(root, absolute).split(sep)[0];
-  return !["worktrees", "skills", "agents", "prompts", "AGENTS.md"].includes(
-    first,
-  );
+  return !PUBLIC_STATE_SEGMENTS.has(first);
 }
 
 export function mkdirPrivateSync(
@@ -34,7 +33,7 @@ export function mkdirPrivateSync(
   _options?: { recursive?: boolean },
 ): void {
   const absolute = resolve(path);
-  const root = join(homedir(), ".yukino");
+  const root = join(homedir(), YUKINO_DIR_NAME);
   if (!isPathWithin(root, absolute)) {
     mkdirSync(absolute, { recursive: true, mode: 0o700 });
     return;

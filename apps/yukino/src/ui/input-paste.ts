@@ -2,7 +2,7 @@ import {
   clampToGraphemeBoundary,
   nextGraphemeBoundary,
   previousGraphemeBoundary,
-} from "./terminal-text.js";
+} from "@/ui/terminal-text.js";
 
 export interface PasteStore {
   counter: number;

@@ -1,18 +1,18 @@
-import { useAutoScroll } from "@browser/hooks/use-auto-scroll";
-import type { ChatItem } from "@browser/types";
 import { memo } from "react";
 
-import { AskUserDialog } from "./ask-user-dialog";
-import { AssistantMessage } from "./assistant-message";
-import { DoneIndicator } from "./done-indicator";
-import { ErrorMessage } from "./error-message";
-import { PermissionDialog } from "./permission-dialog";
-import { ReviewProgress } from "./review-progress";
-import { SystemMessage } from "./system-message";
-import { ThinkingBlock } from "./thinking-block";
-import { ToolBlock } from "./tool-block";
-import { UserMessage } from "./user-message";
-import { Welcome, type WelcomeInfo } from "./welcome";
+import { AskUserDialog } from "#/components/ask-user-dialog.js";
+import { AssistantMessage } from "#/components/assistant-message.js";
+import { DoneIndicator } from "#/components/done-indicator.js";
+import { ErrorMessage } from "#/components/error-message.js";
+import { PermissionDialog } from "#/components/permission-dialog.js";
+import { ReviewProgress } from "#/components/review-progress.js";
+import { SystemMessage } from "#/components/system-message.js";
+import { ThinkingBlock } from "#/components/thinking-block.js";
+import { ToolBlock } from "#/components/tool-block.js";
+import { UserMessage } from "#/components/user-message.js";
+import { Welcome, type WelcomeInfo } from "#/components/welcome.js";
+import { useAutoScroll } from "#/hooks/use-auto-scroll.js";
+import type { ChatItem } from "#/types.js";
 
 interface MessageListProps {
   items: ChatItem[];

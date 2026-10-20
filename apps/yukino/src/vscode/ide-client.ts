@@ -8,11 +8,11 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { z } from "zod";
 
-import { detectIde } from "./lockfile.js";
-import { WebSocketTransport } from "./ws-transport.js";
-
 import { createChildLogger } from "@/logger/index.js";
 import { version } from "@/version.js";
+import { detectIde } from "@/vscode/lockfile.js";
+import { WebSocketTransport } from "@/vscode/ws-transport.js";
+
 
 const log = createChildLogger({ module: "vscode" });
 

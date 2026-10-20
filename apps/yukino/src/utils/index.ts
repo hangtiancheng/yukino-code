@@ -1,12 +1,15 @@
 import { stripVTControlCharacters } from "node:util";
 
 import { createChildLogger } from "@/logger/index.js";
+import { NUMERIC_LITERAL } from "@/utils/constants.js";
+
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
-export * as FileScan from "./file-scan.js";
-export * as Paths from "./paths.js";
-export * as PublicHttp from "./public-http.js";
-export * as Slug from "./slug.js";
+export * as FileScan from "@/utils/file-scan.js";
+export * as Paths from "@/utils/paths.js";
+export * as PublicHttp from "@/utils/public-http.js";
+export * as Slug from "@/utils/slug.js";
+export * from "@/utils/constants.js";
 
 const log = createChildLogger({ module: "utils" });
 
@@ -131,8 +134,6 @@ export function asError(err: unknown) {
   }
   return new Error(String(err));
 }
-
-const NUMERIC_LITERAL = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
 
 // One contract for both JSON numbers and numeric strings: the value must be a
 // finite, fully-parsed number, then it is truncated toward zero. Partial parses

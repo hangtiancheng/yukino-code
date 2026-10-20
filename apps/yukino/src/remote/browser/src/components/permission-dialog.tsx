@@ -1,4 +1,4 @@
-import type { PermissionItem, PermissionResponse } from "@browser/types";
+import type { PermissionItem, PermissionResponse } from "#/types.js";
 
 interface PermissionDialogProps {
   item: PermissionItem;

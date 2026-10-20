@@ -1,12 +1,12 @@
 import { Box, Text } from "ink";
 
-import { plainTerminalLine } from "./terminal-text.js";
+import { THEME } from "@/ui/constants.js";
+import { plainTerminalLine } from "@/ui/terminal-text.js";
 import {
   useAvailableRows,
   useTerminalDimensions,
-} from "./use-terminal-layout.js";
+} from "@/ui/use-terminal-layout.js";
 
-import { THEME } from "@/ui/styles.js";
 
 interface PendingQueueProps {
   messages: string[];

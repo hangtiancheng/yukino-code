@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  MAIN_AGENT_ONLY_TOOLS,
+  SUBAGENT_DISALLOWED_TOOLS,
+} from "@/subagent/constants.js";
+import {
   cloneRegistryForFork,
   cloneRegistryForTeammate,
   filterToolsForAgent,
-  MAIN_AGENT_ONLY_TOOLS,
-  SUBAGENT_DISALLOWED_TOOLS,
 } from "@/subagent/tool-filter.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool } from "@/tools/types.js";

@@ -1,8 +1,22 @@
 import { existsSync, rmSync } from "node:fs";
 
-import type { AgentEvent } from "./events.js";
-import { StreamingExecutor } from "./streaming-executor.js";
-
+import {
+  MAX_OUTPUT_CHARS,
+  MAX_TOKENS_CEILING,
+  MAX_TOKENS_RECOVERIES,
+} from "@/agent/constants.js";
+import type { AgentEvent } from "@/agent/events.js";
+import {
+  GOAL_BUDGET_LIMITED_NOTICE,
+  MAX_TOKENS_RECOVERY_PROMPT,
+  MAX_TOKENS_RESUME_PROMPT,
+  MAX_TOKENS_TRUNCATED_ARGS_NOTICE,
+  NEW_SKILLS_REMINDER_PREFIX,
+  NO_CALLABLE_TOOLS_REMINDER,
+  NO_DEFERRED_TOOLS_REMINDER,
+  NO_PERSISTENT_GOAL_REMINDER,
+} from "@/agent/prompts.js";
+import { StreamingExecutor } from "@/agent/streaming-executor.js";
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import {
   manageContext,
@@ -13,14 +27,14 @@ import { RecoveryState } from "@/compact/recovery.js";
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,
-} from "@/config/provider-config.js";
+} from "@/config/constants.js";
+import { REJECTED_TOOL_RESULT } from "@/conversation/constants.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import type {
   ToolUseBlock,
   ToolResultBlock,
   ThinkingBlock,
 } from "@/conversation/index.js";
-import { REJECTED_TOOL_RESULT } from "@/conversation/pairing.js";
 import type { FileHistory } from "@/file-history/index.js";
 import { GoalManager } from "@/goal/index.js";
 import type { HookEngine, EventName } from "@/hooks/index.js";
@@ -32,13 +46,15 @@ import type { RecallResult } from "@/memory/manager.js";
 import type { PermissionChecker } from "@/permissions/index.js";
 import { requestToolPermission } from "@/permissions/request.js";
 import { createPlanPath, getOrCreatePlanPath } from "@/plan-file/index.js";
+import {
+  DEFERRED_GUIDANCE_MARKER,
+  TOOL_GUIDANCE_MARKER,
+} from "@/prompt/constants.js";
 import { coordinatorReminder } from "@/prompt/coordinator.js";
 import { buildPlanModeReminder } from "@/prompt/plan-mode.js";
 import {
   buildDeferredToolGuidance,
   buildToolGuidance,
-  DEFERRED_GUIDANCE_MARKER,
-  TOOL_GUIDANCE_MARKER,
 } from "@/prompt/tools.js";
 import {
   saveTranscriptMessage,
@@ -71,25 +87,14 @@ import type { ToolRegistry } from "@/tools/registry.js";
 import type { PermissionRequestHandler, ToolResult } from "@/tools/types.js";
 import { asErrorString, asRecord, strArg } from "@/utils/index.js";
 
+export * from "@/agent/constants.js";
+export * from "@/agent/prompts.js";
+
 // Submodule namespaces for library consumers (Agent.<Sub>.*).
-export * as Events from "./events.js";
-export * as StreamingExecutor from "./streaming-executor.js";
+export * as Events from "@/agent/events.js";
+export * as StreamingExecutor from "@/agent/streaming-executor.js";
 
 type ToolResultEvent = Extract<AgentEvent, { type: "tool_result" }>;
-
-// When the model stops on max_tokens, escalate its output ceiling once toward
-// this value (capped at the context window), then attempt a bounded number of
-// multi-turn recoveries.
-const MAX_TOKENS_CEILING = 64000;
-const MAX_TOKENS_RECOVERIES = 3;
-// Per-result spill threshold before entering conversation history: once a
-// tool result's character count exceeds this value the full content is written
-// to disk (rather than truncated outright, to avoid losing critical
-// information) and only a preview plus the file path is retained in history.
-// Set to 50000 (rather than a smaller value) so the model can see enough
-// content in one pass without needing an extra ReadFile round-trip to view the
-// full result.
-const MAX_OUTPUT_CHARS = 50000;
 
 const anonymousArtifactSessions = new WeakMap<ConversationManager, string>();
 
@@ -423,7 +428,7 @@ export class Agent {
         const guidance =
           toolGuidance ||
           (this.conversation.hasReminderContaining(TOOL_GUIDANCE_MARKER)
-            ? `${TOOL_GUIDANCE_MARKER}\nNo tools are currently callable. Return findings or blockers without issuing tool calls.`
+            ? `${TOOL_GUIDANCE_MARKER}\n${NO_CALLABLE_TOOLS_REMINDER}`
             : "");
         if (guidance) {
           this.conversation.addSystemReminderIfChanged(
@@ -435,7 +440,7 @@ export class Agent {
         const goalReminder =
           this.goalManager?.reminder() ||
           (this.conversation.hasReminderContaining("<persistent-goal>")
-            ? "<persistent-goal>\nNo persistent goal is set. Follow the current user request.\n</persistent-goal>"
+            ? NO_PERSISTENT_GOAL_REMINDER
             : "");
         if (goalReminder) {
           this.conversation.addSystemReminderIfChanged(
@@ -491,7 +496,7 @@ export class Agent {
         const deferredReminder =
           deferredGuidance ||
           (this.conversation.hasReminderContaining(DEFERRED_GUIDANCE_MARKER)
-            ? `${DEFERRED_GUIDANCE_MARKER}\nNo deferred tools can currently be discovered and invoked. Do not use earlier deferred-tool lists.`
+            ? `${DEFERRED_GUIDANCE_MARKER}\n${NO_DEFERRED_TOOLS_REMINDER}`
             : "");
         if (deferredReminder) {
           this.conversation.addSystemReminderIfChanged(
@@ -520,7 +525,7 @@ export class Agent {
           const delta = this.skillDeltaFn();
           if (delta) {
             this.conversation.addSystemReminder(
-              "The following skills became available:\n" + delta,
+              NEW_SKILLS_REMINDER_PREFIX + delta,
             );
           }
         }
@@ -836,9 +841,7 @@ export class Agent {
                     lastUsage.cacheCreationInputTokens,
                   );
                 }
-                this.conversation.addUserMessage(
-                  "Output token limit hit. Resume directly from where you stopped. Do not apologize or repeat previous content. Pick up mid-thought if needed.",
-                );
+                this.conversation.addUserMessage(MAX_TOKENS_RESUME_PROMPT);
                 this.persistLastMessage();
               }
               // Nothing produced at all: replay as-is — a thinking-only turn
@@ -868,9 +871,7 @@ export class Agent {
                     lastUsage.cacheCreationInputTokens,
                   );
                 }
-                this.conversation.addUserMessage(
-                  "Output token limit hit. Resume directly from where you stopped. Break remaining work into smaller pieces.",
-                );
+                this.conversation.addUserMessage(MAX_TOKENS_RECOVERY_PROMPT);
                 this.persistLastMessage();
               }
               // Zero output: persisting an empty assistant turn (or stacking a
@@ -890,8 +891,7 @@ export class Agent {
 
           if (stopReason === "max_tokens") {
             for (const call of toolUses) {
-              call.parseError =
-                "The response hit the output token limit, so tool arguments may be truncated. Re-issue the call with complete arguments";
+              call.parseError = MAX_TOKENS_TRUNCATED_ARGS_NOTICE;
             }
           }
           if (
@@ -899,8 +899,7 @@ export class Agent {
             this.goalManager?.get()?.status === "budget_limited"
           ) {
             for (const call of toolUses) {
-              call.parseError =
-                "Goal token budget reached; no further tools will be executed. Report existing progress.";
+              call.parseError = GOAL_BUDGET_LIMITED_NOTICE;
             }
           }
 

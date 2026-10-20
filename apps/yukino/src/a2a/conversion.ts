@@ -11,10 +11,8 @@ import type {
 } from "@a2a-js/sdk";
 import { z } from "zod";
 
+import { MAX_TOOL_OUTPUT_LENGTH, YUKINO_DATA_KEY } from "@/a2a/constants.js";
 import type { AgentEvent } from "@/agent/events.js";
-
-/** Discriminator key inside structured data parts owned by yukino. */
-export const YUKINO_DATA_KEY = "yukino";
 
 export const PermissionRequestDataSchema = z.object({
   [YUKINO_DATA_KEY]: z.literal("permission-request"),
@@ -66,9 +64,6 @@ export type ToolResultData = z.infer<typeof ToolResultDataSchema>;
 
 export type YukinoData =
   PermissionRequestData | ThinkingData | ToolCallData | ToolResultData;
-
-/** Tool result outputs above this length are truncated in published events. */
-export const MAX_TOOL_OUTPUT_LENGTH = 8000;
 
 export function textPart(text: string): Part {
   return {

@@ -2,11 +2,10 @@ import chalk from "chalk";
 import { Marked } from "marked";
 import type { TokenizerExtension } from "marked";
 
-import { visibleWidth, wrapToLines } from "./terminal-text.js";
-
+import { THEME } from "@/ui/constants.js";
 import { markedTerminal } from "@/ui/marked-terminal.js";
-import { THEME } from "@/ui/styles.js";
 import { isLanguageSupported } from "@/ui/syntax-highlight.js";
+import { visibleWidth, wrapToLines } from "@/ui/terminal-text.js";
 import { plainTerminalText } from "@/utils/index.js";
 
 chalk.level = 3;

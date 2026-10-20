@@ -1,9 +1,10 @@
 import { join } from "node:path";
 
+import type { Message } from "@/conversation/index.js";
 import {
   analyzeHarnessAnomalies,
   descriptionFallbackDraft,
-} from "./analyze.js";
+} from "@/feedback/analyze.js";
 import {
   buildEnvironment,
   collectAttachments,
@@ -14,13 +15,14 @@ import {
   type CollectOutput,
   type EnvironmentSnapshot,
   type RuntimeInfo,
-} from "./collect.js";
+} from "@/feedback/collect.js";
+import { MAX_ANALYSIS_LOG_BYTES } from "@/feedback/constants.js";
 import {
   filterDuplicateDrafts,
   issueFingerprint,
   loadFiledIssues,
   recordFiledIssues,
-} from "./dedup.js";
+} from "@/feedback/dedup.js";
 import {
   buildIssueUrl,
   createGist,
@@ -29,17 +31,15 @@ import {
   detectChannel,
   fetchRepoLabels,
   openInBrowser,
-} from "./github.js";
-import { redactJsonLines, redactText } from "./redact.js";
+} from "@/feedback/github.js";
+import { redactJsonLines, redactText } from "@/feedback/redact.js";
 import type {
   FeedbackChannel,
   FeedbackOptions,
   IssueConfirmation,
   IssueDraft,
-} from "./types.js";
-import { writeZipArchive } from "./zip.js";
-
-import type { Message } from "@/conversation/index.js";
+} from "@/feedback/types.js";
+import { writeZipArchive } from "@/feedback/zip.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import {
@@ -52,7 +52,6 @@ import { mkdirPrivateSync as mkdirSync } from "@/storage/private.js";
 import { asErrorString } from "@/utils/index.js";
 import { version } from "@/version.js";
 
-const MAX_ANALYSIS_LOG_BYTES = 200 * 1024;
 const log = createChildLogger({ module: "feedback" });
 
 interface Attachments {

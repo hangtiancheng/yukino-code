@@ -2,20 +2,20 @@ import { Box, Text } from "ink";
 import type { DOMElement } from "ink";
 import type { ReactNode, RefObject } from "react";
 
-import { selectorChrome } from "./selector-layout.js";
-import { ContentViewport } from "./terminal-layout.js";
+import { THEME } from "@/ui/constants.js";
+import { selectorChrome } from "@/ui/selector-layout.js";
+import { ContentViewport } from "@/ui/terminal-layout.js";
 import {
   plainTerminalLine,
   truncateToWidth,
   visibleWidth,
-} from "./terminal-text.js";
+} from "@/ui/terminal-text.js";
 import {
   AvailableRows,
   useAvailableRows,
   useTerminalDimensions,
-} from "./use-terminal-layout.js";
+} from "@/ui/use-terminal-layout.js";
 
-import { THEME } from "@/ui/styles.js";
 
 function fitHint(hint: string, width: number): string {
   const full = plainTerminalLine(hint);

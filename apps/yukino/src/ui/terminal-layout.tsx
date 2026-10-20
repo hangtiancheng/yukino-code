@@ -3,12 +3,12 @@ import type { DOMElement } from "ink";
 import { useInsertionEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import { trackTerminalFrame } from "./terminal-output.js";
+import { trackTerminalFrame } from "@/ui/terminal-output.js";
 import {
   AvailableRows,
   useAvailableRows,
   useTerminalDimensions,
-} from "./use-terminal-layout.js";
+} from "@/ui/use-terminal-layout.js";
 
 interface ViewportProps {
   children: ReactNode;

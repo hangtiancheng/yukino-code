@@ -1,5 +1,5 @@
-import { useScrollFollow } from "@browser/hooks/use-scroll-follow";
-import type { SlashCommand } from "@browser/types";
+import { useScrollFollow } from "#/hooks/use-scroll-follow.js";
+import type { SlashCommand } from "#/types.js";
 
 interface SlashMenuProps {
   commands: SlashCommand[];

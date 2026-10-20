@@ -4,7 +4,6 @@ import { dirname } from "node:path";
 
 import z, { parse } from "zod";
 
-import { withFileSyncLock } from "./file-lock.js";
 
 import { createChildLogger } from "@/logger/index.js";
 import {
@@ -12,6 +11,7 @@ import {
   writePrivateFileSync as writeFileSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 import {
   unresolvedTaskDependencies,
   validateTaskDependencies,

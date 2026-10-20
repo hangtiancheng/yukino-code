@@ -1,7 +1,7 @@
-import type { SubagentProgress } from "./agent-tool-progress.js";
-import type { PermissionAction } from "./permission-dialog.js";
-
 import type { IssueConfirmation } from "@/feedback/types.js";
+import type { SubagentProgress } from "@/ui/agent-tool-progress.js";
+import type { PermissionAction } from "@/ui/permission-dialog.js";
+
 
 /**
  * Whether a single Ctrl+C / Esc has anything to interrupt. Only foreground

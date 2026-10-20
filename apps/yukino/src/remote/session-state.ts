@@ -1,8 +1,8 @@
-import type { RemoteAgentHandle } from "./server.js";
 
 import { RecoveryState } from "@/compact/recovery.js";
 import { FileHistory } from "@/file-history/index.js";
 import { GoalManager } from "@/goal/index.js";
+import type { RemoteAgentHandle } from "@/remote/server.js";
 import { rebuildFromSession } from "@/session/index.js";
 import type { SessionMessage } from "@/session/index.js";
 import { TaskStore } from "@/todo/store.js";

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { ConversationManager } from "@/conversation/index.js";
+import { MCP_INSTRUCTIONS_MARKER } from "@/mcp/constants.js";
 import {
-  MCP_INSTRUCTIONS_MARKER,
   syncMcpInstructions,
   type McpInstruction,
   type McpInstructionSource,

@@ -1,4 +1,4 @@
-import type { CodeReviewStartPayload } from "@browser/types";
+import type { CodeReviewStartPayload } from "#/types.js";
 
 /**
  * Browser port of the terminal CodeReviewFormSchema (src/code-review/form.ts):

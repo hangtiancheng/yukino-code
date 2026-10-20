@@ -2,6 +2,12 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 import {
+  MAX_AT_REFS,
+  MAX_INLINE_BYTES,
+  MAX_INLINE_TOTAL_BYTES,
+  MAX_RANGE_FILE_BYTES,
+} from "@/conversation/constants.js";
+import {
   isImagePath,
   MAX_IMAGES_PER_MESSAGE,
   loadImageAttachment,
@@ -9,11 +15,6 @@ import {
 import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "at-expand" });
-const MAX_INLINE_BYTES = 100_000;
-const MAX_INLINE_TOTAL_BYTES = 300_000;
-const MAX_AT_REFS = 32;
-// Files larger than this are never read, even for a narrow line range.
-const MAX_RANGE_FILE_BYTES = 10_000_000;
 
 // An @ref may carry a #L3 or #L3-10 suffix (inserted via the IDE integration).
 function parseRef(ref: string): {

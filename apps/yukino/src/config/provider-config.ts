@@ -9,27 +9,20 @@
 
 import { z } from "zod";
 
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  DEFAULT_THINKING_LEVEL,
+  MIN_THINKING_ANSWER_TOKENS,
+  MIN_THINKING_BUDGET_TOKENS,
+  THINKING_BUDGETS,
+  THINKING_LEVELS,
+} from "@/config/constants.js";
 import { yukinoPath } from "@/storage/index.js";
 
 export function globalConfigPath(): string {
   return yukinoPath("config.yaml");
 }
-
-/**
- * PI-equivalent thinking levels. `off` disables reasoning entirely; the rest
- * map to a provider-native effort string (openai / openai-compat, and
- * anthropic in adaptive mode) or a thinking token budget (anthropic in budget
- * mode).
- */
-export const THINKING_LEVELS = [
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-] as const;
 
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
@@ -89,31 +82,6 @@ export function resolveDefaultProvider(
 ): ProviderConfig {
   return providers[defaultProvider] ?? providers[0];
 }
-
-export const DEFAULT_THINKING_LEVEL: ThinkingLevel = "high";
-export const DEFAULT_CONTEXT_WINDOW = 1_000_000;
-/**
- * Fallback output-token ceiling used when `max_output_tokens` is unset (PI's
- * custom-model `maxTokens` default).
- */
-export const DEFAULT_MAX_OUTPUT_TOKENS = 128_000;
-
-/**
- * PI-equivalent thinking token budgets, used by the anthropic budget-based
- * thinking path. Must stay below DEFAULT_MAX_OUTPUT_TOKENS so the answer keeps
- * room after the thinking budget is reserved.
- */
-export const THINKING_BUDGETS: Record<Exclude<ThinkingLevel, "off">, number> = {
-  minimal: 1024,
-  low: 2048,
-  medium: 8192,
-  high: 16384,
-  xhigh: 32768,
-  max: 65536,
-};
-
-export const MIN_THINKING_BUDGET_TOKENS = 1024;
-export const MIN_THINKING_ANSWER_TOKENS = 1024;
 
 export function isValidThinkingLevel(value: string): value is ThinkingLevel {
   return THINKING_LEVELS.some((level) => level === value);

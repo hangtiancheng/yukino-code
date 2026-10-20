@@ -1,5 +1,6 @@
-import { useScrollFollow } from "@browser/hooks/use-scroll-follow";
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
+
+import { useScrollFollow } from "#/hooks/use-scroll-follow.js";
 
 interface PickerItem {
   id: string;

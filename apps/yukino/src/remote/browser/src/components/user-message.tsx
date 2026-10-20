@@ -1,4 +1,4 @@
-import { Markdown } from "./markdown";
+import { Markdown } from "#/components/markdown.js";
 
 export function UserMessage({ content }: { content: string }) {
   return (

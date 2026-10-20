@@ -1,17 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-import type { LLMClient, LLMOutputBudget, LLMStreamOptions } from "./client.js";
-import {
-  AuthenticationError,
-  containsContextLengthError,
-  ContextTooLongError,
-  LLMError,
-  NetworkError,
-  RateLimitError,
-  ServerError,
-} from "./errors.js";
-import { parseToolArguments, type StreamEvent } from "./events.js";
 
 import { resolveAPIKey } from "@/config/index.js";
 import {
@@ -31,6 +20,21 @@ import type {
   ToolUseBlock,
 } from "@/conversation/index.js";
 import { ensureToolPairing } from "@/conversation/pairing.js";
+import type {
+  LLMClient,
+  LLMOutputBudget,
+  LLMStreamOptions,
+} from "@/llm/client.js";
+import {
+  AuthenticationError,
+  containsContextLengthError,
+  ContextTooLongError,
+  LLMError,
+  NetworkError,
+  RateLimitError,
+  ServerError,
+} from "@/llm/errors.js";
+import { parseToolArguments, type StreamEvent } from "@/llm/events.js";
 import { createChildLogger } from "@/logger/index.js";
 import type { ProviderToolSchema } from "@/tools/types.js";
 import {

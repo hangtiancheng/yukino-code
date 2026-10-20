@@ -1,6 +1,6 @@
-import type { MCPClient, MCPTool } from "./client.js";
-
 import { createChildLogger } from "@/logger/index.js";
+import type { MCPClient, MCPTool } from "@/mcp/client.js";
+import { MCP_NAME_SEP, MCP_TOOL_PREFIX } from "@/mcp/constants.js";
 import type {
   MCPToolLike,
   ToolResult,
@@ -11,14 +11,6 @@ import type {
 import { asErrorString } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "mcp" });
-
-export const MCP_TOOL_PREFIX = "mcp__";
-/**
- * Separator between the server segment and the tool segment in a tool name. A double
- * underscore marks the boundary — server names and tool names may themselves contain
- * single underscores.
- */
-export const MCP_NAME_SEP = "__";
 
 /**
  * Replaces illegal characters with underscores so the composed tool name passes API validation.

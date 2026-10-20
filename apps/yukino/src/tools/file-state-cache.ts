@@ -2,6 +2,11 @@ import { statSync } from "fs";
 import { resolve } from "path";
 
 import { createChildLogger } from "@/logger/index.js";
+import {
+  FILE_DELETED_ERROR,
+  FILE_MODIFIED_ERROR,
+  FILE_NOT_READ_ERROR,
+} from "@/tools/constants.js";
 import { canonicalPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "file-state-cache" });
@@ -39,8 +44,7 @@ export class FileStateCache {
     if (mtimeMs === undefined) {
       return {
         ok: false,
-        error:
-          "Error: file has not been read yet, read it first before editing.",
+        error: FILE_NOT_READ_ERROR,
       };
     }
 
@@ -51,16 +55,14 @@ export class FileStateCache {
       log.error({ err }, "file state cache operation failed");
       return {
         ok: false,
-        error:
-          "Error: file was deleted or is no longer accessible; read it again before editing.",
+        error: FILE_DELETED_ERROR,
       };
     }
 
     if (currentModifiedTime !== mtimeMs) {
       return {
         ok: false,
-        error:
-          "Error: file has been modified since last read, read it again before editing.",
+        error: FILE_MODIFIED_ERROR,
       };
     }
     return { ok: true };

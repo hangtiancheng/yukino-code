@@ -5,9 +5,8 @@ import {
 } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-import type { LspServerConfig } from "./config.js";
-
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
+import type { LspServerConfig } from "@/lsp/config.js";
 import { asErrorString, isRecord } from "@/utils/index.js";
 
 interface PendingRequest {

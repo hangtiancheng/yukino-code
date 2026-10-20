@@ -20,6 +20,7 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 
+import { SESSION_ID_PATTERN } from "@/acp/constants.js";
 import {
   addUsage,
   agentEventToUpdate,
@@ -29,8 +30,7 @@ import {
   stopReason,
   toolKind,
   toolLocations,
-} from "./conversion.js";
-
+} from "@/acp/conversion.js";
 import type { AgentEvent } from "@/agent/events.js";
 import {
   forkEnabled,
@@ -50,8 +50,6 @@ import {
 } from "@/session/index.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 import { version } from "@/version.js";
-
-const SESSION_ID_PATTERN = /^[a-z0-9]+-[a-f0-9]{8}$/u;
 
 export interface AcpRuntime {
   sessionId: string;

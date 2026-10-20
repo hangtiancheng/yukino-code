@@ -1,12 +1,6 @@
 import { z } from "zod";
 
-export const ATTACHMENT_KINDS = [
-  "session",
-  "tools",
-  "file-history",
-  "log",
-  "env",
-] as const;
+import { ATTACHMENT_KINDS } from "@/feedback/constants.js";
 
 export const AttachmentKindSchema = z.enum(ATTACHMENT_KINDS);
 export type AttachmentKind = z.infer<typeof AttachmentKindSchema>;

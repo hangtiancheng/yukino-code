@@ -1,17 +1,14 @@
+import { createChildLogger } from "@/logger/index.js";
+import { MAX_RETAINED_FINISHED_TASKS } from "@/subagent/constants.js";
 import {
   BackgroundTaskStore,
   type StoredBackgroundTask,
-} from "./task-store.js";
-
-import { createChildLogger } from "@/logger/index.js";
+} from "@/subagent/task-store.js";
 import { asErrorString } from "@/utils/index.js";
 import { escapeXml } from "@/utils/xml.js";
 
 const log = createChildLogger({ module: "tasks" });
 
-// Finished tasks kept in memory (with their outputs) before the oldest are
-// evicted; see TaskManager.pruneCompleted.
-const MAX_RETAINED_FINISHED_TASKS = 200;
 let nextTaskId = 1;
 
 export type AgentTaskStatus = "running" | "completed" | "failed" | "cancelled";

@@ -12,33 +12,28 @@ import { join } from "node:path";
 
 import z from "zod";
 
-import { exitCodeHint } from "./exit-code-hints.js";
-import type { ToolRegistry } from "./registry.js";
-import { formatShellOutput, MAX_SHELL_OUTPUT_BYTES } from "./shell-output.js";
-import { TaskOutputTool } from "./task-output.js";
-import type { ToolResult } from "./types.js";
-
 import {
   mkdirPrivateSync as mkdirSync,
   openPrivateFileSync as openSync,
 } from "@/storage/private.js";
 import { TaskManager } from "@/subagent/task-manager.js";
+import { buildPersistedOutputPreview, spillDir } from "@/tool-result/index.js";
 import {
-  buildPersistedOutputPreview,
-  spillDir,
-  TOOL_RESULT_PREVIEW_CHARS,
-} from "@/tool-result/index.js";
+  BACKGROUNDABLE_TOOL_NAMES,
+  COMMAND_INTERRUPTED_ERROR,
+  MAX_SHELL_OUTPUT_BYTES,
+  SHELL_OUTPUT_PREVIEW_BYTES,
+} from "@/tools/constants.js";
+import { exitCodeHint } from "@/tools/exit-code-hints.js";
+import type { ToolRegistry } from "@/tools/registry.js";
+import { formatShellOutput } from "@/tools/shell-output.js";
+import { TaskOutputTool } from "@/tools/task-output.js";
+import type { ToolResult } from "@/tools/types.js";
+
 
 // Shared background-execution plumbing for the backgroundable tools (Bash,
 // PowerShell): the file-descriptor output mode, the size watchdog
 // constants, result/notification formatting, and the host wiring helpers.
-
-/** Notification body budget: larger outputs stay on disk and only a preview travels in the notification. */
-export const BACKGROUND_NOTIFICATION_BYTES = 30_000;
-const SHELL_OUTPUT_PREVIEW_BYTES = TOOL_RESULT_PREVIEW_CHARS;
-/** Disk cap for foreground and background commands, independent of display limits. */
-export const MAX_SHELL_OUTPUT_FILE_BYTES = 5 * 1024 * 1024 * 1024;
-export const SIZE_WATCHDOG_INTERVAL_MS = 500;
 
 export type BackgroundReason = "explicit" | "user" | "timeout";
 
@@ -236,7 +231,7 @@ export function formatFinalResult(
         ? formatShellOutput(prompt, command, merged, "", truncated)
         : "";
     const error = exit.aborted
-      ? "Error: command interrupted"
+      ? COMMAND_INTERRUPTED_ERROR
       : `Error: command timed out after ${String(timeout)}s`;
     return {
       output: captured ? `${captured}\n${error}` : error,
@@ -332,9 +327,6 @@ export type BackgroundableTool = z.infer<typeof BackgroundableToolShape>;
 const BackgroundableToolSchema = z.custom<BackgroundableTool>(
   (tool) => BackgroundableToolShape.safeParse(tool).success,
 );
-
-/** Tools that support background execution; Ctrl+B handling iterates this list. */
-export const BACKGROUNDABLE_TOOL_NAMES = ["Bash", "PowerShell"] as const;
 
 function asBackgroundable(tool: unknown): BackgroundableTool | null {
   const parsed = BackgroundableToolSchema.safeParse(tool);

@@ -1,8 +1,13 @@
+import { CONFIRMED_BLOCK_RE, PLAN_BLOCK_RE } from "@/review/constants.js";
+
 /**
  * Prompt templates for yukino's tool names (CodeComment / FileReadDiff /
  * ReadFile / Grep / Glob) and loop semantics (a turn without tool calls ends
  * the agent — no task_done tool).
  */
+
+export const UTIL_SYSTEM_PROMPT =
+  "You are a precise assistant. Follow the instructions exactly and output only what is requested.";
 
 export function renderTemplate(
   template: string,
@@ -265,14 +270,6 @@ export const NO_TOOL_USE_NUDGE =
   "\n\nIMPORTANT: Your previous response did not call any tools and reported no findings. " +
   "Do not reply with prose alone. Review every file in <review_files>, call `CodeComment` to report each confirmed issue, " +
   "use `FileReadDiff` / `ReadFile` / `Grep` / `Glob` when you need context, and end your turn only after every file has been covered.";
-
-// When an optional section has no content, drop its header + placeholder
-// together instead of leaving a dangling "### Review Plan" with nothing
-// under it.
-const PLAN_BLOCK_RE =
-  /^### [^\n]*Review Plan[^\n]*\n\{\{plan_guidance\}\}\n\n?/m;
-const CONFIRMED_BLOCK_RE =
-  /^### [^\n]*Confirmed Findings[^\n]*\n\{\{confirmed_comments\}\}\n\n?/m;
 
 export function stripEmptyPlanBlock(content: string): string {
   return content.replace(PLAN_BLOCK_RE, "");

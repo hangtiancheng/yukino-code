@@ -30,6 +30,17 @@ import * as v8 from "node:v8";
 
 import yaml from "js-yaml";
 
+import { globalConfigPath } from "@/config/provider-config.js";
+import {
+  COLLECT_ORDER,
+  GIT_TIMEOUT_MS,
+  MAX_BACKUP_FILE_BYTES,
+  MAX_CONFIG_FILE_BYTES,
+  MAX_FILE_BYTES,
+  MAX_TOTAL_BYTES,
+  MAX_TRACE_RESULT_CHARS,
+  PROXY_VAR_NAMES,
+} from "@/feedback/constants.js";
 import {
   isSensitiveKey,
   redactJsonLines,
@@ -37,10 +48,8 @@ import {
   redactText,
   redactUrl,
   secretValues,
-} from "./redact.js";
-import type { AttachmentKind, CollectedFile } from "./types.js";
-
-import { globalConfigPath } from "@/config/provider-config.js";
+} from "@/feedback/redact.js";
+import type { AttachmentKind, CollectedFile } from "@/feedback/types.js";
 import { fileHistoryDir } from "@/file-history/index.js";
 import { flushLogger, getLogFilePath } from "@/logger/index.js";
 import {
@@ -54,13 +63,6 @@ import { spillDir } from "@/tool-result/index.js";
 import { version } from "@/version.js";
 
 const execFileAsync = promisify(execFile);
-
-export const MAX_FILE_BYTES = 5 * 1024 * 1024;
-export const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
-const MAX_BACKUP_FILE_BYTES = 1024 * 1024;
-const MAX_TRACE_RESULT_CHARS = 100_000;
-const MAX_CONFIG_FILE_BYTES = 256 * 1024;
-const GIT_TIMEOUT_MS = 3_000;
 
 /** Live process/session state handed in by the UI layer. */
 export interface RuntimeInfo {
@@ -470,17 +472,6 @@ export interface EnvironmentSnapshot {
   git: Record<string, unknown> | null;
 }
 
-const PROXY_VAR_NAMES = [
-  "HTTP_PROXY",
-  "HTTPS_PROXY",
-  "ALL_PROXY",
-  "NO_PROXY",
-  "http_proxy",
-  "https_proxy",
-  "all_proxy",
-  "no_proxy",
-];
-
 function envValue(name: string): string | null {
   return process.env[name] ?? null;
 }
@@ -734,15 +725,6 @@ export function summarizeEnvironment(
     git: env.git,
   };
 }
-
-// env and log first: they are small and the most failure-relevant context.
-const COLLECT_ORDER: AttachmentKind[] = [
-  "env",
-  "log",
-  "session",
-  "tools",
-  "file-history",
-];
 
 export async function collectAttachments(
   input: CollectInput,

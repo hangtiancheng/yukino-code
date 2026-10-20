@@ -1,18 +1,19 @@
 import chalk from "chalk";
 import { Box, Text } from "ink";
 
+
+import type { ThinkingLevel } from "@/config/provider-config.js";
+import { THEME } from "@/ui/constants.js";
+import { thinkingLevelColor } from "@/ui/styles.js";
 import {
   plainTerminalLine,
   truncateToWidth,
   visibleWidth,
-} from "./terminal-text.js";
+} from "@/ui/terminal-text.js";
 import {
   useAvailableRows,
   useTerminalDimensions,
-} from "./use-terminal-layout.js";
-
-import type { ThinkingLevel } from "@/config/provider-config.js";
-import { THEME, thinkingLevelColor } from "@/ui/styles.js";
+} from "@/ui/use-terminal-layout.js";
 import { compactPath } from "@/utils/paths.js";
 
 interface FooterProps {

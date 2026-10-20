@@ -8,12 +8,12 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DiscoveredModel } from "@/llm/model-discovery.js";
+import { ICONS } from "@/ui/constants.js"
 import {
   ModelSelect,
   OTHER_LABEL,
   type ModelPickerState,
 } from "@/ui/model-select.js";
-import { ICONS } from "@/ui/styles.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),

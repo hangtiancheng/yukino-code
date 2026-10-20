@@ -50,3 +50,6 @@ export function buildCompactionSummaryMessage(
       : "")
   );
 }
+
+export const PTL_RETRY_MARKER =
+  "[earlier conversation truncated for compaction retry]";

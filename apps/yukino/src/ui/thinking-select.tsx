@@ -2,20 +2,19 @@ import { Box, Text, measureElement, useBoxMetrics, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { getListWindowStart } from "./list-window.js";
-import { SelectorFrame } from "./selector-frame.js";
-import { selectorChrome } from "./selector-layout.js";
-import { truncateToWidth, visibleWidth } from "./terminal-text.js";
+import { THINKING_LEVELS } from "@/config/constants.js";
+import { type ThinkingLevel } from "@/config/provider-config.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { getListWindowStart } from "@/ui/list-window.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { selectorChrome } from "@/ui/selector-layout.js";
+import { thinkingLevelColor } from "@/ui/styles.js";
+import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
 import {
   useAvailableRows,
   useTerminalDimensions,
-} from "./use-terminal-layout.js";
+} from "@/ui/use-terminal-layout.js";
 
-import {
-  THINKING_LEVELS,
-  type ThinkingLevel,
-} from "@/config/provider-config.js";
-import { ICONS, THEME, thinkingLevelColor } from "@/ui/styles.js";
 
 interface ThinkingSelectProps {
   currentLevel: ThinkingLevel;

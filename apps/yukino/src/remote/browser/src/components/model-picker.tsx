@@ -1,7 +1,6 @@
-import type { ModelListPayload } from "@browser/types";
-
-import { Modal, ModalHeader } from "./modal";
-import { PickerList } from "./picker-list";
+import { Modal, ModalHeader } from "#/components/modal.js";
+import { PickerList } from "#/components/picker-list.js";
+import type { ModelListPayload } from "#/types.js";
 
 interface ModelPickerProps {
   state: ModelListPayload;

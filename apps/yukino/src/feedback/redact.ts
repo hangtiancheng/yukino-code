@@ -1,18 +1,8 @@
 import { z } from "zod";
 
-import {
-  REDACTED,
-  redactCredentials,
-  environmentSecrets,
-} from "@/utils/redact.js";
-
-export { REDACTED } from "@/utils/redact.js";
-
-// Key names whose values must never leave the machine. camelCase is normalized
-// to snake_case before matching so "apiKey" and "API_KEY" behave alike.
-const SENSITIVE_KEY =
-  /(?:^|[-_])(api[-_]?key|secret|token|password|passwd|credential|authorization|cookie|private[-_]?key)(?:$|[-_])/i;
-
+import { SENSITIVE_KEY, TEXT_PATTERNS } from "@/feedback/constants.js";
+import { REDACTED } from "@/utils/constants.js";
+import { redactCredentials, environmentSecrets } from "@/utils/redact.js";
 const UnknownArraySchema = z.array(z.unknown());
 const UnknownRecordSchema = z.record(z.string(), z.unknown());
 
@@ -48,17 +38,6 @@ export function redactUrl(value: string): string {
     return value;
   }
 }
-
-// Ordered: specific prefixes first so the generic sk- pattern cannot shadow them.
-const TEXT_PATTERNS: { pattern: RegExp; replacement: string }[] = [
-  { pattern: /\bsk-ant-[A-Za-z0-9_-]{10,}/g, replacement: REDACTED },
-  { pattern: /\bsk-[A-Za-z0-9_-]{20,}/g, replacement: REDACTED },
-  { pattern: /\bAKIA[A-Z0-9]{16}\b/g, replacement: REDACTED },
-  { pattern: /\bAIza[A-Za-z0-9_-]{35}\b/g, replacement: REDACTED },
-  { pattern: /\bgh[a-z]_[A-Za-z0-9_]{30,}/g, replacement: REDACTED },
-  { pattern: /\bgithub_pat_[A-Za-z0-9_]{20,}/g, replacement: REDACTED },
-  { pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g, replacement: REDACTED },
-];
 
 /** Regex-based redaction for free text (transcripts, logs, issue bodies). */
 export function redactText(

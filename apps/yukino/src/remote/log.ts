@@ -5,15 +5,14 @@
 // usage, permission requests) are intentionally not logged.
 
 import type { AgentEvent } from "@/agent/events.js";
+import { TEXT_PREVIEW_CHARS } from "@/remote/constants.js";
+
 
 /** Minimal pino Logger shape (warn/error) to keep this module generic. */
 export interface EventLogger {
   warn(obj: Record<string, unknown>): void;
   error(obj: Record<string, unknown>): void;
 }
-
-/** Max characters of tool output kept in a log line. */
-const TEXT_PREVIEW_CHARS = 800;
 
 function preview(text: string): string {
   if (text.length <= TEXT_PREVIEW_CHARS) {

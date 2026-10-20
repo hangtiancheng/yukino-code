@@ -1,6 +1,5 @@
-// @ts-check
-
 import { copyFileSync } from "node:fs";
+
 import { defineConfig } from "tsup";
 
 export default defineConfig((options) => ({
@@ -16,6 +15,7 @@ export default defineConfig((options) => ({
   sourcemap: !!options.watch,
   env: { NODE_ENV: options.watch ? "development" : "production" },
   onSuccess: async () => {
+    await Promise.resolve();
     copyFileSync("index.html", "dist/index.html");
   },
 }));

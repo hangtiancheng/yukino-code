@@ -5,37 +5,41 @@ import { Worker } from "node:worker_threads";
 
 import { Minimatch } from "minimatch";
 
-import { GREP_DESCRIPTION } from "./descriptions.js";
-import { SearchOutput } from "./search-output.js";
-import { takeUtf8Prefix } from "./shell-output.js";
-import {
-  SKIP_DIRS,
-  type Tool,
-  type ToolCategory,
-  type ToolContext,
-  type ToolResult,
-  type ToolSchema,
-} from "./types.js";
-
 import { createChildLogger } from "@/logger/index.js";
 import {
   isPrivateStatePath,
   protectPrivateFileSync,
 } from "@/storage/private.js";
+import {
+  BINARY_SNIFF_BYTES,
+  DEFAULT_MAX_TRAVERSED_ENTRIES,
+  DEFAULT_MAX_TRAVERSAL_DEPTH,
+  GREP_PATTERN_TIMEOUT_ERROR,
+  IN_CLASS,
+  MATCH_MAX_TIMEOUT_MS,
+  MATCH_MIN_TIMEOUT_MS,
+  MAX_GREP_FILE_BYTES,
+  MAX_MATCH_LINE_BYTES,
+  MAX_RESULTS,
+  OPERATION_INTERRUPTED_ERROR,
+  PATTERN_REQUIRED_ERROR,
+  SKIP_DIRS,
+  TOP_LEVEL,
+} from "@/tools/constants.js";
+import { GREP_DESCRIPTION } from "@/tools/prompts.js";
+import { SearchOutput } from "@/tools/search-output.js";
+import { takeUtf8Prefix } from "@/tools/shell-output.js";
+import {
+  type Tool,
+  type ToolCategory,
+  type ToolContext,
+  type ToolResult,
+  type ToolSchema,
+} from "@/tools/types.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
-
-const MAX_RESULTS = 500;
-const MAX_MATCH_LINE_BYTES = 2000;
-const BINARY_SNIFF_BYTES = 8 * 1024;
-const DEFAULT_MAX_TRAVERSED_ENTRIES = 10_000;
-const DEFAULT_MAX_TRAVERSAL_DEPTH = 25;
-// Files above this size are skipped rather than buffered whole: reading a
-// multi-GB file into memory would spike it and block the loop, and the 500-
-// match cap means huge files rarely contribute anything the model needs.
-const MAX_GREP_FILE_BYTES = 25 * 1024 * 1024;
 
 // A catastrophic-backtracking pattern can pin RegExp.prototype.test on a single
 // line essentially forever. The per-line matching therefore runs in a worker
@@ -67,14 +71,9 @@ interface RegexMatch {
   line: string;
 }
 
-const MATCH_MIN_TIMEOUT_MS = 2000;
-const MATCH_MAX_TIMEOUT_MS = 10000;
-
 export class GrepPatternTooSlowError extends Error {
   constructor() {
-    super(
-      "Error: the pattern timed out while matching (likely catastrophic backtracking). Simplify it — avoid nested quantifiers such as (a+)+ — or narrow the path/include filter.",
-    );
+    super(GREP_PATTERN_TIMEOUT_ERROR);
     this.name = "GrepPatternTooSlowError";
   }
 }
@@ -201,25 +200,6 @@ export interface GrepTraversalLimits {
   maxDepth: number;
 }
 
-// JS regexes keep \w/\b/\d ASCII-only even in u-mode, unlike ripgrep whose
-// defaults are Unicode-aware. Rewrite them to property-escape equivalents
-// before compiling so "\w+" matches Chinese text and "\b" works next to CJK.
-const WORD = "\\p{L}\\p{M}\\p{N}_";
-const TOP_LEVEL = new Map<string, string>([
-  ["w", `[${WORD}]`],
-  ["W", `[^${WORD}]`],
-  ["d", "\\p{Nd}"],
-  ["D", "\\P{Nd}"],
-  ["b", `(?:(?<![${WORD}])(?=[${WORD}])|(?<=[${WORD}])(?![${WORD}]))`],
-  ["B", `(?:(?<=[${WORD}])(?=[${WORD}])|(?<![${WORD}])(?![${WORD}]))`],
-]);
-// Inside a character class \b means backspace and complements (\W/\D) can't
-// be inlined without v-flag set operations, so only \w/\d are expanded.
-const IN_CLASS = new Map<string, string>([
-  ["w", WORD],
-  ["d", "\\p{Nd}"],
-]);
-
 function toUnicodePattern(pattern: string): string {
   let out = "";
   let inClass = false;
@@ -306,12 +286,12 @@ export class GrepTool implements Tool {
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     if (ctx.abortSignal?.aborted) {
-      return { output: "Error: operation interrupted", isError: true };
+      return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
     }
     const pattern = strArg(args, "pattern");
     if (!pattern) {
       return {
-        output: "Error: pattern is required",
+        output: PATTERN_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -515,7 +495,7 @@ export class GrepTool implements Tool {
         log.error({ err }, "tool operation failed");
         searchError = {
           output: ctx.abortSignal?.aborted
-            ? "Error: operation interrupted"
+            ? OPERATION_INTERRUPTED_ERROR
             : `Error: ${asErrorString(err)}`,
           isError: true,
         };

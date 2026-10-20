@@ -1,18 +1,21 @@
+import { getOrCreatePlanPath } from "@/plan-file/index.js";
+import {
+  PLAN_MODE_DELEGATED_ERROR,
+  PLAN_MODE_UNAVAILABLE_ERROR,
+} from "@/tools/constants.js";
+import { ENTER_PLAN_MODE_DESCRIPTION } from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
   ToolContext,
   ToolResult,
   ToolSchema,
-} from "./types.js";
+} from "@/tools/types.js";
 
-import { getOrCreatePlanPath } from "@/plan-file/index.js";
 
 export class EnterPlanModeTool implements Tool {
   name = "EnterPlanMode";
-  description = `Use this tool proactively before a non-trivial implementation when the right approach is genuinely unclear and user review would prevent significant rework. It enters a read-only exploration phase where you inspect the codebase, compare approaches, write a concrete plan, and then call ExitPlanMode for approval.
-
-Use it for significant architectural ambiguity, unclear requirements that require exploration, or high-impact restructuring. Skip it when the task is straightforward, the user has already specified the implementation, the fix is obvious after diagnosis, or the request is pure research. Do not use it from delegated agents. This tool takes no parameters.`;
+  description = ENTER_PLAN_MODE_DESCRIPTION;
   category: ToolCategory = "read";
 
   schema(): ToolSchema {
@@ -36,14 +39,13 @@ Use it for significant architectural ambiguity, unclear requirements that requir
     const checker = ctx.permissionChecker;
     if (!checker) {
       return Promise.resolve({
-        output:
-          "Plan mode is unavailable because no permission context exists.",
+        output: PLAN_MODE_UNAVAILABLE_ERROR,
         isError: true,
       });
     }
     if (ctx.subagentSessionId || checker.isSubagent || checker.teammate) {
       return Promise.resolve({
-        output: "EnterPlanMode cannot be used from delegated agents.",
+        output: PLAN_MODE_DELEGATED_ERROR,
         isError: true,
       });
     }

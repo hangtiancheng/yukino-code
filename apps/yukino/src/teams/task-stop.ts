@@ -1,6 +1,9 @@
-import type { TeamManager } from "./index.js";
-
 import type { TaskManager } from "@/subagent/task-manager.js";
+import type { TeamManager } from "@/teams/index.js";
+import {
+  TASK_STOP_SUBAGENT_TOOL_DESCRIPTION,
+  TASK_STOP_TOOL_DESCRIPTION,
+} from "@/teams/prompts.js";
 import type {
   Tool,
   ToolCategory,
@@ -13,8 +16,7 @@ import { strArg } from "@/utils/index.js";
 /** Abort a running teammate or one-shot background Agent/Bash/PowerShell task. */
 export class TaskStopTool implements Tool {
   name = "TaskStop";
-  description =
-    "Stop a running teammate or background task (Agent, Bash, PowerShell). Pass exactly one of teammate or task_id.";
+  description = TASK_STOP_TOOL_DESCRIPTION;
   category: ToolCategory = "command";
 
   constructor(
@@ -24,8 +26,7 @@ export class TaskStopTool implements Tool {
   ) {
     if (!leaderAccess) {
       this.category = "read";
-      this.description =
-        "Stop one of this agent's own background tasks (Agent, Bash, PowerShell). Pass task_id.";
+      this.description = TASK_STOP_SUBAGENT_TOOL_DESCRIPTION;
     }
   }
 

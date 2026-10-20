@@ -1,11 +1,7 @@
 import { z } from "zod";
 
+import { PACKAGE_URL, VERSION_PATTERN } from "@/update/constants.js";
 import { version } from "@/version.js";
-
-export const PACKAGE_NAME = "@yukino.js/yukino";
-const PACKAGE_URL = "https://registry.npmjs.org/@yukino.js%2Fyukino";
-const VERSION_PATTERN =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*))?(?:\+[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?$/u;
 
 function parseVersion(value: string) {
   const match = VERSION_PATTERN.exec(value);

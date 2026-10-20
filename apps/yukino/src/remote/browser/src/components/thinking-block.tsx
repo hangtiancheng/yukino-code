@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Markdown } from "./markdown";
+import { Markdown } from "#/components/markdown.js";
 
 interface ThinkingBlockProps {
   text: string;

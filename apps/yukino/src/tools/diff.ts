@@ -1,6 +1,4 @@
-const CONTEXT_LINES = 3;
-// Prevent excessively large diffs from overwhelming UI rendering and context window usage
-const MAX_DIFF_LINES = 200;
+import { CONTEXT_LINES, MAX_DIFF_LINES } from "@/tools/constants.js";
 
 export interface DiffResult {
   /**

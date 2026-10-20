@@ -1,8 +1,7 @@
-import { argsPreview, formatArgs } from "@browser/lib/format";
-import type { ToolItem } from "@browser/types";
-
-import { Collapsible } from "./collapsible";
-import { DiffLines } from "./diff-lines";
+import { Collapsible } from "#/components/collapsible.js";
+import { DiffLines } from "#/components/diff-lines.js";
+import { argsPreview, formatArgs } from "#/lib/format.js";
+import type { ToolItem } from "#/types.js";
 
 interface ToolBlockProps {
   item: ToolItem;

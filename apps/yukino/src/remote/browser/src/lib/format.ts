@@ -1,4 +1,4 @@
-import type { ToolArgs } from "@browser/types";
+import type { ToolArgs } from "#/types.js";
 
 /** Format a token count with K/M suffixes for compact display. */
 export function formatTokens(n: number): string {

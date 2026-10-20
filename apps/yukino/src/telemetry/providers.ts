@@ -38,8 +38,11 @@ import {
 } from "@opentelemetry/semantic-conventions";
 import type * as Sentry from "@sentry/node";
 
-import { scrubTelemetryPayload } from "./privacy.js";
-
+import { createChildLogger } from "@/logger/index.js";
+import {
+  DEFAULT_EXPORT_INTERVAL_MS,
+  SHUTDOWN_TIMEOUT_MS,
+} from "@/telemetry/constants.js";
 import type {
   TelemetryAttributes,
   TelemetryMetricKind,
@@ -48,18 +51,14 @@ import type {
   TelemetryObservationKind,
   TelemetryObservationUpdate,
   TelemetryRuntime,
-} from "./index.js";
-
-import { createChildLogger } from "@/logger/index.js";
+} from "@/telemetry/index.js";
+import { scrubTelemetryPayload } from "@/telemetry/privacy.js";
 import { version } from "@/version.js";
 
 const log = createChildLogger({ module: "telemetry" });
 
 type OtlpProtocol = "grpc" | "http/json" | "http/protobuf";
 type SentryModule = typeof Sentry;
-
-const DEFAULT_EXPORT_INTERVAL_MS = 60_000;
-const SHUTDOWN_TIMEOUT_MS = 2_000;
 
 export function parseExporterTypes(value: string | undefined): string[] {
   return (value ?? "")

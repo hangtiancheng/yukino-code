@@ -5,12 +5,12 @@ import { basename } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { FEEDBACK_REPO } from "@/feedback/constants.js";
 import {
   buildIssueUrl,
   createGist,
   desiredLabels,
   detectChannel,
-  FEEDBACK_REPO,
   fetchRepoLabels,
 } from "@/feedback/github.js";
 import type { CollectedFile } from "@/feedback/types.js";

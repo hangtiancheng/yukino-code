@@ -1,8 +1,7 @@
-import type { SkillCatalog } from "./catalog.js";
-import { runFork, runInline } from "./executor.js";
-
-import type { SkillForkHost, SkillHost } from "./index.js";
-
+import type { SkillCatalog } from "@/skills/catalog.js";
+import { runFork, runInline } from "@/skills/executor.js";
+import type { SkillForkHost, SkillHost } from "@/skills/index.js";
+import { LOAD_SKILL_DESCRIPTION } from "@/skills/prompts.js";
 import type {
   Tool,
   ToolContext,
@@ -16,9 +15,7 @@ import { asErrorString, strArg } from "@/utils/index.js";
 // skills instead delegate to a subagent and return only its result.
 export class LoadSkillTool implements Tool {
   name = "LoadSkill";
-  description =
-    "Activate a skill by name. Returns the full SOP body so you can follow its instructions. Call this when the user's request matches one of the available " +
-    "Skills listed in the available-skills section. Pass the Skill name without a leading slash.";
+  description = LOAD_SKILL_DESCRIPTION;
   category = "read" as const;
 
   constructor(

@@ -5,12 +5,12 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PACKAGE_NAME } from "@/update/constants.js";
 import {
   getSelfUpdateCommand,
   packageManagerInvocation,
   runSelfUpdate,
 } from "@/update/install.js";
-import { PACKAGE_NAME } from "@/update/version-check.js";
 
 const mocks = vi.hoisted(() => ({
   execFile:

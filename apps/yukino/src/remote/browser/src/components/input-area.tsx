@@ -1,12 +1,12 @@
-import { useScrollFollow } from "@browser/hooks/use-scroll-follow";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { SlashMenu } from "#/components/slash-menu.js";
+import { useScrollFollow } from "#/hooks/use-scroll-follow.js";
 import type {
   FileCompleteResponsePayload,
   ImageResultPayload,
   SlashCommand,
-} from "@browser/types";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-import { SlashMenu } from "./slash-menu";
+} from "#/types.js";
 
 interface InputAreaProps {
   streaming: boolean;

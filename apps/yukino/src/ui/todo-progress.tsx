@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import type { Task } from "@/todo/index.js";
 import { taskProgress } from "@/todo/progress.js";
-import { THEME } from "@/ui/styles.js";
+import { THEME } from "@/ui/constants.js";
 import { plainTerminalLine } from "@/ui/terminal-text.js";
 
 export function TodoProgress({ tasks }: { tasks: readonly Task[] }) {

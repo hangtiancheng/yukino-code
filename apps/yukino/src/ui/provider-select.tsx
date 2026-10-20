@@ -2,10 +2,10 @@ import Fuse from "fuse.js";
 import { useInput } from "ink";
 import { useMemo, useState } from "react";
 
-import { SelectorList, SelectorListRow } from "./selector-list.js";
-import { updateSelectorQuery } from "./selector-search.js";
-
 import type { ProviderConfig } from "@/config/provider-config.js";
+import { SelectorList, SelectorListRow } from "@/ui/selector-list.js";
+import { updateSelectorQuery } from "@/ui/selector-search.js";
+
 
 interface ProviderSelectProps {
   /** Index into `providers` of the active provider; out-of-range marks none. */

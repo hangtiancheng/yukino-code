@@ -1,10 +1,9 @@
+import { Modal, ModalHeader } from "#/components/modal.js";
 import type {
   BackgroundTaskInfo,
   SubagentInfo,
   TeammateInfo,
-} from "@browser/types";
-
-import { Modal, ModalHeader } from "./modal";
+} from "#/types.js";
 
 interface ActivityPanelProps {
   subagents: SubagentInfo[];

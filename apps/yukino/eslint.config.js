@@ -14,8 +14,6 @@ export default defineConfig(
     "dist",
     "node_modules",
     "eslint.config.js",
-    "tsup.config.ts",
-    "vitest.config.ts",
   ]),
   {
     files: ["**/*.{ts,tsx}"],

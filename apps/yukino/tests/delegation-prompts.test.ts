@@ -13,9 +13,9 @@ import { PermissionChecker } from "@/permissions/index.js";
 import {
   buildSubagentInstructions,
   buildTeammatePrompt,
-} from "@/prompt/delegation.js";
+} from "@/prompt/prompts.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/definition.js";
+import { BUILTIN_AGENTS } from "@/subagent/constants.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import { ToolRegistry } from "@/tools/registry.js";

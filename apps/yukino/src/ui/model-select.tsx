@@ -2,13 +2,13 @@ import Fuse from "fuse.js";
 import { Box, Text, useInput } from "ink";
 import { useMemo, useState } from "react";
 
-import { SelectorFrame } from "./selector-frame.js";
-import { SelectorList, SelectorListRow } from "./selector-list.js";
-import { updateSelectorQuery } from "./selector-search.js";
-import { TextField } from "./text-field.js";
-
 import type { DiscoveredModel } from "@/llm/model-discovery.js";
-import { ICONS, THEME } from "@/ui/styles.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { SelectorList, SelectorListRow } from "@/ui/selector-list.js";
+import { updateSelectorQuery } from "@/ui/selector-search.js";
+import { TextField } from "@/ui/text-field.js";
+
 
 export interface ModelPickerState {
   status: "loading" | "ready" | "empty" | "error";

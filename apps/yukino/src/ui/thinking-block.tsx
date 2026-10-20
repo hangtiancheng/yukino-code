@@ -1,10 +1,14 @@
 import { Box, Text } from "ink";
 
-import { renderMarkdown } from "./markdown.js";
-import { truncateToWidth, visibleWidth, wrapToLines } from "./terminal-text.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
+import { THEME } from "@/ui/constants.js";
+import { renderMarkdown } from "@/ui/markdown.js";
+import {
+  truncateToWidth,
+  visibleWidth,
+  wrapToLines,
+} from "@/ui/terminal-text.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 
-import { THEME } from "@/ui/styles.js";
 
 interface Props {
   text: string;

@@ -8,10 +8,10 @@ import {
   attachmentSizePreview,
   buildEnvironment,
   collectAttachments,
-  MAX_FILE_BYTES,
   readTextCapped,
   summarizeEnvironment,
 } from "@/feedback/collect.js";
+import { MAX_FILE_BYTES } from "@/feedback/constants.js";
 import { redactText } from "@/feedback/redact.js";
 import { fileHistoryDir } from "@/file-history/index.js";
 import { closeLogger, initLogger } from "@/logger/index.js";

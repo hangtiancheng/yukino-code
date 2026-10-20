@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 
 import z from "zod";
 
-import { withFileSyncLock } from "./file-lock.js";
 
 import { projectKey, yukinoPath } from "@/storage/index.js";
 import {
@@ -12,6 +11,7 @@ import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
 } from "@/storage/private.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
 
 /** Metadata for a single team member. */
 export const TeamMemberEntrySchema = z.object({

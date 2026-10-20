@@ -1,12 +1,11 @@
 import { Box, Static, Text, useIsScreenReaderEnabled, useStdout } from "ink";
 import { memo, useInsertionEffect } from "react";
 
-import { CommittedMessage, type ChatMessage } from "./chat.js";
-import { expectStaticTerminalOutput } from "./terminal-output.js";
-import { plainTerminalLine, truncateToWidth } from "./terminal-text.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
-
-import { THEME } from "@/ui/styles.js";
+import { CommittedMessage, type ChatMessage } from "@/ui/chat.js";
+import { THEME } from "@/ui/constants.js";
+import { expectStaticTerminalOutput } from "@/ui/terminal-output.js";
+import { plainTerminalLine, truncateToWidth } from "@/ui/terminal-text.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 import { compactPath } from "@/utils/paths.js";
 import { version } from "@/version.js";
 

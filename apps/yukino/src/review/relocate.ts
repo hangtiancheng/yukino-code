@@ -1,13 +1,13 @@
-import { callOnce } from "./llm-call.js";
+import type { LLMClient } from "@/llm/client.js";
+import { callOnce } from "@/review/llm-call.js";
 import {
   RELOCATION_SYSTEM,
   RELOCATION_USER,
   renderTemplate,
-} from "./prompts.js";
-import { resolveComment } from "./resolve.js";
-import type { FileDiff, ReviewComment } from "./types.js";
+} from "@/review/prompts.js";
+import { resolveComment } from "@/review/resolve.js";
+import type { FileDiff, ReviewComment } from "@/review/types.js";
 
-import type { LLMClient } from "@/llm/client.js";
 
 /**
  * LLM re-location. The last positioning resort: when deterministic matching

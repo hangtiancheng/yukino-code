@@ -15,9 +15,10 @@ import { join, resolve } from "node:path";
 
 import yaml from "js-yaml";
 
-import { parseSkillFile, type SkillCatalog } from "./catalog.js";
-
 import { createChildLogger } from "@/logger/index.js";
+import { parseSkillFile, type SkillCatalog } from "@/skills/catalog.js";
+import { MAX_SKILL_DOWNLOAD_BYTES } from "@/skills/constants.js";
+import { INSTALL_SKILL_DESCRIPTION } from "@/skills/prompts.js";
 import type {
   Tool,
   ToolContext,
@@ -31,7 +32,6 @@ import {
 } from "@/utils/public-http.js";
 
 const log = createChildLogger({ module: "skills" });
-const MAX_SKILL_DOWNLOAD_BYTES = 1024 * 1024;
 
 async function readSkillResponse(
   response: Response,
@@ -81,8 +81,7 @@ async function readSkillResponse(
 // ~/.yukino/skills/<name>/SKILL.md, then reloads the catalog.
 export class InstallSkillTool implements Tool {
   name = "InstallSkill";
-  description =
-    "Install a skill from a local file path or an http(s) URL into ~/.yukino/skills.";
+  description = INSTALL_SKILL_DESCRIPTION;
   category = "write" as const;
 
   constructor(

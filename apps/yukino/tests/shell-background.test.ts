@@ -6,12 +6,12 @@ import { expect, it, vi } from "vitest";
 
 import { TaskManager } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
+import { BACKGROUND_NOTIFICATION_BYTES } from "@/tools/constants.js";
 import { PowerShellTool } from "@/tools/powershell.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import {
   attachBackgroundTaskManager,
   backgroundAllForegroundTasks,
-  BACKGROUND_NOTIFICATION_BYTES,
   buildShellResult,
   formatFinalResult,
   hasAnyForegroundTasks,

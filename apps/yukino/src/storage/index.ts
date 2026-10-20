@@ -2,10 +2,18 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import {
+  ARTIFACTS_DIR_NAME,
+  PROJECTS_DIR_NAME,
+  SESSIONS_DIR_NAME,
+  YUKINO_DIR_NAME,
+} from "@/storage/constants.js";
 import { canonicalPath } from "@/utils/paths.js";
 
+export * from "@/storage/constants.js";
+
 export function getYukinoDir(): string {
-  return join(homedir(), ".yukino");
+  return join(homedir(), YUKINO_DIR_NAME);
 }
 
 export function yukinoPath(...segments: string[]): string {
@@ -16,7 +24,12 @@ export function sessionPath(sessionId: string, ...segments: string[]): string {
   if (!/^[A-Za-z0-9_-]+$/u.test(sessionId)) {
     throw new Error("Invalid session ID");
   }
-  return yukinoPath("sessions", "artifacts", sessionId, ...segments);
+  return yukinoPath(
+    SESSIONS_DIR_NAME,
+    ARTIFACTS_DIR_NAME,
+    sessionId,
+    ...segments,
+  );
 }
 
 export function projectKey(cwd: string): string {
@@ -24,9 +37,9 @@ export function projectKey(cwd: string): string {
 }
 
 export function projectPath(cwd: string, ...segments: string[]): string {
-  return yukinoPath("projects", projectKey(cwd), ...segments);
+  return yukinoPath(PROJECTS_DIR_NAME, projectKey(cwd), ...segments);
 }
 
 export function getSessionsDir(cwd: string): string {
-  return yukinoPath("sessions", projectKey(cwd));
+  return yukinoPath(SESSIONS_DIR_NAME, projectKey(cwd));
 }

@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
 
 import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  THINKING_LEVELS,
+} from "@/config/constants.js";
+import {
   loadConfig,
   loadProjectMcpServers,
   withProjectMcpServers,
@@ -16,19 +20,18 @@ import {
 } from "@/config/index.js";
 import {
   clampThinkingLevel,
-  DEFAULT_MAX_OUTPUT_TOKENS,
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
   getThinkingLevel,
   isValidThinkingLevel,
   ProviderConfigSchema,
-  THINKING_LEVELS,
   thinkingBudgetForLevel,
   toReasoningEffort,
   withProviderDefaults,
   type ProviderConfig,
 } from "@/config/provider-config.js";
+
 describe("config", () => {
   describe("getContextWindow", () => {
     it("returns configured value if set", () => {

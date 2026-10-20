@@ -1,6 +1,6 @@
 import type { Command, CommandRegistry } from "@/commands/commands.js";
 import type { LspServerConfig } from "@/lsp/config.js";
-import { MCP_TOOL_PREFIX } from "@/mcp/tool-wrapper.js";
+import { MCP_TOOL_PREFIX } from "@/mcp/constants.js";
 import type { SkillCatalog } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
 import type { SkillHost } from "@/skills/index.js";

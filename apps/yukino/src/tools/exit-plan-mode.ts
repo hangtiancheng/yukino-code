@@ -1,12 +1,18 @@
+import { loadPlan, planExists } from "@/plan-file/index.js";
+import {
+  NO_PLAN_APPROVAL_HANDLER_ERROR,
+  NO_PLAN_FILE_ERROR,
+  NOT_IN_PLAN_MODE_CONTINUE_ERROR,
+  NOT_IN_PLAN_MODE_ERROR,
+} from "@/tools/constants.js";
+import { EXIT_PLAN_MODE_DESCRIPTION } from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
   ToolContext,
   ToolResult,
   ToolSchema,
-} from "./types.js";
-
-import { loadPlan, planExists } from "@/plan-file/index.js";
+} from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
 
 export class ExitPlanModeTool implements Tool {
@@ -14,8 +20,7 @@ export class ExitPlanModeTool implements Tool {
   // because class names are not stable after minification — bundlers like
   // Terser/esbuild may rename or mangle them, producing incorrect tool names at runtime.
   name = "ExitPlanMode";
-  description =
-    "Submit the completed plan from the plan file. The main agent presents it for user approval; a teammate follows the host's team approval policy (leader review in coordinator mode, automatic approval otherwise); a one-shot subagent returns it to the parent. Do not implement until the host approves execution.";
+  description = EXIT_PLAN_MODE_DESCRIPTION;
   category: ToolCategory = "read";
 
   constructor(
@@ -43,14 +48,12 @@ export class ExitPlanModeTool implements Tool {
     if (ctx.permissionChecker?.mode !== "plan") {
       if (ctx.permissionChecker && planExists(ctx.permissionChecker)) {
         return Promise.resolve({
-          output:
-            "You are not in plan mode. Continue within the user's requested scope and current permissions, or call EnterPlanMode first when the task genuinely needs planning. AskUserQuestion is for clarification, not approval.",
+          output: NOT_IN_PLAN_MODE_CONTINUE_ERROR,
           isError: true,
         });
       }
       return Promise.resolve({
-        output:
-          "You are not in plan mode. This tool is only for exiting plan mode after writing a plan.",
+        output: NOT_IN_PLAN_MODE_ERROR,
         isError: true,
       });
     }
@@ -58,8 +61,7 @@ export class ExitPlanModeTool implements Tool {
     const plan = loadPlan(ctx.permissionChecker);
     if (!planExists(ctx.permissionChecker) || !plan?.trim()) {
       return Promise.resolve({
-        output:
-          "No non-empty plan file found. Write your plan to the declared plan file before calling ExitPlanMode.",
+        output: NO_PLAN_FILE_ERROR,
         isError: true,
       });
     }
@@ -67,8 +69,7 @@ export class ExitPlanModeTool implements Tool {
     if (ctx.permissionChecker.teammate) {
       if (!this.submitTeammatePlan) {
         return Promise.resolve({
-          output:
-            "No leader plan approval handler is available for this teammate.",
+          output: NO_PLAN_APPROVAL_HANDLER_ERROR,
           isError: true,
         });
       }

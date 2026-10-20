@@ -3,14 +3,15 @@ import { join } from "node:path";
 
 import z from "zod";
 
-import { withFileSyncLock } from "./file-lock.js";
-
 import { createChildLogger } from "@/logger/index.js";
 import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
+import { MAX_READ_MESSAGES } from "@/teams/constants.js";
+import { withFileSyncLock } from "@/teams/file-lock.js";
+
 
 const log = createChildLogger({ module: "teams" });
 
@@ -22,7 +23,7 @@ const FileMailMessageSchema = z.object({
   // Read marker: false on delivery, set to true once the message is read or explicitly marked.
   read: z.boolean().optional(),
   // Three fields for structured messages; left empty for plain-text messages.
-  // See the constants in protocol.ts for type values; requestId correlates responses
+  // See the constants in constants.ts for type values; requestId correlates responses
   // to their originating requests; approve uses an optional field to distinguish
   // "no response yet" from "explicitly rejected".
   type: z.string().optional(),
@@ -36,8 +37,6 @@ export type FileMailMessage = z.infer<typeof FileMailMessageSchema>;
 // file-lock.ts) — a lock directory of exclusive-create contender entries,
 // token-protected release, dead-holder-only preemption, and
 // write-then-rename persistence below.
-
-const MAX_READ_MESSAGES = 500;
 
 export class FileMailbox {
   private filePath: string;

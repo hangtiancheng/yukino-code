@@ -1,12 +1,12 @@
 import { Text } from "ink";
 
+import { THEME } from "@/ui/constants.js";
 import {
   plainTerminalLine,
   truncateToWidth,
   visibleWidth,
-} from "./terminal-text.js";
+} from "@/ui/terminal-text.js";
 
-import { THEME } from "@/ui/styles.js";
 
 interface StatusBorderProps {
   width: number;

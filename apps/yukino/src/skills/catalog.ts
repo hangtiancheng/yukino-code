@@ -11,9 +11,8 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 import { z } from "zod";
 
-import type { Skill, SkillMeta } from "./index.js";
-
 import { createChildLogger } from "@/logger/index.js";
+import type { Skill, SkillMeta } from "@/skills/index.js";
 import { yukinoPath } from "@/storage/index.js";
 import { asRecord, strArg } from "@/utils/index.js";
 

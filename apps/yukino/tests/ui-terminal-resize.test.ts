@@ -9,9 +9,10 @@ import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 import { AgentStatus } from "@/ui/agent-status.js";
 import { ChatView, type ChatMessage } from "@/ui/chat.js";
+import { THEME} from "@/ui/constants.js"
 import { Footer } from "@/ui/footer.js";
 import { InputBox } from "@/ui/input.js";
-import { setThemeMode, THEME } from "@/ui/styles.js";
+import { setThemeMode } from "@/ui/styles.js";
 import { TerminalLayout } from "@/ui/terminal-layout.js";
 import { installTerminalOutput } from "@/ui/terminal-output.js";
 import { ToolCard } from "@/ui/tool-display.js";

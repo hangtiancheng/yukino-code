@@ -1,8 +1,7 @@
-import { MCPClient } from "./client.js";
-import type { MCPTool } from "./client.js";
-
 import type { MCPServerConfig } from "@/config/index.js";
 import { createChildLogger } from "@/logger/index.js";
+import { MCPClient } from "@/mcp/client.js";
+import type { MCPTool } from "@/mcp/client.js";
 import { asErrorString } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "mcp" });

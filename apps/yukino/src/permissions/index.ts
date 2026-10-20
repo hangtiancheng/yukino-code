@@ -5,23 +5,31 @@ import { resolve, dirname, sep } from "node:path";
 import yaml from "js-yaml";
 import z, { parse } from "zod";
 
-import { analyzeShell } from "./shell.js";
-
 import { createChildLogger } from "@/logger/index.js";
+import {
+  CONTENT_FIELDS,
+  DANGEROUS_PATTERNS,
+  FILE_TOOLS,
+  PLAN_COORDINATION_TOOLS,
+  RULE_RE,
+  SAFE_PREFIXES,
+} from "@/permissions/constants.js";
+import { analyzeShell } from "@/permissions/shell.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
 import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
+import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/constants.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
-import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/protocol.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";
 import { asErrorString, isObject, isRecord, strArg } from "@/utils/index.js";
 import { canonicalPath, isPathWithin, resolveToolPath } from "@/utils/paths.js";
 import { OwnedWorktrees, type WorktreeResult } from "@/worktree/index.js";
 
-export * as Request from "./request.js";
+export * as Request from "@/permissions/request.js";
+export * from "@/permissions/constants.js";
 
 const log = createChildLogger({ module: "permissions" });
 
@@ -49,109 +57,6 @@ export interface DangerousPattern {
   re: RegExp;
   reason: string;
 }
-
-// Intentionally empty: no command patterns are currently classified as
-// dangerous, so detectDangerous() below never matches and the Layer-3 deny
-// stays inert until patterns are added.
-export const DANGEROUS_PATTERNS: DangerousPattern[] = [];
-
-export const SAFE_PREFIXES: (string | RegExp)[] = [
-  "echo", // Output only, no dangerous flags
-  "printf", // xargs runs /usr/bin/printf (binary), not bash builtin — no -v support
-  "wc", // Read-only counting, no dangerous flags
-  "grep", // Read-only search, no dangerous flags
-  "head", // Read-only, no dangerous flags
-  "tail", // Read-only (including -f follow), no dangerous flags
-
-  // Cross-platform commands from shared validation
-  /^docker\s+(?:ps|images)(?:\s|$)/u,
-
-  // Unix/bash-specific read-only commands (not shared because they don't exist in PowerShell)
-
-  // Time and date
-  "cal",
-  "uptime",
-
-  // File content viewing (relative paths handled separately)
-  "cat",
-  "head",
-  "tail",
-  "wc",
-  "stat",
-  "strings",
-  "hexdump",
-  "od",
-  "nl",
-
-  // System info
-  "id",
-  "uname",
-  "free",
-  "df",
-  "du",
-  "locale",
-  "groups",
-  "nproc",
-
-  // Path information
-  "basename",
-  "dirname",
-  "realpath",
-
-  // Text processing
-  "cut",
-  "paste",
-  "tr",
-  "column",
-  "tac", // Reverse cat — displays file contents in reverse line order
-  "rev", // Reverse characters in each line
-  "fold", // Wrap lines to specified width
-  "expand", // Convert tabs to spaces
-  "unexpand", // Convert spaces to tabs
-  "fmt", // Simple text formatter — output to stdout only
-  "comm", // Compare sorted files line by line
-  "cmp", // Byte-by-byte file comparison
-  "numfmt", // Number format conversion
-
-  // Path information (additional)
-  "readlink", // Resolve symlinks — displays target of symbolic link
-
-  // File comparison
-  "diff",
-
-  // true and false, used to silence or create errors
-  "true",
-  "false",
-
-  // Misc. safe commands
-  "sleep",
-  "which",
-  "type",
-  "expr", // Evaluate expressions (arithmetic, string matching)
-  "test", // Conditional evaluation (file checks, comparisons)
-  "getconf", // Get system configuration values
-  "seq", // Generate number sequences
-  "tsort", // Topological sort
-  "pr", // Paginate files for printing
-];
-
-// Per-tool argument field treated as the "content" for safe/dangerous checks and rule matching
-const CONTENT_FIELDS: Record<string, string> = {
-  Bash: "command",
-  PowerShell: "command",
-  ComputerUse: "action",
-  ReadFile: "file_path",
-  LSP: "file_path",
-  WebFetch: "url",
-  TaskOutput: "task_id",
-  WriteFile: "file_path",
-  EditFile: "file_path",
-  Glob: "pattern",
-  Grep: "pattern",
-  InstallSkill: "source",
-};
-
-const FILE_TOOLS = new Set(["ReadFile", "WriteFile", "EditFile", "LSP"]);
 
 function escapeRuleLiteral(content: string): string {
   return content.replace(/[\\*?]/gu, "\\$&");
@@ -195,19 +100,6 @@ function normalizePathPattern(cwd: string, pattern: string): string {
       .join("/"),
   ).replace(/\/$/u, "")}/${suffix}`;
 }
-
-const PLAN_COORDINATION_TOOLS = new Set([
-  "AskUserQuestion",
-  "EnterPlanMode",
-  "ExitPlanMode",
-  "Agent",
-  "Goal",
-  "TodoWrite",
-  "TaskStop",
-  "TeamCreate",
-  "TeamDelete",
-  ...TEAMMATE_COORDINATION_TOOLS,
-]);
 
 export function extractContent(
   toolName: string,
@@ -300,8 +192,6 @@ function globMatch(
     return false;
   }
 }
-
-const RULE_RE = /^(\w+|\*)\(([\s\S]+)\)$/;
 
 function isNodeJSErrnoException(err: unknown): err is NodeJS.ErrnoException {
   return isObject(err) && "code" in err && typeof err.code === "string";

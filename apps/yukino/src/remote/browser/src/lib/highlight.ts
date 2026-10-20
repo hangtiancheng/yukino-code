@@ -1,5 +1,5 @@
-import { DARK_THEME, LIGHT_THEME } from "@yukino/theme/palette.js";
-import { defaultSyntaxTheme } from "@yukino/theme/syntax.js";
+import { DARK_THEME, LIGHT_THEME } from "@yukino.js/yukino/theme/constants.js";
+import { defaultSyntaxTheme } from "@yukino.js/yukino/theme/syntax.js";
 import { createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import bash from "shiki/langs/bash.mjs";

@@ -1,12 +1,15 @@
-import { formatDiffEntry } from "./grouping.js";
+import {
+  CONFIRMED_MAX_CONTENT,
+  CONFIRMED_MAX_EXISTING_CODE,
+} from "@/review/constants.js";
+import { formatDiffEntry } from "@/review/grouping.js";
 import {
   MAIN_USER,
   renderTemplate,
   stripEmptyConfirmedBlock,
   stripEmptyPlanBlock,
-} from "./prompts.js";
-import type { FileDiff, ReviewComment } from "./types.js";
-
+} from "@/review/prompts.js";
+import type { FileDiff, ReviewComment } from "@/review/types.js";
 import { escapeXml } from "@/utils/xml.js";
 
 /** Render group diffs as per-file XML elements. */
@@ -44,11 +47,6 @@ export function buildChangeFilesExceptGroup(
   }
   return lines.join("\n");
 }
-
-const CONFIRMED_MAX_EXISTING_CODE = 200;
-const CONFIRMED_MAX_CONTENT = 300;
-/** Cap on confirmed findings: the round loop stops once this many accumulate. */
-export const CONFIRMED_CAP = 30;
 
 function flattenOneLine(s: string): string {
   return s.replace(/\r\n/g, " ").replace(/\n/g, " ").replace(/\r/g, " ").trim();

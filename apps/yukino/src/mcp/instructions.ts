@@ -15,8 +15,7 @@
  * out again.
  */
 
-/** Heading of announcements that add servers; also the marker history is scanned for. Removal-only deltas do not carry it. */
-export const MCP_INSTRUCTIONS_MARKER = "# MCP Server Instructions";
+import { MCP_INSTRUCTIONS_MARKER } from "@/mcp/constants.js";
 
 export interface McpInstruction {
   serverName: string;

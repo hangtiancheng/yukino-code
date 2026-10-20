@@ -1,29 +1,26 @@
 import type TurndownService from "turndown";
 
-import { WEB_FETCH_DESCRIPTION } from "./descriptions.js";
+import { createChildLogger } from "@/logger/index.js";
+import {
+  CACHE_TTL_MS,
+  FETCH_TIMEOUT_MS,
+  FETCH_INTERRUPTED_ERROR,
+  MAX_CACHE_SIZE_BYTES,
+  MAX_CONTENT_BYTES,
+  MAX_MARKDOWN_LENGTH,
+  URL_REQUIRED_ERROR,
+} from "@/tools/constants.js";
+import { WEB_FETCH_DESCRIPTION } from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
   ToolContext,
   ToolResult,
   ToolSchema,
-} from "./types.js";
-
-import { createChildLogger } from "@/logger/index.js";
+} from "@/tools/types.js";
 import { asErrorString, isRecord, strArg } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "tools" });
-
-// Resource controls: cap a single response, the request timeout, and how much
-// markdown reaches the model, so one fetch cannot overwhelm the session.
-const MAX_CONTENT_BYTES = 10 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 60_000;
-const MAX_MARKDOWN_LENGTH = 100_000;
-
-// Fetched pages are cached per URL for 15 minutes (expired entries are dropped
-// on access), bounded by a 50MB byte budget with oldest-first eviction.
-const CACHE_TTL_MS = 15 * 60 * 1000;
-const MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024;
 
 interface CacheEntry {
   markdown: string;
@@ -189,11 +186,11 @@ export class WebFetchTool implements Tool {
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     if (ctx.abortSignal?.aborted) {
-      return { output: "Error: fetch interrupted", isError: true };
+      return { output: FETCH_INTERRUPTED_ERROR, isError: true };
     }
     const url = strArg(args, "url");
     if (!url) {
-      return { output: "Error: url is required", isError: true };
+      return { output: URL_REQUIRED_ERROR, isError: true };
     }
 
     let parsed: URL;

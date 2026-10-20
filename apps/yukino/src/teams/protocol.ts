@@ -1,36 +1,13 @@
 import { randomBytes } from "node:crypto";
 
-import type { FileMailMessage } from "./file-mailbox.js";
-
-/**
- * Beyond plain text, teammates exchange several kinds of structured messages.
- *
- * Each request carries a requestId that is echoed verbatim in the response,
- * allowing the requesting side — the Leader for shutdown flows, a teammate for
- * plan approval — to correlate replies with the requests it sent: when shutdown
- * requests are dispatched to three teammates simultaneously, the three
- * responses are indistinguishable without an ID.
- */
-export const MSG_TEXT = "text";
-export const MSG_SHUTDOWN_REQUEST = "shutdown_request";
-export const MSG_SHUTDOWN_RESPONSE = "shutdown_response";
-export const MSG_PLAN_APPROVAL_REQUEST = "plan_approval_request";
-export const MSG_PLAN_APPROVAL_RESPONSE = "plan_approval_response";
-export const LEADER_NAME = "leader";
-
-// Team-internal coordination tools. Teammates run unattended — they have no
-// permission dialog of their own — so messaging and the shared task board
-// must never fall through to an "ask" decision on a teammate checker. These
-// are exempted on the checker itself (see PermissionChecker.teammate); the
-// "command" categories stay in place so the Leader's calls still go through
-// permission policy. Explicit deny/ask rules still take precedence.
-export const TEAMMATE_COORDINATION_TOOLS: ReadonlySet<string> = new Set([
-  "SendMessage",
-  "TaskCreate",
-  "TaskGet",
-  "TaskList",
-  "TaskUpdate",
-]);
+import {
+  LEADER_NAME,
+  MSG_PLAN_APPROVAL_REQUEST,
+  MSG_PLAN_APPROVAL_RESPONSE,
+  MSG_SHUTDOWN_REQUEST,
+  MSG_SHUTDOWN_RESPONSE,
+} from "@/teams/constants.js";
+import type { FileMailMessage } from "@/teams/file-mailbox.js";
 
 const teammateNamePattern = /^[a-zA-Z0-9_-]+$/;
 

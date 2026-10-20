@@ -1,15 +1,12 @@
 import { existsSync, realpathSync } from "node:fs";
 
+import { SANDBOX_EXEC_PATH } from "@/sandbox/constants.js";
 import type {
   Sandbox,
   SandboxConfig,
   SandboxExecutionContext,
-} from "./index.js";
-
+} from "@/sandbox/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
-
-// Hardcoded path to prevent PATH injection attacks
-const SANDBOX_EXEC_PATH = "/usr/bin/sandbox-exec";
 
 /**
  * macOS seatbelt sandbox implementation.

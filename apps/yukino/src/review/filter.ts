@@ -1,16 +1,15 @@
 import { safeParse, z } from "zod";
 
-import { buildConcatenatedDiffs } from "./format.js";
-import { callOnce } from "./llm-call.js";
+import type { LLMClient } from "@/llm/client.js";
+import { buildConcatenatedDiffs } from "@/review/format.js";
+import { callOnce } from "@/review/llm-call.js";
 import {
   FILTER_SYSTEM,
   FILTER_USER,
   renderTemplate,
   stripMarkdownFences,
-} from "./prompts.js";
-import type { FileDiff, ReviewComment } from "./types.js";
-
-import type { LLMClient } from "@/llm/client.js";
+} from "@/review/prompts.js";
+import type { FileDiff, ReviewComment } from "@/review/types.js";
 import { safeJSONParse } from "@/utils/index.js";
 
 /**

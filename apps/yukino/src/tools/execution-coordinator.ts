@@ -1,6 +1,9 @@
-import type { ToolContext, ToolResult } from "./types.js";
-
 import { isSafeCommand } from "@/permissions/index.js";
+import {
+  COMMAND_INTERRUPTED_ERROR,
+  EXECUTION_CANCELLED_ERROR,
+} from "@/tools/constants.js";
+import type { ToolContext, ToolResult } from "@/tools/types.js";
 import { canonicalPath } from "@/utils/paths.js";
 
 interface Waiter {
@@ -26,7 +29,7 @@ export function acquireWorkspaceMutation(
     const cancel = () => {
       queue.pending = queue.pending.filter((entry) => entry !== waiter);
       signal?.removeEventListener("abort", cancel);
-      reject(new Error("Tool execution was cancelled before it started."));
+      reject(new Error(EXECUTION_CANCELLED_ERROR));
     };
     const waiter: Waiter = {
       start: () => {
@@ -115,7 +118,7 @@ export async function withCommandExecution(
     });
   } catch (error) {
     if (ctx.abortSignal?.aborted) {
-      return { output: "Error: command interrupted", isError: true };
+      return { output: COMMAND_INTERRUPTED_ERROR, isError: true };
     }
     throw error;
   } finally {

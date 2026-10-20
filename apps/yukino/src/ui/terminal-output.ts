@@ -1,7 +1,7 @@
 import ansiEscapes from "ansi-escapes";
 import sliceAnsi from "slice-ansi";
 
-import { truncateToWidth, visibleWidth } from "./terminal-text.js";
+import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
 
 const BSU = "\x1b[?2026h"; // Begin Synchronized Update
 const ESU = "\x1b[?2026l"; // End Synchronized Update

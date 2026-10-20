@@ -1,11 +1,12 @@
+import { OUTPUT_REQUIRED_ERROR } from "@/tools/constants.js";
+import { SYNTHETIC_OUTPUT_DESCRIPTION } from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
   ToolContext,
   ToolResult,
   ToolSchema,
-} from "./types.js";
-
+} from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
 
 /**
@@ -15,9 +16,7 @@ import { asErrorString } from "@/utils/index.js";
  */
 export class SyntheticOutputTool implements Tool {
   name = "SyntheticOutput";
-  description =
-    "Return structured output in JSON format. Use this tool to return your final response " +
-    "as structured data in non-interactive or coordinator mode sessions.";
+  description = SYNTHETIC_OUTPUT_DESCRIPTION;
   category: ToolCategory = "read";
 
   /** jsonSchema is optional; when set, output is validated against the structure agreed with the caller. */
@@ -46,7 +45,7 @@ export class SyntheticOutputTool implements Tool {
   ): Promise<ToolResult> {
     if (!("output" in args)) {
       return Promise.resolve({
-        output: "Error: output is required",
+        output: OUTPUT_REQUIRED_ERROR,
         isError: true,
       });
     }

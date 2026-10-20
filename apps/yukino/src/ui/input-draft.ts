@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SetStateAction } from "react";
 
-import type { PasteStore } from "./input-paste.js";
+import type { PasteStore } from "@/ui/input-paste.js";
 
 interface InputPosition {
   lines: string[];

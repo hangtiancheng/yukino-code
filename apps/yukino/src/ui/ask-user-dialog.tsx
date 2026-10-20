@@ -3,13 +3,13 @@ import type { DOMElement } from "ink";
 import { useReducer, useRef } from "react";
 import type { RefObject } from "react";
 
-import { SelectorFrame } from "./selector-frame.js";
-import { truncateToWidth, visibleWidth } from "./terminal-text.js";
-import { TextField } from "./text-field.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
-
 import type { Question } from "@/tools/ask-user.js";
-import { ICONS, THEME } from "@/ui/styles.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
+import { TextField } from "@/ui/text-field.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
+
 
 interface Props {
   questions: Question[];

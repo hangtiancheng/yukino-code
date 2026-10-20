@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 
-import { THEME } from "./styles.js";
+import { THEME } from "@/ui/constants.js";
 
 export function UpdateNotice({ latestVersion }: { latestVersion?: string }) {
   if (!latestVersion) {

@@ -2,17 +2,16 @@ import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import type { SubagentProgress } from "./agent-tool-progress.js";
-import { getListWindowStart } from "./list-window.js";
-import { SelectorFrame } from "./selector-frame.js";
-import { selectorChrome } from "./selector-layout.js";
-import { useAvailableRows } from "./use-terminal-layout.js";
-
 import type { AgentTask } from "@/subagent/task-manager.js";
 import type { TeammateUIState } from "@/teams/progress.js";
 import { formatTokens } from "@/teams/progress.js";
 import { toDisplayPreview } from "@/tool-result/index.js";
-import { THEME } from "@/ui/styles.js";
+import type { SubagentProgress } from "@/ui/agent-tool-progress.js";
+import { THEME } from "@/ui/constants.js";
+import { getListWindowStart } from "@/ui/list-window.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { selectorChrome } from "@/ui/selector-layout.js";
+import { useAvailableRows } from "@/ui/use-terminal-layout.js";
 
 interface Props {
   teammates: TeammateUIState[];

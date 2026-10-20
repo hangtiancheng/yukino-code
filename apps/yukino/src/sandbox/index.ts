@@ -1,8 +1,9 @@
 import os from "node:os";
 
 // Submodule namespaces for library consumers (Sandbox.<Sub>.*).
-export * as Bwrap from "./bwrap.js";
-export * as Seatbelt from "./seatbelt.js";
+export * as Bwrap from "@/sandbox/bwrap.js";
+export * as Constants from "@/sandbox/constants.js";
+export * as Seatbelt from "@/sandbox/seatbelt.js";
 
 export type SandboxImplementation = "bwrap" | "seatbelt";
 

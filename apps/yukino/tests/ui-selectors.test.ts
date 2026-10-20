@@ -16,6 +16,7 @@ import { AskUserQuestionTool } from "@/tools/ask-user.js";
 import { AgentStatus } from "@/ui/agent-status.js";
 import { AgentsDialog } from "@/ui/agents-dialog.js";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
+import { ICONS, THEME } from "@/ui/constants.js"
 import { InteractionDock } from "@/ui/interaction-dock.js";
 import { PermissionDialog } from "@/ui/permission-dialog.js";
 import { PlanApprovalDialog } from "@/ui/plan-approval.js";
@@ -24,7 +25,7 @@ import { SelectorFrame } from "@/ui/selector-frame.js";
 import { SelectorListRow } from "@/ui/selector-list.js";
 import { updateSelectorQuery } from "@/ui/selector-search.js";
 import { SessionSelector } from "@/ui/session-selector.js";
-import { ICONS, setThemeMode, THEME } from "@/ui/styles.js";
+import {setThemeMode } from "@/ui/styles.js";
 import { visibleWidth } from "@/ui/terminal-text.js";
 
 // Keep Ink's real layout and React hooks; invoke only the captured input

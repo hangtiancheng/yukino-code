@@ -7,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 import { ChatView, type ChatMessage } from "@/ui/chat.js";
+import { THEME} from "@/ui/constants.js"
 import { InputBox } from "@/ui/input.js";
 import { PendingQueue } from "@/ui/pending-queue.js";
-import { setThemeMode, THEME } from "@/ui/styles.js";
+import { setThemeMode } from "@/ui/styles.js";
 import { TerminalLayout } from "@/ui/terminal-layout.js";
 import { installTerminalOutput } from "@/ui/terminal-output.js";
 import { TodoProgress } from "@/ui/todo-progress.js";

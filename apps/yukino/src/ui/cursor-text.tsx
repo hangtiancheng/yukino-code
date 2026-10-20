@@ -10,10 +10,10 @@ import type { DOMElement } from "ink";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { visibleWidth } from "./terminal-text.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
-
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
+import { visibleWidth } from "@/ui/terminal-text.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
+
 
 function TerminalCursor({ text, color }: { text: string; color?: string }) {
   const ref = useRef<DOMElement>(null);

@@ -2,19 +2,22 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { WRITE_FILE_DESCRIPTION } from "./descriptions.js";
-import { withWorkspaceMutation } from "./execution-coordinator.js";
-import { withFileMutationQueue } from "./file-mutation-queue.js";
+import { createChildLogger } from "@/logger/index.js";
+import { isPrivateStatePath, writePrivateFile } from "@/storage/private.js";
+import {
+  FILE_PATH_REQUIRED_ERROR,
+  OPERATION_INTERRUPTED_ERROR,
+} from "@/tools/constants.js";
+import { withWorkspaceMutation } from "@/tools/execution-coordinator.js";
+import { withFileMutationQueue } from "@/tools/file-mutation-queue.js";
+import { WRITE_FILE_DESCRIPTION } from "@/tools/prompts.js";
 import {
   type Tool,
   type ToolCategory,
   type ToolContext,
   type ToolResult,
   type ToolSchema,
-} from "./types.js";
-
-import { createChildLogger } from "@/logger/index.js";
-import { isPrivateStatePath, writePrivateFile } from "@/storage/private.js";
+} from "@/tools/types.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -71,7 +74,7 @@ export class WriteFileTool implements Tool {
     const requestedPath = strArg(args, "file_path");
     if (!requestedPath) {
       return Promise.resolve({
-        output: "Error: file_path is required",
+        output: FILE_PATH_REQUIRED_ERROR,
         isError: true,
       });
     }
@@ -87,7 +90,7 @@ export class WriteFileTool implements Tool {
     return withFileMutationQueue<ToolResult>(filePath, async () => {
       if (ctx.abortSignal?.aborted) {
         return {
-          output: "Error: operation interrupted",
+          output: OPERATION_INTERRUPTED_ERROR,
           isError: true,
         };
       }
@@ -105,7 +108,7 @@ export class WriteFileTool implements Tool {
       try {
         await mkdir(dirname(filePath), { recursive: true });
         if (ctx.abortSignal?.aborted) {
-          return { output: "Error: operation interrupted", isError: true };
+          return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
         }
         if (
           ctx.fileStateCache &&

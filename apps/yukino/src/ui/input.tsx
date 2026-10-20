@@ -5,34 +5,10 @@ import { Box, Text, useInput, usePaste } from "ink";
 import type { Key } from "ink";
 import { useState, useMemo, useRef, useEffect } from "react";
 
-import { CursorText } from "./cursor-text.js";
-import { useInputDraft } from "./input-draft.js";
-import type { InputDraft } from "./input-draft.js";
-import {
-  layoutInputRows,
-  locateInputCursor,
-  moveInputVertically,
-} from "./input-navigation.js";
-import {
-  collapseImage,
-  collapsePaste,
-  expandPastes,
-  inputBoundary,
-} from "./input-paste.js";
-import { getListWindowStart } from "./list-window.js";
-import { StatusBorder } from "./status-border.js";
-import { truncateToWidth, visibleWidth } from "./terminal-text.js";
-import {
-  useAvailableRows,
-  useTerminalDimensions,
-} from "./use-terminal-layout.js";
-
 import type { Command } from "@/commands/commands.js";
 import type { CommandUsageTracker } from "@/commands/usage-tracker.js";
-import {
-  THINKING_LEVELS,
-  type ThinkingLevel,
-} from "@/config/provider-config.js";
+import { THINKING_LEVELS } from "@/config/constants.js";
+import { type ThinkingLevel } from "@/config/provider-config.js";
 import { parseUserBashCommand } from "@/conversation/user-bash.js";
 import { saveClipboardImage } from "@/images/clipboard.js";
 import { createChildLogger } from "@/logger/index.js";
@@ -40,7 +16,28 @@ import type {
   NonPlanPermissionMode,
   PermissionMode,
 } from "@/permissions/index.js";
-import { ICONS, THEME } from "@/ui/styles.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { CursorText } from "@/ui/cursor-text.js";
+import { useInputDraft } from "@/ui/input-draft.js";
+import type { InputDraft } from "@/ui/input-draft.js";
+import {
+  layoutInputRows,
+  locateInputCursor,
+  moveInputVertically,
+} from "@/ui/input-navigation.js";
+import {
+  collapseImage,
+  collapsePaste,
+  expandPastes,
+  inputBoundary,
+} from "@/ui/input-paste.js";
+import { getListWindowStart } from "@/ui/list-window.js";
+import { StatusBorder } from "@/ui/status-border.js";
+import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
+import {
+  useAvailableRows,
+  useTerminalDimensions,
+} from "@/ui/use-terminal-layout.js";
 import { scanCwdFiles } from "@/utils/file-scan.js";
 
 const log = createChildLogger({ module: "input" });
@@ -62,7 +59,7 @@ const SPINNER_FRAMES = [
   "⠏",
 ] as const;
 
-export type { InputDraft } from "./input-draft.js";
+export type { InputDraft } from "@/ui/input-draft.js";
 
 const PERMISSION_MODE_CYCLE: NonPlanPermissionMode[] = [
   "default",

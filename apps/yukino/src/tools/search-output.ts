@@ -1,6 +1,5 @@
-import { utf8ByteLength } from "./shell-output.js";
-
-export const MAX_SEARCH_OUTPUT_BYTES = 50 * 1024;
+import { MAX_SEARCH_OUTPUT_BYTES } from "@/tools/constants.js";
+import { utf8ByteLength } from "@/tools/shell-output.js";
 
 export class SearchOutput {
   readonly lines: string[] = [];

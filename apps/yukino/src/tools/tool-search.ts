@@ -1,4 +1,7 @@
-import type { ToolRegistry } from "./registry.js";
+import { MCP_TOOL_PREFIX } from "@/mcp/constants.js";
+import { QUERY_REQUIRED_ERROR } from "@/tools/constants.js";
+import { TOOL_SEARCH_DESCRIPTION } from "@/tools/prompts.js";
+import type { ToolRegistry } from "@/tools/registry.js";
 import {
   type Tool,
   type ToolCategory,
@@ -6,15 +9,13 @@ import {
   type ToolResult,
   type ToolResultContentBlock,
   type ToolSchema,
-} from "./types.js";
-
-import { MCP_TOOL_PREFIX } from "@/mcp/tool-wrapper.js";
+} from "@/tools/types.js";
 import { intArg, strArg } from "@/utils/index.js";
 
 export class ToolSearchTool implements Tool {
   name = "ToolSearch";
 
-  description = "Search for and load deferred tools by name or keyword.";
+  description = TOOL_SEARCH_DESCRIPTION;
   category: ToolCategory = "read";
 
   private registry: ToolRegistry;
@@ -56,7 +57,7 @@ export class ToolSearchTool implements Tool {
 
     if (!query) {
       return Promise.resolve({
-        output: "Error: query is required",
+        output: QUERY_REQUIRED_ERROR,
         isError: true,
       });
     }

@@ -8,14 +8,15 @@ import { z } from "zod";
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,
+  THINKING_LEVELS,
+} from "@/config/constants.js";
+import {
   getThinkingLevel,
   globalConfigPath,
   ProviderConfigSchema,
   type ProviderConfig,
-  THINKING_LEVELS,
   type ThinkingLevel,
-} from "./provider-config.js";
-
+} from "@/config/provider-config.js";
 import {
   mkdirPrivateSync as mkdirSync,
   readPrivateFileSync as readFileSync,

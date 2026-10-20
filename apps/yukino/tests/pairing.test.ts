@@ -1,10 +1,8 @@
 import { describe, it, expect } from "vitest";
 
+import { INTERRUPTED_TOOL_RESULT } from "@/conversation/constants.js";
 import type { Message } from "@/conversation/index.js";
-import {
-  ensureToolPairing,
-  INTERRUPTED_TOOL_RESULT,
-} from "@/conversation/pairing.js";
+import { ensureToolPairing } from "@/conversation/pairing.js";
 
 function assistantWithTool(id: string): Message {
   return {

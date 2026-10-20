@@ -1,8 +1,23 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { FileMailbox, type FileMailMessage } from "./file-mailbox.js";
-import type { TeammateUIState } from "./progress.js";
+import { createChildLogger } from "@/logger/index.js";
+import type { PermissionChecker } from "@/permissions/index.js";
+import { createPlanPath } from "@/plan-file/index.js";
+import { buildTeammatePrompt } from "@/prompt/prompts.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+} from "@/storage/private.js";
+import type { SubagentProgressEvent } from "@/subagent/spawn.js";
+import {
+  LEADER_NAME,
+  MAX_RETAINED_TERMINATED_MEMBERS,
+  MSG_PLAN_APPROVAL_RESPONSE,
+  MSG_TEXT,
+} from "@/teams/constants.js";
+import { FileMailbox, type FileMailMessage } from "@/teams/file-mailbox.js";
+import type { TeammateUIState } from "@/teams/progress.js";
 import {
   clearActiveTools,
   createProgress,
@@ -10,20 +25,17 @@ import {
   recordToolResult,
   recordToolStart,
   recordTurnComplete,
-} from "./progress.js";
+} from "@/teams/progress.js";
 import {
-  LEADER_NAME,
-  MSG_PLAN_APPROVAL_RESPONSE,
-  MSG_TEXT,
   isValidTeammateName,
   isShutdownRequest,
   planApprovalRequest,
   planApprovalResponse,
   shutdownRequest,
   shutdownResponse,
-} from "./protocol.js";
-import { getNameRegistry } from "./registry.js";
-import { SharedTaskStore } from "./shared-task.js";
+} from "@/teams/protocol.js";
+import { getNameRegistry } from "@/teams/registry.js";
+import { SharedTaskStore } from "@/teams/shared-task.js";
 import {
   listTeamNames,
   readTeamFile,
@@ -32,36 +44,27 @@ import {
   writeTeamFile,
   type TeamFile,
   type TeamMemberEntry,
-} from "./team-file.js";
-
-import { createChildLogger } from "@/logger/index.js";
-import type { PermissionChecker } from "@/permissions/index.js";
-import { createPlanPath } from "@/plan-file/index.js";
-import { buildTeammatePrompt } from "@/prompt/delegation.js";
-import {
-  mkdirPrivateSync as mkdirSync,
-  readPrivateFileSync as readFileSync,
-} from "@/storage/private.js";
-import type { SubagentProgressEvent } from "@/subagent/spawn.js";
+} from "@/teams/team-file.js";
 import { asErrorString } from "@/utils/index.js";
 import { canonicalPath } from "@/utils/paths.js";
 import { escapeXml } from "@/utils/xml.js";
 
 // Submodule namespaces for library consumers (Teams.<Sub>.*).
-export * as Coordinator from "./coordinator.js";
-export * as FileLock from "./file-lock.js";
-export * as FileMailbox from "./file-mailbox.js";
-export * as Progress from "./progress.js";
-export * as Protocol from "./protocol.js";
-export * as Registry from "./registry.js";
-export * as SharedTask from "./shared-task.js";
-export * as TaskStop from "./task-stop.js";
-export * as TaskTools from "./task-tools.js";
-export * as TeamFile from "./team-file.js";
-export * as Tools from "./tools.js";
+export * as Constants from "@/teams/constants.js";
+export * as Coordinator from "@/teams/coordinator.js";
+export * as FileLock from "@/teams/file-lock.js";
+export * as FileMailbox from "@/teams/file-mailbox.js";
+export * as Progress from "@/teams/progress.js";
+export * as Prompts from "@/teams/prompts.js";
+export * as Protocol from "@/teams/protocol.js";
+export * as Registry from "@/teams/registry.js";
+export * as SharedTask from "@/teams/shared-task.js";
+export * as TaskStop from "@/teams/task-stop.js";
+export * as TaskTools from "@/teams/task-tools.js";
+export * as TeamFile from "@/teams/team-file.js";
+export * as Tools from "@/teams/tools.js";
 
 const log = createChildLogger({ module: "teams" });
-const MAX_RETAINED_TERMINATED_MEMBERS = 200;
 
 // Callback that receives agent events during execution. The team layer uses
 // this to update TeammateUIState while staying decoupled from the agent

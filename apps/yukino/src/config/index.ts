@@ -9,33 +9,30 @@ import yaml from "js-yaml";
 import { z } from "zod";
 
 import {
+  ENV_KEY_MAP,
+  PROJECT_MCP_FILENAME,
+  VALID_PROTOCOLS,
+} from "@/config/constants.js";
+import {
   globalConfigPath,
   ProviderConfigSchema,
   withProviderDefaults,
   type ProviderConfig,
-} from "./provider-config.js";
-
+} from "@/config/provider-config.js";
 import { createChildLogger } from "@/logger/index.js";
 import { LspServerConfigSchema } from "@/lsp/config.js";
 import { readPrivateFileSync } from "@/storage/private.js";
 import { asRecord } from "@/utils/index.js";
 
-export * as ProviderConfig from "./provider-config.js";
-export * as ProviderLogin from "./provider-login.js";
+export * as Constants from "@/config/constants.js";
+export * as ProviderConfig from "@/config/provider-config.js";
+export * as ProviderLogin from "@/config/provider-login.js";
 
 const log = createChildLogger({ module: "config" });
-
-const ENV_KEY_MAP = {
-  anthropic: "ANTHROPIC_API_KEY",
-  openai: "OPENAI_API_KEY",
-  "openai-compat": "OPENAI_API_KEY",
-};
 
 function isKeyofTypeofEnvKeyMap(k: string): k is keyof typeof ENV_KEY_MAP {
   return VALID_PROTOCOLS.has(k);
 }
-
-const VALID_PROTOCOLS = new Set(Object.keys(ENV_KEY_MAP));
 
 export class ConfigError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -267,9 +264,6 @@ function validateMcpServers(config: AppConfig): void {
     }
   }
 }
-
-/** Project-level MCP config file, compatible with the Claude Code format. */
-const PROJECT_MCP_FILENAME = ".mcp.json";
 
 const McpJsonEntrySchema = z.looseObject({
   enabled: z.boolean().default(true),

@@ -11,6 +11,7 @@ import {
   type StreamableHTTPClientTransportOptions,
 } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import type { MCPServerConfig } from "@/config/index.js";
 import {
@@ -18,6 +19,7 @@ import {
   maybeResizeAndDownsampleImage,
 } from "@/images/index.js";
 import { createChildLogger } from "@/logger/index.js";
+import { MCP_IMAGE_MEDIA_TYPES } from "@/mcp/constants.js";
 import type {
   ToolResult,
   ToolResultContentBlock,
@@ -110,16 +112,6 @@ function asDict(
   }
   return dict;
 }
-
-// MCP image content uses {type:"image", data, mimeType}; providers use
-// {type:"image", source:{type:"base64", media_type, data}}. Unsupported mime
-// types degrade to a text placeholder.
-const MCP_IMAGE_MEDIA_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-]);
 
 export async function mcpContentToToolOutput(
   content: unknown[],

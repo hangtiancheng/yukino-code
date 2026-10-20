@@ -11,9 +11,18 @@ import {
 import { dirname, isAbsolute, join, resolve } from "path";
 import { promisify } from "util";
 
+
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath, projectKey } from "@/storage/index.js";
 import { canonicalPath } from "@/utils/paths.js";
+import {
+  SAFE_REF_RE,
+  SHA_RE,
+  SHARED_AGENTS_ENTRIES,
+} from "@/worktree/constants.js";
+
+export * from "@/worktree/constants.js";
+export * from "@/worktree/prompts.js";
 
 const log = createChildLogger({ module: "worktree" });
 
@@ -31,16 +40,6 @@ export interface WorktreeResult {
 // the branch and SHA by directly reading files under the .git directory,
 // without spawning a git subprocess — saving the ~15ms process-spawn overhead
 // per call.
-
-/**
- * Allowed character set of ref names — excludes whitespace and shell
- * metacharacters. Path traversal is ruled out together with the ".." and
- * leading-slash checks in isSafeRefName.
- */
-const SAFE_REF_RE = /^[a-zA-Z0-9/._+@-]+$/;
-
-/** Full SHA-1 (40 hex) or SHA-256 (64 hex) */
-const SHA_RE = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
 
 function isSafeRefName(name: string): boolean {
   if (!name || name.startsWith("-") || name.startsWith("/")) {
@@ -560,14 +559,6 @@ export async function hasWorktreeChanges(
   }
 }
 
-export function buildWorktreeNotice(parentCwd: string, wtPath: string): string {
-  return (
-    `You are working in a git worktree at: ${wtPath}\n` +
-    `The parent project is at: ${parentCwd}\n` +
-    `Changes made here are isolated from the parent working tree.`
-  );
-}
-
 /**
  * Propagates settings, hooks, symlinks, and .worktreeinclude files from the
  * main repo into a newly created worktree. Failures are logged but never
@@ -582,8 +573,6 @@ async function performPostCreationSetup(
   await symlinkNodeModules(repoRoot, wtPath);
   await copyWorktreeIncludeFiles(repoRoot, wtPath);
 }
-
-const SHARED_AGENTS_ENTRIES = ["AGENTS.md", "skills"];
 
 async function copyAgentsSettings(
   repoRoot: string,

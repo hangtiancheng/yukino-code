@@ -9,15 +9,11 @@ import type { LLMClient } from "@/llm/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { createPlanPath } from "@/plan-file/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/definition.js";
+import { BUILTIN_AGENTS } from "@/subagent/constants.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
+import { LEADER_NAME, MSG_PLAN_APPROVAL_RESPONSE } from "@/teams/constants.js";
 import { TeamManager } from "@/teams/index.js";
-import {
-  LEADER_NAME,
-  MSG_PLAN_APPROVAL_RESPONSE,
-  planApprovalResponse,
-  shutdownRequest,
-} from "@/teams/protocol.js";
+import { planApprovalResponse, shutdownRequest } from "@/teams/protocol.js";
 import { SendMessageTool } from "@/teams/tools.js";
 import { EnterPlanModeTool } from "@/tools/enter-plan-mode.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";

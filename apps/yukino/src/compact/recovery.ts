@@ -1,12 +1,8 @@
-// Recovery budgets for the attachment block appended to the summary
-// message. Compaction collapses the working conversation into a summary;
-// without these snapshots the model would forget which files it just read.
-// Active skill SOPs are re-injected after compaction by Agent.restoreContext →
-// ConversationManager.injectLongTermMemory (agent/index.ts), not through
-// this attachment.
-const RECOVERY_FILE_LIMIT = 5;
-const RECOVERY_TOKENS_PER_FILE = 5_000;
-const RECOVERY_CHARS_PER_TOKEN = 3.5;
+import {
+  RECOVERY_CHARS_PER_TOKEN,
+  RECOVERY_FILE_LIMIT,
+  RECOVERY_TOKENS_PER_FILE,
+} from "@/compact/constants.js";
 
 function approxTokens(s: string): number {
   if (!s) {

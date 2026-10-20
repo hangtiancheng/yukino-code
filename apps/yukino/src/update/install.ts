@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
-import { PACKAGE_NAME } from "./version-check.js";
+import { PACKAGE_NAME } from "@/update/constants.js";
 
 type PackageManager = "npm" | "yarn" | "pnpm";
 export interface UpdateCommand {

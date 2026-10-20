@@ -1,18 +1,17 @@
 import { Box, Text } from "ink";
 
-import { DiffLines } from "./diff-render.js";
+import { isDiffTool } from "@/tools/is-diff-tool.js";
+import { THEME } from "@/ui/constants.js";
+import { DiffLines } from "@/ui/diff-render.js";
 import {
   expandTabs,
   plainTerminalLine,
   truncateToWidth,
   visibleWidth,
   wrapToLines,
-} from "./terminal-text.js";
-import { formatToolOutputPreview } from "./tool-preview.js";
-import { useTerminalDimensions } from "./use-terminal-layout.js";
-
-import { isDiffTool } from "@/tools/is-diff-tool.js";
-import { THEME } from "@/ui/styles.js";
+} from "@/ui/terminal-text.js";
+import { formatToolOutputPreview } from "@/ui/tool-preview.js";
+import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 import { formatToolArgs, plainTerminalText } from "@/utils/index.js";
 
 export type ToolCardStatus = "running" | "completed" | "failed" | "stopped";

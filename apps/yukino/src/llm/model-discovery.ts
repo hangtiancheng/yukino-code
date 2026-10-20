@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
+import { DISCOVERY_TIMEOUT_MS, MAX_MODEL_PAGES } from "@/llm/constants.js";
 
-const DISCOVERY_TIMEOUT_MS = 5_000;
-const MAX_MODEL_PAGES = 10;
+
 const HttpUrlSchema = z.url();
 const ModelSchema = z.object({
   id: z.string().trim().min(1),

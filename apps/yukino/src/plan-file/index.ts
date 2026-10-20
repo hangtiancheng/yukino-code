@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
+import { PLANS_DIR_NAME } from "@/plan-file/constants.js";
 import { yukinoPath } from "@/storage/index.js";
 import {
   readPrivateFileSync as readFileSync,
@@ -10,6 +11,8 @@ import {
 } from "@/storage/private.js";
 import { generateSlug } from "@/utils/slug";
 
+export * from "@/plan-file/constants.js";
+
 const log = createChildLogger({ module: "plan-file" });
 
 export interface PlanOwner {
@@ -17,7 +20,7 @@ export interface PlanOwner {
 }
 
 function isPlanInStorage(planPath: string): boolean {
-  const plansDir = yukinoPath("plans");
+  const plansDir = yukinoPath(PLANS_DIR_NAME);
   // relative() is separator-agnostic: on Windows resolve() produces "\"
   // paths, so a hardcoded "/" join would never match.
   const rel = relative(plansDir, resolve(planPath));
@@ -41,7 +44,7 @@ export function getOrCreatePlanPath(owner: PlanOwner): string {
 }
 
 export function createPlanPath(): string {
-  const dir = yukinoPath("plans");
+  const dir = yukinoPath(PLANS_DIR_NAME);
   mkdirSync(dir, { recursive: true });
   const slug = generateSlug();
   const path = join(dir, `${slug}.md`);

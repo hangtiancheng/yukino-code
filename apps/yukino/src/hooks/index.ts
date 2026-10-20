@@ -1,9 +1,12 @@
 import { exec } from "node:child_process";
 
 import type { HookConfig } from "@/config/index.js";
+import { HOOK_MAX_BUFFER_BYTES, HOOK_TIMEOUT_MS } from "@/hooks/constants.js";
 import { createChildLogger } from "@/logger/index.js";
 import { asErrorString } from "@/utils/index.js";
 import { strArg } from "@/utils/index.js";
+
+export * from "@/hooks/constants.js";
 
 const log = createChildLogger({ module: "hooks" });
 
@@ -20,11 +23,11 @@ function execHookAsync(
       command,
       {
         encoding: "utf-8",
-        timeout: 30000,
+        timeout: HOOK_TIMEOUT_MS,
         env: opts.env,
         cwd: opts.cwd,
         signal: opts.signal,
-        maxBuffer: 10 * 1024 * 1024,
+        maxBuffer: HOOK_MAX_BUFFER_BYTES,
         ...(process.platform === "win32" ? {} : { shell: "bash" }),
       },
       (err, stdout) => {
@@ -254,9 +257,9 @@ export class HookEngine {
             signal: options.abortSignal
               ? AbortSignal.any([
                   options.abortSignal,
-                  AbortSignal.timeout(30000),
+                  AbortSignal.timeout(HOOK_TIMEOUT_MS),
                 ])
-              : AbortSignal.timeout(30000),
+              : AbortSignal.timeout(HOOK_TIMEOUT_MS),
           });
           if (!resp.ok) {
             await resp.body?.cancel();

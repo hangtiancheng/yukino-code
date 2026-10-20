@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { THINKING_LEVELS } from "@/config/provider-config.js";
+import { THINKING_LEVELS } from "@/config/constants.js";
 import {
-  activityStatusColor,
   DARK_THEME,
   LIGHT_THEME,
+} from "@/theme/constants.js";
+import {
+  THEME
+} from "@/ui/constants.js";
+import {
+  activityStatusColor,
   setThemeMode,
-  THEME,
   thinkingLevelColor,
 } from "@/ui/styles.js";
 import {

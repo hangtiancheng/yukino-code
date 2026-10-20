@@ -1,6 +1,6 @@
+import { THINKING_LEVELS } from "@/config/constants.js";
 import {
   isValidThinkingLevel,
-  THINKING_LEVELS,
   type ThinkingLevel,
 } from "@/config/provider-config.js";
 

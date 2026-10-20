@@ -1,4 +1,5 @@
-import type { Message, ToolResultBlock } from "./index.js";
+import { INTERRUPTED_TOOL_RESULT } from "@/conversation/constants.js";
+import type { Message, ToolResultBlock } from "@/conversation/index.js";
 
 // Both Anthropic and OpenAI reject the entire request when a tool use lacks its
 // matching tool result. Unpaired entries can creep into the conversation history in
@@ -6,18 +7,6 @@ import type { Message, ToolResultBlock } from "./index.js";
 // disk after the process exits, or concurrent writes interleave. Here we reconcile
 // the pairing uniformly before sending the request, so individual frontends don't
 // each have to reimplement it.
-
-/** Used to fill in tool calls that have no result. The tool may never have started,
- *  or it may have been interrupted partway through, so the wording must not assert
- *  that it produced no side effects. */
-export const INTERRUPTED_TOOL_RESULT =
-  "Tool execution was interrupted. The tool may or may not have completed; verify before relying on its effects.";
-
-/** Used for tool calls the user explicitly declined to authorize. In this case we can
- *  assert that nothing was changed, and we must state this clearly; otherwise the
- *  model will assume the modification took effect and proceed accordingly. */
-export const REJECTED_TOOL_RESULT =
-  "The user rejected this tool use. Nothing was changed (for file edits, the new content was NOT written).";
 
 /**
  * Returns a copy of the messages with the pairing relationships repaired; the input

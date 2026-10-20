@@ -1,4 +1,4 @@
-import type { FileDiff, Hunk, ReviewComment } from "./types.js";
+import type { FileDiff, Hunk, ReviewComment } from "@/review/types.js";
 
 /**
  * Comment positioning. The external positioning module: deterministic

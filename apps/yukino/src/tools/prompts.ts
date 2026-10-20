@@ -53,5 +53,59 @@ export const GREP_DESCRIPTION = `Search file content with a case-insensitive, li
 
 export const WEB_FETCH_DESCRIPTION = `Fetch a URL over HTTP(S) and return its content as Markdown. Use it to retrieve and analyze web pages.
 - url must be a fully-formed http or https URL; redirects are followed automatically and the final URL is reported when it differs.
-- HTML is converted to Markdown; other text formats (plain text, JSON, XML, Markdown) are returned as-is. Binary content (images, PDFs, archives) is rejected.
+- HTML is converted to Markdown; other text formats (plain text, JSON, XML, Markdown) are returned as-is. Binary content (images, PDFs, archives) are rejected.
 - Responses over 10MB are rejected and results are truncated at 100K characters. Successful fetches are cached for 15 minutes.`;
+
+export const ASK_USER_QUESTION_DESCRIPTION = `
+  Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 2 to 4 options; an "Other" option for custom input is added automatically.
+  Set multiSelect=true when the user may choose multiple options, or false for one mutually exclusive choice. Ask only for missing information that changes the task; do not re-request authorization already given.
+  `;
+
+export const ENTER_PLAN_MODE_DESCRIPTION = `Use this tool proactively before a non-trivial implementation when the right approach is genuinely unclear and user review would prevent significant rework. It enters a read-only exploration phase where you inspect the codebase, compare approaches, write a concrete plan, and then call ExitPlanMode for approval.
+
+Use it for significant architectural ambiguity, unclear requirements that require exploration, or high-impact restructuring. Skip it when the task is straightforward, the user has already specified the implementation, the fix is obvious after diagnosis, or the request is pure research. Do not use it from delegated agents. This tool takes no parameters.`;
+
+export const EXIT_PLAN_MODE_DESCRIPTION =
+  "Submit the completed plan from the plan file. The main agent presents it for user approval; a teammate follows the host's team approval policy (leader review in coordinator mode, automatic approval otherwise); a one-shot subagent returns it to the parent. Do not implement until the host approves execution.";
+
+export const ENTER_WORKTREE_DESCRIPTION =
+  "Create a git worktree for isolated work and return its absolute path. " +
+  "The working directory is NOT changed: pass the returned path explicitly to " +
+  "later tools (Bash cd commands, ReadFile/WriteFile/EditFile paths) to operate " +
+  "inside the worktree.";
+
+export const EXIT_WORKTREE_DESCRIPTION =
+  "Clean up a git worktree previously created by EnterWorktree, identified by " +
+  "its path. Does not change the working directory. A worktree with " +
+  "uncommitted changes is retained for explicit integration, not deleted.";
+
+export const GOAL_DESCRIPTION =
+  "Get the user-set persistent goal, or report complete or blocked with a reason. These are the only statuses the model can set. A goal is active automatically when the user sets it; do not mark it in progress. Only the user can set, replace, pause, resume, or clear goals. Complete only when all requirements are achieved and verified. Record the same blocker on three consecutive continuation turns before stopping; multiple calls in one turn count once.";
+
+export const LSP_DESCRIPTION =
+  "Query a configured language server for definitions, references, hover, symbols, implementations, type definitions, call hierarchy, or diagnostics. file_path resolves against the current working directory; line and character are 1-based UTF-16 positions. Returned ranges use the LSP standard (0-based UTF-16) and file URIs. This tool cannot edit files or run arbitrary commands. Servers must be explicitly configured in lsp_servers; no automatic installation.";
+
+export const MCP_CALL_DESCRIPTION =
+  "Invoke a tool on a connected MCP server. Call ToolSearch first to load the " +
+  "tool's schema, then pass its arguments here exactly as that schema requires, " +
+  "using the same JSON types.";
+
+export const SYNTHETIC_OUTPUT_DESCRIPTION =
+  "Return structured output in JSON format. Use this tool to return your final response " +
+  "as structured data in non-interactive or coordinator mode sessions.";
+
+export const TASK_OUTPUT_DESCRIPTION =
+  "Inspect a background Agent/Bash/PowerShell task by its task_id, or wait once for at most timeout_ms (maximum 60000). This does not consume completion notifications or cancel timed-out tasks. Prefer automatic task notifications over repeated polling. TaskCreate IDs belong to the separate TODO list and cannot be used here.";
+
+export const TOOL_SEARCH_DESCRIPTION =
+  "Search for and load deferred tools by name or keyword.";
+
+export function computerUseDescription(environment: string): string {
+  return (
+    `Control the current ${environment} computer with screenshots, mouse, keyboard, scrolling, waiting, and zoom. ` +
+    "Use screenshot before choosing coordinates and verify consequential actions with another screenshot. " +
+    "Two call styles are supported: Anthropic-style single actions (action + coordinate/scroll_amount/scroll_direction/start_coordinate/region/text), " +
+    "and OpenAI-style batches (actions[] of typed actions with x/y/button/keys/path/scrollX/scrollY/text, plus pendingSafetyChecks and status; " +
+    "a screenshot is returned after the batch). Flat OpenAI aliases (action=click/drag/keypress/move) are also accepted."
+  );
+}

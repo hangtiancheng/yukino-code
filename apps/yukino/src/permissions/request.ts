@@ -1,5 +1,4 @@
-import type { Decision } from "./index.js";
-
+import type { Decision } from "@/permissions/index.js";
 import type {
   PermissionRequestHandler,
   PermissionRequestSource,

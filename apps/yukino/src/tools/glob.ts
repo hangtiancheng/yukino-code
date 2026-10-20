@@ -3,18 +3,21 @@ import { dirname, relative, sep } from "path";
 
 import { globIterate } from "glob";
 
-import { GLOB_DESCRIPTION } from "./descriptions.js";
-import { SearchOutput } from "./search-output.js";
+import { createChildLogger } from "@/logger/index.js";
 import {
+  OPERATION_INTERRUPTED_ERROR,
+  PATTERN_REQUIRED_ERROR,
   SKIP_DIRS,
+} from "@/tools/constants.js";
+import { GLOB_DESCRIPTION } from "@/tools/prompts.js";
+import { SearchOutput } from "@/tools/search-output.js";
+import {
   type Tool,
   type ToolCategory,
   type ToolContext,
   type ToolResult,
   type ToolSchema,
-} from "./types.js";
-
-import { createChildLogger } from "@/logger/index.js";
+} from "@/tools/types.js";
 import { asErrorString, strArg } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
@@ -59,7 +62,7 @@ export class GlobTool implements Tool {
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     if (ctx.abortSignal?.aborted) {
-      return { output: "Error: operation interrupted", isError: true };
+      return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
     }
     const rawPattern = strArg(args, "pattern");
     const pattern = rawPattern.startsWith("~/")
@@ -67,7 +70,7 @@ export class GlobTool implements Tool {
       : rawPattern;
     if (!pattern) {
       return {
-        output: "Error: pattern is required",
+        output: PATTERN_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -171,7 +174,7 @@ export class GlobTool implements Tool {
       log.error({ err }, "tool operation failed");
       return {
         output: ctx.abortSignal?.aborted
-          ? "Error: operation interrupted"
+          ? OPERATION_INTERRUPTED_ERROR
           : `Error: ${asErrorString(err)}`,
         isError: true,
       };

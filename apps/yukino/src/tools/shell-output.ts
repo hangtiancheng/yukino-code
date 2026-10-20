@@ -1,5 +1,3 @@
-export const MAX_SHELL_OUTPUT_BYTES = 10 * 1024 * 1024;
-
 export function utf8ByteLength(value: string): number {
   return Buffer.byteLength(value, "utf8");
 }

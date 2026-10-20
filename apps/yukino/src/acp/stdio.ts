@@ -2,7 +2,7 @@ import { Readable, Writable } from "node:stream";
 
 import { ndJsonStream } from "@agentclientprotocol/sdk";
 
-import { createYukinoAcpApp } from "./agent.js";
+import { createYukinoAcpApp } from "@/acp/agent.js";
 
 function redirectConsoleToStderr(): void {
   const write = (...args: unknown[]): void => {

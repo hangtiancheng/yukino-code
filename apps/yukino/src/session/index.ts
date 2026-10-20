@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 
 import z, { parse, safeParse } from "zod";
 
+
 import { buildCompactionSummaryMessage } from "@/compact/prompts.js";
 import type {
   Message,
@@ -20,6 +21,7 @@ import type {
   UserBashResult,
 } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
+import { COMPACT_BOUNDARY, SESSION_EXPIRY_DAYS } from "@/session/constants.js";
 import { getSessionsDir, sessionPath } from "@/storage/index.js";
 import {
   readPrivateFileSync as readFileSync,
@@ -33,16 +35,7 @@ import {
 } from "@/tools/types.js";
 import { contentToText } from "@/utils/index.js";
 
-// Persistent session lines. Ordinary messages carry no `type`, while compaction boundary records
-// have the type COMPACT_BOUNDARY. Their `content` is the JSON-serialized CompactBoundaryPayload
-// (containing a summary and the retained recent tail messages).
-// Inlining the retained tail directly into the boundary record avoids "physical location" issues:
-// during restoration, reading the boundary is sufficient to reconstruct
-// [summary] + retained messages + messages appended after the boundary, without needing to search
-// for the retained messages in the area preceding the boundary.
-export const COMPACT_BOUNDARY = "compact_boundary";
-
-const SESSION_EXPIRY_DAYS = 30;
+export * from "@/session/constants.js";
 
 // Tool block fields on disk always use snake_case; the in-memory conversation layer still uses camelCase.
 // The conversion between the two is consolidated in conversion functions in this file (toolUsesToRecords / toRestored, etc.).

@@ -6,8 +6,15 @@ import { promisify } from "node:util";
 
 import { z } from "zod";
 
-import type { CollectedFile, FeedbackChannel } from "./types.js";
-
+import {
+  DESIRED_LABELS,
+  FEEDBACK_REPO,
+  GH_UPLOAD_TIMEOUT_MS,
+  GITHUB_URL_LIMIT,
+  NETWORK_TIMEOUT_MS,
+  PROBE_TIMEOUT_MS,
+} from "@/feedback/constants.js";
+import type { CollectedFile, FeedbackChannel } from "@/feedback/types.js";
 import {
   mkdirPrivateSync as mkdirSync,
   writePrivateFileSync as writeFileSync,
@@ -15,17 +22,6 @@ import {
 import { version } from "@/version.js";
 
 const execFileAsync = promisify(execFile);
-
-export const FEEDBACK_REPO_OWNER = "hangtiancheng";
-export const FEEDBACK_REPO_NAME = "yukino-code";
-export const FEEDBACK_REPO = `${FEEDBACK_REPO_OWNER}/${FEEDBACK_REPO_NAME}`;
-const DESIRED_LABELS = ["bug", "yukino-feedback"];
-
-// Empirically safe limit for GitHub's issues/new prefill URL.
-const GITHUB_URL_LIMIT = 7250;
-const NETWORK_TIMEOUT_MS = 30_000;
-const GH_UPLOAD_TIMEOUT_MS = 60_000;
-const PROBE_TIMEOUT_MS = 3_000;
 
 function githubToken(): string | undefined {
   return process.env.GH_TOKEN || process.env.GITHUB_TOKEN || undefined;

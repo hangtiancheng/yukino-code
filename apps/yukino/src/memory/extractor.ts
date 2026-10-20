@@ -3,14 +3,14 @@ import { join, basename } from "node:path";
 
 import yaml from "js-yaml";
 
-import { MemoryManager } from "./manager.js";
-import { MemoryPermissionChecker } from "./permissions.js";
-import { extractWrittenPaths } from "./written-paths.js";
 
 import { Agent } from "@/agent/index.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
+import { MemoryManager } from "@/memory/manager.js";
+import { MemoryPermissionChecker } from "@/memory/permissions.js";
+import { extractWrittenPaths } from "@/memory/written-paths.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
 import {
   readPrivateFileSync as readFileSync,

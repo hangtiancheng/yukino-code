@@ -14,11 +14,14 @@ import {
   mkdirPrivateSync as mkdirSync,
   writePrivateFileSync as writeFileSync,
 } from "@/storage/private.js";
+import {
+  LOCK_ACQUIRE_TIMEOUT_MS,
+  LOCK_MAX_BACKOFF_MS,
+  LOCK_MIN_BACKOFF_MS,
+  LOCK_STALE_MS,
+} from "@/teams/constants.js";
 
-const LOCK_ACQUIRE_TIMEOUT_MS = 5_000;
-const LOCK_STALE_MS = 10_000;
-const LOCK_MIN_BACKOFF_MS = 5;
-const LOCK_MAX_BACKOFF_MS = 80;
+
 const heldLocks = new Set<string>();
 
 const ErrnoExceptionSchema = z.looseObject({

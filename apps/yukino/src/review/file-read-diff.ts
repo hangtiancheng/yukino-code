@@ -1,5 +1,4 @@
-import type { FileDiff } from "./types.js";
-
+import type { FileDiff } from "@/review/types.js";
 import type {
   Tool,
   ToolContext,

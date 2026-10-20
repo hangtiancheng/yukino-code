@@ -4,33 +4,17 @@ import { lstat, open, readlink } from "fs/promises";
 import { join } from "path";
 import { promisify } from "util";
 
-import { parseDiffText, quoteGitPath } from "./diff-parser.js";
-import type { FileDiff, ReviewMode } from "./types.js";
+import {
+  BINARY_SNIFF_WINDOW,
+  DIFF_CONTEXT_LINES,
+  DIFF_FLAGS,
+  MAX_UNTRACKED_FILE_SIZE,
+  OPEN_NOFOLLOW,
+} from "@/review/constants.js";
+import { parseDiffText, quoteGitPath } from "@/review/diff-parser.js";
+import type { FileDiff, ReviewMode } from "@/review/types.js";
 
 const execFileAsync = promisify(execFile);
-
-/** Context lines per hunk. */
-const DIFF_CONTEXT_LINES = 3;
-/** Untracked files above this size are reported as binary. */
-const MAX_UNTRACKED_FILE_SIZE = 10 * 1024 * 1024;
-/** Leading bytes sniffed for NUL to decide binary-ness, matching git's heuristic. */
-const BINARY_SNIFF_WINDOW = 8000;
-// O_NOFOLLOW is undefined on Windows; falling back to 0 keeps the flag a no-op
-// there while POSIX refuses to open a symlink swapped in after lstat.
-const OPEN_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
-
-const DIFF_FLAGS = [
-  "-c",
-  "core.quotepath=false",
-  "diff",
-  "--no-ext-diff",
-  "--no-textconv",
-  "--find-renames",
-  "--src-prefix=a/",
-  "--dst-prefix=b/",
-  "--no-color",
-  `-U${String(DIFF_CONTEXT_LINES)}`,
-];
 
 async function runGit(
   cwd: string,

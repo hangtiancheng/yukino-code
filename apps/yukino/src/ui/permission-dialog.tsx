@@ -2,10 +2,10 @@ import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import { SelectorFrame } from "./selector-frame.js";
-import { truncateToWidth } from "./terminal-text.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { truncateToWidth } from "@/ui/terminal-text.js";
 
-import { ICONS, THEME } from "@/ui/styles.js";
 
 export type PermissionAction = "allow" | "deny" | "allowAlways";
 

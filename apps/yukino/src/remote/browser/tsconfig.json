@@ -4,7 +4,7 @@
     "moduleResolution": "bundler",
     "target": "esnext",
     "lib": ["esnext", "dom", "dom.iterable"],
-    "types": [],
+    "types": ["node"],
     "strict": true,
     "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
@@ -15,9 +15,9 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@browser/*": ["./src/*"],
-      "@yukino/*": ["../../*"]
+      "#/*": ["./src/*"],
+      "@yukino.js/yukino/*": ["../../*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "postcss.config.ts", "tsup.config.ts"]
 }

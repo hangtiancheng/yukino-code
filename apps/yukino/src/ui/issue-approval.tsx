@@ -2,11 +2,10 @@ import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import { SelectorFrame } from "./selector-frame.js";
-import { ICONS, THEME } from "./styles.js";
-import { TextField } from "./text-field.js";
-
 import type { IssueDraft } from "@/feedback/types.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { TextField } from "@/ui/text-field.js";
 
 export type IssueApprovalChoice = "approve" | "reject";
 

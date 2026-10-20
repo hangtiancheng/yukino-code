@@ -3,10 +3,17 @@ import { extname } from "node:path";
 
 import sharp from "sharp";
 
+import {
+  MAX_IMAGE_BYTES,
+  MAX_IMAGE_BYTES_PASSTHROUGH,
+  MAX_IMAGE_INPUT_BYTES,
+  MAX_DIMENSION_PX,
+} from "@/images/constants.js";
 import { createChildLogger } from "@/logger/index.js";
 
 // Submodule namespaces for library consumers (Images.<Sub>.*).
-export * as Clipboard from "./clipboard.js";
+export * as Clipboard from "@/images/clipboard.js";
+export * from "@/images/constants.js";
 
 const log = createChildLogger({ module: "images" });
 
@@ -33,17 +40,6 @@ interface ImageAttachment {
   /** Decoded byte length of `data`. */
   byteLength: number;
 }
-
-// Hard limit is 5MB on the base64-encoded payload. base64 inflates by 4/3, so the raw-byte target that always fits is 5MB * 3/4 = 3.75MB.
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const MAX_IMAGE_BYTES_PASSTHROUGH = (MAX_IMAGE_BYTES * 3) / 4;
-// On-disk admission cap for loadImageAttachment (pre-read memory bound).
-const MAX_IMAGE_INPUT_BYTES = 50 * 1024 * 1024;
-
-export const MAX_DIMENSION_PX = 2000;
-
-// Cap images per user message to stay well under provider block limits.
-export const MAX_IMAGES_PER_MESSAGE = 10;
 
 export class ImageTooLargeError extends Error {
   constructor(message: string) {

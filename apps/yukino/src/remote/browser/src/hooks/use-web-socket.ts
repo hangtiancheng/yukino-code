@@ -1,8 +1,8 @@
-import type { ClientMessage, ServerMessage } from "@browser/types";
-import { isServerMessage } from "@browser/types";
 import { useCallback, useEffect, useRef } from "react";
 
-import { OfflineMessageQueue } from "./offline-queue";
+import { OfflineMessageQueue } from "#/hooks/offline-queue.js";
+import type { ClientMessage, ServerMessage } from "#/types.js";
+import { isServerMessage } from "#/types.js";
 
 interface UseWebSocketOptions {
   onMessage: (message: ServerMessage) => void;

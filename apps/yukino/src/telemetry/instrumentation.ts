@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { getTelemetryRuntime, type TelemetryObservation } from "./index.js";
 
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
+import {
+  getTelemetryRuntime,
+  type TelemetryObservation,
+} from "@/telemetry/index.js";
 import type { ToolResult } from "@/tools/types.js";
 
 interface LlmMetadata {

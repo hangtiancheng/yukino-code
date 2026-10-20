@@ -8,9 +8,6 @@ import {
   type RefObject,
 } from "react";
 
-import type { ChatMessage } from "./chat.js";
-import { plainTerminalLine } from "./terminal-text.js";
-import type { ToolBlockInfo } from "./tool-display.js";
 
 import type { UserBashResult } from "@/conversation/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
@@ -24,6 +21,9 @@ import {
   type SessionMessage,
 } from "@/session/index.js";
 import type { ToolResult } from "@/tools/types.js";
+import type { ChatMessage } from "@/ui/chat.js";
+import { plainTerminalLine } from "@/ui/terminal-text.js";
+import type { ToolBlockInfo } from "@/ui/tool-display.js";
 import { asErrorString, plainTerminalText } from "@/utils/index.js";
 
 interface Options {

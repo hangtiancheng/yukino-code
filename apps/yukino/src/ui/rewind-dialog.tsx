@@ -2,10 +2,9 @@ import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import { SelectorFrame } from "./selector-frame.js";
-
 import type { Snapshot } from "@/file-history/index.js";
-import { ICONS, THEME } from "@/ui/styles.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
 
 export type RewindAction =
   | { type: "code_and_conversation"; snapshotIndex: number }

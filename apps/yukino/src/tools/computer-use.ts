@@ -8,12 +8,28 @@ import { setTimeout as delay } from "node:timers/promises";
 import sharp from "sharp";
 import { safeParse, z } from "zod";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
+import { maybeResizeAndDownsampleImage } from "@/images/index.js";
+import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
+import {
+  ACTIONS,
+  COMMAND_TIMEOUT_MS,
+  COMPUTER_USE_ACTION_REQUIRED_ERROR,
+  COMPUTER_USE_BOTH_ACTIONS_ERROR,
+  COMPUTER_USE_LOCKED_ERROR,
+  MAX_BATCH_ACTIONS,
+  MAX_COMMAND_OUTPUT_BYTES,
+  MAX_SCREENSHOT_HEIGHT,
+  MAX_SCREENSHOT_WIDTH,
+  OPENAI_ACTION_TYPES,
+} from "@/tools/constants.js";
+import { computerUseDescription } from "@/tools/prompts.js";
 import {
   MACOS_SNIPPET,
   WINDOWS_PWSH_ACTION_SNIPPET,
   WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
   WINDOWS_PWSH_SNIPPET,
-} from "./snippets.js";
+} from "@/tools/snippets.js";
 import type {
   Tool,
   ToolCategory,
@@ -21,36 +37,8 @@ import type {
   ToolResult,
   ToolResultContentBlock,
   ToolSchema,
-} from "./types.js";
-
-import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
-import { maybeResizeAndDownsampleImage } from "@/images/index.js";
-import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
+} from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
-
-const ACTIONS = [
-  "key",
-  "hold_key",
-  "type",
-  "cursor_position",
-  "mouse_move",
-  "left_mouse_down",
-  "left_mouse_up",
-  "left_click",
-  "left_click_drag",
-  "right_click",
-  "middle_click",
-  "double_click",
-  "triple_click",
-  "scroll",
-  "wait",
-  "screenshot",
-  "zoom",
-  "click",
-  "drag",
-  "keypress",
-  "move",
-] as const;
 
 const CoordinateSchema = z.tuple([
   z.number().int().nonnegative(),
@@ -61,20 +49,6 @@ const PathPointSchema = z.object({
   y: z.number().int().nonnegative(),
 });
 
-// OpenAI computer contract: instead of one action per call, the model sends an
-// ordered batch of typed actions plus safety-check/status bookkeeping.
-const OPENAI_ACTION_TYPES = [
-  "click",
-  "double_click",
-  "drag",
-  "keypress",
-  "move",
-  "screenshot",
-  "scroll",
-  "type",
-  "wait",
-] as const;
-const MAX_BATCH_ACTIONS = 100;
 const OpenAIActionSchema = z.object({
   type: z.enum(OPENAI_ACTION_TYPES),
   button: z.enum(["left", "right", "wheel", "back", "forward"]).optional(),
@@ -179,11 +153,6 @@ export interface ComputerUseToolOptions {
   platform?: NodeJS.Platform;
   runCommand?: CommandRunner;
 }
-
-const COMMAND_TIMEOUT_MS = 15_000;
-const MAX_COMMAND_OUTPUT_BYTES = 32 * 1024 * 1024;
-const MAX_SCREENSHOT_WIDTH = 1366;
-const MAX_SCREENSHOT_HEIGHT = 900;
 
 function defaultEnvironment(platform: NodeJS.Platform): ComputerUseEnvironment {
   if (platform === "darwin") {
@@ -546,12 +515,7 @@ export class ComputerUseTool implements Tool {
     this.platform = options.platform ?? process.platform;
     this.environment = options.environment ?? defaultEnvironment(this.platform);
     this.run = options.runCommand ?? runCommand;
-    this.description =
-      `Control the current ${this.environment} computer with screenshots, mouse, keyboard, scrolling, waiting, and zoom. ` +
-      "Use screenshot before choosing coordinates and verify consequential actions with another screenshot. " +
-      "Two call styles are supported: Anthropic-style single actions (action + coordinate/scroll_amount/scroll_direction/start_coordinate/region/text), " +
-      "and OpenAI-style batches (actions[] of typed actions with x/y/button/keys/path/scrollX/scrollY/text, plus pendingSafetyChecks and status; " +
-      "a screenshot is returned after the batch). Flat OpenAI aliases (action=click/drag/keypress/move) are also accepted.";
+    this.description = computerUseDescription(this.environment);
   }
 
   isConcurrencySafe(_args: Record<string, unknown>): boolean {
@@ -764,15 +728,13 @@ export class ComputerUseTool implements Tool {
     const batch = input.actions ?? [];
     if (batch.length > 0 && input.action !== undefined) {
       return {
-        output:
-          "Error: send either action (Anthropic-style, one action per call) or actions (OpenAI-style batch), not both.",
+        output: COMPUTER_USE_BOTH_ACTIONS_ERROR,
         isError: true,
       };
     }
     if (batch.length === 0 && input.action === undefined) {
       return {
-        output:
-          "Error: action (Anthropic-style) or actions (OpenAI-style batch) is required.",
+        output: COMPUTER_USE_ACTION_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -782,8 +744,7 @@ export class ComputerUseTool implements Tool {
     );
     if (!release) {
       return {
-        output:
-          "Error: the computer is being controlled by another Yukino call. Retry after it finishes.",
+        output: COMPUTER_USE_LOCKED_ERROR,
         isError: true,
       };
     }

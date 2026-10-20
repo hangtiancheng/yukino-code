@@ -3,22 +3,22 @@ import type { DOMElement } from "ink";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { CursorText } from "./cursor-text.js";
-import { getListWindowStart } from "./list-window.js";
-import { SelectorFrame } from "./selector-frame.js";
-import { selectorChrome } from "./selector-layout.js";
-import { cursorWindow } from "./terminal-text.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { CursorText } from "@/ui/cursor-text.js";
+import { getListWindowStart } from "@/ui/list-window.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { selectorChrome } from "@/ui/selector-layout.js";
+import { cursorWindow } from "@/ui/terminal-text.js";
 import {
   plainTerminalLine,
   truncateToWidth,
   visibleWidth,
-} from "./terminal-text.js";
+} from "@/ui/terminal-text.js";
 import {
   useAvailableRows,
   useTerminalDimensions,
-} from "./use-terminal-layout.js";
+} from "@/ui/use-terminal-layout.js";
 
-import { ICONS, THEME } from "@/ui/styles.js";
 
 interface SelectorListProps {
   children: (start: number, count: number, width: number) => ReactNode;

@@ -5,8 +5,13 @@ import { createNodeWebSocketUpgradeHandler } from "@agentclientprotocol/sdk/expe
 import { AcpServer } from "@agentclientprotocol/sdk/experimental/server";
 import { WebSocketServer } from "ws";
 
-import { createYukinoAcpApp } from "./agent.js";
-
+import { createYukinoAcpApp } from "@/acp/agent.js";
+import {
+  ACP_PATH,
+  ACP_WS_DEFAULT_PORT,
+  DEFAULT_ADDRESS,
+  LOOPBACK_HOSTS,
+} from "@/acp/constants.js";
 import { parseRemoteAddress } from "@/remote/address.js";
 import {
   addWebSocketToken,
@@ -14,11 +19,6 @@ import {
   createWebSocketAccessToken,
   rejectWebSocketUpgrade,
 } from "@/websocket-security.js";
-
-const ACP_PATH = "/acp";
-const ACP_WS_DEFAULT_PORT = 18889;
-const DEFAULT_ADDRESS = `127.0.0.1:${String(ACP_WS_DEFAULT_PORT)}`;
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 export interface AcpWebSocketServerHandle {
   url: string;

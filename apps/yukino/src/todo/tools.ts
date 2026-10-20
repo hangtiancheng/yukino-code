@@ -1,11 +1,16 @@
 import z from "zod";
 
-import { unresolvedTaskDependencies } from "./dependencies.js";
-import { taskProgress } from "./progress.js";
-import { StoredTaskStatusSchema } from "./store.js";
-
-import type { TaskBoard, TaskList } from "./index.js";
-
+import { unresolvedTaskDependencies } from "@/todo/dependencies.js";
+import type { TaskBoard, TaskList } from "@/todo/index.js";
+import { taskProgress } from "@/todo/progress.js";
+import {
+  TASK_CREATE_DESCRIPTION,
+  TASK_GET_DESCRIPTION,
+  TASK_LIST_DESCRIPTION,
+  TASK_UPDATE_DESCRIPTION,
+  TODO_WRITE_DESCRIPTION,
+} from "@/todo/prompts.js";
+import { StoredTaskStatusSchema } from "@/todo/store.js";
 import type {
   Tool,
   ToolResult,
@@ -16,8 +21,7 @@ import { asErrorString, strArg } from "@/utils/index.js";
 
 export class TaskCreateTool implements Tool {
   name = "TaskCreate";
-  description =
-    "Create a pending item on the current task board. This tracks work; it does not launch an Agent or a background task.";
+  description = TASK_CREATE_DESCRIPTION;
   category = "read" as const;
   isConcurrencySafe(): boolean {
     return true;
@@ -92,7 +96,7 @@ export class TaskCreateTool implements Tool {
 
 export class TaskGetTool implements Tool {
   name = "TaskGet";
-  description = "Get a task by its ID.";
+  description = TASK_GET_DESCRIPTION;
   category = "read" as const;
 
   private list: TaskBoard;
@@ -144,7 +148,7 @@ export class TaskGetTool implements Tool {
 
 export class TaskListTool implements Tool {
   name = "TaskList";
-  description = "List all tasks.";
+  description = TASK_LIST_DESCRIPTION;
   category = "read" as const;
 
   private list: TaskBoard;
@@ -194,8 +198,7 @@ export class TaskListTool implements Tool {
 
 export class TaskUpdateTool implements Tool {
   name = "TaskUpdate";
-  description =
-    "Atomically update the current task board's fields and dependencies. Dependency IDs must already exist; self-dependencies, cycles, and starting blocked work are rejected. Teammates claim in_progress tasks under their own name. deleted removes the task and its links.";
+  description = TASK_UPDATE_DESCRIPTION;
   category = "read" as const;
   isConcurrencySafe(): boolean {
     return true;
@@ -321,8 +324,7 @@ const TaskUpdateArgsSchema = z
 
 export class TodoWriteTool implements Tool {
   name = "TodoWrite";
-  description =
-    "Replace this agent's entire private TODO list in one atomic update. Include all items to retain; reuse returned IDs to preserve metadata and dependency links. Returns todos with IDs and TODO completed/total progress. An empty array clears the list; completing all items retains them. Track complex work, not trivial requests; this tool never launches work.";
+  description = TODO_WRITE_DESCRIPTION;
   category = "read" as const;
   constructor(private list: TaskList) {}
   isConcurrencySafe(): boolean {

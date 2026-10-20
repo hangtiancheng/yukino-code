@@ -1,15 +1,15 @@
 import { memo } from "react";
 
-import {
-  AgentToolProgress,
-  type SubagentProgress,
-} from "./agent-tool-progress.js";
-import type { ToolBlockInfo } from "./tool-display.js";
 
 import type { AgentTask } from "@/subagent/task-manager.js";
 import type { TeammateUIState } from "@/teams/progress.js";
+import {
+  AgentToolProgress,
+  type SubagentProgress,
+} from "@/ui/agent-tool-progress.js";
+import type { ToolBlockInfo } from "@/ui/tool-display.js";
 
-export type { SubagentProgress } from "./agent-tool-progress.js";
+export type { SubagentProgress } from "@/ui/agent-tool-progress.js";
 
 interface Props {
   tools: ToolBlockInfo[];

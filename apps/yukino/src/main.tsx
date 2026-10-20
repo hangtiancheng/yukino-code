@@ -1,31 +1,31 @@
 import { render } from "ink";
 
-import type { InteractionSummary } from "./bootstrap/interaction-summary.js";
-import type { RuntimeMode } from "./cli.js";
+import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
+import type { RuntimeMode } from "@/cli.js";
 import {
   forkEnabled,
   loadConfig,
   memoryEnabled,
   withProjectMcpServers,
-} from "./config/index.js";
-import { initLogger, logger } from "./logger/index.js";
-import { runPrintMode } from "./print-mode.js";
-import { recover, recordError, recordExit } from "./recover.js";
-import { newSessionId } from "./session/index.js";
+} from "@/config/index.js";
+import { initLogger, logger } from "@/logger/index.js";
+import { runPrintMode } from "@/print-mode.js";
+import { recover, recordError, recordExit } from "@/recover.js";
+import { newSessionId } from "@/session/index.js";
 import {
   captureTelemetryError,
   initializeTelemetry,
   installRemoteTelemetrySignalHandlers,
   setTelemetryMode,
   shutdownTelemetry,
-} from "./telemetry/index.js";
-import { App } from "./ui/app.js";
-import { renderInteractionSummary } from "./ui/interaction-summary.js";
-import { setThemeMode } from "./ui/styles.js";
-import { TerminalInput } from "./ui/terminal-input.js";
-import { installTerminalOutput } from "./ui/terminal-output.js";
-import { detectTerminalTheme } from "./ui/terminal-theme.js";
-import { asErrorString } from "./utils/index.js";
+} from "@/telemetry/index.js";
+import { App } from "@/ui/app.js";
+import { renderInteractionSummary } from "@/ui/interaction-summary.js";
+import { setThemeMode } from "@/ui/styles.js";
+import { TerminalInput } from "@/ui/terminal-input.js";
+import { installTerminalOutput } from "@/ui/terminal-output.js";
+import { detectTerminalTheme } from "@/ui/terminal-theme.js";
+import { asErrorString } from "@/utils/index.js";
 
 async function runAcpMode(
   mode: Extract<RuntimeMode, { kind: "acp" | "acp-ws" }>,

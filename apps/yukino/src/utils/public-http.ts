@@ -4,6 +4,8 @@ import { request as httpsRequest } from "node:https";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 import { Readable } from "node:stream";
 
+import { MAX_REDIRECTS, REDIRECT_STATUSES } from "@/utils/constants.js";
+
 export interface LookupAddress {
   address: string;
   family: number;
@@ -18,8 +20,6 @@ export interface PublicHttpDependencies {
   lookup?: HostLookup;
 }
 
-const MAX_REDIRECTS = 5;
-const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const blockedIpv4Addresses = new BlockList();
 const blockedIpv6Addresses = new BlockList();
 

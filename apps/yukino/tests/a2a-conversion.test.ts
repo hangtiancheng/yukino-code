@@ -3,10 +3,10 @@ import type { Part } from "@a2a-js/sdk";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { MAX_TOOL_OUTPUT_LENGTH } from "@/a2a/constants.js";
 import {
   agentEventToMessage,
   findPermissionResponse,
-  MAX_TOOL_OUTPUT_LENGTH,
   messageText,
   statusUpdate,
   taskSnapshot,

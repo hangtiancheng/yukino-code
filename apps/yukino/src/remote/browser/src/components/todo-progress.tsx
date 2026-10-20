@@ -1,5 +1,6 @@
-import type { TodoUpdatePayload } from "@browser/types";
 import { useEffect, useState } from "react";
+
+import type { TodoUpdatePayload } from "#/types.js";
 
 interface TodoProgressProps {
   todos: TodoUpdatePayload;

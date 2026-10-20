@@ -1,11 +1,5 @@
-import type { CodeReviewResult, ReviewComment } from "./types.js";
-
-const SEVERITY_ICON: Record<string, string> = {
-  critical: "🔴",
-  high: "🟠",
-  medium: "🟡",
-  low: "🔵",
-};
+import { SEVERITY_ICON } from "@/review/constants.js";
+import type { CodeReviewResult, ReviewComment } from "@/review/types.js";
 
 function formatComment(cm: ReviewComment): string {
   const icon = SEVERITY_ICON[cm.severity] ?? "🟢";

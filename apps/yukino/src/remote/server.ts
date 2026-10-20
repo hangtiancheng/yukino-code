@@ -13,9 +13,6 @@ import express, { type Express } from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import z from "zod";
 
-import { parseRemoteAddress } from "./address.js";
-import { AgentEventLogger } from "./log.js";
-import { restoreRemoteSession } from "./session-state.js";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
@@ -34,12 +31,12 @@ import {
 import { loadUserCommands } from "@/commands/loader.js";
 import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
+import { DEFAULT_THINKING_LEVEL } from "@/config/constants.js";
 import { loadConfig, withProjectMcpServers } from "@/config/index.js";
 import type { SandboxYamlConfig } from "@/config/index.js";
 import type { HookConfig, MCPServerConfig } from "@/config/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import {
-  DEFAULT_THINKING_LEVEL,
   getContextWindow,
   getMaxOutputTokens,
   getSupportedThinkingLevels,
@@ -90,6 +87,19 @@ import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
+import { parseRemoteAddress } from "@/remote/address.js";
+import {
+  BROWSER_DIST,
+  FILE_CACHE_TTL_MS,
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_STALE_MS,
+  MAX_UPLOAD_IMAGE_BYTES,
+  MIME_TYPES,
+  PENDING_REQUEST_TIMEOUT_MINUTES,
+  PENDING_REQUEST_TIMEOUT_MS,
+} from "@/remote/constants.js";
+import { AgentEventLogger } from "@/remote/log.js";
+import { restoreRemoteSession } from "@/remote/session-state.js";
 import { formatReviewReport } from "@/review/report.js";
 import { runCodeReview, validateReviewInput } from "@/review/runner.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
@@ -114,7 +124,7 @@ import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/definition.js";
+import { BUILTIN_AGENTS, FORK_AGENT } from "@/subagent/constants.js";
 import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
 import {
   TaskManager,
@@ -173,15 +183,6 @@ function nextRequestId(prefix: string): string {
   requestCounter += 1;
   return `${prefix}_${Date.now().toString(36)}_${String(requestCounter)}`;
 }
-
-// Permission/ask requests with no client response settle after this long, so
-// a closed browser tab cannot pin the streaming slot (and the run) forever.
-const PENDING_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
-const PENDING_REQUEST_TIMEOUT_MINUTES = 10;
-// WS heartbeat: ping interval and the no-pong threshold that terminates a
-// half-open connection.
-const HEARTBEAT_INTERVAL_MS = 30_000;
-const HEARTBEAT_STALE_MS = 75_000;
 
 interface WsOutbound {
   type: string;
@@ -267,27 +268,6 @@ const ImageUploadSchema = z.object({
   name: z.string(),
   dataBase64: z.string(),
 });
-
-/** Uploaded images follow the terminal clipboard-image limit. */
-const MAX_UPLOAD_IMAGE_BYTES = 32 * 1024 * 1024;
-/** @-mention file cache lifetime (matches the terminal input cache). */
-const FILE_CACHE_TTL_MS = 30_000;
-
-const BROWSER_DIST = [
-  join(import.meta.dirname, "browser", "dist"),
-  join(import.meta.dirname, "..", "browser", "dist"),
-].find((directory) => existsSync(directory));
-
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".json": "application/json; charset=utf-8",
-  ".woff2": "font/woff2",
-};
 
 /** Serves a static file from browser/dist/. Returns null if not found. */
 function serveStatic(path: string): { body: Buffer; mime: string } | null {

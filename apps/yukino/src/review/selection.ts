@@ -1,6 +1,7 @@
 import { minimatch } from "minimatch";
 
-import type { ExcludeReason, FileDecision, FileDiff } from "./types.js";
+import { FILE_TOKEN_LIMIT, MATCH_OPTS } from "@/review/constants.js";
+import type { ExcludeReason, FileDecision, FileDiff } from "@/review/types.js";
 
 /**
  * Deterministic file selection. Static credential/noise/extension gates are
@@ -21,18 +22,6 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-/**
- * Fallback per-file diff size ceiling when the caller does not derive one
- * from the provider context window.
- */
-export const FILE_TOKEN_LIMIT = 160_000;
-
-/**
- * Fraction of the context window a single review prompt may occupy.
- * Feeds both the per-file gate and the group token budget.
- */
-export const PROMPT_TOKEN_RATIO = 0.8;
-
 export interface SelectionOptions {
   /** User exclude globs from the code review form. */
   excludePatterns?: string[];
@@ -46,8 +35,6 @@ export function effectivePath(d: FileDiff): string {
   }
   return d.oldPath;
 }
-
-const MATCH_OPTS = { dot: true, nocase: false };
 
 function matchesAny(path: string, patterns: string[]): boolean {
   return patterns.some((p) => minimatch(path, p, MATCH_OPTS));

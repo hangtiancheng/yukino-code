@@ -1,12 +1,11 @@
-import type { FileDiff, Hunk, HunkLine } from "./types.js";
+import { HUNK_HEADER_RE } from "@/review/constants.js";
+import type { FileDiff, Hunk, HunkLine } from "@/review/types.js";
 
 /**
  * Unified-diff parsing. Deterministic engineering: everything downstream (selection,
  * grouping, line resolution) consumes these structures instead of re-reading
  * raw diff text.
  */
-
-const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
 /** Split diff text on "\n" and drop the "\r" CRLF conversion leaves behind. */
 function splitDiffLines(text: string): string[] {

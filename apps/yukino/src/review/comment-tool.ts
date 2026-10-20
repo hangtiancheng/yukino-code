@@ -1,12 +1,16 @@
 import { posix } from "node:path";
 
+import {
+  CATEGORIES,
+  CODE_COMMENT_SUCCESS,
+  SEVERITIES,
+} from "@/review/constants.js";
 import type {
   CommentCategory,
   CommentSeverity,
   FileDiff,
   ReviewComment,
-} from "./types.js";
-
+} from "@/review/types.js";
 import type {
   Tool,
   ToolContext,
@@ -20,19 +24,6 @@ import { isRecord, safeJSONParse, strArg } from "@/utils/index.js";
  * free text: the schema forces path + existing_code anchors, which the
  * positioning pipeline then turns into exact line numbers.
  */
-
-const CATEGORIES: CommentCategory[] = [
-  "bug",
-  "security",
-  "performance",
-  "maintainability",
-  "test",
-  "style",
-  "documentation",
-  "other",
-];
-
-const SEVERITIES: CommentSeverity[] = ["critical", "high", "medium", "low"];
 
 function normalizeCategory(raw: unknown): CommentCategory {
   const s = typeof raw === "string" ? raw.toLowerCase() : "";
@@ -215,9 +206,6 @@ export interface CodeCommentToolDeps {
   resolve: (comments: ReviewComment[]) => Promise<void>;
   groupLabel: string;
 }
-
-export const CODE_COMMENT_SUCCESS =
-  "Comments recorded. Continue reviewing; when finished, end your turn without calling tools.";
 
 /**
  * The review agent's only output channel. Category is "read" — it mutates no

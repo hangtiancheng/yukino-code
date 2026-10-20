@@ -1,6 +1,6 @@
-import { createClient, type LLMClient } from "./client.js";
-
 import type { ProviderConfig } from "@/config/provider-config.js";
+import { createClient, type LLMClient } from "@/llm/client.js";
+
 
 export function createModelResolver(
   baseConfig: ProviderConfig,

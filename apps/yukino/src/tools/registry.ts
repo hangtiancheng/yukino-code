@@ -7,7 +7,7 @@ import type {
   Tool,
   ToolProtocol,
   ToolSchema,
-} from "./types.js";
+} from "@/tools/types.js";
 
 export class ToolRegistry {
   private tools = new Map<string, Tool>();

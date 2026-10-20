@@ -1,11 +1,27 @@
 import {
+  AUTO_COMPACT_SAFETY_MARGIN,
+  AUTO_MARGIN_RATIO,
+  CHARS_PER_TOKEN,
+  IMAGE_CHAR_EQUIV,
+  KEEP_MAX_TOKENS,
+  KEEP_RECENT_TOKENS,
+  MANUAL_COMPACT_SAFETY_MARGIN,
+  MANUAL_MARGIN_RATIO,
+  MAX_CONSECUTIVE_FAILURES,
+  MAX_PTL_RETRIES,
+  MIN_COMPACT_PREFIX,
+  MIN_KEEP_MESSAGES,
+  SUMMARY_ANSWER_RESERVE_TOKENS,
+  SUMMARY_OUTPUT_RESERVE,
+} from "@/compact/constants.js";
+import {
   buildCompactionSummaryMessage,
   buildSummaryInstructions,
   buildSummaryPrompt,
-} from "./prompts.js";
-import type { RecoveryState } from "./recovery.js";
-
-import { DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/provider-config.js";
+  PTL_RETRY_MARKER,
+} from "@/compact/prompts.js";
+import type { RecoveryState } from "@/compact/recovery.js";
+import { DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/constants.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
@@ -30,55 +46,6 @@ export interface CompactResult {
   message: string;
   boundary?: CompactBoundaryPayload;
 }
-
-// Auto-compact uses a token-budget formula rather than a fixed usage ratio:
-// reserve room for the summary output in the next response turn, then leave a
-// safety margin before the window fills.
-
-const MAX_CONSECUTIVE_FAILURES = 3;
-const MAX_PTL_RETRIES = 3;
-const PTL_RETRY_MARKER =
-  "[earlier conversation truncated for compaction retry]";
-const CHARS_PER_TOKEN = 3.5;
-
-// Recent-history retention budget for compaction. When we compact we keep the tail of
-// the transcript verbatim instead of collapsing everything into a summary, so
-// the model still sees the literal recent exchange (not just a paraphrase).
-//   KEEP_RECENT_TOKENS — lower bound: walk back from the tail until the kept
-//     tail reaches at least this many tokens (one of two "good enough" stops).
-//   MIN_KEEP_MESSAGES — floor: keep at least this many recent messages even if
-//     they are short (the other "good enough" stop).
-//   KEEP_MAX_TOKENS — upper bound: stop walking back once adding the next
-//     message would cross it. The most recent message is always kept, even
-//     when it alone exceeds the cap, so the tail can still overshoot.
-const KEEP_RECENT_TOKENS = 10000;
-const MIN_KEEP_MESSAGES = 5;
-const KEEP_MAX_TOKENS = 40000;
-
-// If fewer than this many messages would be summarized (everything else is in
-// the kept tail), skip compaction entirely — the savings aren't worth the
-// summary round-trip and the lost cache. Degenerate-case guard.
-const MIN_COMPACT_PREFIX = 2;
-
-const SUMMARY_OUTPUT_RESERVE = 20000;
-const AUTO_COMPACT_SAFETY_MARGIN = 13000;
-const MANUAL_COMPACT_SAFETY_MARGIN = 3000;
-// Reserve enough answer space for a full compaction summary so a fixed thinking
-// budget cannot squeeze the summary down to the 1024-token answer floor.
-const SUMMARY_ANSWER_RESERVE_TOKENS = 16_000;
-
-// effectiveWindow = contextWindow − min(model maxOutput, SUMMARY_OUTPUT_RESERVE).
-// Auto-compact triggers at effectiveWindow − AUTO margin; once token usage crosses
-// effectiveWindow − MANUAL margin (the hard block line) we must force a compaction.
-//
-// The fixed margins assume a large window. On a small window they can exceed the
-// available space and drive the threshold to zero or below, which would force a
-// compaction every turn and keep the hard-block line permanently crossed. The
-// margin is therefore capped to a fraction of the effective window so the
-// threshold stays a meaningful positive headroom, while large windows keep the
-// original fixed-margin behaviour exactly.
-const AUTO_MARGIN_RATIO = 0.25;
-const MANUAL_MARGIN_RATIO = 0.1;
 
 export function computeCompactThreshold(
   contextWindow: number,
@@ -116,12 +83,6 @@ export interface UsageAnchor {
   // this index are estimated incrementally.
   anchorCount: number;
 }
-
-// Each image block counts as a fixed char-equivalent (~2000 tokens at
-// CHARS_PER_TOKEN, the order of magnitude of Anthropic's per-image token
-// cost). Without this, image-heavy conversations systematically
-// under-estimate and compaction fires too late.
-const IMAGE_CHAR_EQUIV = 7000;
 
 function contentChars(content: string | Record<string, unknown>[]): number {
   if (typeof content === "string") {

@@ -1,21 +1,13 @@
-import {
-  DARK_THEME,
-  LIGHT_THEME,
-  type ThemeMode,
-  type ThemePalette,
-} from "../theme/palette.js";
 
 import type { ThinkingLevel } from "@/config/provider-config.js";
+import { DARK_THEME, LIGHT_THEME, type ThemeMode } from "@/theme/constants.js";
+import { THEME } from "@/ui/constants.js";
 
-export { DARK_THEME, LIGHT_THEME };
-export type { ThemePalette };
 let themeMode: ThemeMode = "dark";
 
 export function getThemeMode(): ThemeMode {
   return themeMode;
 }
-
-export const THEME: ThemePalette = { ...DARK_THEME };
 
 export function setThemeMode(mode: ThemeMode): void {
   themeMode = mode;
@@ -62,17 +54,3 @@ export function activityStatusColor(status: ActivityStatus): string {
       return THEME.borderMuted;
   }
 }
-
-export const ICONS = {
-  active: "◉",
-  arrow: "→" satisfies "→" | "←",
-  branch: "├─",
-  collapsed: "⊞",
-  expanded: "⊟",
-  inactive: "○",
-  lastBranch: "└─",
-  prompt: ">",
-  success: "✓",
-  error: "✗",
-  tree: "│",
-} as const;

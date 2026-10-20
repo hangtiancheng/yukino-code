@@ -1,3 +1,23 @@
+import {
+  PLAN_MODE_ASK_USER_CLARIFICATION,
+  PLAN_MODE_COORDINATOR_APPROVAL,
+  PLAN_MODE_COORDINATOR_CLARIFICATION,
+  PLAN_MODE_EXIT_FOR_APPROVAL,
+  PLAN_MODE_FINISH_TURN_SUBMIT,
+  PLAN_MODE_READONLY_APPROVAL,
+  PLAN_MODE_READONLY_CONSTRAINT,
+  PLAN_MODE_READ_ONLY_RUN,
+  PLAN_MODE_REPORT_TO_LEADER_CLARIFICATION,
+  PLAN_MODE_RETURN_TO_PARENT_CLARIFICATION,
+  PLAN_MODE_SUBAGENT_EXIT_PLAN_MODE,
+  PLAN_MODE_SUBAGENT_RETURN_PLAN,
+  PLAN_MODE_TEAMMATE_AUTO_APPROVAL,
+  PLAN_MODE_TEAMMATE_LEADER_REVIEW,
+  PLAN_MODE_TEAMMATE_RETURN_PLAN,
+  PLAN_MODE_TEAMMATE_SUBMIT_PLAN,
+  PLAN_MODE_WRITABLE_CONSTRAINT,
+} from "@/prompt/prompts.js";
+
 interface PlanCapabilities {
   canAskUser?: boolean;
   canExitPlanMode?: boolean;
@@ -33,28 +53,28 @@ export function buildPlanModeReminder(
   } = capabilities;
   const writable = canWriteFile || (planExist && canEditFile);
   const constraint = writable
-    ? "Read-only except the declared plan file."
-    : "Read-only. Return the plan in your final response; do not create or edit files.";
+    ? PLAN_MODE_WRITABLE_CONSTRAINT
+    : PLAN_MODE_READONLY_CONSTRAINT;
   const clarification = isCoordinator
-    ? "State material unknowns in your user-facing response; teammate messages are not user clarification or approval."
+    ? PLAN_MODE_COORDINATOR_CLARIFICATION
     : canAskUser
-      ? "Use AskUserQuestion only for needed clarification, never approval."
+      ? PLAN_MODE_ASK_USER_CLARIFICATION
       : canSendMessage
-        ? "Report material unknowns to the leader with SendMessage."
-        : "Return material unknowns to the parent in your final response.";
+        ? PLAN_MODE_REPORT_TO_LEADER_CLARIFICATION
+        : PLAN_MODE_RETURN_TO_PARENT_CLARIFICATION;
   const approval = isCoordinator
-    ? "Return the synthesized plan to the user. Stay read-only until the user leaves plan mode with Shift+Tab. Do not submit your own plan to a teammate or treat a worker report as approval."
+    ? PLAN_MODE_COORDINATOR_APPROVAL
     : readOnly
-      ? "Return the findings or plan to the leader or parent. This role remains read-only for every follow-up; plan approval cannot authorize implementation."
+      ? PLAN_MODE_READONLY_APPROVAL
       : isTeammate
-        ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode and end the turn." : "When the plan is ready, return it in your final response; the host will submit it."} ${requiresLeaderPlanApproval ? "Stay read-only until the leader reviews your plan and gives approval. If rejected, revise using the leader's feedback and submit again." : "The runtime will automatically approve the submitted plan and resume execution under current tool permissions."}`
+        ? `${canExitPlanMode ? PLAN_MODE_TEAMMATE_SUBMIT_PLAN : PLAN_MODE_TEAMMATE_RETURN_PLAN} ${requiresLeaderPlanApproval ? PLAN_MODE_TEAMMATE_LEADER_REVIEW : PLAN_MODE_TEAMMATE_AUTO_APPROVAL}`
         : isSubagent
-          ? `${canExitPlanMode ? "When the plan file is ready, call ExitPlanMode to return the plan to the parent and end the turn." : "When the plan is ready, return it to the parent."} This read-only run cannot enter implementation mode.`
+          ? `${canExitPlanMode ? PLAN_MODE_SUBAGENT_EXIT_PLAN_MODE : PLAN_MODE_SUBAGENT_RETURN_PLAN} ${PLAN_MODE_READ_ONLY_RUN}`
           : canExitPlanMode
-            ? "When the plan is ready, call ExitPlanMode for approval; never request approval through prose. Wait for the runtime approval gate before implementation."
+            ? PLAN_MODE_EXIT_FOR_APPROVAL
             : canSendMessage
-              ? "When the plan is ready, finish the turn. The runtime will submit and automatically approve the plan, then resume execution under the current tool permissions. Do not ask the leader to approve it through SendMessage."
-              : "When the plan is ready, return it to the parent. This read-only run cannot enter implementation mode.";
+              ? PLAN_MODE_FINISH_TURN_SUBMIT
+              : `${PLAN_MODE_SUBAGENT_RETURN_PLAN} ${PLAN_MODE_READ_ONLY_RUN}`;
   if (iteration > 1 && (iteration - 1) % 5 !== 0) {
     return `Plan mode still active. ${constraint} Plan file: ${planPath}. Keep Context, Approach, files, and Verification current. ${clarification} ${approval}`;
   }

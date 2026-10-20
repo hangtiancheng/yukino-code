@@ -1,42 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import { CommentCollector, CodeCommentTool } from "./comment-tool.js";
-import { FileReadDiffTool } from "./file-read-diff.js";
-import { filterComments } from "./filter.js";
-import {
-  buildChangeFilesExceptGroup,
-  buildConcatenatedDiffs,
-  buildConfirmedCommentsBlock,
-  buildMainTaskMessage,
-  CONFIRMED_CAP,
-} from "./format.js";
-import { collectDiffs, deriveReviewMode } from "./git.js";
-import { groupDiffs } from "./grouping.js";
-import { callOnce } from "./llm-call.js";
-import {
-  MAIN_SYSTEM,
-  NO_TOOL_USE_NUDGE,
-  PLAN_SYSTEM,
-  PLAN_USER,
-  renderTemplate,
-} from "./prompts.js";
-import { relocateWithLlm } from "./relocate.js";
-import { relocateAcrossFiles, resolveComment } from "./resolve.js";
-import {
-  PROMPT_TOKEN_RATIO,
-  selectFiles,
-  summarizeSelection,
-} from "./selection.js";
-import type {
-  CodeReviewOptions,
-  CodeReviewResult,
-  FileDiff,
-  FileGroup,
-  ReviewComment,
-  ReviewMode,
-  ReviewToolEvent,
-} from "./types.js";
-
 import { Agent } from "@/agent/index.js";
 import {
   getContextWindow,
@@ -47,6 +10,47 @@ import { ConversationManager } from "@/conversation/index.js";
 import { redactText } from "@/feedback/redact.js";
 import { createClient, type LLMClient } from "@/llm/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { CommentCollector, CodeCommentTool } from "@/review/comment-tool.js";
+import {
+  CONFIRMED_CAP,
+  DEFAULT_CONCURRENCY,
+  DEFAULT_MAX_ROUNDS,
+  MAX_AGENT_ITERATIONS,
+  PLAN_MODE_GROUP_LINE_THRESHOLD,
+  PLAN_MODE_LINE_THRESHOLD,
+  PROMPT_TOKEN_RATIO,
+} from "@/review/constants.js";
+import { FileReadDiffTool } from "@/review/file-read-diff.js";
+import { filterComments } from "@/review/filter.js";
+import {
+  buildChangeFilesExceptGroup,
+  buildConcatenatedDiffs,
+  buildConfirmedCommentsBlock,
+  buildMainTaskMessage,
+} from "@/review/format.js";
+import { collectDiffs, deriveReviewMode } from "@/review/git.js";
+import { groupDiffs } from "@/review/grouping.js";
+import { callOnce } from "@/review/llm-call.js";
+import {
+  MAIN_SYSTEM,
+  NO_TOOL_USE_NUDGE,
+  PLAN_SYSTEM,
+  PLAN_USER,
+  renderTemplate,
+  UTIL_SYSTEM_PROMPT,
+} from "@/review/prompts.js";
+import { relocateWithLlm } from "@/review/relocate.js";
+import { relocateAcrossFiles, resolveComment } from "@/review/resolve.js";
+import { selectFiles, summarizeSelection } from "@/review/selection.js";
+import type {
+  CodeReviewOptions,
+  CodeReviewResult,
+  FileDiff,
+  FileGroup,
+  ReviewComment,
+  ReviewMode,
+  ReviewToolEvent,
+} from "@/review/types.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { GlobTool } from "@/tools/glob.js";
 import { GrepTool } from "@/tools/grep.js";
@@ -59,17 +63,6 @@ import { ToolRegistry } from "@/tools/registry.js";
  * group runs as an isolated subagent with its own conversation, registry,
  * and permission scope, reusing yukino's tool loop and auto-compaction.
  */
-
-const UTIL_SYSTEM_PROMPT =
-  "You are a precise assistant. Follow the instructions exactly and output only what is requested.";
-
-/** Plan phase thresholds. */
-const PLAN_MODE_LINE_THRESHOLD = 50;
-const PLAN_MODE_GROUP_LINE_THRESHOLD = 100;
-/** Turn cap for one agent run (each round builds a fresh Agent). */
-const MAX_AGENT_ITERATIONS = 50;
-const DEFAULT_CONCURRENCY = 3;
-const DEFAULT_MAX_ROUNDS = 2;
 
 export interface RunCodeReviewDeps {
   provider: ProviderConfig;

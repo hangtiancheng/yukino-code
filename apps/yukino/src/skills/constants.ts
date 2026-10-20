@@ -1,0 +1,1 @@
+export const MAX_SKILL_DOWNLOAD_BYTES = 1024 * 1024;

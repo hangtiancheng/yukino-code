@@ -1,14 +1,13 @@
+import { useState } from "react";
+
+import { Modal, ModalHeader } from "#/components/modal.js";
 import {
   EMPTY_CODE_REVIEW_FORM,
   validateCodeReviewForm,
   type CodeReviewFieldErrors,
   type CodeReviewFormValues,
-} from "@browser/lib/code-review-form";
-import type { CodeReviewStartPayload } from "@browser/types";
-import { useState } from "react";
-
-import { Modal, ModalHeader } from "./modal";
-
+} from "#/lib/code-review-form.js";
+import type { CodeReviewStartPayload } from "#/types.js";
 interface CodeReviewDialogProps {
   onRun: (options: CodeReviewStartPayload) => void;
   onClose: () => void;

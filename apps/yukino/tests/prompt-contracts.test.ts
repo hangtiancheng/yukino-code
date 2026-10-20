@@ -41,7 +41,7 @@ import {
   POWERSHELL_DESCRIPTION,
   READ_FILE_DESCRIPTION,
   WRITE_FILE_DESCRIPTION,
-} from "@/tools/descriptions.js";
+} from "@/tools/prompts.js";
 import type { ToolSchema } from "@/tools/types.js";
 
 const env: EnvironmentContext = {

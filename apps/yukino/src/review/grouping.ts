@@ -1,16 +1,20 @@
 import { safeParse, z } from "zod";
 
-import { callOnce } from "./llm-call.js";
+import type { LLMClient } from "@/llm/client.js";
+import {
+  GROUPING_MIN_FILES,
+  GROUP_TOKEN_BUDGET,
+  MAX_FILES_PER_GROUP,
+} from "@/review/constants.js";
+import { callOnce } from "@/review/llm-call.js";
 import {
   GROUPING_SYSTEM,
   GROUPING_USER,
   renderTemplate,
   stripMarkdownFences,
-} from "./prompts.js";
-import { estimateTokens } from "./selection.js";
-import type { FileDiff, FileGroup } from "./types.js";
-
-import type { LLMClient } from "@/llm/client.js";
+} from "@/review/prompts.js";
+import { estimateTokens } from "@/review/selection.js";
+import type { FileDiff, FileGroup } from "@/review/types.js";
 import { safeJSONParse } from "@/utils/index.js";
 
 /**
@@ -19,16 +23,6 @@ import { safeJSONParse } from "@/utils/index.js";
  * that stays stable on large changesets and naturally supports concurrent
  * review.
  */
-
-/** Below this file count, grouping adds no value. */
-export const GROUPING_MIN_FILES = 4;
-/** Hard cap per group. */
-export const MAX_FILES_PER_GROUP = 10;
-/**
- * Fallback combined diff token budget per group when the caller does not
- * derive one from the provider context window.
- */
-export const GROUP_TOKEN_BUDGET = 60_000;
 
 /** Render one changed file as `STATUS   path (+N/-M)`, the shared prompt shape. */
 export function formatDiffEntry(d: FileDiff): string {

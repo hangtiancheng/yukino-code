@@ -6,8 +6,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import type { UserBashResult } from "./index.js";
-
+import type { UserBashResult } from "@/conversation/index.js";
 import {
   mkdirPrivateSync as mkdirSync,
   writePrivateFileSync as writeFileSync,

@@ -1,7 +1,7 @@
-import type { RewindChoice, RewindSnapshot } from "@browser/types";
 import { useState } from "react";
 
-import { Modal, ModalHeader } from "./modal";
+import { Modal, ModalHeader } from "#/components/modal.js";
+import type { RewindChoice, RewindSnapshot } from "#/types.js";
 
 interface RewindDialogProps {
   snapshots: RewindSnapshot[];

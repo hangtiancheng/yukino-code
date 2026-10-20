@@ -1,9 +1,19 @@
 import z from "zod";
 
+import {
+  GOAL_RECORD,
+  MAX_GOAL_TURNS,
+  NO_GOAL_MESSAGE,
+} from "@/goal/constants.js";
+import {
+  BUDGET_LIMIT_INSTRUCTION,
+  CONTINUATION_INSTRUCTION,
+  REMINDER_INSTRUCTION,
+} from "@/goal/prompts.js";
 import { loadSession, saveMessage } from "@/session/index.js";
 
-export const MAX_GOAL_TURNS = 150;
-export const GOAL_RECORD = "goal_state";
+export * from "@/goal/constants.js";
+
 export const GoalSchema = z.object({
   objective: z.string().trim().min(1).max(4000),
   status: z.enum([
@@ -244,7 +254,7 @@ export class GoalManager {
       this.transition("max_turns");
       return null;
     }
-    return `Continue working toward the persistent goal: ${this.state.objective}\nPreserve the full objective and do not narrow success to completed work. Before using Goal to mark complete, derive all requirements and verify each with authoritative evidence; check that tests cover those requirements and treat uncertainty as unfinished work. If the same blocker persists, record it once per continuation turn; three consecutive turns stop continuation. Difficulty, slowness, and partial progress are not blockers. Honor user steering, current permissions, and pending approvals. Do not repeat completed work.`;
+    return `Continue working toward the persistent goal: ${this.state.objective}\n${CONTINUATION_INSTRUCTION}`;
   }
 
   takeBudgetSummary(): string | null {
@@ -255,20 +265,20 @@ export class GoalManager {
     goal.budgetSummaryPending = false;
     this.trackingUsage = true;
     this.persist();
-    return `<goal-budget-limit>\n${this.format()}\nThe goal token budget is exhausted. Stop substantive work. This is the single final summary request; no tools are available. Briefly report what was accomplished and verified, what remains unfinished, and any blockers. Preserve the full objective and do not claim incomplete work is complete. Leave the goal budget_limited for the user to decide.\n</goal-budget-limit>`;
+    return `<goal-budget-limit>\n${this.format()}\n${BUDGET_LIMIT_INSTRUCTION}\n</goal-budget-limit>`;
   }
 
   reminder(): string {
     const goal = this.get();
     return goal
-      ? `<persistent-goal>\n${this.format()}\nOnly the user can set, replace, pause, or resume a goal. Use Goal to get status or report completion/blockage. Preserve the full objective. Completion requires every requirement to be achieved and supported by verified evidence, including checking test coverage; uncertain work remains unfinished. Record the same unavoidable blocker once per turn; only three consecutive turns stop continuation. Difficulty or partial progress does not establish a blocker. Honor paused and terminal states, user steering, permissions, and approvals.\n</persistent-goal>`
+      ? `<persistent-goal>\n${this.format()}\n${REMINDER_INSTRUCTION}\n</persistent-goal>`
       : "";
   }
 
   format(): string {
     const goal = this.get();
     if (!goal) {
-      return "No goal is set. Only the user can set one with /goal <objective>.";
+      return NO_GOAL_MESSAGE;
     }
     return `Goal: ${goal.objective}\nStatus: ${goal.status}\nTokens: ${String(goal.tokensUsed)}${goal.tokenBudget === null ? "" : ` / ${String(goal.tokenBudget)}`}\nActive time: ${String(Math.floor(goal.activeMs / 1000))}s\nContinuation turns: ${String(goal.turnsExecuted)} / ${String(MAX_GOAL_TURNS)}${goal.lastBlockReason ? `\nBlocker: ${goal.lastBlockReason}` : ""}`;
   }

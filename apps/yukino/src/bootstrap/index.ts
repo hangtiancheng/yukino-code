@@ -1,5 +1,5 @@
 // Submodule namespaces for library consumers (Bootstrap.<Sub>.*).
-export * as ExitCleanup from "./exit-cleanup.js";
-export * as InteractionSummary from "./interaction-summary.js";
-export * as ToolRegistry from "./tool-registry.js";
-export * as Sandbox from "./sandbox.js";
+export * as ExitCleanup from "@/bootstrap/exit-cleanup.js";
+export * as InteractionSummary from "@/bootstrap/interaction-summary.js";
+export * as ToolRegistry from "@/bootstrap/tool-registry.js";
+export * as Sandbox from "@/bootstrap/sandbox.js";

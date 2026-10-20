@@ -2,15 +2,33 @@ import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { dirname } from "node:path";
 
+import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
+import { createChildLogger } from "@/logger/index.js";
+import { isSafeCommand } from "@/permissions/index.js";
+import type {
+  PreparedSandboxCommand,
+  Sandbox,
+  SandboxConfig,
+} from "@/sandbox/index.js";
+import { TaskFailure, type TaskManager } from "@/subagent/task-manager.js";
+import {
+  BACKGROUND_NOTIFICATION_BYTES,
+  COMMAND_INTERRUPTED_ERROR,
+  COMMAND_REQUIRED_ERROR,
+  KILL_GRACE_MS,
+  MAX_SHELL_OUTPUT_BYTES,
+  MAX_SHELL_OUTPUT_FILE_BYTES,
+  MAX_TIMEOUT,
+  SANDBOX_UNAVAILABLE_ERROR,
+  SIZE_WATCHDOG_INTERVAL_MS,
+  TIMEOUT_INVALID_ERROR,
+} from "@/tools/constants.js";
+import { withCommandExecution } from "@/tools/execution-coordinator.js";
 import {
   BASH_BACKGROUND_DESCRIPTION,
   BASH_DESCRIPTION,
-} from "./descriptions.js";
-import { withCommandExecution } from "./execution-coordinator.js";
+} from "@/tools/prompts.js";
 import {
-  BACKGROUND_NOTIFICATION_BYTES,
-  MAX_SHELL_OUTPUT_FILE_BYTES,
-  SIZE_WATCHDOG_INTERVAL_MS,
   backgroundMessage,
   backgroundTaskName,
   buildShellResult,
@@ -21,31 +39,17 @@ import {
   type BackgroundReason,
   type CommandHandle,
   type ShellExit,
-} from "./shell-background.js";
-import { MAX_SHELL_OUTPUT_BYTES } from "./shell-output.js";
+} from "@/tools/shell-background.js";
 import {
   type Tool,
   type ToolCategory,
   type ToolContext,
   type ToolResult,
   type ToolSchema,
-} from "./types.js";
-
-import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
-import { createChildLogger } from "@/logger/index.js";
-import { isSafeCommand } from "@/permissions/index.js";
-import type {
-  PreparedSandboxCommand,
-  Sandbox,
-  SandboxConfig,
-} from "@/sandbox/index.js";
-import { TaskFailure, type TaskManager } from "@/subagent/task-manager.js";
+} from "@/tools/types.js";
 import { asErrorString, boolArg, intArg, strArg } from "@/utils/index.js";
 
-const MAX_TIMEOUT = 600;
 const log = createChildLogger({ module: "bash" });
-// Grace period between SIGTERM and the SIGKILL escalation when terminating a command.
-const KILL_GRACE_MS = 3000;
 
 export class BashTool implements Tool {
   async dispose(): Promise<void> {
@@ -184,7 +188,7 @@ export class BashTool implements Tool {
     const command = strArg(args, "command");
     if (!command) {
       return {
-        output: "Error: command is required",
+        output: COMMAND_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -192,7 +196,7 @@ export class BashTool implements Tool {
     let timeout = intArg(args, "timeout", 120);
     if (!Number.isFinite(timeout) || timeout <= 0) {
       return {
-        output: "Error: timeout must be a finite number greater than 0 seconds",
+        output: TIMEOUT_INVALID_ERROR,
         isError: true,
       };
     }
@@ -232,8 +236,7 @@ export class BashTool implements Tool {
       if (!this.sandbox) {
         discardOutputFile();
         return {
-          output:
-            "Error: sandbox is enabled but unavailable; command was not executed",
+          output: SANDBOX_UNAVAILABLE_ERROR,
           isError: true,
         };
       }
@@ -293,7 +296,7 @@ export class BashTool implements Tool {
         // The command never started, so interruption remains the primary result.
       }
       return {
-        output: "Error: command interrupted",
+        output: COMMAND_INTERRUPTED_ERROR,
         isError: true,
       };
     }
