@@ -416,7 +416,7 @@ Legacy librdkafka configuration keys are rejected.
 
 Both **stdio** (default) and **HTTP** transports are supported: `--http` (or
 `MCP_TRANSPORT=http`) starts `startHttpServer`, which serves the same tools over
-streamable HTTP (`POST /mcp`) and legacy SSE (`GET /sse` + `POST /messages`).
+streamable HTTP (`POST /mcp`).
 The HTTP endpoints are **unauthenticated**; keep `HOST` bound to localhost (the
 default) and only enable HTTP on a trusted machine.
 
@@ -448,7 +448,7 @@ mcp/
 ├── src/
 │   ├── main.ts         # stdio/HTTP entrypoint + shutdown
 │   ├── server.ts       # MCP server + tool registration
-│   ├── http.ts         # h3 app: streamable HTTP + legacy SSE transports
+│   ├── http.ts         # h3 app: streamable HTTP transport
 │   ├── version.ts      # package version (build-time define, package.json fallback)
 │   ├── shared/         # config (zod) + logger
 │   └── tools/
