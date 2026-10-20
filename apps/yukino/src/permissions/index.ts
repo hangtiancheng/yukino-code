@@ -26,7 +26,15 @@ import { withFileSyncLock } from "@/teams/file-lock.js";
 import { mcpCallPermissionContent } from "@/tools/mcp-call.js";
 import { asErrorString, isObject, isRecord, strArg } from "@/utils/index.js";
 import { canonicalPath, isPathWithin, resolveToolPath } from "@/utils/paths.js";
-import { OwnedWorktrees, type WorktreeResult } from "@/worktree/index.js";
+import {
+  WORKTREE_ALREADY_ACTIVE_ERROR,
+  WORKTREE_NOT_OWNED_ERROR,
+} from "@/worktree/constants.js";
+import {
+  OwnedWorktrees,
+  type WorktreeResult,
+  type WorktreeSession,
+} from "@/worktree/index.js";
 
 export * as Constants from "@/permissions/constants.js";
 export * as Request from "@/permissions/request.js";
@@ -438,9 +446,12 @@ export class PermissionChecker {
   worktrees = new OwnedWorktrees();
   private extraRoots: string[] = [];
   private isolatedRoot?: string;
+  private activeWorktree?: Readonly<WorktreeSession>;
+  private restoredCwd?: string;
+  private enteredWorktrees = new Set<string>();
 
   constructor(
-    private readonly cwd: string,
+    private readonly projectCwd: string,
     mode: PermissionMode = "default",
   ) {
     this.modeState = {
@@ -448,8 +459,53 @@ export class PermissionChecker {
       listeners: new Set(),
     };
     this.planModeState = {};
-    this.sandbox = new PathSandbox(cwd);
-    this.ruleEngine = new RuleEngine(cwd);
+    this.sandbox = new PathSandbox(projectCwd);
+    this.ruleEngine = new RuleEngine(projectCwd);
+  }
+
+  get cwd(): string {
+    return this.activeWorktree?.path ?? this.restoredCwd ?? this.projectCwd;
+  }
+
+  get worktreeSession(): Readonly<WorktreeSession> | undefined {
+    return this.activeWorktree;
+  }
+
+  async enterWorktree(
+    worktree: WorktreeResult,
+    originalCwd = this.cwd,
+  ): Promise<void> {
+    if (this.activeWorktree) {
+      throw new Error(WORKTREE_ALREADY_ACTIVE_ERROR);
+    }
+    const path = canonicalPath(worktree.path);
+    if (!worktree.created && !this.enteredWorktrees.has(path)) {
+      throw new Error(WORKTREE_NOT_OWNED_ERROR);
+    }
+    await this.registerWorktree(worktree);
+    const owned = this.worktrees.get(worktree.path);
+    if (!owned) {
+      throw new Error(WORKTREE_NOT_OWNED_ERROR);
+    }
+    this.activeWorktree = Object.freeze({ ...owned, originalCwd });
+    this.enteredWorktrees.add(path);
+  }
+
+  leaveWorktree(): void {
+    if (this.activeWorktree) {
+      this.extraRoots = this.extraRoots.filter(
+        (root) => root !== this.activeWorktree?.path,
+      );
+    }
+    this.restoredCwd = this.activeWorktree?.originalCwd ?? this.restoredCwd;
+    this.activeWorktree = undefined;
+    this.sandbox = new PathSandbox(
+      this.isolatedRoot ?? this.cwd,
+      !this.isolatedRoot,
+    );
+    for (const root of this.extraRoots) {
+      this.sandbox.addRoot(root);
+    }
   }
 
   get mode(): PermissionMode {
@@ -670,7 +726,9 @@ export class PermissionChecker {
 
     // Layer 4: only writes need path approval; reads and bypass mode skip it.
     if (category === "write" && filePath && this.mode !== "bypassPermissions") {
-      const sandboxDecision = this.sandbox.check(filePath);
+      const sandboxDecision = this.sandbox.check(
+        resolveToolPath(this.cwd, filePath),
+      );
       if (sandboxDecision && explicitEffect !== "allow") {
         return { effect: "ask", reason: sandboxDecision.reason };
       }

@@ -13,6 +13,10 @@ import { join } from "node:path";
 
 import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
 
+import { Agent } from "@/agent/index.js";
+import { ConversationManager } from "@/conversation/index.js";
+import type { LLMClient } from "@/llm/client.js";
+import type { StreamEvent } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import type { SandboxConfig } from "@/sandbox/index.js";
 import { SeatbeltSandbox } from "@/sandbox/seatbelt.js";
@@ -20,14 +24,28 @@ import { yukinoPath, projectKey } from "@/storage/index.js";
 import { BashTool } from "@/tools/bash.js";
 import { EnterWorktreeTool } from "@/tools/enter-worktree.js";
 import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
+import { FileStateCache } from "@/tools/file-state-cache.js";
+import { ReadFileTool } from "@/tools/read-file.js";
+import { ToolRegistry } from "@/tools/registry.js";
+import { WriteFileTool } from "@/tools/write-file.js";
 import type { WorktreeResult } from "@/worktree/index.js";
 import {
   createAgentWorktree,
   hasWorktreeChanges,
   removeAgentWorktree,
+  resolveGitDir,
+  type WorktreeSession,
 } from "@/worktree/index.js";
 
 const temporaryDirectories: string[] = [];
+
+function activeSession(checker: PermissionChecker): Readonly<WorktreeSession> {
+  const session = checker.worktreeSession;
+  if (!session) {
+    throw new Error("Expected an active worktree session");
+  }
+  return session;
+}
 
 // Hide the machine's global git config so hook-path assertions observe only
 // repository and worktree configuration created by each test.
@@ -82,19 +100,14 @@ function initRepo(name = "repo"): string {
   return repo;
 }
 
-async function exit(repo: string, worktree: WorktreeResult, head?: string) {
+async function exit(repo: string, worktree: WorktreeResult, owned = true) {
   const checker = new PermissionChecker(repo);
-  if (head) {
-    await checker.registerWorktree(worktree);
+  if (owned) {
+    await checker.enterWorktree(worktree);
   }
   return new ExitWorktreeTool().execute(
     { cwd: repo, permissionChecker: checker },
-    {
-      path: worktree.path,
-      head_commit: head,
-      branch: "forged",
-      git_root: "/forged",
-    },
+    { action: "remove" },
   );
 }
 
@@ -123,7 +136,7 @@ describe("worktree creation safety", () => {
       created: false,
     });
 
-    const result = await exit(repo, worktree, worktree.headCommit);
+    const result = await exit(repo, worktree);
     expect(result.isError).toBe(false);
     expect(existsSync(worktree.path)).toBe(false);
     expect(existsSync(join(repo, "injected-dollar"))).toBe(false);
@@ -218,8 +231,8 @@ describe("worktree cleanup safety", () => {
   it("keeps a worktree without runtime ownership", async () => {
     const repo = initRepo();
     const worktree = await createAgentWorktree("unknown-head", repo);
-    const result = await exit(repo, worktree);
-    expect(result.output).toContain("kept");
+    const result = await exit(repo, worktree, false);
+    expect(result.output).toContain("No-op");
     expect(existsSync(worktree.path)).toBe(true);
     expect(git(repo, "rev-parse", worktree.branch)).toBe(worktree.headCommit);
   });
@@ -231,8 +244,9 @@ describe("worktree cleanup safety", () => {
       const worktree = await createAgentWorktree("dirty", repo);
       writeFileSync(join(worktree.path, file), "unsaved work\n");
 
-      const result = await exit(repo, worktree, worktree.headCommit);
-      expect(result.output).toContain("kept");
+      const result = await exit(repo, worktree);
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("discard_changes: true");
       expect(readFileSync(join(worktree.path, file), "utf-8")).toBe(
         "unsaved work\n",
       );
@@ -260,22 +274,22 @@ describe("worktree cleanup safety", () => {
   it("cleans up an owned clean worktree using its recorded baseline", async () => {
     const repo = initRepo();
     const worktree = await createAgentWorktree("clean", repo);
-    const result = await exit(repo, worktree, worktree.headCommit);
+    const result = await exit(repo, worktree);
     expect(result.isError).toBe(false);
-    expect(result.output).toContain("cleaned up");
+    expect(result.output).toContain("Removed worktree");
     expect(existsSync(worktree.path)).toBe(false);
     expect(git(repo, "branch", "--list", worktree.branch)).toBe("");
   });
 
-  it("keeps committed changes despite a caller-supplied replacement baseline", async () => {
+  it("refuses committed changes against the recorded baseline", async () => {
     const repo = initRepo();
     const worktree = await createAgentWorktree("unmerged", repo);
     git(worktree.path, "commit", "-q", "--allow-empty", "-m", "unmerged work");
     const tip = git(worktree.path, "rev-parse", "HEAD");
 
-    const result = await exit(repo, worktree, tip);
-    expect(result.isError).toBe(false);
-    expect(result.output).toContain("kept");
+    const result = await exit(repo, worktree);
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("1 commits");
     expect(existsSync(worktree.path)).toBe(true);
     expect(git(repo, "rev-parse", worktree.branch)).toBe(tip);
   });
@@ -292,24 +306,19 @@ describe("runtime worktree ownership and sandbox roots", () => {
       (
         await tool.execute(
           { cwd: repo, permissionChecker: checker },
-          {
-            path: userTree,
-            branch: "user-branch",
-            git_root: repo,
-            head_commit: git(repo, "rev-parse", "HEAD"),
-          },
+          { action: "remove", discard_changes: true },
         )
       ).isError,
     ).toBe(true);
     expect(existsSync(userTree)).toBe(true);
     const worktree = await createAgentWorktree("owned", repo);
-    await checker.registerWorktree(worktree);
+    await checker.enterWorktree(worktree);
     const other = new PermissionChecker(repo);
     expect(
       (
         await tool.execute(
           { cwd: repo, permissionChecker: other },
-          { path: worktree.path },
+          { action: "remove", discard_changes: true },
         )
       ).isError,
     ).toBe(true);
@@ -318,7 +327,7 @@ describe("runtime worktree ownership and sandbox roots", () => {
       (
         await tool.execute(
           { cwd: repo, permissionChecker: checker },
-          { path: worktree.path },
+          { action: "remove", discard_changes: true },
         )
       ).output,
     ).toContain("branch changed");
@@ -331,17 +340,19 @@ describe("runtime worktree ownership and sandbox roots", () => {
     const reused = await createAgentWorktree("prior", repo);
     expect(reused.created).toBe(false);
     const checker = new PermissionChecker(repo);
-    await checker.registerWorktree(reused);
+    await expect(checker.enterWorktree(reused)).rejects.toThrow(
+      "not created by this runtime",
+    );
     expect(
       (
         await new ExitWorktreeTool().execute(
           { cwd: repo, permissionChecker: checker },
-          { path: original.path },
+          { action: "remove" },
         )
       ).isError,
     ).toBe(true);
     expect(existsSync(original.path)).toBe(true);
-    await checker.registerWorktree(original);
+    await checker.enterWorktree(original);
     git(
       original.path,
       "commit",
@@ -353,12 +364,10 @@ describe("runtime worktree ownership and sandbox roots", () => {
     await checker.registerWorktree(await createAgentWorktree("prior", repo));
     const result = await new ExitWorktreeTool().execute(
       { cwd: repo, permissionChecker: checker },
-      {
-        path: original.path,
-        head_commit: git(original.path, "rev-parse", "HEAD"),
-      },
+      { action: "remove" },
     );
-    expect(result.output).toContain("has changes, kept");
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("discard_changes: true");
     expect(existsSync(original.path)).toBe(true);
   });
 
@@ -496,4 +505,351 @@ describe("runtime worktree ownership and sandbox roots", () => {
       expect(git(repo, "rev-parse", "HEAD")).toBe(initial);
     },
   );
+});
+
+describe("EnterWorktree and ExitWorktree sessions", () => {
+  it("generates a slug, keeps dirty work, restores the caller's subdirectory, and permits another entry", async () => {
+    const repo = initRepo();
+    const nested = join(repo, "nested");
+    mkdirSync(nested);
+    const checker = new PermissionChecker(nested, "acceptEdits");
+    const fileStateCache = new FileStateCache();
+    fileStateCache.record(join(repo, "tracked.txt"), 0);
+    const ctx = { cwd: nested, permissionChecker: checker, fileStateCache };
+    const enter = new EnterWorktreeTool();
+    expect(enter.schema().input_schema.required ?? []).not.toContain("slug");
+    const entered = await enter.execute(ctx, {});
+    expect(entered.isError, entered.output).toBe(false);
+    const session = activeSession(checker);
+    expect(session.path).not.toBe(repo);
+    expect(session.branch).toMatch(/^worktree\/[a-zA-Z0-9_-]+\/work$/);
+    expect(checker.cwd).toBe(session.path);
+    expect(fileStateCache.has(join(repo, "tracked.txt"))).toBe(false);
+    writeFileSync(join(session.path, "untracked.txt"), "keep this\n");
+    fileStateCache.record(join(session.path, "tracked.txt"), 0);
+    expect((await enter.execute(ctx, {})).isError).toBe(true);
+    const kept = await new ExitWorktreeTool().execute(ctx, { action: "keep" });
+    expect(kept.isError, kept.output).toBe(false);
+    expect(checker.cwd).toBe(nested);
+    expect(checker.worktreeSession).toBeUndefined();
+    expect(fileStateCache.has(join(session.path, "tracked.txt"))).toBe(false);
+    expect(checker.sandboxWriteRoots([nested])).not.toContain(session.path);
+    expect(readFileSync(join(session.path, "untracked.txt"), "utf8")).toBe(
+      "keep this\n",
+    );
+    expect(git(repo, "rev-parse", session.branch)).toBe(session.headCommit);
+    expect((await enter.execute(ctx, { slug: "next-session" })).isError).toBe(
+      false,
+    );
+    expect(checker.worktreeSession?.path).not.toBe(session.path);
+  });
+
+  it("refuses removal until explicitly allowed to discard both files and commits", async () => {
+    const repo = initRepo();
+    const checker = new PermissionChecker(repo);
+    const ctx = { cwd: repo, permissionChecker: checker };
+    await new EnterWorktreeTool().execute(ctx, { slug: "discard" });
+    const session = activeSession(checker);
+    git(session.path, "commit", "-q", "--allow-empty", "-m", "new work");
+    writeFileSync(join(session.path, "tracked.txt"), "unsaved work\n");
+    writeFileSync(join(session.path, "untracked.txt"), "new file\n");
+    const tool = new ExitWorktreeTool();
+    const refused = await tool.execute(ctx, { action: "remove" });
+    expect(refused.isError).toBe(true);
+    expect(refused.output).toContain("2 uncommitted files and 1 commits");
+    expect(checker.worktreeSession).toBe(session);
+    expect(checker.cwd).toBe(session.path);
+    const removed = await tool.execute(ctx, {
+      action: "remove",
+      discard_changes: true,
+    });
+    expect(removed.isError, removed.output).toBe(false);
+    expect(removed.output).toContain(
+      "Discarded 2 uncommitted files and 1 commits",
+    );
+    expect(existsSync(session.path)).toBe(false);
+    expect(git(repo, "branch", "--list", session.branch)).toBe("");
+    expect(checker.cwd).toBe(repo);
+    expect(checker.worktreeSession).toBeUndefined();
+  });
+
+  it("fails closed on unreadable Git state and permits an explicit discard", async () => {
+    const repo = initRepo();
+    const checker = new PermissionChecker(repo);
+    const ctx = { cwd: repo, permissionChecker: checker };
+    await new EnterWorktreeTool().execute(ctx, { slug: "corrupt-index" });
+    const session = activeSession(checker);
+    writeFileSync(join(await resolveGitDir(session.path), "index"), "corrupt");
+    const tool = new ExitWorktreeTool();
+    const refused = await tool.execute(ctx, { action: "remove" });
+    expect(refused.isError).toBe(true);
+    expect(refused.output).toContain("Could not verify worktree state");
+    expect(checker.worktreeSession).toBe(session);
+    expect(existsSync(session.path)).toBe(true);
+    const removed = await tool.execute(ctx, {
+      action: "remove",
+      discard_changes: true,
+    });
+    expect(removed.isError, removed.output).toBe(false);
+    expect(existsSync(session.path)).toBe(false);
+  });
+
+  it("keeps the session active and reports a locked worktree removal failure", async () => {
+    const repo = initRepo();
+    const checker = new PermissionChecker(repo);
+    const ctx = { cwd: repo, permissionChecker: checker };
+    await new EnterWorktreeTool().execute(ctx, { slug: "locked" });
+    const session = activeSession(checker);
+    git(repo, "worktree", "lock", session.path);
+    const result = await new ExitWorktreeTool().execute(ctx, {
+      action: "remove",
+      discard_changes: true,
+    });
+    expect(result.isError).toBe(true);
+    expect(checker.worktreeSession).toBe(session);
+    expect(existsSync(session.path)).toBe(true);
+    expect(git(repo, "rev-parse", session.branch)).toBe(session.headCommit);
+  });
+
+  it("preserves the original baseline when re-entering a kept worktree in the same runtime", async () => {
+    const repo = initRepo();
+    const checker = new PermissionChecker(repo);
+    const ctx = { cwd: repo, permissionChecker: checker };
+    const enter = new EnterWorktreeTool();
+    const exit = new ExitWorktreeTool();
+    await enter.execute(ctx, { slug: "reenter" });
+    const session = activeSession(checker);
+    git(
+      session.path,
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "preserved commit",
+    );
+    await exit.execute(ctx, { action: "keep" });
+    const reentered = await enter.execute(ctx, { slug: "reenter" });
+    expect(reentered.isError, reentered.output).toBe(false);
+    expect(checker.worktreeSession?.headCommit).toBe(session.headCommit);
+    const refused = await exit.execute(ctx, { action: "remove" });
+    expect(refused.isError).toBe(true);
+    expect(refused.output).toContain("1 commits");
+    expect(existsSync(session.path)).toBe(true);
+  });
+
+  it("restores the original cwd and reports a partial failure when branch deletion fails", async () => {
+    const repo = initRepo();
+    const checker = new PermissionChecker(repo);
+    const ctx = { cwd: repo, permissionChecker: checker };
+    await new EnterWorktreeTool().execute(ctx, { slug: "branch-locked" });
+    const session = activeSession(checker);
+    writeFileSync(
+      join(repo, ".git", "refs", "heads", `${session.branch}.lock`),
+      "lock",
+    );
+    const result = await new ExitWorktreeTool().execute(ctx, {
+      action: "remove",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("Session restored");
+    expect(checker.cwd).toBe(repo);
+    expect(checker.worktreeSession).toBeUndefined();
+    expect(existsSync(session.path)).toBe(false);
+    expect(git(repo, "rev-parse", session.branch)).toBe(session.headCommit);
+  });
+
+  it("isolates active sessions from children and other runtimes", async () => {
+    const repo = initRepo();
+    const parent = new PermissionChecker(repo);
+    const ctx = { cwd: repo, permissionChecker: parent };
+    await new EnterWorktreeTool().execute(ctx, { slug: "parent" });
+    const session = activeSession(parent);
+    for (const checker of [
+      parent.forSubagent(session.path),
+      new PermissionChecker(repo),
+    ]) {
+      const result = await new ExitWorktreeTool().execute(
+        { cwd: checker.cwd, permissionChecker: checker },
+        { action: "remove", discard_changes: true },
+      );
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("No-op");
+    }
+    const other = new PermissionChecker(repo);
+    const refused = await new EnterWorktreeTool().execute(
+      { cwd: repo, permissionChecker: other },
+      { slug: "parent" },
+    );
+    expect(refused.isError).toBe(true);
+    expect(other.worktreeSession).toBeUndefined();
+    expect(parent.worktreeSession).toBe(session);
+    expect(existsSync(session.path)).toBe(true);
+    const child = parent.forSubagent(repo);
+    const childEntry = await new EnterWorktreeTool().execute(
+      { cwd: repo, permissionChecker: child },
+      { slug: "parent" },
+    );
+    expect(childEntry.isError).toBe(true);
+    expect(child.worktreeSession).toBeUndefined();
+  });
+
+  it.each([{ slug: "" }, { slug: null }, { slug: 1 }, { slug: "../escape" }])(
+    "rejects invalid EnterWorktree arguments %j",
+    async (args) => {
+      const repo = initRepo();
+      const checker = new PermissionChecker(repo);
+      const result = await new EnterWorktreeTool().execute(
+        { cwd: repo, permissionChecker: checker },
+        args,
+      );
+      expect(result.isError).toBe(true);
+      expect(checker.worktreeSession).toBeUndefined();
+      expect(
+        git(repo, "worktree", "list", "--porcelain").match(/^worktree /gm),
+      ).toHaveLength(1);
+    },
+  );
+
+  it.each([
+    {},
+    { action: "invalid" },
+    { action: "remove", discard_changes: "true" },
+    { action: "remove", path: "/forged" },
+  ])("rejects invalid ExitWorktree arguments %j", async (args) => {
+    const repo = initRepo();
+    const checker = new PermissionChecker(repo);
+    const ctx = { cwd: repo, permissionChecker: checker };
+    await new EnterWorktreeTool().execute(ctx, { slug: "validate" });
+    const session = activeSession(checker);
+    const result = await new ExitWorktreeTool().execute(ctx, args);
+    expect(result.isError).toBe(true);
+    expect(checker.worktreeSession).toBe(session);
+    expect(existsSync(session.path)).toBe(true);
+  });
+
+  it("switches shell execution in the same batch and across agent turns without changing the process cwd", async () => {
+    const repo = initRepo();
+    const processCwd = process.cwd();
+    const checker = new PermissionChecker(repo, "acceptEdits");
+    const registry = new ToolRegistry();
+    registry.register(new EnterWorktreeTool());
+    registry.register(new ExitWorktreeTool());
+    registry.register(new BashTool());
+    registry.register(new WriteFileTool());
+    registry.register(new ReadFileTool());
+    const conversation = new ConversationManager();
+    const end = (stopReason: string): StreamEvent => ({
+      type: "stream_end",
+      stopReason,
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+      },
+    });
+    const call = (
+      toolId: string,
+      toolName: string,
+      args: Record<string, unknown>,
+    ): StreamEvent => ({
+      type: "tool_call_complete",
+      toolId,
+      toolName,
+      arguments: args,
+    });
+    const scripts: StreamEvent[][] = [
+      [
+        call("enter", "EnterWorktree", { slug: "agent-loop" }),
+        call("write-enter", "WriteFile", {
+          file_path: "only-worktree.txt",
+          content: "isolated work\n",
+        }),
+        call("read-enter", "ReadFile", { file_path: "only-worktree.txt" }),
+        call("pwd-enter", "Bash", { command: "pwd" }),
+        end("tool_use"),
+      ],
+      [end("end_turn")],
+      [
+        call("pwd-turn", "Bash", { command: "pwd" }),
+        call("exit", "ExitWorktree", { action: "keep" }),
+        call("write-exit", "WriteFile", {
+          file_path: "only-original.txt",
+          content: "original project\n",
+        }),
+        call("pwd-exit", "Bash", { command: "pwd" }),
+        end("tool_use"),
+      ],
+      [end("end_turn")],
+    ];
+    const client: LLMClient = {
+      setSystemPrompt() {},
+      async *stream() {
+        await Promise.resolve();
+        yield* scripts.shift() ?? [end("end_turn")];
+      },
+    };
+    conversation.addUserMessage("enter worktree");
+    const onPermissionRequest = async (name: string): Promise<"allow"> => {
+      expect(name).toBe("Bash");
+      await Promise.resolve();
+      return "allow";
+    };
+    const first = new Agent({
+      client,
+      registry,
+      checker,
+      conversation,
+      cwd: repo,
+      onPermissionRequest,
+    });
+    const results = new Map<string, string>();
+    for await (const event of first.run()) {
+      if (event.type === "tool_result") {
+        expect(event.isError, event.output).toBe(false);
+        results.set(event.toolId, event.output);
+      }
+    }
+    const path = activeSession(checker).path;
+    expect(results.get("pwd-enter")).toContain(path);
+    expect(results.get("read-enter")).toContain("isolated work");
+    expect(existsSync(join(repo, "only-worktree.txt"))).toBe(false);
+    expect(
+      checker.check("WriteFile", "write", { file_path: "relative.txt" }).effect,
+    ).toBe("allow");
+    conversation.addUserMessage("exit worktree and keep it");
+    const second = new Agent({
+      client,
+      registry,
+      checker,
+      conversation,
+      cwd: repo,
+      onPermissionRequest,
+    });
+    for await (const event of second.run()) {
+      if (event.type === "tool_result") {
+        expect(event.isError, event.output).toBe(false);
+        results.set(event.toolId, event.output);
+      }
+    }
+    expect(results.get("pwd-turn")).toContain(path);
+    expect(results.get("pwd-exit")).toContain(repo);
+    expect(existsSync(join(path, "only-original.txt"))).toBe(false);
+    expect(readFileSync(join(repo, "only-original.txt"), "utf8")).toBe(
+      "original project\n",
+    );
+    expect(
+      conversation
+        .getMessages()
+        .some(
+          (message) =>
+            typeof message.content === "string" &&
+            message.content.includes(
+              `<working-directory>\nThe agent's current working directory is ${repo}.`,
+            ),
+        ),
+    ).toBe(true);
+    expect(checker.cwd).toBe(repo);
+    expect(process.cwd()).toBe(processCwd);
+  });
 });

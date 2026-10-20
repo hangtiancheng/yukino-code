@@ -1,10 +1,16 @@
+import { randomUUID } from "node:crypto";
+
+import { z } from "zod";
+
 import { createChildLogger } from "@/logger/index.js";
 import {
   SLUG_INVALID_ERROR,
-  SLUG_REQUIRED_ERROR,
-  WORKTREE_SLUG_PATTERN,
+  WORKTREE_RUNTIME_REQUIRED_ERROR,
 } from "@/tools/constants.js";
-import { ENTER_WORKTREE_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  ENTER_WORKTREE_DESCRIPTION,
+  WORKTREE_SLUG_DESCRIPTION,
+} from "@/tools/prompts.js";
 import {
   type Tool,
   type ToolCategory,
@@ -13,10 +19,17 @@ import {
   type ToolSchema,
 } from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
-import { strArg } from "@/utils/index.js";
+import {
+  WORKTREE_ALREADY_ACTIVE_ERROR,
+  WORKTREE_SLUG_PATTERN,
+} from "@/worktree/constants.js";
 import { createAgentWorktree } from "@/worktree/index.js";
 
 const log = createChildLogger({ module: "tools" });
+
+const inputSchema = z.strictObject({
+  slug: z.string().regex(WORKTREE_SLUG_PATTERN, SLUG_INVALID_ERROR).optional(),
+});
 
 export class EnterWorktreeTool implements Tool {
   // Use a hardcoded string instead of EnterWorktreeTool.name.replace("Tool", "")
@@ -34,11 +47,10 @@ export class EnterWorktreeTool implements Tool {
       properties: {
         slug: {
           type: "string" as const,
-          description:
-            "Short identifier for the worktree (branch name suffix).",
+          description: WORKTREE_SLUG_DESCRIPTION,
         },
       },
-      required: ["slug"],
+      additionalProperties: false,
     };
 
     return {
@@ -52,26 +64,31 @@ export class EnterWorktreeTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
-    const slug = strArg(args, "slug");
-    if (!slug) {
-      return Promise.resolve({
-        output: SLUG_REQUIRED_ERROR,
+    const input = inputSchema.safeParse(args);
+    if (!input.success) {
+      return {
+        output: `Error: ${input.error.message}`,
         isError: true,
-      });
+      };
     }
-
-    if (!WORKTREE_SLUG_PATTERN.test(slug)) {
-      return Promise.resolve({
-        output: SLUG_INVALID_ERROR,
+    const checker = ctx.permissionChecker;
+    if (!checker) {
+      return { output: WORKTREE_RUNTIME_REQUIRED_ERROR, isError: true };
+    }
+    if (checker.worktreeSession) {
+      return {
+        output: WORKTREE_ALREADY_ACTIVE_ERROR,
         isError: true,
-      });
+      };
     }
 
     try {
+      const slug = input.data.slug ?? randomUUID();
       const result = await createAgentWorktree(slug, undefined, ctx.cwd);
-      await ctx.permissionChecker?.registerWorktree(result);
+      await checker.enterWorktree(result, ctx.cwd);
+      ctx.fileStateCache?.clear();
       return {
-        output: `Worktree created at ${result.path}\nBranch: ${result.branch}\nHead: ${result.headCommit}`,
+        output: `Entered worktree at ${result.path}\nBranch: ${result.branch}\nHead: ${result.headCommit}\nThe session is now working in the worktree. Use ExitWorktree with action: "keep" or "remove" to return to ${ctx.cwd}.`,
         isError: false,
       };
     } catch (err) {

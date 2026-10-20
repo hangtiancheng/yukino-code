@@ -12,3 +12,5 @@ export const MAX_TOKENS_RECOVERIES = 3;
 // content in one pass without needing an extra ReadFile round-trip to view the
 // full result.
 export const MAX_OUTPUT_CHARS = 50000;
+
+export const WORKING_DIRECTORY_MARKER = "<working-directory>";

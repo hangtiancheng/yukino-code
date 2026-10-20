@@ -18,6 +18,7 @@ import {
   SAFE_REF_RE,
   SHA_RE,
   SHARED_AGENTS_ENTRIES,
+  WORKTREE_SLUG_PATTERN,
 } from "@/worktree/constants.js";
 
 export * as Constants from "@/worktree/constants.js";
@@ -33,6 +34,15 @@ export interface WorktreeResult {
   branch: string;
   headCommit: string;
   gitRoot: string;
+}
+
+export interface WorktreeSession extends WorktreeResult {
+  originalCwd: string;
+}
+
+export interface WorktreeChanges {
+  changedFiles: number;
+  commits: number;
 }
 
 // Pure filesystem-based git HEAD reading: the helpers in this section retrieve
@@ -290,7 +300,7 @@ export async function createAgentWorktree(
   gitRoot?: string,
   cwd = process.cwd(),
 ): Promise<WorktreeResult> {
-  if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+  if (!WORKTREE_SLUG_PATTERN.test(slug)) {
     throw new Error(
       "Invalid worktree slug: use only alphanumeric, hyphen, underscore",
     );
@@ -410,6 +420,10 @@ interface OwnedWorktree extends WorktreeResult {
 export class OwnedWorktrees {
   private records = new Map<string, Readonly<OwnedWorktree>>();
 
+  get(path: string): Readonly<WorktreeResult> | undefined {
+    return this.records.get(canonicalPath(path));
+  }
+
   async register(worktree: WorktreeResult): Promise<boolean> {
     const path = canonicalPath(worktree.path);
     if (this.records.has(path)) {
@@ -467,7 +481,10 @@ export class OwnedWorktrees {
     return this.records.get(canonicalPath(path))?.tempDir;
   }
 
-  async cleanup(requested: string): Promise<string> {
+  async remove(
+    requested: string,
+    discardChanges: boolean,
+  ): Promise<WorktreeChanges | null> {
     const path = canonicalPath(requested);
     const record = this.records.get(path);
     if (!record) {
@@ -505,12 +522,31 @@ export class OwnedWorktrees {
         "Worktree registration or branch changed; refusing cleanup",
       );
     }
-    if (await hasWorktreeChanges(path, record.headCommit)) {
-      return `Worktree has changes, kept at: ${path}\nBranch: ${record.branch}`;
+    const changes = await countWorktreeChanges(path, record.headCommit);
+    if (!discardChanges) {
+      if (!changes) {
+        throw new Error(
+          'Could not verify worktree state. Refusing to remove. Confirm with the user, then retry with discard_changes: true, or use action: "keep".',
+        );
+      }
+      if (
+        changes.changedFiles > 0 ||
+        changes.commits > 0 ||
+        (await hasWorktreeChanges(path, record.headCommit))
+      ) {
+        throw new Error(
+          `Worktree has ${changes.changedFiles} uncommitted files and ${changes.commits} commits. Confirm with the user, then retry with discard_changes: true, or use action: "keep".`,
+        );
+      }
     }
-    await removeAgentWorktree(path, record.branch, record.gitRoot);
+    await removeAgentWorktree(
+      path,
+      record.branch,
+      record.gitRoot,
+      discardChanges,
+    );
     this.records.delete(path);
-    return `Worktree cleaned up (no changes): ${path}`;
+    return changes;
   }
 }
 
@@ -518,13 +554,49 @@ export async function removeAgentWorktree(
   path: string,
   branch: string,
   gitRoot: string,
+  discardChanges = false,
 ): Promise<void> {
-  // Git rechecks for dirty/locked worktrees at removal time. If removal fails,
-  // stop here; if the branch has unmerged commits, -d leaves its tip intact.
-  await execFileAsync("git", ["worktree", "remove", "--", path], {
-    cwd: gitRoot,
-  });
-  await execFileAsync("git", ["branch", "-d", "--", branch], { cwd: gitRoot });
+  // Without explicit discard permission, Git rechecks dirty/locked worktrees
+  // and preserves unmerged branches even if they changed after inspection.
+  await execFileAsync(
+    "git",
+    ["worktree", "remove", ...(discardChanges ? ["--force"] : []), "--", path],
+    {
+      cwd: gitRoot,
+    },
+  );
+  await execFileAsync(
+    "git",
+    ["branch", discardChanges ? "-D" : "-d", "--", branch],
+    { cwd: gitRoot },
+  );
+}
+
+export async function countWorktreeChanges(
+  path: string,
+  headCommit: string,
+): Promise<WorktreeChanges | null> {
+  try {
+    const [{ stdout: status }, { stdout: count }] = await Promise.all([
+      execFileAsync("git", ["status", "--porcelain", "--untracked-files=all"], {
+        cwd: path,
+      }),
+      execFileAsync("git", ["rev-list", "--count", `${headCommit}..HEAD`], {
+        cwd: path,
+      }),
+    ]);
+    const commits = Number(count.trim());
+    if (!Number.isSafeInteger(commits) || commits < 0) {
+      return null;
+    }
+    return {
+      changedFiles: status.split("\n").filter((line) => line.trim()).length,
+      commits,
+    };
+  } catch (err) {
+    log.error({ err }, "failed to inspect worktree changes");
+    return null;
+  }
 }
 
 export async function hasWorktreeChanges(

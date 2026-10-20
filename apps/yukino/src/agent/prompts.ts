@@ -21,3 +21,10 @@ export const MAX_TOKENS_TRUNCATED_ARGS_NOTICE =
 
 export const GOAL_BUDGET_LIMITED_NOTICE =
   "Goal token budget reached; no further tools will be executed. Report existing progress.";
+export function buildWorkingDirectoryReminder(
+  cwd: string,
+  branch?: string,
+  instructions = "",
+): string {
+  return `<working-directory>\nThe agent's current working directory is ${cwd}.${branch ? ` Worktree branch: ${branch}.` : ""} Resolve relative file paths and shell commands here. This supersedes earlier working-directory information.${instructions ? `\nInstructions for the current directory:\n${instructions}` : ""}\n</working-directory>`;
+}

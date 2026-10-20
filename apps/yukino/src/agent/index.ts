@@ -4,6 +4,7 @@ import {
   MAX_OUTPUT_CHARS,
   MAX_TOKENS_CEILING,
   MAX_TOKENS_RECOVERIES,
+  WORKING_DIRECTORY_MARKER,
 } from "@/agent/constants.js";
 import type { AgentEvent } from "@/agent/events.js";
 import {
@@ -15,6 +16,7 @@ import {
   NO_CALLABLE_TOOLS_REMINDER,
   NO_DEFERRED_TOOLS_REMINDER,
   NO_PERSISTENT_GOAL_REMINDER,
+  buildWorkingDirectoryReminder,
 } from "@/agent/prompts.js";
 import { StreamingExecutor } from "@/agent/streaming-executor.js";
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
@@ -42,6 +44,7 @@ import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError, LLMError, RateLimitError } from "@/llm/errors.js";
 import type { UsageInfo } from "@/llm/events.js";
 import { llmRetryDelay } from "@/llm/retry.js";
+import { loadInstructions } from "@/memory/instructions.js";
 import type { RecallResult } from "@/memory/manager.js";
 import type { PermissionChecker } from "@/permissions/index.js";
 import { requestToolPermission } from "@/permissions/request.js";
@@ -160,7 +163,11 @@ export class Agent {
   private registry: ToolRegistry;
   private checker: PermissionChecker;
   private conversation: ConversationManager;
-  private cwd: string;
+  private initialCwd: string;
+
+  private get cwd(): string {
+    return this.checker.worktreeSession?.path ?? this.initialCwd;
+  }
   private sessionId: string;
   private sessionFilePath: string;
   private goalManager?: GoalManager;
@@ -202,7 +209,7 @@ export class Agent {
     this.registry = config.registry;
     this.checker = config.checker;
     this.conversation = config.conversation;
-    this.cwd = config.cwd;
+    this.initialCwd = config.cwd;
     this.sessionId = config.sessionId ?? "";
     this.goalManager =
       config.goalManager ??
@@ -433,6 +440,21 @@ export class Agent {
           this.conversation.addSystemReminderIfChanged(
             TOOL_GUIDANCE_MARKER,
             guidance,
+          );
+        }
+
+        const worktree = this.checker.worktreeSession;
+        if (
+          worktree ||
+          this.conversation.hasReminderContaining(WORKING_DIRECTORY_MARKER)
+        ) {
+          this.conversation.addSystemReminderIfChanged(
+            WORKING_DIRECTORY_MARKER,
+            buildWorkingDirectoryReminder(
+              this.cwd,
+              worktree?.branch,
+              loadInstructions(this.cwd),
+            ),
           );
         }
 

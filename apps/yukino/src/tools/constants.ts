@@ -231,7 +231,6 @@ export const GENERIC_HINTS = new Map<number, string>([
   [143, "terminated by SIGTERM"],
 ]);
 
-export const WORKTREE_SLUG_PATTERN = /^[a-zA-Z0-9_-]+$/;
 export const INTEGER_PATTERN = /^[+-]?\d+$/;
 export const NUMBER_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
@@ -252,11 +251,10 @@ export const URL_REQUIRED_ERROR = "Error: url is required";
 export const FETCH_INTERRUPTED_ERROR = "Error: fetch interrupted";
 export const OUTPUT_REQUIRED_ERROR = "Error: output is required";
 export const QUERY_REQUIRED_ERROR = "Error: query is required";
-export const SLUG_REQUIRED_ERROR = "Error: slug is required";
 export const SLUG_INVALID_ERROR =
   "Error: slug must contain only alphanumeric, hyphen, underscore";
-export const WORKTREE_PATH_REQUIRED_ERROR =
-  "Error: path and runtime worktree ownership are required";
+export const WORKTREE_RUNTIME_REQUIRED_ERROR =
+  "Error: a runtime permission checker is required for worktree sessions";
 export const QUESTION_COUNT_ERROR = "Error: must have 1-4 questions";
 export const FILE_NOT_READ_ERROR =
   "Error: file has not been read yet, read it first before editing.";

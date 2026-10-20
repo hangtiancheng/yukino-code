@@ -69,15 +69,24 @@ export const EXIT_PLAN_MODE_DESCRIPTION =
   "Submit the completed plan from the plan file. The main agent presents it for user approval; a teammate follows the host's team approval policy (leader review in coordinator mode, automatic approval otherwise); a one-shot subagent returns it to the parent. Do not implement until the host approves execution.";
 
 export const ENTER_WORKTREE_DESCRIPTION =
-  "Create a git worktree for isolated work and return its absolute path. " +
-  "The working directory is NOT changed: pass the returned path explicitly to " +
-  "later tools (Bash cd commands, ReadFile/WriteFile/EditFile paths) to operate " +
-  "inside the worktree.";
+  "Create an isolated git worktree and switch this agent's working directory into it. " +
+  "Use only when the user explicitly requests a worktree. Only one worktree session may be active at a time. " +
+  "The optional slug is generated randomly when omitted. Use ExitWorktree to return to the original directory.";
 
 export const EXIT_WORKTREE_DESCRIPTION =
-  "Clean up a git worktree previously created by EnterWorktree, identified by " +
-  "its path. Does not change the working directory. A worktree with " +
-  "uncommitted changes is retained for explicit integration, not deleted.";
+  "Exit this agent's active EnterWorktree session and restore its original working directory. " +
+  "Use only when the user asks to leave the worktree. With no active session this is a no-op. " +
+  "Use action: keep to preserve the worktree and branch, or remove to delete both. " +
+  "Removal refuses uncommitted files, new commits, or unverifiable state unless discard_changes is true. " +
+  "If removal is refused, confirm with the user before retrying with discard_changes: true. " +
+  "Manually created worktrees and worktrees from other runtimes are never adopted.";
+
+export const WORKTREE_SLUG_DESCRIPTION =
+  "Optional worktree identifier and branch suffix, using letters, digits, hyphens, or underscores. A random slug is generated when omitted.";
+export const WORKTREE_ACTION_DESCRIPTION =
+  '"keep" preserves the worktree and branch; "remove" deletes both.';
+export const WORKTREE_DISCARD_CHANGES_DESCRIPTION =
+  "Explicitly allow discarding uncommitted files and new commits, or removing when changes cannot be verified. Confirm with the user before setting true. Only applies to remove.";
 
 export const GOAL_DESCRIPTION =
   "Get the user-set persistent goal, or report in_progress, complete, or blocked with a reason. A goal is active automatically when the user sets it; in_progress reports progress and resets the blocker audit while keeping it active. Only the user can set, replace, pause, resume, or clear goals. Complete only when all requirements are achieved and verified. Record the same blocker on three consecutive continuation turns before stopping; multiple calls in one turn count once.";
