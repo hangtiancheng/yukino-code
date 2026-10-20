@@ -3,7 +3,7 @@ import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
 import type { Snapshot } from "@/file-history/index.js";
-import { ICONS, THEME } from "@/ui/constants.js";
+import { ICONS, RESTORE_OPTIONS, THEME } from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 
 export type RewindAction =
@@ -17,13 +17,6 @@ interface Props {
   onComplete: (action: RewindAction) => void;
   onCancel: () => void;
 }
-
-const RESTORE_OPTIONS = [
-  "Restore code and conversation",
-  "Restore conversation only",
-  "Restore code only",
-  "Never mind",
-];
 
 function RewindDialog({ snapshots, onComplete, onCancel }: Props) {
   const [phase, setPhase] = useState<0 | 1>(0);

@@ -1,3 +1,4 @@
+import { MARKER } from "@/ui/constants.js";
 import {
   clampToGraphemeBoundary,
   nextGraphemeBoundary,
@@ -9,8 +10,6 @@ export interface PasteStore {
   imageCounter?: number;
   entries: Record<string, string>;
 }
-
-const MARKER = /\[paste #\d+ (?:\+\d+ lines|\d+ chars)\]|\[Image #\d+\]/g;
 
 export function collapsePaste(
   text: string,

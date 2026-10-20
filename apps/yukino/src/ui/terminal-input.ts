@@ -1,10 +1,12 @@
 import { Transform, type TransformCallback } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 
-const OSC_BACKGROUND = "\x1b]11;";
-const COLOR_SCHEME = "\x1b[?997;";
-const PASTE_START = "\x1b[200~";
-const PASTE_END = "\x1b[201~";
+import {
+  COLOR_SCHEME,
+  OSC_BACKGROUND,
+  PASTE_END,
+  PASTE_START,
+} from "@/ui/constants.js";
 
 // Longest suffix of `text` that is also a prefix of `marker` (shorter than the
 // marker itself), so a marker split across chunks is still recognized.

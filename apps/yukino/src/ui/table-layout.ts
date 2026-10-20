@@ -1,6 +1,6 @@
 import chalk from "chalk";
 
-import { THEME } from "@/ui/constants.js";
+import { CELL_PADDING, THEME } from "@/ui/constants.js";
 import {
   expandTabs,
   truncateToWidth,
@@ -8,9 +8,6 @@ import {
   wrapWordsToLines,
 } from "@/ui/terminal-text.js";
 import { plainTerminalText } from "@/utils/index.js";
-
-/** One space of padding on each side of a cell, in terminal columns. */
-const CELL_PADDING = 2;
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: "grapheme",

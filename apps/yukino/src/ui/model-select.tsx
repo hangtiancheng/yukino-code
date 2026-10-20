@@ -3,7 +3,7 @@ import { Box, Text, useInput } from "ink";
 import { useMemo, useState } from "react";
 
 import type { DiscoveredModel } from "@/llm/model-discovery.js";
-import { ICONS, THEME } from "@/ui/constants.js";
+import { ICONS, OTHER, OTHER_LABEL, THEME } from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { SelectorList, SelectorListRow } from "@/ui/selector-list.js";
 import { updateSelectorQuery } from "@/ui/selector-search.js";
@@ -21,10 +21,6 @@ interface ModelSelectProps {
   onCancel: () => void;
   onSelect: (model: DiscoveredModel) => void;
 }
-
-/** Focus sentinel for the free-text row; never a real model id. */
-const OTHER = "\u0000other";
-export const OTHER_LABEL = "Other (type your own)";
 
 const STATUS_MESSAGES: Record<
   Exclude<ModelPickerState["status"], "ready">,

@@ -25,7 +25,13 @@ afterEach(async () => {
   await Promise.all(tools.map((tool) => tool.dispose()));
   rmSync(cwd, { recursive: true, force: true });
 });
-function tool(options: Record<string, unknown> = {}, timeout = 1000): LspTool {
+// The handshake budget doubles as the initialize timeout, so a tight default
+// races subprocess startup under the full suite's parallel load. Keep it
+// generous; tests that assert bounded timeouts pass an explicit smaller value.
+function tool(
+  options: Record<string, unknown> = {},
+  timeout = 10_000,
+): LspTool {
   const config: LspServerConfig = {
     name: "fixture",
     command: process.execPath,

@@ -1,8 +1,9 @@
 import ansiRegex from "ansi-regex";
 
+import { TAB_SIZE } from "@/ui/constants.js";
 import { inputBoundary } from "@/ui/input-paste.js";
 import type { PasteStore } from "@/ui/input-paste.js";
-import { TAB_SIZE, truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
+import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
 
 interface InputCell {
   /** UTF-16 offset in the stored logical line, not a display column. */

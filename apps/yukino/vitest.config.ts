@@ -6,7 +6,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "src"),
-      "#/": resolve(import.meta.dirname, "src/remote/browser/src"),
+      "#": resolve(import.meta.dirname, "src/remote/browser/src"),
     },
   },
   test: {

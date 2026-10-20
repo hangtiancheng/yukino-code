@@ -1,21 +1,8 @@
 import ansiEscapes from "ansi-escapes";
 import sliceAnsi from "slice-ansi";
 
+import { BSU, ESU, SYNC_OUTPUT_TERM_PROGRAMS } from "@/ui/constants.js";
 import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
-
-const BSU = "\x1b[?2026h"; // Begin Synchronized Update
-const ESU = "\x1b[?2026l"; // End Synchronized Update
-
-/** TERM_PROGRAM values whose terminal emulator implements synchronized output. */
-const SYNC_OUTPUT_TERM_PROGRAMS = new Set([
-  "alacritty",
-  "contour",
-  "ghostty",
-  "iTerm.app",
-  "vscode",
-  "WarpTerminal",
-  "WezTerm",
-]);
 
 /**
  * Detects whether the current terminal supports DEC 2026 synchronized output.

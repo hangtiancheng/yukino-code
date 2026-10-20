@@ -1,9 +1,7 @@
 import { Text } from "ink";
 import React, { useEffect, useState } from "react";
 
-import { THEME } from "@/ui/constants.js";
-
-const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+import { SPINNER_FRAMES, THEME } from "@/ui/constants.js";
 
 interface SpinnerProps {
   label?: string;
@@ -28,7 +26,7 @@ function Spinner({ label, inputTokens = 0, outputTokens = 0 }: SpinnerProps) {
   useEffect(() => {
     const startedAt = Date.now();
     const animation = setInterval(() => {
-      setFrame((current) => (current + 1) % FRAMES.length);
+      setFrame((current) => (current + 1) % SPINNER_FRAMES.length);
     }, 80);
     const timer = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startedAt) / 1000));
@@ -48,7 +46,9 @@ function Spinner({ label, inputTokens = 0, outputTokens = 0 }: SpinnerProps) {
 
   return (
     <Text>
-      <Text color={THEME.accent}>{FRAMES[frame] ?? FRAMES[0]}</Text>{" "}
+      <Text color={THEME.accent}>
+        {SPINNER_FRAMES[frame] ?? SPINNER_FRAMES[0]}
+      </Text>{" "}
       <Text color={THEME.muted}>
         {label ?? "Working"}
         {details.length > 0 ? ` (${details.join(" · ")})` : ""}

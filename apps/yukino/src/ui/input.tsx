@@ -16,7 +16,14 @@ import type {
   NonPlanPermissionMode,
   PermissionMode,
 } from "@/permissions/index.js";
-import { ICONS, THEME } from "@/ui/constants.js";
+import {
+  COMMAND_TAGS,
+  FILE_CACHE_TTL_MS,
+  ICONS,
+  PERMISSION_MODE_CYCLE,
+  SPINNER_FRAMES,
+  THEME,
+} from "@/ui/constants.js";
 import { CursorText } from "@/ui/cursor-text.js";
 import { useInputDraft } from "@/ui/input-draft.js";
 import type { InputDraft } from "@/ui/input-draft.js";
@@ -42,30 +49,7 @@ import { scanCwdFiles } from "@/utils/file-scan.js";
 
 const log = createChildLogger({ module: "input" });
 
-const COMMAND_TAGS = ["[skill]", "[custom]"];
-// @-mention cache lifetime: covers edits made outside the app (user editor,
-// git) that produce no fileFactsVersion bump.
-const FILE_CACHE_TTL_MS = 30_000;
-const SPINNER_FRAMES = [
-  "⠋",
-  "⠙",
-  "⠹",
-  "⠸",
-  "⠼",
-  "⠴",
-  "⠦",
-  "⠧",
-  "⠇",
-  "⠏",
-] as const;
-
 export type { InputDraft } from "@/ui/input-draft.js";
-
-const PERMISSION_MODE_CYCLE: NonPlanPermissionMode[] = [
-  "default",
-  "acceptEdits",
-  "bypassPermissions",
-];
 
 interface InputBoxProps {
   onSubmit: ((text: string) => void) | ((text: string) => boolean);

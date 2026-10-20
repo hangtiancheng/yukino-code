@@ -140,7 +140,7 @@ import type { PermissionRequestHandler } from "@/tools/types.js";
 import { AgentActivity, type SubagentProgress } from "@/ui/agent-activity.js";
 import { AgentStatus } from "@/ui/agent-status.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "@/ui/chat.js";
-import { THEME } from "@/ui/constants.js";
+import { MAX_RECENT_TOOLS, THEME } from "@/ui/constants.js";
 import { Footer } from "@/ui/footer.js";
 import { InteractionDock } from "@/ui/interaction-dock.js";
 import {
@@ -208,9 +208,6 @@ interface Props {
   onExitSummary?: (summary: InteractionSummary) => void;
   defaultProvider?: number;
 }
-
-// Maximum number of recent tool names (deduplicated) passed to the memory recall selector
-const MAX_RECENT_TOOLS = 10;
 
 export function App({
   config: initialConfig,

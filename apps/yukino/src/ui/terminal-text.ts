@@ -2,9 +2,8 @@ import sliceAnsi from "slice-ansi";
 import stringWidth from "string-width";
 import wrapAnsi from "wrap-ansi";
 
+import { TAB_SIZE } from "@/ui/constants.js";
 import { plainTerminalText } from "@/utils/index.js";
-
-export const TAB_SIZE = 2;
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: "grapheme",

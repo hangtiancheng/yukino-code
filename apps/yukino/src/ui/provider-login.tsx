@@ -19,7 +19,7 @@ import {
   modelListUrl,
   type DiscoveredModel,
 } from "@/llm/model-discovery.js";
-import { THEME } from "@/ui/constants.js";
+import { PROTOCOLS, THEME } from "@/ui/constants.js";
 import { CursorText } from "@/ui/cursor-text.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import {
@@ -30,7 +30,6 @@ import {
 } from "@/ui/terminal-text.js";
 import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 
-const PROTOCOLS = ["anthropic", "openai", "openai-compat"] as const;
 const FIELD_KEYS = [
   "name",
   "protocol",

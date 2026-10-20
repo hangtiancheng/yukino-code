@@ -2,7 +2,7 @@ import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import { ICONS, THEME } from "@/ui/constants.js";
+import { ICONS, PLAN_APPROVAL_OPTIONS, THEME } from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { TextField } from "@/ui/text-field.js";
 
@@ -11,12 +11,6 @@ export type PlanChoice = "yolo" | "manual" | "feedback";
 interface PlanApprovalDialogProps {
   onSelect: (choice: PlanChoice, feedback?: string) => void;
 }
-
-const PLAN_APPROVAL_OPTIONS = [
-  "Yes, enter YOLO mode (auto-approve all)",
-  "Yes, manually approve edits",
-  "Tell Yukino what to change",
-];
 
 export function PlanApprovalDialog({ onSelect }: PlanApprovalDialogProps) {
   const [cursor, setCursor] = useState(0);

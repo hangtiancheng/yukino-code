@@ -2,20 +2,11 @@ import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import { ICONS, THEME } from "@/ui/constants.js";
+import { ICONS, PERMISSION_OPTIONS, THEME } from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { truncateToWidth } from "@/ui/terminal-text.js";
 
 export type PermissionAction = "allow" | "deny" | "allowAlways";
-
-const PERMISSION_OPTIONS: { label: string; action: PermissionAction }[] = [
-  { label: "Yes", action: "allow" },
-  {
-    label: "Yes, remember the scopes above for all agents in this project",
-    action: "allowAlways",
-  },
-  { label: "No", action: "deny" },
-];
 
 interface PermissionDialogProps {
   agentName?: string;

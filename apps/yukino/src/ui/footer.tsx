@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { Box, Text } from "ink";
 
 import type { ThinkingLevel } from "@/config/provider-config.js";
-import { THEME } from "@/ui/constants.js";
+import { MODE_DISPLAY, THEME } from "@/ui/constants.js";
 import { thinkingLevelColor } from "@/ui/styles.js";
 import {
   plainTerminalLine,
@@ -27,13 +27,6 @@ interface FooterProps {
   thinkingLevel?: ThinkingLevel;
   cwd: string;
 }
-
-const MODE_DISPLAY: Record<string, string> = {
-  default: "Default",
-  acceptEdits: "Accept Edits",
-  plan: "Plan",
-  bypassPermissions: "YOLO",
-};
 
 function permissionModeColor(mode: string): string {
   if (mode === "acceptEdits") {
