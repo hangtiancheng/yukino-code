@@ -6,7 +6,14 @@ import eslintPluginReactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
 
 export default defineConfig(
-  { ignores: ["**/node_modules", "**/dist", "**/out"] },
+  {
+    ignores: [
+      "**/node_modules",
+      "**/dist",
+      "**/out",
+      "src/renderer/src/components/ui",
+    ],
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat["jsx-runtime"],
