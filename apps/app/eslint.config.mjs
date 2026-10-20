@@ -1,5 +1,5 @@
 import { defineConfig } from "eslint/config";
-import tseslint from "@electron-toolkit/eslint-config-ts";
+import tseslint from "typescript-eslint";
 import eslintPluginReact from "eslint-plugin-react";
 import eslintPluginReactHooks from "eslint-plugin-react-hooks";
 import eslintPluginReactRefresh from "eslint-plugin-react-refresh";

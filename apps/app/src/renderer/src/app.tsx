@@ -1,4 +1,4 @@
-import Versions from "./components/kebab-case-versions";
+import Versions from "./components/versions";
 import electronLogo from "./assets/electron.svg";
 
 function App(): React.JSX.Element {
