@@ -1,7 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
 
-
 import type { FileHistory } from "@/file-history/index.js";
 import type { GoalManager } from "@/goal/index.js";
 import type { Decision, PermissionChecker } from "@/permissions/index.js";

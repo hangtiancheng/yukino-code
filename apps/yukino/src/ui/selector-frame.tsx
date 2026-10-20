@@ -16,7 +16,6 @@ import {
   useTerminalDimensions,
 } from "@/ui/use-terminal-layout.js";
 
-
 function fitHint(hint: string, width: number): string {
   const full = plainTerminalLine(hint);
   const compact = full.replace(/Escape/g, "Esc").replace(/ navigate/g, "");

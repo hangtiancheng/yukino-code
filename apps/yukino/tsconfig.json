@@ -6,21 +6,16 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "esnext",
-    "lib": [
-      "esnext"
-    ],
-    "types": [
-      "node"
-    ],
+    "lib": ["esnext"],
+    "types": ["node"],
     "sourceMap": false,
     "declaration": false,
     "declarationMap": false,
     "noUncheckedIndexedAccess": false,
     "exactOptionalPropertyTypes": false,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"],
+      "#/*": ["./src/remote/browser/src/*"]
     },
     "forceConsistentCasingInFileNames": true,
     "strict": true,
@@ -36,15 +31,6 @@
     "resolveJsonModule": true,
     "plugins": []
   },
-  "include": [
-    "src",
-    "tests",
-    "tsup.config.ts",
-    "vitest.config.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "src/remote/browser"
-  ]
+  "include": ["src", "tests", "tsup.config.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "src/remote/browser"]
 }

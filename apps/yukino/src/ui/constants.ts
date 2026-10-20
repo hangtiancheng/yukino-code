@@ -58,7 +58,6 @@ import yaml from "shiki/langs/yaml.mjs";
 import zig from "shiki/langs/zig.mjs";
 import type { LanguageRegistration } from "shiki/types";
 
-
 import type { NonPlanPermissionMode } from "@/permissions/index.js";
 import type { CodeReviewFormValues } from "@/review/form.js";
 import { DARK_THEME, type ThemePalette } from "@/theme/constants.js";
@@ -127,7 +126,8 @@ export const MODE_DISPLAY: Record<string, string> = {
 // Maximum number of recent tool names (deduplicated) passed to the memory recall selector
 export const MAX_RECENT_TOOLS = 10;
 
-export const MARKER = /\[paste #\d+ (?:\+\d+ lines|\d+ chars)\]|\[Image #\d+\]/g;
+export const MARKER =
+  /\[paste #\d+ (?:\+\d+ lines|\d+ chars)\]|\[Image #\d+\]/g;
 
 export const EMPTY_FORM: CodeReviewFormValues = {
   focus: "",

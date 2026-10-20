@@ -7,7 +7,6 @@ import {
   visibleWidth,
 } from "@/ui/terminal-text.js";
 
-
 interface StatusBorderProps {
   width: number;
   color?: string;

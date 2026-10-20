@@ -7,7 +7,6 @@
 import type { AgentEvent } from "@/agent/events.js";
 import { TEXT_PREVIEW_CHARS } from "@/remote/constants.js";
 
-
 /** Minimal pino Logger shape (warn/error) to keep this module generic. */
 export interface EventLogger {
   warn(obj: Record<string, unknown>): void;

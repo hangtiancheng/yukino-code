@@ -2,7 +2,6 @@ import { Box, Text, useInput, usePaste } from "ink";
 import type { DOMElement } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,

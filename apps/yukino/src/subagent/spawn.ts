@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 
-
 import { Agent, type AgentConfig } from "@/agent/index.js";
 import {
   getContextWindow,

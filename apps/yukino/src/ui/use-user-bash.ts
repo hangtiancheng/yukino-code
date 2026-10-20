@@ -8,7 +8,6 @@ import {
   type RefObject,
 } from "react";
 
-
 import type { UserBashResult } from "@/conversation/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import {

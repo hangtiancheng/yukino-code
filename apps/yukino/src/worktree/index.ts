@@ -11,7 +11,6 @@ import {
 import { dirname, isAbsolute, join, resolve } from "path";
 import { promisify } from "util";
 
-
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath, projectKey } from "@/storage/index.js";
 import { canonicalPath } from "@/utils/paths.js";

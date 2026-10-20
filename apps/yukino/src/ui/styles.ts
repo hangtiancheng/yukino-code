@@ -1,4 +1,3 @@
-
 import type { ThinkingLevel } from "@/config/provider-config.js";
 import { DARK_THEME, LIGHT_THEME, type ThemeMode } from "@/theme/constants.js";
 import { THEME } from "@/ui/constants.js";

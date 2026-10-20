@@ -13,7 +13,6 @@ import express, { type Express } from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import z from "zod";
 
-
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
 import { configureBashSandbox } from "@/bootstrap/sandbox.js";

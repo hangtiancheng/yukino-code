@@ -21,7 +21,6 @@ import {
   WEB_FETCH_RULE,
 } from "@/prompt/prompts.js";
 
-
 export function buildToolGuidance(
   toolNames: readonly string[],
   coordinatorMode = false,

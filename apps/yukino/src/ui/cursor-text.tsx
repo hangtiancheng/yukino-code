@@ -14,7 +14,6 @@ import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import { visibleWidth } from "@/ui/terminal-text.js";
 import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 
-
 function TerminalCursor({ text, color }: { text: string; color?: string }) {
   const ref = useRef<DOMElement>(null);
   const { setCursorPosition } = useCursor();

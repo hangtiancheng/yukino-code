@@ -12,7 +12,6 @@ import {
 import { MAX_READ_MESSAGES } from "@/teams/constants.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
-
 const log = createChildLogger({ module: "teams" });
 
 const FileMailMessageSchema = z.object({

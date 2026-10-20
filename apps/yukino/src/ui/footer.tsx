@@ -1,7 +1,6 @@
 import chalk from "chalk";
 import { Box, Text } from "ink";
 
-
 import type { ThinkingLevel } from "@/config/provider-config.js";
 import { THEME } from "@/ui/constants.js";
 import { thinkingLevelColor } from "@/ui/styles.js";

@@ -1,6 +1,5 @@
 import { join, resolve, sep } from "node:path";
 
-
 import type { ToolResultBlock } from "@/conversation/index.js";
 import { createChildLogger } from "@/logger/index.js";
 import { getSessionArtifactsDir } from "@/session/index.js";

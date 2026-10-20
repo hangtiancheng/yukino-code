@@ -8,7 +8,6 @@ import {
 import { resolveComment } from "@/review/resolve.js";
 import type { FileDiff, ReviewComment } from "@/review/types.js";
 
-
 /**
  * LLM re-location. The last positioning resort: when deterministic matching
  * failed, an independent call extracts the verbatim snippet the comment

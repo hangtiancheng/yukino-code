@@ -1,6 +1,5 @@
 import { Chalk } from "chalk";
 
-
 import { isDiffTool } from "@/tools/is-diff-tool.js";
 import { THEME } from "@/ui/constants.js";
 import { expandTabs, wrapToLines } from "@/ui/terminal-text.js";

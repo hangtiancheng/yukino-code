@@ -9,7 +9,6 @@ import {
 } from "@/ui/terminal-text.js";
 import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 
-
 interface Props {
   text: string;
   duration?: number;

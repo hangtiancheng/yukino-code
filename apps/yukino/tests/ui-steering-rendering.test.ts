@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 import { ChatView, type ChatMessage } from "@/ui/chat.js";
-import { THEME} from "@/ui/constants.js"
+import { THEME } from "@/ui/constants.js";
 import { InputBox } from "@/ui/input.js";
 import { PendingQueue } from "@/ui/pending-queue.js";
 import { setThemeMode } from "@/ui/styles.js";

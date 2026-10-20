@@ -9,7 +9,6 @@ import { SelectorList, SelectorListRow } from "@/ui/selector-list.js";
 import { updateSelectorQuery } from "@/ui/selector-search.js";
 import { TextField } from "@/ui/text-field.js";
 
-
 export interface ModelPickerState {
   status: "loading" | "ready" | "empty" | "error";
   models: DiscoveredModel[];

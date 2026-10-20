@@ -2,7 +2,6 @@ import type { IssueConfirmation } from "@/feedback/types.js";
 import type { SubagentProgress } from "@/ui/agent-tool-progress.js";
 import type { PermissionAction } from "@/ui/permission-dialog.js";
 
-
 /**
  * Whether a single Ctrl+C / Esc has anything to interrupt. Only foreground
  * execution counts: the streaming run (agent loop, forked skill, or code

@@ -9,7 +9,6 @@ import { SelectorFrame } from "@/ui/selector-frame.js";
 import { truncateToWidth } from "@/ui/terminal-text.js";
 import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 
-
 interface Props {
   cwd: string;
   sessionId: string;

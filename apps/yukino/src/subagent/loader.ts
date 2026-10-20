@@ -9,7 +9,6 @@ import { yukinoPath } from "@/storage/index.js";
 import { BUILTIN_AGENTS } from "@/subagent/constants.js";
 import type { AgentDefinition } from "@/subagent/definition.js";
 
-
 const log = createChildLogger({ module: "subagent" });
 
 /** User definitions override built-in agents. */

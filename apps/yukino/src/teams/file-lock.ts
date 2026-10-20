@@ -21,7 +21,6 @@ import {
   LOCK_STALE_MS,
 } from "@/teams/constants.js";
 
-
 const heldLocks = new Set<string>();
 
 const ErrnoExceptionSchema = z.looseObject({

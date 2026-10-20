@@ -10,7 +10,6 @@ import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
 import { TextField } from "@/ui/text-field.js";
 import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
 
-
 interface Props {
   questions: Question[];
   onComplete: (answers: Record<string, string>) => void;

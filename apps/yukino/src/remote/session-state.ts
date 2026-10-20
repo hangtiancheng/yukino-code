@@ -1,4 +1,3 @@
-
 import { RecoveryState } from "@/compact/recovery.js";
 import { FileHistory } from "@/file-history/index.js";
 import { GoalManager } from "@/goal/index.js";

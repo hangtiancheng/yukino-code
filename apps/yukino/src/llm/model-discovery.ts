@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import { DISCOVERY_TIMEOUT_MS, MAX_MODEL_PAGES } from "@/llm/constants.js";
 
-
 const HttpUrlSchema = z.url();
 const ModelSchema = z.object({
   id: z.string().trim().min(1),

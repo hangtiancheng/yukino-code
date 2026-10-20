@@ -1,6 +1,5 @@
 import { Box } from "ink";
 
-
 import type { AgentTask } from "@/subagent/task-manager.js";
 import { formatTokens, type TeammateUIState } from "@/teams/progress.js";
 import {

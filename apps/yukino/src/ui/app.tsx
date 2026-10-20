@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { Box, Text, useApp } from "ink";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
-
 import { Agent } from "@/agent/index.js";
 import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
 import {

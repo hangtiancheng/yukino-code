@@ -11,7 +11,6 @@ import {
   type StreamableHTTPClientTransportOptions,
 } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import type { MCPServerConfig } from "@/config/index.js";
 import {

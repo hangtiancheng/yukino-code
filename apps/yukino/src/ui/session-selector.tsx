@@ -6,7 +6,6 @@ import type { SessionInfo } from "@/session/index.js";
 import { SelectorList, SelectorListRow } from "@/ui/selector-list.js";
 import { updateSelectorQuery } from "@/ui/selector-search.js";
 
-
 interface SessionSelectorProps {
   currentSessionId?: string;
   reservedRows?: number;

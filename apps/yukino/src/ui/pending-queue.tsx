@@ -7,7 +7,6 @@ import {
   useTerminalDimensions,
 } from "@/ui/use-terminal-layout.js";
 
-
 interface PendingQueueProps {
   messages: string[];
   /** Messages steered into the in-flight run; delivered at the next turn boundary. */

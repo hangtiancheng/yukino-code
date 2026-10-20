@@ -5,7 +5,6 @@ import {
 } from "@/todo/dependencies.js";
 import type { StoredTaskStatus, TaskStore } from "@/todo/store.js";
 
-
 // Submodule namespaces for library consumers (Todo.<Sub>.*).
 export * as Store from "@/todo/store.js";
 export * as Tools from "@/todo/tools.js";

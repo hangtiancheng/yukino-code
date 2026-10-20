@@ -15,7 +15,6 @@ import {
   useTerminalDimensions,
 } from "@/ui/use-terminal-layout.js";
 
-
 interface ThinkingSelectProps {
   currentLevel: ThinkingLevel;
   levels?: readonly ThinkingLevel[];

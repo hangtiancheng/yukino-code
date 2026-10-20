@@ -1,6 +1,5 @@
 import { memo } from "react";
 
-
 import type { AgentTask } from "@/subagent/task-manager.js";
 import type { TeammateUIState } from "@/teams/progress.js";
 import {

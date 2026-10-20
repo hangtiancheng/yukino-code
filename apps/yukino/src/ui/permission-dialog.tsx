@@ -6,7 +6,6 @@ import { ICONS, THEME } from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { truncateToWidth } from "@/ui/terminal-text.js";
 
-
 export type PermissionAction = "allow" | "deny" | "allowAlways";
 
 const PERMISSION_OPTIONS: { label: string; action: PermissionAction }[] = [

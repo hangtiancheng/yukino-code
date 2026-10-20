@@ -30,7 +30,6 @@ import { formatShellOutput } from "@/tools/shell-output.js";
 import { TaskOutputTool } from "@/tools/task-output.js";
 import type { ToolResult } from "@/tools/types.js";
 
-
 // Shared background-execution plumbing for the backgroundable tools (Bash,
 // PowerShell): the file-descriptor output mode, the size watchdog
 // constants, result/notification formatting, and the host wiring helpers.

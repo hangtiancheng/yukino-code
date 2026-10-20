@@ -4,7 +4,6 @@ import { dirname } from "node:path";
 
 import z, { parse } from "zod";
 
-
 import { createChildLogger } from "@/logger/index.js";
 import {
   readPrivateFileSync as readFileSync,

@@ -9,7 +9,7 @@ import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 import { AgentStatus } from "@/ui/agent-status.js";
 import { ChatView, type ChatMessage } from "@/ui/chat.js";
-import { THEME} from "@/ui/constants.js"
+import { THEME } from "@/ui/constants.js";
 import { Footer } from "@/ui/footer.js";
 import { InputBox } from "@/ui/input.js";
 import { setThemeMode } from "@/ui/styles.js";

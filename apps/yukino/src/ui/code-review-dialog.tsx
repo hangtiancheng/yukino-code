@@ -11,7 +11,6 @@ import { THEME } from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { TextField } from "@/ui/text-field.js";
 
-
 export interface CodeReviewDialogProps {
   onSubmit: (options: CodeReviewFormOptions) => Promise<void> | void;
   onCancel: () => void;

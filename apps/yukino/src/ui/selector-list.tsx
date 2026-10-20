@@ -19,7 +19,6 @@ import {
   useTerminalDimensions,
 } from "@/ui/use-terminal-layout.js";
 
-
 interface SelectorListProps {
   children: (start: number, count: number, width: number) => ReactNode;
   cursor: number;

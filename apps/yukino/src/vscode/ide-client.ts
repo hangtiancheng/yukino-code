@@ -13,7 +13,6 @@ import { version } from "@/version.js";
 import { detectIde } from "@/vscode/lockfile.js";
 import { WebSocketTransport } from "@/vscode/ws-transport.js";
 
-
 const log = createChildLogger({ module: "vscode" });
 
 export interface IdeAtMention {

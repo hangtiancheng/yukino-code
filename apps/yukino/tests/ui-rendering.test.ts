@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runInline } from "@/skills/executor.js";
 import { AgentActivity } from "@/ui/agent-activity.js";
 import { CommittedMessage } from "@/ui/chat.js";
-import { THEME } from "@/ui/constants.js"
+import { THEME } from "@/ui/constants.js";
 import { Footer } from "@/ui/footer.js";
 import {
   renderMarkdown,

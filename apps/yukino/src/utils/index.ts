@@ -3,7 +3,6 @@ import { stripVTControlCharacters } from "node:util";
 import { createChildLogger } from "@/logger/index.js";
 import { NUMERIC_LITERAL } from "@/utils/constants.js";
 
-
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
 export * as FileScan from "@/utils/file-scan.js";
 export * as Paths from "@/utils/paths.js";

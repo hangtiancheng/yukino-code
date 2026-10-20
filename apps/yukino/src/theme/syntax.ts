@@ -1,6 +1,6 @@
 import type { ThemeRegistration } from "shiki";
 
-import { DARK_THEME, LIGHT_THEME, type ThemeMode } from "@/theme/constants.js";
+import { DARK_THEME, LIGHT_THEME, type ThemeMode } from "./constants.js";
 
 export function defaultSyntaxTheme(
   mode: ThemeMode,

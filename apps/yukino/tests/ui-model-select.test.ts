@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DiscoveredModel } from "@/llm/model-discovery.js";
-import { ICONS } from "@/ui/constants.js"
+import { ICONS } from "@/ui/constants.js";
 import {
   ModelSelect,
   OTHER_LABEL,

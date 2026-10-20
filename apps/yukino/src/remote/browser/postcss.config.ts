@@ -1,8 +1,9 @@
 import { fileURLToPath } from "node:url";
 
 import tailwindcss from "@tailwindcss/postcss";
-import { PALETTES } from "@yukino.js/yukino/theme/constants.js";
 import type { Plugin } from "postcss";
+
+import { PALETTES } from "@/theme/constants.js";
 
 function asString(value: unknown): string {
   if (typeof value === "string") {

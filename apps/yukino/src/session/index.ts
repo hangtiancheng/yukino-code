@@ -12,7 +12,6 @@ import { dirname, join } from "node:path";
 
 import z, { parse, safeParse } from "zod";
 
-
 import { buildCompactionSummaryMessage } from "@/compact/prompts.js";
 import type {
   Message,

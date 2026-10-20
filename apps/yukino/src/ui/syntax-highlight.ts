@@ -63,7 +63,7 @@ import zig from "shiki/langs/zig.mjs";
 import type { LanguageRegistration } from "shiki/types";
 
 import { defaultSyntaxTheme } from "@/theme/syntax.js";
-import { THEME} from "@/ui/constants.js"
+import { THEME } from "@/ui/constants.js";
 import { getThemeMode } from "@/ui/styles.js";
 
 const GRAMMAR_MODULES: LanguageRegistration[][] = [

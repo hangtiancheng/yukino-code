@@ -12,7 +12,6 @@ import type {
   ToolSchema,
 } from "@/tools/types.js";
 
-
 export class EnterPlanModeTool implements Tool {
   name = "EnterPlanMode";
   description = ENTER_PLAN_MODE_DESCRIPTION;
