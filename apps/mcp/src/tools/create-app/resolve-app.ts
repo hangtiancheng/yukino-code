@@ -7,6 +7,13 @@ const OptionalNonEmptyString = NonEmptyString.optional().catch(undefined);
 
 const EmptyPayload = { html: undefined, title: undefined };
 
+function asPayload(value: unknown): object {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  return {};
+}
+
 const AppPayload = z
   .object({
     html: OptionalNonEmptyString,
@@ -32,15 +39,15 @@ export type AppDocument = z.infer<typeof AppDocumentSchema>;
 // 宿主可能丢掉工具结果里的 _meta。HTML 依次取自结果 _meta、structuredContent，
 // 最后回退到已经送达的 tool-input 参数。
 export function resolveAppDocument(input: {
-  resultMeta?: object;
-  structuredContent?: object;
+  resultMeta?: unknown;
+  structuredContent?: unknown;
   inputHtml?: string;
   inputTitle?: string;
   fallbackTitle: string;
 }): AppDocument | undefined {
   const parsed = ResolveInput.parse({
-    resultMeta: input.resultMeta,
-    structuredContent: input.structuredContent,
+    resultMeta: asPayload(input.resultMeta),
+    structuredContent: asPayload(input.structuredContent),
     inputHtml: input.inputHtml,
     inputTitle: input.inputTitle,
     fallbackTitle: input.fallbackTitle,

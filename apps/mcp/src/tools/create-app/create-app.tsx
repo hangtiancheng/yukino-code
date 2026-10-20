@@ -10,6 +10,13 @@ import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 
 import "./global.css";
+import {
+  DEFAULT_FRAME_HEIGHT,
+  readContentHeight,
+  readHostMaxHeight,
+  resolveFrameHeight,
+  withHeightReporter,
+} from "./frame-size.js";
 import { resolveAppDocument } from "./resolve-app.js";
 
 type RenderState =
@@ -104,8 +111,25 @@ function Shell(): ReactElement {
   const [state, setState] = useState<RenderState>({ phase: "waiting" });
   const [connected, setConnected] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [frameHeight, setFrameHeight] = useState(DEFAULT_FRAME_HEIGHT);
   const inputHtmlRef = useRef<string | undefined>(undefined);
   const inputTitleRef = useRef<string | undefined>(undefined);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const contentHeightRef = useRef<number | undefined>(undefined);
+  const maxHeightRef = useRef(readHostMaxHeight(undefined));
+  const readyHtml = state.phase === "ready" ? state.html : undefined;
+  const seenHtmlRef = useRef(readyHtml);
+  if (seenHtmlRef.current !== readyHtml) {
+    seenHtmlRef.current = readyHtml;
+    contentHeightRef.current = undefined;
+    setFrameHeight(
+      resolveFrameHeight({
+        navHeight: navRef.current?.offsetHeight ?? 0,
+        maxHeight: maxHeightRef.current,
+      }),
+    );
+  }
 
   useEffect(() => {
     const app = new App(
@@ -156,6 +180,18 @@ function Shell(): ReactElement {
         });
       }
     });
+    const syncHostMax = (
+      dimensions: { height?: number; maxHeight?: number } | undefined,
+    ) => {
+      maxHeightRef.current = readHostMaxHeight(dimensions);
+      setFrameHeight(
+        resolveFrameHeight({
+          contentHeight: contentHeightRef.current,
+          navHeight: navRef.current?.offsetHeight ?? 0,
+          maxHeight: maxHeightRef.current,
+        }),
+      );
+    };
     app.addEventListener("hostcontextchanged", (ctx) => {
       if (ctx.theme) {
         applyDocumentTheme(ctx.theme);
@@ -166,6 +202,7 @@ function Shell(): ReactElement {
       if (ctx.styles?.css?.fonts) {
         applyHostFonts(ctx.styles.css.fonts);
       }
+      syncHostMax(ctx.containerDimensions);
     });
     app.addEventListener("toolcancelled", () => {
       setState({ phase: "failed", message: "App creation was cancelled." });
@@ -174,7 +211,7 @@ function Shell(): ReactElement {
       return {};
     };
 
-    const transport = new PostMessageTransport();
+    const transport = new PostMessageTransport(window.parent, window.parent);
     let cancelled = false;
     void app.connect(transport).then(
       () => {
@@ -183,6 +220,7 @@ function Shell(): ReactElement {
         }
         stopResize = app.setupSizeChangedNotifications();
         applyHostContextStyles(app);
+        syncHostMax(app.getHostContext()?.containerDimensions);
         setConnected(true);
       },
       (err: unknown) => {
@@ -199,9 +237,33 @@ function Shell(): ReactElement {
     };
   }, []);
 
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== frameRef.current?.contentWindow) {
+        return;
+      }
+      const contentHeight = readContentHeight(event.data);
+      if (contentHeight === undefined) {
+        return;
+      }
+      contentHeightRef.current = contentHeight;
+      setFrameHeight(
+        resolveFrameHeight({
+          contentHeight,
+          navHeight: navRef.current?.offsetHeight ?? 0,
+          maxHeight: maxHeightRef.current,
+        }),
+      );
+    };
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+    };
+  }, []);
+
   if (connectError !== null) {
     return (
-      <main className="flex h-screen flex-col">
+      <main className="flex flex-col">
         <nav className="border-b border-base-300 bg-base-200 px-3 py-1 font-semibold">
           {FALLBACK_TITLE}
         </nav>
@@ -217,15 +279,20 @@ function Shell(): ReactElement {
   const title = state.phase === "ready" ? state.title : FALLBACK_TITLE;
 
   return (
-    <main className="flex h-screen flex-col">
-      <nav className="navbar min-h-0 gap-3 border-b border-base-300 bg-base-200 px-3 py-1">
+    <main className="flex flex-col">
+      <nav
+        ref={navRef}
+        className="navbar min-h-0 gap-3 border-b border-base-300 bg-base-200 px-3 py-1"
+      >
         <div className="min-w-0 flex-1 truncate font-semibold">{title}</div>
         <StatusChip state={state} connected={connected} />
       </nav>
       <iframe
-        className="min-h-0 w-full flex-1 border-0 bg-base-100"
+        ref={frameRef}
+        className="block w-full border-0 bg-base-100"
+        style={{ height: frameHeight }}
         sandbox="allow-scripts allow-forms allow-modals allow-popups"
-        srcDoc={state.phase === "ready" ? state.html : undefined}
+        srcDoc={readyHtml ? withHeightReporter(readyHtml) : undefined}
         title="Rendered app"
       />
     </main>
