@@ -5,7 +5,6 @@ import { AssistantMessage } from "#/components/assistant-message.js";
 import { DoneIndicator } from "#/components/done-indicator.js";
 import { ErrorMessage } from "#/components/error-message.js";
 import { PermissionDialog } from "#/components/permission-dialog.js";
-import { ReviewProgress } from "#/components/review-progress.js";
 import { SystemMessage } from "#/components/system-message.js";
 import { ThinkingBlock } from "#/components/thinking-block.js";
 import { ToolBlock } from "#/components/tool-block.js";
@@ -142,8 +141,6 @@ const MessageRow = memo(function MessageRow({
         return (
           <AskUserDialog key={item.id} item={item} onAnswer={onAnswerAsk} />
         );
-      case "review":
-        return <ReviewProgress key={item.id} item={item} />;
       case "done":
         return <DoneIndicator key={item.id} elapsed={item.elapsed} />;
       default:

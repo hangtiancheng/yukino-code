@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
 import { ChatView } from "@/ui/chat.js";
 import type { ChatMessage } from "@/ui/chat.js";
-import { CodeReviewDialog } from "@/ui/code-review-dialog.js";
 import { Footer } from "@/ui/footer.js";
 import type { InputDraft } from "@/ui/input-draft.js";
 import { InputBox } from "@/ui/input.js";
@@ -401,39 +400,24 @@ describe("responsive terminal workspace", () => {
     expect(frame).toContain("→ No");
   });
 
-  it.each(["provider", "review"])(
-    "scrolls the active %s form field into view",
-    (form) => {
-      resize(32, 8);
-      mount(
-        form === "provider"
-          ? createElement(ProviderLogin, {
-              onSubmit: vi.fn(),
-              onCancel: vi.fn(),
-            })
-          : createElement(CodeReviewDialog, {
-              onSubmit: vi.fn(),
-              onCancel: vi.fn(),
-            }),
-      );
-      for (let index = 0; index < (form === "provider" ? 7 : 4); index++) {
-        press({ tab: true });
-      }
-      expectFits(32, 8);
-      expect(frame).toContain(
-        form === "provider" ? "› Max out" : "› Exclude globs",
-      );
-      expect(caret.current).toBeDefined();
-      resize(20, 6);
-      expectFits(20, 6);
-      expect(caret.current).toBeDefined();
-      resize(100, 30);
-      expectFits(100, 30);
-      expect(frame).toContain(
-        form === "provider" ? "› Max output tokens" : "› Exclude globs",
-      );
-    },
-  );
+  it("scrolls the active provider form field into view", () => {
+    resize(32, 8);
+    mount(
+      createElement(ProviderLogin, { onSubmit: vi.fn(), onCancel: vi.fn() }),
+    );
+    for (let index = 0; index < 7; index++) {
+      press({ tab: true });
+    }
+    expectFits(32, 8);
+    expect(frame).toContain("› Max out");
+    expect(caret.current).toBeDefined();
+    resize(20, 6);
+    expectFits(20, 6);
+    expect(caret.current).toBeDefined();
+    resize(100, 30);
+    expectFits(100, 30);
+    expect(frame).toContain("› Max output tokens");
+  });
 
   it("keeps the selected question option visible with long questions and narrow tabs", () => {
     resize(32, 8);
@@ -480,7 +464,7 @@ describe("responsive terminal workspace", () => {
   it("keeps a form's editing caret on the visible draft when only one content row fits", () => {
     resize(32, 5);
     mount(
-      createElement(CodeReviewDialog, { onSubmit: vi.fn(), onCancel: vi.fn() }),
+      createElement(ProviderLogin, { onSubmit: vi.fn(), onCancel: vi.fn() }),
     );
     press({}, "visible-draft");
     expectFits(32, 5);

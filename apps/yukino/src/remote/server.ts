@@ -28,6 +28,7 @@ import {
   type CommandContext,
 } from "@/commands/commands.js";
 import { loadUserCommands } from "@/commands/loader.js";
+import { runSubagentCommand } from "@/commands/subagent.js";
 import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
 import { DEFAULT_THINKING_LEVEL } from "@/config/constants.js";
@@ -102,8 +103,6 @@ import {
 import { AgentEventLogger } from "@/remote/log.js";
 import { RemoteMcpApps } from "@/remote/mcp-apps.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
-import { formatReviewReport } from "@/review/report.js";
-import { runCodeReview, validateReviewInput } from "@/review/runner.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import {
   newSessionId,
@@ -214,14 +213,6 @@ const PlanApprovalResponseSchema = z.object({
   id: z.string(),
   choice: z.enum(["yolo", "manual", "feedback"]),
   feedback: z.string().optional(),
-});
-
-const CodeReviewStartSchema = z.object({
-  background: z.string().optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
-  commit: z.string().optional(),
-  excludePatterns: z.array(z.string()).optional(),
 });
 
 const PermissionModeSchema = z.enum([
@@ -1163,7 +1154,6 @@ export class RemoteServer {
     this.broadcast({ type: "run_state", data: { streaming: value } });
   }
   private compactController: AbortController | null = null;
-  private reviewController: AbortController | null = null;
   private turnCount = 0;
   private readonly eventLogger = new AgentEventLogger(log);
   /** Resolves run() once stop() has completed; run() blocks on it. */
@@ -1214,7 +1204,7 @@ export class RemoteServer {
   /** Steering texts already appended to prompt history at steer time. */
   private steeringHistoryRecorded: string[] = [];
   private userBashController: AbortController | null = null;
-  private forkController: AbortController | null = null;
+  private subagentController: AbortController | null = null;
   private modelListController: AbortController | null = null;
   /** Lazily created OS sandbox for /sandbox toggling (terminal parity). */
   private sandbox: Promise<Sandbox | null> | null = null;
@@ -1477,18 +1467,6 @@ export class RemoteServer {
             log.warn(
               { issues: parsed.error.issues },
               "malformed plan approval",
-            );
-          }
-          break;
-        }
-        case "code_review_start": {
-          const parsed = CodeReviewStartSchema.safeParse(msg.data);
-          if (parsed.success) {
-            await this.handleCodeReviewStart(parsed.data);
-          } else {
-            log.warn(
-              { issues: parsed.error.issues },
-              "malformed code review request",
             );
           }
           break;
@@ -2268,6 +2246,36 @@ export class RemoteServer {
         const prompt = cmd.handler(ctx);
         const displayText = args ? `/${name} ${args}` : `/${name}`;
 
+        if (cmd.agent) {
+          const controller = new AbortController();
+          this.subagentController = controller;
+          const startTime = Date.now();
+          try {
+            await runSubagentCommand(cmd.agent, prompt, displayText, {
+              cwd: handle.cwd,
+              sessionId: handle.sessionId,
+              registry: handle.registry,
+              conversation: handle.conv,
+              permissionChecker: handle.checker,
+              onPermissionRequest: this.createPermissionCallback(),
+              abortSignal: controller.signal,
+              onEvent: (event) => {
+                this.bridgeEvent(event, startTime, () => {});
+                if (event.type === "stream_text") {
+                  this.broadcast({
+                    type: "stream_end",
+                    data: { text: event.text },
+                  });
+                }
+              },
+            });
+          } finally {
+            this.subagentController = null;
+            this.broadcast({ type: "command_done", data: null });
+          }
+          break;
+        }
+
         this.exitPlanSucceeded = false;
         const cwd = handle.cwd;
         const sessionId = handle.sessionId;
@@ -2338,7 +2346,7 @@ export class RemoteServer {
       return;
     }
     const controller = new AbortController();
-    this.forkController = controller;
+    this.subagentController = controller;
     this.runCanceled = false;
     this.broadcast({
       type: "system",
@@ -2398,7 +2406,7 @@ export class RemoteServer {
         data: { message: `Skill fork error: ${asErrorString(err)}` },
       });
     } finally {
-      this.forkController = null;
+      this.subagentController = null;
       this.broadcast({ type: "command_done", data: null });
     }
   }
@@ -2561,18 +2569,6 @@ export class RemoteServer {
               message: "Not a git repository or git worktree not available.",
             },
           });
-        }
-        this.broadcast({ type: "command_done", data: null });
-        break;
-
-      case "review":
-        if (args.trim()) {
-          this.broadcast({
-            type: "system",
-            data: { message: "Usage: /review" },
-          });
-        } else {
-          this.broadcast({ type: "code_review_form", data: null });
         }
         this.broadcast({ type: "command_done", data: null });
         break;
@@ -3804,138 +3800,6 @@ export class RemoteServer {
     }
   }
 
-  /** Runs a code review configured through the browser form. */
-  private async handleCodeReviewStart(
-    options: z.infer<typeof CodeReviewStartSchema>,
-  ): Promise<void> {
-    if (this.streaming) {
-      this.broadcast({
-        type: "system",
-        data: { message: "A run is already in progress." },
-      });
-      return;
-    }
-
-    const from = options.from?.trim() || undefined;
-    const to = options.to?.trim() || undefined;
-    const commit = options.commit?.trim() || undefined;
-    try {
-      validateReviewInput(from, to, commit);
-      for (const ref of [from, to, commit]) {
-        if (ref && /[\r\n]/u.test(ref)) {
-          throw new Error("Git refs must be a single line");
-        }
-      }
-    } catch (err) {
-      this.broadcast({
-        type: "error",
-        data: { message: err instanceof Error ? err.message : String(err) },
-      });
-      this.broadcast({ type: "command_done", data: null });
-      return;
-    }
-
-    // Claim the shared foreground slot before cold initialization yields. This
-    // prevents a second review or chat run from entering the same conversation.
-    const controller = new AbortController();
-    this.reviewController = controller;
-    this.streaming = true;
-    this.runCanceled = false;
-
-    try {
-      const handle = await this.ensureAgent();
-      if (!handle) {
-        return;
-      }
-
-      const startTime = Date.now();
-      this.broadcast({
-        type: "code_review_progress",
-        data: { phase: "diff", message: "Starting code review…" },
-      });
-      const result = await runCodeReview(
-        {
-          cwd: handle.cwd,
-          background: options.background?.trim() || undefined,
-          from,
-          to,
-          commit,
-          excludePatterns:
-            options.excludePatterns?.filter((pattern) => pattern.trim()) ?? [],
-          abortSignal: controller.signal,
-          onProgress: (event) => {
-            this.broadcast({
-              type: "code_review_progress",
-              data: {
-                phase: event.phase,
-                message: event.message,
-                progress: event.progress,
-              },
-            });
-          },
-          onToolEvent: (event) => {
-            if (event.type === "tool_use") {
-              this.broadcast({
-                type: "tool_use",
-                data: {
-                  toolId: event.toolId,
-                  toolName: event.toolName,
-                  args: event.args,
-                },
-              });
-            } else {
-              this.broadcast({
-                type: "tool_result",
-                data: {
-                  toolId: event.toolId,
-                  toolName: event.toolName,
-                  output: event.output,
-                  isError: event.isError,
-                  elapsed: event.elapsed,
-                },
-              });
-            }
-          },
-        },
-        { provider: handle.provider },
-      );
-      const report = formatReviewReport(result);
-      this.broadcast({ type: "stream_text", data: { text: report } });
-      this.broadcast({ type: "stream_end", data: { text: report } });
-      if (result.comments.length > 0) {
-        handle.conv.addSystemReminder(
-          `<code_review_findings>\n${report}\n</code_review_findings>`,
-        );
-      }
-      this.broadcast({
-        type: "loop_complete",
-        data: {
-          stopReason: result.aborted ? "aborted" : "end_turn",
-          totalTurns: 0,
-          elapsed: (Date.now() - startTime) / 1000,
-        },
-      });
-    } catch (err) {
-      log.error({ err }, "code review failed");
-      this.broadcast({
-        type: "error",
-        data: { message: err instanceof Error ? err.message : String(err) },
-      });
-      this.broadcast({ type: "command_done", data: null });
-    } finally {
-      this.reviewController = null;
-      this.streaming = false;
-      // Dispatch follow-ups queued during the review (FIFO), like every other
-      // run exit. Guarded so a drain failure cannot mask the original review
-      // error already reported above.
-      try {
-        await this.drainFollowUps();
-      } catch (err) {
-        log.error({ err }, "follow-up drain after code review failed");
-      }
-    }
-  }
-
   /** Renders /memory output (parity with the terminal UI). */
   private buildMemoryStatus(args: string): string {
     const handle = this.agentHandle;
@@ -4380,9 +4244,8 @@ export class RemoteServer {
     this.closePlanApproval();
     this.agentHandle?.abort();
     this.compactController?.abort();
-    this.reviewController?.abort();
     this.userBashController?.abort();
-    this.forkController?.abort();
+    this.subagentController?.abort();
     // Aborting a provider cannot settle promises owned by the WebSocket UI.
     for (const [id, resolve] of this.pendingPermissions) {
       resolve("deny");

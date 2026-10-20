@@ -150,13 +150,6 @@ export interface PlanApprovalPayload {
   planContent: string;
 }
 
-export interface CodeReviewProgressPayload {
-  phase: string;
-  message: string;
-  /** 0..1 overall completion estimate, when known. */
-  progress?: number;
-}
-
 export interface SteeringPayload {
   text: string;
 }
@@ -396,15 +389,6 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("session_list"),
     data: z.strictObject({ sessions: z.array(sessionSummarySchema) }),
   }),
-  z.strictObject({ type: z.literal("code_review_form"), data: z.null() }),
-  z.strictObject({
-    type: z.literal("code_review_progress"),
-    data: z.strictObject({
-      phase: z.string(),
-      message: z.string(),
-      progress: z.number().optional(),
-    }),
-  }),
   z.strictObject({
     type: z.literal("steering_queued"),
     data: z.strictObject({ text: z.string() }),
@@ -618,16 +602,6 @@ export interface PlanApprovalResponsePayload {
   feedback?: string;
 }
 
-/** Transformed code-review form values; shape matches the server's
- *  CodeReviewStartSchema (server.ts), where every field is optional. */
-export interface CodeReviewStartPayload {
-  background?: string;
-  from?: string;
-  to?: string;
-  commit?: string;
-  excludePatterns?: string[];
-}
-
 export type PermissionModeChoice =
   "default" | "acceptEdits" | "bypassPermissions" | "plan";
 
@@ -676,7 +650,6 @@ export type ClientMessage =
   | { type: "permission_response"; data: PermissionResponsePayload }
   | { type: "ask_user_response"; data: AskUserResponsePayload }
   | { type: "plan_approval_response"; data: PlanApprovalResponsePayload }
-  | { type: "code_review_start"; data: CodeReviewStartPayload }
   | { type: "set_permission_mode"; data: SetPermissionModePayload }
   | { type: "model_list_request"; data: Record<string, never> }
   | { type: "model_select"; data: ModelSelectPayload }
@@ -761,16 +734,6 @@ export interface AskUserItem {
   answered: boolean;
 }
 
-export interface ReviewItem {
-  kind: "review";
-  id: string;
-  phase: string;
-  message: string;
-  /** 0..1 overall completion estimate, when known. */
-  progress: number | null;
-  done: boolean;
-}
-
 export interface DoneItem {
   kind: "done";
   id: string;
@@ -786,7 +749,6 @@ export type ChatItem =
   | ToolItem
   | PermissionItem
   | AskUserItem
-  | ReviewItem
   | DoneItem;
 
 /* ───────────────────────── Derived helper types ───────────────────────── */

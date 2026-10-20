@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ActivityPanel } from "#/components/activity-panel.js";
-import { CodeReviewDialog } from "#/components/code-review-dialog.js";
 import { InputArea } from "#/components/input-area.js";
 import { MessageList } from "#/components/message-list.js";
 import { ModelPicker } from "#/components/model-picker.js";
@@ -18,7 +17,6 @@ import { useWebSocket } from "#/hooks/use-web-socket.js";
 import { McpAppContext } from "#/lib/mcp-app-context.js";
 import type {
   ClientMessage,
-  CodeReviewStartPayload,
   PermissionModeChoice,
   PermissionResponse,
   PlanChoice,
@@ -41,7 +39,6 @@ export function App() {
     markAskAnswered,
     closePlanApproval,
     closeSessions,
-    closeCodeReview,
     closeModelPicker,
     closeProviderPicker,
     closeRewindPicker,
@@ -132,14 +129,6 @@ export function App() {
     [closeSessions, send],
   );
 
-  const handleCodeReviewRun = useCallback(
-    (options: CodeReviewStartPayload) => {
-      closeCodeReview();
-      send({ type: "code_review_start", data: options });
-    },
-    [closeCodeReview, send],
-  );
-
   const cyclePermissionMode = useCallback(() => {
     const current = state.permissionMode || "default";
     const index = MODE_CYCLE.findIndex((mode) => mode === current);
@@ -223,7 +212,6 @@ export function App() {
     activityOpen ||
     state.planApproval !== null ||
     state.sessions !== null ||
-    state.codeReviewOpen ||
     state.modelPicker !== null ||
     state.providerPicker !== null ||
     state.rewindPicker !== null ||
@@ -336,12 +324,6 @@ export function App() {
           sessions={state.sessions}
           onPick={handlePickSession}
           onClose={closeSessions}
-        />
-      )}
-      {state.codeReviewOpen && (
-        <CodeReviewDialog
-          onRun={handleCodeReviewRun}
-          onClose={closeCodeReview}
         />
       )}
       {state.modelPicker && (

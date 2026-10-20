@@ -100,11 +100,6 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
       ],
     },
   },
-  code_review_form: { type: "code_review_form", data: null },
-  code_review_progress: {
-    type: "code_review_progress",
-    data: { phase: "review", message: "checking", progress: 0.5 },
-  },
   steering_queued: { type: "steering_queued", data: { text: "also check b" } },
   steering_delivered: {
     type: "steering_delivered",

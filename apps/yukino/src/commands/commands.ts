@@ -1,3 +1,5 @@
+import { REVIEW_COMMAND_DESCRIPTION } from "@/commands/constants.js";
+import { buildReviewPrompt } from "@/commands/prompts.js";
 import { THINKING_LEVELS } from "@/config/constants.js";
 import {
   isValidThinkingLevel,
@@ -33,6 +35,8 @@ export interface Command {
   type: CommandType;
   description: string;
   handler: (ctx: CommandContext) => string;
+  /** Run a prompt in this named foreground subagent. */
+  agent?: string;
   /** Skill-derived commands; excluded from the /help listing (see /skills). */
   isSkill?: boolean;
   /** Handler returns markdown to render richly (e.g. a table), not plain text. */
@@ -252,9 +256,10 @@ export function createDefaultRegistry(): CommandRegistry {
 
   registry.register({
     name: "review",
-    type: "local_ui",
-    description: "Configure and run a structured AI code review",
-    handler: ({ args }) => (args.trim() ? "review-usage" : "review"),
+    type: "prompt",
+    description: REVIEW_COMMAND_DESCRIPTION,
+    agent: "review",
+    handler: ({ args }) => buildReviewPrompt(args),
   });
 
   registry.register({

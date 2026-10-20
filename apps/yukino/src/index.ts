@@ -32,7 +32,6 @@ export * as Permissions from "@/permissions/index.js";
 export * as PlanFile from "@/plan-file/index.js";
 export * as Prompt from "@/prompt/index.js";
 export * as Remote from "@/remote/index.js";
-export * as Review from "@/review/index.js";
 export * as Sandbox from "@/sandbox/index.js";
 export * as Session from "@/session/index.js";
 export * as Skills from "@/skills/index.js";

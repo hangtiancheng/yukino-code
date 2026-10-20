@@ -18,6 +18,7 @@ import {
   createDefaultRegistry as createCommandRegistry,
 } from "@/commands/commands.js";
 import { loadUserCommands } from "@/commands/loader.js";
+import { runSubagentCommand } from "@/commands/subagent.js";
 import { CommandUsageTracker } from "@/commands/usage-tracker.js";
 import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
@@ -86,9 +87,6 @@ import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
-import type { CodeReviewFormOptions } from "@/review/form.js";
-import { formatReviewReport } from "@/review/report.js";
-import { runCodeReview } from "@/review/runner.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import * as sessionMod from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
@@ -249,7 +247,6 @@ export function App({
     status: "loading",
     models: [],
   });
-  const [codeReviewActive, setCodeReviewActive] = useState(false);
   const [thinkingDialogActive, setThinkingDialogActive] = useState(false);
   const [providerSwitching, setProviderSwitching] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -657,7 +654,7 @@ export function App({
   // Without a running user Bash command, Ctrl+C / Esc routes to interruptForeground,
   // which stops foreground execution — the in-flight agent loop (its
   // signal is shared by synchronous tool calls and run_in_background=false
-  // subagents), a forked slash skill, /compact, or a code review. Background
+  // subagents), a forked slash skill, /compact, or a subagent command. Background
   // tasks, background subagents and teammates own separate abort controllers and keep running;
   // only the TUI-exit path (double Ctrl+C, /quit) tears them down through
   // interruptAll().
@@ -760,7 +757,6 @@ export function App({
   // need their own ad-hoc guard.
   const modalActive =
     loginActive ||
-    codeReviewActive ||
     providerDialogActive ||
     modelDialogActive ||
     thinkingDialogActive ||
@@ -1947,18 +1943,6 @@ export function App({
           setFeedbackDescription(parsed.args);
           setFeedbackActive(true);
           break;
-        case "review":
-          setCodeReviewActive(true);
-          break;
-        case "review-usage":
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: "Usage: /review",
-            },
-          ]);
-          break;
         case "resume": {
           const arg = parsed.args.trim();
           if (!arg) {
@@ -2255,6 +2239,41 @@ export function App({
     }
 
     if (cmd.type === "prompt") {
+      if (cmd.agent) {
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        setError(null);
+        setMessages((prev) => [...prev, { role: "user", content: text }]);
+        setIsStreaming(true);
+        setSubagents([]);
+        output.prepareTurn();
+        try {
+          await runSubagentCommand(
+            cmd.agent,
+            cmd.handler({ cwd, args: parsed.args }),
+            text,
+            {
+              cwd,
+              sessionId: sessionIdRef.current,
+              registry: registryRef.current,
+              conversation: conversationRef.current,
+              permissionChecker: checkerRef.current ?? undefined,
+              onPermissionRequest: requestPermission,
+              abortSignal: controller.signal,
+              onEvent: output.createEventHandler((toolId) =>
+                subagentCardsRef.current.get(toolId),
+              ),
+            },
+          );
+        } finally {
+          if (abortControllerRef.current === controller) {
+            abortControllerRef.current = null;
+          }
+          output.finishTurn();
+          setIsStreaming(false);
+        }
+        return true;
+      }
       // File-based custom command or inline skill: render the body and run it as a user turn.
       const promptText = cmd.handler({ cwd, args: parsed.args });
       if (clientRef.current && promptText.trim()) {
@@ -2919,7 +2938,6 @@ export function App({
     isCompacting ||
     providerSwitching ||
     loginActive ||
-    codeReviewActive ||
     providerDialogActive ||
     modelDialogActive ||
     thinkingDialogActive ||
@@ -3017,60 +3035,6 @@ export function App({
     initialResumeHandledRef.current = true;
     void handleSlashCommand(resume === true ? "/resume" : `/resume ${resume}`);
   }, [appState, resume]);
-
-  const handleCodeReview = (reviewOptions: CodeReviewFormOptions): void => {
-    if (!clientRef.current) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "system", content: "Client not ready." },
-      ]);
-      return;
-    }
-
-    dismissNotice();
-    setCodeReviewActive(false);
-    const controller = new AbortController();
-    const onReviewEvent = output.createEventHandler();
-    abortControllerRef.current = controller;
-    output.prepareTurn();
-    setIsStreaming(true);
-
-    void runCodeReview(
-      {
-        cwd,
-        ...reviewOptions,
-        abortSignal: controller.signal,
-        onToolEvent: onReviewEvent,
-      },
-      { provider: selectedProviderRef.current },
-    )
-      .then((result) => {
-        const report = formatReviewReport(result);
-        onReviewEvent({ type: "stream_text", text: report });
-        onReviewEvent({ type: "turn_complete" });
-        if (result.comments.length > 0) {
-          conversationRef.current.addSystemReminder(
-            `<code_review_findings>\n${report}\n</code_review_findings>`,
-          );
-        }
-      })
-      .catch((err: unknown) => {
-        onReviewEvent({ type: "turn_complete" });
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "system",
-            content: `Review failed: ${asErrorString(err)}`,
-          },
-        ]);
-      })
-      .finally(() => {
-        if (abortControllerRef.current === controller) {
-          abortControllerRef.current = null;
-        }
-        setIsStreaming(false);
-      });
-  };
 
   const handleFeedbackSubmit = (options: FeedbackOptions): void => {
     setFeedbackActive(false);
@@ -3352,16 +3316,6 @@ export function App({
                   onSubmit: handleLogin,
                   onCancel: () => {
                     setLoginActive(false);
-                  },
-                }
-              : undefined
-          }
-          codeReview={
-            codeReviewActive
-              ? {
-                  onSubmit: handleCodeReview,
-                  onCancel: () => {
-                    setCodeReviewActive(false);
                   },
                 }
               : undefined

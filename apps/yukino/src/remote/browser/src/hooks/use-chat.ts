@@ -10,7 +10,6 @@ import type {
   PermissionResponse,
   PlanApprovalPayload,
   ProviderListPayload,
-  ReviewItem,
   RewindSnapshot,
   ServerMessage,
   SessionSummary,
@@ -73,8 +72,6 @@ export interface ChatState {
   planApproval: PlanApprovalPayload | null;
   /** Open session picker list, if any. */
   sessions: SessionSummary[] | null;
-  /** Whether the code review form dialog is open. */
-  codeReviewOpen: boolean;
   /** id of the assistant item currently receiving stream_text, if any. */
   currentAssistantId: string | null;
   /** id of the thinking item currently receiving thinking_text, if any. */
@@ -126,7 +123,6 @@ export const initialState: ChatState = {
   steering: [],
   planApproval: null,
   sessions: null,
-  codeReviewOpen: false,
   currentAssistantId: null,
   currentThinkingId: null,
   history: [],
@@ -154,7 +150,6 @@ type Action =
   | { kind: "markAskAnswered"; id: string }
   | { kind: "closePlanApproval" }
   | { kind: "closeSessions" }
-  | { kind: "closeCodeReview" }
   | { kind: "closeModelPicker" }
   | { kind: "closeProviderPicker" }
   | { kind: "closeRewindPicker" }
@@ -189,19 +184,6 @@ function finalizeAssistant(state: ChatState): ChatState {
       it.kind === "assistant" && it.id === id
         ? { ...it, streaming: false }
         : it,
-    ),
-  };
-}
-
-/** Marks any open review progress card as finished. */
-function finalizeReviews(state: ChatState): ChatState {
-  if (!state.items.some((it) => it.kind === "review" && !it.done)) {
-    return state;
-  }
-  return {
-    ...state,
-    items: state.items.map((it) =>
-      it.kind === "review" && !it.done ? { ...it, done: true } : it,
     ),
   };
 }
@@ -256,39 +238,6 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "plan_approval_request":
       return { ...state, planApproval: msg.data };
 
-    case "code_review_form":
-      return { ...state, codeReviewOpen: true };
-
-    case "code_review_progress": {
-      const open = state.items.findLast(
-        (it): it is ReviewItem => it.kind === "review" && !it.done,
-      );
-      if (open) {
-        return {
-          ...state,
-          items: state.items.map((it) =>
-            it.kind === "review" && it.id === open.id
-              ? {
-                  ...it,
-                  phase: msg.data.phase,
-                  message: msg.data.message,
-                  progress: msg.data.progress ?? null,
-                }
-              : it,
-          ),
-        };
-      }
-      const item: ReviewItem = {
-        kind: "review",
-        id: nextId("rev"),
-        phase: msg.data.phase,
-        message: msg.data.message,
-        progress: msg.data.progress ?? null,
-        done: false,
-      };
-      return { ...state, items: [...state.items, item] };
-    }
-
     case "steering_queued":
       return { ...state, steering: [...state.steering, msg.data.text] };
 
@@ -332,7 +281,6 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
         followUps: [],
         planApproval: null,
         sessions: null,
-        codeReviewOpen: false,
         items: [
           {
             kind: "system",
@@ -343,15 +291,13 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
       };
 
     case "command_done":
-      return finalizeReviews(state);
+      return state;
 
     case "run_state": {
       if (msg.data.streaming) {
         return { ...state, streaming: true };
       }
-      const next = finalizeReviews(
-        finalizeCurrentThinking(finalizeAssistant(state)),
-      );
+      const next = finalizeCurrentThinking(finalizeAssistant(state));
       return { ...next, streaming: false, steering: [] };
     }
 
@@ -562,7 +508,6 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
     case "loop_complete": {
       let next = finalizeAssistant(state);
       next = finalizeCurrentThinking(next);
-      next = finalizeReviews(next);
       return {
         ...next,
         items: [
@@ -577,11 +522,10 @@ function applyMessage(state: ChatState, msg: ServerMessage): ChatState {
 
     case "error": {
       // Mirror loop_complete: the run is over, so close the streaming
-      // assistant/thinking/review items instead of leaving the cursor
+      // assistant/thinking items instead of leaving the cursor
       // blinking and currentAssistantId appending future text into them.
       let next = finalizeAssistant(state);
       next = finalizeCurrentThinking(next);
-      next = finalizeReviews(next);
       return {
         ...next,
         items: [
@@ -728,9 +672,6 @@ export function chatReducer(state: ChatState, action: Action): ChatState {
     case "closeSessions":
       return { ...state, sessions: null };
 
-    case "closeCodeReview":
-      return { ...state, codeReviewOpen: false };
-
     case "closeModelPicker":
       return { ...state, modelPicker: null };
 
@@ -785,7 +726,6 @@ export interface ChatApi {
   markAskAnswered: (id: string) => void;
   closePlanApproval: () => void;
   closeSessions: () => void;
-  closeCodeReview: () => void;
   closeModelPicker: () => void;
   closeProviderPicker: () => void;
   closeRewindPicker: () => void;
@@ -825,10 +765,6 @@ export function useChat(): ChatApi {
     dispatch({ kind: "closeSessions" });
   }, []);
 
-  const closeCodeReview = useCallback(() => {
-    dispatch({ kind: "closeCodeReview" });
-  }, []);
-
   const closeModelPicker = useCallback(() => {
     dispatch({ kind: "closeModelPicker" });
   }, []);
@@ -865,7 +801,6 @@ export function useChat(): ChatApi {
     markAskAnswered,
     closePlanApproval,
     closeSessions,
-    closeCodeReview,
     closeModelPicker,
     closeProviderPicker,
     closeRewindPicker,

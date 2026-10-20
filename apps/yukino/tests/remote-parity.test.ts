@@ -106,6 +106,117 @@ async function setup(cwd: string): Promise<{
 }
 
 describe("remote terminal-UI parity", () => {
+  it.each(["complete", "cancel", "fail"] as const)(
+    "runs /review as a synchronous child through the browser command path (%s)",
+    async (outcome) => {
+      const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-review-"));
+      const { server, handle, broadcasts } = await setup(cwd);
+      let release!: () => void;
+      const waiting = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const run = vi.spyOn(Agent.prototype, "run").mockImplementation(function (
+        this: Agent,
+      ) {
+        const conversation: unknown = Reflect.get(this, "conversation");
+        expect(conversation).not.toBe(handle.conv);
+        const signal: unknown = Reflect.get(this, "abortSignal");
+        if (!(signal instanceof AbortSignal)) {
+          throw new Error("Missing review cancellation signal");
+        }
+        signal.addEventListener("abort", release, { once: true });
+        return (async function* () {
+          await waiting;
+          if (outcome === "fail") {
+            throw new Error("Review could not read the PR");
+          }
+          if (outcome === "complete") {
+            yield {
+              type: "stream_text" as const,
+              text: "Finding: src/auth.ts:12 accepts an expired token.",
+            };
+          }
+          yield {
+            type: "loop_complete" as const,
+            stopReason: signal.aborted ? "interrupted" : "end_turn",
+          };
+        })();
+      });
+      try {
+        const pending = invokePrivateAsync(server, "handleUserMessage", [
+          "/review 42",
+        ]);
+        await vi.waitFor(() => {
+          expect(run).toHaveBeenCalledOnce();
+        });
+        expect(Reflect.get(server, "streaming")).toBe(true);
+        const toolUse = broadcasts.find(
+          (message) => message.type === "tool_use",
+        )?.data;
+        expect(toolUse).toMatchObject({
+          toolName: "Agent",
+          args: { subagent_type: "review", run_in_background: false },
+        });
+        const input = z
+          .object({ args: z.object({ prompt: z.string() }) })
+          .parse(toolUse);
+        expect(input.args.prompt).toContain("42");
+        expect(
+          broadcasts.some((message) => message.type === "loop_complete"),
+        ).toBe(false);
+        if (outcome === "cancel") {
+          invokePrivate(server, "cancelActiveRun");
+        } else {
+          release();
+        }
+        await pending;
+        expect(Reflect.get(server, "streaming")).toBe(false);
+        expect(run).toHaveBeenCalledOnce();
+        expect(
+          loadSession(cwd, handle.sessionId)
+            .filter((message) => message.role === "user")
+            .map((message) => message.content),
+        ).toEqual(["/review 42"]);
+        expect(
+          broadcasts.find((message) => message.type === "loop_complete")?.data,
+        ).toMatchObject({
+          stopReason:
+            outcome === "cancel"
+              ? "interrupted"
+              : outcome === "fail"
+                ? "error"
+                : "end_turn",
+        });
+        if (outcome === "complete") {
+          expect(handle.conv.getMessages().at(-1)?.content).toContain(
+            "expired token",
+          );
+          expect(broadcasts).toContainEqual(
+            expect.objectContaining({
+              type: "stream_end",
+              data: {
+                text: "Finding: src/auth.ts:12 accepts an expired token.",
+              },
+            }),
+          );
+        } else if (outcome === "fail") {
+          const result = broadcasts.find(
+            (message) => message.type === "tool_result",
+          )?.data;
+          expect(result).toMatchObject({ isError: true });
+          expect(OutputData.parse(result).output).toContain(
+            "could not read the PR",
+          );
+        }
+      } finally {
+        release();
+        run.mockRestore();
+        await server.stop();
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("rejects a stale plan approval without consuming the current request", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-plan-identity-"));
     const { server, handle, broadcasts } = await setup(cwd);

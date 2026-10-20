@@ -2,7 +2,6 @@ import { useRef, type ComponentProps } from "react";
 
 import { AgentsDialog } from "@/ui/agents-dialog.js";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
-import { CodeReviewDialog } from "@/ui/code-review-dialog.js";
 import { FeedbackDialog } from "@/ui/feedback-dialog.js";
 import type { InputDraft } from "@/ui/input-draft.js";
 import { InputBox } from "@/ui/input.js";
@@ -18,7 +17,6 @@ import { ThinkingSelect } from "@/ui/thinking-select.js";
 
 interface Props {
   login?: ComponentProps<typeof ProviderLogin>;
-  codeReview?: ComponentProps<typeof CodeReviewDialog>;
   provider?: ComponentProps<typeof ProviderSelect>;
   model?: ComponentProps<typeof ModelSelect>;
   thinking?: ComponentProps<typeof ThinkingSelect>;
@@ -35,7 +33,6 @@ interface Props {
 
 export function InteractionDock({
   login,
-  codeReview,
   provider,
   model,
   thinking,
@@ -52,9 +49,6 @@ export function InteractionDock({
   const draftRef = useRef<InputDraft | null>(null);
   if (login) {
     return <ProviderLogin {...login} />;
-  }
-  if (codeReview) {
-    return <CodeReviewDialog {...codeReview} />;
   }
   if (provider) {
     return <ProviderSelect {...provider} />;

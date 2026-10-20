@@ -289,39 +289,6 @@ describe("remote execution boundaries", () => {
     await expect(pending).resolves.toBeNull();
   });
 
-  it("validates reviews before initialization and claims streaming during cold start", async () => {
-    const initialization = deferred<never>();
-    const agentFactory = vi.fn(() => initialization.promise);
-    const server = new RemoteServer({
-      providers: [],
-      addr: ":18888",
-      enableCoordinatorMode: false,
-      forkDisabled: true,
-      agentFactory,
-    });
-
-    const invalid = requirePromise(
-      invokePrivate(server, "handleCodeReviewStart", [{ from: "main" }]),
-    );
-    expect(agentFactory).not.toHaveBeenCalled();
-    expect(Reflect.get(server, "streaming")).toBe(false);
-    await invalid;
-
-    const first = requirePromise(
-      invokePrivate(server, "handleCodeReviewStart", [{}]),
-    );
-    expect(Reflect.get(server, "streaming")).toBe(true);
-    const second = requirePromise(
-      invokePrivate(server, "handleCodeReviewStart", [{}]),
-    );
-    expect(agentFactory).toHaveBeenCalledOnce();
-    await second;
-
-    initialization.reject(new Error("expected test failure"));
-    await first;
-    expect(Reflect.get(server, "streaming")).toBe(false);
-  });
-
   it("uses run-equivalent tool visibility for manual compaction", async () => {
     const registry = new ToolRegistry();
     const visibleNames = vi.spyOn(registry, "listVisibleToolNames");

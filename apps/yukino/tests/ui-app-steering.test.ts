@@ -213,6 +213,45 @@ async function start(mcpServers: MCPServerConfig[] = []) {
 }
 
 describe("App steering delivery", () => {
+  it("runs /review in a fresh foreground child and returns its findings to the parent", async () => {
+    await start();
+    await finishRequest(0);
+    const parent = client.requests[0].conversation;
+    await submit("/review 42");
+    await waitForRequests(2);
+    const child = client.requests[1];
+    expect(child.conversation).not.toBe(parent);
+    expect(child.users.join("\n")).toContain("gh pr diff");
+    expect(child.users.join("\n")).not.toContain("INITIAL_REQUEST");
+    await submit("FOLLOW_UP_AFTER_REVIEW");
+    expect(client.requests).toHaveLength(2);
+    await finishRequest(1);
+    await waitForRequests(3);
+    expect(client.requests[2].conversation).toBe(parent);
+    expect(parent.getMessages()).toContainEqual(
+      expect.objectContaining({ role: "assistant", content: "NEXT_REPLY_1" }),
+    );
+    expect(client.requests[2].users.join("\n")).toContain("/review 42");
+    await finishRequest(2);
+  });
+
+  it("cancels the foreground review and accepts a new turn", async () => {
+    await start();
+    await finishRequest(0);
+    await submit("/review 42");
+    await waitForRequests(2);
+    await press("\u001b");
+    await vi.waitFor(() => {
+      expect(client.requests[1].signal?.aborted).toBe(true);
+    });
+    await submit("CONTINUE_AFTER_REVIEW");
+    await waitForRequests(3);
+    expect(client.requests[2].conversation).toBe(
+      client.requests[0].conversation,
+    );
+    await finishRequest(2);
+  });
+
   it("keeps the read cache when the rewind picker is cancelled", async () => {
     await start();
     await finishRequest(0);

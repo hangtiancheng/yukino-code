@@ -29,6 +29,12 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     permissionMode: "plan",
     readOnly: true,
   },
+  {
+    name: "review",
+    description:
+      "Review pull requests for correctness, project conventions, performance, test coverage, and security. Read the diff and relevant code, then return concise findings with file paths, line numbers, impact, and suggested improvements. Do not modify files or publish reviews; return missing context or blockers to the parent.",
+    disallowedTools: ["EditFile", "WriteFile", "ExitPlanMode"],
+  },
 ];
 
 /** Fallback target when subagent_type is omitted and fork is disabled */
