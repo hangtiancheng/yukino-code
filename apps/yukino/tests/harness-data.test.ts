@@ -246,9 +246,10 @@ describe("fork and restored context", () => {
         permissionChecker: new PermissionChecker(directory, "acceptEdits"),
       },
       {
+        kind: "subagent",
         description: "isolated audit",
         prompt: "Inspect this",
-        isolation: "worktree",
+        worktree: true,
       },
     );
     expect(handler).toHaveBeenCalledOnce();
@@ -289,7 +290,7 @@ describe("fork and restored context", () => {
     const tool = new AgentTool(cwd(), new ToolRegistry(), handler, parent);
     const result = await tool.execute(
       { cwd: cwd() },
-      { description: "audit", prompt: "Inspect this" },
+      { kind: "subagent", description: "audit", prompt: "Inspect this" },
     );
     expect(result.output).toContain("verified worker result");
     expect(parent.getMessages()).toEqual(before);

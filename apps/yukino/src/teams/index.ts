@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 
@@ -841,7 +842,7 @@ export class TeamManager {
   }
 
   create(
-    name: string,
+    name = `team-${randomUUID()}`,
     opts: { leaderAgentId?: string; description?: string } = {},
   ): Team {
     const existing = this.get(name);

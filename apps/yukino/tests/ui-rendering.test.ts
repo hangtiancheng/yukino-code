@@ -561,7 +561,7 @@ describe("shared live and committed tool cards", () => {
             {
               toolId: "team-agent",
               toolName: "Agent",
-              args: { description: "reviewer", team_name: "squad" },
+              args: { description: "reviewer", kind: "teammate" },
               output: "Teammate spawned",
               loading: false,
             },

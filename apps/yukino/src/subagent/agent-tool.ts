@@ -8,7 +8,10 @@ import { PermissionChecker } from "@/permissions/index.js";
 import { newSessionId } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
 import {
+  AGENT_KINDS,
+  DEFAULT_AGENT_KIND,
   BUILTIN_AGENTS,
+  PLAN_TEAMMATE_AGENT,
   GENERAL_PURPOSE_AGENT_TYPE,
   FORK_CONTEXT_REQUIRED_ERROR,
 } from "@/subagent/constants.js";
@@ -16,6 +19,10 @@ import type { AgentDefinition } from "@/subagent/definition.js";
 import { loadAgentDefinitions } from "@/subagent/loader.js";
 import {
   AGENT_TOOL_DESCRIPTION,
+  AGENT_BACKGROUND_DESCRIPTION,
+  AGENT_KIND_DESCRIPTION,
+  AGENT_MODEL_DESCRIPTION,
+  AGENT_WORKTREE_DESCRIPTION,
   buildAgentToolDescription,
   FORK_PARAMETER_DESCRIPTION,
   SUBAGENT_TYPE_DESCRIPTION,
@@ -28,7 +35,6 @@ import {
 } from "@/subagent/tool-filter.js";
 import { LEADER_NAME } from "@/teams/constants.js";
 import type { TeamManager, RunAgent } from "@/teams/index.js";
-import { isValidTeammateName } from "@/teams/protocol.js";
 import {
   TeamTaskCreateTool,
   TeamTaskGetTool,
@@ -44,7 +50,7 @@ import type {
   ToolContext,
   ToolSchema,
 } from "@/tools/types.js";
-import { asErrorString, boolArg, strArg } from "@/utils/index.js";
+import { asErrorString, strArg } from "@/utils/index.js";
 import { createAgentWorktree } from "@/worktree/index.js";
 import { buildWorktreeNotice } from "@/worktree/prompts.js";
 
@@ -66,7 +72,7 @@ interface AgentRunOptions {
   fork: boolean;
   background: boolean;
   modelOverride?: string;
-  isolate?: boolean;
+  worktree?: boolean;
 }
 
 export class AgentTool implements Tool {
@@ -83,7 +89,6 @@ export class AgentTool implements Tool {
   private conversation?: ConversationManager;
   private taskManager: TaskManager;
 
-  /** Optional: Team manager, enables the team_name parameter. */
   private teamManager?: TeamManager;
   private cwd: string;
   defaultFork = true;
@@ -133,8 +138,7 @@ export class AgentTool implements Tool {
   }
 
   /**
-   * Sets the team manager and teammate run callback, enabling the team_name parameter
-   * so teammates can be spawned directly through the Agent tool.
+   * Sets the team manager and teammate run callback.
    */
   setTeamManager(
     mgr: TeamManager,
@@ -209,10 +213,11 @@ export class AgentTool implements Tool {
             type: "string",
             description: "Short description of what the agent will do",
           },
-          name: {
+          kind: {
             type: "string",
-            description:
-              "Optional stable teammate name when team_name is set. Use only letters, digits, underscores, and hyphens.",
+            enum: [...AGENT_KINDS],
+            description: AGENT_KIND_DESCRIPTION,
+            default: DEFAULT_AGENT_KIND,
           },
           prompt: {
             type: "string",
@@ -231,36 +236,16 @@ export class AgentTool implements Tool {
           },
           model: {
             type: "string",
-            description: "Override the model for this agent.",
+            description: AGENT_MODEL_DESCRIPTION,
           },
           run_in_background: {
             type: "boolean",
-            description:
-              "Run this one-shot subagent asynchronously. Returns a task ID immediately and delivers the final result through a task notification.",
+            description: AGENT_BACKGROUND_DESCRIPTION,
             default: false,
           },
-          isolation: {
-            type: "string",
-            enum: ["worktree"],
-            description:
-              "Set to 'worktree' to run the agent in its own Git worktree, so its edits " +
-              "cannot collide with the parent or with other agents working in parallel.",
-          },
-          plan_mode_required: {
+          worktree: {
             type: "boolean",
-            description:
-              "Only meaningful together with team_name. Requests a planning phase. " +
-              (this.teamManager?.coordinatorMode
-                ? "The teammate stays read-only until the leader reviews its submitted plan and responds with approval or revision feedback."
-                : "Subject to parent acceptEdits/bypassPermissions overrides. The runtime automatically approves the submitted plan and resumes execution under current tool permissions."),
-          },
-          team_name: {
-            type: "string",
-            description:
-              "REQUIRED when creating team members. Spawns the agent as a long-running " +
-              "teammate under this team (created via TeamCreate). Unlike regular subagents, " +
-              "team members persist after the leader returns and communicate via SendMessage. " +
-              "Without team_name the agent runs as a one-shot subagent that blocks and returns inline.",
+            description: AGENT_WORKTREE_DESCRIPTION,
           },
         },
         required: ["description", "prompt"],
@@ -284,6 +269,18 @@ export class AgentTool implements Tool {
       };
     }
 
+    const kindArg = z.enum(AGENT_KINDS).optional().safeParse(args.kind);
+    if (!kindArg.success) {
+      return {
+        output: "Error: kind must be subagent or teammate",
+        isError: true,
+      };
+    }
+    const kind = kindArg.data ?? DEFAULT_AGENT_KIND;
+    const worktreeArg = z.boolean().optional().safeParse(args.worktree);
+    if (!worktreeArg.success) {
+      return { output: "Error: worktree must be a boolean", isError: true };
+    }
     const subagentType =
       strArg(args, "subagent_type") || GENERAL_PURPOSE_AGENT_TYPE;
     const forkArg = z.boolean().optional().safeParse(args.fork);
@@ -291,7 +288,7 @@ export class AgentTool implements Tool {
       return { output: "Error: fork must be a boolean", isError: true };
     }
     const fork = forkArg.data ?? this.defaultFork;
-    const definition = this.definitions.find(
+    let definition = this.definitions.find(
       (entry) => entry.name === subagentType,
     );
     if (!definition) {
@@ -312,13 +309,17 @@ export class AgentTool implements Tool {
       };
     }
     ctx = { ...ctx, subagentSessionId: newSessionId() };
-    const teamName = strArg(args, "team_name");
-    const teammateName = strArg(args, "name");
-    const isolation = strArg(args, "isolation");
-
-    // Team-member path: team_name runs the selected role as a
-    // persistent teammate and notifies the leader via SendMessage / mailbox upon completion.
-    if (teamName && this.teamManager && this.teamRunAgentFactory) {
+    if (kind === "teammate") {
+      if (!this.teamManager || !this.teamRunAgentFactory) {
+        return {
+          output:
+            "Error: teammate execution is unavailable; no team was created.",
+          isError: true,
+        };
+      }
+      if (definition.name === "plan" && BUILTIN_AGENTS.includes(definition)) {
+        definition = PLAN_TEAMMATE_AGENT;
+      }
       let contextSnapshot: ConversationManager | undefined;
       try {
         contextSnapshot = fork ? this.forkConversation() : undefined;
@@ -326,24 +327,14 @@ export class AgentTool implements Tool {
         return { output: asErrorString(error), isError: true };
       }
       return await this.runAsTeammate(
-        teamName,
-        teammateName,
         description,
         prompt,
-        boolArg(args, "plan_mode_required"),
-        isolation === "worktree" || definition.isolation === "worktree",
+        worktreeArg.data ?? definition.worktree ?? false,
         ctx,
         definition,
         modelOverride,
         contextSnapshot,
       );
-    }
-    if (teamName) {
-      return {
-        output:
-          "Error: teammate execution is unavailable; no team was created.",
-        isError: true,
-      };
     }
 
     return this.runDefinition(ctx, definition, prompt, {
@@ -351,7 +342,7 @@ export class AgentTool implements Tool {
       fork,
       background: backgroundArg.data ?? definition.background ?? false,
       modelOverride,
-      isolate: isolation === "worktree",
+      worktree: worktreeArg.data ?? definition.worktree,
     });
   }
 
@@ -376,7 +367,7 @@ export class AgentTool implements Tool {
     // land on its own branch and cannot collide with the parent or other parallel child agents.
     let effectivePrompt = prompt;
     let cwdOverride: string | undefined;
-    if (options.isolate || definition.isolation === "worktree") {
+    if (options.worktree ?? definition.worktree) {
       try {
         const wt = await createAgentWorktree(
           newAgentSlug(),
@@ -470,16 +461,9 @@ ${prompt}`;
     };
   }
 
-  /**
-   * Team-member mode: Spawns a persistent teammate in the specified team.
-   * Runs persistently within this process.
-   */
   private async runAsTeammate(
-    teamName: string,
-    requestedName: string,
     description: string,
     prompt: string,
-    planModeRequired: boolean,
     worktreeIsolation: boolean,
     ctx: ToolContext,
     definition: AgentDefinition,
@@ -488,60 +472,22 @@ ${prompt}`;
   ): Promise<ToolResult> {
     if (!this.teamManager) {
       return {
-        output: `Error: team manager '${teamName}' not found.`,
+        output: "Error: teammate execution is unavailable.",
         isError: true,
       };
     }
-    if (requestedName && !isValidTeammateName(requestedName)) {
-      return {
-        output:
-          `Error: invalid teammate name '${requestedName}'. ` +
-          "Use only letters, digits, underscores, and hyphens; 'leader' is reserved.",
-        isError: true,
-      };
-    }
-    // Auto-creation must not tear down another team's running workers.
-    let team = this.teamManager.get(teamName);
-    if (!team) {
-      if (this.teamManager.list().length) {
-        return {
-          output:
-            "Error: another team already exists. Use its team_name or explicitly delete it before creating a different team.",
-          isError: true,
-        };
-      }
-      team = this.teamManager.create(teamName, {
+    const team =
+      this.teamManager.list()[0] ??
+      this.teamManager.create(undefined, {
         leaderAgentId: LEADER_NAME,
         description,
       });
-    }
+    const teamName = team.name;
+    const planModeRequired = definition.name === "plan";
 
-    const previousMember = requestedName
-      ? team.getMember(requestedName)
-      : undefined;
-    if (
-      previousMember &&
-      !previousMember.active &&
-      !previousMember.cancel &&
-      !previousMember.done &&
-      previousMember.uiState &&
-      ["completed", "failed", "stopped"].includes(previousMember.uiState.status)
-    ) {
-      team.removeMember(requestedName);
-    }
-    if (requestedName && team.getMember(requestedName)) {
-      return {
-        output: `Error: teammate '${requestedName}' already exists in team '${teamName}'.`,
-        isError: true,
-      };
-    }
-
-    let memberName =
-      requestedName ||
-      sanitizeNameSegment(description.replace(/\s+/g, "-").toLowerCase()).slice(
-        0,
-        30,
-      );
+    let memberName = sanitizeNameSegment(
+      description.replace(/\s+/g, "-").toLowerCase(),
+    ).slice(0, 30);
     let suffix = 2;
     const base = memberName;
     while (memberName === LEADER_NAME || team.getMember(memberName)) {
@@ -647,11 +593,7 @@ ${prompt}`;
           {
             agentType: definition.name,
             model: modelOverride || definition.model,
-            planApprovalRequired:
-              !definition.readOnly &&
-              (planModeRequired ||
-                (team.requiresLeaderPlanApproval &&
-                  definition.permissionMode === "plan")),
+            planApprovalRequired: planModeRequired,
             cleanup: () => teammateRegistry.dispose(),
           },
         );

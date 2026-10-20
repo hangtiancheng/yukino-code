@@ -1,4 +1,5 @@
 import type { AgentDefinition } from "@/subagent/definition.js";
+import { PLAN_TEAMMATE_DESCRIPTION } from "@/subagent/prompts.js";
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [
   {
@@ -32,6 +33,14 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
 
 /** Default role, independent of context inheritance. */
 export const GENERAL_PURPOSE_AGENT_TYPE = "general-purpose";
+export const AGENT_KINDS = ["subagent", "teammate"] as const;
+export const DEFAULT_AGENT_KIND = "teammate";
+
+export const PLAN_TEAMMATE_AGENT: AgentDefinition = {
+  name: "plan",
+  description: PLAN_TEAMMATE_DESCRIPTION,
+  permissionMode: "plan",
+};
 
 export const PLAN_AGENT_UNAVAILABLE_ERROR =
   "The built-in plan agent is unavailable.";
@@ -64,7 +73,7 @@ type AllTools =
   | "LSP"
   | "TeamCreate"
   | "SendMessage"
-  | "ListTeams"
+  | "ListTeam"
   | "TeamDelete"
   | "SyntheticOutput"
   | "AskUserQuestion"

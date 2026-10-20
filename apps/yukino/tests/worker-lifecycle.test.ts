@@ -312,7 +312,7 @@ describe("persistent teammate cleanup boundaries", () => {
     expect(readTeamFile(directory, "squad")?.members).toHaveLength(201);
   });
 
-  it("allows a fully reaped failed teammate name to be reused", async () => {
+  it("generates a unique teammate name after a failed teammate", async () => {
     const agent = new AgentTool(directory, new ToolRegistry(), () =>
       Promise.resolve("unused"),
     );
@@ -323,22 +323,26 @@ describe("persistent teammate cleanup boundaries", () => {
         fail ? Promise.reject(new Error("failed")) : Promise.resolve("ready"),
     );
     const args = {
-      description: "worker",
+      kind: "teammate",
+      description: "alice",
       prompt: "work",
-      team_name: "squad",
       fork: false,
-      name: "alice",
     };
     await agent.execute({ cwd: directory }, args);
-    await manager.get("squad")?.getMember("alice")?.done;
+    await manager.list()[0]?.getMember("alice")?.done;
     fail = false;
     expect((await agent.execute({ cwd: directory }, args)).isError).toBe(false);
     await vi.waitFor(() => {
-      expect(manager.get("squad")?.getMember("alice")?.uiState?.status).toBe(
+      expect(manager.list()[0]?.getMember("alice-2")?.uiState?.status).toBe(
         "idle",
       );
     });
-    expect(manager.get("squad")?.listMembers()).toHaveLength(1);
+    expect(
+      manager
+        .list()[0]
+        ?.listMembers()
+        .map((member) => member.name),
+    ).toEqual(["alice", "alice-2"]);
   });
   it("retains registry, conversation runner and ownership while idle, then cleans them on stop exactly once", async () => {
     const parent = new ToolRegistry();
@@ -356,15 +360,14 @@ describe("persistent teammate cleanup boundaries", () => {
     await agent.execute(
       { cwd: directory },
       {
-        description: "worker",
+        kind: "teammate",
+        description: "alice",
         prompt: "work",
-        team_name: "squad",
         fork: false,
-        name: "alice",
       },
     );
-    const team = manager.get("squad");
-    const store = manager.getTaskStore("squad");
+    const team = manager.list()[0];
+    const store = manager.getTaskStore(team.name);
     const task = store.create("unfinished", "", "alice");
     const completed = store.create("done", "", "alice");
     store.update(completed.id, { status: "completed" });
@@ -518,7 +521,7 @@ describe("delegation authority", () => {
     const existing = manager.create("squad");
     existing.addMember("alice");
     expect(fork.get("Agent")).toBeUndefined();
-    expect(manager.get("squad")).toBe(existing);
+    expect(manager.list()[0]).toBe(existing);
     const stop = await fork
       .get("TaskStop")
       ?.execute({ cwd: directory }, { teammate: "alice" });
@@ -526,7 +529,7 @@ describe("delegation authority", () => {
     await fork.dispose();
   });
 
-  it("does not implicitly replace a team on a mistyped Agent team_name", async () => {
+  it("uses the existing team for teammate calls", async () => {
     const existing = manager.create("squad");
     const agent = new AgentTool(directory, new ToolRegistry(), () =>
       Promise.resolve("unused"),
@@ -534,9 +537,9 @@ describe("delegation authority", () => {
     agent.setTeamManager(manager, () => () => Promise.resolve("worker"));
     const result = await agent.execute(
       { cwd: directory },
-      { description: "worker", prompt: "work", team_name: "typo", fork: false },
+      { kind: "teammate", description: "worker", prompt: "work", fork: false },
     );
-    expect(result.isError).toBe(true);
+    expect(result.isError).toBe(false);
     expect(manager.list()).toEqual([existing]);
   });
 });

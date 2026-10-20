@@ -43,8 +43,8 @@ export const TEAMMATE_COORDINATION_TOOLS: ReadonlySet<string> = new Set([
 //
 // TeamDelete is retained for teardown: teammates are attached to the Team, and once
 // work is done there must be a way to stop them and clean up the team directory.
-// TeamCreate is not here because the Agent tool's team_name path auto-creates the
-// specified Team if it does not exist — the Leader simply dispatches teammates
+// TeamCreate is not here because the Agent tool's teammate path auto-creates a
+// Team if none exists — the Leader simply dispatches teammates
 // without a separate team-creation step.
 export const COORDINATOR_ALLOWED_TOOLS = new Set([
   "Goal",

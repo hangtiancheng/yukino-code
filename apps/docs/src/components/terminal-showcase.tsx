@@ -96,9 +96,9 @@ const SCENES: Scene[] = [
       {
         kind: "tool",
         name: "Agent",
-        arg: "team_name=audit · security-auditor",
+        arg: "kind=teammate · security-auditor",
       },
-      { kind: "tool", name: "Agent", arg: "team_name=audit · perf-auditor" },
+      { kind: "tool", name: "Agent", arg: "kind=teammate · perf-auditor" },
       { kind: "answer" },
     ],
   },

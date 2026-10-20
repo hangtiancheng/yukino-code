@@ -128,13 +128,15 @@ function decorateTool(
     };
   }
 
-  const teamName = strArg(tool.args, "team_name");
+  const teammateKind = (tool.args.kind ?? "teammate") === "teammate";
   const background = tool.args.run_in_background === true;
   const role = strArg(tool.args, "subagent_type") || "general-purpose";
   return {
     ...tool,
-    progress: teamName ? "0 turns | 0 tokens" : `${role} subagent | 0 turns`,
-    ...(teamName || background ? { status: "running", loading: true } : {}),
+    progress: teammateKind
+      ? "0 turns | 0 tokens"
+      : `${role} subagent | 0 turns`,
+    ...(teammateKind || background ? { status: "running", loading: true } : {}),
   };
 }
 

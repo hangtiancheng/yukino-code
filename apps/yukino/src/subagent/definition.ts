@@ -10,6 +10,6 @@ export interface AgentDefinition {
   permissionMode?: PermissionMode;
   readOnly?: boolean;
   background?: boolean;
-  isolation?: "worktree";
+  worktree?: boolean;
   initialPrompt?: string;
 }

@@ -302,6 +302,7 @@ describe("delegated prompt contracts", () => {
     const result = await tool.execute(
       { cwd: directory },
       {
+        kind: "subagent",
         description: "explore",
         prompt: "read only",
         subagent_type: "explore",
@@ -346,9 +347,23 @@ describe("delegated prompt contracts", () => {
       "default",
       true,
     );
-    expect(
-      JSON.stringify(tool.schema().input_schema.properties.name),
-    ).toContain("stable teammate name");
+    const { properties } = tool.schema().input_schema;
+    expect(properties.kind).toMatchObject({
+      enum: ["subagent", "teammate"],
+      default: "teammate",
+    });
+    expect(properties.worktree).toMatchObject({ type: "boolean" });
+    expect(JSON.stringify(properties.model)).toContain(
+      "Most tasks do not need this field",
+    );
+    for (const removed of [
+      "name",
+      "team_name",
+      "isolation",
+      "plan_mode_required",
+    ]) {
+      expect(properties).not.toHaveProperty(removed);
+    }
     tool.defaultFork = false;
     expect(tool.schema().input_schema.properties.fork).toHaveProperty(
       "default",
@@ -379,6 +394,7 @@ describe("delegated prompt contracts", () => {
     const result = await tool.execute(
       { cwd: directory, toolCallId: "outer-agent" },
       {
+        kind: "subagent",
         description: "inspect",
         prompt: "inspect files",
         subagent_type: "explore",

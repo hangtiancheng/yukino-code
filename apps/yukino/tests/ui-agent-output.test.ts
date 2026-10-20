@@ -350,7 +350,7 @@ describe("agent output hook", () => {
       type: "tool_use",
       toolName: "Agent",
       toolId: "team-agent",
-      args: { description: "reviewer", team_name: "squad" },
+      args: { description: "reviewer", kind: "teammate" },
     });
     expect(state().output.activeTools).toEqual([
       expect.objectContaining({ toolId: "team-agent", loading: true }),
@@ -439,6 +439,7 @@ describe("agent output hook", () => {
         toolName: "Agent",
         toolId: "agent-stop",
         args: {
+          kind: "subagent",
           description: "fix bug",
           prompt: "fix it",
           subagent_type: "general-purpose",
@@ -450,6 +451,7 @@ describe("agent output hook", () => {
         toolName: "Agent",
         toolId: "agent-done",
         args: {
+          kind: "subagent",
           description: "survey code",
           prompt: "survey",
           subagent_type: "explore",
@@ -531,17 +533,13 @@ describe("agent output hook", () => {
 
   it("keeps teammate spawn history after deleting the team", () => {
     const send = startLoop();
-    for (const [toolId, teamName] of [
-      ["a-1", "alpha"],
-      ["a-2", "alpha"],
-      ["b-1", "beta"],
-    ]) {
+    for (const toolId of ["a-1", "a-2", "b-1"]) {
       send(
         {
           type: "tool_use",
           toolName: "Agent",
           toolId,
-          args: { description: toolId, team_name: teamName },
+          args: { description: toolId, kind: "teammate" },
         },
         {
           type: "tool_result",
@@ -559,7 +557,7 @@ describe("agent output hook", () => {
         type: "tool_use",
         toolName: "TeamDelete",
         toolId: "delete",
-        args: { name: "alpha" },
+        args: {},
       },
       {
         type: "tool_result",
@@ -588,7 +586,7 @@ describe("agent output hook", () => {
           type: "tool_use",
           toolName: "Agent",
           toolId,
-          args: { description: toolId, team_name: "alpha" },
+          args: { description: toolId, kind: "teammate" },
         },
         {
           type: "tool_result",
@@ -605,7 +603,7 @@ describe("agent output hook", () => {
         type: "tool_use",
         toolName: "TeamCreate",
         toolId: "create",
-        args: { team_name: "beta" },
+        args: {},
       },
       {
         type: "tool_result",

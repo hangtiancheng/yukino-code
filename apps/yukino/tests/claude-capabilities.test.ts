@@ -162,6 +162,7 @@ describe("Claude capability contracts", () => {
     const result = await tool.execute(
       { cwd },
       {
+        kind: "subagent",
         description: "Task",
         prompt: "Work",
         subagent_type: "worker",
@@ -176,7 +177,12 @@ describe("Claude capability contracts", () => {
       (
         await tool.execute(
           { cwd },
-          { description: "Task", prompt: "Work", run_in_background: "false" },
+          {
+            kind: "subagent",
+            description: "Task",
+            prompt: "Work",
+            run_in_background: "false",
+          },
         )
       ).isError,
     ).toBe(true);

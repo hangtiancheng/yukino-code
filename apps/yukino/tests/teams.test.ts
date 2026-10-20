@@ -16,7 +16,7 @@ import {
 } from "@/teams/progress.js";
 import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
 import {
-  ListTeamsTool,
+  ListTeamTool,
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,
@@ -118,9 +118,7 @@ describe("teams orchestration", () => {
         Promise.reject(new Error("kaboom")),
       );
     await vi.waitFor(() => {
-      expect(mgr.get("squad")?.getMember("flaky")?.uiState?.status).toBe(
-        "failed",
-      );
+      expect(mgr.list()[0]?.getMember("flaky")?.uiState?.status).toBe("failed");
     });
     expect(mgr.drainLeaderMailbox().some((d) => d.includes("failed"))).toBe(
       true,
@@ -214,13 +212,13 @@ describe("teams orchestration", () => {
           {
             cwd: cwd(),
           },
-          { team_name: "t1", fork: false },
+          {},
         )
       ).output,
     ).toContain("created");
 
     mgr
-      .get("t1")
+      .list()[0]
       ?.spawnTeammate("w1", "task A", (task: string) =>
         Promise.resolve(`done:${task}`),
       );
@@ -242,14 +240,14 @@ describe("teams orchestration", () => {
     expect(send.isError).toBe(false);
     expect(
       mgr
-        .get("t1")
+        .list()[0]
         ?.getMember("w1")
         ?.mailbox.receiveSync()
         .map((m) => m.text),
     ).toContain("hi");
 
-    const list = await new ListTeamsTool(mgr).execute();
-    expect(list.output).toContain("t1");
+    const list = await new ListTeamTool(mgr).execute();
+    expect(list.output).toContain(mgr.list()[0]?.name);
     expect(list.output).toContain("w1");
   });
 
@@ -267,7 +265,7 @@ describe("teams orchestration", () => {
       expect(tool.category).toBe("command");
       expect(checker.check(tool.name, tool.category, {}).effect).toBe("ask");
     }
-    expect(new ListTeamsTool(mgr).category).toBe("read");
+    expect(new ListTeamTool(mgr).category).toBe("read");
   });
 
   it("gives spawned teammates a coordination-capable checker", async () => {
@@ -287,10 +285,9 @@ describe("teams orchestration", () => {
     const result = await tool.execute(
       { cwd: project },
       {
-        team_name: "squad",
+        kind: "teammate",
         fork: false,
-        name: "w1",
-        description: "worker",
+        description: "w1",
         prompt: "task A",
       },
     );
@@ -334,10 +331,9 @@ describe("teams orchestration", () => {
     await tool.execute(
       { cwd: project, permissionChecker: parent },
       {
-        team_name: "squad",
+        kind: "teammate",
         fork: false,
-        name: "w1",
-        description: "worker",
+        description: "w1",
         prompt: "task",
       },
     );
@@ -406,56 +402,142 @@ describe("teams orchestration", () => {
     const project = cwd();
     const mgr = new TeamManager(project);
 
-    // A live team with a spawned teammate.
-    await new TeamCreateTool(mgr).execute(
-      { cwd: cwd() },
-      { team_name: "old", fork: false },
+    await new TeamCreateTool(mgr).execute({ cwd: project }, {});
+    const old = mgr.list()[0];
+    old?.spawnTeammate("w1", "task A", (task: string) =>
+      Promise.resolve(`done:${task}`),
     );
-    mgr
-      .get("old")
-      ?.spawnTeammate("w1", "task A", (task: string) =>
-        Promise.resolve(`done:${task}`),
-      );
     await vi.waitFor(() => {
-      expect(mgr.get("old")?.getMember("w1")?.uiState?.status).toBe("idle");
+      expect(old?.getMember("w1")?.uiState?.status).toBe("idle");
     });
 
-    // A disk-only leftover from a previous session, unknown to this manager.
     new TeamManager(project).create("stale");
-    expect(listTeamNames(project).sort()).toEqual(["old", "stale"]);
+    expect(listTeamNames(project)).toHaveLength(2);
 
     const result = await new TeamCreateTool(mgr).execute(
-      { cwd: cwd() },
-      { team_name: "fresh", fork: false },
+      { cwd: project },
+      { description: "fresh work" },
     );
-
+    const fresh = mgr.list()[0];
     expect(result.isError).toBe(false);
-    expect(result.output).toContain("fresh");
-    expect(mgr.list().map((team) => team.name)).toEqual(["fresh"]);
-    expect(listTeamNames(project)).toEqual(["fresh"]);
+    expect(fresh?.name).not.toBe(old?.name);
+    expect(fresh?.description).toBe("fresh work");
+    expect(result.output).toContain(fresh?.name);
+    expect(mgr.list()).toHaveLength(1);
+    expect(listTeamNames(project)).toEqual([fresh?.name]);
+    expect(old?.getMember("w1")?.active).toBe(false);
   });
 
-  it("validates required args", async () => {
+  it("creates and deletes the current team without name arguments", async () => {
+    const project = cwd();
+    const mgr = new TeamManager(project);
+    const create = new TeamCreateTool(mgr);
+    const list = new ListTeamTool(mgr);
+    const remove = new TeamDeleteTool(mgr);
+    expect(create.schema().input_schema).toMatchObject({
+      properties: { description: { type: "string" } },
+      required: [],
+    });
+    expect(create.schema().input_schema.properties).not.toHaveProperty(
+      "team_name",
+    );
+    expect(list.name).toBe("ListTeam");
+    expect(remove.schema().input_schema.properties).toEqual({});
+    expect(remove.schema().input_schema.required).toEqual([]);
+    expect((await list.execute()).output).toBe("No active team.");
+    expect((await remove.execute()).isError).toBe(false);
+    expect((await create.execute({ cwd: project }, {})).isError).toBe(false);
+    expect(mgr.list()[0]?.name).toMatch(/^team-[a-f0-9-]+$/);
+    const team = mgr.list()[0];
+    team?.spawnTeammate("worker", "work", () => Promise.resolve("done"));
+    const result = await remove.execute();
+    expect(result.isError).toBe(false);
+    expect(result.output).toContain(team?.name);
+    expect(team?.getMember("worker")?.active).toBe(false);
+    expect(mgr.list()).toEqual([]);
+    expect(listTeamNames(project)).toEqual([]);
+  });
+
+  it("defaults to teammates and generates unique names in a single team", async () => {
+    const project = cwd();
+    const mgr = new TeamManager(project);
+    const spawn = vi.fn(() => Promise.resolve("one-shot result"));
+    const agent = new AgentTool(project, new ToolRegistry(), spawn);
+    agent.setTeamManager(mgr, () => () => Promise.resolve("done"));
+    try {
+      const results = await Promise.all(
+        ["reviewer", "reviewer", "leader"].map((description) =>
+          agent.execute(
+            { cwd: project },
+            { description, prompt: "work", fork: false },
+          ),
+        ),
+      );
+      expect(results.every((result) => !result.isError)).toBe(true);
+      expect(mgr.list()).toHaveLength(1);
+      const team = mgr.list()[0];
+      expect(team?.listMembers().map((member) => member.name)).toEqual([
+        "reviewer",
+        "reviewer-2",
+        "leader-2",
+      ]);
+      expect(spawn).not.toHaveBeenCalled();
+      const result = await agent.execute(
+        { cwd: project },
+        {
+          kind: "subagent",
+          description: "one-shot",
+          prompt: "work",
+          fork: false,
+        },
+      );
+      expect(result).toMatchObject({
+        output: "one-shot result",
+        isError: false,
+      });
+      expect(team?.listMembers()).toHaveLength(3);
+      expect(spawn).toHaveBeenCalledOnce();
+    } finally {
+      await mgr.deleteAll();
+    }
+  });
+
+  it.each([
+    { kind: "worker" },
+    { kind: false },
+    { worktree: "true" },
+    { worktree: 1 },
+  ])(
+    "rejects invalid Agent parameters before spawning: %j",
+    async (invalid) => {
+      const project = cwd();
+      const mgr = new TeamManager(project);
+      const spawn = vi.fn(() => Promise.resolve("unused"));
+      const factory = vi.fn(() => () => Promise.resolve("unused"));
+      const agent = new AgentTool(project, new ToolRegistry(), spawn);
+      agent.setTeamManager(mgr, factory);
+      const result = await agent.execute(
+        { cwd: project },
+        {
+          description: "worker",
+          prompt: "work",
+          fork: false,
+          ...invalid,
+        },
+      );
+      expect(result.isError).toBe(true);
+      expect(mgr.list()).toEqual([]);
+      expect(factory).not.toHaveBeenCalled();
+      expect(spawn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("requires an active team for messaging", async () => {
     const mgr = new TeamManager(cwd());
-    expect(
-      (
-        await new TeamCreateTool(mgr).execute(
-          {
-            cwd: cwd(),
-          },
-          {},
-        )
-      ).isError,
-    ).toBe(true);
-    expect(
-      (
-        await new SendMessageTool(mgr).execute(
-          {
-            cwd: cwd(),
-          },
-          { to: "a", content: "m" },
-        )
-      ).isError,
-    ).toBe(true);
+    const result = await new SendMessageTool(mgr).execute(
+      { cwd: cwd() },
+      { to: "a", content: "m" },
+    );
+    expect(result.isError).toBe(true);
   });
 });

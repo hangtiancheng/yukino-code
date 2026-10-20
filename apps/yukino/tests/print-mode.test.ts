@@ -134,7 +134,12 @@ function delegate(args: Record<string, unknown>): StreamEvent[] {
       type: "tool_call_complete",
       toolName: "Agent",
       toolId: "worker",
-      arguments: { description: "audit", prompt: "Inspect this", ...args },
+      arguments: {
+        kind: "subagent",
+        description: "audit",
+        prompt: "Inspect this",
+        ...args,
+      },
     },
     { ...end, stopReason: "tool_use" },
   ];
@@ -243,6 +248,7 @@ function failingBackgroundClient(dispatchFromLeader: boolean): OpenAIClient {
       yield { ...end, stopReason: "tool_use" };
     } else if (dispatchFromLeader && leaderCalls++ === 0) {
       yield* delegate({
+        kind: "subagent",
         description: "original dispatch",
         prompt: "unique-child-assignment",
         subagent_type: "general-purpose",
@@ -316,6 +322,7 @@ describe("durable background outcomes across hosts", () => {
             taskManager: handle.backgroundTaskManager,
           },
           {
+            kind: "subagent",
             description: "original dispatch",
             prompt: "unique-child-assignment",
             run_in_background: true,
@@ -574,7 +581,7 @@ describe("print mode delegation", () => {
         subagent_type: "general-purpose",
         fork: false,
         run_in_background: true,
-        isolation: "worktree",
+        worktree: true,
         model: "worker-model",
       }),
       [end],
@@ -599,7 +606,7 @@ describe("print mode delegation", () => {
       .spyOn(subagents, "spawnSubagent")
       .mockResolvedValue("done");
     turns = [
-      delegate({ team_name: "audit", description: "Audit API/routes" }),
+      delegate({ kind: "teammate", description: "Audit API/routes" }),
       [end],
     ];
 
@@ -609,18 +616,18 @@ describe("print mode delegation", () => {
     expect(spawn.mock.calls[0]?.[9]?.mode).toBe("bypassPermissions");
   });
 
-  it("rejects an invalid explicit teammate name before spawning", async () => {
+  it("generates a safe teammate name from a non-ASCII description", async () => {
     const spawn = vi
       .spyOn(subagents, "spawnSubagent")
       .mockResolvedValue("done");
-    turns = [delegate({ team_name: "audit", name: "api/reviewer" }), [end]];
+    turns = [delegate({ kind: "teammate", description: "审查 API" }), [end]];
 
     await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
 
-    expect(spawn).not.toHaveBeenCalled();
+    expect(spawn.mock.calls[0]?.[1]).toContain('You are "__-api"');
   });
 
-  it("passes an explicit teammate name and worktree with parent mode precedence", async () => {
+  it("passes an automatically generated teammate name and worktree with parent mode precedence", async () => {
     const isolated = join(cwd, "isolated");
     vi.spyOn(worktrees.OwnedWorktrees.prototype, "register").mockResolvedValue(
       true,
@@ -661,10 +668,9 @@ describe("print mode delegation", () => {
     });
     turns = [
       delegate({
-        team_name: "audit",
-        name: "core-scout",
-        isolation: "worktree",
-        plan_mode_required: true,
+        kind: "teammate",
+        description: "core scout",
+        worktree: true,
       }),
       [end],
     ];

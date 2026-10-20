@@ -72,6 +72,7 @@ describe("independent Agent role and context parameters", () => {
       const result = await tool.execute(
         { cwd },
         {
+          kind: "subagent",
           description: "Independent assignment",
           prompt: "Do the assigned work",
           run_in_background: background,
@@ -114,7 +115,7 @@ describe("independent Agent role and context parameters", () => {
       expect(
         await tool.execute(
           { cwd },
-          { description: "Work", prompt: "Work", fork },
+          { kind: "subagent", description: "Work", prompt: "Work", fork },
         ),
       ).toMatchObject({
         isError: true,
@@ -130,14 +131,14 @@ describe("independent Agent role and context parameters", () => {
     expect(
       await tool.execute(
         { cwd },
-        { description: "Work", prompt: "Work", fork: true },
+        { kind: "subagent", description: "Work", prompt: "Work", fork: true },
       ),
     ).toMatchObject({ isError: true });
     expect(spawn).not.toHaveBeenCalled();
     expect(
       await tool.execute(
         { cwd },
-        { description: "Work", prompt: "Work", fork: false },
+        { kind: "subagent", description: "Work", prompt: "Work", fork: false },
       ),
     ).toEqual({ output: "Fresh result", isError: false });
   });
@@ -158,6 +159,7 @@ describe("independent Agent role and context parameters", () => {
     await tool.execute(
       { cwd },
       {
+        kind: "subagent",
         description: "Work",
         prompt: "Work",
         subagent_type: "plan",
@@ -242,7 +244,13 @@ describe("independent Agent role and context parameters", () => {
                 "bypassPermissions",
               ),
             },
-            { description: "Work", prompt: "Work", subagent_type: name, fork },
+            {
+              kind: "subagent",
+              description: "Work",
+              prompt: "Work",
+              subagent_type: name,
+              fork,
+            },
           ),
         ).toMatchObject({ isError: false, output: "Worker result" });
         await registry.dispose();
@@ -270,10 +278,9 @@ describe("independent Agent role and context parameters", () => {
           await tool.execute(
             { cwd },
             {
-              description: "Worker",
+              kind: "teammate",
+              description: "worker",
               prompt: "Work",
-              team_name: "context-test",
-              name: "worker",
               subagent_type: "explore",
               fork,
             },

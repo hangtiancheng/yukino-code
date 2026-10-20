@@ -8,14 +8,13 @@ import {
 } from "@/teams/constants.js";
 import type { TeamManager, Team } from "@/teams/index.js";
 import {
-  LIST_TEAMS_TOOL_DESCRIPTION,
+  LIST_TEAM_TOOL_DESCRIPTION,
   SEND_MESSAGE_TOOL_DESCRIPTION,
   TEAM_CREATE_TOOL_DESCRIPTION,
   TEAM_DELETE_TOOL_DESCRIPTION,
 } from "@/teams/prompts.js";
 import { shutdownRequest, shutdownResponse } from "@/teams/protocol.js";
 import { getNameRegistry } from "@/teams/registry.js";
-import { sanitizeTeamName } from "@/teams/team-file.js";
 import type {
   Tool,
   ToolContext,
@@ -37,13 +36,12 @@ export class TeamCreateTool implements Tool {
       input_schema: {
         type: "object",
         properties: {
-          team_name: { type: "string", description: "Name for the team" },
           description: {
             type: "string",
             description: "What this team will work on",
           },
         },
-        required: ["team_name"],
+        required: [],
       },
     };
   }
@@ -52,34 +50,17 @@ export class TeamCreateTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
-    const requested = strArg(args, "team_name");
-    if (!requested) {
-      return Promise.resolve({
-        output: "Error: team_name is required",
-        isError: true,
-      });
-    }
-    try {
-      sanitizeTeamName(requested);
-    } catch (error) {
-      return { output: asErrorString(error), isError: true };
-    }
-
-    // Single-team semantics: at most one team exists at any moment. Creating a
-    // team sweeps every other team — running ones are stopped, and residuals
-    // from previous sessions are removed from disk — so the requested name is
-    // always free and no suffix disambiguation is needed.
     await this.mgr.deleteAll();
 
     const description = strArg(args, "description");
-    const team = this.mgr.create(requested, {
+    const team = this.mgr.create(undefined, {
       leaderAgentId: LEADER_NAME,
       description,
     });
     return {
       output:
         `Team '${team.name}' created. ` +
-        `Use Agent tool with team_name='${team.name}' to add teammates.`,
+        `Use Agent with kind="teammate" to add teammates.`,
       isError: false,
     };
   }
@@ -287,9 +268,9 @@ export class SendMessageTool implements Tool {
   }
 }
 
-export class ListTeamsTool implements Tool {
-  name = "ListTeams";
-  description = LIST_TEAMS_TOOL_DESCRIPTION;
+export class ListTeamTool implements Tool {
+  name = "ListTeam";
+  description = LIST_TEAM_TOOL_DESCRIPTION;
   category = "read" as const;
   constructor(private mgr: TeamManager) {}
   schema(): ToolSchema {
@@ -305,23 +286,20 @@ export class ListTeamsTool implements Tool {
   }
 
   execute(): Promise<ToolResult> {
-    const teams = this.mgr.list();
-    if (teams.length === 0) {
+    const team = this.mgr.list()[0];
+    if (!team) {
       return Promise.resolve({
-        output: "No teams.",
+        output: "No active team.",
         isError: false,
       });
     }
-    const lines = teams.map((t) => {
-      const members =
-        t
-          .listMembers()
-          .map((m) => `${m.name}${m.active ? " (active)" : ""}`)
-          .join(", ") || "(no members)";
-      return `${t.name}: ${members}`;
-    });
+    const members =
+      team
+        .listMembers()
+        .map((member) => `${member.name}${member.active ? " (active)" : ""}`)
+        .join(", ") || "(no members)";
     return Promise.resolve({
-      output: lines.join("\n"),
+      output: `${team.name}: ${members}`,
       isError: false,
     });
   }
@@ -338,20 +316,18 @@ export class TeamDeleteTool implements Tool {
       description: this.description,
       input_schema: {
         type: "object",
-        properties: {
-          name: { type: "string" },
-        },
-        required: ["name"],
+        properties: {},
+        required: [],
       },
     };
   }
 
-  async execute(
-    ctx: ToolContext,
-    args: Record<string, unknown>,
-  ): Promise<ToolResult> {
-    const name = strArg(args, "name");
-    await this.mgr.delete(name);
-    return { output: `Team '${name}' deleted.`, isError: false };
+  async execute(): Promise<ToolResult> {
+    const team = this.mgr.list()[0];
+    if (!team) {
+      return { output: "No active team.", isError: false };
+    }
+    await this.mgr.delete(team.name);
+    return { output: `Team '${team.name}' deleted.`, isError: false };
   }
 }

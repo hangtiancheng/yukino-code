@@ -284,7 +284,7 @@ describe("coordinator teammate plan reviews", () => {
       async *stream(_conversation, schemas) {
         await Promise.resolve();
         const checker = defined(
-          defined(defined(manager.get("squad")).getMember("planner")).checker,
+          defined(defined(manager.list()[0]).getMember("planner")).checker,
         );
         modes.push(checker.mode);
         const names = schemas.map((schema) =>
@@ -334,24 +334,22 @@ describe("coordinator teammate plan reviews", () => {
         await tool.execute(
           { cwd, permissionChecker: parent },
           {
-            team_name: "squad",
+            kind: "teammate",
             fork: false,
-            name: "planner",
             prompt: "Plan then execute",
             description: "planner",
-            subagent_type: "general-purpose",
-            plan_mode_required: true,
+            subagent_type: "plan",
           },
         )
       ).isError,
     ).toBe(false);
     await vi.waitFor(() => {
       expect(
-        manager.get("squad")?.getMember("planner")?.pendingPlanApproval,
+        manager.list()[0]?.getMember("planner")?.pendingPlanApproval,
       ).toBeDefined();
     });
     expect(modes).toEqual(["plan"]);
-    const requests = defined(manager.get("squad")).leaderMailbox.receiveSync();
+    const requests = defined(manager.list()[0]).leaderMailbox.receiveSync();
     expect(requests).toHaveLength(1);
     expect(requests[0].text).toBe("Plan from the real tool path");
     expect(parent.mode).toBe("bypassPermissions");
@@ -374,7 +372,7 @@ describe("coordinator teammate plan reviews", () => {
     });
     expect(modes).toEqual(["plan", "bypassPermissions"]);
     const checker = defined(
-      defined(defined(manager.get("squad")).getMember("planner")).checker,
+      defined(defined(manager.list()[0]).getMember("planner")).checker,
     );
     for (const mode of ["default", "acceptEdits", "plan"] as const) {
       parent.mode = mode;
@@ -386,20 +384,49 @@ describe("coordinator teammate plan reviews", () => {
   });
 });
 
+describe("automatic teammate plan approval", () => {
+  it("plans then executes for the plan role outside coordinator mode", async () => {
+    await manager.dispose();
+    manager = new TeamManager(cwd);
+    const parent = new PermissionChecker(cwd);
+    const agent = new AgentTool(cwd, new ToolRegistry(), () =>
+      Promise.resolve("unused"),
+    );
+    const modes: string[] = [];
+    agent.setTeamManager(manager, (_tools, checker, _cwd, options) => {
+      expect(options?.definition.readOnly).not.toBe(true);
+      return () => {
+        modes.push(defined(checker).mode);
+        return Promise.resolve(
+          modes.length === 1 ? "Implementation plan" : "Implemented",
+        );
+      };
+    });
+    const result = await agent.execute(
+      { cwd, permissionChecker: parent },
+      {
+        description: "planner",
+        prompt: "Plan then implement",
+        subagent_type: "plan",
+        fork: false,
+      },
+    );
+    expect(result.isError).toBe(false);
+    await vi.waitFor(() => {
+      expect(modes).toEqual(["plan", "default"]);
+    });
+    expect(
+      manager.list()[0]?.getMember("planner")?.pendingPlanApproval,
+    ).toBeUndefined();
+    expect(parent.mode).toBe("default");
+  });
+});
+
 describe("permanently read-only teammates", () => {
-  it.each(
-    [true, false].flatMap((coordinator) =>
-      ["plan", "explore"].flatMap((role) =>
-        [true, false].map((requestedApproval) => ({
-          coordinator,
-          role,
-          requestedApproval,
-        })),
-      ),
-    ),
-  )(
-    "keeps $role read-only across approval requests and follow-ups (coordinator=$coordinator, plan_mode_required=$requestedApproval)",
-    async ({ coordinator, role, requestedApproval }) => {
+  it.each([true, false])(
+    "keeps explore read-only across follow-ups (coordinator=%s)",
+    async (coordinator) => {
+      const role = "explore";
       await manager.dispose();
       manager = new TeamManager(cwd, coordinator);
       const parent = new PermissionChecker(cwd, "bypassPermissions");
@@ -411,7 +438,7 @@ describe("permanently read-only teammates", () => {
       const modes: string[] = [];
       const run = vi.fn((_prompt: string) => {
         const checker = defined(
-          defined(manager.get("squad")).getMember("researcher")?.checker,
+          defined(manager.list()[0]).getMember("researcher")?.checker,
         );
         modes.push(checker.mode);
         expect(
@@ -429,18 +456,16 @@ describe("permanently read-only teammates", () => {
           await agent.execute(
             { cwd, permissionChecker: parent },
             {
-              team_name: "squad",
+              kind: "teammate",
               fork: false,
-              name: "researcher",
-              description: "research",
+              description: "researcher",
               prompt: "Investigate",
               subagent_type: role,
-              plan_mode_required: requestedApproval,
             },
           )
         ).isError,
       ).toBe(false);
-      const team = defined(manager.get("squad"));
+      const team = defined(manager.list()[0]);
       await vi.waitFor(() => {
         expect(team.getMember("researcher")?.uiState?.status).toBe("idle");
       });

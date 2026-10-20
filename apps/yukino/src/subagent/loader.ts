@@ -57,7 +57,7 @@ const YamlFrontmatterSchema = z.looseObject({
     .enum(["default", "acceptEdits", "plan", "bypassPermissions"])
     .optional(),
   background: z.boolean().optional(),
-  isolation: z.literal("worktree").optional(),
+  worktree: z.boolean().optional(),
 });
 
 function parseAgentDefinition(content: string): AgentDefinition | null {
@@ -86,7 +86,7 @@ function parseAgentDefinition(content: string): AgentDefinition | null {
       model: parsed.model,
       permissionMode: parsed.permission_mode,
       background: parsed.background,
-      isolation: parsed.isolation,
+      worktree: parsed.worktree,
       initialPrompt: body,
     };
   } catch (err) {

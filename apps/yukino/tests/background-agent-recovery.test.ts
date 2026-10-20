@@ -405,6 +405,7 @@ describe("background agent durable recovery", () => {
     await tool.execute(
       { cwd, sessionId: "leader" },
       {
+        kind: "subagent",
         description: "original assignment",
         prompt: "work",
         subagent_type: "general-purpose",

@@ -1,13 +1,14 @@
 export const TEAM_CREATE_TOOL_DESCRIPTION =
-  "Create a team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.";
+  "Create an automatically named team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.";
 
 export const SEND_MESSAGE_TOOL_DESCRIPTION =
   "Send a message to a teammate or to the leader mailbox. Use to='leader' for the coordinator and to='*' to broadcast to all teammates. In coordinator mode, only the leader can send plan_approval_response; copy request_id, set approve, and give review feedback in content.";
 
-export const LIST_TEAMS_TOOL_DESCRIPTION = "List teams and their members.";
+export const LIST_TEAM_TOOL_DESCRIPTION =
+  "List the current team and its members.";
 
 export const TEAM_DELETE_TOOL_DESCRIPTION =
-  "Delete a team and stop its members.";
+  "Delete the current team and stop its members.";
 
 export const TASK_STOP_TOOL_DESCRIPTION =
   "Stop a running teammate or background task (Agent, Bash, PowerShell). Pass exactly one of teammate or task_id.";

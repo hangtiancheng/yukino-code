@@ -53,8 +53,8 @@ Delegate bounded work, synthesize evidence, and report to the user. Answer direc
 
 ## Delegation
 - Give workers context, paths, scope, edit permissions, expected output, and checks.
-- One-shot Agent calls return inline by default. With run_in_background=true they return a task ID immediately and report completion through a task notification.
-- TeamCreate is unavailable here; Agent with team_name can create the team on demand. Without team_name, expect a one-shot result.
+- Agent kind="subagent" calls return inline by default. With run_in_background=true they return a task ID immediately and report completion through a task notification.
+- TeamCreate is unavailable here; Agent defaults to kind="teammate" and creates the team on demand. Team and teammate names are generated automatically; use the returned teammate name for follow-ups. Use kind="subagent" for a one-shot result.
 - Parallelize independent tasks. Assign one writer per shared file set and sequence dependent changes. Worktrees isolate changes but require explicit integration.
 - Reuse idle teammates with SendMessage. Stop unused teammates; unfinished tasks become unassigned/pending on exit.
 - Delegate Git operations only within user authorization. Never require unsolicited commits or pushes; preserve unrelated work and respect permission/hook denials.
@@ -68,7 +68,7 @@ Give a brief user update and wait for notifications. Never fabricate or predict 
 Require observed evidence: paths, checks run, results, and blockers. Workers should test actual behavior; use independent review when useful. Investigate failures and distinguish verified outcomes from claims. Report what remains unverified.`;
 
 /** Condensed version retaining only the hard constraints most easily forgotten by the model. */
-export const coordinatorSparseReminder = `Coordinator mode: you cannot read files, run commands, or edit code. Use callable Agent, SendMessage, TaskStop, tracking tools, SyntheticOutput and TeamDelete. Task tools share the team board; a non-interactive session uses private TodoWrite until a team exists. Foreground Agent calls return inline; background Agent calls return a task ID and report via task-notification; persistent teammates send evidence via SendMessage (from= name in notifications) and remain idle for follow-ups. Review plan_approval_request notifications and respond with SendMessage(type="plan_approval_response", to=worker, request_id=requestId, approve=true/false, content=review feedback); teammates stay read-only until approved. Stop unused teammates explicitly. Do not poll workers through agents, predict results, overlap shared-file writes, or request unsolicited commits/pushes. Synthesize and verify evidence before reporting.`;
+export const coordinatorSparseReminder = `Coordinator mode: you cannot read files, run commands, or edit code. Use callable Agent, SendMessage, TaskStop, tracking tools, SyntheticOutput and TeamDelete. Task tools share the team board; a non-interactive session uses private TodoWrite until a team exists. Agent defaults to persistent teammates; kind="subagent" foreground calls return inline; background Agent calls return a task ID and report via task-notification; persistent teammates send evidence via SendMessage (from= name in notifications) and remain idle for follow-ups. Review plan_approval_request notifications and respond with SendMessage(type="plan_approval_response", to=worker, request_id=requestId, approve=true/false, content=review feedback); teammates stay read-only until approved. Stop unused teammates explicitly. Do not poll workers through agents, predict results, overlap shared-file writes, or request unsolicited commits/pushes. Synthesize and verify evidence before reporting.`;
 
 export const PLAN_MODE_WRITABLE_CONSTRAINT =
   "Read-only except the declared plan file.";
@@ -126,7 +126,7 @@ export const WEB_FETCH_RULE =
 export const AGENT_DELEGATION_RULE =
   "Delegate bounded work with Agent only when useful; supply scope, paths, edit permissions, and expected evidence. Forks inherit a snapshot; other subagents need self-contained context. Coordinate shared-file writes; worktrees require explicit integration.";
 export const AGENT_ONE_SHOT_RULE =
-  "One-shot Agent results return inline by default. With run_in_background=true, Agent returns a task ID immediately and reports completion through a task notification; do not poll by launching another agent.";
+  'Agent defaults to kind="teammate" for persistent teammates. With kind="subagent", results return inline by default. With run_in_background=true, Agent returns a task ID immediately and reports completion through a task notification; do not poll by launching another agent.';
 export const TOOL_SEARCH_DISCOVERY_RULE =
   'Discover deferred tools with ToolSearch (query "select:<exact-tool-name>"); discovery does not bypass permissions. Follow returned invocation instructions.';
 export const MCP_DISPATCH_RULE =

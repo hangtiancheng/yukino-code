@@ -37,7 +37,6 @@ import { TeamManager } from "@/teams/index.js";
 import { getNameRegistry } from "@/teams/registry.js";
 import { SharedTaskStore } from "@/teams/shared-task.js";
 import { readTeamFile } from "@/teams/team-file.js";
-import { TeamCreateTool } from "@/teams/tools.js";
 import { McpCallTool } from "@/tools/mcp-call.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { ToolSearchTool } from "@/tools/tool-search.js";
@@ -151,6 +150,7 @@ describe("delegated lifecycle regressions", () => {
                 toolId: id,
                 toolName: "Agent",
                 arguments: {
+                  kind: "subagent",
                   description: id,
                   prompt: `Handle ${id}`,
                   run_in_background: false,
@@ -222,6 +222,7 @@ describe("delegated lifecycle regressions", () => {
     await agent.execute(
       { cwd: isolated },
       {
+        kind: "subagent",
         description: "nested worker",
         prompt: "work",
         subagent_type: "general-purpose",
@@ -436,6 +437,7 @@ describe("delegated lifecycle regressions", () => {
     const result = await agent.execute(
       { cwd: directory, taskManager: localTasks },
       {
+        kind: "subagent",
         description: "worker",
         prompt: "work",
         subagent_type: "async-worker",
@@ -459,9 +461,9 @@ describe("delegated lifecycle regressions", () => {
     ).execute(
       { cwd: directory },
       {
+        kind: "teammate",
         description: "worker",
         prompt: "work",
-        team_name: "squad",
         fork: false,
         subagent_type: "general-purpose",
       },
@@ -491,6 +493,7 @@ describe("delegated lifecycle regressions", () => {
     await agent.execute(
       { cwd: directory },
       {
+        kind: "subagent",
         description: "worker",
         prompt: "work",
         subagent_type: "general-purpose",
@@ -507,18 +510,10 @@ describe("delegated lifecycle regressions", () => {
 });
 
 describe("team approval and persistence regressions", () => {
-  it("rejects whitespace team names before deleting the existing team and rejects mailbox traversal", async () => {
-    manager.create("existing");
-    const result = await new TeamCreateTool(manager).execute(
-      { cwd: directory },
-      { team_name: "  ", fork: false },
-    );
-    expect(result.isError).toBe(true);
-    expect(manager.get("existing")).toBeDefined();
+  it("rejects mailbox traversal and reserved teammate names", () => {
+    const team = manager.create("existing");
     expect(() => new FileMailbox(directory, "../escape")).toThrow("Invalid");
-    expect(() => manager.get("existing")?.addMember("leader")).toThrow(
-      "Invalid",
-    );
+    expect(() => team.addMember("leader")).toThrow("Invalid");
   });
 
   it("does not let old idle mail overwrite a newer in-process assignment's live state", async () => {
@@ -550,17 +545,16 @@ describe("team approval and persistence regressions", () => {
     const result = await agent.execute(
       { cwd: directory, permissionChecker: parent },
       {
-        description: "plan worker",
+        kind: "teammate",
+        description: "planner",
         prompt: "review",
-        team_name: "squad",
         fork: false,
-        name: "planner",
-        subagent_type: "plan",
+        subagent_type: "explore",
         model: "chosen-model",
       },
     );
     expect(result.isError).toBe(false);
-    expect(options?.definition.name).toBe("plan");
+    expect(options?.definition.name).toBe("explore");
     expect(options?.modelOverride).toBe("chosen-model");
     expect(scoped?.get("WriteFile")).toBeUndefined();
     expect(scoped?.get("SendMessage")).toBeDefined();
@@ -570,9 +564,7 @@ describe("team approval and persistence regressions", () => {
     expect(manager.drainLeaderMailbox().join("\n")).not.toContain(
       "plan_approval_request",
     );
-    expect(manager.get("squad")?.getMember("planner")?.checker?.mode).toBe(
-      "plan",
-    );
+    expect(manager.list()[0]?.getMember("planner")?.checker?.mode).toBe("plan");
   });
 
   it("rolls a failed teammate runner factory back out of memory and disk", async () => {
@@ -585,17 +577,18 @@ describe("team approval and persistence regressions", () => {
     const result = await agent.execute(
       { cwd: directory },
       {
+        kind: "teammate",
         description: "worker",
         prompt: "work",
-        team_name: "squad",
         fork: false,
-        name: "worker",
       },
     );
     expect(result.isError).toBe(true);
     expect(result.output).toContain("factory failed");
-    expect(manager.get("squad")?.listMembers()).toEqual([]);
-    expect(readTeamFile(directory, "squad")?.members).toEqual([]);
+    expect(manager.list()[0]?.listMembers()).toEqual([]);
+    expect(readTeamFile(directory, manager.list()[0].name)?.members).toEqual(
+      [],
+    );
   });
 
   it("automatically approves the submitted plan without leader review or tool authorization", async () => {

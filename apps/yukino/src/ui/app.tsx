@@ -115,7 +115,7 @@ import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
   SendMessageTool,
-  ListTeamsTool,
+  ListTeamTool,
   TeamDeleteTool,
 } from "@/teams/tools.js";
 import { TaskList } from "@/todo/index.js";
@@ -1086,7 +1086,7 @@ export function App({
         registryRef.current.register(
           new SendMessageTool(teamManagerRef.current),
         );
-        registryRef.current.register(new ListTeamsTool(teamManagerRef.current));
+        registryRef.current.register(new ListTeamTool(teamManagerRef.current));
         registryRef.current.register(
           new TeamDeleteTool(teamManagerRef.current),
         );
@@ -1289,7 +1289,7 @@ export function App({
           backgroundTaskManagerRef.current,
         );
         agentTool.defaultFork = !(forkDisabled ?? false);
-        // Wire the team manager into AgentTool to enable the team_name teammate path (teammates receive shared task-board tools)
+        // Wire the team manager into AgentTool to enable the teammate path (teammates receive shared task-board tools)
         agentTool.setTeamManager(teamManagerRef.current, teamRunAgentFactory);
         registryRef.current.register(agentTool);
 

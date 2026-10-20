@@ -42,6 +42,7 @@ export async function runSubagentCommand(
   record("user", input);
   const toolId = randomUUID();
   const args = {
+    kind: "subagent",
     subagent_type: agentName,
     fork: agentName === "plan",
     description: input,
