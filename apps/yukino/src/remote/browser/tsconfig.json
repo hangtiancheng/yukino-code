@@ -16,7 +16,7 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "#/*": ["./src/*"],
-      "@yukino.js/yukino/*": ["../../*"]
+      "@/*": ["../../*"]
     }
   },
   "include": ["src", "postcss.config.ts", "tsup.config.ts"]
