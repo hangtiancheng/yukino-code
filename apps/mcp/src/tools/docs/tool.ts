@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { createEmbedder } from "./embedder.js";
@@ -145,7 +145,7 @@ function formatResults(docs: RetrievedDoc[]): string {
     .join("\n\n---\n\n");
 }
 
-const InputSchema = {
+const InputSchema = z.object({
   query: z
     .string()
     .min(1)
@@ -159,7 +159,7 @@ const InputSchema = {
     .max(10)
     .default(3)
     .describe("Number of most relevant chunks to return (1-10, default 3)."),
-};
+});
 
 export const docsModule: ToolModule = {
   name: "docs",
@@ -172,7 +172,6 @@ export const docsModule: ToolModule = {
         title: "Sync Docs",
         description:
           "Refresh the RAG knowledge base from the configured local docs directory. Waits for initial/in-flight indexing, adds/updates changed files and removes deleted files. Call after editing documents or when docs_tool reports indexing in progress. Per-file failures preserve the previous version and are reported in stats.",
-        inputSchema: {},
         annotations: {
           readOnlyHint: false,
           destructiveHint: true,

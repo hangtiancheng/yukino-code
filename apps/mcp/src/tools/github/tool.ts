@@ -49,7 +49,7 @@ export const githubModule: ToolModule = {
         title: "GitHub CLI",
         description:
           'Run any GitHub CLI (gh) command. Supply args without the leading gh, e.g. ["pr","list","--repo","owner/repo","--json","number,title"]. Covers repositories, issues, PRs/reviews/merges, Actions, releases/assets, projects and every REST/GraphQL endpoint via gh api. Use --help to discover commands, --json/--jq for focused results, and gh api --paginate --slurp for pagination. stdin supports --input - (JSON/binary-as-text payloads), --body-file - and other stdin-based flags. cwd selects the local repository for checkout/clone/git operations. No command allowlist or confirmation step. Requires gh on PATH; authentication uses gh auth login or GH_TOKEN/GITHUB_TOKEN (Enterprise: GH_HOST/GH_ENTERPRISE_TOKEN). Returns stdout, stderr, exit_code, signal, timed_out and cancelled; nonzero exits, timeouts or cancellation are errors. Use response_format=base64 for binary stdout.',
-        inputSchema: {
+        inputSchema: z.object({
           args: z
             .array(z.string())
             .min(1)
@@ -83,7 +83,7 @@ export const githubModule: ToolModule = {
             .describe(
               "Encoding of stdout; base64 preserves binary API downloads.",
             ),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async ({ args, cwd, stdin, timeout_ms, response_format }, extra) => {
@@ -93,7 +93,7 @@ export const githubModule: ToolModule = {
             stdin,
             timeoutMs: timeout_ms,
             env: ghEnvironment(),
-            signal: extra.signal,
+            signal: extra.mcpReq.signal,
           });
           const output = operationResult({
             ...result,

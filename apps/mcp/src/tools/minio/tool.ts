@@ -43,7 +43,7 @@ export const minioModule: ToolModule = {
         title: "MinIO / S3",
         description:
           "Call any S3-compatible (MinIO) REST operation with full account privileges: list buckets, list/create/delete buckets, get/put/head/delete objects, multipart upload, versioning, policies, lifecycle and other subresources. There is no operation allowlist. Requests are signed with AWS Signature V4 (path-style). Set method plus optional bucket, key, query subresource params (e.g. {location:''}, {uploads:''}, {'list-type':2, prefix:'a/'}, {partNumber:1, uploadId:'...'}, {delete:''}), headers and a body. The body may be a UTF-8 string (XML/JSON), base64 (body_base64) or a local file (body_path). Responses return status_code, headers, size and the body as text (XML/JSON) or base64; large or binary bodies can be written to save_path instead. Uses MINIO_URL (S3_ENDPOINT fallback), MINIO_ACCESS_KEY/MINIO_SECRET_KEY (AWS_* fallback) and MINIO_REGION, or per-call endpoint/region.",
-        inputSchema: {
+        inputSchema: z.object({
           endpoint: z
             .string()
             .trim()
@@ -138,7 +138,7 @@ export const minioModule: ToolModule = {
             .positive()
             .default(30_000)
             .describe("HTTP request timeout in milliseconds."),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async (input) => {

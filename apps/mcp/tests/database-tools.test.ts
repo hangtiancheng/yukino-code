@@ -1,6 +1,6 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { BSON } from "mongodb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -178,7 +178,9 @@ describe("unrestricted database tools", () => {
       expect.objectContaining({ connectionString: "postgresql://override/db" }),
     );
     expect(drivers.postgres.query).toHaveBeenCalledWith(sql, []);
-    const payload = JSON.parse(firstText(result));
+    const payload = z
+      .object({ results: z.array(z.unknown()) })
+      .parse(JSON.parse(firstText(result)) as unknown);
     expect(payload).toEqual(result.structuredContent);
     expect(payload.results).toHaveLength(3);
     expect(payload.results[1]).toEqual({
@@ -306,7 +308,9 @@ describe("unrestricted database tools", () => {
       expect.objectContaining({ url: "redis://override:6379/0" }),
     );
     expect(
-      drivers.redis.sendCommand.mock.calls.map(([command]) => command),
+      drivers.redis.sendCommand.mock.calls.map(
+        ([command]) => command as string[],
+      ),
     ).toEqual(commands);
     expect(result.structuredContent).toEqual({
       results: ["OK", "OK", "QUEUED", "QUEUED", ["OK", "OK"]],
@@ -325,7 +329,7 @@ describe("unrestricted database tools", () => {
     expect(result.structuredContent).toMatchObject({
       results: [{ field: "value" }],
       failed_command_index: 1,
-      error: expect.stringContaining("ERR invalid command"),
+      error: expect.stringContaining("ERR invalid command") as unknown,
     });
     expect(JSON.parse(firstText(result))).toEqual(result.structuredContent);
     expect(drivers.redis.sendCommand).toHaveBeenCalledTimes(2);
@@ -377,7 +381,9 @@ describe("unrestricted database tools", () => {
     process.env["MONGODB_DATABASE"] = "configured_db";
     const result = await call("mongodb_tool", { database: "admin", command });
     expect(drivers.mongodb.db).toHaveBeenCalledWith("admin");
-    const sent = drivers.mongoCommand.mock.calls[0][0];
+    const sent = drivers.mongoCommand.mock.calls[0][0] as {
+      deletes: { q: { _id: BSON.ObjectId } }[];
+    };
     expect(sent.deletes[0].q._id).toBeInstanceOf(BSON.ObjectId);
     expect(sent.deletes[0].q._id.toHexString()).toBe(id);
     expect(result.structuredContent).toEqual({

@@ -1,6 +1,6 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -125,7 +125,10 @@ describe("etcd_tool", () => {
       body: { key: "app/name", value: "yukino" },
     });
     expect(result.isError).toBeUndefined();
-    const sent = JSON.parse(routes.lastCall().body ?? "{}");
+    const sent = JSON.parse(routes.lastCall().body ?? "{}") as {
+      key?: string;
+      value?: string;
+    };
     expect(sent.key).toBe(Buffer.from("app/name").toString("base64"));
     expect(sent.value).toBe(Buffer.from("yukino").toString("base64"));
     expect(routes.lastCall().headers["content-type"]).toContain(
@@ -173,7 +176,10 @@ describe("etcd_tool", () => {
       raw_base64: true,
       headers: { authorization: "token-abc" },
     });
-    const sent = JSON.parse(routes.lastCall().body ?? "{}");
+    const sent = JSON.parse(routes.lastCall().body ?? "{}") as {
+      key?: string;
+      value?: string;
+    };
     expect(sent.key).toBe(b64);
     expect(sent.value).toBe(b64);
     expect(routes.lastCall().headers["authorization"]).toBe("token-abc");

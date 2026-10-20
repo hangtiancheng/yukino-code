@@ -20,7 +20,7 @@ export const etcdModule: ToolModule = {
         title: "etcd",
         description:
           "Call any etcd v3 JSON-gateway endpoint with full privileges: kv range/put/deleterange/txn/compaction, lease grant/revoke/keepalive/timetolive/leases, auth authenticate/enable/role/user, cluster member add/list/remove/update, and maintenance status/defragment/alarm/hash. There is no endpoint allowlist. Keys, range ends and values are passed as plain UTF-8 strings and base64-encoded for the wire automatically; response keys/values are decoded back to strings (binary values stay base64). Set raw_base64=true to send and receive verbatim base64 instead. path defaults to /v3/kv/range; body is the JSON request document (e.g. {key:'a', range_end:'b'} or {key:'a', value:'v', lease:'0'}). Streaming endpoints (/v3/watch, /v3/maintenance/snapshot) are not supported. Uses ETCD_URL (ETCD_ENDPOINTS fallback) or base_url; pass an auth token via headers.authorization after /v3/auth/authenticate.",
-        inputSchema: {
+        inputSchema: z.object({
           base_url: z
             .string()
             .trim()
@@ -66,7 +66,7 @@ export const etcdModule: ToolModule = {
             .positive()
             .default(30_000)
             .describe("HTTP request timeout in milliseconds."),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async ({

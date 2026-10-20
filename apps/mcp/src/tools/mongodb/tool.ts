@@ -1,4 +1,4 @@
-import { BSON, MongoClient } from "mongodb";
+import { BSON, type Document, MongoClient } from "mongodb";
 import { z } from "zod";
 
 import { loadConfig } from "@/shared/config.js";
@@ -21,7 +21,7 @@ export const mongodbModule: ToolModule = {
         title: "MongoDB",
         description:
           'Execute any MongoDB database command with full connection privileges: find, insert, update, delete, aggregate, create/drop collections or databases, indexes, users and administration. Supply a raw command document (e.g. {"find":"users","filter":{}}); BSON values use Extended JSON such as {"$oid":"..."}. Set database to admin for administrative commands. Returns the full command response as canonical Extended JSON, preserving BSON types and cursor batches. Uses MONGODB_URL or connection_url; database defaults to MONGODB_DATABASE or the URL\'s database.',
-        inputSchema: {
+        inputSchema: z.object({
           connection_url: connectionUrlSchema,
           database: z
             .string()
@@ -40,7 +40,7 @@ export const mongodbModule: ToolModule = {
             .describe(
               "Raw MongoDB command document, accepting Extended JSON for BSON types. There is no operation allowlist.",
             ),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async ({ connection_url, database, command }) => {
@@ -58,7 +58,11 @@ export const mongodbModule: ToolModule = {
             await client.connect();
             const result = await client
               .db(database ?? (config.database || undefined))
-              .command(BSON.EJSON.deserialize(command, { relaxed: false }));
+              .command(
+                BSON.EJSON.deserialize(command, {
+                  relaxed: false,
+                }) as Document,
+              );
             return operationResult({
               data: BSON.EJSON.serialize(result, { relaxed: false }),
             });

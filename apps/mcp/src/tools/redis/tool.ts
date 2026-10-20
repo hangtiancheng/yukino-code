@@ -27,7 +27,7 @@ export const redisModule: ToolModule = {
         title: "Redis",
         description:
           'Execute any Redis command with full connection privileges, including reads, writes, Lua scripts, configuration and destructive commands. Supply an ordered commands array of argument arrays, e.g. [["SET","key","value"],["GET","key"]]. All commands run sequentially on one dedicated connection so SELECT, MULTI/EXEC and state changes work within a call. Stops at the first failed command and retains completed replies. Uses REDIS_URL or connection_url; independent of the docs connection.',
-        inputSchema: {
+        inputSchema: z.object({
           connection_url: connectionUrlSchema,
           commands: z
             .array(z.array(z.string()).min(1))
@@ -35,7 +35,7 @@ export const redisModule: ToolModule = {
             .describe(
               "Redis commands as argument arrays. Arguments are sent verbatim, without shell parsing or command filtering.",
             ),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async ({ connection_url, commands }) => {

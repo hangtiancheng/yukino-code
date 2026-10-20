@@ -1,7 +1,9 @@
-const originalEmit = process.emit;
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
+type EmitSignature = (event: string | symbol, ...args: unknown[]) => boolean;
+
+const originalEmit = process.emit.bind(process) as EmitSignature;
 
 process.emit = function patchedEmit(
-  this: NodeJS.Process,
   event: string | symbol,
   ...args: unknown[]
 ): boolean {
@@ -15,9 +17,5 @@ process.emit = function patchedEmit(
       return false;
     }
   }
-  return (originalEmit as (...emitArgs: unknown[]) => boolean).call(
-    this,
-    event,
-    ...args,
-  );
+  return originalEmit(event, ...args);
 } as typeof process.emit;

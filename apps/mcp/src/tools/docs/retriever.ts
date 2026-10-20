@@ -125,7 +125,7 @@ export async function retrieve(
     }
     docs.push({
       id: cache.ids[hit.index],
-      content: String(row.content ?? ""),
+      content: typeof row.content === "string" ? row.content : "",
       metadata: parseMetadata(row.metadata),
       score: (1 + hit.score) / 2,
     });

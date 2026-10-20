@@ -51,7 +51,7 @@ export function buildHttpPassthroughSchema(options: {
   paramsDescription: string;
   bodyDescription: string;
 }) {
-  return {
+  return z.object({
     base_url: z
       .string()
       .trim()
@@ -86,7 +86,7 @@ export function buildHttpPassthroughSchema(options: {
       .positive()
       .default(30_000)
       .describe("HTTP request timeout in milliseconds."),
-  };
+  });
 }
 
 /**

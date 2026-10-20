@@ -5,7 +5,7 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { logger } from "@/shared/logger.js";
@@ -26,7 +26,7 @@ const RESOURCE_DOMAINS = [
 
 const MAX_HTML_CHARS = 200_000;
 
-const InputSchema = {
+const InputSchema = z.object({
   html: z
     .string()
     .min(1)
@@ -43,7 +43,7 @@ const InputSchema = {
     .max(120)
     .default("MCP App")
     .describe("Short human-readable label shown above the app."),
-};
+});
 
 const NO_UI_FALLBACK_NOTE =
   "Agentic app delivered via the create_app UI; hosts without MCP Apps support " +

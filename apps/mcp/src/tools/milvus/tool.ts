@@ -18,7 +18,7 @@ export const milvusModule: ToolModule = {
         title: "Milvus",
         description:
           "Call any Milvus RESTful API v2 endpoint with full privileges: collections (list/create/describe/drop/has/load/release/rename/alter), entities (insert/upsert/delete/get/query/search/hybrid_search), indexes, partitions, databases, aliases, users/roles/grants, import and jobs. There is no endpoint allowlist. path defaults to /v2/vectordb/collections/list and method to POST; body is the JSON request document. Set database to inject dbName into the body, or include dbName yourself. Authentication uses a Bearer token from MILVUS_TOKEN or MILVUS_USERNAME:MILVUS_PASSWORD (override with token). Responses return {status_code, data}; a non-zero Milvus code or non-2xx status sets isError. Uses MILVUS_URL (MILVUS_ADDRESS fallback) or base_url. The REST API shares the gRPC port (default 19530); health/metrics live on 9091 and can be reached with an absolute base_url.",
-        inputSchema: {
+        inputSchema: z.object({
           base_url: z
             .string()
             .trim()
@@ -65,7 +65,7 @@ export const milvusModule: ToolModule = {
             .positive()
             .default(30_000)
             .describe("HTTP request timeout in milliseconds."),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async ({

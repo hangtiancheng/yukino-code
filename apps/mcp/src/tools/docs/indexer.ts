@@ -63,6 +63,10 @@ function insertChunk(
   );
 }
 
+function sourceLabel(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 export async function indexChunks(
   ctx: DocsContext,
   chunks: IndexChunk[],
@@ -72,13 +76,13 @@ export async function indexChunks(
   }
   const vectors = await ctx.embedder.embedTexts(chunks.map((c) => c.content));
   const createdAt = new Date().toISOString();
-  transact(ctx, String(chunks[0]?.metadata["_source"] ?? "index"), () => {
+  transact(ctx, sourceLabel(chunks[0]?.metadata["_source"], "index"), () => {
     const insert = prepareUpsert(ctx);
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       insertChunk(
         insert,
-        String(chunk.metadata["_source"] ?? ""),
+        sourceLabel(chunk.metadata["_source"], ""),
         chunk,
         vectors[i],
         createdAt,

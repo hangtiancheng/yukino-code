@@ -1,6 +1,6 @@
 import "./shared/quiet-sqlite-warning.js";
 import "dotenv/config";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 
 import { startHttpServer } from "./http.js";
 import { createServer } from "./server.js";

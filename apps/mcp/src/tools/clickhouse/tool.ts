@@ -22,7 +22,7 @@ export const clickhouseModule: ToolModule = {
         title: "ClickHouse",
         description:
           "Execute arbitrary ClickHouse SQL over the HTTP interface with the account's full privileges: queries, inserts, DDL, mutations, system and administrative statements. There is no SQL allowlist or read-only mode. SELECT results are returned parsed when the output format is JSON-family (default_format defaults to JSON; override with format, e.g. JSONEachRow, CSV, TSV, Pretty). For INSERT ... FORMAT <fmt>, pass the SQL in sql and the rows in data (or data_base64); the query is sent as a parameter and the data as the body. Parameterized queries use params, mapped to ClickHouse param_<name> settings for {name:Type} placeholders. Extra engine settings (max_execution_time, readonly, etc.) go in settings. Uses CLICKHOUSE_URL (CLICKHOUSE_HTTP_URL fallback) or connection_url; credentials from CLICKHOUSE_USER/CLICKHOUSE_PASSWORD, database from CLICKHOUSE_DATABASE.",
-        inputSchema: {
+        inputSchema: z.object({
           connection_url: connectionUrlSchema,
           sql: z.string().min(1).describe("SQL statement to execute verbatim."),
           params: z
@@ -82,7 +82,7 @@ export const clickhouseModule: ToolModule = {
             .positive()
             .default(30_000)
             .describe("HTTP request timeout in milliseconds."),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async (input) => {

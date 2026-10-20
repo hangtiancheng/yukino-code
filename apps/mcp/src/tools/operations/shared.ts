@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { McpToolName } from "@/tools/names.js";
@@ -12,7 +12,7 @@ export const connectionUrlSchema = z
     "Connection URL override; otherwise uses the configured environment variable.",
   );
 
-export const sqlInputSchema = {
+export const sqlInputSchema = z.object({
   connection_url: connectionUrlSchema,
   sql: z
     .string()
@@ -26,7 +26,7 @@ export const sqlInputSchema = {
     .describe(
       "Optional positional parameters ($1, $2 for PostgreSQL; ? for MySQL).",
     ),
-};
+});
 
 export const unrestrictedAnnotations = {
   readOnlyHint: false,
@@ -58,14 +58,17 @@ export function operationResult(data: Record<string, unknown>): CallToolResult {
       return { name: value.name, message: value.message };
     }
     if (value instanceof Map) {
-      return Object.fromEntries(value);
+      return Object.fromEntries(value as Map<unknown, unknown>) as Record<
+        string,
+        unknown
+      >;
     }
     if (value instanceof Set) {
-      return [...value];
+      return [...(value as Set<unknown>)];
     }
     return value;
   });
-  const structuredContent: Record<string, unknown> = JSON.parse(text);
+  const structuredContent = JSON.parse(text) as Record<string, unknown>;
   return { content: [{ type: "text", text }], structuredContent };
 }
 

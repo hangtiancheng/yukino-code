@@ -1,6 +1,6 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -81,7 +81,7 @@ describe("milvus_tool", () => {
       database: "analytics",
       body: { collectionName: "docs" },
     });
-    const sent = JSON.parse(routes.lastCall().body ?? "{}");
+    const sent = JSON.parse(routes.lastCall().body ?? "{}") as object;
     expect(sent).toEqual({ collectionName: "docs", dbName: "analytics" });
   });
 
@@ -99,7 +99,9 @@ describe("milvus_tool", () => {
       token: "api-key-123",
       body: { collectionName: "docs", dbName: "explicit", filter: "id > 0" },
     });
-    const sent = JSON.parse(routes.lastCall().body ?? "{}");
+    const sent = JSON.parse(routes.lastCall().body ?? "{}") as {
+      dbName?: string;
+    };
     expect(sent.dbName).toBe("explicit");
     expect(routes.lastCall().headers["authorization"]).toBe(
       "Bearer api-key-123",

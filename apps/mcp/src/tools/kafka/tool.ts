@@ -721,7 +721,7 @@ export const kafkaModule: ToolModule = {
         title: "Kafka",
         description:
           "Operate an Apache Kafka cluster through @platformatic/kafka with full client privileges. Choose an operation: produce (send messages), consume (read messages by subscription or explicit partition assignments), list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets (low/high per partition) and committed_offsets (a group's committed positions; -1001 means uncommitted). There is no operation allowlist beyond these; @platformatic/kafka client options (requestTimeout, retries, acks, compression, nested tls/sasl, etc.) are passed through config. Message keys/values are strings decoded with encoding (utf8 default, or base64 for binary); consume returns at most max_messages within timeout_ms. Uses KAFKA_BROKERS (default localhost:9092) or brokers, plus KAFKA_CLIENT_ID and optional KAFKA_USERNAME/KAFKA_PASSWORD/KAFKA_SASL_MECHANISM/KAFKA_SECURITY_PROTOCOL.",
-        inputSchema: {
+        inputSchema: z.object({
           brokers: z
             .string()
             .trim()
@@ -847,7 +847,7 @@ export const kafkaModule: ToolModule = {
             .describe(
               "Consume window and per-request timeout in milliseconds.",
             ),
-        },
+        }),
         annotations: unrestrictedAnnotations,
       },
       async (raw) => {
