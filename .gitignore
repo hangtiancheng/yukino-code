@@ -27,9 +27,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 !.env.example
 !**/.env.example
 
-apps/dejavu/.config.json
-apps/dejavu/.config.jsonc
-
 node_modules/
 **/node_modules/
 
