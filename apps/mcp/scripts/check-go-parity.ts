@@ -6,11 +6,14 @@ import { createServer as createHTTPServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+
 import { createServer } from "../src/server.js";
 import { docsModule } from "../src/tools/docs/tool.js";
+
 import { goInputSchema } from "./go-contract.js";
 
 const directory = await mkdtemp(join(tmpdir(), "yukino-mcp-parity-"));
@@ -26,7 +29,9 @@ execFileSync(
 let failEmbeddings = false;
 const http = createHTTPServer(async (request, response) => {
   const chunks: Buffer[] = [];
-  for await (const chunk of request) chunks.push(Buffer.from(chunk));
+  for await (const chunk of request) {
+    chunks.push(Buffer.from(chunk));
+  }
   const text = Buffer.concat(chunks).toString();
   const url = new URL(request.url!, "http://fixture");
   response.setHeader("content-type", "application/json");
@@ -154,12 +159,13 @@ try {
     ]);
     assert.equal(!!ts.isError, !valid, `${name}: TS error status`);
     assert.equal(!!go.isError, !valid, `${name}: Go error status`);
-    if (valid)
+    if (valid) {
       assert.deepEqual(
         go.structuredContent,
         ts.structuredContent,
         `${name}: successful result`,
       );
+    }
     checks++;
   }
   await compare("create_app", {
@@ -174,8 +180,9 @@ try {
     ["mysql_tool", { sql: "SELECT 1", connection_url: " \ufeff " }],
     ["docs_tool", { query: "query", top_k: 11 }],
     ["grafana_tool", { method: "CONNECT" }],
-  ] as const)
+  ] as const) {
     await compare(name, args, false);
+  }
   for (const name of ["prometheus_tool", "grafana_tool"]) {
     for (const body of [undefined, null, "raw string", { nested: [true, 1] }]) {
       await compare(name, {
@@ -239,7 +246,9 @@ try {
     docsModule.shutdown?.(),
   ]);
   await new Promise<void>((resolve, reject) =>
-    http.close((err) => (err ? reject(err) : resolve())),
+    http.close((err) => {
+      err ? reject(err) : resolve();
+    }),
   );
   await rm(directory, { recursive: true, force: true });
 }

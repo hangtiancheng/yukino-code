@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { createRequire as nodeCreateRequire } from "node:module";
 import path from "node:path";
+import type * as NodeSqlite from "node:sqlite";
 import type { DatabaseSync as Database } from "node:sqlite";
 
 import type { Embedder } from "./embedder.js";
@@ -23,8 +24,9 @@ export interface VectorCache {
 
 const nodeRequire = nodeCreateRequire(import.meta.url);
 
-function loadSqlite(): typeof import("node:sqlite") {
-  return nodeRequire("node:sqlite") as typeof import("node:sqlite");
+function loadSqlite(): typeof NodeSqlite {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return nodeRequire("node:sqlite") as typeof NodeSqlite;
 }
 
 export interface DocsContext {

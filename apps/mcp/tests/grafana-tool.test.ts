@@ -33,7 +33,7 @@ async function call(args: Record<string, unknown> = {}) {
 
 beforeEach(async () => {
   for (const key of envKeys) {
-    delete process.env[key];
+    Reflect.deleteProperty(process.env, key);
   }
   process.env["GRAFANA_BASE_URL"] = "http://localhost:3000";
   const server = new McpServer({ name: "test", version: "1" });

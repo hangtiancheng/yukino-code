@@ -49,7 +49,7 @@ async function call(args: Record<string, unknown> = {}) {
 
 beforeEach(async () => {
   for (const key of envKeys) {
-    delete process.env[key];
+    Reflect.deleteProperty(process.env, key);
   }
   process.env["MINIO_URL"] = "http://localhost:9000";
   process.env["MINIO_ACCESS_KEY"] = "admin";

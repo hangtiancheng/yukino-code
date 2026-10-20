@@ -179,7 +179,7 @@ function data(result: Awaited<ReturnType<typeof call>>) {
 }
 beforeEach(async () => {
   for (const key of envKeys) {
-    delete process.env[key];
+    Reflect.deleteProperty(process.env, key);
   }
   state.options = [];
   state.sent = [];

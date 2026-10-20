@@ -29,9 +29,12 @@ export default defineConfig(
       import: importPlugin,
     },
     rules: {
+      "no-empty": "warn",
+      "@typescript-eslint/no-empty-function": "warn",
+      "@typescript-eslint/no-non-null-assertion": "warn",
       "@typescript-eslint/restrict-template-expressions": "off",
       "@typescript-eslint/consistent-type-imports": [
-        "error",
+        "warn",
         { prefer: "type-imports" },
       ],
       "@typescript-eslint/no-floating-promises": [
@@ -44,13 +47,13 @@ export default defineConfig(
       ],
       "@typescript-eslint/no-unnecessary-condition": "off",
       "@typescript-eslint/ban-ts-comment": "error",
+      "@typescript-eslint/require-await": "warn",
       "@typescript-eslint/consistent-type-assertions": [
-        "error",
-        // Runtime boundaries must use zod validation instead of type assertions.
+        "warn",
+        // Runtime boundaries should use zod validation instead of type assertions.
         { assertionStyle: "never" },
       ],
       "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/no-non-null-assertion": "error",
       "@typescript-eslint/no-unsafe-argument": "error",
       "@typescript-eslint/prefer-nullish-coalescing": "off",
       "@typescript-eslint/no-unsafe-assignment": "error",

@@ -78,7 +78,7 @@ async function call(name: string, args: Record<string, unknown>) {
 beforeEach(async () => {
   vi.clearAllMocks();
   for (const key of envKeys) {
-    delete process.env[key];
+    Reflect.deleteProperty(process.env, key);
   }
   drivers.postgres.connect.mockResolvedValue(undefined);
   drivers.postgres.end.mockResolvedValue(undefined);

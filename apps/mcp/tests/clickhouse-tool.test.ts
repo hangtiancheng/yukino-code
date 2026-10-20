@@ -32,7 +32,7 @@ async function call(args: Record<string, unknown> = {}) {
 
 beforeEach(async () => {
   for (const key of envKeys) {
-    delete process.env[key];
+    Reflect.deleteProperty(process.env, key);
   }
   process.env["CLICKHOUSE_URL"] = "http://localhost:8123";
   process.env["CLICKHOUSE_USER"] = "langfuse";

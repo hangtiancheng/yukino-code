@@ -33,7 +33,7 @@ async function call(args: Record<string, unknown> = {}) {
 
 beforeEach(async () => {
   for (const key of envKeys) {
-    delete process.env[key];
+    Reflect.deleteProperty(process.env, key);
   }
   process.env["MILVUS_URL"] = "http://localhost:19530";
   process.env["MILVUS_USERNAME"] = "root";

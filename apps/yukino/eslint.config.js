@@ -34,6 +34,7 @@ export default defineConfig(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      "@typescript-eslint/no-empty-function": "warn",
       "@typescript-eslint/restrict-template-expressions": "off",
       "@typescript-eslint/consistent-type-imports": [
         "error",

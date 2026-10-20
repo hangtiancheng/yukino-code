@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 export function normalizeVector(values: number[] | Float32Array): Float32Array {
   const out = Float32Array.from(values);
   let sum = 0;
-  for (let i = 0; i < out.length; i++) {
-    sum += out[i] * out[i];
+  for (const item of out) {
+    sum += item * item;
   }
   const norm = Math.sqrt(sum);
   if (norm > 0) {

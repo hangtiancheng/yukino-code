@@ -1,9 +1,12 @@
 // Run from apps/mcp: node_modules/.bin/tsx --tsconfig tsconfig.json scripts/export-go-contract.ts
 // Keep the Go tool schemas tied to the public TypeScript MCP contract.
 import { writeFile } from "node:fs/promises";
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+
 import { createServer } from "../src/server.js";
+
 import { goInputSchema } from "./go-contract.js";
 
 const server = createServer();

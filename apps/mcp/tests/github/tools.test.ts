@@ -35,7 +35,7 @@ async function call(args: Record<string, unknown>) {
 }
 beforeEach(async () => {
   for (const key of envKeys) {
-    delete process.env[key];
+    Reflect.deleteProperty(process.env, key);
   }
   executableDir = makeTempDir();
   process.env["PATH"] = executableDir;
