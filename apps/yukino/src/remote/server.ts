@@ -3775,7 +3775,7 @@ export class RemoteServer {
 
     this.hasExitedPlanMode = true;
     handle.checker.exitPlanMode(
-      choice === "yolo" ? "bypassPermissions" : undefined,
+      choice === "yolo" ? "bypassPermissions" : "default",
     );
     handle.conv.addSystemReminder(
       buildPlanModeExitReminder(planPath, !!planContent),
