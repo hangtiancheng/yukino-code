@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   connectionUrlSchema,
   operationError,
@@ -10,6 +9,7 @@ import {
   requireConnection,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
+import type { ToolModule } from "@/tools/types.js";
 
 const scalar = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -99,7 +99,9 @@ export const clickhouseModule: ToolModule = {
 
           const url = new URL(base);
           const search = url.searchParams;
-          if (database) search.set("database", database);
+          if (database) {
+            search.set("database", database);
+          }
           for (const [key, value] of Object.entries(input.params)) {
             search.set(`param_${key}`, String(value));
           }
@@ -108,7 +110,9 @@ export const clickhouseModule: ToolModule = {
           }
           const format = input.format ?? "JSON";
           search.set("default_format", format);
-          if (input.stacktrace) search.set("stacktrace", "1");
+          if (input.stacktrace) {
+            search.set("stacktrace", "1");
+          }
 
           const requestHeaders = new Headers();
           // Send credentials through exactly one channel: ClickHouse rejects
@@ -117,7 +121,9 @@ export const clickhouseModule: ToolModule = {
           // parameter is set alongside the basic-auth header.
           if (input.api_key) {
             requestHeaders.set("x-clickhouse-key", input.api_key);
-            if (user) requestHeaders.set("x-clickhouse-user", user);
+            if (user) {
+              requestHeaders.set("x-clickhouse-user", user);
+            }
           } else if (user || password) {
             requestHeaders.set(
               "authorization",

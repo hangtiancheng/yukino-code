@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+
 import { kafkaModule } from "@/tools/kafka/tool.js";
 
 // Use a disposable Kafka-compatible cluster: this test creates and deletes a topic.

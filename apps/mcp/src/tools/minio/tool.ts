@@ -2,16 +2,17 @@ import { readFile, writeFile } from "node:fs/promises";
 
 import { z } from "zod";
 
+import { fetchS3 } from "./http.js";
+import { buildCanonicalUri, signRequest } from "./s3.js";
+
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   operationError,
   operationResult,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
-import { buildCanonicalUri, signRequest } from "./s3.js";
-import { fetchS3 } from "./http.js";
+import type { ToolModule } from "@/tools/types.js";
 
 const TEXT_SUBTYPE =
   /(^|\/)(xml|json|javascript|html|x-www-form-urlencoded)([;+]|$)/i;
@@ -19,7 +20,9 @@ const TEXT_SUBTYPE =
 function isTextual(contentType: string | null, buffer: Buffer): boolean {
   if (contentType) {
     const ct = contentType.toLowerCase();
-    if (ct.startsWith("text/")) return true;
+    if (ct.startsWith("text/")) {
+      return true;
+    }
     return TEXT_SUBTYPE.test(ct);
   }
   // No content type: treat as text when it decodes cleanly as UTF-8.
@@ -229,13 +232,17 @@ export const minioModule: ToolModule = {
             // save_path to fall back on.
             if (textual) {
               result["body"] = slice.toString("utf8");
-              if (truncated) result["truncated"] = true;
+              if (truncated) {
+                result["truncated"] = true;
+              }
             } else if (
               format === "base64" ||
               (format === "auto" && !input.save_path)
             ) {
               result["body_base64"] = slice.toString("base64");
-              if (truncated) result["truncated"] = true;
+              if (truncated) {
+                result["truncated"] = true;
+              }
             }
           }
 

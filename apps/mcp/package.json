@@ -24,12 +24,14 @@
     "dev": "pnpm build:app && tsx ./src/main.ts",
     "build": "tsup && vite build",
     "build:app": "vite build",
+    "lint": "eslint --cache --quiet ./src ./tests",
+    "lint:fix": "eslint --cache --fix --quiet ./src ./tests",
     "test": "pnpm build:app && vitest run",
     "test:watch": "pnpm build:app && vitest",
     "format": "prettier -w ./ --experimental-cli",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "happy": "pnpm typecheck && pnpm build && pnpm test",
-    "happy:fix": "pnpm typecheck && pnpm format && pnpm build && pnpm test"
+    "happy": "pnpm typecheck && pnpm lint && pnpm build && pnpm test",
+    "happy:fix": "pnpm typecheck && pnpm lint:fix && pnpm format && pnpm build && pnpm test"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.67",
@@ -48,6 +50,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
@@ -56,6 +59,11 @@
     "@vitejs/plugin-react": "^6.1.2",
     "daisyui": "^5.7.47",
     "dotenv": "^17.4.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-unicorn": "^78.0.0",
+    "globals": "^17.13.0",
     "prettier": "^3.9.9",
     "react": "19.2.7",
     "react-dom": "19.2.7",
@@ -63,6 +71,7 @@
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.0",
     "vite": "^8.3.4",
     "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.1.11"

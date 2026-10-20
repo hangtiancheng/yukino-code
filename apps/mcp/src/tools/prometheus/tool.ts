@@ -1,15 +1,15 @@
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
+import {
+  buildHttpPassthroughSchema,
+  runHttpPassthrough,
+} from "@/tools/operations/http.js";
 import {
   operationError,
   operationResult,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
-import {
-  buildHttpPassthroughSchema,
-  runHttpPassthrough,
-} from "@/tools/operations/http.js";
+import type { ToolModule } from "@/tools/types.js";
 
 export const prometheusModule: ToolModule = {
   name: "prometheus",
@@ -56,7 +56,7 @@ export const prometheusModule: ToolModule = {
               typeof payload === "object" &&
               payload !== null &&
               "status" in payload &&
-              (payload as { status: unknown }).status === "error",
+              payload.status === "error",
           });
           const result = operationResult({ status_code, data });
           return isError ? { ...result, isError: true } : result;

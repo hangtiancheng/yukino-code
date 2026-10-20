@@ -9,14 +9,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { minioModule } from "@/tools/minio/tool.js";
+import { firstText, isolateEnv, stubFetchRoutes } from "./helpers.js";
+
 import {
   buildCanonicalQuery,
   buildCanonicalUri,
   rfc3986Encode,
   signRequest,
 } from "@/tools/minio/s3.js";
-import { firstText, isolateEnv, stubFetchRoutes } from "./helpers.js";
+import { minioModule } from "@/tools/minio/tool.js";
 
 const envKeys = [
   "MINIO_URL",
@@ -47,7 +48,9 @@ async function call(args: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   process.env["MINIO_URL"] = "http://localhost:9000";
   process.env["MINIO_ACCESS_KEY"] = "admin";
   process.env["MINIO_SECRET_KEY"] = "12345678";
@@ -187,7 +190,7 @@ describe("minio_tool", () => {
     ]);
     return call().then((result) => {
       expect(result.isError).toBeUndefined();
-      const sc = result.structuredContent as Record<string, unknown>;
+      const sc = result.structuredContent!;
       expect(sc["status_code"]).toBe(200);
       expect(sc["body"]).toBe(xml);
       const last = routes.lastCall();
@@ -271,7 +274,7 @@ describe("minio_tool", () => {
         save_path: download,
       });
       expect(get.isError).toBeUndefined();
-      const sc = get.structuredContent as Record<string, unknown>;
+      const sc = get.structuredContent!;
       expect(sc["saved_to"]).toBe(download);
       expect(sc["saved_bytes"]).toBe(bytes.length);
       expect(readFileSync(download).equals(bytes)).toBe(true);
@@ -295,7 +298,7 @@ describe("minio_tool", () => {
       ]);
       const result = await call({ bucket: "data", save_path: target });
       expect(result.isError).toBeUndefined();
-      const sc = result.structuredContent as Record<string, unknown>;
+      const sc = result.structuredContent!;
       expect(sc["saved_to"]).toBe(target);
       expect(sc["body"]).toBe(xml);
       expect(readFileSync(target, "utf8")).toBe(xml);
@@ -316,7 +319,7 @@ describe("minio_tool", () => {
     ]);
     const result = await call({ bucket: "data", key: "missing.txt" });
     expect(result.isError).toBe(true);
-    const sc = result.structuredContent as Record<string, unknown>;
+    const sc = result.structuredContent!;
     expect(sc["status_code"]).toBe(404);
     expect(String(sc["body"])).toContain("NoSuchKey");
   });

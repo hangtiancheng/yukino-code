@@ -3,8 +3,10 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { kafkaModule } from "@/tools/kafka/tool.js";
+
 import { firstText, isolateEnv } from "./helpers.js";
+
+import { kafkaModule } from "@/tools/kafka/tool.js";
 
 const state = vi.hoisted(() => ({
   options: [] as Record<string, unknown>[],
@@ -23,16 +25,16 @@ const state = vi.hoisted(() => ({
       string,
       {
         id: string;
-        partitions: Array<{
+        partitions: {
           leader: number;
           leaderEpoch: number;
           replicas: number[];
           isr: number[];
-        }>;
+        }[];
       }
     >(),
   },
-  offsets: [] as Array<{ partitionIndex: number; committedOffset: bigint }>,
+  offsets: [] as { partitionIndex: number; committedOffset: bigint }[],
 }));
 vi.mock("@platformatic/kafka", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@platformatic/kafka")>();
@@ -45,13 +47,17 @@ vi.mock("@platformatic/kafka", async (importOriginal) => {
       state.closed++;
     }
     async metadata() {
-      if (state.error) throw state.error;
+      if (state.error) {
+        throw state.error;
+      }
       return state.metadata;
     }
   }
   class Producer extends Base {
     override async metadata() {
-      if (state.error) throw state.error;
+      if (state.error) {
+        throw state.error;
+      }
       return {
         ...state.metadata,
         topics: new Map([
@@ -72,14 +78,18 @@ vi.mock("@platformatic/kafka", async (importOriginal) => {
     }
     async send(options: { messages: Record<string, unknown>[] }) {
       state.sent.push(...options.messages);
-      if (state.error) throw state.error;
+      if (state.error) {
+        throw state.error;
+      }
       return {};
     }
   }
   class Consumer extends Base {
     async consume(options: Record<string, unknown>) {
       state.adminCalls.push({ op: "consume", ...options });
-      if (state.error) throw state.error;
+      if (state.error) {
+        throw state.error;
+      }
       const records = state.consumed.slice();
       return new Readable({
         objectMode: true,
@@ -89,7 +99,9 @@ vi.mock("@platformatic/kafka", async (importOriginal) => {
             this.destroy(state.streamError);
             return;
           }
-          if (records.length) this.push(records.shift());
+          if (records.length) {
+            this.push(records.shift());
+          }
         },
       });
     }
@@ -99,12 +111,16 @@ vi.mock("@platformatic/kafka", async (importOriginal) => {
   }
   class Admin extends Base {
     async listTopics() {
-      if (state.error) throw state.error;
+      if (state.error) {
+        throw state.error;
+      }
       return [...state.metadata.topics.keys()];
     }
     async createTopics(options: Record<string, unknown>) {
       state.adminCalls.push({ op: "createTopics", ...options });
-      if (state.error) throw state.error;
+      if (state.error) {
+        throw state.error;
+      }
     }
     async deleteTopics(options: Record<string, unknown>) {
       state.adminCalls.push({ op: "deleteTopics", ...options });
@@ -113,10 +129,10 @@ vi.mock("@platformatic/kafka", async (importOriginal) => {
       state.adminCalls.push({ op: "createPartitions", ...options });
     }
     async listOffsets(options: {
-      topics: Array<{
+      topics: {
         name: string;
-        partitions: Array<{ partitionIndex: number; timestamp: bigint }>;
-      }>;
+        partitions: { partitionIndex: number; timestamp: bigint }[];
+      }[];
     }) {
       return options.topics.map((t) => ({
         name: t.name,
@@ -126,9 +142,7 @@ vi.mock("@platformatic/kafka", async (importOriginal) => {
         })),
       }));
     }
-    async listConsumerGroupOffsets(options: {
-      groups: Array<{ groupId: string }>;
-    }) {
+    async listConsumerGroupOffsets(options: { groups: { groupId: string }[] }) {
       return [
         {
           groupId: options.groups[0].groupId,
@@ -164,7 +178,9 @@ function data(result: Awaited<ReturnType<typeof call>>) {
   return result.structuredContent?.["data"] as Record<string, unknown>;
 }
 beforeEach(async () => {
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   state.options = [];
   state.sent = [];
   state.consumed = [];
@@ -450,8 +466,9 @@ describe("kafka_tool", () => {
       { operation: "consume" },
       { operation: "committed_offsets", group_id: "g1" },
       { operation: "create_partitions", topic: "events" },
-    ])
+    ]) {
       expect((await call(args)).isError).toBe(true);
+    }
   });
   it("maps environment security settings to TLS and SASL", async () => {
     Object.assign(process.env, {

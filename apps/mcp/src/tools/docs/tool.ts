@@ -1,19 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { loadConfig } from "@/shared/config.js";
-import { logger } from "@/shared/logger.js";
-import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import { createEmbedder } from "./embedder.js";
 import { syncDocs, type SyncStats } from "./pipeline.js";
+import { retrieve, type RetrievedDoc } from "./retriever.js";
 import {
   closeStore,
   ensureSchema,
   openStore,
   type DocsContext,
 } from "./store.js";
-import { retrieve, type RetrievedDoc } from "./retriever.js";
+
+import { loadConfig } from "@/shared/config.js";
+import { logger } from "@/shared/logger.js";
+import { TOOL_NAMES } from "@/tools/names.js";
+import type { ToolModule } from "@/tools/types.js";
 
 type EngineState =
   | { status: "ready"; ctx: DocsContext }
@@ -100,7 +101,7 @@ async function initEngine(): Promise<EngineState> {
   } catch (err) {
     const reason =
       `cannot open the vector index at ${config.index.dbPath}: ` +
-      `${errorMessage(err)}`;
+      errorMessage(err);
     logger.warn({ err }, "docs degraded: index unreachable");
     return { status: "degraded", reason };
   }
@@ -181,13 +182,14 @@ export const docsModule: ToolModule = {
       },
       async () => {
         const state = await getState();
-        if (state.status === "degraded")
+        if (state.status === "degraded") {
           return {
             content: [
               { type: "text", text: `docs is unavailable: ${state.reason}` },
             ],
             isError: true,
           };
+        }
         try {
           const stats = await runSync(state.ctx);
           return {

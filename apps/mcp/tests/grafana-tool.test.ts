@@ -4,8 +4,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { grafanaModule } from "@/tools/grafana/tool.js";
 import { firstText, isolateEnv, stubFetchRoutes } from "./helpers.js";
+
+import { grafanaModule } from "@/tools/grafana/tool.js";
 
 const envKeys = [
   "GRAFANA_BASE_URL",
@@ -31,7 +32,9 @@ async function call(args: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   process.env["GRAFANA_BASE_URL"] = "http://localhost:3000";
   const server = new McpServer({ name: "test", version: "1" });
   grafanaModule.register(server);

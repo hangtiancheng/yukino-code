@@ -4,6 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { docsModule } from "@/tools/docs/tool.js";
+
 const storeState = vi.hoisted(() => ({
   db: null as FakeDb | null,
   openCalls: 0,
@@ -65,8 +67,6 @@ vi.mock("@/tools/docs/pipeline.js", () => ({
     chunks: 0,
   })),
 }));
-
-import { docsModule } from "@/tools/docs/tool.js";
 
 const CallToolResultSchema = z.looseObject({
   isError: z.boolean().optional(),

@@ -3,13 +3,13 @@ import { z } from "zod";
 
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   connectionUrlSchema,
   operationResult,
   requireConnection,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
+import type { ToolModule } from "@/tools/types.js";
 
 function hasReplyError(reply: unknown): boolean {
   return (
@@ -68,7 +68,9 @@ export const redisModule: ToolModule = {
             }
             return operationResult({ results });
           } finally {
-            if (client.isOpen) client.destroy();
+            if (client.isOpen) {
+              client.destroy();
+            }
           }
         } catch (error) {
           return {

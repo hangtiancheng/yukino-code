@@ -5,11 +5,12 @@ import { BSON } from "mongodb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { firstText, isolateEnv } from "./helpers.js";
+
 import { mongodbModule } from "@/tools/mongodb/tool.js";
 import { mysqlModule } from "@/tools/mysql/tool.js";
 import { postgresModule } from "@/tools/postgres/tool.js";
 import { redisModule } from "@/tools/redis/tool.js";
-import { firstText, isolateEnv } from "./helpers.js";
 
 const drivers = vi.hoisted(() => {
   const postgres = {
@@ -76,7 +77,9 @@ async function call(name: string, args: Record<string, unknown>) {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   drivers.postgres.connect.mockResolvedValue(undefined);
   drivers.postgres.end.mockResolvedValue(undefined);
   drivers.postgres.query.mockResolvedValue({
@@ -107,8 +110,9 @@ beforeEach(async () => {
     mysqlModule,
     redisModule,
     mongodbModule,
-  ])
+  ]) {
     module.register(server);
+  }
   const [a, b] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: "test", version: "1" });
   await Promise.all([client.connect(a), server.connect(b)]);
@@ -126,11 +130,12 @@ describe("unrestricted database tools", () => {
       "postgres_tool",
       "redis_tool",
     ]);
-    for (const tool of tools)
+    for (const tool of tools) {
       expect(tool.annotations).toMatchObject({
         readOnlyHint: false,
         destructiveHint: true,
       });
+    }
   });
 
   it.each([

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+
 import {
   Admin,
   Consumer,
@@ -20,14 +21,15 @@ import type {
   CommitOptionsPartition,
 } from "@platformatic/kafka";
 import { z } from "zod";
+
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   operationError,
   operationResult,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
+import type { ToolModule } from "@/tools/types.js";
 
 type Encoding = "utf8" | "base64";
 type KafkaOptions = BaseOptions &
@@ -40,17 +42,19 @@ function buildConfig(
   timeout: number,
 ): KafkaOptions {
   const legacy = Object.keys(extra).find((key) => key.includes("."));
-  if (legacy)
+  if (legacy) {
     throw new Error(
       `Unsupported legacy Kafka config key "${legacy}"; use @platformatic/kafka client options.`,
     );
+  }
   const kafka = loadConfig().kafka;
   const protocol = kafka.securityProtocol?.toUpperCase();
   if (
     protocol &&
     !["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"].includes(protocol)
-  )
+  ) {
     throw new Error(`Unsupported Kafka security protocol "${protocol}"`);
+  }
   const bootstrapBrokers = brokers.split(",").map((value) => value.trim());
   const conf: KafkaOptions = {
     clientId,
@@ -61,8 +65,9 @@ function buildConfig(
     retries: 0,
     strict: true,
   };
-  if (bootstrapBrokers.some((broker) => broker === ""))
+  if (bootstrapBrokers.some((broker) => broker === "")) {
     throw new Error("Kafka brokers must not contain empty entries");
+  }
   if (protocol === "SSL" || protocol === "SASL_SSL") {
     conf.tls = {};
     conf.tlsServerName = true;
@@ -98,7 +103,7 @@ function normalizeMessage(
   message: Pick<Message, "topic" | "partition" | "offset" | "timestamp"> & {
     key?: Buffer;
     value?: Buffer;
-    headerEntries: Array<[Buffer, Buffer]>;
+    headerEntries: [Buffer, Buffer][];
   },
   encoding: Encoding,
 ): Record<string, unknown> {
@@ -116,15 +121,18 @@ function normalizeMessage(
   };
 }
 function requireString(value: string | undefined, field: string): string {
-  if (!value) throw new Error(`operation requires "${field}"`);
+  if (!value) {
+    throw new Error(`operation requires "${field}"`);
+  }
   return value;
 }
 function protocolError(code: number): void {
-  if (code !== 0)
+  if (code !== 0) {
     throw new Error(
       protocolErrors[protocolErrorsCodesById[code]]?.message ??
         `Kafka protocol error ${code}`,
     );
+  }
 }
 async function withAdmin<T>(
   conf: KafkaOptions,
@@ -153,15 +161,15 @@ function normalizeTopics(metadata: ClusterMetadata) {
 interface OpInput {
   topic?: string;
   topics?: string[];
-  messages?: Array<{
+  messages?: {
     key?: string | null;
     value: string | null;
     partition?: number;
     timestamp?: number;
     headers?: Record<string, string>;
-  }>;
-  assignments?: Array<{ topic: string; partition: number; offset?: number }>;
-  partitions?: Array<{ topic?: string; partition: number; offset?: number }>;
+  }[];
+  assignments?: { topic: string; partition: number; offset?: number }[];
+  partitions?: { topic?: string; partition: number; offset?: number }[];
   group_id?: string;
   from_beginning: boolean;
   auto_commit: boolean;
@@ -175,8 +183,9 @@ interface OpInput {
 
 async function opProduce(input: OpInput, conf: KafkaOptions): Promise<unknown> {
   const topic = requireString(input.topic, "topic");
-  if (!input.messages?.length)
+  if (!input.messages?.length) {
     throw new Error("produce requires at least one message");
+  }
   const producer = new Producer<Buffer, Buffer | null, Buffer, Buffer>(conf);
   try {
     if (input.messages.some((message) => message.partition !== undefined)) {
@@ -189,10 +198,11 @@ async function opProduce(input: OpInput, conf: KafkaOptions): Promise<unknown> {
         metadata.topics.get(topic)?.partitions.length ??
         0;
       for (const message of input.messages) {
-        if (message.partition !== undefined && message.partition >= count)
+        if (message.partition !== undefined && message.partition >= count) {
           throw new Error(
             `Unknown Kafka partition ${topic}/${message.partition}`,
           );
+        }
       }
     }
     await producer.send({
@@ -229,27 +239,48 @@ function collectMessages(
     const messages: Message[] = [];
     let settled = false;
     const finish = (error?: Error) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       clearTimeout(timer);
       stream.pause();
-      if (error) reject(error);
-      else resolve(messages);
+      if (error) {
+        reject(error);
+      } else {
+        resolve(messages);
+      }
     };
-    const timer = setTimeout(() => finish(), Math.max(0, timeout));
-    stream.on("error", (error) => finish(error));
-    stream.on("end", () => finish());
+    const timer = setTimeout(
+      () => {
+        finish();
+      },
+      Math.max(0, timeout),
+    );
+    stream.on("error", (error) => {
+      finish(error);
+    });
+    stream.on("end", () => {
+      finish();
+    });
     stream.on("data", (message) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       messages.push(message);
-      if (messages.length >= max) finish();
+      if (messages.length >= max) {
+        finish();
+      }
     });
   });
 }
 async function opConsume(input: OpInput, conf: KafkaOptions): Promise<unknown> {
-  if (input.assignments?.length) return opAssignedConsume(input, conf);
-  if (!input.topics?.length)
+  if (input.assignments?.length) {
+    return opAssignedConsume(input, conf);
+  }
+  if (!input.topics?.length) {
     throw new Error("consume requires topics or assignments");
+  }
   const groupId =
     input.group_id ?? conf.groupId ?? `yukino-mcp-${randomUUID()}`;
   const consumer = new Consumer<Buffer, Buffer, Buffer, Buffer>({
@@ -272,10 +303,9 @@ async function opConsume(input: OpInput, conf: KafkaOptions): Promise<unknown> {
           : MessagesStreamFallbackModes.LATEST,
       }),
       new Promise<never>((_, reject) => {
-        startupTimer = setTimeout(
-          () => reject(new Error("Kafka consume setup timed out")),
-          input.timeout_ms,
-        );
+        startupTimer = setTimeout(() => {
+          reject(new Error("Kafka consume setup timed out"));
+        }, input.timeout_ms);
       }),
     ]);
     clearTimeout(startupTimer);
@@ -286,13 +316,14 @@ async function opConsume(input: OpInput, conf: KafkaOptions): Promise<unknown> {
     );
     if (input.auto_commit && messages.length) {
       const offsets = new Map<string, CommitOptionsPartition>();
-      for (const message of messages)
+      for (const message of messages) {
         offsets.set(`${message.topic}:${message.partition}`, {
           topic: message.topic,
           partition: message.partition,
           offset: message.offset + 1n,
           leaderEpoch: message.leaderEpoch,
         });
+      }
       await consumer.commit({ offsets: [...offsets.values()] });
     }
     return {
@@ -354,8 +385,9 @@ async function opAssignedConsume(
     const positions = assignments.map((a) => {
       const topic = metadata.topics.get(a.topic);
       const partition = topic?.partitions[a.partition];
-      if (!topic || !partition)
+      if (!topic || !partition) {
         throw new Error(`Unknown Kafka partition ${a.topic}/${a.partition}`);
+      }
       const committed = stored[0]?.topics
         .find((t) => t.name === a.topic)
         ?.partitions.find(
@@ -370,8 +402,9 @@ async function opAssignedConsume(
           : committed !== undefined && committed >= 0n
             ? committed
             : fallbackOffset;
-      if (offset === undefined)
+      if (offset === undefined) {
         throw new Error(`Missing Kafka offset ${a.topic}/${a.partition}`);
+      }
       return {
         ...a,
         id: topic.id,
@@ -385,13 +418,14 @@ async function opAssignedConsume(
       string,
       {
         name: string;
-        partitionOffsets: Array<{ partition: number; offset: bigint }>;
+        partitionOffsets: { partition: number; offset: bigint }[];
       }
     >();
     while (messages.length < input.max_messages && Date.now() < deadline) {
       for (const position of positions) {
-        if (messages.length >= input.max_messages || Date.now() >= deadline)
+        if (messages.length >= input.max_messages || Date.now() >= deadline) {
           break;
+        }
         const response = await consumer.fetch({
           node: position.leader,
           maxWaitTime: Math.min(100, Math.max(1, deadline - Date.now())),
@@ -413,14 +447,18 @@ async function opAssignedConsume(
           ],
         });
         protocolError(response.errorCode);
-        for (const topic of response.responses)
+        for (const topic of response.responses) {
           for (const part of topic.partitions) {
             protocolError(part.errorCode);
             for (const batch of part.records ?? []) {
-              if (batch.attributes & IS_CONTROL) continue;
+              if (batch.attributes & IS_CONTROL) {
+                continue;
+              }
               for (const record of batch.records) {
                 const offset = batch.firstOffset + BigInt(record.offsetDelta);
-                if (offset < position.offset) continue;
+                if (offset < position.offset) {
+                  continue;
+                }
                 messages.push(
                   normalizeMessage(
                     {
@@ -439,33 +477,42 @@ async function opAssignedConsume(
                   ),
                 );
                 position.offset = offset + 1n;
-                if (!commits.has(position.topic))
+                if (!commits.has(position.topic)) {
                   commits.set(position.topic, {
                     name: position.topic,
                     partitionOffsets: [],
                   });
+                }
                 const offsets = commits.get(position.topic)!.partitionOffsets;
                 const commit = offsets.find(
                   (p) => p.partition === position.partition,
                 );
-                if (commit) commit.offset = position.offset;
-                else
+                if (commit) {
+                  commit.offset = position.offset;
+                } else {
                   offsets.push({
                     partition: position.partition,
                     offset: position.offset,
                   });
-                if (messages.length >= input.max_messages) break;
+                }
+                if (messages.length >= input.max_messages) {
+                  break;
+                }
               }
-              if (messages.length >= input.max_messages) break;
+              if (messages.length >= input.max_messages) {
+                break;
+              }
             }
           }
+        }
       }
     }
-    if (input.auto_commit && commits.size)
+    if (input.auto_commit && commits.size) {
       await admin.alterConsumerGroupOffsets({
         groupId,
         topics: [...commits.values()],
       });
+    }
     return { count: messages.length, group_id: groupId, messages };
   } finally {
     await Promise.all([consumer.close(true), admin.close()]);
@@ -538,8 +585,9 @@ async function opCreatePartitions(
   conf: KafkaOptions,
 ): Promise<unknown> {
   const topic = requireString(input.topic, "topic");
-  if (!input.num_partitions)
+  if (!input.num_partitions) {
     throw new Error('create_partitions requires "num_partitions"');
+  }
   return withAdmin(conf, async (admin) => {
     await admin.createPartitions({
       topics: [{ name: topic, count: input.num_partitions!, assignments: [] }],
@@ -579,8 +627,9 @@ async function opWatermarkOffsets(
         const hi = high[0]?.partitions.find(
           (p) => p.partitionIndex === partition,
         )?.offset;
-        if (lo === undefined || hi === undefined)
+        if (lo === undefined || hi === undefined) {
           throw new Error(`Missing Kafka watermark ${topic}/${partition}`);
+        }
         return { partition, low: jsonInteger(lo), high: jsonInteger(hi) };
       }),
     };
@@ -591,15 +640,18 @@ async function opCommittedOffsets(
   conf: KafkaOptions,
 ): Promise<unknown> {
   const groupId = requireString(input.group_id, "group_id");
-  if (!input.partitions?.length)
+  if (!input.partitions?.length) {
     throw new Error("committed_offsets requires partitions");
+  }
   const topics = new Map<string, number[]>();
   const refs = input.partitions.map((part) => ({
     ...part,
     topic: requireString(part.topic ?? input.topic, "topic"),
   }));
   for (const part of refs) {
-    if (!topics.has(part.topic)) topics.set(part.topic, []);
+    if (!topics.has(part.topic)) {
+      topics.set(part.topic, []);
+    }
     topics.get(part.topic)!.push(part.partition);
   }
   return withAdmin(conf, async (admin) => {
@@ -642,8 +694,9 @@ async function groupOffsets(
     if (
       error instanceof Error &&
       findErrorBy(error, "apiId", "GROUP_ID_NOT_FOUND")
-    )
+    ) {
       return [];
+    }
     throw error;
   }
 }

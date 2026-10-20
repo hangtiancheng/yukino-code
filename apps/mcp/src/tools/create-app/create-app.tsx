@@ -1,7 +1,3 @@
-import { useEffect, useState } from "react";
-import type { ReactElement } from "react";
-import { createRoot } from "react-dom/client";
-
 import {
   App,
   PostMessageTransport,
@@ -9,8 +5,12 @@ import {
   applyHostFonts,
   applyHostStyleVariables,
 } from "@modelcontextprotocol/ext-apps";
+import { useEffect, useRef, useState } from "react";
+import type { ReactElement } from "react";
+import { createRoot } from "react-dom/client";
 
 import "./global.css";
+import { resolveAppDocument } from "./resolve-app.js";
 
 type RenderState =
   | { phase: "waiting" }
@@ -30,9 +30,15 @@ function readStringField(
 
 function applyHostContextStyles(app: App): void {
   const ctx = app.getHostContext();
-  if (ctx?.theme) applyDocumentTheme(ctx.theme);
-  if (ctx?.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
-  if (ctx?.styles?.css?.fonts) applyHostFonts(ctx.styles.css.fonts);
+  if (ctx?.theme) {
+    applyDocumentTheme(ctx.theme);
+  }
+  if (ctx?.styles?.variables) {
+    applyHostStyleVariables(ctx.styles.variables);
+  }
+  if (ctx?.styles?.css?.fonts) {
+    applyHostFonts(ctx.styles.css.fonts);
+  }
 }
 
 function StatusChip({
@@ -98,6 +104,8 @@ function Shell(): ReactElement {
   const [state, setState] = useState<RenderState>({ phase: "waiting" });
   const [connected, setConnected] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const inputHtmlRef = useRef<string | undefined>(undefined);
+  const inputTitleRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const app = new App(
@@ -115,6 +123,8 @@ function Shell(): ReactElement {
       const html = readStringField(params.arguments, "html");
       const title = readStringField(params.arguments, "title");
       if (html !== undefined) {
+        inputHtmlRef.current = html;
+        inputTitleRef.current = title;
         setState({ phase: "ready", html, title: title ?? FALLBACK_TITLE });
       }
     });
@@ -126,12 +136,19 @@ function Shell(): ReactElement {
         });
         return;
       }
-      const html = readStringField(result._meta, "html");
-      const title =
-        readStringField(result._meta, "title") ??
-        readStringField(result.structuredContent, "title");
-      if (html !== undefined) {
-        setState({ phase: "ready", html, title: title ?? FALLBACK_TITLE });
+      const document = resolveAppDocument({
+        resultMeta: result._meta,
+        structuredContent: result.structuredContent,
+        inputHtml: inputHtmlRef.current,
+        inputTitle: inputTitleRef.current,
+        fallbackTitle: FALLBACK_TITLE,
+      });
+      if (document !== undefined) {
+        setState({
+          phase: "ready",
+          html: document.html,
+          title: document.title,
+        });
       } else {
         setState({
           phase: "failed",
@@ -140,9 +157,15 @@ function Shell(): ReactElement {
       }
     });
     app.addEventListener("hostcontextchanged", (ctx) => {
-      if (ctx.theme) applyDocumentTheme(ctx.theme);
-      if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
-      if (ctx.styles?.css?.fonts) applyHostFonts(ctx.styles.css.fonts);
+      if (ctx.theme) {
+        applyDocumentTheme(ctx.theme);
+      }
+      if (ctx.styles?.variables) {
+        applyHostStyleVariables(ctx.styles.variables);
+      }
+      if (ctx.styles?.css?.fonts) {
+        applyHostFonts(ctx.styles.css.fonts);
+      }
     });
     app.addEventListener("toolcancelled", () => {
       setState({ phase: "failed", message: "App creation was cancelled." });
@@ -155,13 +178,17 @@ function Shell(): ReactElement {
     let cancelled = false;
     void app.connect(transport).then(
       () => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         stopResize = app.setupSizeChangedNotifications();
         applyHostContextStyles(app);
         setConnected(true);
       },
       (err: unknown) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         setConnectError(err instanceof Error ? err.message : String(err));
       },
     );

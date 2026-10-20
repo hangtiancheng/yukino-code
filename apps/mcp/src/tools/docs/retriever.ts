@@ -1,6 +1,6 @@
-import { blobToVector, normalizeVector } from "./utils.js";
 import type { DocsContext, VectorCache } from "./store.js";
 import { currentDataVersion, readMeta } from "./store.js";
+import { blobToVector, normalizeVector } from "./utils.js";
 
 export interface RetrievedDoc {
   id: string;

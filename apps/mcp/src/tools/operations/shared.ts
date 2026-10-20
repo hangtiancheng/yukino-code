@@ -1,5 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+
 import type { McpToolName } from "@/tools/names.js";
 
 export const connectionUrlSchema = z
@@ -50,11 +51,18 @@ export function requireConnection(
 
 export function operationResult(data: Record<string, unknown>): CallToolResult {
   const text = JSON.stringify(data, (_key, value: unknown) => {
-    if (typeof value === "bigint") return value.toString();
-    if (value instanceof Error)
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+    if (value instanceof Error) {
       return { name: value.name, message: value.message };
-    if (value instanceof Map) return Object.fromEntries(value);
-    if (value instanceof Set) return [...value];
+    }
+    if (value instanceof Map) {
+      return Object.fromEntries(value);
+    }
+    if (value instanceof Set) {
+      return [...value];
+    }
     return value;
   });
   const structuredContent: Record<string, unknown> = JSON.parse(text);

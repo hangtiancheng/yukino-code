@@ -3,9 +3,10 @@ import { createRequire as nodeCreateRequire } from "node:module";
 import path from "node:path";
 import type { DatabaseSync as Database } from "node:sqlite";
 
+import type { Embedder } from "./embedder.js";
+
 import type { IndexConfig } from "@/shared/config.js";
 import { logger } from "@/shared/logger.js";
-import type { Embedder } from "./embedder.js";
 
 const BUSY_TIMEOUT_MS = 5_000;
 

@@ -37,7 +37,11 @@ describe("S3 HTTP transport", () => {
         expect(receivedUrl).toBe(`/data/${key}?versionId=a%2Bb`);
       } finally {
         server.closeAllConnections();
-        await new Promise<void>((resolve) => server.close(() => resolve()));
+        await new Promise<void>((resolve) =>
+          server.close(() => {
+            resolve();
+          }),
+        );
       }
     },
   );

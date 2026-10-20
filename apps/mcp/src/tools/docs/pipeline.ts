@@ -1,4 +1,3 @@
-import { logger } from "@/shared/logger.js";
 import { splitMarkdown } from "./chunker.js";
 import {
   deleteBySource,
@@ -7,9 +6,11 @@ import {
   readSourceHashes,
   type IndexChunk,
 } from "./indexer.js";
-import type { DocsContext } from "./store.js";
 import { scanDocsDir } from "./scanner.js";
+import type { DocsContext } from "./store.js";
 import { sha256 } from "./utils.js";
+
+import { logger } from "@/shared/logger.js";
 
 export interface SyncStats {
   indexed: number;

@@ -212,8 +212,12 @@ function normalizeEtcdUrl(raw: string): string {
   // Compose-style endpoint such as "etcd:2379" or a comma-separated list; use
   // the first entry, preserving its scheme when supplied.
   const first = raw.split(",")[0]?.trim() ?? "";
-  if (!first) return "";
-  if (/^https?:\/\//i.test(first)) return stripTrailingSlashes(first);
+  if (!first) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(first)) {
+    return stripTrailingSlashes(first);
+  }
   return stripTrailingSlashes(`http://${first}`);
 }
 

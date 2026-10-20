@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   connectionUrlSchema,
   operationError,
@@ -11,6 +10,7 @@ import {
   requireConnection,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
+import type { ToolModule } from "@/tools/types.js";
 
 export const mongodbModule: ToolModule = {
   name: "mongodb",

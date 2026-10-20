@@ -2,12 +2,12 @@ import { z } from "zod";
 
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   operationError,
   operationResult,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
+import type { ToolModule } from "@/tools/types.js";
 
 export const milvusModule: ToolModule = {
   name: "milvus",
@@ -103,7 +103,9 @@ export const milvusModule: ToolModule = {
             accept: "application/json",
           });
           const bearer = token ?? config.token;
-          if (bearer) requestHeaders.set("authorization", `Bearer ${bearer}`);
+          if (bearer) {
+            requestHeaders.set("authorization", `Bearer ${bearer}`);
+          }
           for (const [key, value] of Object.entries(headers)) {
             requestHeaders.set(key, value);
           }
@@ -125,7 +127,7 @@ export const milvusModule: ToolModule = {
             typeof data === "object" &&
             data !== null &&
             "code" in data &&
-            typeof (data as { code: unknown }).code === "number" &&
+            typeof data.code === "number" &&
             (data as { code: number }).code !== 0;
           const result = operationResult({
             status_code: response.status,

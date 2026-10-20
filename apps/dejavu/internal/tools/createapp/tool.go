@@ -2,8 +2,6 @@
 // document inside the MCP App shell.
 //
 // The shell is embedded static HTML. html/template fills only the default title.
-// The model-supplied document stays in the tool result _meta and is written by
-// the browser shell into a sandboxed iframe; it is not passed through the template.
 package createapp
 
 import (

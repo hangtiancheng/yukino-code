@@ -4,8 +4,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { clickhouseModule } from "@/tools/clickhouse/tool.js";
 import { firstText, isolateEnv, stubFetchRoutes } from "./helpers.js";
+
+import { clickhouseModule } from "@/tools/clickhouse/tool.js";
 
 const envKeys = [
   "CLICKHOUSE_URL",
@@ -30,7 +31,9 @@ async function call(args: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   process.env["CLICKHOUSE_URL"] = "http://localhost:8123";
   process.env["CLICKHOUSE_USER"] = "langfuse";
   process.env["CLICKHOUSE_PASSWORD"] = "secret";
@@ -64,7 +67,7 @@ describe("clickhouse_tool", () => {
     ]);
     const result = await call({ sql: "SELECT 1 AS n" });
     expect(result.isError).toBeUndefined();
-    const sc = result.structuredContent as Record<string, unknown>;
+    const sc = result.structuredContent!;
     expect(sc["status_code"]).toBe(200);
     expect(sc["format"]).toBe("JSON");
     expect(sc["data"]).toEqual(payload);
@@ -121,7 +124,7 @@ describe("clickhouse_tool", () => {
       { method: "POST", url: "http://localhost:8123/", text: "1,2\n3,4\n" },
     ]);
     const result = await call({ sql: "SELECT 1", format: "CSV" });
-    const sc = result.structuredContent as Record<string, unknown>;
+    const sc = result.structuredContent!;
     expect(sc["format"]).toBe("CSV");
     expect(sc["data"]).toBe("1,2\n3,4\n");
   });
@@ -137,7 +140,7 @@ describe("clickhouse_tool", () => {
     ]);
     const result = await call({ sql: "SELEC 1" });
     expect(result.isError).toBe(true);
-    const sc = result.structuredContent as Record<string, unknown>;
+    const sc = result.structuredContent!;
     expect(sc["status_code"]).toBe(500);
     expect(String(sc["data"])).toContain("DB::Exception");
   });

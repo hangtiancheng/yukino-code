@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  fakeEmbedder,
+  makeIndexFixture,
+  type IndexFixture,
+} from "./fixture.js";
+
+import {
   deleteBySource,
   indexChunks,
   readSourceHashes,
@@ -11,11 +17,6 @@ import {
 import { retrieve } from "@/tools/docs/retriever.js";
 import { ensureSchema, readMeta } from "@/tools/docs/store.js";
 import { sha256 } from "@/tools/docs/utils.js";
-import {
-  fakeEmbedder,
-  makeIndexFixture,
-  type IndexFixture,
-} from "./fixture.js";
 
 let fixture: IndexFixture | null = null;
 

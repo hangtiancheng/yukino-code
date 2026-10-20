@@ -1,14 +1,15 @@
 import { z } from "zod";
 
+import { decodeResponseBytes, encodeRequestBytes } from "./codec.js";
+
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   operationError,
   operationResult,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
-import { decodeResponseBytes, encodeRequestBytes } from "./codec.js";
+import type { ToolModule } from "@/tools/types.js";
 
 export const etcdModule: ToolModule = {
   name: "etcd",
@@ -109,7 +110,9 @@ export const etcdModule: ToolModule = {
           } catch {
             data = text;
           }
-          if (!raw_base64) data = decodeResponseBytes(data);
+          if (!raw_base64) {
+            data = decodeResponseBytes(data);
+          }
           const result = operationResult({
             status_code: response.status,
             data,

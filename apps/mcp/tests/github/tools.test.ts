@@ -7,8 +7,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { githubModule } from "@/tools/github/tool.js";
 import { firstText, isolateEnv, makeTempDir, writeFakeGh } from "../helpers.js";
+
+import { githubModule } from "@/tools/github/tool.js";
 
 const envKeys = [
   "PATH",
@@ -33,7 +34,9 @@ async function call(args: Record<string, unknown>) {
   );
 }
 beforeEach(async () => {
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   executableDir = makeTempDir();
   process.env["PATH"] = executableDir;
   const server = new McpServer({ name: "test", version: "1" });

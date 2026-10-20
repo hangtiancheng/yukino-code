@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { runGh } from "./runner.js";
+
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
 import {
@@ -8,7 +10,6 @@ import {
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
 import type { ToolModule } from "@/tools/types.js";
-import { runGh } from "./runner.js";
 
 function ghEnvironment(): NodeJS.ProcessEnv {
   const config = loadConfig().github;
@@ -19,8 +20,9 @@ function ghEnvironment(): NodeJS.ProcessEnv {
   };
   const hostname =
     config.hostname || (config.baseUrl ? new URL(config.baseUrl).host : "");
-  if (hostname)
+  if (hostname) {
     env["GH_HOST"] = hostname === "api.github.com" ? "github.com" : hostname;
+  }
   if (config.token) {
     if (
       hostname &&
@@ -28,8 +30,9 @@ function ghEnvironment(): NodeJS.ProcessEnv {
       hostname !== "api.github.com" &&
       !hostname.endsWith(".ghe.com")
     ) {
-      if (!env["GH_ENTERPRISE_TOKEN"] && !env["GITHUB_ENTERPRISE_TOKEN"])
+      if (!env["GH_ENTERPRISE_TOKEN"] && !env["GITHUB_ENTERPRISE_TOKEN"]) {
         env["GH_ENTERPRISE_TOKEN"] = config.token;
+      }
     } else if (!env["GH_TOKEN"]) {
       env["GH_TOKEN"] = config.token;
     }

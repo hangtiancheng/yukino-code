@@ -2,7 +2,6 @@ import { Client, type QueryResult } from "pg";
 
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
 import {
   operationError,
   operationResult,
@@ -10,6 +9,7 @@ import {
   sqlInputSchema,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
+import type { ToolModule } from "@/tools/types.js";
 
 export const postgresModule: ToolModule = {
   name: "postgres",

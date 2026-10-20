@@ -4,9 +4,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { etcdModule } from "@/tools/etcd/tool.js";
-import { decodeResponseBytes, encodeRequestBytes } from "@/tools/etcd/codec.js";
 import { firstText, isolateEnv, stubFetchRoutes } from "./helpers.js";
+
+import { decodeResponseBytes, encodeRequestBytes } from "@/tools/etcd/codec.js";
+import { etcdModule } from "@/tools/etcd/tool.js";
 
 const envKeys = ["ETCD_URL", "ETCD_ENDPOINTS"];
 isolateEnv(envKeys);
@@ -25,7 +26,9 @@ async function call(args: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   process.env["ETCD_URL"] = "http://localhost:2379";
   const server = new McpServer({ name: "test", version: "1" });
   etcdModule.register(server);
@@ -97,7 +100,7 @@ describe("etcd base64 codec", () => {
       ],
     };
     const decoded = decodeResponseBytes(data) as {
-      kvs: Array<{ key: string; value: string }>;
+      kvs: { key: string; value: string }[];
     };
     expect(decoded.kvs[0].key).toBe("greeting");
     expect(decoded.kvs[0].value).toBe("hello");
@@ -149,8 +152,8 @@ describe("etcd_tool", () => {
     ]);
     const result = await call({ body: { key: "app/name" } });
     expect(result.isError).toBeUndefined();
-    const sc = result.structuredContent as Record<string, unknown>;
-    const data = sc["data"] as { kvs: Array<{ key: string; value: string }> };
+    const sc = result.structuredContent!;
+    const data = sc["data"] as { kvs: { key: string; value: string }[] };
     expect(data.kvs[0].key).toBe("app/name");
     expect(data.kvs[0].value).toBe("yukino");
   });
@@ -187,7 +190,7 @@ describe("etcd_tool", () => {
     ]);
     const result = await call({ body: {} });
     expect(result.isError).toBe(true);
-    const sc = result.structuredContent as Record<string, unknown>;
+    const sc = result.structuredContent!;
     expect(sc["status_code"]).toBe(400);
   });
 

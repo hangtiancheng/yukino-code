@@ -2,6 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { makeIndexFixture, type IndexFixture } from "./fixture.js";
+
 import {
   deleteBySource,
   LockConflictError,
@@ -11,7 +13,6 @@ import {
 } from "@/tools/docs/indexer.js";
 import { closeStore, type DocsContext } from "@/tools/docs/store.js";
 import { sha256 } from "@/tools/docs/utils.js";
-import { makeIndexFixture, type IndexFixture } from "./fixture.js";
 
 let fixture: IndexFixture | null = null;
 

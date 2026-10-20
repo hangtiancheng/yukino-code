@@ -4,8 +4,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { milvusModule } from "@/tools/milvus/tool.js";
 import { firstText, isolateEnv, stubFetchRoutes } from "./helpers.js";
+
+import { milvusModule } from "@/tools/milvus/tool.js";
 
 const envKeys = [
   "MILVUS_URL",
@@ -31,7 +32,9 @@ async function call(args: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  for (const key of envKeys) delete process.env[key];
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
   process.env["MILVUS_URL"] = "http://localhost:19530";
   process.env["MILVUS_USERNAME"] = "root";
   process.env["MILVUS_PASSWORD"] = "milvus";
@@ -60,7 +63,7 @@ describe("milvus_tool", () => {
     const last = routes.lastCall();
     expect(last.headers["authorization"]).toBe("Bearer root:milvus");
     expect(last.headers["content-type"]).toContain("application/json");
-    const sc = result.structuredContent as Record<string, unknown>;
+    const sc = result.structuredContent!;
     expect(sc["status_code"]).toBe(200);
     expect(sc["data"]).toEqual({ code: 0, data: [] });
   });
@@ -116,7 +119,7 @@ describe("milvus_tool", () => {
       body: { collectionName: "missing" },
     });
     expect(result.isError).toBe(true);
-    const sc = result.structuredContent as Record<string, unknown>;
+    const sc = result.structuredContent!;
     expect((sc["data"] as { code: number }).code).toBe(100);
   });
 

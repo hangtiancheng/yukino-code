@@ -68,7 +68,9 @@ export function buildCanonicalUri({
   let uri = "/";
   if (bucket) {
     uri += rfc3986Encode(bucket);
-    if (key) uri += `/${encodeKeyPath(key)}`;
+    if (key) {
+      uri += `/${encodeKeyPath(key)}`;
+    }
   } else if (key) {
     uri += encodeKeyPath(key);
   }
@@ -80,9 +82,9 @@ export function buildCanonicalUri({
  * both, and join. Repeated keys (arrays) expand to multiple pairs.
  */
 export function buildCanonicalQuery(
-  query: Record<string, string | number | boolean | Array<string | number>>,
+  query: Record<string, string | number | boolean | (string | number)[]>,
 ): string {
-  const pairs: Array<[string, string]> = [];
+  const pairs: [string, string][] = [];
   for (const [rawKey, rawValue] of Object.entries(query)) {
     const values = Array.isArray(rawValue) ? rawValue : [rawValue];
     for (const value of values) {
@@ -110,7 +112,7 @@ export interface SignOptions {
   /** Absolute endpoint origin, e.g. http://localhost:9000 (no trailing slash). */
   endpoint: string;
   canonicalUri: string;
-  query?: Record<string, string | number | boolean | Array<string | number>>;
+  query?: Record<string, string | number | boolean | (string | number)[]>;
   headers?: Record<string, string>;
   payload?: Buffer;
   credentials: S3Credentials;
@@ -208,7 +210,9 @@ export function signRequest(options: SignOptions): SignedRequest {
   // it is omitted here but was included in the canonical request above.
   const outHeaders: Record<string, string> = {};
   for (const [name, value] of Object.entries(signed)) {
-    if (name === "host") continue;
+    if (name === "host") {
+      continue;
+    }
     outHeaders[name] = value;
   }
   outHeaders["authorization"] = authorization;

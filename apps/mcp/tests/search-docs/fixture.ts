@@ -35,7 +35,7 @@ export function makeIndexFixture(options: FixtureOptions = {}): IndexFixture {
   const ownsDir = options.dbPath === undefined;
   const dir = ownsDir
     ? mkdtempSync(path.join(tmpdir(), "yukino-index-test-"))
-    : path.dirname(options.dbPath as string);
+    : path.dirname(options.dbPath!);
   const index: IndexConfig = {
     dbPath: options.dbPath ?? path.join(dir, "index.sqlite"),
   };

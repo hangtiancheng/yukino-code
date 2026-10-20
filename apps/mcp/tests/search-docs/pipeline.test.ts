@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { makeIndexFixture, type IndexFixture } from "./fixture.js";
+
 import { LockConflictError } from "@/tools/docs/indexer.js";
 import { buildChunks, syncDocs } from "@/tools/docs/pipeline.js";
 import type { DocsContext } from "@/tools/docs/store.js";
 import { sha256 } from "@/tools/docs/utils.js";
-import { makeIndexFixture, type IndexFixture } from "./fixture.js";
 
 const indexerMocks = vi.hoisted(() => ({
   deleteBySource: vi.fn<(ctx: unknown, source: string) => Promise<void>>(

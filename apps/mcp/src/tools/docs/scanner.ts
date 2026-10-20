@@ -15,8 +15,9 @@ export async function scanDocsDir(dir: string): Promise<ScannedDoc[]> {
   try {
     entries = await readdir(dir, { withFileTypes: true, recursive: true });
   } catch (err) {
-    if (err instanceof Error && "code" in err && err.code === "ENOENT")
+    if (err instanceof Error && "code" in err && err.code === "ENOENT") {
       return [];
+    }
     throw err;
   }
 

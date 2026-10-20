@@ -1,15 +1,15 @@
 import { loadConfig } from "@/shared/config.js";
 import { TOOL_NAMES } from "@/tools/names.js";
-import type { ToolModule } from "@/tools/types.js";
+import {
+  buildHttpPassthroughSchema,
+  runHttpPassthrough,
+} from "@/tools/operations/http.js";
 import {
   operationError,
   operationResult,
   unrestrictedAnnotations,
 } from "@/tools/operations/shared.js";
-import {
-  buildHttpPassthroughSchema,
-  runHttpPassthrough,
-} from "@/tools/operations/http.js";
+import type { ToolModule } from "@/tools/types.js";
 
 export const grafanaModule: ToolModule = {
   name: "grafana",

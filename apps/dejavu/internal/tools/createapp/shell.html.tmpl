@@ -32,6 +32,8 @@
       let nextID = 1;
       const pending = new Map();
       let hostContext = {};
+      let inputHtml;
+      let inputTitle;
 
       function send(message) {
         parentWindow.postMessage(message, "*");
@@ -86,7 +88,11 @@
       function onToolInput(params) {
         const html = readString(params.arguments, "html");
         const title = readString(params.arguments, "title");
-        if (html !== undefined) show(html, title);
+        if (html !== undefined) {
+          inputHtml = html;
+          inputTitle = title;
+          show(html, title);
+        }
       }
       function onNotification(method, params) {
         if (method === "ui/notifications/tool-input") onToolInput(params);
@@ -98,8 +104,8 @@
             fail("The create_app tool call failed.");
             return;
           }
-          const html = readString(params._meta, "html");
-          const title = readString(params._meta, "title") || readString(params.structuredContent, "title");
+          const html = readString(params._meta, "html") || readString(params.structuredContent, "html") || inputHtml;
+          const title = readString(params._meta, "title") || readString(params.structuredContent, "title") || inputTitle;
           if (html !== undefined) show(html, title);
           else fail("Tool result contained no app HTML.");
         } else if (method === "ui/notifications/tool-cancelled") {

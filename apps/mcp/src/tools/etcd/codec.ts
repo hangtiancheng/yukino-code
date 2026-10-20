@@ -14,8 +14,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** True when `text` is exactly the standard base64 of some byte string. */
 function isValidBase64(text: string): boolean {
-  if (text.length === 0 || text.length % 4 !== 0) return false;
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return false;
+  if (text.length === 0 || text.length % 4 !== 0) {
+    return false;
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) {
+    return false;
+  }
   return Buffer.from(text, "base64").toString("base64") === text;
 }
 
@@ -34,8 +38,12 @@ function decodeUtf8Strict(buffer: Buffer): string | null {
  * their UTF-8 bytes (callers wanting verbatim base64 use raw_base64).
  */
 export function encodeRequestBytes(body: unknown): unknown {
-  if (Array.isArray(body)) return body.map(encodeRequestBytes);
-  if (!isRecord(body)) return body;
+  if (Array.isArray(body)) {
+    return body.map(encodeRequestBytes);
+  }
+  if (!isRecord(body)) {
+    return body;
+  }
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
     if (BYTES_FIELDS.has(key) && typeof value === "string") {
@@ -53,8 +61,12 @@ export function encodeRequestBytes(body: unknown): unknown {
  * valid UTF-8 are left as their base64 representation.
  */
 export function decodeResponseBytes(data: unknown): unknown {
-  if (Array.isArray(data)) return data.map(decodeResponseBytes);
-  if (!isRecord(data)) return data;
+  if (Array.isArray(data)) {
+    return data.map(decodeResponseBytes);
+  }
+  if (!isRecord(data)) {
+    return data;
+  }
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     if (
