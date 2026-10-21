@@ -15,14 +15,12 @@ import { TaskList } from "@/todo/index.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import { TodoProgress } from "@/ui/todo-progress.js";
 import { useTaskProgress } from "@/ui/use-task-progress.js";
-
 let cwd: string;
 let manager: TeamManager;
 let list: TaskList;
 let registry: ToolRegistry;
 let instance: Instance | undefined;
 let frame: string;
-
 beforeEach(() => {
   vi.useFakeTimers({
     toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
@@ -39,7 +37,6 @@ beforeEach(() => {
     },
   );
 });
-
 afterEach(async () => {
   act(() => {
     instance?.unmount();
@@ -53,12 +50,10 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   rmSync(cwd, { recursive: true, force: true });
 });
-
 function Progress() {
   const { tasks, boardId } = useTaskProgress(list, manager);
   return <TodoProgress key={boardId} tasks={tasks} />;
 }
-
 function mount(
   interactionMode: "interactive" | "non-interactive" = "interactive",
 ) {
@@ -74,7 +69,6 @@ function mount(
     });
   });
 }
-
 async function execute(name: string, args: Record<string, unknown>) {
   const tool = registry.get(name);
   if (!tool) {
@@ -88,34 +82,33 @@ async function execute(name: string, args: Record<string, unknown>) {
   });
   return output;
 }
-
 function advance(milliseconds: number) {
   act(() => {
     vi.advanceTimersByTime(milliseconds);
   });
 }
-
 describe("tool and UI TODO synchronization", () => {
   it("renders Task mutations immediately and hides completed progress without deleting tasks", async () => {
     mount();
     expect(
-      await execute("TaskCreate", { subject: "work", description: "" }),
+      await execute("TodoWrite", {
+        todos: [{ subject: "work", description: "" }],
+      }),
     ).toContain("TODO 0/1");
     expect(frame).toContain("TODO 0/1");
     expect(
-      await execute("TaskUpdate", { taskId: "1", status: "completed" }),
+      await execute("TodoWrite", { todos: [{ id: "1", status: "completed" }] }),
     ).toContain("TODO 1/1");
     expect(frame).toContain("TODO 1/1");
     advance(5000);
     expect(frame).toBe("");
     expect(list.list()).toHaveLength(1);
-    await execute("TaskUpdate", { taskId: "1", status: "in_progress" });
+    await execute("TodoWrite", { todos: [{ id: "1", status: "in_progress" }] });
     expect(frame).toContain("TODO 0/1");
-    await execute("TaskUpdate", { taskId: "1", status: "deleted" });
+    await execute("TodoWrite", { deleteIds: ["1"] });
     expect(frame).toBe("");
   });
-
-  it("renders TodoWrite replacements with the same count rules and retains completed items", async () => {
+  it("renders TodoWrite batches with the same count rules and retains completed items", async () => {
     mount("non-interactive");
     const result = await execute("TodoWrite", {
       todos: [
@@ -130,39 +123,45 @@ describe("tool and UI TODO synchronization", () => {
     expect(frame).toContain("TODO 1/3");
     await execute("TodoWrite", {
       todos: [{ id: "1", subject: "done", status: "completed" }],
+      deleteIds: ["2", "3"],
     });
     expect(frame).toContain("TODO 1/1");
     advance(5000);
     expect(frame).toBe("");
     expect(list.list()[0]?.status).toBe("completed");
-    await execute("TodoWrite", { todos: [] });
+    await execute("TodoWrite", { deleteIds: ["1"] });
     expect(list.list()).toEqual([]);
     expect(frame).toBe("");
   });
-
   it("follows shared boards, observes external writes, and resets hiding across matching task IDs", async () => {
     mount();
-    await execute("TaskCreate", { subject: "private", description: "" });
-    await execute("TaskUpdate", { taskId: "1", status: "completed" });
+    await execute("TodoWrite", {
+      todos: [{ subject: "private", description: "" }],
+    });
+    await execute("TodoWrite", { todos: [{ id: "1", status: "completed" }] });
     advance(5000);
     expect(frame).toBe("");
     act(() => {
       manager.create("squad");
     });
-    await execute("TaskCreate", { subject: "shared", description: "" });
+    await execute("TodoWrite", {
+      todos: [{ subject: "shared", description: "" }],
+    });
     expect(frame).toContain("TODO 0/1");
-    await execute("TaskUpdate", { taskId: "1", status: "completed" });
+    await execute("TodoWrite", { todos: [{ id: "1", status: "completed" }] });
     expect(frame).toContain("TODO 1/1");
     advance(5000);
     expect(frame).toBe("");
     const external = new SharedTaskStore(
       join(teamDir(cwd, "squad"), "tasks.json"),
     );
-    external.create("teammate work");
+    external.write({ todos: [{ subject: "teammate work" }] });
     advance(500);
     expect(frame).toContain("TODO 1/2");
     act(() => {
-      manager.getTaskStore("squad").update("2", { status: "completed" });
+      manager
+        .getTaskStore("squad")
+        .write({ todos: [{ id: "2", ...{ status: "completed" } }] });
     });
     expect(frame).toContain("TODO 2/2");
     await act(async () => {
@@ -177,8 +176,10 @@ describe("tool and UI TODO synchronization", () => {
     act(() => {
       manager.create("squad");
     });
-    await execute("TaskCreate", { subject: "new shared", description: "" });
-    await execute("TaskUpdate", { taskId: "1", status: "completed" });
+    await execute("TodoWrite", {
+      todos: [{ subject: "new shared", description: "" }],
+    });
+    await execute("TodoWrite", { todos: [{ id: "1", status: "completed" }] });
     expect(frame).toContain("TODO 1/1");
   });
 });

@@ -1,29 +1,22 @@
-export const TASK_CREATE_DESCRIPTION =
-  "Create a pending item on the current task board. This tracks work; it does not launch an Agent or a background task.";
-
-export const TASK_CREATE_METADATA_DESCRIPTION =
-  "Task-specific structured context stored with the task.";
-
-export const TASK_GET_DESCRIPTION = "Get a task by its ID.";
-
-export const TASK_FIELD_DESCRIPTIONS = {
-  taskId: "Task ID: a positive decimal integer string.",
-  subject: "Brief task title",
-  description: "What needs to be done",
-  owner: "Task owner",
-  status: "New task status; deleted removes the item and its dependency links",
-  addBlocks: "Existing task IDs this one blocks",
-  addBlockedBy: "Existing task IDs blocking this one",
-  todoId: "Existing task ID; omit for a new item",
-};
-
-export const TASK_LIST_DESCRIPTION = "List all tasks.";
-
-export const TASK_UPDATE_DESCRIPTION =
-  "Atomically update the current task board's fields and dependencies. Dependency IDs must already exist; self-dependencies, cycles, and starting blocked work are rejected. Teammates claim in_progress tasks under their own name. deleted removes the task and its links.";
-
-export const TASK_UPDATE_METADATA_DESCRIPTION =
-  "Merge top-level metadata keys, preserving omitted keys; null removes a key. Nested values are replaced as a whole.";
-
 export const TODO_WRITE_DESCRIPTION =
-  "Replace this agent's entire private TODO list in one atomic update. Include all items to retain; reuse returned IDs to preserve metadata and dependency links. Returns todos with IDs and TODO completed/total progress. An empty array clears the list; completing all items retains them. Track complex work, not trivial requests; this tool never launches work.";
+  "Read or atomically edit the current TODO board. Call with {} to refresh the complete board. todos contains incremental edits: omit id to create (subject required, status defaults to pending), or supply an existing id to update only specified fields. Omitted tasks and fields are retained; empty arrays do nothing. deleteIds explicitly removes tasks and their links. Both creation and updates accept priority, owner, metadata and dependencies. blocks/blockedBy replace the specified dependency list and maintain reciprocal links; IDs must exist before this call. Self-dependencies, cycles and starting blocked work are rejected. Metadata merges top-level keys; null removes a key. Teammates claim in_progress tasks under their own name. Returns boardId, todos with IDs and TODO completed/total progress. Track complex work; this tool never launches an Agent or a background task.";
+
+export const TODO_FIELD_DESCRIPTIONS = {
+  id: "Existing task ID: a positive decimal integer string. Omit to create a task.",
+  subject: "Brief task title; required when creating a task.",
+  description:
+    "What needs to be done; defaults to an empty string for new tasks.",
+  status:
+    "Task status; defaults to pending for new tasks. Use deleteIds to remove tasks.",
+  owner:
+    "Task owner. Only the leader may assign other teammates; an empty string unassigns.",
+  priority: "Task priority, available during both creation and updates.",
+  metadata:
+    "Merge top-level context keys; null removes a key. Omitted keys are retained; nested values are replaced.",
+  blocks:
+    "Replace the list of existing task IDs this task blocks; [] removes these links.",
+  blockedBy:
+    "Replace the list of existing task IDs blocking this task; [] removes these links.",
+  deleteIds:
+    "Existing task IDs to delete atomically, removing their dependency links.",
+};

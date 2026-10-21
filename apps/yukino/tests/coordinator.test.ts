@@ -71,13 +71,7 @@ describe("coordinator tool set", () => {
   });
 
   it("allows the leader to manage the shared board and private checklist", () => {
-    for (const name of [
-      "TaskCreate",
-      "TaskGet",
-      "TaskList",
-      "TaskUpdate",
-      "TodoWrite",
-    ]) {
+    for (const name of ["TodoWrite"]) {
       expect(isCoordinatorTool(name)).toBe(true);
     }
   });

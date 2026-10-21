@@ -10,10 +10,9 @@ import type { StreamEvent } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { TaskList } from "@/todo/index.js";
-import { TaskCreateTool, TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
+import { TodoWriteTool } from "@/todo/tools.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolResult } from "@/tools/types.js";
-
 const end: StreamEvent = {
   type: "stream_end",
   stopReason: "end_turn",
@@ -24,7 +23,6 @@ const end: StreamEvent = {
     cacheCreationInputTokens: 0,
   },
 };
-
 function fixture(
   tools: Tool[],
   abortSignal?: AbortSignal,
@@ -70,7 +68,6 @@ function fixture(
   });
   return { iterator: agent.run(), conversation, requests: () => requests };
 }
-
 function tool(
   name: string,
   execute: Tool["execute"],
@@ -88,7 +85,6 @@ function tool(
     execute,
   };
 }
-
 async function nextResult(iterator: AsyncGenerator<AgentEvent>) {
   for (;;) {
     const next = await iterator.next();
@@ -100,7 +96,6 @@ async function nextResult(iterator: AsyncGenerator<AgentEvent>) {
     }
   }
 }
-
 function deferredResult() {
   let release: (result: ToolResult) => void = () => undefined;
   const result = new Promise<ToolResult>((resolve) => {
@@ -108,7 +103,6 @@ function deferredResult() {
   });
   return { result, release };
 }
-
 async function collectEvents(iterator: AsyncGenerator<AgentEvent>) {
   const events: AgentEvent[] = [];
   for await (const event of iterator) {
@@ -116,30 +110,23 @@ async function collectEvents(iterator: AsyncGenerator<AgentEvent>) {
   }
   return events;
 }
-
 describe("tool completion streaming", () => {
-  it.each(["TaskCreate", "TaskUpdate", "TodoWrite"])(
-    "%s completes while earlier foreground Agents are still running",
-    async (name) => {
+  it.each(["create", "update", "read"])(
+    "TodoWrite %s completes while earlier foreground Agents are still running",
+    async (operation) => {
+      const name = "TodoWrite";
       const slow = deferredResult();
       const tasks = new TaskList();
-      const task = tasks.create("work", "");
-      const taskTool =
-        name === "TaskCreate"
-          ? new TaskCreateTool(tasks)
-          : name === "TaskUpdate"
-            ? new TaskUpdateTool(tasks)
-            : new TodoWriteTool(tasks);
+      const task = tasks
+        .write({ todos: [{ subject: "work", description: "" }] })
+        .slice(-1)[0];
+      const taskTool = new TodoWriteTool(tasks);
       const args =
-        name === "TaskCreate"
-          ? { subject: "next", description: "" }
-          : name === "TaskUpdate"
-            ? { taskId: task.id, status: "in_progress" }
-            : {
-                todos: [
-                  { id: task.id, subject: "work", status: "in_progress" },
-                ],
-              };
+        operation === "create"
+          ? { todos: [{ subject: "next" }] }
+          : operation === "update"
+            ? { todos: [{ id: task.id, status: "in_progress" }] }
+            : {};
       const delegation = new AgentTool(
         process.cwd(),
         new ToolRegistry(),
@@ -179,8 +166,8 @@ describe("tool completion streaming", () => {
           },
           { timeout: 500 },
         );
-        expect(tasks.list()).toHaveLength(name === "TaskCreate" ? 2 : 1);
-        if (name !== "TaskCreate") {
+        expect(tasks.list()).toHaveLength(operation === "create" ? 2 : 1);
+        if (operation === "update") {
           expect(tasks.get(task.id)?.status).toBe("in_progress");
         }
         slow.release({ output: "done", isError: false });
@@ -198,36 +185,35 @@ describe("tool completion streaming", () => {
       }
     },
   );
-
   it("preserves task creation and dependent update order within a concurrent batch", async () => {
     const tasks = new TaskList();
     const calls = [
       {
-        toolName: "TaskCreate",
-        arguments: { subject: "first", description: "" },
+        toolName: "TodoWrite",
+        arguments: { todos: [{ subject: "first", description: "" }] },
       },
       {
-        toolName: "TaskCreate",
-        arguments: { subject: "second", description: "" },
+        toolName: "TodoWrite",
+        arguments: { todos: [{ subject: "second", description: "" }] },
       },
       {
-        toolName: "TaskUpdate",
-        arguments: { taskId: "2", addBlockedBy: ["1"] },
+        toolName: "TodoWrite",
+        arguments: { todos: [{ id: "2", blockedBy: ["1"] }] },
       },
       {
-        toolName: "TaskUpdate",
-        arguments: { taskId: "1", status: "completed" },
+        toolName: "TodoWrite",
+        arguments: { todos: [{ id: "1", status: "completed" }] },
       },
       {
-        toolName: "TaskUpdate",
-        arguments: { taskId: "2", status: "in_progress" },
+        toolName: "TodoWrite",
+        arguments: { todos: [{ id: "2", status: "in_progress" }] },
       },
     ].map((call, index) => ({
       ...call,
       toolUseId: String(index),
     }));
     const { iterator, conversation } = fixture(
-      [new TaskCreateTool(tasks), new TaskUpdateTool(tasks)],
+      [new TodoWriteTool(tasks)],
       undefined,
       undefined,
       calls,
@@ -253,7 +239,6 @@ describe("tool completion streaming", () => {
         ?.toolResults?.map((result) => result.toolUseId),
     ).toEqual(["0", "1", "2", "3", "4"]);
   });
-
   it("emits a fast result before a slow call finishes and persists source order", async () => {
     const slow = deferredResult();
     const { iterator, conversation } = fixture([
@@ -290,8 +275,7 @@ describe("tool completion streaming", () => {
       slow.release({ output: "slow", isError: false });
       await iterator.return(undefined);
     }
-  }, 3_000);
-
+  }, 3000);
   it("emits a sequential result before launching the next mutation", async () => {
     const second = vi.fn(() =>
       Promise.resolve({ output: "second", isError: false }),
@@ -309,7 +293,6 @@ describe("tool completion streaming", () => {
     await collectEvents(iterator);
     expect(second).toHaveBeenCalledOnce();
   });
-
   it("preflights the whole parallel batch before execution and runs post hooks in completion order", async () => {
     const slow = deferredResult();
     const trace: string[] = [];
@@ -354,8 +337,7 @@ describe("tool completion streaming", () => {
       slow.release({ output: "slow", isError: false });
       await iterator.return(undefined);
     }
-  }, 3_000);
-
+  }, 3000);
   it("pairs every result on interruption and skips later mutations and provider requests", async () => {
     const slow = deferredResult();
     const controller = new AbortController();
@@ -394,5 +376,5 @@ describe("tool completion streaming", () => {
       slow.release({ output: "cancelled", isError: true });
       await iterator.return(undefined);
     }
-  }, 3_000);
+  }, 3000);
 });

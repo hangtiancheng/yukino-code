@@ -206,12 +206,15 @@ describe("host tracking interfaces", () => {
         memoryEnabled: false,
       });
       try {
-        expect(handle.registry.get("TodoWrite") !== undefined).toBe(
-          interactionMode === "non-interactive",
-        );
-        expect(handle.registry.get("TaskCreate") !== undefined).toBe(
-          interactionMode === "interactive",
-        );
+        expect(handle.registry.get("TodoWrite")).toBeDefined();
+        for (const name of [
+          "TaskCreate",
+          "TaskGet",
+          "TaskList",
+          "TaskUpdate",
+        ]) {
+          expect(handle.registry.get(name)).toBeUndefined();
+        }
       } finally {
         await handle.registry.dispose();
         await handle.teamManager.dispose();

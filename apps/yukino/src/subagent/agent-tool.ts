@@ -35,12 +35,7 @@ import {
 } from "@/subagent/tool-filter.js";
 import { LEADER_NAME } from "@/teams/constants.js";
 import type { TeamManager, RunAgent } from "@/teams/index.js";
-import {
-  TeamTaskCreateTool,
-  TeamTaskGetTool,
-  TeamTaskListTool,
-  TeamTaskUpdateTool,
-} from "@/teams/task-tools.js";
+import { TeamTodoWriteTool } from "@/teams/task-tools.js";
 import { SendMessageTool } from "@/teams/tools.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import type { ToolRegistry } from "@/tools/registry.js";
@@ -519,14 +514,8 @@ ${prompt}`;
     teammateRegistry.register(
       new SendMessageTool(this.teamManager, memberName),
     );
-    teammateRegistry.unregister("TodoWrite");
     teammateRegistry.register(
-      new TeamTaskCreateTool(this.teamManager, teamName, memberName),
-    );
-    teammateRegistry.register(new TeamTaskGetTool(this.teamManager, teamName));
-    teammateRegistry.register(new TeamTaskListTool(this.teamManager, teamName));
-    teammateRegistry.register(
-      new TeamTaskUpdateTool(this.teamManager, teamName, memberName),
+      new TeamTodoWriteTool(this.teamManager, teamName, memberName),
     );
     // Worktree isolation: the teammate works on its own branch; changes are NOT
     // merged automatically — the worktree path is recorded in member metadata

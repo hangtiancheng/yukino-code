@@ -125,7 +125,9 @@ describe("team config persistence", () => {
     const secondProject = cwd();
     const first = new TeamManager(firstProject);
     first.create("Shared Team").addMember("alice");
-    first.getTaskStore("Shared Team").create("first project task");
+    first
+      .getTaskStore("Shared Team")
+      .write({ todos: [{ subject: "first project task" }] });
 
     const second = new TeamManager(secondProject);
     second.restoreFromDisk();
@@ -134,7 +136,9 @@ describe("team config persistence", () => {
     expect(second.getTaskStore("Shared Team").listTasks()).toEqual([]);
 
     second.create("Shared Team").addMember("bob");
-    second.getTaskStore("shared-team").create("second project task");
+    second
+      .getTaskStore("shared-team")
+      .write({ todos: [{ subject: "second project task" }] });
     expect(first.getTaskStore("shared-team").listTasks()).toHaveLength(1);
     expect(first.getTaskStore("shared-team").listTasks()[0]?.subject).toBe(
       "first project task",

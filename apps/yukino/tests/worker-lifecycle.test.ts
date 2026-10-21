@@ -17,7 +17,7 @@ import { TeamManager } from "@/teams/index.js";
 import { getNameRegistry } from "@/teams/registry.js";
 import { SharedTaskStore } from "@/teams/shared-task.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
-import { TeamTaskUpdateTool } from "@/teams/task-tools.js";
+import { TeamTodoWriteTool } from "@/teams/task-tools.js";
 import { readTeamFile } from "@/teams/team-file.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
@@ -25,28 +25,23 @@ import { TodoWriteTool } from "@/todo/tools.js";
 import { BashTool } from "@/tools/bash.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolContext } from "@/tools/types.js";
-
 vi.mock("node:os", async (original) => ({
   ...(await original<typeof os>()),
   homedir: vi.fn(),
 }));
-
 let directory: string;
 let manager: TeamManager;
-
 beforeEach(() => {
   directory = mkdtempSync(join(os.tmpdir(), "yukino-worker-life-"));
   vi.mocked(os.homedir).mockReturnValue(directory);
   manager = new TeamManager(directory);
   getNameRegistry().clear();
 });
-
 afterEach(async () => {
   await manager.dispose();
   vi.restoreAllMocks();
   rmSync(directory, { recursive: true, force: true });
 });
-
 function tool(name: string, dispose?: () => Promise<void>): Tool {
   return {
     name,
@@ -61,7 +56,6 @@ function tool(name: string, dispose?: () => Promise<void>): Tool {
     dispose,
   };
 }
-
 function end(reason = "end_turn"): StreamEvent {
   return {
     type: "stream_end",
@@ -74,7 +68,6 @@ function end(reason = "end_turn"): StreamEvent {
     },
   };
 }
-
 describe("owned and borrowed tool cleanup", () => {
   it("disposes once, waits for every owned resource even when one fails, and never closes borrowed tools", async () => {
     const registry = new ToolRegistry();
@@ -102,7 +95,6 @@ describe("owned and borrowed tool cleanup", () => {
     expect(borrowed).not.toHaveBeenCalled();
     expect(registry.listTools()).toEqual([]);
   });
-
   it("transfers subprocess tool ownership without shutting it down with the source registry", async () => {
     const source = new ToolRegistry();
     const cleanup = vi.fn(() => Promise.resolve());
@@ -116,7 +108,6 @@ describe("owned and borrowed tool cleanup", () => {
     await target.dispose();
     expect(cleanup).toHaveBeenCalledOnce();
   });
-
   it("still cleans up owned resources removed or replaced in the registry", async () => {
     const registry = new ToolRegistry();
     const oldCleanup = vi.fn(() => Promise.resolve());
@@ -129,7 +120,6 @@ describe("owned and borrowed tool cleanup", () => {
     expect(oldCleanup).toHaveBeenCalledOnce();
     expect(removedCleanup).toHaveBeenCalledOnce();
   });
-
   it.each(["completed", "failed", "interrupted", "maxTurns"] as const)(
     "reaps a real owned background Bash process when a subagent ends as %s",
     async (outcome) => {
@@ -228,9 +218,8 @@ describe("owned and borrowed tool cleanup", () => {
         await registry.dispose();
       }
     },
-    15_000,
+    15000,
   );
-
   it("releases cancellation closures only after runners settle and forbids clearing live tasks", async () => {
     const tasks = new TaskManager();
     let finish!: (result: string) => void;
@@ -260,7 +249,6 @@ describe("owned and borrowed tool cleanup", () => {
     expect(tasks.list()).toEqual([]);
   });
 });
-
 describe("persistent teammate cleanup boundaries", () => {
   it("publishes termination only after in-process cleanup settles", async () => {
     const team = manager.create("squad");
@@ -311,7 +299,6 @@ describe("persistent teammate cleanup boundaries", () => {
     expect(team.listMembers()).toHaveLength(201);
     expect(readTeamFile(directory, "squad")?.members).toHaveLength(201);
   });
-
   it("generates a unique teammate name after a failed teammate", async () => {
     const agent = new AgentTool(directory, new ToolRegistry(), () =>
       Promise.resolve("unused"),
@@ -368,9 +355,15 @@ describe("persistent teammate cleanup boundaries", () => {
     );
     const team = manager.list()[0];
     const store = manager.getTaskStore(team.name);
-    const task = store.create("unfinished", "", "alice");
-    const completed = store.create("done", "", "alice");
-    store.update(completed.id, { status: "completed" });
+    const task = store
+      .write({
+        todos: [{ subject: "unfinished", description: "", owner: "alice" }],
+      })
+      .slice(-1)[0];
+    const completed = store
+      .write({ todos: [{ subject: "done", description: "", owner: "alice" }] })
+      .slice(-1)[0];
+    store.write({ todos: [{ id: completed.id, ...{ status: "completed" } }] });
     await vi.waitFor(() => {
       expect(team?.getMember("alice")?.uiState?.status).toBe("idle");
     });
@@ -400,11 +393,12 @@ describe("persistent teammate cleanup boundaries", () => {
     await parent.dispose();
     expect(cleanup).toHaveBeenCalledOnce();
   });
-
   it("still clears live references and releases tasks when cleanup fails", async () => {
     const team = manager.create("squad");
     const store = manager.getTaskStore("squad");
-    store.create("unfinished", "", "alice");
+    store.write({
+      todos: [{ subject: "unfinished", description: "", owner: "alice" }],
+    });
     const checker = new PermissionChecker(directory, "acceptEdits").forSubagent(
       directory,
     );
@@ -426,19 +420,19 @@ describe("persistent teammate cleanup boundaries", () => {
     expect(cleanup).toHaveBeenCalledOnce();
     expect(store.get("1")).toMatchObject({ status: "pending", owner: "" });
   });
-
   it("reclaims stale teammate ownership when restoring a session", () => {
     const team = manager.create("squad");
     const member = team.addMember("alice");
     member.active = true;
     team.persist();
     const store = manager.getTaskStore("squad");
-    store.create("unfinished", "", "alice");
+    store.write({
+      todos: [{ subject: "unfinished", description: "", owner: "alice" }],
+    });
     new TeamManager(directory).get("squad");
     expect(store.get("1")).toMatchObject({ status: "pending", owner: "" });
   });
 });
-
 describe("delegation authority", () => {
   it.each([false, true])(
     "allows defined subagents to stop only owned background tasks (background=%s)",
@@ -528,7 +522,6 @@ describe("delegation authority", () => {
     expect(stop?.isError).toBe(true);
     await fork.dispose();
   });
-
   it("uses the existing team for teammate calls", async () => {
     const existing = manager.create("squad");
     const agent = new AgentTool(directory, new ToolRegistry(), () =>
@@ -543,36 +536,52 @@ describe("delegation authority", () => {
     expect(manager.list()).toEqual([existing]);
   });
 });
-
 describe("task board correctness", () => {
   it("requires a teammate to return work to pending before dropping ownership", () => {
     const store = new SharedTaskStore(join(directory, "board.json"));
-    const task = store.create("work");
-    store.update(task.id, { status: "in_progress" }, "alice");
-    expect(() => store.update(task.id, { owner: "" }, "alice")).toThrow(
-      "must have an owner",
+    const task = store.write({ todos: [{ subject: "work" }] }).slice(-1)[0];
+    store.write(
+      { todos: [{ id: task.id, ...{ status: "in_progress" } }] },
+      { actor: "alice" },
     );
+    expect(() =>
+      store
+        .write(
+          { todos: [{ id: task.id, ...{ owner: "" } }] },
+          { actor: "alice" },
+        )
+        .find((candidate) => candidate.id === task.id),
+    ).toThrow("must have an owner");
     expect(store.get(task.id)).toMatchObject({
       status: "in_progress",
       owner: "alice",
     });
-    store.update(task.id, { status: "pending", owner: "" }, "alice");
+    store.write(
+      { todos: [{ id: task.id, ...{ status: "pending", owner: "" } }] },
+      { actor: "alice" },
+    );
     expect(store.get(task.id)).toMatchObject({ status: "pending", owner: "" });
   });
-  it("keeps leader schemas stable while routing Task tools to the team and child tasks to private lists", async () => {
+  it("keeps leader schemas stable while routing TodoWrite to the team and child tasks to private lists", async () => {
     const privateList = new TaskList();
     const registry = createToolRegistry(directory, privateList, {
       teamManager: manager,
     });
-    const schema = registry.get("TaskUpdate")?.schema();
+    const schema = registry.get("TodoWrite")?.schema();
     await registry
-      .get("TaskCreate")
-      ?.execute({ cwd: directory }, { subject: "private", description: "" });
+      .get("TodoWrite")
+      ?.execute(
+        { cwd: directory },
+        { todos: [{ subject: "private", description: "" }] },
+      );
     manager.create("squad");
     await registry
-      .get("TaskCreate")
-      ?.execute({ cwd: directory }, { subject: "shared", description: "" });
-    expect(registry.get("TodoWrite")).toBeUndefined();
+      .get("TodoWrite")
+      ?.execute(
+        { cwd: directory },
+        { todos: [{ subject: "shared", description: "" }] },
+      );
+    expect(registry.get("TodoWrite")).toBeDefined();
     expect(privateList.list().map((task) => task.subject)).toEqual(["private"]);
     expect(
       manager
@@ -580,30 +589,44 @@ describe("task board correctness", () => {
         .listTasks()
         .map((task) => task.subject),
     ).toEqual(["shared"]);
-    expect(registry.get("TaskUpdate")?.schema()).toEqual(schema);
+    expect(registry.get("TodoWrite")?.schema()).toEqual(schema);
     const fork = filterToolsForAgent(registry, undefined, undefined, false);
     await fork
-      .get("TaskCreate")
-      ?.execute({ cwd: directory }, { subject: "child", description: "" });
+      .get("TodoWrite")
+      ?.execute(
+        { cwd: directory },
+        { todos: [{ subject: "child", description: "" }] },
+      );
     expect(manager.getTaskStore("squad").listTasks()).toHaveLength(1);
     await fork.dispose();
     await registry.dispose();
   });
-
   it("atomically rejects competing claims, unresolved dependencies and busy workers", async () => {
     const team = manager.create("squad");
     team.addMember("alice");
     team.addMember("bob");
     const store = manager.getTaskStore("squad");
-    const first = store.create("first");
-    const second = store.create("second", "", "", [], [first.id]);
-    const alice = new TeamTaskUpdateTool(manager, "squad", "alice");
-    const bob = new TeamTaskUpdateTool(manager, "squad", "bob");
+    const first = store.write({ todos: [{ subject: "first" }] }).slice(-1)[0];
+    const second = store
+      .write({
+        todos: [
+          {
+            subject: "second",
+            description: "",
+            owner: "",
+            blocks: [],
+            blockedBy: [first.id],
+          },
+        ],
+      })
+      .slice(-1)[0];
+    const alice = new TeamTodoWriteTool(manager, "squad", "alice");
+    const bob = new TeamTodoWriteTool(manager, "squad", "bob");
     expect(
       (
         await alice.execute(
           { cwd: directory },
-          { taskId: second.id, status: "in_progress" },
+          { todos: [{ id: second.id, status: "in_progress" }] },
         )
       ).isError,
     ).toBe(true);
@@ -615,7 +638,7 @@ describe("task board correctness", () => {
       [alice, bob].map((updater) =>
         updater.execute(
           { cwd: directory },
-          { taskId: first.id, status: "in_progress" },
+          { todos: [{ id: first.id, status: "in_progress" }] },
         ),
       ),
     );
@@ -624,57 +647,75 @@ describe("task board correctness", () => {
       (
         await bob.execute(
           { cwd: directory },
-          { taskId: first.id, status: "completed" },
+          { todos: [{ id: first.id, status: "completed" }] },
         )
       ).isError,
     ).toBe(true);
-    const third = store.create("third");
+    const third = store.write({ todos: [{ subject: "third" }] }).slice(-1)[0];
     expect(
       (
         await alice.execute(
           { cwd: directory },
-          { taskId: third.id, status: "in_progress" },
+          { todos: [{ id: third.id, status: "in_progress" }] },
         )
       ).isError,
     ).toBe(true);
     await alice.execute(
       { cwd: directory },
-      { taskId: first.id, status: "completed" },
+      { todos: [{ id: first.id, status: "completed" }] },
     );
     expect(
       (
         await bob.execute(
           { cwd: directory },
-          { taskId: second.id, status: "in_progress" },
+          { todos: [{ id: second.id, status: "in_progress" }] },
         )
       ).isError,
     ).toBe(false);
     expect(store.get(second.id)?.owner).toBe("bob");
   });
-
   it("does not reuse deleted private task IDs after resume or an empty TodoWrite", () => {
     const store = new TaskStore("session");
     const list = new TaskList(store);
-    list.create("first", "");
-    list.create("second", "");
-    list.delete("2");
+    list.write({ todos: [{ subject: "first", description: "" }] });
+    list.write({ todos: [{ subject: "second", description: "" }] });
+    list.write({ deleteIds: ["2"] });
     const resumed = new TaskList(new TaskStore("session"));
-    expect(resumed.create("third", "").id).toBe("3");
-    resumed.replace([]);
-    expect(new TaskList(new TaskStore("session")).create("fourth", "").id).toBe(
-      "4",
-    );
+    expect(
+      resumed
+        .write({ todos: [{ subject: "third", description: "" }] })
+        .slice(-1)[0].id,
+    ).toBe("3");
+    resumed.write({ todos: [] });
+    expect(
+      new TaskList(new TaskStore("session"))
+        .write({ todos: [{ subject: "fourth", description: "" }] })
+        .slice(-1)[0].id,
+    ).toBe("4");
   });
-
   it("merges metadata, clears null keys, and cannot bypass dependencies with TodoWrite", async () => {
     const list = new TaskList();
-    const first = list.create("first", "", {
-      keep: 1,
-      remove: true,
+    const first = list
+      .write({
+        todos: [
+          {
+            subject: "first",
+            description: "",
+            metadata: {
+              keep: 1,
+              remove: true,
+            },
+          },
+        ],
+      })
+      .slice(-1)[0];
+    const second = list
+      .write({ todos: [{ subject: "second", description: "" }] })
+      .slice(-1)[0];
+    list.write({ todos: [{ id: second.id, ...{ blockedBy: [first.id] } }] });
+    list.write({
+      todos: [{ id: first.id, ...{ metadata: { add: 2, remove: null } } }],
     });
-    const second = list.create("second", "");
-    list.update(second.id, { addBlockedBy: [first.id] });
-    list.update(first.id, { metadata: { add: 2, remove: null } });
     expect(list.get(first.id)?.metadata).toEqual({ keep: 1, add: 2 });
     const before = list.list();
     const result = await new TodoWriteTool(list).execute(
@@ -689,14 +730,34 @@ describe("task board correctness", () => {
     expect(result.isError).toBe(true);
     expect(list.list()).toEqual(before);
   });
-
   it("does not treat cancelled dependencies as completed and preserves terminal records when releasing an owner", () => {
     const store = new SharedTaskStore(join(directory, "board.json"));
-    const first = store.create("cancelled", "", "alice");
-    store.update(first.id, { status: "cancelled" });
-    const second = store.create("dependent", "", "alice", [], [first.id]);
+    const first = store
+      .write({
+        todos: [{ subject: "cancelled", description: "", owner: "alice" }],
+      })
+      .slice(-1)[0];
+    store.write({ todos: [{ id: first.id, ...{ status: "cancelled" } }] });
+    const second = store
+      .write({
+        todos: [
+          {
+            subject: "dependent",
+            description: "",
+            owner: "alice",
+            blocks: [],
+            blockedBy: [first.id],
+          },
+        ],
+      })
+      .slice(-1)[0];
     expect(() =>
-      store.update(second.id, { status: "in_progress" }, "alice"),
+      store
+        .write(
+          { todos: [{ id: second.id, ...{ status: "in_progress" } }] },
+          { actor: "alice" },
+        )
+        .find((task) => task.id === second.id),
     ).toThrow("blocked");
     store.releaseOwner("alice");
     expect(store.get(first.id)).toMatchObject({

@@ -379,14 +379,15 @@ describe("teammate coordination tools", () => {
     expect(message.reason).toBe("Teammate coordination tool");
 
     expect(
-      checker.check("TaskCreate", "command", {
-        subject: "s",
-        description: "d",
+      checker.check("TodoWrite", "command", {
+        todos: [{ subject: "s", description: "d" }],
       }).effect,
     ).toBe("allow");
-    expect(checker.check("TaskUpdate", "command", { taskId: "1" }).effect).toBe(
-      "allow",
-    );
+    expect(
+      checker.check("TodoWrite", "command", {
+        todos: [{ id: "1", status: "completed" }],
+      }).effect,
+    ).toBe("allow");
   });
 
   it("keeps SendMessage behind approval for non-teammate checkers", () => {

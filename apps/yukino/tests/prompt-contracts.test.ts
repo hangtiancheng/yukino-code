@@ -62,7 +62,7 @@ afterEach(() => {
 
 describe("system prompt contracts", () => {
   it("separates TODO progress statuses from the user-controlled Goal lifecycle", () => {
-    const guidance = buildToolGuidance(["Goal", "TaskCreate", "TaskUpdate"]);
+    const guidance = buildToolGuidance(["Goal", "TodoWrite"]);
     expect(guidance).toContain("Mark TODO items in_progress");
     expect(guidance).toContain("A set goal is already active");
     expect(guidance).toContain(
@@ -70,7 +70,7 @@ describe("system prompt contracts", () => {
     );
     expect(guidance).toContain("it cannot resume a paused or stopped goal");
     expect(buildToolGuidance(["Goal"])).not.toContain("Mark TODO items");
-    expect(buildToolGuidance(["TaskUpdate"])).not.toContain("Goal manages");
+    expect(buildToolGuidance(["TodoWrite"])).not.toContain("Goal manages");
   });
   it("only advertises deferred tools with available discovery and dispatch routes", () => {
     const names = ["mcp__server__action", "Local"];
@@ -155,7 +155,7 @@ describe("system prompt contracts", () => {
         "Agent",
         "TeamCreate",
         "SendMessage",
-        "TaskCreate",
+        "TodoWrite",
         "ToolSearch",
         "McpCall",
       ]);
@@ -176,7 +176,7 @@ describe("system prompt contracts", () => {
       "Never fabricate URLs",
       "actual UI",
       "unobserved success",
-      "Task tools",
+      "TodoWrite",
       "TeamCreate",
       'kind="teammate"',
       "run_in_background",

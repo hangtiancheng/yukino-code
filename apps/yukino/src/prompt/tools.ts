@@ -14,7 +14,6 @@ import {
   MCP_DISPATCH_RULE,
   READFILE_OFFSETS_RULE,
   TASK_OUTPUT_RULE,
-  TASK_TOOLS_RULE,
   TODO_TOOLS_RULE,
   TODO_WRITE_RULE,
   TOOL_SEARCH_DISCOVERY_RULE,
@@ -52,16 +51,11 @@ export function buildToolGuidance(
       `Use ${shells.join(" or ")} for commands and validation${has("Grep") || has("Glob") ? "" : ", including narrow file searches"}. Do not use shell commands to evade read-only or permission restrictions.`,
     );
   }
-  if (
-    ["TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TodoWrite"].some(has)
-  ) {
+  if (has("TodoWrite")) {
     rules.push(TODO_TOOLS_RULE);
   }
   if (has("Goal")) {
     rules.push(GOAL_RULE);
-  }
-  if (["TaskCreate", "TaskUpdate", "TaskList", "TaskGet"].some(has)) {
-    rules.push(TASK_TOOLS_RULE);
   }
   if (has("TodoWrite")) {
     rules.push(TODO_WRITE_RULE);

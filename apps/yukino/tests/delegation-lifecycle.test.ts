@@ -699,24 +699,39 @@ describe("team approval and persistence regressions", () => {
   it("does not overwrite a corrupted shared board with stale cached tasks", () => {
     const path = join(directory, "tasks.json");
     const store = new SharedTaskStore(path);
-    store.create("original");
+    store.write({ todos: [{ subject: "original" }] });
     writeFileSync(path, "not valid JSON");
-    expect(() => store.create("new")).toThrow("unreadable");
-    expect(() => store.update("1", { status: "completed" })).toThrow(
-      "unreadable",
-    );
+    expect(
+      () => store.write({ todos: [{ subject: "new" }] }).slice(-1)[0],
+    ).toThrow("unreadable");
+    expect(() =>
+      store
+        .write({ todos: [{ id: "1", ...{ status: "completed" } }] })
+        .find((task) => task.id === "1"),
+    ).toThrow("unreadable");
     expect(readFileSync(path, "utf-8")).toBe("not valid JSON");
   });
 
   it("rejects dependencies before the other task exists without consuming an ID", () => {
     const store = new SharedTaskStore(join(directory, "tasks.json"));
-    expect(() => store.create("first", "", "", ["2"])).toThrow(
-      "Unknown dependency",
-    );
+    expect(
+      () =>
+        store
+          .write({
+            todos: [
+              { subject: "first", description: "", owner: "", blocks: ["2"] },
+            ],
+          })
+          .slice(-1)[0],
+    ).toThrow("Unknown dependency");
     expect(store.listTasks()).toEqual([]);
-    expect(store.create("first").id).toBe("1");
-    expect(store.create("second").id).toBe("2");
-    store.update("1", { addBlocks: ["2"] });
+    expect(store.write({ todos: [{ subject: "first" }] }).slice(-1)[0].id).toBe(
+      "1",
+    );
+    expect(
+      store.write({ todos: [{ subject: "second" }] }).slice(-1)[0].id,
+    ).toBe("2");
+    store.write({ todos: [{ id: "1", ...{ blocks: ["2"] } }] });
     expect(store.get("2")?.blockedBy).toEqual(["1"]);
   });
 });

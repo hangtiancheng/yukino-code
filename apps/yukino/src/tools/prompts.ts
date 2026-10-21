@@ -111,7 +111,7 @@ export const SYNTHETIC_OUTPUT_DESCRIPTION =
   "as structured data in non-interactive or coordinator mode sessions.";
 
 export const TASK_OUTPUT_DESCRIPTION =
-  "Inspect a background Agent/Bash/PowerShell task by its task_id, or wait once for at most timeout_ms (maximum 60000). This does not consume completion notifications or cancel timed-out tasks. Prefer automatic task notifications over repeated polling. TaskCreate IDs belong to the separate TODO list and cannot be used here.";
+  "Inspect a background Agent/Bash/PowerShell task by its task_id, or wait once for at most timeout_ms (maximum 60000). This does not consume completion notifications or cancel timed-out tasks. Prefer automatic task notifications over repeated polling. TodoWrite item IDs belong to the separate TODO board and cannot be used here.";
 
 export const TOOL_SEARCH_DESCRIPTION =
   "Search for and load deferred tools by name or keyword.";

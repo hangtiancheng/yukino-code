@@ -74,11 +74,7 @@ export function toolKind(toolName: string): ToolKind {
   if (/^(Bash|PowerShell|ComputerUse)$/u.test(toolName)) {
     return "execute";
   }
-  if (
-    /^(Agent|TaskCreate|TaskGet|TaskList|TaskUpdate|TaskStop|TaskOutput|TodoWrite)$/u.test(
-      toolName,
-    )
-  ) {
+  if (/^(Agent|TaskStop|TaskOutput|TodoWrite)$/u.test(toolName)) {
     return "think";
   }
   if (toolName === "ExitPlanMode") {

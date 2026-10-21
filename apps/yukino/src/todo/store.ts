@@ -47,12 +47,14 @@ export const TaskSnapshotSchema = z.object({
 
 export class TaskStore {
   private filePath: string;
+  readonly boardId: string;
 
   constructor(listId: string) {
     if (!/^[A-Za-z0-9_-]+$/u.test(listId)) {
       throw new Error("Invalid task list ID");
     }
     this.filePath = sessionPath(listId, "tasks.json");
+    this.boardId = `private:${listId}`;
   }
 
   load(): z.infer<typeof TaskSnapshotSchema> {

@@ -64,10 +64,6 @@ type AllTools =
   | "LoadSkill"
   | "Agent"
   | "TaskStop"
-  | "TaskCreate"
-  | "TaskGet"
-  | "TaskList"
-  | "TaskUpdate"
   | "TodoWrite"
   | "TaskOutput"
   | "LSP"
@@ -127,10 +123,6 @@ export const SUBAGENT_DISALLOWED_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 export const ASYNC_AGENT_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
-  "TaskCreate",
-  "TaskGet",
-  "TaskList",
-  "TaskUpdate",
   "TodoWrite",
   "TaskOutput",
   "TaskStop",

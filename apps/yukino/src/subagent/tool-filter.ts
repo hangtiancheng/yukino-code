@@ -6,7 +6,7 @@ import {
 } from "@/subagent/constants.js";
 import { TaskStopTool } from "@/teams/task-stop.js";
 import { TaskList } from "@/todo/index.js";
-import { isLocalTaskTool } from "@/todo/tools.js";
+import { TodoWriteTool } from "@/todo/tools.js";
 import { McpCallTool } from "@/tools/mcp-call.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { ToolSearchTool } from "@/tools/tool-search.js";
@@ -17,17 +17,18 @@ function registerScopedTool(
   tool: Tool,
   tasks: TaskList,
 ): void {
-  const scoped = isLocalTaskTool(tool)
-    ? tool.forList(tasks)
-    : tool instanceof ToolSearchTool
-      ? new ToolSearchTool(registry)
-      : tool instanceof McpCallTool
-        ? new McpCallTool(registry)
-        : tool instanceof LoadSkillTool
-          ? tool.forDelegatedAgent()
-          : tool instanceof TaskStopTool
-            ? tool.forSubagent()
-            : tool;
+  const scoped =
+    tool instanceof TodoWriteTool
+      ? tool.forList(tasks)
+      : tool instanceof ToolSearchTool
+        ? new ToolSearchTool(registry)
+        : tool instanceof McpCallTool
+          ? new McpCallTool(registry)
+          : tool instanceof LoadSkillTool
+            ? tool.forDelegatedAgent()
+            : tool instanceof TaskStopTool
+              ? tool.forSubagent()
+              : tool;
   registry[scoped === tool ? "registerBorrowed" : "register"](scoped);
 }
 

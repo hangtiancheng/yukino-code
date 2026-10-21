@@ -1,3 +1,5 @@
+import type { Task } from "@/todo/index.js";
+
 export const TEAM_CREATE_TOOL_DESCRIPTION =
   "Create an automatically named team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.";
 
@@ -15,3 +17,7 @@ export const TASK_STOP_TOOL_DESCRIPTION =
 
 export const TASK_STOP_SUBAGENT_TOOL_DESCRIPTION =
   "Stop one of this agent's own background tasks (Agent, Bash, PowerShell). Pass task_id.";
+
+export function buildTaskAssignmentPrompt(task: Task): string {
+  return `Task assignment: #${task.id} ${task.subject}\n${task.description}\nUse TodoWrite({}) to inspect dependencies, then TodoWrite({todos:[{id:"${task.id}",status:"in_progress"}]}) to claim it before starting.`;
+}

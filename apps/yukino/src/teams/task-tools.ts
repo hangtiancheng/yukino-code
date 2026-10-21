@@ -1,14 +1,13 @@
 import { LEADER_NAME } from "@/teams/constants.js";
 import type { Team, TeamManager } from "@/teams/index.js";
-import type { Task, TaskBoard, TaskList, TaskUpdates } from "@/todo/index.js";
-import {
-  TaskCreateTool,
-  TaskGetTool,
-  TaskListTool,
-  TaskUpdateTool,
-  TodoWriteTool,
-} from "@/todo/tools.js";
-import type { ToolRegistry } from "@/tools/registry.js";
+import { buildTaskAssignmentPrompt } from "@/teams/prompts.js";
+import type {
+  Task,
+  TaskBoard,
+  TaskList,
+  TodoWriteInput,
+} from "@/todo/index.js";
+import { TodoWriteTool } from "@/todo/tools.js";
 
 class TeamTaskBoard implements TaskBoard {
   constructor(
@@ -18,157 +17,77 @@ class TeamTaskBoard implements TaskBoard {
     private fallback?: TaskBoard,
   ) {}
 
-  private board(): TaskBoard {
+  private board(): { team: Team } | { fallback: TaskBoard } {
     const team = this.teamName
       ? this.manager.get(this.teamName)
       : this.manager.list()[0];
-    if (!team) {
-      if (this.fallback) {
-        return this.fallback;
-      }
-      throw new Error("No active team task board");
+    if (team) {
+      return { team };
     }
+    if (this.fallback) {
+      return { fallback: this.fallback };
+    }
+    throw new Error("No active team task board");
+  }
+
+  get boardId(): string {
+    const board = this.board();
+    return "fallback" in board
+      ? board.fallback.boardId
+      : `team:${board.team.name}`;
+  }
+
+  write(input: TodoWriteInput): Task[] {
+    const board = this.board();
+    if ("fallback" in board) {
+      return board.fallback.write(input);
+    }
+    const { team } = board;
     const store = this.manager.getTaskStore(team.name);
-    const actor = this.agentName === LEADER_NAME ? undefined : this.agentName;
-    return {
-      create: (subject, description, metadata) =>
-        store.create(
-          subject,
-          description,
-          "",
-          [],
-          [],
-          this.agentName,
-          metadata,
-        ),
-      get: (id) => store.get(id),
-      list: () => store.listTasks(),
-      update: (id, updates) => {
-        if (updates.owner && updates.owner !== LEADER_NAME) {
-          const owner = team.getMember(updates.owner);
-          if (!owner || (!owner.active && owner.uiState)) {
-            throw new Error(
-              `Teammate '${updates.owner}' is not available for assignment`,
-            );
-          }
+    const tasks = store.write(input, {
+      actor: this.agentName === LEADER_NAME ? undefined : this.agentName,
+      createdBy: this.agentName,
+      validateOwner: (name) => {
+        if (name === LEADER_NAME) {
+          return;
         }
-        const task = store.update(id, updates, actor);
-        if (
-          updates.owner &&
-          task?.owner &&
-          task.owner !== LEADER_NAME &&
-          task.owner !== this.agentName
-        ) {
-          team
-            .getMember(task.owner)
-            ?.mailbox.sendSync(
-              this.agentName,
-              `Task assignment: #${task.id} ${task.subject}\n${task.description}\nUse TaskGet to inspect dependencies, then TaskUpdate to claim it before starting.`,
-            );
+        const owner = team.getMember(name);
+        if (!owner || (!owner.active && owner.uiState)) {
+          throw new Error(`Teammate '${name}' is not available for assignment`);
         }
-        return task;
       },
-      delete: (id) => store.delete(id, actor),
-    };
-  }
-
-  create(
-    subject: string,
-    description: string,
-    metadata?: Record<string, unknown>,
-  ): Task {
-    return this.board().create(subject, description, metadata);
-  }
-  get(id: string): Task | undefined {
-    return this.board().get(id);
-  }
-  list(): Task[] {
-    return this.board().list();
-  }
-  update(id: string, updates: TaskUpdates): Task | undefined {
-    return this.board().update(id, updates);
-  }
-  delete(id: string): boolean {
-    return this.board().delete(id);
-  }
-}
-
-export class TeamTaskCreateTool extends TaskCreateTool {
-  constructor(
-    manager: TeamManager,
-    teamName?: string,
-    agentName = LEADER_NAME,
-    fallback?: TaskBoard,
-  ) {
-    super(new TeamTaskBoard(manager, teamName, agentName, fallback));
-  }
-}
-export class TeamTaskGetTool extends TaskGetTool {
-  constructor(
-    manager: TeamManager,
-    teamName?: string,
-    agentName = LEADER_NAME,
-    fallback?: TaskBoard,
-  ) {
-    super(new TeamTaskBoard(manager, teamName, agentName, fallback));
-  }
-}
-export class TeamTaskListTool extends TaskListTool {
-  constructor(
-    manager: TeamManager,
-    teamName?: string,
-    agentName = LEADER_NAME,
-    fallback?: TaskBoard,
-  ) {
-    super(new TeamTaskBoard(manager, teamName, agentName, fallback));
-  }
-}
-export class TeamTaskUpdateTool extends TaskUpdateTool {
-  constructor(
-    manager: TeamManager,
-    teamName?: string,
-    agentName = LEADER_NAME,
-    fallback?: TaskBoard,
-  ) {
-    super(new TeamTaskBoard(manager, teamName, agentName, fallback));
-  }
-}
-
-export function registerLeaderTaskTools(
-  registry: ToolRegistry,
-  manager: TeamManager,
-  fallback: TaskList,
-  mode: "tasks" | "todos",
-): void {
-  const tools = [
-    new TeamTaskCreateTool(manager, undefined, LEADER_NAME, fallback),
-    new TeamTaskGetTool(manager, undefined, LEADER_NAME, fallback),
-    new TeamTaskListTool(manager, undefined, LEADER_NAME, fallback),
-    new TeamTaskUpdateTool(manager, undefined, LEADER_NAME, fallback),
-  ];
-  const todo = new TodoWriteTool(fallback);
-  let currentMode: "tasks" | "todos" | undefined;
-  const sync = () => {
-    const nextMode =
-      mode === "tasks" || manager.list().length ? "tasks" : "todos";
-    if (nextMode === currentMode) {
-      return;
-    }
-    currentMode = nextMode;
-    if (nextMode === "tasks") {
-      registry.unregister(todo.name);
-      for (const tool of tools) {
-        registry.register(tool);
+    });
+    const newCount =
+      input.todos?.filter((todo) => todo.id === undefined).length ?? 0;
+    const created = newCount ? tasks.slice(-newCount) : [];
+    let newIndex = 0;
+    for (const todo of input.todos ?? []) {
+      const id = todo.id ?? created[newIndex++]?.id;
+      const task = tasks.find((candidate) => candidate.id === id);
+      if (
+        todo.owner &&
+        task?.owner &&
+        task.owner !== LEADER_NAME &&
+        task.owner !== this.agentName
+      ) {
+        team
+          .getMember(task.owner)
+          ?.mailbox.sendSync(this.agentName, buildTaskAssignmentPrompt(task));
       }
-    } else {
-      for (const tool of tools) {
-        registry.unregister(tool.name);
-      }
-      registry.register(todo);
     }
-  };
-  registry.addCleanup(manager.subscribe(sync));
-  sync();
+    return tasks;
+  }
+}
+
+export class TeamTodoWriteTool extends TodoWriteTool {
+  constructor(
+    manager: TeamManager,
+    teamName?: string,
+    agentName = LEADER_NAME,
+    fallback?: TaskBoard,
+  ) {
+    super(new TeamTaskBoard(manager, teamName, agentName, fallback));
+  }
 }
 
 export function subscribeLeaderTasks(

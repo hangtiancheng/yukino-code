@@ -546,7 +546,7 @@ describe("Chat Completions terminal boundaries", () => {
                 {
                   index: 0,
                   id: "call_1",
-                  function: { name: "TaskList", arguments: "" },
+                  function: { name: "TodoWrite", arguments: "" },
                 },
               ],
             },
@@ -564,12 +564,12 @@ describe("Chat Completions terminal boundaries", () => {
     );
     expect(events).toContainEqual({
       type: "tool_call_start",
-      toolName: "TaskList",
+      toolName: "TodoWrite",
       toolId: "call_1",
     });
     expect(events).toContainEqual({
       type: "tool_call_complete",
-      toolName: "TaskList",
+      toolName: "TodoWrite",
       toolId: "call_1",
       arguments: {},
     });

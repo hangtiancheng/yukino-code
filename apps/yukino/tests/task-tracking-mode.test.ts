@@ -1,38 +1,49 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import z from "zod";
 
 import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { buildToolGuidance } from "@/prompt/tools.js";
 import { sessionPath } from "@/storage/index.js";
-import { filterToolsForAgent } from "@/subagent/tool-filter.js";
+import {
+  cloneRegistryForTeammate,
+  filterToolsForAgent,
+} from "@/subagent/tool-filter.js";
 import { TeamManager } from "@/teams/index.js";
 import { SharedTaskStore } from "@/teams/shared-task.js";
 import { teamDir } from "@/teams/team-file.js";
 import { TaskList } from "@/todo/index.js";
 import { StoredTaskSchema, TaskStore } from "@/todo/store.js";
-import { TaskCreateTool, TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
 import type { ToolRegistry } from "@/tools/registry.js";
+
+function snapshot(output: string) {
+  return z
+    .object({
+      boardId: z.string(),
+      todos: z.array(StoredTaskSchema),
+      progress: z.string(),
+    })
+    .parse(JSON.parse(output));
+}
 
 let cwd: string;
 let manager: TeamManager;
 const registries: ToolRegistry[] = [];
-
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "yukino-tracking-mode-"));
   manager = new TeamManager(cwd);
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(registries.splice(0).map((registry) => registry.dispose()));
   await manager.dispose();
   rmSync(cwd, { recursive: true, force: true });
 });
-
 function registry(
-  interactionMode: "interactive" | "non-interactive",
+  interactionMode: "interactive" | "non-interactive" = "interactive",
   list = new TaskList(),
 ) {
   const result = createToolRegistry(cwd, list, {
@@ -42,350 +53,233 @@ function registry(
   registries.push(result);
   return result;
 }
-
-function trackingNames(registry: ToolRegistry) {
-  return registry
-    .getAllSchemas()
-    .map((schema) => schema.name)
-    .filter((name) =>
-      /^(TodoWrite|TaskCreate|TaskGet|TaskList|TaskUpdate)$/u.test(name),
-    );
+function tool(registry: ToolRegistry) {
+  const result = registry.get("TodoWrite");
+  if (!result) {
+    throw new Error("Missing TodoWrite");
+  }
+  return result;
+}
+function fixture(board: string) {
+  const store = new TaskStore("tracking");
+  const list = new TaskList(store);
+  const tools = registry("interactive", list);
+  if (board === "shared") {
+    manager.create("squad");
+  }
+  const file =
+    board === "shared"
+      ? join(teamDir(cwd, "squad"), "tasks.json")
+      : sessionPath("tracking", "tasks.json");
+  const write = tool(tools);
+  const execute = (args: Record<string, unknown>) =>
+    write.execute({ cwd }, args);
+  return { store, list, tools, write, execute, file };
 }
 
-describe("tracking tool modes", () => {
-  it.each(["private", "shared"])(
-    "round-trips metadata through TaskCreate, TaskUpdate, TaskGet and the %s task file",
-    async (board) => {
-      const list = new TaskList(new TaskStore("metadata"));
-      const tools = registry("interactive", list);
-      if (board === "shared") {
-        manager.create("squad");
-      }
-      const create = tools.get("TaskCreate");
-      const update = tools.get("TaskUpdate");
-      const get = tools.get("TaskGet");
-      if (!create || !update || !get) {
-        throw new Error("Missing task tools");
-      }
-      for (const tool of [create, update]) {
-        expect(tool.schema().input_schema.properties.metadata).toMatchObject({
-          type: "object",
-          additionalProperties: {},
-        });
-      }
-      expect(
-        (
-          await create.execute(
-            { cwd },
-            {
-              subject: "keep structured context",
-              description: "",
-              metadata: {
-                ticket: "issue-20",
-                labels: ["bug"],
-                evidence: { reviewed: false },
-                obsolete: "remove",
-              },
-            },
-          )
-        ).isError,
-      ).toBe(false);
-      const created = await get.execute({ cwd }, { taskId: "1" });
-      expect(created.isError).toBe(false);
-      expect(
-        StoredTaskSchema.parse(JSON.parse(created.output)).metadata,
-      ).toEqual({
-        ticket: "issue-20",
-        labels: ["bug"],
-        evidence: { reviewed: false },
-        obsolete: "remove",
-      });
-      expect(
-        (
-          await update.execute(
-            { cwd },
-            {
-              taskId: "1",
-              metadata: {
-                ticket: "issue-21",
-                evidence: { checked: true },
-                obsolete: null,
-                added: [null, 2],
-              },
-            },
-          )
-        ).isError,
-      ).toBe(false);
-      expect(
-        (
-          await update.execute(
-            { cwd },
-            { taskId: "1", description: "updated without metadata" },
-          )
-        ).isError,
-      ).toBe(false);
-      const expected = {
-        ticket: "issue-21",
-        labels: ["bug"],
-        evidence: { checked: true },
-        added: [null, 2],
-      };
-      const updated = await get.execute({ cwd }, { taskId: "1" });
-      expect(updated.isError).toBe(false);
-      expect(
-        StoredTaskSchema.parse(JSON.parse(updated.output)).metadata,
-      ).toEqual(expected);
-      const restored =
-        board === "shared"
-          ? new SharedTaskStore(join(teamDir(cwd, "squad"), "tasks.json")).get(
-              "1",
-            )
-          : new TaskList(new TaskStore("metadata")).get("1");
-      expect(restored?.metadata).toEqual(expected);
-      const taskFile =
-        board === "shared"
-          ? join(teamDir(cwd, "squad"), "tasks.json")
-          : sessionPath("metadata", "tasks.json");
-      expect(JSON.parse(readFileSync(taskFile, "utf8"))).toEqual({
-        nextId: 2,
-        tasks: [expect.objectContaining({ id: "1", metadata: expected })],
-      });
-    },
-  );
-
-  it.each(["private", "shared"])(
-    "rejects malformed task and dependency IDs consistently on the %s board",
-    async (board) => {
+describe("unified TODO tracking", () => {
+  it.each(["interactive", "non-interactive"] as const)(
+    "keeps one stable tool in %s sessions across team creation and deletion",
+    async (mode) => {
       const list = new TaskList();
-      const tools = registry("interactive", list);
-      if (board === "shared") {
-        manager.create("squad");
-      }
-      const create = tools.get("TaskCreate");
-      const get = tools.get("TaskGet");
-      const update = tools.get("TaskUpdate");
-      if (!create || !get || !update) {
-        throw new Error("Missing task tools");
-      }
-      await create.execute({ cwd }, { subject: "original", description: "" });
-      for (const tool of [get, update]) {
-        expect(tool.schema().input_schema.properties.taskId).toMatchObject({
-          type: "string",
-          pattern: "^[1-9]\\d*$",
-        });
-        for (const taskId of [
-          undefined,
-          1,
-          "",
-          "0",
-          "01",
-          "-1",
-          "1.0",
-          " 1 ",
-          "1\n",
-          "task-1",
-        ]) {
-          const result = await tool.execute({ cwd }, { taskId });
-          expect(result.isError).toBe(true);
-          expect(result.output).toContain("taskId");
-        }
-      }
-      for (const field of ["addBlocks", "addBlockedBy"]) {
-        for (const id of [1, "0", "01", "-1", "1.0", " 1 ", "task-1"]) {
-          const result = await update.execute(
-            { cwd },
-            { taskId: "1", subject: "must not change", [field]: [id] },
+      const tools = registry(mode, list);
+      const write = tool(tools);
+      const schema = write.schema();
+      const names = () =>
+        tools
+          .getAllSchemas()
+          .map((schema) => schema.name)
+          .filter((name) =>
+            /^(TodoWrite|TaskCreate|TaskGet|TaskList|TaskUpdate)$/u.test(name),
           );
-          expect(result.isError).toBe(true);
-          expect(result.output).toContain(field);
-        }
-      }
-      const task = await get.execute({ cwd }, { taskId: "1" });
-      expect(task.isError).toBe(false);
-      expect(JSON.parse(task.output)).toMatchObject({
-        subject: "original",
-        blocks: [],
-        blockedBy: [],
+      expect(names()).toEqual(["TodoWrite"]);
+      await write.execute({ cwd }, { todos: [{ subject: "private" }] });
+      manager.create("squad");
+      expect(tool(tools)).toBe(write);
+      expect(write.schema()).toEqual(schema);
+      expect(names()).toEqual(["TodoWrite"]);
+      const shared = await write.execute(
+        { cwd },
+        { todos: [{ subject: "shared" }] },
+      );
+      expect(snapshot(shared.output)).toMatchObject({
+        boardId: "team:squad",
+        todos: [{ id: "1", subject: "shared" }],
       });
-      const missing = await get.execute({ cwd }, { taskId: "999" });
-      expect(missing).toMatchObject({
-        isError: true,
-        output: "Task not found",
-      });
+      expect(list.list().map((task) => task.subject)).toEqual(["private"]);
+      await manager.delete("squad");
+      expect(tool(tools)).toBe(write);
+      expect(snapshot((await write.execute({ cwd }, {})).output)).toMatchObject(
+        {
+          boardId: list.boardId,
+          todos: [{ subject: "private" }],
+        },
+      );
+      const guidance = buildToolGuidance(
+        tools.getAllSchemas().map((schema) => schema.name),
+      );
+      expect(guidance).toContain("incrementally");
+      expect(guidance).not.toMatch(
+        /TaskCreate|TaskGet|TaskList|TaskUpdate|replaces the entire/u,
+      );
     },
   );
 
   it.each(["private", "shared"])(
-    "rejects unsupported Task fields on the %s board without mutating tasks",
+    "initializes every field, merges metadata and persists the %s board",
     async (board) => {
-      const list = new TaskList();
-      const tools = registry("interactive", list);
-      if (board === "shared") {
-        manager.create("squad");
-      }
-      const tasks = () =>
-        board === "shared"
-          ? manager.getTaskStore("squad").listTasks()
-          : list.list();
-      const create = tools.get("TaskCreate");
-      const update = tools.get("TaskUpdate");
-      if (!create || !update) {
-        throw new Error("Missing task tools");
-      }
-      expect(Object.keys(create.schema().input_schema.properties)).toEqual([
-        "subject",
-        "description",
-        "metadata",
-      ]);
-      expect(Object.keys(update.schema().input_schema.properties)).toEqual([
-        "taskId",
-        "status",
-        "subject",
-        "description",
-        "owner",
-        "priority",
-        "metadata",
-        "addBlocks",
-        "addBlockedBy",
-      ]);
-      for (const fields of [
-        { unknownField: "unsupported" },
-        { metadata: null },
-        { metadata: [] },
-        { metadata: "invalid" },
-        { metadata: 42 },
-      ]) {
-        const result = await create.execute(
-          { cwd },
-          { subject: "removed", description: "", ...fields },
-        );
-        expect(result.isError).toBe(true);
-        expect(tasks()).toEqual([]);
-      }
-      expect(
-        (await create.execute({ cwd }, { subject: "work", description: "" }))
-          .isError,
-      ).toBe(false);
-      const before = tasks();
-      expect(before[0]?.id).toBe("1");
-      for (const fields of [
-        { unknownField: "unsupported" },
-        { metadata: null },
-        { metadata: [] },
-        { metadata: "invalid" },
-        { metadata: 42 },
-      ]) {
-        const result = await update.execute(
-          { cwd },
-          { taskId: "1", status: "completed", ...fields },
-        );
-        expect(result.isError).toBe(true);
-        expect(tasks()).toEqual(before);
-      }
-    },
-  );
-
-  it("exposes only supported TODO fields and rejects unknown fields atomically", async () => {
-    const list = new TaskList();
-    list.create("existing", "");
-    const tool = new TodoWriteTool(list);
-    const schema = z
-      .object({
-        items: z.object({ properties: z.record(z.string(), z.unknown()) }),
-      })
-      .parse(tool.schema().input_schema.properties.todos);
-    expect(Object.keys(schema.items.properties)).toEqual([
-      "id",
-      "subject",
-      "description",
-      "status",
-      "priority",
-    ]);
-    const before = list.list();
-    const result = await tool.execute(
-      { cwd },
-      {
+      const { execute, file } = fixture(board);
+      const created = await execute({
         todos: [
           {
-            subject: "invalid",
-            status: "pending",
-            unknownField: "unsupported",
+            subject: "first",
+            description: "details",
+            priority: "high",
+            owner: "leader",
+            status: "blocked",
+            metadata: { keep: 1, remove: true, nested: { before: true } },
           },
         ],
-      },
-    );
-    expect(result.isError).toBe(true);
-    expect(list.list()).toEqual(before);
-  });
-
-  it.each(["interactive", "non-interactive"] as const)(
-    "exposes only the %s tracking interface and scoped guidance",
-    (mode) => {
-      const tools = registry(mode);
-      expect(trackingNames(tools)).toEqual(
-        mode === "interactive"
-          ? ["TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]
-          : ["TodoWrite"],
-      );
-      const prompt = buildToolGuidance(trackingNames(tools));
-      expect(prompt).toContain("Completed items remain stored");
-      if (mode === "interactive") {
-        expect(prompt).not.toContain("TodoWrite");
-      } else {
-        expect(prompt).not.toContain("TaskCreate");
-        expect(prompt).toContain("returned todos");
-      }
-      expect(tools.get("TaskOutput")).toBeDefined();
+      });
+      expect(created.isError).toBe(false);
+      expect(snapshot(created.output)).toMatchObject({
+        progress: "TODO 0/1",
+        todos: [
+          { id: "1", status: "blocked", priority: "high", owner: "leader" },
+        ],
+      });
+      const updated = await execute({
+        todos: [
+          {
+            id: "1",
+            status: "completed",
+            metadata: {
+              remove: null,
+              added: [null, 2],
+              nested: { after: true },
+            },
+          },
+          { subject: "second", priority: "low", blockedBy: ["1"] },
+        ],
+      });
+      expect(updated.isError).toBe(false);
+      const expected = { keep: 1, added: [null, 2], nested: { after: true } };
+      expect(snapshot(updated.output)).toMatchObject({
+        progress: "TODO 1/2",
+        todos: [
+          {
+            id: "1",
+            description: "details",
+            priority: "high",
+            metadata: expected,
+            blocks: ["2"],
+          },
+          { id: "2", priority: "low", status: "pending", blockedBy: ["1"] },
+        ],
+      });
+      const restored =
+        board === "shared"
+          ? new SharedTaskStore(file).get("1")
+          : new TaskList(new TaskStore("tracking")).get("1");
+      expect(restored?.metadata).toEqual(expected);
+      expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({
+        nextId: 3,
+        tasks: [{ id: "1", metadata: expected }, { id: "2" }],
+      });
     },
   );
 
-  it("switches a non-interactive leader to shared tasks for a team and restores its private TODOs on deletion", async () => {
-    const list = new TaskList();
-    const tools = registry("non-interactive", list);
-    await tools
-      .get("TodoWrite")
-      ?.execute(
-        { cwd },
-        { todos: [{ subject: "private", status: "completed" }] },
+  it.each(["private", "shared"])(
+    "creates five prioritized items concurrently on the %s board",
+    async (board) => {
+      const { execute } = fixture(board);
+      const results = await Promise.all(
+        Array.from({ length: 5 }, (_, i) =>
+          execute({ todos: [{ subject: `Task ${i}`, priority: "high" }] }),
+        ),
       );
-    manager.create("squad");
-    expect(trackingNames(tools)).toEqual([
-      "TaskCreate",
-      "TaskGet",
-      "TaskList",
-      "TaskUpdate",
-    ]);
-    await tools
-      .get("TaskCreate")
-      ?.execute({ cwd }, { subject: "shared", description: "" });
-    expect(list.list()[0]?.subject).toBe("private");
-    expect(manager.getTaskStore("squad").listTasks()[0]?.subject).toBe(
-      "shared",
-    );
-    await manager.delete("squad");
-    expect(trackingNames(tools)).toEqual(["TodoWrite"]);
-    const next = await tools.get("TodoWrite")?.execute(
-      { cwd },
-      {
-        todos: [
-          { id: "1", subject: "private", status: "completed" },
-          { subject: "next", status: "pending" },
-        ],
-      },
-    );
-    expect(next?.output).toContain("TODO 1/2");
-    expect(list.list().map((task) => task.id)).toEqual(["1", "2"]);
-  });
+      expect(results.every((result) => !result.isError)).toBe(true);
+      const { todos } = snapshot((await execute({})).output);
+      expect(todos).toHaveLength(5);
+      expect(new Set(todos.map((task) => task.id)).size).toBe(5);
+      expect(todos.every((task) => task.priority === "high")).toBe(true);
+    },
+  );
 
-  it.each(["fork", "foreground", "background"])(
-    "inherits the TODO interface with isolated %s lists",
+  it.each(["private", "shared"])(
+    "refreshes the %s board without saving or notifying, and treats empty arrays as no-ops",
+    async (board) => {
+      const { execute, store, file, list } = fixture(board);
+      await execute({ todos: [{ subject: "original" }] });
+      const changed = vi.fn();
+      const unsubscribe =
+        board === "shared"
+          ? manager.getTaskStore("squad").subscribe(changed)
+          : list.subscribe(changed);
+      changed.mockClear();
+      const save = vi.spyOn(store, "save");
+      const before = readFileSync(file, "utf8");
+      const mtime = statSync(file).mtimeMs;
+      for (const args of [{}, { todos: [] }, { deleteIds: [] }]) {
+        const result = await execute(args);
+        expect(result.isError).toBe(false);
+        expect(snapshot(result.output).todos).toHaveLength(1);
+      }
+      expect(save).not.toHaveBeenCalled();
+      expect(changed).not.toHaveBeenCalled();
+      expect(readFileSync(file, "utf8")).toBe(before);
+      expect(statSync(file).mtimeMs).toBe(mtime);
+      unsubscribe();
+    },
+  );
+
+  it.each(["private", "shared"])(
+    "rejects malformed, unknown and conflicting edits atomically on the %s board",
+    async (board) => {
+      const { execute, file } = fixture(board);
+      await execute({ todos: [{ subject: "original" }] });
+      const before = readFileSync(file, "utf8");
+      const invalid = [
+        { unknownField: true },
+        { todos: [{ subject: "x", unknownField: true }] },
+        { todos: [{}] },
+        { todos: [{ id: "999", subject: "x" }] },
+        { todos: [{ id: "1", status: "deleted" }] },
+        { todos: [{ id: "1", priority: "urgent" }] },
+        { todos: [{ id: "1", metadata: null }] },
+        { todos: [{ id: "1" }, { id: "1" }] },
+        { todos: [{ id: "1" }], deleteIds: ["1"] },
+        { deleteIds: ["1", "1"] },
+        { deleteIds: ["999"] },
+        { todos: [{ subject: "valid" }, { subject: "bad", blockedBy: ["2"] }] },
+        ...[1, "", "0", "01", "-1", "1.0", " 1 ", "1\n", "task-1"].flatMap(
+          (id) => [
+            { todos: [{ id, status: "completed" }] },
+            { deleteIds: [id] },
+            ...["blocks", "blockedBy"].map((field) => ({
+              todos: [{ id: "1", [field]: [id] }],
+            })),
+          ],
+        ),
+      ];
+      for (const args of invalid) {
+        expect((await execute(args)).isError).toBe(true);
+        expect(readFileSync(file, "utf8")).toBe(before);
+      }
+      const next = await execute({ todos: [{ subject: "next" }] });
+      expect(snapshot(next.output).todos[1].id).toBe("2");
+    },
+  );
+
+  it.each(["subagent", "background", "fork", "teammate"])(
+    "gives %s registry clones isolated private boards",
     async (kind) => {
-      const list = new TaskList();
-      list.create("parent", "");
-      const parent = registry("non-interactive", list);
+      const parent = registry();
+      manager.create("squad");
+      await tool(parent).execute({ cwd }, { todos: [{ subject: "shared" }] });
       const clone = () =>
-        kind === "fork"
-          ? filterToolsForAgent(parent, undefined, undefined, false)
+        kind === "teammate"
+          ? cloneRegistryForTeammate(parent)
           : filterToolsForAgent(
               parent,
               undefined,
@@ -395,84 +289,19 @@ describe("tracking tool modes", () => {
       const child = clone();
       const sibling = clone();
       registries.push(child, sibling);
-      expect(trackingNames(child)).toEqual(["TodoWrite"]);
-      await child
-        .get("TodoWrite")
-        ?.execute(
-          { cwd },
-          { todos: [{ subject: "child", status: "completed" }] },
-        );
-      await sibling
-        .get("TodoWrite")
-        ?.execute(
-          { cwd },
-          { todos: [{ subject: "sibling", status: "pending" }] },
-        );
-      const childResult = await child
-        .get("TodoWrite")
-        ?.execute(
-          { cwd },
-          { todos: [{ id: "1", subject: "child", status: "completed" }] },
-        );
-      expect(childResult?.isError).toBe(false);
-      expect(childResult?.output).toContain("TODO 1/1");
-      expect(childResult?.output).not.toContain("sibling");
-      expect(list.list()[0]?.subject).toBe("parent");
+      await tool(child).execute({ cwd }, { todos: [{ subject: "child" }] });
+      expect(
+        snapshot((await tool(child).execute({ cwd }, {})).output).todos,
+      ).toMatchObject([{ subject: "child" }]);
+      expect(
+        snapshot((await tool(sibling).execute({ cwd }, {})).output).todos,
+      ).toEqual([]);
+      expect(
+        manager
+          .getTaskStore("squad")
+          .listTasks()
+          .map((task) => task.subject),
+      ).toEqual(["shared"]);
     },
   );
-
-  it("gives Task and TODO operations the same snapshots, completion counts and atomic failure behavior", async () => {
-    const tasks = new TaskList();
-    const todos = new TaskList();
-    const create = new TaskCreateTool(tasks);
-    const update = new TaskUpdateTool(tasks);
-    const write = new TodoWriteTool(todos);
-    await create.execute({ cwd }, { subject: "first", description: "" });
-    await create.execute({ cwd }, { subject: "second", description: "" });
-    await update.execute({ cwd }, { taskId: "1", status: "completed" });
-    await update.execute(
-      { cwd },
-      { taskId: "2", status: "blocked", priority: "high" },
-    );
-    const written = await write.execute(
-      { cwd },
-      {
-        todos: [
-          { subject: "first", status: "completed" },
-          { subject: "second", status: "blocked", priority: "high" },
-        ],
-      },
-    );
-    expect(todos.list()).toEqual(tasks.list());
-    const serializedTasks: unknown = JSON.parse(JSON.stringify(tasks.list()));
-    expect(JSON.parse(written.output)).toEqual({
-      todos: serializedTasks,
-      progress: "TODO 1/2",
-    });
-    const completed = await update.execute(
-      { cwd },
-      { taskId: "2", status: "completed" },
-    );
-    expect(completed.output).toContain("TODO 2/2");
-    await write.execute(
-      { cwd },
-      {
-        todos: [
-          { id: "1", subject: "first", status: "completed" },
-          { id: "2", subject: "second", status: "completed" },
-        ],
-      },
-    );
-    expect(todos.list()).toEqual(tasks.list());
-    for (const tool of [write, update]) {
-      const result = await tool.execute(
-        { cwd },
-        tool === write
-          ? { todos: [{ id: "unknown", subject: "bad", status: "pending" }] }
-          : { taskId: "2", status: "bad" },
-      );
-      expect(result.isError).toBe(true);
-    }
-    expect(todos.list()).toEqual(tasks.list());
-  });
 });

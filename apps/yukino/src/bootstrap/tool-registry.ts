@@ -5,15 +5,9 @@ import type { SkillCatalog } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
 import type { SkillHost } from "@/skills/index.js";
 import type { TeamManager } from "@/teams/index.js";
-import { registerLeaderTaskTools } from "@/teams/task-tools.js";
+import { TeamTodoWriteTool } from "@/teams/task-tools.js";
 import type { TaskList } from "@/todo/index.js";
-import {
-  TaskCreateTool,
-  TaskGetTool,
-  TaskListTool,
-  TaskUpdateTool,
-  TodoWriteTool,
-} from "@/todo/tools.js";
+import { TodoWriteTool } from "@/todo/tools.js";
 import { BashTool } from "@/tools/bash.js";
 import { ComputerUseTool } from "@/tools/computer-use.js";
 import { EditFileTool } from "@/tools/edit-file.js";
@@ -64,23 +58,16 @@ export function createToolRegistry(
 ): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(new GoalTool());
-  const trackingMode =
-    options.interactionMode === "non-interactive" ? "todos" : "tasks";
-  if (options.teamManager) {
-    registerLeaderTaskTools(
-      registry,
-      options.teamManager,
-      taskList,
-      trackingMode,
-    );
-  } else if (trackingMode === "todos") {
-    registry.register(new TodoWriteTool(taskList));
-  } else {
-    registry.register(new TaskCreateTool(taskList));
-    registry.register(new TaskGetTool(taskList));
-    registry.register(new TaskListTool(taskList));
-    registry.register(new TaskUpdateTool(taskList));
-  }
+  registry.register(
+    options.teamManager
+      ? new TeamTodoWriteTool(
+          options.teamManager,
+          undefined,
+          undefined,
+          taskList,
+        )
+      : new TodoWriteTool(taskList),
+  );
   registry.register(new TaskOutputTool());
   registry.register(new LspTool(options.lspServers ?? []));
   registry.register(new BashTool());

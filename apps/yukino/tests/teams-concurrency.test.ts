@@ -36,37 +36,39 @@ afterEach(() => {
 });
 
 describe("SharedTaskStore cross-instance writes", () => {
-  it("create() reloads under the lock so a stale in-memory counter cannot collide", () => {
+  it("creation reloads under the lock so a stale in-memory counter cannot collide", () => {
     const dir = makeTempDir();
     const path = join(dir, "tasks.json");
     const a = new SharedTaskStore(path);
     const b = new SharedTaskStore(path);
 
-    const first = a.create("first");
+    const first = a.write({ todos: [{ subject: "first" }] }).slice(-1)[0];
     expect(first.id).toBe("1");
 
-    // b was constructed before a's create, so its in-memory nextId is still
+    // b was constructed before a's write, so its in-memory nextId is still
     // 1. Without the in-lock reload it would reuse id "1" and its save would
     // drop a's task entirely.
-    const second = b.create("second");
+    const second = b.write({ todos: [{ subject: "second" }] }).slice(-1)[0];
     expect(second.id).toBe("2");
 
     const tasks = new SharedTaskStore(path).listTasks();
     expect(tasks.map((t) => t.subject).sort()).toEqual(["first", "second"]);
   });
 
-  it("update() reloads under the lock so it cannot resurrect a dropped task list", () => {
+  it("incremental writing reloads under the lock so it cannot resurrect a dropped task list", () => {
     const dir = makeTempDir();
     const path = join(dir, "tasks.json");
     const a = new SharedTaskStore(path);
     const b = new SharedTaskStore(path);
 
-    a.create("first");
-    b.create("second");
+    a.write({ todos: [{ subject: "first" }] });
+    b.write({ todos: [{ subject: "second" }] });
 
     // a's in-memory task list only knows about "first"; without the in-lock
     // reload its save would wipe "second".
-    const updated = a.update("2", { status: "completed" });
+    const updated = a
+      .write({ todos: [{ id: "2", ...{ status: "completed" } }] })
+      .find((task) => task.id === "2");
     expect(updated?.status).toBe("completed");
 
     const tasks = new SharedTaskStore(path).listTasks();

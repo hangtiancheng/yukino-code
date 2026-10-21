@@ -673,7 +673,7 @@ export class Team {
       if (tasks.length) {
         this.leaderMailbox.sendSync(
           member.name,
-          `[tasks-released] ${member.name} exited. Unassigned tasks: ${tasks.map((task) => `#${task.id}`).join(", ")}. Use TaskList to reassign them.`,
+          `[tasks-released] ${member.name} exited. Unassigned tasks: ${tasks.map((task) => `#${task.id}`).join(", ")}. Use TodoWrite({}) to inspect and reassign them.`,
         );
       }
     } catch (error) {

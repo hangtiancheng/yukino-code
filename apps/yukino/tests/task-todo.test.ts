@@ -23,11 +23,10 @@ import {
 import { SharedTaskStore } from "@/teams/shared-task.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
-import { TaskCreateTool, TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
+import { TodoWriteTool } from "@/todo/tools.js";
 import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
 import { TaskOutputTool } from "@/tools/task-output.js";
 import { TodoProgress } from "@/ui/todo-progress.js";
-
 const directories: string[] = [];
 function temporaryDirectory(): string {
   const directory = mkdtempSync(join(tmpdir(), "yukino-task-regression-"));
@@ -40,23 +39,30 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
-
 describe("atomic task/TODO list", () => {
   it("updates fields and both dependency directions in one persisted transaction", async () => {
     const cwd = temporaryDirectory();
     const store = new TaskStore("session");
     const list = new TaskList(store);
-    const first = list.create("first", "one");
-    const second = list.create("second", "two");
+    const first = list
+      .write({ todos: [{ subject: "first", description: "one" }] })
+      .slice(-1)[0];
+    const second = list
+      .write({ todos: [{ subject: "second", description: "two" }] })
+      .slice(-1)[0];
     const save = vi.spyOn(store, "save");
-    const result = await new TaskUpdateTool(list).execute(
+    const result = await new TodoWriteTool(list).execute(
       { cwd },
       {
-        taskId: first.id,
-        status: "in_progress",
-        addBlocks: [second.id],
-        priority: "high",
-        metadata: { evidence: "tests" },
+        todos: [
+          {
+            id: first.id,
+            status: "in_progress",
+            blocks: [second.id],
+            priority: "high",
+            metadata: { evidence: "tests" },
+          },
+        ],
       },
     );
     expect(result.isError).toBe(false);
@@ -72,39 +78,67 @@ describe("atomic task/TODO list", () => {
   });
   it("rolls back scalar updates and links on unknown, self, or cyclic dependencies", () => {
     const list = new TaskList();
-    const a = list.create("a", "a");
-    const b = list.create("b", "b");
-    list.addBlocks(a.id, [b.id]);
+    const a = list
+      .write({ todos: [{ subject: "a", description: "a" }] })
+      .slice(-1)[0];
+    const b = list
+      .write({ todos: [{ subject: "b", description: "b" }] })
+      .slice(-1)[0];
+    list.write({ todos: [{ id: a.id, blocks: [b.id] }] });
     const before = list.list();
     for (const dependency of [a.id, b.id, "missing"]) {
       expect(() =>
-        list.update(b.id, {
-          subject: "changed",
-          metadata: { leaked: true },
-          addBlocks: [dependency],
-        }),
+        list
+          .write({
+            todos: [
+              {
+                id: b.id,
+                ...{
+                  subject: "changed",
+                  metadata: { leaked: true },
+                  blocks: [dependency],
+                },
+              },
+            ],
+          })
+          .find((task) => task.id === b.id),
       ).toThrow();
       expect(list.list()).toEqual(before);
     }
   });
-  it.each(["addBlocks", "addBlockedBy"] as const)(
+  it.each(["blocks", "blockedBy"] as const)(
     "rejects future IDs in %s without retaining partial links or publishing changes",
     (field) => {
       const list = new TaskList();
-      const first = list.create("first", "");
-      const second = list.create("second", "");
+      const first = list
+        .write({ todos: [{ subject: "first", description: "" }] })
+        .slice(-1)[0];
+      const second = list
+        .write({ todos: [{ subject: "second", description: "" }] })
+        .slice(-1)[0];
       const changes = vi.fn();
       list.subscribe(changes);
       const before = list.list();
       expect(() =>
-        list.update(first.id, {
-          status: "in_progress",
-          [field]: [second.id, "3"],
-        }),
+        list
+          .write({
+            todos: [
+              {
+                id: first.id,
+                ...{
+                  status: "in_progress",
+                  [field]: [second.id, "3"],
+                },
+              },
+            ],
+          })
+          .find((task) => task.id === first.id),
       ).toThrow("Unknown dependency");
       expect(list.list()).toEqual(before);
       expect(changes).toHaveBeenCalledOnce();
-      const third = list.create("third", "");
+      const third = list
+        .write({ todos: [{ subject: "third", description: "" }] })
+        .slice(-1)[0];
       expect(third.id).toBe("3");
       expect(third.blocks).toEqual([]);
       expect(third.blockedBy).toEqual([]);
@@ -112,30 +146,40 @@ describe("atomic task/TODO list", () => {
       expect(list.get(second.id)).toEqual(second);
     },
   );
-  it("removes dangling links on delete and bulk replacement", () => {
+  it("removes reciprocal links on task deletion and explicit dependency replacement", () => {
     const list = new TaskList();
-    const a = list.create("a", "");
-    const b = list.create("b", "");
-    const c = list.create("c", "");
-    list.addBlocks(a.id, [b.id]);
-    list.addBlocks(b.id, [c.id]);
-    list.delete(b.id);
+    const a = list
+      .write({ todos: [{ subject: "a", description: "" }] })
+      .slice(-1)[0];
+    const b = list
+      .write({ todos: [{ subject: "b", description: "" }] })
+      .slice(-1)[0];
+    const c = list
+      .write({ todos: [{ subject: "c", description: "" }] })
+      .slice(-1)[0];
+    list.write({ todos: [{ id: a.id, blocks: [b.id] }] });
+    list.write({ todos: [{ id: b.id, blocks: [c.id] }] });
+    list.write({ deleteIds: [b.id] });
     expect(list.get(a.id)?.blocks).toEqual([]);
     expect(list.get(c.id)?.blockedBy).toEqual([]);
-    list.addBlocks(a.id, [c.id]);
-    list.replace([{ id: c.id, subject: "c", status: "pending" }]);
+    list.write({ todos: [{ id: a.id, blocks: [c.id] }] });
+    list.write({ todos: [{ id: c.id, blockedBy: [] }] });
     expect(list.get(c.id)?.blockedBy).toEqual([]);
   });
-  it("preserves identity and metadata when replacing TODOs, rejecting duplicate and unknown IDs", async () => {
+  it("preserves identity and metadata in incremental edits, rejecting duplicate and unknown IDs", async () => {
     const list = new TaskList(new TaskStore("metadata-todos"));
     expect(
       (
-        await new TaskCreateTool(list).execute(
+        await new TodoWriteTool(list).execute(
           { cwd: "/tmp" },
           {
-            subject: "a",
-            description: "description",
-            metadata: { count: 2 },
+            todos: [
+              {
+                subject: "a",
+                description: "description",
+                metadata: { count: 2 },
+              },
+            ],
           },
         )
       ).isError,
@@ -143,12 +187,16 @@ describe("atomic task/TODO list", () => {
     const [a] = list.list();
     expect(
       (
-        await new TaskUpdateTool(list).execute(
+        await new TodoWriteTool(list).execute(
           { cwd: "/tmp" },
           {
-            taskId: a.id,
-            owner: "leader",
-            priority: "high",
+            todos: [
+              {
+                id: a.id,
+                owner: "leader",
+                priority: "high",
+              },
+            ],
           },
         )
       ).isError,
@@ -190,7 +238,7 @@ describe("atomic task/TODO list", () => {
     expect((await tool.execute({ cwd: "/tmp" }, { todos: [] })).isError).toBe(
       false,
     );
-    expect(list.list()).toEqual([]);
+    expect(list.list()).toEqual(before);
   });
   it("does not mutate memory or consume IDs when persistence fails", () => {
     const store = new TaskStore("s");
@@ -198,32 +246,44 @@ describe("atomic task/TODO list", () => {
     const save = vi.spyOn(store, "save").mockImplementation(() => {
       throw new Error("disk full");
     });
-    expect(() => list.create("a", "")).toThrow("disk full");
+    expect(
+      () =>
+        list.write({ todos: [{ subject: "a", description: "" }] }).slice(-1)[0],
+    ).toThrow("disk full");
     expect(list.list()).toEqual([]);
     save.mockRestore();
-    expect(list.create("a", "").id).toBe("1");
+    expect(
+      list.write({ todos: [{ subject: "a", description: "" }] }).slice(-1)[0]
+        .id,
+    ).toBe("1");
     const before = list.list();
     vi.spyOn(store, "save").mockImplementation(() => {
       throw new Error("disk full");
     });
-    expect(() => list.update("1", { status: "completed" })).toThrow();
+    expect(() =>
+      list
+        .write({ todos: [{ id: "1", ...{ status: "completed" } }] })
+        .find((task) => task.id === "1"),
+    ).toThrow();
     expect(list.list()).toEqual(before);
   });
   it("returns isolated snapshots and publishes only successful commits", () => {
     const list = new TaskList();
     const received = vi.fn();
     const unsubscribe = list.subscribe(received);
-    const created = list.create("original", "");
+    const created = list
+      .write({ todos: [{ subject: "original", description: "" }] })
+      .slice(-1)[0];
     created.subject = "external mutation";
     list.list()[0].blocks.push("missing");
     expect(list.get(created.id)?.subject).toBe("original");
     expect(list.get(created.id)?.blocks).toEqual([]);
     expect(() => {
-      list.addBlocks(created.id, ["missing"]);
+      list.write({ todos: [{ id: created.id, blocks: ["missing"] }] });
     }).toThrow();
     expect(received).toHaveBeenCalledTimes(2);
     unsubscribe();
-    list.update(created.id, { status: "completed" });
+    list.write({ todos: [{ id: created.id, ...{ status: "completed" } }] });
     expect(received).toHaveBeenCalledTimes(2);
   });
   it("refuses corrupt stores rather than overwriting their contents", () => {
@@ -238,12 +298,14 @@ describe("atomic task/TODO list", () => {
   });
   it("rejects invalid statuses and blank TODO titles without changing the list", async () => {
     const list = new TaskList();
-    const item = list.create("a", "");
+    const item = list
+      .write({ todos: [{ subject: "a", description: "" }] })
+      .slice(-1)[0];
     expect(
       (
-        await new TaskUpdateTool(list).execute(
+        await new TodoWriteTool(list).execute(
           { cwd: "/tmp" },
-          { taskId: item.id, status: "nonsense" },
+          { todos: [{ id: item.id, status: "nonsense" }] },
         )
       ).isError,
     ).toBe(true);
@@ -259,7 +321,9 @@ describe("atomic task/TODO list", () => {
   });
   it("rejects malformed TODO IDs without replacing existing items or consuming IDs", async () => {
     const list = new TaskList();
-    const item = list.create("original", "");
+    const item = list
+      .write({ todos: [{ subject: "original", description: "" }] })
+      .slice(-1)[0];
     const write = new TodoWriteTool(list);
     for (const id of [1, "", "0", "01", "-1", "1.0", " 1 ", "1\n", "task-1"]) {
       const result = await write.execute(
@@ -270,13 +334,16 @@ describe("atomic task/TODO list", () => {
       expect(result.output).toContain("id");
       expect(list.list()).toEqual([item]);
     }
-    expect(list.create("next", "").id).toBe("2");
+    expect(
+      list.write({ todos: [{ subject: "next", description: "" }] }).slice(-1)[0]
+        .id,
+    ).toBe("2");
   });
   it.each(["subagent", "background", "fork", "teammate"])(
     "isolates %s private tasks from the parent and siblings",
     async (kind) => {
       const rootList = new TaskList();
-      rootList.create("parent task", "");
+      rootList.write({ todos: [{ subject: "parent task", description: "" }] });
       const root = createToolRegistry("/tmp", rootList);
       const clone = () =>
         kind === "fork"
@@ -294,32 +361,30 @@ describe("atomic task/TODO list", () => {
       expect(
         (
           await child
-            .get("TaskCreate")
+            .get("TodoWrite")
             ?.execute(
               { cwd: "/tmp" },
-              { subject: "child task", description: "" },
+              { todos: [{ subject: "child task", description: "" }] },
             )
         )?.isError,
       ).toBe(false);
       expect(
-        (await child.get("TaskList")?.execute({ cwd: "/tmp" }, {}))?.output,
+        (await child.get("TodoWrite")?.execute({ cwd: "/tmp" }, {}))?.output,
       ).toContain("child task");
-      expect(
-        (await sibling.get("TaskList")?.execute({ cwd: "/tmp" }, {}))?.output,
-      ).toBe("No tasks found\nTODO 0/0");
+      const empty = await sibling
+        .get("TodoWrite")
+        ?.execute({ cwd: "/tmp" }, {});
+      expect(JSON.parse(empty?.output ?? "null")).toMatchObject({
+        todos: [],
+        progress: "TODO 0/0",
+      });
       expect(rootList.list()[0]?.subject).toBe("parent task");
     },
   );
   it("keeps bookkeeping and semantic navigation available in plan without enabling edits", () => {
     const checker = new PermissionChecker("/tmp", "plan");
     checker.mode = "plan";
-    for (const name of [
-      "TodoWrite",
-      "TaskCreate",
-      "TaskOutput",
-      "LSP",
-      "WebFetch",
-    ]) {
+    for (const name of ["TodoWrite", "TaskOutput", "LSP", "WebFetch"]) {
       expect(
         checker.check(name, "read", { file_path: "/tmp/example.ts" }).effect,
       ).toBe("allow");
@@ -331,12 +396,14 @@ describe("atomic task/TODO list", () => {
   });
   it("renders bounded progress and honest cancelled/blocked counts", () => {
     const list = new TaskList();
-    list.replace([
-      { subject: "done", status: "completed" },
-      { subject: "Testing", status: "in_progress" },
-      { subject: "stuck", status: "blocked" },
-      { subject: "dropped", status: "cancelled" },
-    ]);
+    list.write({
+      todos: [
+        { subject: "done", status: "completed" },
+        { subject: "Testing", status: "in_progress" },
+        { subject: "stuck", status: "blocked" },
+        { subject: "dropped", status: "cancelled" },
+      ],
+    });
     const text = renderToString(
       createElement(TodoProgress, { tasks: list.list() }),
       { columns: 120 },
@@ -349,12 +416,14 @@ describe("atomic task/TODO list", () => {
   });
   it("keeps progress on one line and strips terminal control sequences", () => {
     const list = new TaskList();
-    list.replace([
-      {
-        subject: "Testing\n\u001b[31mprogress🙂\u001b[0m\tfiles\u0007",
-        status: "in_progress",
-      },
-    ]);
+    list.write({
+      todos: [
+        {
+          subject: "Testing\n\u001b[31mprogress🙂\u001b[0m\tfiles\u0007",
+          status: "in_progress",
+        },
+      ],
+    });
     const text = renderToString(
       createElement(TodoProgress, { tasks: list.list() }),
       { columns: 120 },
@@ -365,7 +434,6 @@ describe("atomic task/TODO list", () => {
     expect(text).not.toContain("\u001b[31m");
   });
 });
-
 describe("strict shared task transactions", () => {
   it.each(["blocks", "blockedBy"] as const)(
     "rejects forward references in %s at creation and never auto-links later tasks",
@@ -373,54 +441,88 @@ describe("strict shared task transactions", () => {
       const path = join(temporaryDirectory(), "tasks.json");
       const firstHost = new SharedTaskStore(path);
       const secondHost = new SharedTaskStore(path);
-      firstHost.create("first");
+      firstHost.write({ todos: [{ subject: "first" }] });
       const before = readFileSync(path, "utf8");
       for (const dependency of ["2", "3"]) {
-        expect(() =>
-          secondHost.create(
-            "invalid",
-            "",
-            "",
-            direction === "blocks" ? ["1", dependency] : [],
-            direction === "blockedBy" ? ["1", dependency] : [],
-          ),
+        expect(
+          () =>
+            secondHost
+              .write({
+                todos: [
+                  {
+                    subject: "invalid",
+                    description: "",
+                    owner: "",
+                    blocks: direction === "blocks" ? ["1", dependency] : [],
+                    blockedBy:
+                      direction === "blockedBy" ? ["1", dependency] : [],
+                  },
+                ],
+              })
+              .slice(-1)[0],
         ).toThrow();
         expect(readFileSync(path, "utf8")).toBe(before);
       }
-      expect(firstHost.create("second").id).toBe("2");
-      expect(secondHost.create("third").id).toBe("3");
+      expect(
+        firstHost.write({ todos: [{ subject: "second" }] }).slice(-1)[0].id,
+      ).toBe("2");
+      expect(
+        secondHost.write({ todos: [{ subject: "third" }] }).slice(-1)[0].id,
+      ).toBe("3");
       for (const task of firstHost.listTasks()) {
         expect(task.blocks).toEqual([]);
         expect(task.blockedBy).toEqual([]);
       }
     },
   );
-  it.each(["addBlocks", "addBlockedBy"] as const)(
+  it.each(["blocks", "blockedBy"] as const)(
     "rolls back partial %s links and honors the latest board across hosts",
     (field) => {
       const path = join(temporaryDirectory(), "tasks.json");
       const leader = new SharedTaskStore(path);
       const teammate = new SharedTaskStore(path);
-      const first = leader.create("first");
-      const second = teammate.create("second");
+      const first = leader
+        .write({ todos: [{ subject: "first" }] })
+        .slice(-1)[0];
+      const second = teammate
+        .write({ todos: [{ subject: "second" }] })
+        .slice(-1)[0];
       const before = readFileSync(path, "utf8");
       expect(() =>
-        leader.update(first.id, {
-          owner: "new owner",
-          [field]: [second.id, "3"],
-        }),
+        leader
+          .write({
+            todos: [
+              {
+                id: first.id,
+                ...{
+                  owner: "new owner",
+                  [field]: [second.id, "3"],
+                },
+              },
+            ],
+          })
+          .find((task) => task.id === first.id),
       ).toThrow("Unknown dependency");
       expect(readFileSync(path, "utf8")).toBe(before);
       expect(teammate.get(first.id)).toEqual(first);
       expect(teammate.get(second.id)).toEqual(second);
-      teammate.create("third");
+      teammate.write({ todos: [{ subject: "third" }] });
       expect(leader.get("3")).toMatchObject({ blocks: [], blockedBy: [] });
-      leader.update(first.id, { addBlocks: [second.id] });
+      leader.write({ todos: [{ id: first.id, ...{ blocks: [second.id] } }] });
       expect(() =>
-        teammate.update(second.id, {
-          status: "completed",
-          addBlocks: [first.id],
-        }),
+        teammate
+          .write({
+            todos: [
+              {
+                id: second.id,
+                ...{
+                  status: "completed",
+                  blocks: [first.id],
+                },
+              },
+            ],
+          })
+          .find((task) => task.id === second.id),
       ).toThrow("cycle");
       expect(leader.get(second.id)).toMatchObject({
         status: "pending",
@@ -432,16 +534,37 @@ describe("strict shared task transactions", () => {
   it("rejects missing, self and cyclic dependencies without changing disk or scalar fields", () => {
     const path = join(temporaryDirectory(), "tasks.json");
     const store = new SharedTaskStore(path);
-    const a = store.create("a");
-    const b = store.create("b", "", "", [], [a.id]);
+    const a = store.write({ todos: [{ subject: "a" }] }).slice(-1)[0];
+    const b = store
+      .write({
+        todos: [
+          {
+            subject: "b",
+            description: "",
+            owner: "",
+            blocks: [],
+            blockedBy: [a.id],
+          },
+        ],
+      })
+      .slice(-1)[0];
     const before = readFileSync(path, "utf8");
     for (const dependency of [a.id, b.id, "missing"]) {
       expect(() =>
-        store.update(b.id, {
-          status: "completed",
-          owner: "new owner",
-          addBlocks: [dependency],
-        }),
+        store
+          .write({
+            todos: [
+              {
+                id: b.id,
+                ...{
+                  status: "completed",
+                  owner: "new owner",
+                  blocks: [dependency],
+                },
+              },
+            ],
+          })
+          .find((task) => task.id === b.id),
       ).toThrow();
       expect(readFileSync(path, "utf8")).toBe(before);
       expect(store.get(b.id)).toMatchObject({
@@ -450,29 +573,72 @@ describe("strict shared task transactions", () => {
         blocks: [],
       });
     }
-    expect(() => store.create("future dependency", "", "", ["4"])).toThrow(
-      "Unknown dependency",
+    expect(
+      () =>
+        store
+          .write({
+            todos: [
+              {
+                subject: "future dependency",
+                description: "",
+                owner: "",
+                blocks: ["4"],
+              },
+            ],
+          })
+          .slice(-1)[0],
+    ).toThrow("Unknown dependency");
+    expect(store.write({ todos: [{ subject: "next" }] }).slice(-1)[0].id).toBe(
+      "3",
     );
-    expect(store.create("next").id).toBe("3");
   });
   it("supports cancellation and removes reciprocal links on deletion", () => {
     const path = join(temporaryDirectory(), "tasks.json");
     const store = new SharedTaskStore(path);
-    const a = store.create("a");
-    const b = store.create("b", "", "", [], [a.id]);
-    const c = store.create("c", "", "", [], [b.id]);
-    store.update(b.id, { status: "cancelled" });
+    const a = store.write({ todos: [{ subject: "a" }] }).slice(-1)[0];
+    const b = store
+      .write({
+        todos: [
+          {
+            subject: "b",
+            description: "",
+            owner: "",
+            blocks: [],
+            blockedBy: [a.id],
+          },
+        ],
+      })
+      .slice(-1)[0];
+    const c = store
+      .write({
+        todos: [
+          {
+            subject: "c",
+            description: "",
+            owner: "",
+            blocks: [],
+            blockedBy: [b.id],
+          },
+        ],
+      })
+      .slice(-1)[0];
+    store.write({ todos: [{ id: b.id, ...{ status: "cancelled" } }] });
     expect(store.listTasks("cancelled").map((task) => task.id)).toEqual([b.id]);
-    expect(store.delete(b.id)).toBe(true);
-    expect(store.delete(b.id)).toBe(false);
+    expect(store.write({ deleteIds: [b.id] }).map((task) => task.id)).toEqual([
+      a.id,
+      c.id,
+    ]);
+    expect(() => store.write({ deleteIds: [b.id] })).toThrow("not found");
     const restored = new SharedTaskStore(path);
     expect(restored.get(a.id)?.blocks).toEqual([]);
     expect(restored.get(c.id)?.blockedBy).toEqual([]);
-    expect(restored.create("new").id).toBe("4");
+    expect(
+      restored.write({ todos: [{ subject: "new" }] }).slice(-1)[0].id,
+    ).toBe("4");
   });
   it("returns snapshots that cannot mutate cached or persisted records", () => {
     const store = new SharedTaskStore(join(temporaryDirectory(), "tasks.json"));
-    const created = store.create("a");
+    const created = store.write({ todos: [{ subject: "a" }] }).slice(-1)[0];
     created.subject = "uncommitted";
     created.blocks.push("missing");
     store.listTasks()[0].owner = "uncommitted";
@@ -481,7 +647,9 @@ describe("strict shared task transactions", () => {
       owner: "",
       blocks: [],
     });
-    const updated = store.update(created.id, { description: "saved" });
+    const updated = store
+      .write({ todos: [{ id: created.id, ...{ description: "saved" } }] })
+      .find((task) => task.id === created.id);
     if (updated) {
       updated.description = "uncommitted";
     }
@@ -490,17 +658,23 @@ describe("strict shared task transactions", () => {
   it("rolls back memory, counters and links on persistence failure", () => {
     const path = join(temporaryDirectory(), "tasks.json");
     const store = new SharedTaskStore(path);
-    const a = store.create("a");
-    const b = store.create("b");
+    const a = store.write({ todos: [{ subject: "a" }] }).slice(-1)[0];
+    const b = store.write({ todos: [{ subject: "b" }] }).slice(-1)[0];
     const before = readFileSync(path, "utf8");
     const save: unknown = Reflect.get(store, "save");
     Reflect.set(store, "save", () => {
       throw new Error("disk full");
     });
-    expect(() => store.create("c")).toThrow("disk full");
+    expect(
+      () => store.write({ todos: [{ subject: "c" }] }).slice(-1)[0],
+    ).toThrow("disk full");
     expect(Reflect.get(store, "nextId")).toBe(3);
     expect(() =>
-      store.update(a.id, { status: "completed", addBlocks: [b.id] }),
+      store
+        .write({
+          todos: [{ id: a.id, ...{ status: "completed", blocks: [b.id] } }],
+        })
+        .find((task) => task.id === a.id),
     ).toThrow("disk full");
     expect(Reflect.get(store, "tasks")).toMatchObject([
       { id: a.id, status: "pending", blocks: [] },
@@ -508,12 +682,14 @@ describe("strict shared task transactions", () => {
     ]);
     expect(readFileSync(path, "utf8")).toBe(before);
     Reflect.set(store, "save", save);
-    expect(store.create("c").id).toBe("3");
+    expect(store.write({ todos: [{ subject: "c" }] }).slice(-1)[0].id).toBe(
+      "3",
+    );
   });
   it("reports corrupt boards on reads too and never repairs invalid stored dependencies", () => {
     const path = join(temporaryDirectory(), "tasks.json");
     const store = new SharedTaskStore(path);
-    store.create("a");
+    store.write({ todos: [{ subject: "a" }] });
     const corrupt = JSON.stringify({
       nextId: 2,
       tasks: [
@@ -534,7 +710,7 @@ describe("strict shared task transactions", () => {
     for (const operation of [
       () => store.listTasks(),
       () => store.get("1"),
-      () => store.create("next"),
+      () => store.write({ todos: [{ subject: "next" }] }).slice(-1)[0],
       () => {
         store.initEmpty();
       },
@@ -547,14 +723,19 @@ describe("strict shared task transactions", () => {
   it("rejects empty titles and invalid statuses without writing", () => {
     const path = join(temporaryDirectory(), "tasks.json");
     const store = new SharedTaskStore(path);
-    const a = store.create("a");
+    const a = store.write({ todos: [{ subject: "a" }] }).slice(-1)[0];
     const before = readFileSync(path, "utf8");
-    expect(() => store.create("  ")).toThrow();
-    expect(() => store.update(a.id, { status: "done" })).toThrow();
+    expect(
+      () => store.write({ todos: [{ subject: "  " }] }).slice(-1)[0],
+    ).toThrow();
+    expect(() => {
+      Reflect.apply(store.write.bind(store), undefined, [
+        { todos: [{ id: a.id, status: "done" }] },
+      ]);
+    }).toThrow();
     expect(readFileSync(path, "utf8")).toBe(before);
   });
 });
-
 describe("task snapshot validation", () => {
   it.each(["private", "shared"])(
     "validates IDs and nextId consistently in %s storage and retains the counter after deletion",
@@ -568,7 +749,7 @@ describe("task snapshot validation", () => {
           ? new SharedTaskStore(path)
           : new TaskList(new TaskStore("snapshot"));
       const store = load();
-      const task = store.create("first", "");
+      const task = store.write({ todos: [{ subject: "first" }] }).slice(-1)[0];
       const snapshot = { nextId: 2, tasks: [task] };
       for (const invalid of [
         { ...snapshot, nextId: undefined },
@@ -586,16 +767,19 @@ describe("task snapshot validation", () => {
         expect(readFileSync(path, "utf8")).toBe(serialized);
       }
       writeFileSync(path, JSON.stringify(snapshot));
-      expect(load().delete(task.id)).toBe(true);
+      expect(load().write({ deleteIds: [task.id] })).toEqual([]);
       expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
         nextId: 2,
         tasks: [],
       });
-      expect(load().create("next", "").id).toBe("2");
+      expect(
+        load()
+          .write({ todos: [{ subject: "next" }] })
+          .slice(-1)[0].id,
+      ).toBe("2");
     },
   );
 });
-
 describe("background task output", () => {
   it("does not start a runner cancelled while queued", async () => {
     const manager = new TaskManager();

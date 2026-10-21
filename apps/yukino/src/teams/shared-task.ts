@@ -11,13 +11,14 @@ import {
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
-import {
-  unresolvedTaskDependencies,
-  validateTaskDependencies,
-} from "@/todo/dependencies.js";
-import type { Task, TaskUpdates } from "@/todo/index.js";
-import { mergeTaskMetadata } from "@/todo/index.js";
+import { validateTaskDependencies } from "@/todo/dependencies.js";
+import type { Task } from "@/todo/index.js";
 import { StoredTaskSchema, TaskSnapshotSchema } from "@/todo/store.js";
+import {
+  applyTodoWrite,
+  TodoWriteSchema,
+  type TodoWriteInput,
+} from "@/todo/write.js";
 
 export interface SharedTask extends Task {
   createdBy: string;
@@ -34,9 +35,11 @@ const StoreDataSchema = TaskSnapshotSchema.extend({
 type StoreData = z.infer<typeof StoreDataSchema>;
 const log = createChildLogger({ module: "shared-tasks" });
 
-export type TaskUpdateFields = Omit<TaskUpdates, "status"> & {
-  status?: string;
-};
+export interface SharedTodoWriteOptions {
+  actor?: string;
+  createdBy?: string;
+  validateOwner?: (owner: string) => void;
+}
 
 /**
  * Shared task store: persisted as a JSON file (tasks.json), readable and writable by all members of the same team.
@@ -132,30 +135,23 @@ export class SharedTaskStore {
     return result;
   }
 
-  create(
-    subject: string,
-    description = "",
-    owner = "",
-    blocks: string[] = [],
-    blockedBy: string[] = [],
-    createdBy = "",
-    metadata: Record<string, unknown> = {},
-  ): SharedTask {
+  write(
+    input: TodoWriteInput,
+    options: SharedTodoWriteOptions = {},
+  ): SharedTask[] {
+    const parsed = TodoWriteSchema.parse(input);
+    if (!parsed.todos?.length && !parsed.deleteIds?.length) {
+      return this.listTasks();
+    }
     return this.mutate(() => {
-      const task: SharedTask = {
-        id: String(this.nextId++),
-        subject: StoredTaskSchema.shape.subject.parse(subject),
-        description,
-        status: "pending",
-        owner,
-        metadata: structuredClone(metadata),
-        blocks: [...blocks],
-        blockedBy: [...blockedBy],
-        createdBy,
-      };
-      this.tasks.push(task);
-      this.linkDependencies(task);
-      return task;
+      const result = applyTodoWrite(this.tasks, this.nextId, parsed, {
+        actor: options.actor,
+        validateOwner: options.validateOwner,
+        createTask: (task) => ({ ...task, createdBy: options.createdBy ?? "" }),
+      });
+      this.tasks = result.tasks;
+      this.nextId = result.nextId;
+      return this.tasks;
     });
   }
 
@@ -180,103 +176,6 @@ export class SharedTaskStore {
     );
   }
 
-  /**
-   * Updates task fields; addBlocks / addBlockedBy append dependencies (deduplicated).
-   * Returns undefined if the task does not exist.
-   */
-  update(
-    id: string,
-    fields: TaskUpdateFields,
-    actor?: string,
-  ): SharedTask | undefined {
-    return this.mutate(() => {
-      const task = this.tasks.find((t) => t.id === id);
-      if (!task) {
-        return undefined;
-      }
-      this.assertOwner(task, actor);
-      if (actor && fields.owner && fields.owner !== actor) {
-        throw new Error("Only the leader can assign tasks to other teammates");
-      }
-      if (actor && fields.status === "in_progress") {
-        if (task.status === "completed" || task.status === "cancelled") {
-          throw new Error(
-            `Task #${id} is already ${task.status}; reopen it as pending first`,
-          );
-        }
-        task.owner = actor;
-      }
-      if (fields.status !== undefined) {
-        task.status = StoredTaskSchema.shape.status.parse(fields.status);
-      }
-      if (fields.owner !== undefined) {
-        task.owner = fields.owner;
-      }
-      if (fields.description !== undefined) {
-        task.description = fields.description;
-      }
-      if (fields.subject !== undefined) {
-        task.subject = StoredTaskSchema.shape.subject.parse(fields.subject);
-      }
-      if (fields.priority !== undefined) {
-        task.priority = fields.priority;
-      }
-      task.metadata = mergeTaskMetadata(task.metadata, fields.metadata);
-      for (const b of fields.addBlocks ?? []) {
-        if (!task.blocks.includes(b)) {
-          task.blocks.push(b);
-        }
-      }
-      for (const b of fields.addBlockedBy ?? []) {
-        if (!task.blockedBy.includes(b)) {
-          task.blockedBy.push(b);
-        }
-      }
-      this.linkDependencies(task);
-      if (actor && task.status === "in_progress" && !task.owner) {
-        throw new Error("An in-progress teammate task must have an owner");
-      }
-      if (fields.status === "in_progress") {
-        const blockers = unresolvedTaskDependencies(task, this.tasks);
-        if (blockers.length) {
-          throw new Error(`Task #${id} is blocked by: ${blockers.join(", ")}`);
-        }
-        const busy =
-          actor &&
-          this.tasks.find(
-            (other) =>
-              other.id !== id &&
-              other.owner === actor &&
-              other.status === "in_progress",
-          );
-        if (busy) {
-          throw new Error(
-            `Teammate '${actor}' is already working on task #${busy.id}`,
-          );
-        }
-      }
-      return task;
-    });
-  }
-
-  delete(id: string, actor?: string): boolean {
-    return this.mutate(() => {
-      const existing = this.tasks.find((task) => task.id === id);
-      if (!existing) {
-        return false;
-      }
-      this.assertOwner(existing, actor);
-      this.tasks = this.tasks.filter((task) => task.id !== id);
-      for (const task of this.tasks) {
-        task.blocks = task.blocks.filter((dependency) => dependency !== id);
-        task.blockedBy = task.blockedBy.filter(
-          (dependency) => dependency !== id,
-        );
-      }
-      return true;
-    });
-  }
-
   releaseOwner(owner: string): SharedTask[] {
     return (
       this.mutate(() => {
@@ -297,12 +196,6 @@ export class SharedTaskStore {
     );
   }
 
-  private assertOwner(task: SharedTask, actor?: string): void {
-    if (actor && task.owner && task.owner !== actor) {
-      throw new Error(`Task #${task.id} is already claimed by '${task.owner}'`);
-    }
-  }
-
   /** Clears the task store and persists the empty state; used for initialization when creating a new team. */
   initEmpty(): void {
     this.mutate(() => {
@@ -310,36 +203,5 @@ export class SharedTaskStore {
       this.nextId = 1;
       return true;
     });
-  }
-
-  private linkDependencies(task: SharedTask): void {
-    task.blocks = [...new Set(task.blocks)];
-    task.blockedBy = [...new Set(task.blockedBy)];
-    for (const blockedId of task.blocks) {
-      const blocked = this.tasks.find(
-        (candidate) => candidate.id === blockedId,
-      );
-      if (!blocked) {
-        throw new Error(
-          `Unknown dependency: task #${blockedId} does not exist`,
-        );
-      }
-      if (!blocked.blockedBy.includes(task.id)) {
-        blocked.blockedBy.push(task.id);
-      }
-    }
-    for (const blockerId of task.blockedBy) {
-      const blocker = this.tasks.find(
-        (candidate) => candidate.id === blockerId,
-      );
-      if (!blocker) {
-        throw new Error(
-          `Unknown dependency: task #${blockerId} does not exist`,
-        );
-      }
-      if (!blocker.blocks.includes(task.id)) {
-        blocker.blocks.push(task.id);
-      }
-    }
   }
 }
