@@ -112,7 +112,7 @@ function App(): React.JSX.Element {
                 onRespondPermission={chat.respondPermission}
                 onRespondAsk={chat.respondAsk}
               />
-              <div className="from-background via-background/95 pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t pt-6 pb-4">
+              <div className="from-background via-background/95 pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-linear-to-t pt-6 pb-4">
                 <div className="pointer-events-auto mx-auto w-full max-w-3xl px-4">
                   <Composer
                     streaming={state.streaming}
