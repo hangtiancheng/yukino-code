@@ -45,6 +45,13 @@ export interface SessionSummary {
   firstMessage: string;
   messageCount: number;
   modTime: number;
+  /** Canonical project directory this session belongs to. */
+  cwd: string;
+  /** sha256(canonicalPath(cwd)) — stable per-project grouping key. */
+  projectKey: string;
+  /** Epoch ms of the last real user message; null when the session has none.
+   *  This is the ordering key so merely viewing a session never reorders it. */
+  lastUserMessageTime: number | null;
 }
 
 /** Flattened transcript message sent to the renderer on session resume. */
@@ -70,6 +77,8 @@ export type InitState =
   | {
       ok: true;
       cwd: string;
+      /** sha256(canonicalPath(cwd)) — matches SessionSummary.projectKey. */
+      projectKey: string;
       providerName: string;
       model: string;
       sessionId: string;
@@ -139,10 +148,15 @@ export type BridgeEvent =
   /** Pushed after a bridge-side session resume (e.g. the /resume command). */
   | { type: "history"; data: ResumeResult };
 
-/** Payload returned by `yukino:resume-session`. */
+/** Payload returned by `yukino:resume-session`; also carried by the
+ *  `history` event (where the cwd fields are absent). */
 export interface ResumeResult {
   sessionId: string;
   messages: HistoryMessage[];
+  /** Working directory of the resumed session. */
+  cwd?: string;
+  /** True when the resume caused the app's working directory to change. */
+  switchedCwd?: boolean;
 }
 
 /** A slash command surfaced in the composer's command panel. */
@@ -183,7 +197,7 @@ export interface YukinoApi {
   abort(): Promise<void>;
   newSession(): Promise<{ sessionId: string }>;
   listSessions(): Promise<SessionSummary[]>;
-  resumeSession(sessionId: string): Promise<ResumeResult>;
+  resumeSession(sessionId: string, cwd?: string): Promise<ResumeResult>;
   selectFolder(): Promise<{ cwd: string | null }>;
   respondPermission(id: string, response: PermissionResponse): Promise<void>;
   respondAsk(id: string, answers: Record<string, string>): Promise<void>;

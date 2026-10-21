@@ -39,6 +39,9 @@ function AssistantRow({
   thinking: string;
   streaming: boolean;
 }): React.JSX.Element {
+  // The thinking trace is only "in progress" while the model is still
+  // thinking — the moment text starts streaming, thinking is done.
+  const thinkingActive = streaming && !text;
   return (
     <Message>
       <MessageAvatar>
@@ -49,9 +52,9 @@ function AssistantRow({
           <Trace>
             <TraceCollapsible>
               <TraceCollapsibleTrigger>
-                <TraceLine status={streaming ? "running" : undefined}>
+                <TraceLine status={thinkingActive ? "running" : undefined}>
                   <TraceIcon>
-                    {streaming ? <Spinner /> : <InfoIcon />}
+                    {thinkingActive ? <Spinner /> : <InfoIcon />}
                   </TraceIcon>
                   <span data-slot="trace-title" className="text-xs">
                     Thinking

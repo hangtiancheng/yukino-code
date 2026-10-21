@@ -11,6 +11,7 @@ import { Header } from "@renderer/components/chat/header";
 import { SettingsDialog } from "@renderer/components/chat/settings-dialog";
 import { Sidebar } from "@renderer/components/chat/sidebar";
 import { Spinner } from "@renderer/components/ui/spinner";
+import { Toaster } from "@renderer/components/ui/toaster";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import { useChat } from "@renderer/hooks/use-chat";
 import type { InitState } from "@shared/ipc-types";
@@ -89,6 +90,7 @@ function App(): React.JSX.Element {
           open={sidebarOpen}
           sessions={state.sessions}
           activeSessionId={state.activeSessionId}
+          currentProjectKey={state.init?.ok ? state.init.projectKey : null}
           onResumeSession={chat.resumeSession}
           onClose={() => {
             setSidebarOpen(false);
@@ -176,6 +178,7 @@ function App(): React.JSX.Element {
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <Toaster />
     </TooltipProvider>
   );
 }

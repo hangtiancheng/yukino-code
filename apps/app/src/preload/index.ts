@@ -25,8 +25,8 @@ const api = {
     ipcRenderer.invoke("yukino:new-session"),
   listSessions: (): Promise<SessionSummary[]> =>
     ipcRenderer.invoke("yukino:list-sessions"),
-  resumeSession: (sessionId: string): Promise<ResumeResult> =>
-    ipcRenderer.invoke("yukino:resume-session", sessionId),
+  resumeSession: (sessionId: string, cwd?: string): Promise<ResumeResult> =>
+    ipcRenderer.invoke("yukino:resume-session", sessionId, cwd),
   selectFolder: (): Promise<{ cwd: string | null }> =>
     ipcRenderer.invoke("yukino:select-folder"),
   respondPermission: (

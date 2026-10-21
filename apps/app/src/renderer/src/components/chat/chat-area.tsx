@@ -75,8 +75,16 @@ export function ChatArea({
   const stickRef = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
 
-  // The streaming indicator rides along as a trailing virtual row.
-  const rowCount = items.length + (streaming ? 1 : 0);
+  // The streaming indicator rides along as a trailing virtual row — but only
+  // when the last row isn't already rendering its own loading visual
+  // (a streaming assistant row shows Thinking/pending, a running tool row
+  // shows its own spinner). Otherwise "Working…" would spin alongside them.
+  const lastItem = items[items.length - 1];
+  const lastRowBusy =
+    (lastItem?.kind === "assistant" && lastItem.streaming) ||
+    (lastItem?.kind === "tool" && lastItem.running);
+  const showIndicator = streaming && !lastRowBusy;
+  const rowCount = items.length + (showIndicator ? 1 : 0);
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -140,7 +148,7 @@ export function ChatArea({
           style={{ height: virtualizer.getTotalSize() + COMPOSER_CLEARANCE }}
         >
           {virtualizer.getVirtualItems().map((vrow) => {
-            const isIndicator = streaming && vrow.index === items.length;
+            const isIndicator = showIndicator && vrow.index === items.length;
             const item = isIndicator ? null : items[vrow.index];
             const prev =
               !isIndicator && vrow.index > 0 ? items[vrow.index - 1] : null;

@@ -12,13 +12,14 @@ import type {
   SessionSummary,
 } from "@shared/ipc-types";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { toast } from "sonner";
 
 export interface UseChat {
   state: ChatState;
   send: (text: string) => void;
   abort: () => void;
   startNewSession: () => void;
-  resumeSession: (sessionId: string) => void;
+  resumeSession: (sessionId: string, cwd?: string) => void;
   chooseFolder: () => void;
   respondPermission: (id: string, response: PermissionResponse) => void;
   respondAsk: (id: string, answers: Record<string, string>) => void;
@@ -107,10 +108,13 @@ export function useChat(): UseChat {
     void window.api.newSession();
   }, []);
 
-  const resumeSession = useCallback((sessionId: string) => {
+  const resumeSession = useCallback((sessionId: string, cwd?: string) => {
     dispatch({ type: "clear_items" });
-    void window.api.resumeSession(sessionId).then((result) => {
+    void window.api.resumeSession(sessionId, cwd).then((result) => {
       dispatch({ type: "load_history", messages: result.messages });
+      if (result.switchedCwd) {
+        toast.success("Switched working directory");
+      }
     });
   }, []);
 

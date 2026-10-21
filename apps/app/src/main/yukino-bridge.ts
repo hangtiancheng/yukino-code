@@ -37,6 +37,7 @@ import {
   MCP,
   LLM,
   Session,
+  Storage,
   Teams,
 } from "@yukino.js/yukino";
 import { BrowserWindow, dialog, ipcMain, nativeTheme, app } from "electron";
@@ -239,6 +240,7 @@ export class YukinoBridge {
     return {
       ok: true,
       cwd: handle.cwd,
+      projectKey: Storage.projectKey(handle.cwd),
       providerName: handle.provider.name,
       model: handle.provider.model,
       sessionId: handle.sessionId,
@@ -577,25 +579,39 @@ export class YukinoBridge {
     return { sessionId: handle.sessionId };
   }
 
+  /** Sessions across every known project, ordered by last user message. */
   listSessions(): SessionSummary[] {
     try {
-      return Session.listSessions(this.cwd).map((session) => ({
+      return Session.listAllSessions().map((session) => ({
         id: session.id,
         firstMessage: session.firstMessage,
         messageCount: session.messageCount,
         modTime: session.modTime.getTime(),
+        cwd: session.cwd,
+        projectKey: session.projectKey,
+        lastUserMessageTime: session.lastUserMessageTime?.getTime() ?? null,
       }));
     } catch {
       return [];
     }
   }
 
-  async resumeSession(sessionId: string): Promise<ResumeResult> {
+  async resumeSession(sessionId: string, cwd?: string): Promise<ResumeResult> {
+    // Cross-project resume: the session lives in a different folder, so switch
+    // the working directory (reinitializing the agent) before loading it.
+    // Compare canonical project keys, not raw strings — the app's persisted
+    // cwd may be an unresolved alias (symlink, /var vs /private/var) of the
+    // canonical path the activity registry recorded.
+    let switchedCwd = false;
+    if (cwd && Storage.projectKey(cwd) !== Storage.projectKey(this.cwd)) {
+      await this.reinit(cwd);
+      switchedCwd = true;
+    }
     const handle = await this.ensureHandle();
     if (!handle) {
-      return { sessionId, messages: [] };
+      return { sessionId, messages: [], cwd: this.cwd, switchedCwd };
     }
-    const saved = Session.loadSession(this.cwd, sessionId);
+    const saved = Session.loadSession(handle.cwd, sessionId);
     const replay = Remote.SessionState.restoreRemoteSession(
       handle,
       sessionId,
@@ -636,7 +652,12 @@ export class YukinoBridge {
       type: "session_changed",
       data: { sessionId: handle.sessionId, cwd: this.cwd },
     });
-    return { sessionId: handle.sessionId, messages };
+    return {
+      sessionId: handle.sessionId,
+      messages,
+      cwd: this.cwd,
+      switchedCwd,
+    };
   }
 
   async selectFolder(): Promise<{ cwd: string | null }> {
@@ -1460,8 +1481,10 @@ export class YukinoBridge {
     });
     ipcMain.handle("yukino:new-session", () => this.newSession());
     ipcMain.handle("yukino:list-sessions", () => this.listSessions());
-    ipcMain.handle("yukino:resume-session", (_event, sessionId: string) =>
-      this.resumeSession(sessionId),
+    ipcMain.handle(
+      "yukino:resume-session",
+      (_event, sessionId: string, cwd?: string) =>
+        this.resumeSession(sessionId, cwd),
     );
     ipcMain.handle("yukino:select-folder", () => this.selectFolder());
     ipcMain.handle(

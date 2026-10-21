@@ -1,6 +1,8 @@
-// Collapsible left sidebar listing conversation history. The top strip is a
-// window drag region that reserves space for the macOS traffic lights, which
-// sit over the sidebar when it is expanded.
+// Collapsible left sidebar listing conversation history across ALL projects
+// (ordered by the last user message, as returned by the bridge). Rows from
+// other folders carry a project label; resuming one switches the working
+// directory. The top strip is a window drag region that reserves space for
+// the macOS traffic lights, which sit over the sidebar when it is expanded.
 
 import { Button } from "@renderer/components/ui/button";
 import {
@@ -8,9 +10,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip";
+import { folderName } from "@renderer/lib/utils";
 import type { SessionSummary } from "@shared/ipc-types";
 import { cn } from "cn";
-import { PanelLeftIcon } from "lucide-react";
+import { FolderIcon, PanelLeftIcon } from "lucide-react";
 
 function relativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
@@ -28,17 +31,25 @@ function relativeTime(timestamp: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+/** Ordering key: last real user message when known, file mtime otherwise. */
+function sessionTime(session: SessionSummary): number {
+  return session.lastUserMessageTime ?? session.modTime;
+}
+
 export function Sidebar({
   open,
   sessions,
   activeSessionId,
+  currentProjectKey,
   onResumeSession,
   onClose,
 }: {
   open: boolean;
   sessions: SessionSummary[];
   activeSessionId: string | null;
-  onResumeSession: (sessionId: string) => void;
+  /** Project key of the active chat; used to flag foreign sessions. */
+  currentProjectKey: string | null;
+  onResumeSession: (sessionId: string, cwd?: string) => void;
   onClose: () => void;
 }): React.JSX.Element {
   return (
@@ -90,14 +101,18 @@ export function Sidebar({
           <ul className="flex flex-col gap-0.5">
             {sessions.map((session) => {
               const active = session.id === activeSessionId;
+              const foreign =
+                currentProjectKey !== null &&
+                session.projectKey !== currentProjectKey;
               return (
-                <li key={session.id}>
+                <li key={`${session.projectKey}/${session.id}`}>
                   <button
                     type="button"
                     disabled={!open}
                     onClick={() => {
-                      onResumeSession(session.id);
+                      onResumeSession(session.id, session.cwd);
                     }}
+                    title={session.cwd}
                     className={cn(
                       "hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors outline-none focus-visible:ring-3 disabled:pointer-events-none",
                       active && "bg-accent hover:bg-accent",
@@ -111,10 +126,24 @@ export function Sidebar({
                     >
                       {session.firstMessage || session.id}
                     </span>
-                    <span className="text-muted-foreground text-[11px]">
-                      {session.messageCount}{" "}
-                      {session.messageCount === 1 ? "msg" : "msgs"} ·{" "}
-                      {relativeTime(session.modTime)}
+                    <span className="text-muted-foreground flex w-full items-center gap-1 text-[11px]">
+                      {foreign ? (
+                        <>
+                          <FolderIcon className="size-3 shrink-0" />
+                          <span className="line-clamp-1 max-w-20 shrink-0 truncate">
+                            {folderName(session.cwd)}
+                          </span>
+                          <span aria-hidden>·</span>
+                        </>
+                      ) : null}
+                      <span className="shrink-0 tabular-nums">
+                        {session.messageCount}{" "}
+                        {session.messageCount === 1 ? "msg" : "msgs"}
+                      </span>
+                      <span aria-hidden>·</span>
+                      <span className="shrink-0">
+                        {relativeTime(sessionTime(session))}
+                      </span>
                     </span>
                   </button>
                 </li>
