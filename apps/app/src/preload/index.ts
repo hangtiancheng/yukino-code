@@ -1,12 +1,15 @@
-import { contextBridge, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
 import type {
   BridgeEvent,
+  CommandSummary,
   InitState,
+  ModelListResult,
   PermissionResponse,
   ResumeResult,
   SessionSummary,
+  SettingsSnapshot,
 } from "@shared/ipc-types";
+import { contextBridge, ipcRenderer } from "electron";
 
 /**
  * Typed facade over the main-process yukino bridge. Exposed as `window.api`.
@@ -39,18 +42,35 @@ const api = {
   }> => ipcRenderer.invoke("yukino:get-theme"),
   setTheme: (mode: "system" | "light" | "dark"): Promise<void> =>
     ipcRenderer.invoke("yukino:set-theme", mode),
+  listCommands: (): Promise<CommandSummary[]> =>
+    ipcRenderer.invoke("yukino:list-commands"),
+  runCommand: (input: string): Promise<void> =>
+    ipcRenderer.invoke("yukino:run-command", input),
+  getSettings: (): Promise<SettingsSnapshot> =>
+    ipcRenderer.invoke("yukino:get-settings"),
+  listModels: (): Promise<ModelListResult> =>
+    ipcRenderer.invoke("yukino:list-models"),
+  setProvider: (index: number): Promise<void> =>
+    ipcRenderer.invoke("yukino:set-provider", index),
+  setModel: (model: string): Promise<void> =>
+    ipcRenderer.invoke("yukino:set-model", model),
+  setThinkingLevel: (level: string): Promise<void> =>
+    ipcRenderer.invoke("yukino:set-thinking-level", level),
 
   /** Subscribe to the agent event stream. Returns an unsubscribe function. */
   onEvent: (callback: (event: BridgeEvent) => void): (() => void) => {
-    const listener = (_: unknown, event: BridgeEvent): void => callback(event);
+    const listener = (_: unknown, event: BridgeEvent): void => {
+      callback(event);
+    };
     ipcRenderer.on("yukino:event", listener);
     return () => ipcRenderer.removeListener("yukino:event", listener);
   },
 
   /** Subscribe to native theme changes. Returns an unsubscribe function. */
   onTheme: (callback: (theme: "dark" | "light") => void): (() => void) => {
-    const listener = (_: unknown, theme: "dark" | "light"): void =>
+    const listener = (_: unknown, theme: "dark" | "light"): void => {
       callback(theme);
+    };
     ipcRenderer.on("yukino:theme", listener);
     return () => ipcRenderer.removeListener("yukino:theme", listener);
   },
@@ -67,13 +87,6 @@ if (process.contextIsolated) {
     console.error(error);
   }
 } else {
-  // Context isolation disabled: the global Window augmentation lives in
-  // index.d.ts, which tsc ignores here (same basename as index.ts), so the
-  // assignment goes through a cast.
-  const target = window as unknown as {
-    electron: typeof electronAPI;
-    api: typeof api;
-  };
-  target.electron = electronAPI;
-  target.api = api;
+  window.electron = electronAPI;
+  window.api = api;
 }

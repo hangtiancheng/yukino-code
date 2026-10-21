@@ -38,7 +38,7 @@ export type ChatItem =
       elapsed: number | null;
       running: boolean;
     }
-  | { kind: "system"; id: string; text: string }
+  | { kind: "system"; id: string; text: string; markdown: boolean }
   | { kind: "error"; id: string; text: string }
   | { kind: "marker"; id: string; text: string }
   | {
@@ -61,6 +61,8 @@ export interface ChatState {
   init: InitState | null;
   initializing: boolean;
   sessions: SessionSummary[];
+  /** Session currently loaded in the chat surface (for sidebar highlight). */
+  activeSessionId: string | null;
   themeMode: "system" | "light" | "dark";
   themeDark: boolean;
   /** Tool-call ids of live subagents (for the activity indicator). */
@@ -74,6 +76,7 @@ export const initialChatState: ChatState = {
   init: null,
   initializing: true,
   sessions: [],
+  activeSessionId: null,
   themeMode: "system",
   themeDark: false,
   activeSubagents: 0,
@@ -84,6 +87,7 @@ type ChatAction =
   | { type: "append_user"; text: string }
   | { type: "init_state"; data: InitState }
   | { type: "set_sessions"; sessions: SessionSummary[] }
+  | { type: "set_active_session"; sessionId: string | null }
   | { type: "clear_items" }
   | { type: "load_history"; messages: HistoryMessage[] }
   | { type: "set_theme"; mode: "system" | "light" | "dark" }
@@ -106,7 +110,9 @@ function mapLast(
   fn: (item: ChatItem) => ChatItem,
 ): ChatItem[] {
   const last = items[items.length - 1];
-  if (!last) return items;
+  if (!last) {
+    return items;
+  }
   return [...items.slice(0, -1), fn(last)];
 }
 
@@ -117,6 +123,7 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
         ...state,
         init: event.data,
         initializing: false,
+        activeSessionId: event.data.ok ? event.data.sessionId : null,
         items: event.data.ok
           ? state.items
           : [
@@ -134,7 +141,7 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
 
     case "stream_text": {
       const last = state.items[state.items.length - 1];
-      if (last && last.kind === "assistant" && last.streaming) {
+      if (last?.kind === "assistant" && last.streaming) {
         return {
           ...state,
           items: mapLast(state.items, (item) =>
@@ -155,7 +162,7 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
 
     case "thinking_text": {
       const last = state.items[state.items.length - 1];
-      if (last && last.kind === "assistant" && last.streaming) {
+      if (last?.kind === "assistant" && last.streaming) {
         return {
           ...state,
           items: mapLast(state.items, (item) =>
@@ -257,7 +264,12 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
             ...state,
             items: [
               ...state.items,
-              { kind: "system", id: nextId("sys"), text: event.data.message },
+              {
+                kind: "system",
+                id: nextId("sys"),
+                text: event.data.message,
+                markdown: event.data.markdown ?? false,
+              },
             ],
           }
         : state;
@@ -343,7 +355,15 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
           : state;
 
     case "session_changed":
-      return state;
+      return { ...state, activeSessionId: event.data.sessionId };
+
+    case "history":
+      return {
+        ...state,
+        activeSessionId: event.data.sessionId,
+        items: historyToItems(event.data.messages),
+        usage: null,
+      };
   }
 }
 
@@ -418,6 +438,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, init: action.data, initializing: false };
     case "set_sessions":
       return { ...state, sessions: action.sessions };
+    case "set_active_session":
+      return { ...state, activeSessionId: action.sessionId };
     case "clear_items":
       return { ...state, items: [], usage: null };
     case "load_history":

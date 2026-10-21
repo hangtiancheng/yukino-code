@@ -1,27 +1,29 @@
-// App shell: header, scrolling chat surface, and composer. All agent state
-// lives in the useChat hook; this file is presentation only.
+// App shell: collapsible session sidebar, header, virtualized chat surface,
+// and a composer floating at the bottom. The chat scroll viewport extends to
+// the window's bottom and right edges so the scrollbar sits at the very edge
+// of the app, not inside the content column. All agent state lives in the
+// useChat hook; this file is presentation only.
 
-import { AlertTriangleIcon } from "lucide-react";
-import type { InitState } from "@shared/ipc-types";
-import { useChat } from "@renderer/hooks/use-chat";
-import { Header } from "@renderer/components/chat/header";
+import { ChatArea } from "@renderer/components/chat/chat-area";
 import { Composer } from "@renderer/components/chat/composer";
 import { EmptyState } from "@renderer/components/chat/empty-state";
-import { ChatItemRow } from "@renderer/components/chat/chat-item";
-import {
-  MessageScroller,
-  MessageScrollerButton,
-  MessageScrollerContent,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-} from "@renderer/components/ui/message-scroller";
-import { Separator } from "@renderer/components/ui/separator";
+import { Header } from "@renderer/components/chat/header";
+import { SettingsDialog } from "@renderer/components/chat/settings-dialog";
+import { Sidebar } from "@renderer/components/chat/sidebar";
 import { Spinner } from "@renderer/components/ui/spinner";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
+import { useChat } from "@renderer/hooks/use-chat";
+import type { InitState } from "@shared/ipc-types";
+import { AlertTriangleIcon } from "lucide-react";
+import { useState } from "react";
 
 function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}k`;
+  }
   return String(tokens);
 }
 
@@ -56,96 +58,101 @@ function App(): React.JSX.Element {
   const init = state.init;
   const failed = init !== null && !init.ok;
   const booting = state.initializing && init === null;
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const hasItems = state.items.length > 0;
 
   return (
     <TooltipProvider>
-      <MessageScrollerProvider>
-        <div className="bg-background flex h-full min-h-0 flex-col">
+      <div className="bg-background flex h-full min-w-0">
+        <Sidebar
+          open={sidebarOpen}
+          sessions={state.sessions}
+          activeSessionId={state.activeSessionId}
+          onResumeSession={chat.resumeSession}
+          onClose={() => {
+            setSidebarOpen(false);
+          }}
+        />
+
+        <div className="flex h-full min-w-0 flex-1 flex-col">
           <Header
             cwd={init?.ok ? init.cwd : null}
             model={init?.ok ? init.model : null}
-            sessions={state.sessions}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => {
+              setSidebarOpen((open) => !open);
+            }}
             onNewSession={chat.startNewSession}
-            onResumeSession={chat.resumeSession}
             onChooseFolder={chat.chooseFolder}
-            refreshSessions={chat.refreshSessions}
             themeMode={chat.themeMode}
             onThemeMode={chat.setThemeMode}
+            onOpenSettings={() => {
+              setSettingsOpen(true);
+            }}
           />
 
           {failed ? (
-            <InitFailure init={init as InitState & { ok: false }} />
-          ) : (
-            <>
-              <div className="relative flex min-h-0 flex-1 flex-col">
-                {booting || state.items.length === 0 ? (
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-                    {booting ? (
-                      <span className="text-muted-foreground flex items-center gap-2 text-sm">
-                        <Spinner /> Starting agent…
-                      </span>
-                    ) : (
-                      <EmptyState onHint={chat.send} />
-                    )}
-                  </div>
-                ) : null}
-
-                <MessageScroller
-                  className={state.items.length === 0 ? "hidden" : "flex"}
-                >
-                  <MessageScrollerViewport className="mx-auto w-full max-w-3xl py-6">
-                    <MessageScrollerContent>
-                      {state.items.map((item) => (
-                        <ChatItemRow
-                          key={item.id}
-                          item={item}
-                          onRespondPermission={chat.respondPermission}
-                          onRespondAsk={chat.respondAsk}
-                        />
-                      ))}
-                      {state.streaming ? (
-                        <div className="text-muted-foreground flex items-center gap-2 px-5 text-xs">
-                          <Spinner />
-                          {state.activeSubagents > 0
-                            ? `${state.activeSubagents} subagent${state.activeSubagents > 1 ? "s" : ""} working…`
-                            : "Working…"}
-                        </div>
-                      ) : null}
-                    </MessageScrollerContent>
-                  </MessageScrollerViewport>
-                  <MessageScrollerButton />
-                </MessageScroller>
-              </div>
-
-              <Separator />
-
-              <footer className="shrink-0 px-4 pt-3 pb-4">
-                <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+            <InitFailure init={init} />
+          ) : booting ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <span className="text-muted-foreground flex items-center gap-2 text-sm">
+                <Spinner /> Starting agent…
+              </span>
+            </div>
+          ) : hasItems ? (
+            // Scroll viewport fills the column down to the window edge; the
+            // composer floats above its bottom. Must stay a flex column so
+            // ChatArea's flex-1 scroll viewport gets a bounded height.
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <ChatArea
+                items={state.items}
+                streaming={state.streaming}
+                activeSubagents={state.activeSubagents}
+                onRespondPermission={chat.respondPermission}
+                onRespondAsk={chat.respondAsk}
+              />
+              <div className="from-background via-background/95 pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t pt-6 pb-4">
+                <div className="pointer-events-auto mx-auto w-full max-w-3xl px-4">
                   <Composer
                     streaming={state.streaming}
                     disabled={booting || failed || !init}
                     onSend={chat.send}
                     onAbort={chat.abort}
                   />
-                  <div className="text-muted-foreground flex items-center justify-between px-1 text-[11px]">
-                    <span className="truncate">
-                      {init?.ok
-                        ? `${init.providerName} · ${init.permissionMode === "default" ? "approval on tools" : init.permissionMode}`
-                        : ""}
-                    </span>
-                    {state.usage ? (
+                  {state.usage ? (
+                    <div className="text-muted-foreground mt-2 flex justify-end px-1 text-[11px]">
                       <span className="shrink-0 tabular-nums">
                         {formatTokens(state.usage.inputTokens)} in ·{" "}
                         {formatTokens(state.usage.outputTokens)} out
                       </span>
-                    ) : null}
-                  </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Empty conversation: centered hero + static composer.
+            <>
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+                <EmptyState onHint={chat.send} />
+              </div>
+              <footer className="shrink-0 px-4 pt-3 pb-4">
+                <div className="mx-auto w-full max-w-3xl">
+                  <Composer
+                    streaming={state.streaming}
+                    disabled={booting || failed || !init}
+                    onSend={chat.send}
+                    onAbort={chat.abort}
+                  />
                 </div>
               </footer>
             </>
           )}
         </div>
-      </MessageScrollerProvider>
+      </div>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </TooltipProvider>
   );
 }

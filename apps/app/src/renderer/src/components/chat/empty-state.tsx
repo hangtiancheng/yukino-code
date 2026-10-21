@@ -1,6 +1,5 @@
 // Shown before the first message: product identity plus quick-start hints.
 
-import { SparklesIcon } from "lucide-react";
 import { Button } from "@renderer/components/ui/button";
 import {
   Empty,
@@ -11,6 +10,7 @@ import {
   EmptyTitle,
 } from "@renderer/components/ui/empty";
 import { Kbd, KbdGroup } from "@renderer/components/ui/kbd";
+import { SparklesIcon } from "lucide-react";
 
 const hints = [
   "Explain this codebase",
@@ -21,7 +21,7 @@ const hints = [
 export function EmptyState({
   onHint,
 }: {
-  onHint(text: string): void;
+  onHint: (text: string) => void;
 }): React.JSX.Element {
   return (
     <Empty className="border-0 bg-transparent px-6">
@@ -42,7 +42,9 @@ export function EmptyState({
               variant="outline"
               size="sm"
               className="rounded-full"
-              onClick={() => onHint(hint)}
+              onClick={() => {
+                onHint(hint);
+              }}
             >
               {hint}
             </Button>

@@ -2,15 +2,15 @@
 // tool, its arguments, the reason the permission system flagged it, and three
 // actions (allow once / allow always / deny).
 
-import { useState } from "react";
+import { Badge } from "@renderer/components/ui/badge";
+import { Button } from "@renderer/components/ui/button";
+import { Card, CardContent } from "@renderer/components/ui/card";
+import { Separator } from "@renderer/components/ui/separator";
+import type { ChatItem } from "@renderer/lib/chat-state";
+import type { PermissionResponse } from "@shared/ipc-types";
 import { cn } from "cn";
 import { ShieldAlertIcon, ChevronDownIcon } from "lucide-react";
-import type { PermissionResponse } from "@shared/ipc-types";
-import type { ChatItem } from "@renderer/lib/chat-state";
-import { Card, CardContent } from "@renderer/components/ui/card";
-import { Button } from "@renderer/components/ui/button";
-import { Badge } from "@renderer/components/ui/badge";
-import { Separator } from "@renderer/components/ui/separator";
+import { useState } from "react";
 
 type PermissionItem = Extract<ChatItem, { kind: "permission" }>;
 
@@ -18,7 +18,9 @@ function formatArgs(args: Record<string, unknown>): string {
   try {
     return JSON.stringify(args, null, 2);
   } catch {
-    return String(args);
+    // Circular structures can't be stringified; String(args) would just
+    // print "[object Object]", so surface the failure explicitly.
+    return "[arguments could not be serialized]";
   }
 }
 
@@ -76,7 +78,9 @@ export function PermissionCard({
 
         <button
           type="button"
-          onClick={() => setShowArgs((value) => !value)}
+          onClick={() => {
+            setShowArgs((value) => !value);
+          }}
           className="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1 text-xs transition-colors"
         >
           <ChevronDownIcon
@@ -123,13 +127,20 @@ export function PermissionCard({
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => onRespond(payload.id, "allow")}>
+            <Button
+              size="sm"
+              onClick={() => {
+                onRespond(payload.id, "allow");
+              }}
+            >
               Allow
             </Button>
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => onRespond(payload.id, "allowAlways")}
+              onClick={() => {
+                onRespond(payload.id, "allowAlways");
+              }}
             >
               Always allow
             </Button>
@@ -137,7 +148,9 @@ export function PermissionCard({
               size="sm"
               variant="ghost"
               className="text-destructive hover:text-destructive ml-auto"
-              onClick={() => onRespond(payload.id, "deny")}
+              onClick={() => {
+                onRespond(payload.id, "deny");
+              }}
             >
               Deny
             </Button>

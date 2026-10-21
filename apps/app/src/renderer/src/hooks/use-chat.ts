@@ -1,30 +1,29 @@
 // Owns the chat reducer, the bridge event subscription, and every action the
 // UI can trigger. Components stay presentational.
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type {
-  BridgeEvent,
-  PermissionResponse,
-  SessionSummary,
-} from "@shared/ipc-types";
 import {
   chatReducer,
   initialChatState,
   type ChatState,
 } from "@renderer/lib/chat-state";
+import type {
+  BridgeEvent,
+  PermissionResponse,
+  SessionSummary,
+} from "@shared/ipc-types";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 export interface UseChat {
   state: ChatState;
-  send(text: string): void;
-  abort(): void;
-  startNewSession(): void;
-  refreshSessions(): void;
-  resumeSession(sessionId: string): void;
-  chooseFolder(): void;
-  respondPermission(id: string, response: PermissionResponse): void;
-  respondAsk(id: string, answers: Record<string, string>): void;
+  send: (text: string) => void;
+  abort: () => void;
+  startNewSession: () => void;
+  resumeSession: (sessionId: string) => void;
+  chooseFolder: () => void;
+  respondPermission: (id: string, response: PermissionResponse) => void;
+  respondAsk: (id: string, answers: Record<string, string>) => void;
   themeMode: "system" | "light" | "dark";
-  setThemeMode(mode: "system" | "light" | "dark"): void;
+  setThemeMode: (mode: "system" | "light" | "dark") => void;
   isDark: boolean;
 }
 
@@ -36,14 +35,34 @@ export function useChat(): UseChat {
   const [isDark, setIsDark] = useState(false);
   const initStarted = useRef(false);
 
-  const applyEvent = useCallback((event: BridgeEvent) => {
-    dispatch({ type: "event", event });
+  const refreshSessions = useCallback(() => {
+    void window.api.listSessions().then((sessions: SessionSummary[]) => {
+      dispatch({ type: "set_sessions", sessions });
+    });
   }, []);
+
+  const applyEvent = useCallback(
+    (event: BridgeEvent) => {
+      dispatch({ type: "event", event });
+      // Session files change on disk when a run finishes or a session is
+      // created/loaded — keep the sidebar list in sync.
+      if (
+        event.type === "init_state" ||
+        event.type === "session_changed" ||
+        event.type === "loop_complete"
+      ) {
+        refreshSessions();
+      }
+    },
+    [refreshSessions],
+  );
 
   // Subscribe to the bridge event stream and native theme changes.
   useEffect(() => {
     const offEvent = window.api.onEvent(applyEvent);
-    const offTheme = window.api.onTheme((theme) => setIsDark(theme === "dark"));
+    const offTheme = window.api.onTheme((theme) => {
+      setIsDark(theme === "dark");
+    });
     return () => {
       offEvent();
       offTheme();
@@ -54,7 +73,9 @@ export function useChat(): UseChat {
   // arrives as an `init_state` BridgeEvent; the event stream is the single
   // source of truth for chat state (folder changes re-emit it too).
   useEffect(() => {
-    if (initStarted.current) return;
+    if (initStarted.current) {
+      return;
+    }
     initStarted.current = true;
     void window.api.getTheme().then((theme) => {
       setThemeModeState(theme.mode);
@@ -70,19 +91,15 @@ export function useChat(): UseChat {
 
   const send = useCallback((text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
     dispatch({ type: "append_user", text: trimmed });
     void window.api.send(trimmed);
   }, []);
 
   const abort = useCallback(() => {
     void window.api.abort();
-  }, []);
-
-  const refreshSessions = useCallback(() => {
-    void window.api.listSessions().then((sessions: SessionSummary[]) => {
-      dispatch({ type: "set_sessions", sessions });
-    });
   }, []);
 
   const startNewSession = useCallback(() => {
@@ -130,12 +147,17 @@ export function useChat(): UseChat {
 
   // Track OS theme flips while in system mode.
   useEffect(() => {
-    if (themeMode !== "system") return;
+    if (themeMode !== "system") {
+      return;
+    }
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (event: MediaQueryListEvent): void =>
+    const onChange = (event: MediaQueryListEvent): void => {
       setIsDark(event.matches);
+    };
     media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
+    return () => {
+      media.removeEventListener("change", onChange);
+    };
   }, [themeMode]);
 
   return {
@@ -143,7 +165,6 @@ export function useChat(): UseChat {
     send,
     abort,
     startNewSession,
-    refreshSessions,
     resumeSession,
     chooseFolder,
     respondPermission,

@@ -75,6 +75,7 @@ export type InitState =
       sessionId: string;
       permissionMode: string;
       contextWindow: number;
+      thinkingLevel: string;
     }
   | {
       ok: false;
@@ -123,7 +124,7 @@ export type BridgeEvent =
   | { type: "loop_complete"; data: { stopReason: string } }
   | { type: "usage"; data: UsagePayload }
   | { type: "error"; data: { message: string } }
-  | { type: "system"; data: { message: string } }
+  | { type: "system"; data: { message: string; markdown?: boolean } }
   | { type: "compact"; data: { message: string } }
   | { type: "retry"; data: { reason: string; delay: number } }
   | { type: "permission_request"; data: PermissionRequestPayload }
@@ -134,12 +135,45 @@ export type BridgeEvent =
   | { type: "ask_request"; data: AskRequestPayload }
   | { type: "ask_resolved"; data: { id: string } }
   | { type: "subagent"; data: SubagentActivity }
-  | { type: "session_changed"; data: { sessionId: string; cwd: string } };
+  | { type: "session_changed"; data: { sessionId: string; cwd: string } }
+  /** Pushed after a bridge-side session resume (e.g. the /resume command). */
+  | { type: "history"; data: ResumeResult };
 
 /** Payload returned by `yukino:resume-session`. */
 export interface ResumeResult {
   sessionId: string;
   messages: HistoryMessage[];
+}
+
+/** A slash command surfaced in the composer's command panel. */
+export interface CommandSummary {
+  name: string;
+  description: string;
+  type: "local" | "local_ui" | "prompt" | "skill_fork";
+}
+
+/** A provider entry as shown in the settings picker. */
+export interface ProviderSummary {
+  name: string;
+  protocol: string;
+  baseUrl: string;
+  model: string;
+}
+
+/** Snapshot of everything the settings page needs. */
+export interface SettingsSnapshot {
+  providers: ProviderSummary[];
+  /** Index into `providers` of the active provider. */
+  currentProvider: number;
+  model: string;
+  thinkingLevel: string;
+  thinkingLevels: string[];
+}
+
+export interface ModelListResult {
+  status: "loading" | "ready" | "empty" | "error";
+  models: { id: string; name: string | null }[];
+  current: string;
 }
 
 /** The API surface exposed to the renderer as `window.api`. */
@@ -155,6 +189,16 @@ export interface YukinoApi {
   respondAsk(id: string, answers: Record<string, string>): Promise<void>;
   getTheme(): Promise<{ mode: "system" | "light" | "dark"; dark: boolean }>;
   setTheme(mode: "system" | "light" | "dark"): Promise<void>;
+  /** Slash commands for the composer's command panel. */
+  listCommands(): Promise<CommandSummary[]>;
+  /** Runs a slash command; results stream back as BridgeEvents. */
+  runCommand(input: string): Promise<void>;
+  /** Settings snapshot: providers, current provider/model, thinking levels. */
+  getSettings(): Promise<SettingsSnapshot>;
+  listModels(): Promise<ModelListResult>;
+  setProvider(index: number): Promise<void>;
+  setModel(model: string): Promise<void>;
+  setThinkingLevel(level: string): Promise<void>;
   onEvent(callback: (event: BridgeEvent) => void): () => void;
   onTheme(callback: (theme: "dark" | "light") => void): () => void;
 }

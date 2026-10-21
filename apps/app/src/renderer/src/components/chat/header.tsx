@@ -1,16 +1,8 @@
-// Top bar: workspace folder, new session, session history, and theme menu.
-// Sits under the frameless title bar so the left edge leaves room for the
-// macOS traffic lights.
+// Top bar: sidebar toggle, workspace folder, new session, and theme menu.
+// Sits under the frameless title bar. When the sidebar is collapsed the
+// header takes over the left edge, so it must clear the macOS traffic lights.
 
-import {
-  FolderOpenIcon,
-  HistoryIcon,
-  MoonIcon,
-  MonitorIcon,
-  PlusIcon,
-  SunIcon,
-} from "lucide-react";
-import type { SessionSummary } from "@shared/ipc-types";
+import { Badge } from "@renderer/components/ui/badge";
 import { Button } from "@renderer/components/ui/button";
 import {
   DropdownMenu,
@@ -20,51 +12,76 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu";
-import { Badge } from "@renderer/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip";
+import { cn } from "cn";
+import {
+  FolderOpenIcon,
+  MoonIcon,
+  MonitorIcon,
+  PanelLeftIcon,
+  PlusIcon,
+  SettingsIcon,
+  SunIcon,
+} from "lucide-react";
 
 function folderName(cwd: string): string {
   const parts = cwd.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? cwd;
 }
 
-function relativeTime(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const minutes = Math.round(diff / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
-
 export function Header({
   cwd,
   model,
-  sessions,
+  sidebarOpen,
+  onToggleSidebar,
   onNewSession,
-  onResumeSession,
   onChooseFolder,
-  refreshSessions,
   themeMode,
   onThemeMode,
+  onOpenSettings,
 }: {
   cwd: string | null;
   model: string | null;
-  sessions: SessionSummary[];
-  onNewSession(): void;
-  onResumeSession(sessionId: string): void;
-  onChooseFolder(): void;
-  refreshSessions(): void;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
+  onNewSession: () => void;
+  onChooseFolder: () => void;
   themeMode: "system" | "light" | "dark";
-  onThemeMode(mode: "system" | "light" | "dark"): void;
+  onThemeMode: (mode: "system" | "light" | "dark") => void;
+  onOpenSettings: () => void;
 }): React.JSX.Element {
   return (
-    <header className="titlebar-drag border-border flex h-12 shrink-0 items-center gap-1 border-b px-4 pl-[76px]">
+    <header
+      className={cn(
+        "titlebar-drag border-border flex h-12 shrink-0 items-center gap-1 border-b px-4",
+        // Traffic lights float over whichever element owns the left edge.
+        sidebarOpen ? "pl-3" : "pl-19",
+      )}
+    >
+      {/* Only the header opens the sidebar; closing is the sidebar's own button. */}
+      {!sidebarOpen ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="titlebar-no-drag"
+                onClick={onToggleSidebar}
+              />
+            }
+          >
+            <PanelLeftIcon />
+            <span className="sr-only">Show sessions</span>
+          </TooltipTrigger>
+          <TooltipContent>Show sessions</TooltipContent>
+        </Tooltip>
+      ) : null}
+
       <Tooltip>
         <TooltipTrigger
           render={
@@ -72,7 +89,7 @@ export function Header({
               variant="ghost"
               size="sm"
               onClick={onChooseFolder}
-              className="titlebar-no-drag max-w-[220px] gap-1.5"
+              className="titlebar-no-drag max-w-55 gap-1.5"
             />
           }
         >
@@ -85,12 +102,28 @@ export function Header({
       </Tooltip>
 
       {model ? (
-        <Badge
-          variant="outline"
-          className="ml-1 max-w-[180px] truncate font-mono text-[10px]"
-        >
-          {model}
-        </Badge>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Badge
+                variant="outline"
+                role="button"
+                tabIndex={0}
+                onClick={onOpenSettings}
+                onKeyDown={(event: React.KeyboardEvent) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onOpenSettings();
+                  }
+                }}
+                className="titlebar-no-drag ml-1 max-w-45 cursor-pointer truncate font-mono text-[10px]"
+              />
+            }
+          >
+            {model}
+          </TooltipTrigger>
+          <TooltipContent>Model settings</TooltipContent>
+        </Tooltip>
       ) : null}
 
       <div className="titlebar-no-drag ml-auto flex items-center gap-1">
@@ -106,45 +139,17 @@ export function Header({
           <TooltipContent>New session</TooltipContent>
         </Tooltip>
 
-        <DropdownMenu
-          onOpenChange={(open) => {
-            if (open) refreshSessions();
-          }}
-        >
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" />}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button variant="ghost" size="icon-sm" onClick={onOpenSettings} />
+            }
           >
-            <HistoryIcon />
-            <span className="sr-only">Session history</span>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="max-h-96 w-80 overflow-y-auto"
-          >
-            <DropdownMenuLabel>Recent sessions</DropdownMenuLabel>
-            {sessions.length === 0 ? (
-              <DropdownMenuItem disabled>No sessions yet</DropdownMenuItem>
-            ) : (
-              <DropdownMenuGroup>
-                {sessions.map((session) => (
-                  <DropdownMenuItem
-                    key={session.id}
-                    onClick={() => onResumeSession(session.id)}
-                    className="flex flex-col items-start gap-0.5"
-                  >
-                    <span className="line-clamp-1 text-sm font-medium">
-                      {session.firstMessage || session.id}
-                    </span>
-                    <span className="text-muted-foreground text-xs">
-                      {session.messageCount} messages ·{" "}
-                      {relativeTime(session.modTime)}
-                    </span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <SettingsIcon />
+            <span className="sr-only">Settings</span>
+          </TooltipTrigger>
+          <TooltipContent>Settings</TooltipContent>
+        </Tooltip>
 
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -160,22 +165,28 @@ export function Header({
             <span className="sr-only">Theme</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Appearance</DropdownMenuLabel>
             <DropdownMenuGroup>
+              <DropdownMenuLabel>Appearance</DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => onThemeMode("system")}
+                onClick={() => {
+                  onThemeMode("system");
+                }}
                 className="gap-2"
               >
                 <MonitorIcon /> System
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => onThemeMode("light")}
+                onClick={() => {
+                  onThemeMode("light");
+                }}
                 className="gap-2"
               >
                 <SunIcon /> Light
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => onThemeMode("dark")}
+                onClick={() => {
+                  onThemeMode("dark");
+                }}
                 className="gap-2"
               >
                 <MoonIcon /> Dark

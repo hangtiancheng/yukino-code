@@ -2,19 +2,19 @@
 // (single or multiple select), plus an "Other" free-text field, and answers are
 // submitted back through the bridge.
 
-import { useMemo, useState } from "react";
-import { CircleHelpIcon } from "lucide-react";
-import type { ChatItem } from "@renderer/lib/chat-state";
-import { Card, CardContent } from "@renderer/components/ui/card";
-import { Button } from "@renderer/components/ui/button";
 import { Badge } from "@renderer/components/ui/badge";
-import { Separator } from "@renderer/components/ui/separator";
+import { Button } from "@renderer/components/ui/button";
+import { Card, CardContent } from "@renderer/components/ui/card";
 import { Input } from "@renderer/components/ui/input";
 import { Label } from "@renderer/components/ui/label";
+import { Separator } from "@renderer/components/ui/separator";
 import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@renderer/components/ui/toggle-group";
+import type { ChatItem } from "@renderer/lib/chat-state";
+import { CircleHelpIcon } from "lucide-react";
+import { useMemo, useState } from "react";
 
 type AskItem = Extract<ChatItem, { kind: "ask" }>;
 
@@ -113,7 +113,9 @@ export function AskCard({
                 orientation="vertical"
                 className="w-full"
                 value={draft.selected}
-                onValueChange={(value) => setSelected(questionIndex, value)}
+                onValueChange={(value) => {
+                  setSelected(questionIndex, value);
+                }}
                 disabled={item.answered}
               >
                 {question.options.map((option) => (
@@ -155,9 +157,9 @@ export function AskCard({
                     placeholder="Type a custom answer"
                     value={draft.otherText}
                     disabled={item.answered}
-                    onChange={(event) =>
-                      setOtherText(questionIndex, event.target.value)
-                    }
+                    onChange={(event) => {
+                      setOtherText(questionIndex, event.target.value);
+                    }}
                   />
                 </div>
               ) : null}
@@ -170,7 +172,9 @@ export function AskCard({
         {!item.answered ? (
           <Button
             disabled={!complete}
-            onClick={() => onRespond(item.payload.id, answers)}
+            onClick={() => {
+              onRespond(item.payload.id, answers);
+            }}
           >
             Submit
           </Button>

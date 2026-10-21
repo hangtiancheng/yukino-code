@@ -1,6 +1,16 @@
 // Renders a single tool invocation as a collapsible Trace row: an inline
 // status line plus, when expanded, the arguments and output.
 
+import { Badge } from "@renderer/components/ui/badge";
+import { Spinner } from "@renderer/components/ui/spinner";
+import {
+  TraceIcon,
+  TraceLine,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+} from "@renderer/components/ui/trace";
+import type { ChatItem } from "@renderer/lib/chat-state";
 import { cn } from "cn";
 import {
   CheckIcon,
@@ -10,16 +20,6 @@ import {
   WrenchIcon,
   XIcon,
 } from "lucide-react";
-import type { ChatItem } from "@renderer/lib/chat-state";
-import { Spinner } from "@renderer/components/ui/spinner";
-import {
-  TraceIcon,
-  TraceLine,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-} from "@renderer/components/ui/trace";
-import { Badge } from "@renderer/components/ui/badge";
 
 type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 
@@ -27,7 +27,9 @@ type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 function toolSummary(name: string, args: Record<string, unknown>): string {
   const pick = (key: string): string => {
     const value = args[key];
-    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
     return "";
   };
   switch (name) {

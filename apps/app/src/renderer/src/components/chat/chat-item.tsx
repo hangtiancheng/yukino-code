@@ -1,23 +1,22 @@
-// Maps a single ChatState item to its row representation. Chat primitives
+// Maps a single ChatState item to its row content. Chat primitives
 // (Message/Bubble/Marker/Trace) compose the rows; special flows (permission,
-// ask) render as cards.
+// ask) render as cards. Row positioning/spacing is owned by ChatArea.
 
-import { cn } from "cn";
-import { AlertTriangleIcon, BotIcon, InfoIcon, UserIcon } from "lucide-react";
-import type { ChatItem } from "@renderer/lib/chat-state";
-import type { PermissionResponse } from "@shared/ipc-types";
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-} from "@renderer/components/ui/message";
+import { AskCard } from "@renderer/components/chat/ask-card";
+import { Markdown } from "@renderer/components/chat/markdown";
+import { PermissionCard } from "@renderer/components/chat/permission-card";
+import { ToolCard } from "@renderer/components/chat/tool-card";
 import { Bubble, BubbleContent } from "@renderer/components/ui/bubble";
 import {
   Marker,
   MarkerIcon,
   MarkerContent,
 } from "@renderer/components/ui/marker";
-import { MessageScrollerItem } from "@renderer/components/ui/message-scroller";
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+} from "@renderer/components/ui/message";
 import { Spinner } from "@renderer/components/ui/spinner";
 import {
   Trace,
@@ -27,9 +26,9 @@ import {
   TraceIcon,
   TraceLine,
 } from "@renderer/components/ui/trace";
-import { ToolCard } from "@renderer/components/chat/tool-card";
-import { PermissionCard } from "@renderer/components/chat/permission-card";
-import { AskCard } from "@renderer/components/chat/ask-card";
+import type { ChatItem } from "@renderer/lib/chat-state";
+import type { PermissionResponse } from "@shared/ipc-types";
+import { AlertTriangleIcon, BotIcon, InfoIcon, UserIcon } from "lucide-react";
 
 function AssistantRow({
   text,
@@ -67,8 +66,8 @@ function AssistantRow({
         ) : null}
         {text ? (
           <Bubble variant="ghost">
-            <BubbleContent className="text-[15px] leading-7 whitespace-pre-wrap">
-              {text}
+            <BubbleContent className="w-full">
+              <Markdown text={text} streaming={streaming} />
             </BubbleContent>
           </Bubble>
         ) : null}
@@ -83,16 +82,18 @@ function AssistantRow({
 }
 
 function UserRow({ text }: { text: string }): React.JSX.Element {
+  // align="end" flips the row (flex-row-reverse), so the first DOM child sits
+  // at the far right — avatar goes first to land on the right edge.
   return (
     <Message align="end">
+      <MessageAvatar>
+        <UserIcon className="size-4" />
+      </MessageAvatar>
       <MessageContent>
         <Bubble variant="secondary" align="end">
           <BubbleContent className="whitespace-pre-wrap">{text}</BubbleContent>
         </Bubble>
       </MessageContent>
-      <MessageAvatar>
-        <UserIcon className="size-4" />
-      </MessageAvatar>
     </Message>
   );
 }
@@ -108,100 +109,69 @@ export function ChatItemRow({
 }): React.JSX.Element {
   switch (item.kind) {
     case "user":
-      return (
-        <MessageScrollerItem className="px-5 py-0.5">
-          <UserRow text={item.text} />
-        </MessageScrollerItem>
-      );
+      return <UserRow text={item.text} />;
 
     case "assistant":
       return (
-        <MessageScrollerItem
-          className="px-5 py-0.5"
-          scrollAnchor={item.streaming}
-        >
-          <AssistantRow
-            text={item.text}
-            thinking={item.thinking}
-            streaming={item.streaming}
-          />
-        </MessageScrollerItem>
+        <AssistantRow
+          text={item.text}
+          thinking={item.thinking}
+          streaming={item.streaming}
+        />
       );
 
     case "tool":
-      return (
-        <MessageScrollerItem className="px-5 py-0.5">
-          <Message>
-            <MessageAvatar>
-              <ToolGlyph name={item.toolName} />
-            </MessageAvatar>
-            <MessageContent className="gap-0">
-              <ToolCard item={item} />
-            </MessageContent>
-          </Message>
-        </MessageScrollerItem>
-      );
+      // No avatar for tool calls; ChatArea indents the row under the
+      // assistant content column and keeps consecutive calls tight.
+      return <ToolCard item={item} />;
 
     case "system":
-      return (
-        <MessageScrollerItem className="px-5 py-0.5">
-          <Marker>
-            <MarkerIcon>
-              <InfoIcon />
-            </MarkerIcon>
-            <MarkerContent className="text-xs">{item.text}</MarkerContent>
-          </Marker>
-        </MessageScrollerItem>
+      return item.markdown ? (
+        <div className="text-muted-foreground border-border bg-card w-full rounded-lg border px-4 py-3 text-xs">
+          <Markdown text={item.text} streaming={false} />
+        </div>
+      ) : (
+        <Marker>
+          <MarkerIcon>
+            <InfoIcon />
+          </MarkerIcon>
+          <MarkerContent className="text-xs whitespace-pre-wrap">
+            {item.text}
+          </MarkerContent>
+        </Marker>
       );
 
     case "error":
       return (
-        <MessageScrollerItem className="px-5 py-0.5">
-          <Marker>
-            <MarkerIcon>
-              <AlertTriangleIcon className="text-destructive" />
-            </MarkerIcon>
-            <MarkerContent className="text-destructive text-xs whitespace-pre-wrap">
-              {item.text}
-            </MarkerContent>
-          </Marker>
-        </MessageScrollerItem>
+        <Marker>
+          <MarkerIcon>
+            <AlertTriangleIcon className="text-destructive" />
+          </MarkerIcon>
+          <MarkerContent className="text-destructive text-xs whitespace-pre-wrap">
+            {item.text}
+          </MarkerContent>
+        </Marker>
       );
 
     case "marker":
       return (
-        <MessageScrollerItem className="px-5 py-0.5">
-          <Marker variant="separator">
-            <MarkerContent className="text-xs">{item.text}</MarkerContent>
-          </Marker>
-        </MessageScrollerItem>
+        <Marker variant="separator">
+          <MarkerContent className="text-xs">{item.text}</MarkerContent>
+        </Marker>
       );
 
     case "permission":
       return (
-        <MessageScrollerItem className="px-5 py-0.5" scrollAnchor>
-          <div className={cn("flex justify-center")}>
-            <PermissionCard item={item} onRespond={onRespondPermission} />
-          </div>
-        </MessageScrollerItem>
+        <div className="flex justify-center">
+          <PermissionCard item={item} onRespond={onRespondPermission} />
+        </div>
       );
 
     case "ask":
       return (
-        <MessageScrollerItem className="px-5 py-0.5" scrollAnchor>
-          <div className="flex justify-center">
-            <AskCard item={item} onRespond={onRespondAsk} />
-          </div>
-        </MessageScrollerItem>
+        <div className="flex justify-center">
+          <AskCard item={item} onRespond={onRespondAsk} />
+        </div>
       );
   }
-}
-
-/** Per-tool avatar glyph so tool rows read at a glance. */
-function ToolGlyph({ name }: { name: string }): React.JSX.Element {
-  return (
-    <span className="text-muted-foreground flex size-4 items-center justify-center text-[9px] font-semibold">
-      {name.slice(0, 2).toUpperCase()}
-    </span>
-  );
 }
