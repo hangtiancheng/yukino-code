@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-import sharp from "sharp";
+import { Jimp } from "jimp";
 import { safeParse, z } from "zod";
 
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
@@ -1212,43 +1212,43 @@ export class ComputerUseTool implements Tool {
     region?: number[],
   ): Promise<ToolResult> {
     const capture = await this.captureScreenshot(signal);
-    const metadata = await sharp(capture.bytes).metadata();
-    if (!metadata.width || !metadata.height) {
-      throw new Error("Unable to determine screenshot dimensions.");
-    }
+    const image = await Jimp.read(capture.bytes);
+    const pixelWidth = image.width;
+    const pixelHeight = image.height;
+    const screenWidth = capture.width > 0 ? capture.width : pixelWidth;
+    const screenHeight = capture.height > 0 ? capture.height : pixelHeight;
 
     if (region) {
       const left = Math.round(region[0] * this.coordinateScaleX);
       const top = Math.round(region[1] * this.coordinateScaleY);
       const right = Math.round(region[2] * this.coordinateScaleX);
       const bottom = Math.round(region[3] * this.coordinateScaleY);
-      const rawScaleX = metadata.width / capture.width;
-      const rawScaleY = metadata.height / capture.height;
+      const rawScaleX = pixelWidth / screenWidth;
+      const rawScaleY = pixelHeight / screenHeight;
       const rawLeft = Math.max(
         0,
-        Math.min(metadata.width - 1, Math.round(left * rawScaleX)),
+        Math.min(pixelWidth - 1, Math.round(left * rawScaleX)),
       );
       const rawTop = Math.max(
         0,
-        Math.min(metadata.height - 1, Math.round(top * rawScaleY)),
+        Math.min(pixelHeight - 1, Math.round(top * rawScaleY)),
       );
       const rawRight = Math.max(
         rawLeft + 1,
-        Math.min(metadata.width, Math.round(right * rawScaleX)),
+        Math.min(pixelWidth, Math.round(right * rawScaleX)),
       );
       const rawBottom = Math.max(
         rawTop + 1,
-        Math.min(metadata.height, Math.round(bottom * rawScaleY)),
+        Math.min(pixelHeight, Math.round(bottom * rawScaleY)),
       );
-      const cropped = await sharp(capture.bytes)
-        .extract({
-          left: rawLeft,
-          top: rawTop,
-          width: rawRight - rawLeft,
-          height: rawBottom - rawTop,
+      const cropped = await image
+        .crop({
+          x: rawLeft,
+          y: rawTop,
+          w: rawRight - rawLeft,
+          h: rawBottom - rawTop,
         })
-        .png({ compressionLevel: 8 })
-        .toBuffer();
+        .getBuffer("image/png", { deflateLevel: 9 });
       return this.imageResult(
         cropped,
         `Zoomed screenshot of [${region.join(", ")}].`,
@@ -1257,29 +1257,26 @@ export class ComputerUseTool implements Tool {
 
     const targetScale = Math.min(
       1,
-      MAX_SCREENSHOT_WIDTH / capture.width,
-      MAX_SCREENSHOT_HEIGHT / capture.height,
+      MAX_SCREENSHOT_WIDTH / screenWidth,
+      MAX_SCREENSHOT_HEIGHT / screenHeight,
     );
-    const targetWidth = Math.max(1, Math.round(capture.width * targetScale));
-    const targetHeight = Math.max(1, Math.round(capture.height * targetScale));
-    const normalized = await sharp(capture.bytes)
-      .resize(targetWidth, targetHeight, { fit: "fill" })
-      .png({ compressionLevel: 8 })
-      .toBuffer();
+    const targetWidth = Math.max(1, Math.round(screenWidth * targetScale));
+    const targetHeight = Math.max(1, Math.round(screenHeight * targetScale));
+    const normalized = await image
+      .resize({ w: targetWidth, h: targetHeight })
+      .getBuffer("image/png", { deflateLevel: 9 });
     const result = await this.imageResult(
       normalized,
       `Screenshot ${String(targetWidth)}x${String(targetHeight)}. Use this coordinate space for subsequent actions.`,
     );
     const outputBlock = result.contentBlocks?.[0];
     if (outputBlock?.type === "image" && outputBlock.source.type === "base64") {
-      const finalMetadata = await sharp(
+      const final = await Jimp.read(
         Buffer.from(outputBlock.source.data, "base64"),
-      ).metadata();
-      if (finalMetadata.width && finalMetadata.height) {
-        this.coordinateScaleX = capture.width / finalMetadata.width;
-        this.coordinateScaleY = capture.height / finalMetadata.height;
-        result.output = `Screenshot ${String(finalMetadata.width)}x${String(finalMetadata.height)}. Use this coordinate space for subsequent actions.`;
-      }
+      );
+      this.coordinateScaleX = screenWidth / final.width;
+      this.coordinateScaleY = screenHeight / final.height;
+      result.output = `Screenshot ${String(final.width)}x${String(final.height)}. Use this coordinate space for subsequent actions.`;
     }
     return result;
   }
@@ -1322,17 +1319,10 @@ export class ComputerUseTool implements Tool {
           ).catch(() => "");
           const [width, height] = size.split(",").map(Number);
           const bytes = await readFile(screenshotPath);
-          const metadata = await sharp(bytes).metadata();
           return {
             bytes,
-            width:
-              Number.isFinite(width) && width > 0
-                ? width
-                : (metadata.width ?? 1),
-            height:
-              Number.isFinite(height) && height > 0
-                ? height
-                : (metadata.height ?? 1),
+            width: Number.isFinite(width) && width > 0 ? width : 0,
+            height: Number.isFinite(height) && height > 0 ? height : 0,
           };
         }
         case "win32": {
@@ -1361,18 +1351,12 @@ export class ComputerUseTool implements Tool {
             .map(Number);
           // The PowerShell size line can be empty or noisy; never hand a NaN/
           // non-positive dimension downstream (it would poison coordinate
-          // scaling). Fall back to the image metadata like the macOS path.
-          const metadata = await sharp(bytes).metadata();
+          // scaling). Return 0 so screenshot() falls back to the decoded
+          // pixel dimensions like the macOS path.
           return {
             bytes,
-            width:
-              Number.isFinite(width) && width > 0
-                ? width
-                : (metadata.width ?? 1),
-            height:
-              Number.isFinite(height) && height > 0
-                ? height
-                : (metadata.height ?? 1),
+            width: Number.isFinite(width) && width > 0 ? width : 0,
+            height: Number.isFinite(height) && height > 0 ? height : 0,
           };
         }
         case "linux": {
@@ -1387,12 +1371,9 @@ export class ComputerUseTool implements Tool {
               const capture = await this.run(command, args, { signal });
               if (capture.code === 0) {
                 const bytes = await readFile(screenshotPath);
-                const metadata = await sharp(bytes).metadata();
-                return {
-                  bytes,
-                  width: metadata.width ?? 1,
-                  height: metadata.height ?? 1,
-                };
+                // No OS-reported screen size on Linux; screenshot() resolves
+                // dimensions from the decoded PNG.
+                return { bytes, width: 0, height: 0 };
               }
               lastError = commandError(command, capture).message;
             } catch (err) {

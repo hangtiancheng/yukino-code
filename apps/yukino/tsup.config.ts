@@ -6,9 +6,6 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsup";
 import type { Options } from "tsup";
 import type * as TypeScript from "typescript";
-// const sharpStub = fileURLToPath(
-//   new URL("./src/images/sharp-stub.ts", import.meta.url),
-// );
 
 // tsup does not re-export the esbuild Plugin type used by `esbuildPlugins`;
 // recover it from the Options type so standalone plugin consts stay typed.
@@ -77,17 +74,6 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
       path: args.path,
       external: true,
     }));
-    // Native modules and packages with runtime assets must stay external so
-    // their binaries and companion files remain resolvable from node_modules.
-    build.onResolve(
-      {
-        filter: /^sharp(?:\/|$)/,
-      },
-      (args) => ({
-        path: args.path,
-        external: true,
-      }),
-    );
     // Not referenced by src/: ink itself requires it from its devtools entry
     // (ink/build/devtools.js) and declares it a peer dependency. Since the CLI
     // build bundles ink, the resolution happens here, and the peer is not
@@ -225,8 +211,8 @@ const assertNoAmbiguousExports = (): void => {
   );
 };
 
-// Keep maintenance commands separate from the runtime so Windows updates do not
-// load and lock native dependencies. `!lib/**` keeps the clean sweep out of the
+// Keep maintenance commands separate from the runtime so they never load the
+// full application graph. `!lib/**` keeps the clean sweep out of the
 // library output below — tsup runs an array config concurrently, so a `**/*`
 // sweep here races with, and can delete, dist/lib.
 const cliConfig: Options = {
@@ -255,9 +241,6 @@ const cliConfig: Options = {
   define: { __YUKINO_VERSION__: JSON.stringify(pkg.version) },
   tsconfig: "tsconfig.json",
   esbuildPlugins: [externalizeNodeBuiltinsPlugin],
-  // esbuildOptions(options) {
-  //   options.alias = { ...options.alias, sharp: sharpStub };
-  // },
   onSuccess: async () => {
     await Promise.resolve();
     copyRemoteBrowser();
@@ -294,9 +277,6 @@ const libConfig: Options = {
   ].filter((dep) => !uiOnlySet.has(dep)),
   noExternal: [uiOnlyPattern],
   esbuildPlugins: [externalizeNodeBuiltinsPlugin, banUIOnlyPlugin],
-  // esbuildOptions(options) {
-  //   options.alias = { ...options.alias, sharp: sharpStub };
-  // },
   onSuccess: async () => {
     await Promise.resolve();
     assertNoAmbiguousExports();

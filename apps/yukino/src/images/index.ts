@@ -1,7 +1,7 @@
 import { open, readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 
-import sharp from "sharp";
+import { Jimp } from "jimp";
 
 import {
   MAX_IMAGE_BYTES,
@@ -173,13 +173,13 @@ function formatMB(bytes: number): string {
 }
 
 // Resize/compress an image buffer so its base64 encoding fits the API limit:
-//   1. <=3.75MB raw passes through untouched (sharp never invoked).
+//   1. <=3.75MB raw passes through untouched (jimp never invoked).
 //   2. Otherwise: cap dimensions at 2000px; PNG/GIF sources try PNG first
-//      (compressionLevel 8, palette quantization), then every source walks the
-//      JPEG quality ladder 80/60/40/20; halve dimensions and retry the whole
-//      ladder at most twice.
-// GIF/WebP are re-encoded to PNG/JPEG only when they need compression, which
-// also normalizes animated GIFs to their first frame.
+//      (deflateLevel 9), then every source walks the JPEG quality ladder
+//      80/60/40/20; halve dimensions and retry the whole ladder at most twice.
+// GIF sources are re-encoded only when they need compression, which normalizes
+// animated GIFs to their first frame. jimp cannot decode WebP, so an oversized
+// WebP fails with ImageTooLargeError (small WebP still passes through).
 export async function maybeResizeAndDownsampleImage(
   buf: Buffer,
   mediaType: ImageMediaType,
@@ -192,29 +192,26 @@ export async function maybeResizeAndDownsampleImage(
   }
 
   try {
-    return await compressWithSharp(buf, mediaType);
+    return await compressWithJimp(buf);
   } catch (err) {
     if (err instanceof ImageTooLargeError) {
       throw err;
     }
-    // sharp failed at runtime (corrupt file, unsupported variant, ...).
+    // jimp failed at runtime (corrupt file, undecodable WebP, ...).
     // We only get here when the raw size already exceeds the passthrough
     // target (3.75MB), so its base64 form necessarily exceeds the 5MB API
     // limit — there is no valid passthrough, fail with context.
-    log.warn({ err }, "sharp compression failed");
+    log.warn({ err }, "image compression failed");
     throw new ImageTooLargeError(
       `Image is ${formatMB(buf.length)} raw (${formatMB((buf.length * 4) / 3)} base64-encoded, API limit ${formatMB(MAX_IMAGE_BYTES)}) and compression failed. Please provide a smaller image.`,
     );
   }
 }
 
-async function compressWithSharp(
-  buf: Buffer,
-  mediaType: ImageMediaType,
-): Promise<ResizedImage> {
-  const metadata = await sharp(buf).metadata();
-  let width = metadata.width ?? MAX_DIMENSION_PX;
-  let height = metadata.height ?? MAX_DIMENSION_PX;
+async function compressWithJimp(buf: Buffer): Promise<ResizedImage> {
+  const image = await Jimp.read(buf);
+  let width = image.width;
+  let height = image.height;
 
   if (width > MAX_DIMENSION_PX) {
     height = Math.max(1, Math.round((height * MAX_DIMENSION_PX) / width));
@@ -225,26 +222,21 @@ async function compressWithSharp(
     height = MAX_DIMENSION_PX;
   }
 
-  const preservePng = mediaType === "image/png" || mediaType === "image/gif";
+  const preservePng = image.mime === "image/png" || image.mime === "image/gif";
 
   // Halve dimensions and retry the whole ladder at most twice.
   for (let attempt = 0; attempt < 3; attempt++) {
-    // IMPORTANT: create a fresh sharp(buf) per operation — reusing an
-    // instance after toBuffer() does not re-apply format conversions.
+    // Resize from a fresh clone each attempt so repeated halving always
+    // resamples the original pixels, not a previously downsampled copy.
+    const resized = image.clone().resize({ w: width, h: height });
     if (preservePng) {
-      const png = await sharp(buf)
-        .resize(width, height, { fit: "inside", withoutEnlargement: true })
-        .png({ compressionLevel: 8, palette: true })
-        .toBuffer();
+      const png = await resized.getBuffer("image/png", { deflateLevel: 9 });
       if (png.length <= MAX_IMAGE_BYTES_PASSTHROUGH) {
         return toResult(png, "image/png");
       }
     }
     for (const quality of [80, 60, 40, 20]) {
-      const jpeg = await sharp(buf)
-        .resize(width, height, { fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality })
-        .toBuffer();
+      const jpeg = await resized.getBuffer("image/jpeg", { quality });
       if (jpeg.length <= MAX_IMAGE_BYTES_PASSTHROUGH) {
         return toResult(jpeg, "image/jpeg");
       }

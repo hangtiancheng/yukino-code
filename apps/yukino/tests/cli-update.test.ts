@@ -39,23 +39,20 @@ describe("standalone maintenance entry", () => {
     [["update", "--help"], "Usage: yukino update"],
     [["update", "-h"], "--tag <tag>"],
     [["update", "--tag=canary", "--help"], "default: latest"],
-  ])(
-    "runs %j without loading native dependencies or configuration",
-    (args, output) => {
-      const result = spawnSync(
-        process.execPath,
-        [join(directory, "main.js"), ...args],
-        {
-          cwd: directory,
-          encoding: "utf8",
-          timeout: 10_000,
-        },
-      );
-      expect(result.status, result.stderr).toBe(0);
-      expect(result.stdout).toContain(output);
-      expect(result.stderr).toBe("");
-    },
-  );
+  ])("runs %j without loading the runtime or configuration", (args, output) => {
+    const result = spawnSync(
+      process.execPath,
+      [join(directory, "main.js"), ...args],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        timeout: 10_000,
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(output);
+    expect(result.stderr).toBe("");
+  });
 
   it.each([
     [["update"], "latest"],
@@ -97,7 +94,6 @@ describe("standalone maintenance entry", () => {
     );
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Unknown option "--bogus"');
-    expect(result.stderr).not.toContain("sharp");
   });
 
   it("rejects invalid update arguments before starting the runtime", () => {
@@ -112,6 +108,5 @@ describe("standalone maintenance entry", () => {
     );
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Usage: yukino update");
-    expect(result.stderr).not.toContain("sharp");
   });
 });

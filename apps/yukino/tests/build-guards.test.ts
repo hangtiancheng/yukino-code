@@ -164,7 +164,7 @@ describe("library build ui-only dependency guard", () => {
       "zod",
       "@anthropic-ai/sdk",
       "express",
-      "sharp",
+      "jimp",
       "ws",
     ]) {
       expect(uiOnlyPattern.test(specifier)).toBe(false);

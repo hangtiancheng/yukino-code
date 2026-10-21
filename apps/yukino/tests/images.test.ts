@@ -1,12 +1,12 @@
-// These tests run the REAL sharp pipeline (no mocks): fixtures are generated
-// with sharp itself and tests/test.png is a real screenshot (JPEG bytes behind
+// These tests run the REAL jimp pipeline (no mocks): fixtures are generated
+// with jimp itself and tests/test.png is a real screenshot (JPEG bytes behind
 // a .png extension, which doubles as a magic-bytes-vs-extension fixture).
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import sharp, { type Sharp } from "sharp";
+import { Jimp, type JimpInstance } from "jimp";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -32,30 +32,31 @@ const WEBP_MAGIC = Buffer.concat([
   Buffer.from("WEBP", "ascii"),
 ]);
 
-// Gaussian noise is nearly incompressible, which is the cheapest way to make
+// Random noise is nearly incompressible, which is the cheapest way to make
 // real oversized fixtures. Generated once and shared across tests.
-function noiseImage(width: number, height: number): Sharp {
-  return sharp({
-    create: {
-      width,
-      height,
-      channels: 3,
-      background: { r: 128, g: 128, b: 128 },
-      noise: { type: "gaussian", mean: 128, sigma: 30 },
-    },
-  });
+function noiseImage(width: number, height: number): JimpInstance {
+  const image = new Jimp({ width, height, color: 0x808080ff });
+  const data = image.bitmap.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = (Math.random() * 256) | 0;
+    data[i + 1] = (Math.random() * 256) | 0;
+    data[i + 2] = (Math.random() * 256) | 0;
+    data[i + 3] = 255;
+  }
+  return image;
 }
 
-// 1600x1600 noise PNG ≈ 6.75MB: over the 3.75MB passthrough target but under
-// the 2000px dimension cap, so only re-encoding (not resizing) is required.
+// 1600x1600 noise PNG ≈ 8MB: over the 3.75MB passthrough target but under the
+// 2000px dimension cap, so only re-encoding (not resizing) is required. Noise
+// is incompressible, so the PNG attempt fails and the JPEG ladder wins.
 let oversizedPng: Buffer;
 // 3000x3000 noise JPEG (q100) ≈ 10MB: over both the size and dimension caps.
 let oversizedJpeg: Buffer;
 
 beforeAll(async () => {
   [oversizedPng, oversizedJpeg] = await Promise.all([
-    noiseImage(1600, 1600).png().toBuffer(),
-    noiseImage(3000, 3000).jpeg({ quality: 100 }).toBuffer(),
+    noiseImage(1600, 1600).getBuffer("image/png"),
+    noiseImage(3000, 3000).getBuffer("image/jpeg", { quality: 100 }),
   ]);
   expect(oversizedPng.length).toBeGreaterThan(MAX_IMAGE_BYTES_PASSTHROUGH);
   expect(oversizedJpeg.length).toBeGreaterThan(MAX_IMAGE_BYTES_PASSTHROUGH);
@@ -101,7 +102,7 @@ describe("loadImageAttachment (real file)", () => {
   });
 });
 
-describe("maybeResizeAndDownsampleImage (real sharp)", () => {
+describe("maybeResizeAndDownsampleImage (real jimp)", () => {
   it("passes small images through byte-identical without re-encoding", async () => {
     const buf = readFileSync(TEST_PNG_PATH);
     const result = await maybeResizeAndDownsampleImage(buf, "image/jpeg");
@@ -116,19 +117,19 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
     ).rejects.toThrow(ImageTooLargeError);
   });
 
-  it("compresses an oversized PNG, preferring PNG output and keeping dimensions", async () => {
+  it("compresses an oversized PNG via the JPEG ladder, keeping dimensions", async () => {
     const result = await maybeResizeAndDownsampleImage(
       oversizedPng,
       "image/png",
     );
-    expect(result.mediaType).toBe("image/png");
+    expect(result.mediaType).toBe("image/jpeg");
     expect(result.byteLength).toBeLessThanOrEqual(MAX_IMAGE_BYTES_PASSTHROUGH);
-    // The output must be a real decodable PNG; 1600px is already under the
-    // cap and withoutEnlargement must not upscale it.
-    const meta = await sharp(Buffer.from(result.data, "base64")).metadata();
-    expect(meta.format).toBe("png");
-    expect(meta.width).toBe(1600);
-    expect(meta.height).toBe(1600);
+    // Noise cannot be compressed as PNG, so the ladder falls through to JPEG.
+    // 1600px is already under the cap and must not be rescaled.
+    const image = await Jimp.read(Buffer.from(result.data, "base64"));
+    expect(image.mime).toBe("image/jpeg");
+    expect(image.width).toBe(1600);
+    expect(image.height).toBe(1600);
   }, 50_000);
 
   it("compresses an oversized JPEG via the quality ladder and caps dimensions at 2000px", async () => {
@@ -138,10 +139,10 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
     );
     expect(result.mediaType).toBe("image/jpeg");
     expect(result.byteLength).toBeLessThanOrEqual(MAX_IMAGE_BYTES_PASSTHROUGH);
-    const meta = await sharp(Buffer.from(result.data, "base64")).metadata();
-    expect(meta.format).toBe("jpeg");
-    expect(meta.width).toBe(MAX_DIMENSION_PX);
-    expect(meta.height).toBe(MAX_DIMENSION_PX);
+    const image = await Jimp.read(Buffer.from(result.data, "base64"));
+    expect(image.mime).toBe("image/jpeg");
+    expect(image.width).toBe(MAX_DIMENSION_PX);
+    expect(image.height).toBe(MAX_DIMENSION_PX);
   }, 50_000);
 
   it("round-trips the compressed payload as valid base64 binary", async () => {
@@ -154,8 +155,8 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
     expect(sniffMediaType(decoded)).toBe("image/jpeg");
   }, 30_000);
 
-  it("throws ImageTooLargeError when sharp fails on an oversized corrupt buffer", async () => {
-    // PNG magic followed by garbage: sniffable as an image, but sharp cannot
+  it("throws ImageTooLargeError when jimp fails on an oversized corrupt buffer", async () => {
+    // PNG magic followed by garbage: sniffable as an image, but jimp cannot
     // decode it. Over the passthrough target there is no valid fallback —
     // passing it through would exceed the 5MB base64 API limit (regression
     // test for the raw-vs-base64 fallback bug).
@@ -171,7 +172,7 @@ describe("maybeResizeAndDownsampleImage (real sharp)", () => {
     ).rejects.toThrow(/compression failed/);
   });
 
-  it("still passes a small corrupt buffer through (sharp never consulted)", async () => {
+  it("still passes a small corrupt buffer through (jimp never consulted)", async () => {
     const corrupt = Buffer.concat([PNG_MAGIC, Buffer.alloc(1024, 0xab)]);
     const result = await maybeResizeAndDownsampleImage(corrupt, "image/png");
     expect(result.data).toBe(corrupt.toString("base64"));

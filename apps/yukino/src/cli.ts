@@ -339,7 +339,7 @@ async function run(): Promise<void> {
 }
 
 // Maintenance modes (help/version/update) must run without the runtime chunk
-// (native dependencies, configuration). Tests also import this module for
+// (the full application graph, configuration). Tests also import this module for
 // parseCliArgs, so only dispatch when this file is the process entry point.
 function isProcessEntry(): boolean {
   const script = process.argv[1];

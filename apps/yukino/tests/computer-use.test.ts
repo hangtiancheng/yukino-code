@@ -2,7 +2,7 @@ import { access, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
 
-import sharp from "sharp";
+import { Jimp } from "jimp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -521,11 +521,11 @@ describe("ComputerUseTool", () => {
   });
 
   it("runs an OpenAI-style batch in order and returns the post-batch screenshot", async () => {
-    const png = await sharp({
-      create: { width: 800, height: 600, channels: 4, background: "#0a141e" },
-    })
-      .png()
-      .toBuffer();
+    const png = await new Jimp({
+      width: 800,
+      height: 600,
+      color: 0x0a141eff,
+    }).getBuffer("image/png");
     const calls: { command: string; args: readonly string[] }[] = [];
     const runCommand = vi.fn(
       async (command: string, args: readonly string[]) => {
@@ -578,11 +578,11 @@ describe("ComputerUseTool", () => {
   });
 
   it("takes a follow-up screenshot when the batch has none", async () => {
-    const png = await sharp({
-      create: { width: 800, height: 600, channels: 4, background: "#0a141e" },
-    })
-      .png()
-      .toBuffer();
+    const png = await new Jimp({
+      width: 800,
+      height: 600,
+      color: 0x0a141eff,
+    }).getBuffer("image/png");
     const commands: string[] = [];
     const runCommand = vi.fn(
       async (command: string, args: readonly string[]) => {
@@ -637,16 +637,11 @@ describe("ComputerUseTool", () => {
   });
 
   it("returns screenshots as image tool-result blocks and scales later coordinates", async () => {
-    const png = await sharp({
-      create: {
-        width: 2_000,
-        height: 1_000,
-        channels: 4,
-        background: "#0a141e",
-      },
-    })
-      .png()
-      .toBuffer();
+    const png = await new Jimp({
+      width: 2_000,
+      height: 1_000,
+      color: 0x0a141eff,
+    }).getBuffer("image/png");
     const calls: { command: string; args: readonly string[] }[] = [];
     const runCommand = vi.fn(
       async (command: string, args: readonly string[]) => {

@@ -6,7 +6,7 @@ import {
 } from "@/mcp/client.js";
 import { isRecord } from "@/utils/index.js";
 
-// Small buffers pass through maybeResizeAndDownsampleImage untouched (sharp is
+// Small buffers pass through maybeResizeAndDownsampleImage untouched (jimp is
 // only consulted above the passthrough limit), so fake bytes are fine here.
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const DATA = Buffer.concat([PNG_MAGIC, Buffer.from("mcp-image")]).toString(
