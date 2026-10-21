@@ -15,7 +15,7 @@ import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import { useChat } from "@renderer/hooks/use-chat";
 import type { InitState } from "@shared/ipc-types";
 import { AlertTriangleIcon } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 function formatTokens(tokens: number): string {
   if (tokens >= 1_000_000) {
@@ -61,6 +61,26 @@ function App(): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const hasItems = state.items.length > 0;
+
+  // The floating composer overlay has a dynamic height (auto-growing
+  // textarea, conditional usage row). Measure it so ChatArea can park the
+  // scroll-to-latest button just above it instead of behind it.
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [overlayHeight, setOverlayHeight] = useState(0);
+  useLayoutEffect(() => {
+    const element = overlayRef.current;
+    if (!element) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      setOverlayHeight(element.offsetHeight);
+    });
+    observer.observe(element);
+    setOverlayHeight(element.offsetHeight);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasItems]);
 
   return (
     <TooltipProvider>
@@ -108,10 +128,14 @@ function App(): React.JSX.Element {
                 items={state.items}
                 streaming={state.streaming}
                 activeSubagents={state.activeSubagents}
+                overlayHeight={overlayHeight}
                 onRespondPermission={chat.respondPermission}
                 onRespondAsk={chat.respondAsk}
               />
-              <div className="from-background via-background/95 pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-linear-to-t pt-6 pb-4">
+              <div
+                ref={overlayRef}
+                className="from-background via-background/95 pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-linear-to-t pt-6 pb-4"
+              >
                 <div className="pointer-events-auto mx-auto w-full max-w-4xl px-4">
                   <Composer
                     streaming={state.streaming}

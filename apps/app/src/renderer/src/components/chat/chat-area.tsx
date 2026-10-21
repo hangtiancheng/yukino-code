@@ -25,6 +25,9 @@ const STICK_THRESHOLD = 32;
 /** Trailing space so the last rows clear the floating composer overlay. */
 const COMPOSER_CLEARANCE = 168;
 
+/** Gap between the scroll-to-latest button and the top of the composer overlay. */
+const SCROLL_BUTTON_GAP = 8;
+
 /** Vertical rhythm per row; consecutive tool calls stay visually tight. */
 function rowSpacing(item: ChatItem, prev: ChatItem | null): string {
   if (item.kind === "tool") {
@@ -55,12 +58,16 @@ export function ChatArea({
   items,
   streaming,
   activeSubagents,
+  overlayHeight = 0,
   onRespondPermission,
   onRespondAsk,
 }: {
   items: ChatItem[];
   streaming: boolean;
   activeSubagents: number;
+  /** Measured height of the floating composer overlay (px). The
+   *  scroll-to-latest button is lifted above it so it is never covered. */
+  overlayHeight?: number;
   onRespondPermission: (id: string, response: PermissionResponse) => void;
   onRespondAsk: (id: string, answers: Record<string, string>) => void;
 }): React.JSX.Element {
@@ -180,8 +187,11 @@ export function ChatArea({
               size="icon-sm"
               onClick={scrollToBottom}
               tabIndex={atBottom ? -1 : 0}
+              // Lift the button above the floating composer overlay so it is
+              // never painted behind it (the overlay is later in DOM order).
+              style={{ bottom: overlayHeight + SCROLL_BUTTON_GAP }}
               className={cn(
-                "border-border bg-background absolute inset-x-1/2 bottom-4 -translate-x-1/2 transition-[opacity,scale] duration-200",
+                "border-border bg-background absolute inset-x-1/2 -translate-x-1/2 rounded-full transition-[opacity,scale] duration-200",
                 atBottom
                   ? "pointer-events-none scale-95 opacity-0"
                   : "opacity-100",
