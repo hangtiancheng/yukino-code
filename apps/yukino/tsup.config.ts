@@ -2,8 +2,13 @@ import { cpSync, readFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "tsup";
 import type { Options } from "tsup";
+import type * as TypeScript from "typescript";
+// const sharpStub = fileURLToPath(
+//   new URL("./src/images/sharp-stub.ts", import.meta.url),
+// );
 
 // tsup does not re-export the esbuild Plugin type used by `esbuildPlugins`;
 // recover it from the Options type so standalone plugin consts stay typed.
@@ -18,6 +23,7 @@ const copyRemoteBrowser = (): void => {
   });
 };
 
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 const pkg = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
 ) as {
@@ -138,21 +144,22 @@ const banUIOnlyPlugin: EsbuildPlugin = {
 // concurrently, so the declaration file is not guaranteed to exist yet.
 const AMBIGUOUS_EXPORT_DIAGNOSTIC = 2308;
 
-type ExportConflict = {
+interface ExportConflict {
   file: string;
   line: number;
   column: number;
   message: string;
-};
+}
 
 const findAmbiguousExports = (
   tsconfigPath: string,
   projectRoot: string,
 ): ExportConflict[] => {
   const nodeRequire = createRequire(import.meta.url);
-  const ts = nodeRequire("typescript") as typeof import("typescript");
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  const ts = nodeRequire("typescript") as typeof TypeScript;
 
-  const read = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+  const read = ts.readConfigFile(tsconfigPath, (path) => ts.sys.readFile(path));
   if (read.error) {
     throw new Error(
       `[library-build] cannot read ${tsconfigPath}: ${ts.flattenDiagnosticMessageText(read.error.messageText, " ")}`,
@@ -248,7 +255,11 @@ const cliConfig: Options = {
   define: { __YUKINO_VERSION__: JSON.stringify(pkg.version) },
   tsconfig: "tsconfig.json",
   esbuildPlugins: [externalizeNodeBuiltinsPlugin],
+  // esbuildOptions(options) {
+  //   options.alias = { ...options.alias, sharp: sharpStub };
+  // },
   onSuccess: async () => {
+    await Promise.resolve();
     copyRemoteBrowser();
   },
 };
@@ -283,7 +294,11 @@ const libConfig: Options = {
   ].filter((dep) => !uiOnlySet.has(dep)),
   noExternal: [uiOnlyPattern],
   esbuildPlugins: [externalizeNodeBuiltinsPlugin, banUIOnlyPlugin],
+  // esbuildOptions(options) {
+  //   options.alias = { ...options.alias, sharp: sharpStub };
+  // },
   onSuccess: async () => {
+    await Promise.resolve();
     assertNoAmbiguousExports();
   },
 };
