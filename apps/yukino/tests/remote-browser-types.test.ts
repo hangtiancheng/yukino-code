@@ -94,7 +94,7 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
           id: "s1",
           firstMessage: "hello",
           messageCount: 2,
-          modTime: "2026-09-29T00:00:00.000Z",
+          lastUserMessageTime: "2026-09-29T00:00:00.000Z",
         },
       ],
     },

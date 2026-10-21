@@ -39,6 +39,7 @@ import type {
 } from "@/conversation/index.js";
 import type { FileHistory } from "@/file-history/index.js";
 import { GoalManager } from "@/goal/index.js";
+import { recordInput, type InputEntry } from "@/history/index.js";
 import type { HookEngine, EventName } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError, LLMError, RateLimitError } from "@/llm/errors.js";
@@ -61,6 +62,7 @@ import {
 } from "@/prompt/tools.js";
 import {
   saveTranscriptMessage,
+  saveMessage,
   saveTranscriptCompactBoundary,
   sessionLineCount,
   messageToKeptRecord,
@@ -281,23 +283,34 @@ export class Agent {
    * before the next LLM call — instead of waiting for the whole run to
    * finish.
    */
-  steer(text: string): void {
+  steer(text: string, input?: InputEntry): InputEntry | undefined {
     const trimmed = text.trim();
     if (trimmed) {
-      this.steeringQueue.push(trimmed);
+      const entry =
+        input ??
+        recordInput({
+          text: trimmed,
+          cwd: this.initialCwd,
+          sessionId: this.sessionId || null,
+          source: "sdk",
+        });
+      this.steeringQueue.push({ text: trimmed, input: entry });
+      return entry;
     }
   }
 
   /** Take all queued steering messages (called at turn boundaries and on teardown). */
-  drainSteering(): string[] {
+  drainSteering(): SteeringMessage[] {
     const drained = this.steeringQueue;
     this.steeringQueue = [];
     return drained;
   }
 
   /** Remove a queued steering message before delivery (e.g. recalled into the editor). */
-  removeSteering(text: string): boolean {
-    const index = this.steeringQueue.indexOf(text);
+  removeSteering(inputId: string): boolean {
+    const index = this.steeringQueue.findIndex(
+      (message) => message.input.id === inputId,
+    );
     if (index === -1) {
       return false;
     }
@@ -309,19 +322,20 @@ export class Agent {
   private *deliverSteering(): Generator<AgentEvent, string[], unknown> {
     const texts: string[] = [];
     while (!this.abortSignal?.aborted) {
-      const text = this.steeringQueue.shift();
-      if (text === undefined) {
+      const message = this.steeringQueue.shift();
+      if (message === undefined) {
         break;
       }
-      this.conversation.addUserMessage(text);
+      const { text, input } = message;
+      this.conversation.addUserMessage(text, input);
       this.persistLastMessage();
       texts.push(text);
-      yield { type: "steering_delivered", text };
+      yield { type: "steering_delivered", text, inputId: input.id };
     }
     return texts;
   }
 
-  private steeringQueue: string[] = [];
+  private steeringQueue: SteeringMessage[] = [];
   private restoreContext(): void {
     const skills = [
       this.skillSection,
@@ -1588,9 +1602,23 @@ export class Agent {
       return;
     }
     const last = msgs[msgs.length - 1];
-    saveTranscriptMessage(this.sessionFilePath, {
+    const record = {
       ...messageToKeptRecord(last),
       timestamp: Math.floor(Date.now() / 1000),
-    });
+    };
+    if (
+      this.sessionId &&
+      this.sessionFilePath ===
+        getSessionFilePath(this.initialCwd, this.sessionId)
+    ) {
+      saveMessage(this.initialCwd, this.sessionId, record);
+    } else {
+      saveTranscriptMessage(this.sessionFilePath, record);
+    }
   }
+}
+
+export interface SteeringMessage {
+  text: string;
+  input: InputEntry;
 }

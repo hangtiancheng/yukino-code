@@ -479,7 +479,7 @@ describe("persistent goals", () => {
         },
       });
       expect(client.calls).toBe(1);
-      expect(agent.drainSteering()).toEqual([
+      expect(agent.drainSteering().map((message) => message.text)).toEqual([
         "Stop and explain the current diff.",
         "Keep the files untouched.",
       ]);
@@ -517,7 +517,7 @@ describe("persistent goals", () => {
       },
     });
     expect(client.calls).toBe(0);
-    expect(agent.drainSteering()).toEqual([
+    expect(agent.drainSteering().map((message) => message.text)).toEqual([
       "Pause and read my correction first.",
     ]);
     expect(JSON.stringify(conversation.getMessages())).not.toContain(
@@ -540,7 +540,9 @@ describe("persistent goals", () => {
       },
     });
     expect(client.calls).toBe(2);
-    expect(agent.drainSteering()).toEqual(["Review my follow-up next."]);
+    expect(agent.drainSteering().map((message) => message.text)).toEqual([
+      "Review my follow-up next.",
+    ]);
     expect(manager.get()?.budgetSummaryPending).toBe(false);
   });
   it("does not let a final summary execute tools or continue a replacement goal", async () => {

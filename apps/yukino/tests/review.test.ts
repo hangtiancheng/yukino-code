@@ -8,6 +8,7 @@ import type { AgentEvent } from "@/agent/events.js";
 import { createDefaultRegistry } from "@/commands/commands.js";
 import { runSubagentCommand } from "@/commands/subagent.js";
 import { ConversationManager } from "@/conversation/index.js";
+import { loadInputs } from "@/history/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import { loadSession } from "@/session/index.js";
@@ -98,8 +99,13 @@ describe("/review", () => {
       undefined,
     );
     expect(events.map((event) => event.type)).toEqual(["tool_use"]);
+    const input = loadInputs()[0];
     expect(conversation.getMessages()).toEqual([
-      { role: "user", content: "/review 42" },
+      {
+        role: "user",
+        content: "/review 42",
+        userInput: { id: input.id, timestamp: input.timestamp },
+      },
     ]);
     resolve("Verified finding in src/auth.ts:12");
     await run;

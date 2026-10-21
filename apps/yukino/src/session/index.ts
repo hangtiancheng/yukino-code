@@ -19,8 +19,19 @@ import type {
   ToolResultBlock,
   UserBashResult,
 } from "@/conversation/index.js";
+import {
+  listProjects,
+  registerProject,
+  UserInputSchema,
+  type InputEntry,
+  type UserInput,
+} from "@/history/index.js";
 import { createChildLogger } from "@/logger/index.js";
-import { COMPACT_BOUNDARY, SESSION_EXPIRY_DAYS } from "@/session/constants.js";
+import {
+  COMPACT_BOUNDARY,
+  SESSION_EXPIRY_DAYS,
+  INPUT_SESSION_MISMATCH,
+} from "@/session/constants.js";
 import { getSessionsDir, sessionPath } from "@/storage/index.js";
 import {
   readPrivateFileSync as readFileSync,
@@ -33,6 +44,7 @@ import {
   type ToolResultContentBlock,
 } from "@/tools/types.js";
 import { contentToText } from "@/utils/index.js";
+import { canonicalPath } from "@/utils/paths.js";
 
 export * as Constants from "@/session/constants.js";
 
@@ -97,6 +109,7 @@ const SessionMessageSchema = z.object({
   tool_results: z.array(ToolResultRecordSchema).optional(),
   thinking_blocks: z.array(ThinkingBlockSchema).optional(),
   user_bash: UserBashResultSchema.optional(),
+  user_input: UserInputSchema.optional(),
 });
 
 export type SessionMessage = z.infer<typeof SessionMessageSchema>;
@@ -110,6 +123,7 @@ const KeptMessageSchema = z.object({
   tool_results: z.array(ToolResultRecordSchema).optional(),
   thinking_blocks: z.array(ThinkingBlockSchema).optional(),
   user_bash: UserBashResultSchema.optional(),
+  user_input: UserInputSchema.optional(),
 });
 
 export type KeptMessage = z.infer<typeof KeptMessageSchema>;
@@ -118,6 +132,9 @@ export function messageToKeptRecord(message: Message): KeptMessage {
   return {
     role: message.role,
     content: message.content,
+    ...(message.role === "user" && message.userInput
+      ? { user_input: message.userInput }
+      : {}),
     ...(message.userBash ? { user_bash: message.userBash } : {}),
     ...(message.toolUses?.length
       ? { tool_uses: toolUsesToRecords(message.toolUses) }
@@ -177,6 +194,12 @@ export interface SessionInfo {
   messageCount: number;
   size: number;
   modTime: Date;
+  lastUserMessageTime: Date | null;
+}
+
+export interface ProjectSessionInfo extends SessionInfo {
+  cwd: string;
+  projectKey: string;
 }
 
 const log = createChildLogger({ module: "session" });
@@ -203,7 +226,27 @@ export function saveMessage(
   sessionId: string,
   msg: SessionMessage,
 ): void {
+  registerProject(cwd);
   saveTranscriptMessage(getSessionFilePath(cwd, sessionId), msg);
+}
+
+export function saveUserMessage(
+  cwd: string,
+  sessionId: string,
+  input: InputEntry,
+  message: Omit<SessionMessage, "role" | "timestamp" | "user_input">,
+): SessionMessage {
+  if (input.cwd !== canonicalPath(cwd) || input.sessionId !== sessionId) {
+    throw new Error(INPUT_SESSION_MISMATCH);
+  }
+  const msg: SessionMessage = {
+    ...message,
+    role: "user",
+    timestamp: Math.floor(input.timestamp / 1000),
+    user_input: { id: input.id, timestamp: input.timestamp },
+  };
+  saveMessage(cwd, sessionId, msg);
+  return msg;
 }
 
 export function saveTranscriptMessage(
@@ -229,6 +272,7 @@ export function saveCompactBoundary(
   sessionId: string,
   payload: CompactBoundaryPayload,
 ): void {
+  registerProject(cwd);
   saveTranscriptCompactBoundary(getSessionFilePath(cwd, sessionId), payload);
 }
 
@@ -306,6 +350,18 @@ export function loadSession(cwd: string, sessionId: string): SessionMessage[] {
 }
 
 export function loadTranscript(filePath: string): SessionMessage[] {
+  return readTranscript(filePath, false);
+}
+
+export function loadSessionForResume(
+  cwd: string,
+  sessionId: string,
+): SessionMessage[] {
+  registerProject(cwd);
+  return readTranscript(getSessionFilePath(cwd, sessionId), true);
+}
+
+function readTranscript(filePath: string, renew: boolean): SessionMessage[] {
   if (!existsSync(dirname(filePath))) {
     return [];
   }
@@ -345,36 +401,12 @@ export function loadTranscript(filePath: string): SessionMessage[] {
         log.error({ err }, "session operation failed");
       }
     }
-    try {
+    if (renew && out.length > 0) {
       const now = new Date();
       utimesSync(filePath, now, now);
-    } catch {
-      // The session may be removed externally after a successful read.
     }
     return out;
   });
-}
-
-/**
- * Marks a session as recently active by refreshing its mtime. Session writes,
- * loads, rewinds, touches, and expiry cleanup share the same cross-process lock,
- * so cleanup cannot unlink a session that another process is resuming.
- */
-export function touchSession(cwd: string, sessionId: string): void {
-  const filePath = getSessionFilePath(cwd, sessionId);
-  if (!existsSync(dirname(filePath))) {
-    return;
-  }
-  try {
-    withFileSyncLock(filePath, () => {
-      if (existsSync(filePath)) {
-        const now = new Date();
-        utimesSync(filePath, now, now);
-      }
-    });
-  } catch {
-    // best-effort — the session may not exist (yet)
-  }
 }
 
 // A message ready to replay on resume. Boundary records expand into the summary
@@ -393,6 +425,7 @@ export interface RestoredMessage {
   toolResults?: ToolResultBlock[];
   thinkingBlocks?: ThinkingBlock[];
   userBash?: UserBashResult;
+  userInput?: UserInput;
 }
 
 /** Persisted records (snake_case) → in-memory tool blocks (camelCase), used to restore the call chain on session resume. */
@@ -542,6 +575,7 @@ function toRestored(
   return {
     role: m.role,
     content: m.content,
+    ...(m.role === "user" && m.user_input ? { userInput: m.user_input } : {}),
     ...(m.user_bash ? { userBash: m.user_bash } : {}),
     toolUses: recordsToCamelUses(m.tool_uses),
     toolResults: recordsToCamelResults(m.tool_results),
@@ -583,6 +617,7 @@ export function listSessions(cwd: string): SessionInfo[] {
         const id = file.replace(".jsonl", "");
         let firstMessage = "";
         let messageCount = 0;
+        let lastUserTimestamp: number | null = null;
 
         for (const line of readFileSync(filePath, "utf-8").split("\n")) {
           if (!line.trim()) {
@@ -600,6 +635,16 @@ export function listSessions(cwd: string): SessionInfo[] {
             continue;
           }
           messageCount++;
+          if (
+            message.role === "user" &&
+            message.user_input &&
+            !message.tool_results?.length
+          ) {
+            lastUserTimestamp = Math.max(
+              lastUserTimestamp ?? -1,
+              message.user_input.timestamp,
+            );
+          }
           if (!firstMessage && message.role === "user" && message.content) {
             firstMessage = contentToText(message.content).slice(0, 100);
           }
@@ -611,6 +656,8 @@ export function listSessions(cwd: string): SessionInfo[] {
           messageCount,
           size: stat.size,
           modTime: stat.mtime,
+          lastUserMessageTime:
+            lastUserTimestamp === null ? null : new Date(lastUserTimestamp),
         };
       });
       if (info) {
@@ -621,8 +668,39 @@ export function listSessions(cwd: string): SessionInfo[] {
     }
   }
 
-  sessions.sort((a, b) => b.modTime.getTime() - a.modTime.getTime());
+  sessions.sort(compareSessions);
   return sessions;
+}
+
+function compareSessions(a: SessionInfo, b: SessionInfo): number {
+  return (
+    (b.lastUserMessageTime?.getTime() ?? -1) -
+      (a.lastUserMessageTime?.getTime() ?? -1) || a.id.localeCompare(b.id)
+  );
+}
+
+export function listAllSessions(): ProjectSessionInfo[] {
+  const sessions: ProjectSessionInfo[] = [];
+  for (const project of listProjects()) {
+    try {
+      sessions.push(
+        ...listSessions(project.cwd).map((session) => ({
+          ...session,
+          cwd: project.cwd,
+          projectKey: project.projectKey,
+        })),
+      );
+    } catch (err) {
+      log.error({ err }, "session operation failed");
+    }
+  }
+  return sessions.sort(
+    (a, b) =>
+      (b.lastUserMessageTime?.getTime() ?? -1) -
+        (a.lastUserMessageTime?.getTime() ?? -1) ||
+      a.projectKey.localeCompare(b.projectKey) ||
+      a.id.localeCompare(b.id),
+  );
 }
 
 /**

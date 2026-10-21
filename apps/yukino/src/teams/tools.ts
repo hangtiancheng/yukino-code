@@ -268,8 +268,8 @@ export class SendMessageTool implements Tool {
   }
 }
 
-export class ListTeamTool implements Tool {
-  name = "ListTeam";
+export class TeamListTool implements Tool {
+  name = "TeamList";
   description = LIST_TEAM_TOOL_DESCRIPTION;
   category = "read" as const;
   constructor(private mgr: TeamManager) {}

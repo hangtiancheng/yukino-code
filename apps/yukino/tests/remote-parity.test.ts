@@ -17,7 +17,7 @@ import type { ProviderConfig } from "@/config/provider-config.js";
 import * as providerLogin from "@/config/provider-login.js";
 import * as historyMod from "@/history/index.js";
 import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
-import { loadSession } from "@/session/index.js";
+import { loadSession, listSessions, saveUserMessage } from "@/session/index.js";
 import type { Asker } from "@/tools/ask-user.js";
 import { contentToText } from "@/utils/index.js";
 
@@ -106,6 +106,81 @@ async function setup(cwd: string): Promise<{
 }
 
 describe("remote terminal-UI parity", () => {
+  it("binds steering received during cold initialization when its queued turn is dispatched", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-cold-steering-"));
+    const { server, handle } = await setup(cwd);
+    const run = vi
+      .spyOn(Agent.prototype, "run")
+      .mockImplementation(async function* () {
+        await Promise.resolve();
+        yield { type: "loop_complete", stopReason: "end_turn" };
+      });
+    try {
+      Reflect.set(server, "agentHandle", null);
+      Reflect.set(server, "streaming", true);
+      invokePrivate(server, "handleSteeringMessage", ["cold follow-up"]);
+      expect(historyMod.loadInputs()).toHaveLength(0);
+      Reflect.set(server, "agentHandle", handle);
+      Reflect.set(server, "streaming", false);
+      await invokePrivateAsync(server, "drainFollowUps");
+      expect(historyMod.loadInputs().map((input) => input.sessionId)).toEqual([
+        handle.sessionId,
+      ]);
+      expect(loadSession(cwd, handle.sessionId)[0].user_input?.id).toBe(
+        historyMod.loadInputs()[0].id,
+      );
+    } finally {
+      Reflect.set(server, "agentHandle", handle);
+      run.mockRestore();
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps /resume ordering stable when opening an older session without sending a message", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-resume-order-"));
+    const { server, broadcasts } = await setup(cwd);
+    try {
+      for (const [id, timestamp] of [
+        ["older", 1000],
+        ["newer", 2000],
+      ] as const) {
+        const input = historyMod.recordInput({
+          text: id,
+          cwd,
+          sessionId: id,
+          source: "cli",
+        });
+        saveUserMessage(cwd, id, { ...input, timestamp }, { content: id });
+      }
+      await invokePrivateAsync(server, "handleUserMessage", ["/resume"]);
+      await invokePrivateAsync(server, "handleUserMessage", ["/resume older"]);
+      await invokePrivateAsync(server, "handleUserMessage", ["/resume"]);
+      const schema = z.object({
+        sessions: z.array(
+          z.object({
+            id: z.string(),
+            lastUserMessageTime: z.string().nullable(),
+          }),
+        ),
+      });
+      const lists = broadcasts
+        .filter((message) => message.type === "session_list")
+        .map((message) => schema.parse(message.data));
+      expect(lists).toHaveLength(2);
+      expect(lists[0]).toEqual(lists[1]);
+      expect(lists[1].sessions.map((session) => session.id)).toEqual([
+        "newer",
+        "older",
+      ]);
+      expect(listSessions(cwd)[1].lastUserMessageTime?.getTime()).toBe(1000);
+      expect(historyMod.getCommandUsage().resume.usageCount).toBe(3);
+    } finally {
+      await server.stop();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     { agent: "review", outcome: "complete" },
     { agent: "review", outcome: "cancel" },
@@ -550,7 +625,9 @@ describe("remote terminal-UI parity", () => {
     try {
       Reflect.set(server, "streaming", true);
       await invokePrivateAsync(server, "handleSteeringMessage", ["/status"]);
-      expect(Reflect.get(server, "followUps")).toEqual(["/status"]);
+      expect(Reflect.get(server, "followUps")).toEqual([
+        { text: "/status", input: undefined },
+      ]);
       const queued = broadcasts.find((message) => message.type === "followups");
       expect(ListData.parse(queued?.data).list).toEqual(["/status"]);
 
@@ -795,7 +872,9 @@ describe("remote terminal-UI parity", () => {
             : ["late message"],
         );
         expect(
-          historyMod.load().filter((entry) => entry === "late message"),
+          historyMod
+            .loadInputTexts()
+            .filter((entry) => entry === "late message"),
         ).toHaveLength(1);
       } finally {
         run.mockRestore();
@@ -830,9 +909,14 @@ describe("remote terminal-UI parity", () => {
         } else {
           invokePrivate(server, "cancelActiveRun");
         }
-        historyMod.append("another prompt");
+        historyMod.recordInput({
+          text: "another prompt",
+          cwd,
+          sessionId: null,
+          source: "ws",
+        });
         await invokePrivateAsync(server, "handleUserMessage", ["repeated"]);
-        expect(historyMod.load()).toEqual([
+        expect(historyMod.loadInputTexts()).toEqual([
           "repeated",
           "another prompt",
           "repeated",
@@ -853,7 +937,9 @@ describe("remote terminal-UI parity", () => {
     try {
       invokePrivate(server, "handleSteeringMessage", ["!!echo local-only"]);
       expect(steer).not.toHaveBeenCalled();
-      expect(Reflect.get(server, "followUps")).toEqual(["!!echo local-only"]);
+      expect(Reflect.get(server, "followUps")).toEqual([
+        { text: "!!echo local-only", input: undefined },
+      ]);
     } finally {
       steer.mockRestore();
       await server.stop();

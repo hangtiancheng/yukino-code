@@ -32,6 +32,7 @@ import {
   toolLocations,
 } from "@/acp/conversion.js";
 import type { AgentEvent } from "@/agent/events.js";
+import { parse as parseCommand } from "@/commands/commands.js";
 import {
   forkEnabled,
   loadConfig,
@@ -40,13 +41,13 @@ import {
 } from "@/config/index.js";
 import { resolveDefaultProvider } from "@/config/provider-config.js";
 import type { ConversationManager } from "@/conversation/index.js";
+import { recordInput, type InputEntry } from "@/history/index.js";
 import { createRemoteAgent } from "@/remote/server.js";
 import {
   getSessionFilePath,
   listSessions,
-  loadSession,
+  loadSessionForResume,
   rebuildFromSession,
-  saveMessage,
 } from "@/session/index.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
 import { version } from "@/version.js";
@@ -58,7 +59,11 @@ export interface AcpRuntime {
   conv: ConversationManager;
   run(
     text: string,
-    callbacks: { onPermissionRequest: PermissionRequestHandler },
+    callbacks: {
+      onPermissionRequest: PermissionRequestHandler;
+      input?: InputEntry;
+      userContent?: string;
+    },
   ): AsyncGenerator<AgentEvent>;
   abort(): void;
   dispose(): Promise<void>;
@@ -225,7 +230,7 @@ export class YukinoAcpAgent {
       return {};
     }
 
-    const saved = loadSession(params.cwd, params.sessionId);
+    const saved = loadSessionForResume(params.cwd, params.sessionId);
     if (
       !session &&
       !existsSync(getSessionFilePath(params.cwd, params.sessionId))
@@ -382,10 +387,12 @@ export class YukinoAcpAgent {
     context: AgentRequestContext<PromptRequest>,
     signal: AbortSignal,
   ): Promise<PromptResponse> {
-    saveMessage(session.runtime.cwd, sessionId, {
-      role: "user",
-      content: text,
-      timestamp: Math.floor(Date.now() / 1000),
+    const input = recordInput({
+      cwd: session.runtime.cwd,
+      sessionId,
+      source: "acp",
+      text,
+      commandName: parseCommand(text)?.name === "goal" ? "goal" : null,
     });
 
     let reason: PromptResponse["stopReason"] = "end_turn";
@@ -393,6 +400,8 @@ export class YukinoAcpAgent {
     let usage = emptyUsage();
 
     for await (const event of session.runtime.run(text, {
+      input,
+      userContent: text,
       onPermissionRequest: async (
         toolName,
         args,

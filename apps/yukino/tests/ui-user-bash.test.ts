@@ -313,7 +313,10 @@ describe("user Bash lifecycle", () => {
       run.resolve({ output: "done", isError: false });
       await run.promise;
     });
-    expect(send.mock.calls).toEqual([["next prompt"], ["/clear"]]);
+    expect(send.mock.calls).toEqual([
+      ["next prompt", undefined],
+      ["/clear", undefined],
+    ]);
   });
 
   it("joins interrupted execution during exit", async () => {

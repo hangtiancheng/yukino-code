@@ -86,7 +86,7 @@ export function SessionSelector({
             <SelectorListRow
               key={session.id}
               current={session.id === currentSessionId}
-              detail={`${session.id} · ${String(session.messageCount)} messages · ${formatRelativeTime(session.modTime)}`}
+              detail={`${session.id} · ${String(session.messageCount)} messages · ${session.lastUserMessageTime ? formatRelativeTime(session.lastUserMessageTime) : "no user messages"}`}
               focused={start + index === cursor}
               label={session.firstMessage || "(empty session)"}
               width={width}

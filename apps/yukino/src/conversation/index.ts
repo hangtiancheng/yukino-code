@@ -1,3 +1,4 @@
+import type { UserInput } from "@/history/index.js";
 import type { ToolResultContentBlock } from "@/tools/types.js";
 import { contentToText } from "@/utils";
 
@@ -40,6 +41,7 @@ export interface Message {
   toolUses?: ToolUseBlock[] | undefined;
   toolResults?: ToolResultBlock[] | undefined;
   userBash?: UserBashResult;
+  userInput?: UserInput;
 }
 
 export interface UserBashResult {
@@ -62,10 +64,16 @@ export class ConversationManager {
   private baselineTokens = 0;
   private _anchorCount = 0;
 
-  addUserMessage(content: string | Record<string, unknown>[]): void {
+  addUserMessage(
+    content: string | Record<string, unknown>[],
+    userInput?: UserInput,
+  ): void {
     this.history.push({
       role: "user",
       content,
+      ...(userInput
+        ? { userInput: { id: userInput.id, timestamp: userInput.timestamp } }
+        : {}),
     });
   }
 

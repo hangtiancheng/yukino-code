@@ -187,8 +187,8 @@ describe("Agent steering", () => {
       [{ type: "text_delta", text: "hi" }, end()],
     ]);
     const { agent } = makeAgent(client);
-    agent.steer("recalled");
-    expect(agent.removeSteering("recalled")).toBe(true);
+    const input = agent.steer("recalled");
+    expect(agent.removeSteering(input?.id ?? "missing")).toBe(true);
 
     const events = await collect(agent);
 
@@ -206,7 +206,7 @@ describe("Agent steering", () => {
       undefined,
       controller.signal,
     );
-    agent.steer("delivered note");
+    const deliveredInput = agent.steer("delivered note");
     agent.steer("pending note");
 
     const events: AgentEvent[] = [];
@@ -219,13 +219,21 @@ describe("Agent steering", () => {
 
     expect(
       events.filter((event) => event.type === "steering_delivered"),
-    ).toEqual([{ type: "steering_delivered", text: "delivered note" }]);
+    ).toEqual([
+      {
+        type: "steering_delivered",
+        text: "delivered note",
+        inputId: deliveredInput?.id,
+      },
+    ]);
     expect(
       conversation
         .getMessages()
         .map((message) => contentToText(message.content)),
     ).toEqual(["hi", "first", "delivered note"]);
-    expect(agent.drainSteering()).toEqual(["pending note"]);
+    expect(agent.drainSteering().map((message) => message.text)).toEqual([
+      "pending note",
+    ]);
     expect(events.at(-1)).toEqual({
       type: "loop_complete",
       stopReason: "interrupted",
@@ -261,7 +269,9 @@ describe("Agent steering", () => {
         .getMessages()
         .map((message) => contentToText(message.content)),
     ).toEqual(["hi", "first"]);
-    expect(agent.drainSteering()).toEqual(["pending note"]);
+    expect(agent.drainSteering().map((message) => message.text)).toEqual([
+      "pending note",
+    ]);
     expect(events.at(-1)).toEqual({
       type: "loop_complete",
       stopReason: "interrupted",

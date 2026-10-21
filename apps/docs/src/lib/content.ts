@@ -232,7 +232,7 @@ export const tools: ToolItem[] = [
   { name: "SyntheticOutput", icon: icons.fileText, group: "Orchestrate" },
   { name: "TeamCreate", icon: icons.users, group: "Teams" },
   { name: "SendMessage", icon: icons.inbox, group: "Teams" },
-  { name: "ListTeam", icon: icons.users, group: "Teams" },
+  { name: "TeamList", icon: icons.users, group: "Teams" },
   { name: "TeamDelete", icon: icons.users, group: "Teams" },
   { name: "TaskCreate", icon: icons.blocks, group: "Teams" },
   { name: "TaskUpdate", icon: icons.blocks, group: "Teams" },

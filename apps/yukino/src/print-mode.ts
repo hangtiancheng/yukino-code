@@ -15,6 +15,7 @@ import {
 } from "@/config/provider-config.js";
 import { ConversationManager } from "@/conversation/index.js";
 import { GoalManager, handleGoalCommand } from "@/goal/index.js";
+import { recordInput } from "@/history/index.js";
 import { createClient } from "@/llm/client.js";
 import { MCPManager } from "@/mcp/manager.js";
 import { decideAndApply } from "@/mcp/strategy.js";
@@ -25,6 +26,7 @@ import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
 import {
   newSessionId,
   saveMessage,
+  saveUserMessage,
   messageToKeptRecord,
 } from "@/session/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
@@ -88,6 +90,13 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   let prompt = args.prompt;
   const goalManager = new GoalManager(cwd, sessionId);
   const command = parseCommand(prompt);
+  const input = recordInput({
+    text: args.prompt,
+    cwd,
+    sessionId,
+    source: "print",
+    commandName: command?.name === "goal" ? "goal" : null,
+  });
   if (command?.name === "goal") {
     const result = handleGoalCommand(goalManager, command.args);
     if (args.outputFormat === "stream-json") {
@@ -134,12 +143,8 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   const client = await createClient(provider, systemPrompt);
 
   const conv = new ConversationManager();
-  conv.addUserMessage(prompt);
-  saveMessage(cwd, sessionId, {
-    role: "user",
-    content: prompt,
-    timestamp: Math.floor(Date.now() / 1000),
-  });
+  conv.addUserMessage(prompt, input);
+  saveUserMessage(cwd, sessionId, input, { content: prompt });
 
   // Print mode intentionally bypasses permission prompts.
   const checker = new PermissionChecker(cwd, "bypassPermissions");

@@ -44,7 +44,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 - Session-local persistent goals with automatic continuation, explicit pause/resume, token budgets, and completion/blocker audits
 - Automatic context compaction when conversations approach the model's context window
 - Long-term memory extraction and recall across sessions (disable with `enable_memory: false` in `~/.yukino/config.yaml`)
-- Instructions files for persistent guidance: user-global `~/.yukino/AGENTS.md`, plus `AGENTS.md` in every directory from the git root down to the working directory; instruction files are read literally without `@include` expansion
+- Instructions files for persistent guidance: user-global `~/.yukino/AGENTS.md`, plus `AGENTS.md` in every directory from the git root down to the working directory; instruction files are read literally
 
 ### Skills and Commands
 
@@ -118,55 +118,59 @@ pnpm dev
 
 Yukino stores its configuration and runtime state under `~/.yukino`. The current directory (`cwd`) determines where tools execute and which project `/resume` opens. It does not determine the storage root. Directories are created when their features are used. On POSIX, Yukino state directories use `0700` and state files use `0600`, including existing files reopened for reading or appending and temporary files used for atomic replacement. This policy covers runtime state, configuration and memory; it does not chmod working-tree source files. State writes reject symbolic links. These mode bits do not establish a Windows ACL policy.
 
-```text
-~/.yukino/
-├── config.yaml
-├── AGENTS.md
-├── permissions.yaml
-├── prompt_history.jsonl
-├── command_usage.json
-├── prompts/
-│   └── <command>.md
-├── agents/
-│   └── <agent>.md
-├── skills/
-│   └── <skill>/SKILL.md
-├── memory/
-│   ├── MEMORY.md
-│   └── <memory>.md
-├── projects/
-│   └── <project-key>/
-│       ├── permissions.yaml
-│       └── memory/
-│           ├── MEMORY.md
-│           └── <memory>.md
-├── sessions/
-│   ├── <project-key>/
-│   │   └── <session-id>.jsonl
-│   └── artifacts/
-│       └── <session-id>/
-│           ├── tasks.json
-│           ├── file-history/
-│           │   ├── snapshots.json
-│           │   ├── <file-backup>
-│           │   └── <clipboard-image>.png
-│           └── tool-results/
-│               ├── <tool-call-id>.txt
-│               └── shell-<random>.output
-├── plans/
-│   └── <slug>.md
-├── logs/
-│   └── <session-id>.jsonl
-├── crash.log
-├── teams/
-│   └── <project-key>/<team>/
-│       ├── config.json
-│       ├── tasks.json
-│       ├── inboxes/<member>.json
-│       └── logs/<session-id>.jsonl
-└── worktrees/
-    └── <repository-key>/<slug>/
-        └── <Git working tree>
+```yaml
+~/.yukino/                                 # Per-user storage root for global configuration, reusable definitions, project/session state and diagnostics.
+├── config.yaml                            # Provider endpoints, credentials and models; default provider, permission mode, hooks, MCP/LSP and runtime settings.
+├── AGENTS.md                              # Global Markdown instructions and coding/workflow rules supplied to sessions in every project.
+├── permissions.yaml                       # User-wide Tool(pattern) permission rules and their effects, evaluated alongside project-specific rules.
+├── activity.jsonl                         # Input events with IDs, timestamps, cwd, session, source, text and command names; project registry and usage checkpoints.
+├── prompts/                               # Global reusable slash-command templates; nested directories provide command namespaces.
+│   └── <command>.md                       # Markdown prompt body and optional YAML metadata; its relative path determines the slash-command name.
+├── agents/                                # User-defined agent profiles that add agents or override built-in agent definitions by name.
+│   └── <agent>.md                         # YAML model/tool/permission/turn-limit settings plus Markdown task instructions and optional system-prompt override.
+├── skills/                                # Yukino-specific global skill catalog, including skills installed through InstallSkill.
+│   └── <skill>/                           # One reusable skill package, with its entrypoint and any accompanying scripts, references or assets.
+│       └── SKILL.md                       # Skill name, description and execution metadata in YAML frontmatter, followed by Markdown workflow instructions.
+├── memory/                                # User-scoped long-term memory shared across projects, including preferences and feedback about assistant behavior.
+│   ├── MEMORY.md                          # Global memory entrypoint containing concise topic links and summaries for inclusion in model context.
+│   └── <memory>.md                        # Individual user/feedback memory: YAML name, description and type, followed by detailed Markdown content.
+├── projects/                              # Project-scoped permission and memory state, isolated by canonical working-directory identity.
+│   └── <project-key>/                     # One project namespace; the key is the SHA-256 hash of its canonical absolute cwd.
+│       ├── permissions.yaml               # Project Tool(pattern) rules, including persisted allow-always approvals for tool operations.
+│       └── memory/                        # Long-term knowledge about this project, such as architecture, conventions, decisions and reference material.
+│           ├── MEMORY.md                  # Project memory entrypoint with concise links to project topics and shared global memories.
+│           └── <memory>.md                # Project/reference memory with YAML name, description and type plus detailed Markdown facts or guidance.
+├── sessions/                              # Conversation transcripts grouped by project, plus a separate namespace for session-owned artifacts.
+│   ├── <project-key>/                     # Transcript namespace for one canonical cwd, used by project-local resume and global session enumeration.
+│   │   └── <session-id>.jsonl             # Messages, user-input provenance, tool calls/results, thinking blocks, user Bash records, compaction boundaries and goal state.
+│   └── artifacts/                         # Session-owned supporting data, keyed by session ID independently of the executing agent's current directory.
+│       └── <session-id>/                  # One session's private task list, file-rewind data, clipboard images and persisted tool/shell output.
+│           ├── tasks.json                 # Private task list with subjects, descriptions, status, owners, dependencies, metadata, priorities and nextId counter.
+│           ├── file-history/              # File-rewind checkpoints and original file bytes, together with clipboard image attachments for this session.
+│           │   ├── snapshots.json         # Tracked paths, checkpoint metadata, transcript line positions, baseline states, backup paths and backup sequence counter.
+│           │   ├── <file-backup>          # Original file bytes for first-tracked baselines and per-checkpoint versions used to restore workspace files.
+│           │   └── <clipboard-image>.png  # Clipboard image bytes; prompt @ references load these PNGs as image attachments in user messages.
+│           └── tool-results/              # Full tool responses and shell capture files that remain accessible beyond shortened context/UI previews.
+│               ├── <tool-call-id>.txt     # Full text of a spilled tool result, addressed by the encoded tool-call ID and referenced from shortened results.
+│               └── shell-<random>.output  # Captured shell stdout/stderr, including complete command output beyond the in-memory preview.
+├── plans/                                 # Markdown plan documents shared through explicit per-session plan-file references.
+│   └── <slug>.md                          # One plan's Markdown content, used by plan-mode editing, user approval and subsequent plan execution.
+├── logs/                                  # Main-process structured diagnostics, grouped by the logging runtime's session ID.
+│   └── <session-id>.jsonl                 # Pino warn/error/fatal events with timestamps, session/mode/module context and structured error details.
+├── crash.log                              # Timestamped process starts/exits, terminal disconnections and crash stack traces for post-mortem diagnosis.
+├── teams/                                 # Persistent team coordination state, isolated by project and team identity.
+│   └── <project-key>/                     # Teams belonging to one canonical cwd; prevents unrelated projects from sharing rosters, tasks or mailboxes.
+│       └── <team>/                        # One sanitized team-name namespace containing its roster, shared task board, mailboxes and teammate diagnostics.
+│           ├── config.json                # Team metadata, leader ID, permission mode and member IDs/types/models/activity flags/worktree paths.
+│           ├── tasks.json                 # Team-wide task board with creators, owners, statuses, dependencies, task metadata and next_id counter.
+│           ├── inboxes/                   # Recipient-specific persistent mailboxes for communication between the leader and teammates.
+│           │   └── <member>.json          # Message array with sender, text, timestamp, read state and optional protocol type/request ID/approval response.
+│           └── logs/                      # Structured diagnostics from teammate processes, separated from main-process logs.
+│               └── <session-id>.jsonl     # One teammate runtime's warn/error/fatal events, with session/mode/module context and error details.
+└── worktrees/                             # Git worktrees used to isolate agent changes from the original checkout.
+    └── <repository-key>/                  # Repository namespace keyed by the canonical Git repository root; shared across its subdirectories.
+        └── <slug>/                        # Named worktree location for an EnterWorktree invocation or a worktree-enabled agent.
+            └── <Git working tree>         # Checked-out source files on the worktree branch, the .git link file and copied project .agents resources.
 ```
 
 ### Global resources
@@ -175,7 +179,7 @@ Yukino stores its configuration and runtime state under `~/.yukino`. The current
 
 `prompts/` contains user slash-command templates, `agents/` contains agent definitions that can override built-in definitions, and `skills/` contains skills installed by `InstallSkill`. Skill discovery also reads standard `~/.agents/skills/` and project `.agents/skills/`, in this order: global standard skills, global Yukino skills, then project standard skills. Later entries override earlier names. Project `AGENTS.md` and `.mcp.json` remain ordinary project resources.
 
-`prompt_history.jsonl` shares typed input across all projects and retains the latest 10,000 entries. Both loading and writing enforce this limit, and consecutive duplicate inputs are stored once. `command_usage.json` shares command usage counts. Neither file is split by project. `memory/` stores user memories shared across projects, while `plans/` stores plan documents; each live session tracks its active plan path. `logs/` contains main-process logs and `crash.log` records process exits and failures.
+`activity.jsonl` records user input, canonical project directories, and resolved command names across CLI, WebSocket, ACP and print mode. It preserves separate events for identical submissions; input recall merges consecutive duplicate texts and retains the latest 10,000 events. Periodic atomic checkpoints retain cumulative command usage and all registered projects while bounding input history. Writes and checkpoint replacement share a cross-process lock. The old prompt-history and command-usage files are no longer read or written. `memory/` stores user memories shared across projects, while `plans/` stores plan documents; each live session tracks its active plan path. `logs/` contains main-process logs and `crash.log` records process exits and failures.
 
 ### Project namespaces and resume
 
@@ -202,6 +206,8 @@ For example, a worktree named `fix-login` created from `/workspace/repo/app` is 
 Global configuration, prompts, agent definitions, and installed skills are shared directly with the worktree. Standard project `.agents` resources are copied into it. No project `.yukino` settings are copied. `EnterWorktree` accepts an optional `slug` (randomly generated when omitted) and switches the agent's working directory into the worktree. `ExitWorktree` operates on that agent's active session with `{ action: "keep" | "remove", discard_changes?: boolean }` and restores the original working directory. `keep` preserves the directory and branch; `remove` deletes both, using the runtime's recorded repository, branch, Git identity and initial HEAD. Removal refuses changed files, new commits, or unverifiable state unless the user confirms discarding work and `discard_changes` is true. With no active session, exit is a no-op. Existing trees from another runtime are never adopted. Project identity for resume, memory, and permissions stays anchored to the original project; starting a separate session directly in a worktree uses that directory's own project namespace.
 
 Yukino does not read or create a project `.yukino` directory. Existing project-local state is not automatically migrated; it must be moved to the corresponding global paths before it can be resumed.
+
+Session lists order by the last persisted real user input, excluding tool results and internal reminders. Read-only transcript loads do not refresh modification time; explicit resume renews expiry under the transcript lock without changing ordering. Conversation rewind restores the ordering time of the remaining messages. `Session.listAllSessions()` returns globally ordered sessions with their canonical `cwd` and `projectKey`, using the activity log project registry. Projects without recoverable directory metadata are discovered when their known cwd is registered; older messages without user-input provenance have no last-user-message time.
 
 ## Configuration
 
@@ -507,7 +513,7 @@ The common built-in registry is used by terminal, print, Remote/ACP/A2A, and in-
 
 ### Worker lifecycle
 
-Agent defaults to `kind: "teammate"`, joins the current team or creates one automatically, and generates the teammate name from its description. Use `kind: "subagent"` for one-shot runs and `worktree: true` for Git worktree isolation; agent definitions also accept a boolean `worktree` default, which a call can override. The optional `model` field is unnecessary for most tasks. `TeamCreate` generates its team name automatically, `ListTeam` lists the current team, and `TeamDelete` deletes it without a name argument.
+Agent defaults to `kind: "teammate"`, joins the current team or creates one automatically, and generates the teammate name from its description. Use `kind: "subagent"` for one-shot runs and `worktree: true` for Git worktree isolation; agent definitions also accept a boolean `worktree` default, which a call can override. The optional `model` field is unnecessary for most tasks. `TeamCreate` generates its team name automatically, `TeamList` lists the current team, and `TeamDelete` deletes it without a name argument.
 
 `Agent` selects its role and context independently: `subagent_type` defaults to `"general-purpose"`, while `fork` defaults to `true` (or the configured `enable_fork` value). An explicit `fork` value overrides the configuration for every role.
 

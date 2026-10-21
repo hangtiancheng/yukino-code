@@ -14,7 +14,7 @@ import {
   wireSkillsToRegistry,
 } from "@/bootstrap/tool-registry.js";
 import {
-  parse as parseCommand,
+  resolve as resolveCommand,
   createDefaultRegistry as createCommandRegistry,
 } from "@/commands/commands.js";
 import { loadUserCommands } from "@/commands/loader.js";
@@ -115,7 +115,7 @@ import { TaskStopTool } from "@/teams/task-stop.js";
 import {
   TeamCreateTool,
   SendMessageTool,
-  ListTeamTool,
+  TeamListTool,
   TeamDeleteTool,
 } from "@/teams/tools.js";
 import { TaskList } from "@/todo/index.js";
@@ -553,12 +553,14 @@ export function App({
     setMessages,
     onStart: (text) => {
       dismissNotice();
-      setPromptHistory(historyMod.append(text));
+      userBashInputRef.current = recordCliInput(text);
     },
     onSettled: () => {
       setFileFactsVersion((version) => version + 1);
     },
-    onResult: userBashHistory.record,
+    onResult: (result) => {
+      userBashHistory.record(result, userBashInputRef.current);
+    },
   });
   const flushUserBashResults = userBashHistory.flush;
   const permissionResolveRef = useRef<
@@ -584,11 +586,10 @@ export function App({
   const [transcriptRevision, setTranscriptRevision] = useState(0);
   // Steering messages queued into the in-flight agent, mirrored for display.
   // Entries are removed when the agent reports them delivered.
-  const [steeringPending, setSteeringPending] = useState<string[]>([]);
-  // Steering texts already written to prompt history at steer time. Consumed
-  // when the text enters the conversation (delivered in-run or re-fed as a
-  // follow-up), so the follow-up path records each user prompt exactly once.
-  const steeringHistoryRecordedRef = useRef<string[]>([]);
+  const [steeringPending, setSteeringPending] = useState<
+    historyMod.InputEntry[]
+  >([]);
+  const userBashInputRef = useRef<historyMod.InputEntry | undefined>(undefined);
   // Populated after useFollowUpQueue runs; lets the earlier-defined session
   // switch handlers (clear/resume/rewind) drop queued follow-ups when the
   // conversation baseline changes.
@@ -962,6 +963,7 @@ export function App({
 
         fileHistoryRef.current = new FileHistory(sessionIdRef.current);
 
+        historyMod.registerProject(cwd);
         const instructions = loadInstructions(cwd);
         // enable_memory: false disables the whole auto-memory pipeline; no
         // manager is created so nothing scans, rebuilds MEMORY.md, or injects
@@ -971,7 +973,7 @@ export function App({
         const memReminder = memMgr?.buildSystemReminder() ?? "";
         conversationRef.current.injectLongTermMemory(instructions, memReminder);
 
-        setPromptHistory(historyMod.load());
+        setPromptHistory(historyMod.loadInputTexts());
 
         hookEngineRef.current = new HookEngine(hooks);
 
@@ -1086,7 +1088,7 @@ export function App({
         registryRef.current.register(
           new SendMessageTool(teamManagerRef.current),
         );
-        registryRef.current.register(new ListTeamTool(teamManagerRef.current));
+        registryRef.current.register(new TeamListTool(teamManagerRef.current));
         registryRef.current.register(
           new TeamDeleteTool(teamManagerRef.current),
         );
@@ -1572,8 +1574,26 @@ export function App({
     return out;
   };
 
-  const runSlashCommand = async (text: string): Promise<boolean> => {
-    let parsed = parseCommand(text);
+  const recordCliInput = (
+    text: string,
+    commandName: string | null = null,
+  ): historyMod.InputEntry => {
+    const input = historyMod.recordInput({
+      text,
+      commandName,
+      cwd,
+      sessionId: sessionIdRef.current,
+      source: "cli",
+    });
+    setPromptHistory(historyMod.loadInputTexts());
+    return input;
+  };
+
+  const runSlashCommand = async (
+    text: string,
+    submittedInput?: historyMod.InputEntry,
+  ): Promise<boolean> => {
+    const parsed = resolveCommand(text, cmdRegistryRef.current);
     if (!parsed) {
       return false;
     }
@@ -1581,7 +1601,9 @@ export function App({
     // /mcp — show MCP server status, first retrying any server still not
     // connected; /mcp reload re-reads the config from disk and reconnects it.
     if (parsed.name === "mcp") {
-      usageTrackerRef.current.record("mcp");
+      if (!submittedInput) {
+        recordCliInput(text, "mcp");
+      }
       if (parsed.args.trim().toLowerCase() === "reload") {
         await reloadMcpServers();
         return true;
@@ -1625,22 +1647,8 @@ export function App({
       return true;
     }
 
-    // `/skill <name> [args]` shorthand: rewrite to `/<name> [args]` so it
-    // goes through the normal command registry path (skills are wired there).
-    // Exception: `/skill reload` routes to the /skills handler instead.
-    if (parsed.name === "skill" && parsed.args.trim()) {
-      const parts = parsed.args.trim().split(/\s+/);
-      if (parts[0] === "reload") {
-        parsed = { name: "skills", args: "reload" };
-      } else {
-        parsed = { name: parts[0], args: parts.slice(1).join(" ") };
-      }
-    }
-
-    const cmd = cmdRegistryRef.current.find(parsed.name);
-    if (cmd) {
-      usageTrackerRef.current.record(cmd.name);
-    }
+    const cmd = parsed.command;
+    const input = submittedInput ?? recordCliInput(text, cmd?.name ?? null);
     if (!cmd) {
       setMessages((prev) => [
         ...prev,
@@ -1655,11 +1663,9 @@ export function App({
         { role: "system", content: result.message },
       ]);
       if (result.prompt && clientRef.current) {
-        conversationRef.current.addUserMessage(result.prompt);
-        sessionMod.saveMessage(cwd, sessionIdRef.current, {
-          role: "user",
+        conversationRef.current.addUserMessage(result.prompt, input);
+        sessionMod.saveUserMessage(cwd, sessionIdRef.current, input, {
           content: result.prompt,
-          timestamp: Math.floor(Date.now() / 1000),
         });
         setIsStreaming(true);
         output.prepareTurn();
@@ -1798,7 +1804,6 @@ export function App({
           fileStateCacheRef.current.clear();
           // ...nor the old session's queued follow-ups and steering history.
           followUpResetRef.current();
-          steeringHistoryRecordedRef.current = [];
           announcedSkillsRef.current.clear();
           conversationRef.current.injectLongTermMemory(instructions, memory);
           // The fresh history holds no MCP announcement any more, so this re-sends
@@ -1903,7 +1908,7 @@ export function App({
             break;
           }
 
-          const saved = sessionMod.loadSession(cwd, arg);
+          const saved = sessionMod.loadSessionForResume(cwd, arg);
           if (saved.length === 0) {
             const sessions = sessionMod
               .listSessions(cwd)
@@ -1934,7 +1939,6 @@ export function App({
             : "";
           const restored = sessionMod.rebuildFromSession(saved);
           const fileHistory = new FileHistory(arg);
-          sessionMod.touchSession(cwd, arg);
           await backgroundTaskManagerRef.current.stopAll();
           await stopMemoryTasks();
           taskListRef.current.useStore(new TaskStore(arg));
@@ -1946,7 +1950,6 @@ export function App({
           fileStateCacheRef.current.clear();
           // Drop follow-ups/steering recorded against the previous conversation.
           followUpResetRef.current();
-          steeringHistoryRecordedRef.current = [];
           conv.injectLongTermMemory(instructions, memory);
           conv.appendMessages(
             restored.map((message) => ({
@@ -2198,6 +2201,7 @@ export function App({
             {
               cwd,
               sessionId: sessionIdRef.current,
+              inputEntry: input,
               registry: registryRef.current,
               conversation: conversationRef.current,
               permissionChecker: checkerRef.current ?? undefined,
@@ -2225,11 +2229,9 @@ export function App({
       if (clientRef.current && promptText.trim()) {
         setError(null);
         setMessages((prev) => [...prev, { role: "user", content: promptText }]);
-        conversationRef.current.addUserMessage(promptText);
-        sessionMod.saveMessage(cwd, sessionIdRef.current, {
-          role: "user",
+        conversationRef.current.addUserMessage(promptText, input);
+        sessionMod.saveUserMessage(cwd, sessionIdRef.current, input, {
           content: promptText,
-          timestamp: Math.floor(Date.now() / 1000),
         });
         setIsStreaming(true);
         setSubagents([]);
@@ -2344,9 +2346,12 @@ export function App({
   // user-visible message and leaves the app re-operable instead of escaping as
   // an unhandled rejection. This only catches expected command failures — the
   // global unknown-crash handling in recover.ts is left intact.
-  const handleSlashCommand = async (text: string): Promise<boolean> => {
+  const handleSlashCommand = async (
+    text: string,
+    input?: historyMod.InputEntry,
+  ): Promise<boolean> => {
     try {
-      return await runSlashCommand(text);
+      return await runSlashCommand(text, input);
     } catch (err) {
       log.error({ err, text }, "slash command failed");
       setMessages((prev) => [
@@ -2528,16 +2533,9 @@ export function App({
             break;
           }
           case "steering_delivered": {
-            // Remove exactly one occurrence: the same text may be queued twice.
-            setSteeringPending((prev) => {
-              const idx = prev.indexOf(event.text);
-              return idx === -1 ? prev : prev.filter((_, i) => i !== idx);
-            });
-            const recorded = steeringHistoryRecordedRef.current;
-            const recordedIdx = recorded.indexOf(event.text);
-            if (recordedIdx !== -1) {
-              recorded.splice(recordedIdx, 1);
-            }
+            setSteeringPending((prev) =>
+              prev.filter((input) => input.id !== event.inputId),
+            );
             setMessages((prev) => [
               ...prev,
               { role: "user", content: event.text },
@@ -2562,20 +2560,13 @@ export function App({
       setFileFactsVersion((v) => v + 1);
       const leftover = agent.drainSteering();
       if (leftover.length > 0) {
-        // Remove one pending entry per leftover item, not every text match.
-        setSteeringPending((prev) => {
-          const next = [...prev];
-          for (const text of leftover) {
-            const idx = next.indexOf(text);
-            if (idx !== -1) {
-              next.splice(idx, 1);
-            }
-          }
-          return next;
-        });
+        const ids = new Set(leftover.map((message) => message.input.id));
+        setSteeringPending((prev) =>
+          prev.filter((input) => !ids.has(input.id)),
+        );
         if (!exitingRef.current) {
-          for (const text of leftover) {
-            followUps.enqueue(text);
+          for (const message of leftover) {
+            followUps.enqueue(message.text, message.input);
           }
         }
       }
@@ -2657,15 +2648,17 @@ export function App({
     }
   };
 
-  const runUserTurn = async (text: string, modeOverride?: PermissionMode) => {
+  const runUserTurn = async (
+    text: string,
+    input: historyMod.InputEntry,
+    modeOverride?: PermissionMode,
+  ) => {
     await runAgentTurn(async () => {
       setMessages((prev) => [...prev, { role: "user", content: text }]);
       const expanded = await expandAtRefsWithImages(text, cwd);
-      conversationRef.current.addUserMessage(expanded);
-      sessionMod.saveMessage(cwd, sessionIdRef.current, {
-        role: "user",
+      conversationRef.current.addUserMessage(expanded, input);
+      sessionMod.saveUserMessage(cwd, sessionIdRef.current, input, {
         content: expanded,
-        timestamp: Math.floor(Date.now() / 1000),
       });
     }, modeOverride);
   };
@@ -2785,7 +2778,6 @@ export function App({
             fileStateCacheRef.current.clear();
             const transcript = rewindConversation(snapshot);
             followUpResetRef.current();
-            steeringHistoryRecordedRef.current = [];
             void stopMemoryTasks();
             const fileList =
               changed.length > 0
@@ -2805,7 +2797,6 @@ export function App({
             const transcript = rewindConversation(snapshot);
             fileStateCacheRef.current.clear();
             followUpResetRef.current();
-            steeringHistoryRecordedRef.current = [];
             void stopMemoryTasks();
             setMessages([
               ...transcript,
@@ -2860,21 +2851,15 @@ export function App({
     wireSkillsToRegistry(catalog, cmdRegistryRef.current, skillHostRef.current);
   };
 
-  const processSubmission = async (text: string) => {
+  const processSubmission = async (
+    text: string,
+    input?: historyMod.InputEntry,
+  ) => {
     refreshSkillsIfNeeded();
-    // Steering leftovers were recorded when they were steered; consume the
-    // marker instead of appending again so each user prompt lands once.
-    const recorded = steeringHistoryRecordedRef.current;
-    const recordedIdx = recorded.indexOf(text);
-    if (recordedIdx !== -1) {
-      recorded.splice(recordedIdx, 1);
-    } else {
-      setPromptHistory(historyMod.append(text));
-    }
-    if (text.startsWith("/") && (await handleSlashCommand(text))) {
+    if (text.startsWith("/") && (await handleSlashCommand(text, input))) {
       return;
     }
-    await runUserTurn(text);
+    await runUserTurn(text, input ?? recordCliInput(text));
   };
 
   const turnBlocked =
@@ -2934,6 +2919,7 @@ export function App({
       trimmed,
     );
     if (isStreaming && goalControl) {
+      recordCliInput(trimmed, "goal");
       const result = handleGoalCommand(currentGoal(), goalControl[1] ?? "");
       setMessages((prev) => [
         ...prev,
@@ -2942,10 +2928,9 @@ export function App({
       return;
     }
     if (isStreaming && !trimmed.startsWith("/") && agentRef.current) {
-      agentRef.current.steer(trimmed);
-      setSteeringPending((prev) => [...prev, trimmed]);
-      setPromptHistory(historyMod.append(trimmed));
-      steeringHistoryRecordedRef.current.push(trimmed);
+      const input = recordCliInput(trimmed);
+      agentRef.current.steer(trimmed, input);
+      setSteeringPending((prev) => [...prev, input]);
       return;
     }
     followUps.enqueue(text);
@@ -2969,9 +2954,9 @@ export function App({
       return followUp;
     }
     const steered = steeringPending.at(-1);
-    if (steered !== undefined && agentRef.current?.removeSteering(steered)) {
+    if (steered !== undefined && agentRef.current?.removeSteering(steered.id)) {
       setSteeringPending((prev) => prev.slice(0, -1));
-      return steered;
+      return steered.text;
     }
     return undefined;
   };
@@ -3257,7 +3242,10 @@ export function App({
       status={
         <>
           <UpdateNotice latestVersion={noticeVersion} />
-          <PendingQueue messages={pendingMessages} steering={steeringPending} />
+          <PendingQueue
+            messages={pendingMessages}
+            steering={steeringPending.map((input) => input.text)}
+          />
           {ctrlCHint && (
             <Box paddingLeft={1}>
               <Text color={THEME.dim}>Press Ctrl+C again to exit.</Text>

@@ -8,3 +8,5 @@
 export const COMPACT_BOUNDARY = "compact_boundary";
 
 export const SESSION_EXPIRY_DAYS = 30;
+export const INPUT_SESSION_MISMATCH =
+  "User input does not belong to this project and session.";

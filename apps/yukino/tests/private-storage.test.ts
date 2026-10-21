@@ -100,7 +100,12 @@ describe.skipIf(process.platform === "win32")(
         timestamp: 2,
       });
       truncateSessionLines(getSessionFilePath(directory, "private"), 1);
-      history.append("prompt");
+      history.recordInput({
+        text: "prompt",
+        cwd: directory,
+        sessionId: "private",
+        source: "sdk",
+      });
       const plan = { planFilePath: createPlanPath() };
       savePlan(plan, "plan");
       const logger = initLogger({

@@ -367,6 +367,7 @@ function sessions(count = 15): SessionInfo[] {
     messageCount: index + 1,
     size: 100,
     modTime: new Date("2026-01-01T00:00:00Z"),
+    lastUserMessageTime: new Date("2026-01-01T00:00:00Z"),
   }));
 }
 

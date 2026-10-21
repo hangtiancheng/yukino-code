@@ -135,8 +135,7 @@ export interface SessionSummary {
   id: string;
   firstMessage: string;
   messageCount: number;
-  /** ISO timestamp of the session file's last modification. */
-  modTime: string;
+  lastUserMessageTime: string | null;
 }
 
 export interface SessionListPayload {
@@ -255,7 +254,7 @@ const sessionSummarySchema = z.strictObject({
   id: z.string(),
   firstMessage: z.string(),
   messageCount: z.number(),
-  modTime: z.string(),
+  lastUserMessageTime: z.string().nullable(),
 });
 const toolArgsSchema = z.record(z.string(), z.unknown()).nullable();
 

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { InputEntry } from "@/history/index.js";
+
 interface Options {
   blocked: boolean;
-  send: (message: string) => Promise<void>;
+  send: (message: string, input?: InputEntry) => Promise<void>;
   onError: (error: unknown) => void;
 }
 
 export function useFollowUpQueue({ blocked, send, onError }: Options) {
-  const pending = useRef<string[]>([]);
+  const pending = useRef<{ text: string; input?: InputEntry }[]>([]);
   const active = useRef(false);
   // Synchronous pause gate: the paused STATE update is batched, and without
   // this ref the effect could re-fire on the requeue and retry a failing
@@ -30,12 +32,12 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
     };
   }, []);
 
-  const enqueue = useCallback((message: string) => {
+  const enqueue = useCallback((message: string, input?: InputEntry) => {
     if (!message.trim()) {
       return;
     }
-    pending.current = [...pending.current, message];
-    setMessages(pending.current);
+    pending.current = [...pending.current, { text: message, input }];
+    setMessages(pending.current.map((entry) => entry.text));
     pausedRef.current = false;
     setPaused(false);
   }, []);
@@ -46,8 +48,8 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
       return undefined;
     }
     pending.current = pending.current.slice(0, -1);
-    setMessages(pending.current);
-    return message;
+    setMessages(pending.current.map((entry) => entry.text));
+    return message.text;
   }, []);
 
   // Drop every queued/in-flight follow-up when the conversation baseline changes
@@ -74,12 +76,12 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
     const next = pending.current[0];
     pending.current = pending.current.slice(1);
     active.current = true;
-    setMessages(pending.current);
+    setMessages(pending.current.map((entry) => entry.text));
     setProcessing(true);
     const gen = generation.current;
     void (async () => {
       try {
-        await callbacks.current.send(next);
+        await callbacks.current.send(next.text, next.input);
       } catch (error) {
         if (mounted.current && gen === generation.current) {
           // Re-queue the failed message at the front instead of dropping it:
@@ -87,7 +89,7 @@ export function useFollowUpQueue({ blocked, send, onError }: Options) {
           // queue stays paused until the next enqueue lifts the gate, so the
           // failure is surfaced once, not retried in a loop.
           pending.current = [next, ...pending.current];
-          setMessages(pending.current);
+          setMessages(pending.current.map((entry) => entry.text));
           pausedRef.current = true;
           setPaused(true);
           callbacks.current.onError(error);

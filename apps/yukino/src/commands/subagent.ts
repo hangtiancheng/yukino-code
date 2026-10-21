@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { AgentEvent } from "@/agent/events.js";
 import { SUBAGENT_COMMAND_UNAVAILABLE } from "@/commands/constants.js";
 import type { ConversationManager } from "@/conversation/index.js";
-import { saveMessage } from "@/session/index.js";
+import { recordInput, type InputEntry } from "@/history/index.js";
+import { saveMessage, saveUserMessage } from "@/session/index.js";
 import { runPlanAgent } from "@/subagent/plan.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type { ToolContext, ToolResult } from "@/tools/types.js";
@@ -13,6 +14,7 @@ interface SubagentCommandContext extends ToolContext {
   conversation: ConversationManager;
   sessionId: string;
   onEvent: (event: AgentEvent) => void;
+  inputEntry?: InputEntry;
 }
 
 export async function runSubagentCommand(
@@ -28,14 +30,23 @@ export async function runSubagentCommand(
   }
 
   const record = (role: "user" | "assistant", content: string) => {
-    saveMessage(context.cwd, context.sessionId, {
-      role,
-      content,
-      timestamp: Math.floor(Date.now() / 1000),
-    });
     if (role === "user") {
-      context.conversation.addUserMessage(content);
+      const entry =
+        context.inputEntry ??
+        recordInput({
+          cwd: context.cwd,
+          sessionId: context.sessionId,
+          source: "sdk",
+          text: input,
+        });
+      saveUserMessage(context.cwd, context.sessionId, entry, { content });
+      context.conversation.addUserMessage(content, entry);
     } else {
+      saveMessage(context.cwd, context.sessionId, {
+        role,
+        content,
+        timestamp: Math.floor(Date.now() / 1000),
+      });
       context.conversation.addAssistantFull(content, [], []);
     }
   };

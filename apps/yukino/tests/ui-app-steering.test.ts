@@ -12,7 +12,7 @@ import type { ConversationManager } from "@/conversation/index.js";
 import { runFeedbackPipeline } from "@/feedback/pipeline.js";
 import type { PipelineDeps, PipelineResult } from "@/feedback/pipeline.js";
 import type { FeedbackOptions } from "@/feedback/types.js";
-import { load as loadPromptHistory } from "@/history/index.js";
+import { loadInputTexts as loadPromptHistory } from "@/history/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MCPClient } from "@/mcp/client.js";
@@ -304,7 +304,7 @@ describe("App steering delivery", () => {
     );
   });
 
-  it("keeps the original session and queued input if resume cannot touch its transcript", async () => {
+  it("keeps the original session and queued input if resume cannot load and renew its transcript", async () => {
     await start();
     const targetId = sessionMod.newSessionId();
     sessionMod.saveMessage(process.cwd(), targetId, {
@@ -312,7 +312,7 @@ describe("App steering delivery", () => {
       content: "RESUME_TARGET",
       timestamp: 1,
     });
-    vi.spyOn(sessionMod, "touchSession").mockImplementation(() => {
+    vi.spyOn(sessionMod, "loadSessionForResume").mockImplementation(() => {
       throw new Error("resume storage unavailable");
     });
     await submit(`/resume ${targetId}`);

@@ -73,7 +73,7 @@ type AllTools =
   | "LSP"
   | "TeamCreate"
   | "SendMessage"
-  | "ListTeam"
+  | "TeamList"
   | "TeamDelete"
   | "SyntheticOutput"
   | "AskUserQuestion"

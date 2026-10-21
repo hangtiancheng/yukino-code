@@ -15,6 +15,7 @@ import z from "zod";
 
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
+import type { SteeringMessage } from "@/agent/index.js";
 import { configureBashSandbox } from "@/bootstrap/sandbox.js";
 import {
   countMcpTools,
@@ -23,6 +24,7 @@ import {
 import { removeMcpTools } from "@/bootstrap/tool-registry.js";
 import {
   parse as parseCommand,
+  resolve as resolveCommand,
   createDefaultRegistry as createCommandRegistry,
   type CommandRegistry,
   type CommandContext,
@@ -106,16 +108,15 @@ import { restoreRemoteSession } from "@/remote/session-state.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import {
   newSessionId,
-  saveMessage,
+  saveUserMessage,
   saveCompactBoundary,
   listSessions,
   loadSession,
   getSessionFilePath,
-  touchSession,
+  loadSessionForResume,
   truncateSessionLines,
   rebuildFromSession,
 } from "@/session/index.js";
-import type { SessionMessage } from "@/session/index.js";
 import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
 import {
   runFork as runSkillFork,
@@ -288,6 +289,8 @@ function serveStatic(path: string): { body: Buffer; mime: string } | null {
 /** Callback injected into each agent run for the permission-request flow. */
 export interface RunCallbacks {
   onPermissionRequest: PermissionRequestHandler;
+  input?: historyMod.InputEntry;
+  userContent?: string | Record<string, unknown>[];
 }
 
 /** Encapsulates ALL agent state needed by the remote server. */
@@ -342,10 +345,10 @@ export interface RemoteAgentHandle {
    * Queues a steering message for the in-flight agent run. Returns false when
    * no run is active, so callers can surface a "busy" hint instead.
    */
-  steer(text: string): boolean;
+  steer(text: string, input?: historyMod.InputEntry): boolean;
 
   /** Takes steering messages queued too late for in-run delivery. */
-  takeSteeringLeftovers(): string[];
+  takeSteeringLeftovers(): SteeringMessage[];
 
   /**
    * Resets the conversation for /clear. The manager is reset in place —
@@ -429,7 +432,7 @@ class AgentHandleImpl implements RemoteAgentHandle {
   private abortController: AbortController | null = null;
   /** Agent receiving steering during the active run. */
   private currentAgent: Agent | null = null;
-  private steeringLeftovers: string[] = [];
+  private steeringLeftovers: SteeringMessage[] = [];
 
   constructor(
     agentHandleImpl: Omit<
@@ -487,6 +490,23 @@ class AgentHandleImpl implements RemoteAgentHandle {
     if (this.disposed) {
       throw new Error("Agent runtime is disposed");
     }
+    const input =
+      text === null
+        ? undefined
+        : (callbacks.input ??
+          historyMod.recordInput({
+            text:
+              typeof text === "string"
+                ? text
+                : contentToText(text) || "[attachments]",
+            cwd: this.cwd,
+            sessionId: this.sessionId,
+            source: "sdk",
+            commandName:
+              typeof text === "string" && parseCommand(text)?.name === "goal"
+                ? "goal"
+                : null,
+          }));
     if (typeof text === "string") {
       const command = parseCommand(text);
       if (command?.name === "goal") {
@@ -500,8 +520,11 @@ class AgentHandleImpl implements RemoteAgentHandle {
         text = result.prompt;
       }
     }
-    if (text !== null) {
-      this.conv.addUserMessage(text);
+    if (text !== null && input) {
+      saveUserMessage(this.cwd, this.sessionId, input, {
+        content: callbacks.userContent ?? text,
+      });
+      this.conv.addUserMessage(text, input);
     }
 
     // Announce the instructions of every connected MCP server this conversation has
@@ -597,15 +620,15 @@ class AgentHandleImpl implements RemoteAgentHandle {
     void this.teamManager.stopAll();
   }
 
-  steer(text: string): boolean {
+  steer(text: string, input?: historyMod.InputEntry): boolean {
     if (!this.abortController || !this.currentAgent) {
       return false;
     }
-    this.currentAgent.steer(text);
+    this.currentAgent.steer(text, input);
     return true;
   }
 
-  takeSteeringLeftovers(): string[] {
+  takeSteeringLeftovers(): SteeringMessage[] {
     return this.steeringLeftovers.splice(0);
   }
 
@@ -708,6 +731,7 @@ export async function createRemoteAgent(
   }
 
   // The session id itself is chosen above; the session file is written lazily.
+  historyMod.registerProject(cwd);
   const fileHistory = new FileHistory(sessionId);
   const fileStateCache = new FileStateCache();
 
@@ -1179,9 +1203,7 @@ export class RemoteServer {
 
   // Messages sent while a turn is busy but steering is unavailable (slash
   // commands, pre-run window): queued and replayed once the slot frees up.
-  private followUps: string[] = [];
-  /** Steering texts already appended to prompt history at steer time. */
-  private steeringHistoryRecorded: string[] = [];
+  private followUps: { text: string; input?: historyMod.InputEntry }[] = [];
   private userBashController: AbortController | null = null;
   private subagentController: AbortController | null = null;
   private modelListController: AbortController | null = null;
@@ -1292,7 +1314,7 @@ export class RemoteServer {
       this.send(ws, { type: "commands", data: this.buildCommandList() });
       this.send(ws, {
         type: "history",
-        data: { entries: historyMod.load().slice(-200) },
+        data: { entries: historyMod.loadInputTexts().slice(-200) },
       });
       this.sendUsageSnapshot(ws);
       for (const payload of this.mcpApps.entries()) {
@@ -1690,7 +1712,10 @@ export class RemoteServer {
   }
 
   /** Handles a user message: creates agent (if needed) and streams events. */
-  private async handleUserMessage(content: string): Promise<void> {
+  private async handleUserMessage(
+    content: string,
+    submittedInput?: historyMod.InputEntry,
+  ): Promise<void> {
     const text = content.trim();
     if (!text || this.streaming || this.stopping) {
       return;
@@ -1711,25 +1736,42 @@ export class RemoteServer {
     try {
       const command = parseCommand(text);
       if (command?.name === "login" || command?.name === "provider") {
-        historyMod.append(text);
+        if (!submittedInput) {
+          historyMod.recordInput({
+            text,
+            cwd: cwd(),
+            sessionId: this.agentHandle?.sessionId ?? null,
+            source: "ws",
+            commandName: "login",
+          });
+        }
         this.broadcast({ type: "replay_user", data: { content: text } });
         this.broadcastProviderList();
         this.broadcast({ type: "command_done", data: null });
         return;
       }
-      // Prompt history parity: each submission lands once. Steering texts are
-      // recorded when steered, so a later replay skips the duplicate append.
-      const recordedIdx = this.steeringHistoryRecorded.indexOf(text);
-      if (recordedIdx !== -1) {
-        this.steeringHistoryRecorded.splice(recordedIdx, 1);
-      } else {
-        historyMod.append(text);
-      }
-
       handle = await this.ensureAgent();
       if (!handle || this.runCanceled) {
+        if (!submittedInput) {
+          historyMod.recordInput({
+            text,
+            cwd: cwd(),
+            sessionId: null,
+            source: "ws",
+          });
+        }
         return;
       }
+      const input =
+        submittedInput ??
+        historyMod.recordInput({
+          text,
+          cwd: handle.cwd,
+          sessionId: handle.sessionId,
+          source: "ws",
+          commandName:
+            resolveCommand(text, handle.cmdRegistry)?.command?.name ?? null,
+        });
 
       const userBash = parseUserBashCommand(text);
       if (userBash !== null) {
@@ -1737,12 +1779,13 @@ export class RemoteServer {
           handle,
           userBash.command,
           userBash.excludeFromContext,
+          input,
         );
       } else if (text.startsWith("/") && parseCommand(text) !== null) {
         // Slash commands (including prompt-type skills and /plan turns) run
         // through their own handler; leftover replay below covers them too.
         this.broadcast({ type: "replay_user", data: { content: text } });
-        await this.handleSlashCommand(text);
+        await this.handleSlashCommand(text, input);
       } else {
         this.broadcast({ type: "replay_user", data: { content: text } });
         const startTime = Date.now();
@@ -1750,12 +1793,7 @@ export class RemoteServer {
         // raw text while the conversation and session store the expansion
         // (inlined file contents and image blocks).
         const expanded = await expandAtRefsWithImages(text, handle.cwd);
-        saveMessage(handle.cwd, handle.sessionId, {
-          role: "user",
-          content: expanded,
-          timestamp: Math.floor(Date.now() / 1000),
-        });
-        await this.streamAgentRun(handle, expanded, startTime);
+        await this.streamAgentRun(handle, expanded, startTime, input);
       }
     } catch (err) {
       log.error({ err }, "agent stream error");
@@ -1784,9 +1822,9 @@ export class RemoteServer {
     if (!this.runCanceled) {
       for (const leftover of leftovers) {
         if (this.streaming) {
-          this.handleSteeringMessage(leftover);
+          this.handleSteeringMessage(leftover.text, leftover.input);
         } else {
-          await this.handleUserMessage(leftover);
+          await this.handleUserMessage(leftover.text, leftover.input);
         }
       }
     }
@@ -1801,8 +1839,10 @@ export class RemoteServer {
     handle: RemoteAgentHandle,
     text: string | Record<string, unknown>[] | null,
     startTime: number,
+    input?: historyMod.InputEntry,
   ): Promise<void> {
     const callbacks: RunCallbacks = {
+      input,
       onPermissionRequest: this.createPermissionCallback(),
     };
     let streamBuf = "";
@@ -1853,7 +1893,7 @@ export class RemoteServer {
     const leftovers = handle.takeSteeringLeftovers();
     if (!this.runCanceled) {
       for (const leftover of leftovers) {
-        await this.handleUserMessage(leftover);
+        await this.handleUserMessage(leftover.text, leftover.input);
       }
     }
     await this.drainFollowUps();
@@ -1864,6 +1904,7 @@ export class RemoteServer {
     handle: RemoteAgentHandle,
     command: string,
     excludeFromContext: boolean,
+    input: historyMod.InputEntry,
   ): Promise<void> {
     if (!command) {
       this.broadcast({
@@ -1939,13 +1980,10 @@ export class RemoteServer {
       status,
     };
     try {
-      const message: SessionMessage = {
-        role: "user",
+      const message = saveUserMessage(handle.cwd, handle.sessionId, input, {
         content: userBashContext(recorded),
-        timestamp: Math.floor(Date.now() / 1000),
         user_bash: recorded,
-      };
-      saveMessage(handle.cwd, handle.sessionId, message);
+      });
       handle.conv.appendMessages(rebuildFromSession([message]));
     } catch (err) {
       this.broadcast({
@@ -1956,7 +1994,10 @@ export class RemoteServer {
   }
 
   /** Queues a mid-run user message as steering for the active agent run. */
-  private handleSteeringMessage(content: string): void {
+  private handleSteeringMessage(
+    content: string,
+    submittedInput?: historyMod.InputEntry,
+  ): void {
     const text = content.trim();
     if (!text) {
       return;
@@ -1965,6 +2006,13 @@ export class RemoteServer {
       text,
     );
     if (goalControl && this.agentHandle?.goalManager) {
+      historyMod.recordInput({
+        text,
+        cwd: this.agentHandle.cwd,
+        sessionId: this.agentHandle.sessionId,
+        source: "ws",
+        commandName: "goal",
+      });
       const result = handleGoalCommand(
         this.agentHandle.goalManager,
         goalControl[1] ?? "",
@@ -1980,23 +2028,36 @@ export class RemoteServer {
       this.enqueueFollowUp(text);
       return;
     }
-    if (!this.agentHandle?.steer(text)) {
-      this.enqueueFollowUp(text);
+    if (!this.agentHandle) {
+      this.enqueueFollowUp(text, submittedInput);
       return;
     }
-    historyMod.append(text);
-    this.steeringHistoryRecorded.push(text);
+    const input =
+      submittedInput ??
+      historyMod.recordInput({
+        text,
+        cwd: this.agentHandle.cwd,
+        sessionId: this.agentHandle.sessionId,
+        source: "ws",
+      });
+    if (!this.agentHandle?.steer(text, input)) {
+      this.enqueueFollowUp(text, input);
+      return;
+    }
     this.broadcast({ type: "steering_queued", data: { text } });
   }
 
   /** Queues a message that cannot run or steer right now. */
-  private enqueueFollowUp(text: string): void {
-    this.followUps.push(text);
+  private enqueueFollowUp(text: string, input?: historyMod.InputEntry): void {
+    this.followUps.push({ text, input });
     this.broadcastFollowUps();
   }
 
   private broadcastFollowUps(): void {
-    this.broadcast({ type: "followups", data: { list: [...this.followUps] } });
+    this.broadcast({
+      type: "followups",
+      data: { list: this.followUps.map((entry) => entry.text) },
+    });
   }
 
   /** Replays queued follow-ups once the streaming slot is free. */
@@ -2005,7 +2066,7 @@ export class RemoteServer {
       const next = this.followUps.shift();
       this.broadcastFollowUps();
       if (next !== undefined) {
-        await this.handleUserMessage(next);
+        await this.handleUserMessage(next.text, next.input);
       }
     }
   }
@@ -2064,10 +2125,6 @@ export class RemoteServer {
         break;
 
       case "steering_delivered": {
-        const recordedIndex = this.steeringHistoryRecorded.indexOf(ev.text);
-        if (recordedIndex !== -1) {
-          this.steeringHistoryRecorded.splice(recordedIndex, 1);
-        }
         this.broadcast({
           type: "steering_delivered",
           data: { text: ev.text },
@@ -2137,7 +2194,10 @@ export class RemoteServer {
   }
 
   /** Handles slash command input: parse, dispatch to handler by type. */
-  private async handleSlashCommand(input: string): Promise<void> {
+  private async handleSlashCommand(
+    input: string,
+    submittedInput?: historyMod.InputEntry,
+  ): Promise<void> {
     const handle = await this.ensureAgent();
     if (!handle) {
       // Init failed; reset the client-side streaming state so the UI is usable again.
@@ -2145,13 +2205,13 @@ export class RemoteServer {
       return;
     }
 
-    const parsed = parseCommand(input);
+    const parsed = resolveCommand(input, handle.cmdRegistry);
     if (!parsed) {
       return;
     }
 
     const { name, args } = parsed;
-    const cmd = handle.cmdRegistry.find(name);
+    const cmd = parsed.command;
 
     if (!cmd) {
       this.broadcast({
@@ -2164,6 +2224,15 @@ export class RemoteServer {
       return;
     }
 
+    const inputEntry =
+      submittedInput ??
+      historyMod.recordInput({
+        text: input,
+        cwd: handle.cwd,
+        sessionId: handle.sessionId,
+        source: "ws",
+        commandName: cmd.name,
+      });
     const ctx = this.buildCommandContext(args);
 
     switch (cmd.type) {
@@ -2242,6 +2311,7 @@ export class RemoteServer {
               {
                 cwd: handle.cwd,
                 sessionId: handle.sessionId,
+                inputEntry,
                 registry: handle.registry,
                 conversation: handle.conv,
                 permissionChecker: handle.checker,
@@ -2270,19 +2340,11 @@ export class RemoteServer {
         }
 
         this.exitPlanSucceeded = false;
-        const cwd = handle.cwd;
-        const sessionId = handle.sessionId;
-
-        // Persist the display text (not the handler output)
-        saveMessage(cwd, sessionId, {
-          role: "user",
-          content: displayText,
-          timestamp: Math.floor(Date.now() / 1000),
-        });
-
         const startTime = Date.now();
         try {
           const callbacks: RunCallbacks = {
+            input: inputEntry,
+            userContent: displayText,
             onPermissionRequest: this.createPermissionCallback(),
           };
 
@@ -3786,7 +3848,8 @@ export class RemoteServer {
             id: sess.id,
             firstMessage: sess.firstMessage,
             messageCount: sess.messageCount,
-            modTime: sess.modTime.toISOString(),
+            lastUserMessageTime:
+              sess.lastUserMessageTime?.toISOString() ?? null,
           })),
         },
       });
@@ -3801,7 +3864,7 @@ export class RemoteServer {
     }
 
     const saved = sessions.some((session) => session.id === targetId)
-      ? loadSession(cwd, targetId)
+      ? loadSessionForResume(cwd, targetId)
       : [];
     if (saved.length === 0) {
       this.broadcast({
@@ -3815,7 +3878,6 @@ export class RemoteServer {
     await handle.backgroundTaskManager.stopAll();
     await handle.stopMemoryTasks();
     const replay = restoreRemoteSession(handle, targetId, saved);
-    touchSession(cwd, targetId);
     this.subagentStates.clear();
     this.broadcastSubagents();
 
@@ -4154,7 +4216,6 @@ export class RemoteServer {
 
   private cancelActiveRun(): void {
     this.runCanceled = true;
-    this.steeringHistoryRecorded = [];
     this.closePlanApproval();
     this.agentHandle?.abort();
     this.compactController?.abort();

@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { FileHistory } from "@/file-history/index.js";
-import { append, load } from "@/history/index.js";
+import { recordInput, loadInputTexts } from "@/history/index.js";
 import { createPlanPath } from "@/plan-file/index.js";
 import {
   getSessionFilePath,
@@ -48,9 +48,19 @@ describe("global storage", () => {
       expect(getSessionFilePath(first, "first-session")).toContain(
         getYukinoDir(),
       );
-      append("First prompt");
-      append("Second prompt");
-      expect(load()).toEqual(["First prompt", "Second prompt"]);
+      recordInput({
+        text: "First prompt",
+        cwd: first,
+        sessionId: "first-session",
+        source: "cli",
+      });
+      recordInput({
+        text: "Second prompt",
+        cwd: second,
+        sessionId: "second-session",
+        source: "cli",
+      });
+      expect(loadInputTexts()).toEqual(["First prompt", "Second prompt"]);
       new FileHistory("first-session");
       new TaskStore("first-session").save([], 1);
       expect(createPlanPath()).toContain(getYukinoDir());

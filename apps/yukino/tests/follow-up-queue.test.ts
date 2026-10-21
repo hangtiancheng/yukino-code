@@ -104,7 +104,7 @@ describe("follow-up scheduling", () => {
       mount({ blocked: false, send, onError });
       await Promise.resolve();
     });
-    expect(send).toHaveBeenCalledExactlyOnceWith("edited");
+    expect(send).toHaveBeenCalledExactlyOnceWith("edited", undefined);
   });
 
   it("rechecks blocking after the active request ends", async () => {

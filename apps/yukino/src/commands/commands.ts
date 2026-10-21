@@ -98,6 +98,25 @@ export function parse(input: string): Parsed | null {
   };
 }
 
+export function resolve(
+  input: string,
+  registry: CommandRegistry,
+): (Parsed & { command: Command | undefined }) | null {
+  let parsed = parse(input);
+  if (!parsed) {
+    return null;
+  }
+  if (parsed.name.toLowerCase() === "skill" && parsed.args) {
+    const [name, ...args] = parsed.args.split(/\s+/u);
+    parsed =
+      name.toLowerCase() === "reload"
+        ? { name: "skills", args: "reload" }
+        : { name, args: args.join(" ") };
+  }
+  const command = registry.find(parsed.name);
+  return { ...parsed, name: command?.name ?? parsed.name, command };
+}
+
 export function createDefaultRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
 

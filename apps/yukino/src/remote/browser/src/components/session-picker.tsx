@@ -49,7 +49,7 @@ export function SessionPicker({
           id: session.id,
           label: session.firstMessage || "(no messages)",
           detail: session.id,
-          meta: `${String(session.messageCount)} msgs · ${relativeTime(session.modTime)}`,
+          meta: `${String(session.messageCount)} msgs · ${session.lastUserMessageTime ? relativeTime(session.lastUserMessageTime) : "no user messages"}`,
         }))}
         onSelect={onPick}
         onClose={onClose}

@@ -16,7 +16,7 @@ import {
 } from "@/teams/progress.js";
 import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
 import {
-  ListTeamTool,
+  TeamListTool,
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,
@@ -246,7 +246,7 @@ describe("teams orchestration", () => {
         .map((m) => m.text),
     ).toContain("hi");
 
-    const list = await new ListTeamTool(mgr).execute();
+    const list = await new TeamListTool(mgr).execute();
     expect(list.output).toContain(mgr.list()[0]?.name);
     expect(list.output).toContain("w1");
   });
@@ -265,7 +265,7 @@ describe("teams orchestration", () => {
       expect(tool.category).toBe("command");
       expect(checker.check(tool.name, tool.category, {}).effect).toBe("ask");
     }
-    expect(new ListTeamTool(mgr).category).toBe("read");
+    expect(new TeamListTool(mgr).category).toBe("read");
   });
 
   it("gives spawned teammates a coordination-capable checker", async () => {
@@ -432,7 +432,7 @@ describe("teams orchestration", () => {
     const project = cwd();
     const mgr = new TeamManager(project);
     const create = new TeamCreateTool(mgr);
-    const list = new ListTeamTool(mgr);
+    const list = new TeamListTool(mgr);
     const remove = new TeamDeleteTool(mgr);
     expect(create.schema().input_schema).toMatchObject({
       properties: { description: { type: "string" } },
@@ -441,7 +441,7 @@ describe("teams orchestration", () => {
     expect(create.schema().input_schema.properties).not.toHaveProperty(
       "team_name",
     );
-    expect(list.name).toBe("ListTeam");
+    expect(list.name).toBe("TeamList");
     expect(remove.schema().input_schema.properties).toEqual({});
     expect(remove.schema().input_schema.required).toEqual([]);
     expect((await list.execute()).output).toBe("No active team.");

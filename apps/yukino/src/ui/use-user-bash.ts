@@ -14,6 +14,7 @@ import {
   parseUserBashCommand,
   userBashContext,
 } from "@/conversation/user-bash.js";
+import type { InputEntry } from "@/history/index.js";
 import {
   saveMessage,
   rebuildFromSession,
@@ -69,12 +70,15 @@ export function useUserBashHistory(options: {
   callbacks.current = options;
   const pending = useRef<SessionMessage[]>([]);
   const [revision, setRevision] = useState(0);
-  const record = useCallback((result: UserBashResult) => {
+  const record = useCallback((result: UserBashResult, input?: InputEntry) => {
     pending.current.push({
       role: "user",
       content: userBashContext(result),
       timestamp: Math.floor(Date.now() / 1000),
       user_bash: result,
+      ...(input
+        ? { user_input: { id: input.id, timestamp: input.timestamp } }
+        : {}),
     });
     setRevision((value) => value + 1);
   }, []);

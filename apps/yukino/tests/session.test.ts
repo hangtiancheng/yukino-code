@@ -17,6 +17,7 @@ import { COMPACT_BOUNDARY } from "@/session/constants.js";
 import {
   saveMessage,
   loadSession,
+  loadSessionForResume,
   listSessions,
   newSessionId,
   saveCompactBoundary,
@@ -566,7 +567,7 @@ describe("cleanExpiredSessions", () => {
     const aged = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     utimesSync(filePath, aged, aged);
 
-    expect(loadSession(cwd, sessionId)).toHaveLength(1);
+    expect(loadSessionForResume(cwd, sessionId)).toHaveLength(1);
     expect(cleanExpiredSessions(cwd)).toBe(0);
     expect(existsSync(filePath)).toBe(true);
   });
