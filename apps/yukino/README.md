@@ -739,10 +739,12 @@ Pasting an image saves it as a PNG under `~/.yukino/sessions/artifacts/<session-
 
 Besides the `yukino` CLI, the package ships a library entry for embedding Yukino in another host process.
 
-| Entry          | Output                                     | Contents                                                                                                                |
-| -------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| CLI (`yukino`) | `dist/main.js`                             | Fully bundled, minified single file with a shebang; Node built-ins plus ink's `react-devtools-core` peer stay external. |
-| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts` | The `src/index.ts` barrel; runtime dependencies stay external and resolve from the consumer's `node_modules`.           |
+| Entry          | Output                                                                 | Contents                                                                                                                                    |
+| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI (`yukino`) | `dist/main.js`, `dist/image-worker.js`                                 | Minified ESM bundles with a separate image worker; Node built-ins, ink's `react-devtools-core` peer, and WASM codec packages stay external. |
+| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts`, `dist/lib/image-worker.js` | The `src/index.ts` barrel and image worker; runtime dependencies resolve from the consumer's `node_modules`.                                |
+
+Image decoding, compression, and screenshot transforms run in a cancellable worker thread. Jimp handles resizing and encoding; `@jsquash/jpeg` and `@jsquash/webp` decode JPEG and WebP with WASM binaries from their installed packages. Image jobs run one at a time to bound concurrent decode memory.
 
 The library entry is terminal-independent by contract: it must never reach `src/ui/**` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can import it. `pnpm build` enforces that contract:
 

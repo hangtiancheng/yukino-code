@@ -5,11 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { Jimp } from "jimp";
 import { safeParse, z } from "zod";
 
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
-import { maybeResizeAndDownsampleImage } from "@/images/index.js";
+import { processScreenshot } from "@/images/index.js";
 import { tryAcquireFileSyncLock } from "@/teams/file-lock.js";
 import {
   ACTIONS,
@@ -1212,80 +1211,23 @@ export class ComputerUseTool implements Tool {
     region?: number[],
   ): Promise<ToolResult> {
     const capture = await this.captureScreenshot(signal);
-    const image = await Jimp.read(capture.bytes);
-    const pixelWidth = image.width;
-    const pixelHeight = image.height;
-    const screenWidth = capture.width > 0 ? capture.width : pixelWidth;
-    const screenHeight = capture.height > 0 ? capture.height : pixelHeight;
-
-    if (region) {
-      const left = Math.round(region[0] * this.coordinateScaleX);
-      const top = Math.round(region[1] * this.coordinateScaleY);
-      const right = Math.round(region[2] * this.coordinateScaleX);
-      const bottom = Math.round(region[3] * this.coordinateScaleY);
-      const rawScaleX = pixelWidth / screenWidth;
-      const rawScaleY = pixelHeight / screenHeight;
-      const rawLeft = Math.max(
-        0,
-        Math.min(pixelWidth - 1, Math.round(left * rawScaleX)),
-      );
-      const rawTop = Math.max(
-        0,
-        Math.min(pixelHeight - 1, Math.round(top * rawScaleY)),
-      );
-      const rawRight = Math.max(
-        rawLeft + 1,
-        Math.min(pixelWidth, Math.round(right * rawScaleX)),
-      );
-      const rawBottom = Math.max(
-        rawTop + 1,
-        Math.min(pixelHeight, Math.round(bottom * rawScaleY)),
-      );
-      const cropped = await image
-        .crop({
-          x: rawLeft,
-          y: rawTop,
-          w: rawRight - rawLeft,
-          h: rawBottom - rawTop,
-        })
-        .getBuffer("image/png", { deflateLevel: 9 });
-      return this.imageResult(
-        cropped,
-        `Zoomed screenshot of [${region.join(", ")}].`,
-      );
-    }
-
-    const targetScale = Math.min(
-      1,
-      MAX_SCREENSHOT_WIDTH / screenWidth,
-      MAX_SCREENSHOT_HEIGHT / screenHeight,
+    const image = await processScreenshot(
+      capture.bytes,
+      {
+        screenWidth: capture.width,
+        screenHeight: capture.height,
+        maxWidth: MAX_SCREENSHOT_WIDTH,
+        maxHeight: MAX_SCREENSHOT_HEIGHT,
+        region,
+        coordinateScaleX: this.coordinateScaleX,
+        coordinateScaleY: this.coordinateScaleY,
+      },
+      signal,
     );
-    const targetWidth = Math.max(1, Math.round(screenWidth * targetScale));
-    const targetHeight = Math.max(1, Math.round(screenHeight * targetScale));
-    const normalized = await image
-      .resize({ w: targetWidth, h: targetHeight })
-      .getBuffer("image/png", { deflateLevel: 9 });
-    const result = await this.imageResult(
-      normalized,
-      `Screenshot ${String(targetWidth)}x${String(targetHeight)}. Use this coordinate space for subsequent actions.`,
-    );
-    const outputBlock = result.contentBlocks?.[0];
-    if (outputBlock?.type === "image" && outputBlock.source.type === "base64") {
-      const final = await Jimp.read(
-        Buffer.from(outputBlock.source.data, "base64"),
-      );
-      this.coordinateScaleX = screenWidth / final.width;
-      this.coordinateScaleY = screenHeight / final.height;
-      result.output = `Screenshot ${String(final.width)}x${String(final.height)}. Use this coordinate space for subsequent actions.`;
+    if (!region) {
+      this.coordinateScaleX = image.screenWidth / image.width;
+      this.coordinateScaleY = image.screenHeight / image.height;
     }
-    return result;
-  }
-
-  private async imageResult(
-    bytes: Buffer,
-    output: string,
-  ): Promise<ToolResult> {
-    const image = await maybeResizeAndDownsampleImage(bytes, "image/png");
     const imageBlock = {
       type: "image",
       source: {
@@ -1294,7 +1236,13 @@ export class ComputerUseTool implements Tool {
         data: image.data,
       },
     } satisfies ToolResultContentBlock;
-    return { output, contentBlocks: [imageBlock], isError: false };
+    return {
+      output: region
+        ? `Zoomed screenshot of [${region.join(", ")}].`
+        : `Screenshot ${String(image.width)}x${String(image.height)}. Use this coordinate space for subsequent actions.`,
+      contentBlocks: [imageBlock],
+      isError: false,
+    };
   }
 
   private async captureScreenshot(

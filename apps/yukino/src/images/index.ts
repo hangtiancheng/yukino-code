@@ -1,14 +1,13 @@
 import { open, readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 
-import { Jimp } from "jimp";
-
 import {
   MAX_IMAGE_BYTES,
   MAX_IMAGE_BYTES_PASSTHROUGH,
   MAX_IMAGE_INPUT_BYTES,
-  MAX_DIMENSION_PX,
 } from "@/images/constants.js";
+import type { ImageMediaType, ScreenshotOptions } from "@/images/types.js";
+import { processImage } from "@/images/worker.js";
 import { createChildLogger } from "@/logger/index.js";
 
 // Submodule namespaces for library consumers (Images.<Sub>.*).
@@ -16,8 +15,6 @@ export * as Clipboard from "@/images/clipboard.js";
 export * as Constants from "@/images/constants.js";
 
 const log = createChildLogger({ module: "images" });
-
-type ImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
 
 export function asImageMediaType(type: string): ImageMediaType {
   if (
@@ -152,7 +149,7 @@ export async function loadImageAttachment(
     );
   }
   // Magic bytes win over the extension when they disagree.
-  const resized = await maybeResizeAndDownsampleImage(buf, sniffed);
+  const resized = await maybeResizeAndDownsampleImage(buf, sniffed, signal);
   signal?.throwIfAborted();
   return {
     mediaType: resized.mediaType,
@@ -172,18 +169,12 @@ function formatMB(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-// Resize/compress an image buffer so its base64 encoding fits the API limit:
-//   1. <=3.75MB raw passes through untouched (jimp never invoked).
-//   2. Otherwise: cap dimensions at 2000px; PNG/GIF sources try PNG first
-//      (deflateLevel 9), then every source walks the JPEG quality ladder
-//      80/60/40/20; halve dimensions and retry the whole ladder at most twice.
-// GIF sources are re-encoded only when they need compression, which normalizes
-// animated GIFs to their first frame. jimp cannot decode WebP, so an oversized
-// WebP fails with ImageTooLargeError (small WebP still passes through).
 export async function maybeResizeAndDownsampleImage(
   buf: Buffer,
   mediaType: ImageMediaType,
+  signal?: AbortSignal,
 ): Promise<ResizedImage> {
+  signal?.throwIfAborted();
   if (buf.length === 0) {
     throw new ImageTooLargeError("Image file is empty (0 bytes)");
   }
@@ -192,15 +183,9 @@ export async function maybeResizeAndDownsampleImage(
   }
 
   try {
-    return await compressWithJimp(buf);
+    return await processImage({ bytes: buf }, signal);
   } catch (err) {
-    if (err instanceof ImageTooLargeError) {
-      throw err;
-    }
-    // jimp failed at runtime (corrupt file, undecodable WebP, ...).
-    // We only get here when the raw size already exceeds the passthrough
-    // target (3.75MB), so its base64 form necessarily exceeds the 5MB API
-    // limit — there is no valid passthrough, fail with context.
+    signal?.throwIfAborted();
     log.warn({ err }, "image compression failed");
     throw new ImageTooLargeError(
       `Image is ${formatMB(buf.length)} raw (${formatMB((buf.length * 4) / 3)} base64-encoded, API limit ${formatMB(MAX_IMAGE_BYTES)}) and compression failed. Please provide a smaller image.`,
@@ -208,48 +193,11 @@ export async function maybeResizeAndDownsampleImage(
   }
 }
 
-async function compressWithJimp(buf: Buffer): Promise<ResizedImage> {
-  const image = await Jimp.read(buf);
-  let width = image.width;
-  let height = image.height;
-
-  if (width > MAX_DIMENSION_PX) {
-    height = Math.max(1, Math.round((height * MAX_DIMENSION_PX) / width));
-    width = MAX_DIMENSION_PX;
-  }
-  if (height > MAX_DIMENSION_PX) {
-    width = Math.max(1, Math.round((width * MAX_DIMENSION_PX) / height));
-    height = MAX_DIMENSION_PX;
-  }
-
-  const preservePng = image.mime === "image/png" || image.mime === "image/gif";
-
-  // Halve dimensions and retry the whole ladder at most twice.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    // Resize from a fresh clone each attempt so repeated halving always
-    // resamples the original pixels, not a previously downsampled copy.
-    // Skip the resample entirely when the target already matches the source.
-    const resized = image.clone();
-    if (width !== resized.width || height !== resized.height) {
-      resized.resize({ w: width, h: height });
-    }
-    if (preservePng) {
-      const png = await resized.getBuffer("image/png", { deflateLevel: 9 });
-      if (png.length <= MAX_IMAGE_BYTES_PASSTHROUGH) {
-        return toResult(png, "image/png");
-      }
-    }
-    for (const quality of [80, 60, 40, 20]) {
-      const jpeg = await resized.getBuffer("image/jpeg", { quality });
-      if (jpeg.length <= MAX_IMAGE_BYTES_PASSTHROUGH) {
-        return toResult(jpeg, "image/jpeg");
-      }
-    }
-    width = Math.max(1, Math.round(width / 2));
-    height = Math.max(1, Math.round(height / 2));
-  }
-
-  throw new ImageTooLargeError(
-    `Unable to compress image (${formatMB(buf.length)} raw) under the ${formatMB(MAX_IMAGE_BYTES)} base64 API limit (raw bytes must be ≤${formatMB(MAX_IMAGE_BYTES_PASSTHROUGH)}). Please provide a smaller image.`,
-  );
+export function processScreenshot(
+  bytes: Buffer,
+  options: ScreenshotOptions,
+  signal?: AbortSignal,
+) {
+  signal?.throwIfAborted();
+  return processImage({ bytes, screenshot: options }, signal);
 }

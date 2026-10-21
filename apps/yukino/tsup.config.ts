@@ -74,6 +74,11 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
       path: args.path,
       external: true,
     }));
+    // Codec modules locate their WASM binaries inside their installed packages.
+    build.onResolve({ filter: /^@jsquash\// }, (args) => ({
+      path: args.path,
+      external: true,
+    }));
     // Not referenced by src/: ink itself requires it from its devtools entry
     // (ink/build/devtools.js) and declares it a peer dependency. Since the CLI
     // build bundles ink, the resolution happens here, and the peer is not
@@ -216,7 +221,10 @@ const assertNoAmbiguousExports = (): void => {
 // library output below — tsup runs an array config concurrently, so a `**/*`
 // sweep here races with, and can delete, dist/lib.
 const cliConfig: Options = {
-  entry: { main: "src/cli.ts" },
+  entry: {
+    main: "src/cli.ts",
+    "image-worker": "src/images/image-worker.js",
+  },
   format: ["esm"],
   env: {
     NODE_ENV: "production",
@@ -251,7 +259,10 @@ const cliConfig: Options = {
 // own node_modules), emits bundled d.ts, and must never reach src/ui. outDir is
 // nested under dist/ so the two builds' chunk graphs never overwrite each other.
 const libConfig: Options = {
-  entry: ["src/index.ts"],
+  entry: {
+    index: "src/index.ts",
+    "image-worker": "src/images/image-worker.js",
+  },
   format: ["esm"],
   platform: "node",
   target: "node20",

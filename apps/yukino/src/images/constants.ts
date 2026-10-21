@@ -6,6 +6,12 @@ export const MAX_IMAGE_INPUT_BYTES = 50 * 1024 * 1024;
 
 export const MAX_DIMENSION_PX = 2000;
 
+export const IMAGE_WORKER_TIMEOUT_MS = 120_000;
+export const IMAGE_WORKER_TIMEOUT_ERROR = "Image processing timed out.";
+export const IMAGE_WORKER_EXIT_ERROR =
+  "Image processing worker exited without a result.";
+export const IMAGE_PROCESSING_ABORTED_ERROR = "Image processing was aborted.";
+
 // Cap images per user message to stay well under provider block limits.
 export const MAX_IMAGES_PER_MESSAGE = 10;
 

@@ -666,6 +666,19 @@ describe("ComputerUseTool", () => {
       source: { type: "base64", media_type: "image/png" },
     });
 
+    const zoom = await tool.execute(context, {
+      action: "zoom",
+      region: [0, 0, 683, 342],
+    });
+    expect(zoom.isError).toBe(false);
+    const block = zoom.contentBlocks?.[0];
+    if (block?.type !== "image" || block.source.type !== "base64") {
+      throw new Error("Expected an image block");
+    }
+    const cropped = await Jimp.read(Buffer.from(block.source.data, "base64"));
+    expect(cropped.width).toBe(1000);
+    expect(cropped.height).toBe(501);
+
     await tool.execute(context, {
       action: "mouse_move",
       coordinate: [683, 342],
