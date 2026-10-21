@@ -14,7 +14,7 @@ import type { ToolBlockInfo, ToolCardStatus } from "@/ui/tool-display.js";
 import { formatToolArgs } from "@/utils/index.js";
 
 /**
- * Final decoration for an Agent tool card, resolved by the app when the tool
+ * Final decoration for a delegated tool card, resolved by the app when the tool
  * result arrives. Carries the subagent's terminal state so committed cards
  * keep the run's real outcome (e.g. an interrupted run renders as "stopped"
  * instead of a green success card).
@@ -222,13 +222,11 @@ export function useAgentOutput(
         }
         case "tool_result": {
           const output = toDisplayPreview(event.output);
-          // Agent calls carry their terminal subagent state (completed /
-          // stopped / failed) so the card keeps it after commit; plain tools
-          // derive their look from isError alone.
-          const decoration =
-            event.toolName === "Agent"
-              ? resolveAgentCard?.(event.toolId)
-              : undefined;
+          const decoration = resolveAgentCard?.(event.toolId);
+          const status =
+            decoration && event.isError && decoration.status !== "stopped"
+              ? "failed"
+              : decoration?.status;
           const completeTool = (tool: ToolBlockInfo): ToolBlockInfo =>
             tool.toolId === event.toolId
               ? {
@@ -237,7 +235,7 @@ export function useAgentOutput(
                   isError: event.isError,
                   elapsed: event.elapsed,
                   loading: false,
-                  ...(decoration?.status ? { status: decoration.status } : {}),
+                  ...(status ? { status } : {}),
                   ...(decoration?.progress
                     ? { progress: decoration.progress }
                     : {}),
@@ -252,7 +250,7 @@ export function useAgentOutput(
             output,
             isError: event.isError,
             elapsed: event.elapsed,
-            ...(decoration?.status ? { status: decoration.status } : {}),
+            ...(status ? { status } : {}),
             ...(decoration?.progress ? { progress: decoration.progress } : {}),
           });
           if (event.toolName === "AskUserQuestion") {

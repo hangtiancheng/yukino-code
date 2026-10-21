@@ -1089,10 +1089,14 @@ export class Agent {
             // turn boundary, after tool results and before the next LLM call.
             yield* this.deliverSteering();
           } else {
+            yield { type: "turn_complete" };
+            if (this.abortSignal?.aborted) {
+              yield { type: "loop_complete", stopReason: "interrupted" };
+              return;
+            }
             // The model produced no tool calls, so the run would normally end.
             // Steering queued up to this point keeps it alive instead (pi-style).
             if (this.steeringQueue.length > 0) {
-              yield { type: "turn_complete" };
               const steered = yield* this.deliverSteering();
               if (steered.length > 0 || this.abortSignal?.aborted) {
                 continue;
@@ -1112,7 +1116,6 @@ export class Agent {
                     sessionLineCount(this.sessionFilePath),
                   );
                 }
-                yield { type: "turn_complete" };
                 this.conversation.addUserMessage(prompt);
                 this.persistLastMessage();
                 this.goalManager?.beginTurn();

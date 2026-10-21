@@ -111,6 +111,10 @@ describe("Agent loop", () => {
     ).toBe(true);
     const lc = events.find((e) => e.type === "loop_complete");
     expect(lc?.type === "loop_complete" && lc.stopReason).toBe("end_turn");
+    expect(
+      events.filter((event) => event.type === "turn_complete"),
+    ).toHaveLength(1);
+    expect(events.at(-2)).toEqual({ type: "turn_complete" });
 
     const last = conversation.getMessages().at(-1);
     expect(last?.role).toBe("assistant");
@@ -194,7 +198,9 @@ describe("Agent loop", () => {
     const tr = events.find((e) => e.type === "tool_result");
     expect(tr?.type === "tool_result" && tr.output).toBe("echoed");
     expect(tr?.type === "tool_result" && tr.isError).toBe(false);
-    expect(events.some((e) => e.type === "turn_complete")).toBe(true);
+    expect(
+      events.filter((event) => event.type === "turn_complete"),
+    ).toHaveLength(2);
     expect(events.some((e) => e.type === "loop_complete")).toBe(true);
   });
 

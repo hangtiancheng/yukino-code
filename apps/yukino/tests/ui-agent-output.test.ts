@@ -425,110 +425,147 @@ describe("agent output hook", () => {
     ]);
   });
 
-  it("commits foreground Agent cards with the resolved subagent status", () => {
-    const send = startLoop((toolId) =>
-      toolId === "agent-stop"
-        ? { status: "stopped", progress: "general-purpose subagent | 2 turns" }
-        : toolId === "agent-done"
-          ? { status: "completed", progress: "explore subagent | 3 turns" }
-          : undefined,
-    );
+  it.each(["Agent", "EnterPlanMode"])(
+    "commits foreground %s cards with the resolved subagent status",
+    (toolName) => {
+      const send = startLoop((toolId) =>
+        toolId === "agent-stop"
+          ? {
+              status: "stopped",
+              progress: "general-purpose subagent | 2 turns",
+            }
+          : toolId === "agent-done"
+            ? { status: "completed", progress: "explore subagent | 3 turns" }
+            : undefined,
+      );
+      send(
+        {
+          type: "tool_use",
+          toolName,
+          toolId: "agent-stop",
+          args: {
+            kind: "subagent",
+            description: "fix bug",
+            prompt: "fix it",
+            subagent_type: "general-purpose",
+            fork: false,
+          },
+        },
+        {
+          type: "tool_use",
+          toolName,
+          toolId: "agent-done",
+          args: {
+            kind: "subagent",
+            description: "survey code",
+            prompt: "survey",
+            subagent_type: "explore",
+            fork: false,
+          },
+        },
+        {
+          type: "tool_use",
+          toolName: "Read",
+          toolId: "read-1",
+          args: { file_path: "a.ts" },
+        },
+        {
+          type: "tool_result",
+          toolName,
+          toolId: "agent-stop",
+          output: "partial work\n\n[Interrupted]",
+          isError: false,
+          elapsed: 12,
+        },
+        {
+          type: "tool_result",
+          toolName,
+          toolId: "agent-done",
+          output: "findings",
+          isError: false,
+          elapsed: 8,
+        },
+        {
+          type: "tool_result",
+          toolName: "Read",
+          toolId: "read-1",
+          output: "contents",
+          isError: false,
+          elapsed: 1,
+        },
+      );
+
+      // The interrupted card must not look like a success: status drives the
+      // red "stopped" styling.
+      const stopped = state().output.activeTools.find(
+        (tool) => tool.toolId === "agent-stop",
+      );
+      expect(stopped).toEqual(
+        expect.objectContaining({
+          status: "stopped",
+          progress: "general-purpose subagent | 2 turns",
+          loading: false,
+        }),
+      );
+      // Tools without a tracked subagent keep their ordinary result styling.
+      const read = state().output.activeTools.find(
+        (tool) => tool.toolId === "read-1",
+      );
+      expect(read?.status).toBeUndefined();
+      expect(read?.progress).toBeUndefined();
+
+      send({ type: "turn_complete" });
+      const summary = state().messages.at(-1)?.toolSummary ?? [];
+      expect(summary[0]).toEqual(
+        expect.objectContaining({
+          toolName,
+          status: "stopped",
+          progress: "general-purpose subagent | 2 turns",
+          output: "partial work\n\n[Interrupted]",
+          isError: false,
+        }),
+      );
+      expect(summary[1]).toEqual(
+        expect.objectContaining({
+          toolName,
+          status: "completed",
+          progress: "explore subagent | 3 turns",
+        }),
+      );
+      expect(summary[2]?.status).toBeUndefined();
+      expect(summary[2]?.progress).toBeUndefined();
+    },
+  );
+
+  it("marks a rejected plan result as failed even when the subagent completed", () => {
+    const send = startLoop(() => ({
+      status: "completed",
+      progress: "plan subagent | 1 turns",
+    }));
     send(
       {
         type: "tool_use",
-        toolName: "Agent",
-        toolId: "agent-stop",
-        args: {
-          kind: "subagent",
-          description: "fix bug",
-          prompt: "fix it",
-          subagent_type: "general-purpose",
-          fork: false,
-        },
-      },
-      {
-        type: "tool_use",
-        toolName: "Agent",
-        toolId: "agent-done",
-        args: {
-          kind: "subagent",
-          description: "survey code",
-          prompt: "survey",
-          subagent_type: "explore",
-          fork: false,
-        },
-      },
-      {
-        type: "tool_use",
-        toolName: "Read",
-        toolId: "read-1",
-        args: { file_path: "a.ts" },
+        toolName: "EnterPlanMode",
+        toolId: "empty-plan",
+        args: {},
       },
       {
         type: "tool_result",
-        toolName: "Agent",
-        toolId: "agent-stop",
-        output: "partial work\n\n[Interrupted]",
-        isError: false,
-        elapsed: 12,
-      },
-      {
-        type: "tool_result",
-        toolName: "Agent",
-        toolId: "agent-done",
-        output: "findings",
-        isError: false,
-        elapsed: 8,
-      },
-      {
-        type: "tool_result",
-        toolName: "Read",
-        toolId: "read-1",
-        output: "contents",
-        isError: false,
+        toolName: "EnterPlanMode",
+        toolId: "empty-plan",
+        output: "The plan agent returned no plan.",
+        isError: true,
         elapsed: 1,
       },
+      { type: "turn_complete" },
     );
-
-    // The interrupted card must not look like a success: status drives the
-    // red "stopped" styling.
-    const stopped = state().output.activeTools.find(
-      (tool) => tool.toolId === "agent-stop",
-    );
-    expect(stopped).toEqual(
+    expect(state().messages.at(-1)?.toolSummary).toEqual([
       expect.objectContaining({
-        status: "stopped",
-        progress: "general-purpose subagent | 2 turns",
-        loading: false,
+        toolName: "EnterPlanMode",
+        status: "failed",
+        isError: true,
       }),
-    );
-    // Non-Agent tools never receive a decoration, even with a resolver active.
-    const read = state().output.activeTools.find(
-      (tool) => tool.toolId === "read-1",
-    );
-    expect(read?.status).toBeUndefined();
-    expect(read?.progress).toBeUndefined();
-
-    send({ type: "turn_complete" });
-    const summary = state().messages.at(-1)?.toolSummary ?? [];
-    expect(summary[0]).toEqual(
-      expect.objectContaining({
-        toolName: "Agent",
-        status: "stopped",
-        progress: "general-purpose subagent | 2 turns",
-        output: "partial work\n\n[Interrupted]",
-        isError: false,
-      }),
-    );
-    expect(summary[1]).toEqual(
-      expect.objectContaining({
-        toolName: "Agent",
-        status: "completed",
-        progress: "explore subagent | 3 turns",
-      }),
-    );
-    expect(summary[2]?.status).toBeUndefined();
-    expect(summary[2]?.progress).toBeUndefined();
+    ]);
   });
 
   it("keeps teammate spawn history after deleting the team", () => {

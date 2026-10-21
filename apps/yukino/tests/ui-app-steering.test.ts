@@ -603,6 +603,138 @@ describe("App feedback approval", () => {
 
 describe("App plan approval", () => {
   it.each([
+    { role: "review", outcome: "complete" },
+    { role: "review", outcome: "fail" },
+    { role: "review", outcome: "cancel" },
+    { role: "plan", outcome: "complete" },
+    { role: "plan", outcome: "fail" },
+    { role: "plan", outcome: "cancel" },
+  ])(
+    "updates /$role progress and releases input after $outcome",
+    async ({ role, outcome }) => {
+      await start();
+      await finishRequest(0);
+      await submit(`/${role} 42`);
+      await waitForRequests(2);
+      await vi.waitFor(async () => {
+        await flush();
+        const output = terminal.bufferLines().join("\n");
+        expect(output).toContain(`Agent /${role} 42  running`);
+        expect(output).toContain(`${role} subagent | 0 turns`);
+      });
+
+      if (outcome === "cancel") {
+        await press("\x1b");
+        await vi.waitFor(async () => {
+          await act(async () => {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+          });
+          expect(client.requests[1].signal?.aborted).toBe(true);
+        });
+      } else if (outcome === "fail") {
+        await act(async () => {
+          client.requests[1].fail(new Error("Command child failed"));
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        });
+      } else {
+        await finishRequest(1);
+      }
+
+      const status =
+        outcome === "cancel"
+          ? "stopped"
+          : outcome === "fail"
+            ? "failed"
+            : "completed";
+      await vi.waitFor(async () => {
+        await flush();
+        const output = terminal.bufferLines().join("\n");
+        expect(output).toContain(`Agent /${role} 42  ${status}`);
+        expect(output).not.toContain(`Agent /${role} 42  running`);
+        expect(output).toContain(
+          `${role} subagent | ${outcome === "complete" ? "1" : "0"} turns`,
+        );
+        expect(output.includes("Plan complete")).toBe(
+          role === "plan" && outcome === "complete",
+        );
+      });
+
+      expect(client.requests).toHaveLength(2);
+      if (role === "plan" && outcome === "complete") {
+        await press("\x1b[B");
+        await press("\r");
+      } else {
+        await submit(`CONTINUE_AFTER_${role}_${outcome}`);
+      }
+      await waitForRequests(3);
+      expect(client.requests[2].conversation).toBe(
+        client.requests[0].conversation,
+      );
+      await finishRequest(2);
+    },
+  );
+
+  it("shows EnterPlanMode progress and completes its card before requesting approval", async () => {
+    await start();
+    await finishRequest(0);
+    const parent = client.requests[0].conversation;
+    vi.spyOn(client, "stream").mockImplementationOnce(async function* () {
+      await Promise.resolve();
+      yield {
+        type: "tool_call_start",
+        toolId: "enter-plan",
+        toolName: "EnterPlanMode",
+      };
+      yield {
+        type: "tool_call_complete",
+        toolId: "enter-plan",
+        toolName: "EnterPlanMode",
+        arguments: {},
+      };
+      yield {
+        type: "stream_end",
+        stopReason: "tool_use",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        },
+      };
+    });
+
+    await submit("PLAN_THE_FIX");
+    await waitForRequests(2);
+    expect(client.requests[1].conversation).not.toBe(parent);
+    await vi.waitFor(async () => {
+      await flush();
+      const output = terminal.bufferLines().join("\n");
+      expect(output).toContain("EnterPlanMode");
+      expect(output).toContain("plan subagent | 0 turns");
+      expect(output).not.toContain("Plan complete");
+    });
+
+    await finishRequest(1);
+    await vi.waitFor(async () => {
+      await flush();
+      const output = terminal.bufferLines().join("\n");
+      expect(output).toContain("EnterPlanMode  completed");
+      expect(output).toContain("plan subagent | 1 turns");
+      expect(output).toContain("Plan complete");
+      expect(output).not.toContain("EnterPlanMode  running");
+    });
+    expect(client.requests).toHaveLength(2);
+    await press("\x1b[B");
+    await press("\r");
+    await waitForRequests(3);
+    expect(client.requests[2].conversation).toBe(parent);
+    expect(client.requests[2].users.at(-1)).toBe(
+      "Execute this plan:\n\nNEXT_REPLY_1",
+    );
+    await finishRequest(2);
+  });
+
+  it.each([
     {
       approval: "manual selection",
       keys: ["\x1b[B", "\r"],

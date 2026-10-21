@@ -492,6 +492,53 @@ describe("pi Markdown presentation", () => {
 });
 
 describe("shared live and committed tool cards", () => {
+  it.each(["running", "completed", "failed", "stopped"] as const)(
+    "shows EnterPlanMode subagent progress with its %s status",
+    (status) => {
+      terminal.columns = 80;
+      const output = stripVTControlCharacters(
+        renderToString(
+          createElement(AgentActivity, {
+            tools: [
+              {
+                toolId: "enter-plan",
+                toolName: "EnterPlanMode",
+                args: {},
+                loading: true,
+              },
+            ],
+            subagents: [
+              {
+                toolCallId: "enter-plan",
+                role: "plan",
+                turnCount: 3,
+                activeTools:
+                  status === "running"
+                    ? [{ toolId: "read", toolName: "ReadFile" }]
+                    : [],
+                status,
+                output: status === "running" ? undefined : "Planning result",
+              },
+            ],
+            backgroundTasks: [],
+            teammates: [],
+            isAsking: false,
+            expanded: false,
+          }),
+          { columns: 80 },
+        ),
+      );
+      expect(output).toContain(`EnterPlanMode  ${status}`);
+      expect(output).toContain("plan subagent | 3 turns");
+      if (status === "running") {
+        expect(output).toContain("ReadFile");
+      } else {
+        expect(output).toContain("Planning result");
+        expect(output).not.toContain("running");
+      }
+    },
+  );
+
   it("keeps every Agent call visible while subagent progress changes", () => {
     terminal.columns = 80;
     const output = stripVTControlCharacters(

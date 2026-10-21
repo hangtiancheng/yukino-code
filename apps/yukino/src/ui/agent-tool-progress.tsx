@@ -87,6 +87,18 @@ function decorateTool(
       : tool;
   }
 
+  const subagent = subagents.get(tool.toolId);
+  if (subagent) {
+    return {
+      ...tool,
+      output: subagent.output ?? tool.output,
+      progress: subagentProgress(subagent),
+      status: subagent.status,
+      loading: subagent.status === "running",
+      isError: subagent.status === "failed" || subagent.status === "stopped",
+    };
+  }
+
   if (tool.toolName !== "Agent") {
     return tool;
   }
@@ -100,18 +112,6 @@ function decorateTool(
       status,
       loading: status === "running",
       isError: status === "failed" || status === "stopped",
-    };
-  }
-
-  const subagent = subagents.get(tool.toolId);
-  if (subagent) {
-    return {
-      ...tool,
-      output: subagent.output ?? tool.output,
-      progress: subagentProgress(subagent),
-      status: subagent.status,
-      loading: subagent.status === "running",
-      isError: subagent.status === "failed" || subagent.status === "stopped",
     };
   }
 
