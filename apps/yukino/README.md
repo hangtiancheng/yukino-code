@@ -739,10 +739,10 @@ Pasting an image saves it as a PNG under `~/.yukino/sessions/artifacts/<session-
 
 Besides the `yukino` CLI, the package ships a library entry for embedding Yukino in another host process.
 
-| Entry          | Output                                     | Contents                                                                                                                                                                          |
-| -------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CLI (`yukino`) | `dist/main.js`                             | Fully bundled, minified single file with a shebang; Node built-ins plus modules with native binaries or runtime assets (`sharp`, ink's `react-devtools-core` peer) stay external. |
-| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts` | The `src/index.ts` barrel; runtime dependencies stay external and resolve from the consumer's `node_modules`.                                                                     |
+| Entry          | Output                                     | Contents                                                                                                                |
+| -------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| CLI (`yukino`) | `dist/main.js`                             | Fully bundled, minified single file with a shebang; Node built-ins plus ink's `react-devtools-core` peer stay external. |
+| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts` | The `src/index.ts` barrel; runtime dependencies stay external and resolve from the consumer's `node_modules`.           |
 
 The library entry is terminal-independent by contract: it must never reach `src/ui/**` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can import it. `pnpm build` enforces that contract:
 

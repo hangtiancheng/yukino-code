@@ -13,9 +13,9 @@ const sharedAlias = {
 
 export default defineConfig({
   main: {
-    // @yukino.js/yukino is ESM-only with native dependencies (sharp); keep it
-    // and every other dependency external so they resolve from node_modules
-    // at runtime (Node 22.12+ require(esm) support in Electron).
+    // @yukino.js/yukino is ESM-only; keep it and every other dependency
+    // external so they resolve from node_modules at runtime (Node 22.12+
+    // require(esm) support in Electron).
     plugins: [],
     build: {
       externalizeDeps: true,

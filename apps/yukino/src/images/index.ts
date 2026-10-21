@@ -228,7 +228,11 @@ async function compressWithJimp(buf: Buffer): Promise<ResizedImage> {
   for (let attempt = 0; attempt < 3; attempt++) {
     // Resize from a fresh clone each attempt so repeated halving always
     // resamples the original pixels, not a previously downsampled copy.
-    const resized = image.clone().resize({ w: width, h: height });
+    // Skip the resample entirely when the target already matches the source.
+    const resized = image.clone();
+    if (width !== resized.width || height !== resized.height) {
+      resized.resize({ w: width, h: height });
+    }
     if (preservePng) {
       const png = await resized.getBuffer("image/png", { deflateLevel: 9 });
       if (png.length <= MAX_IMAGE_BYTES_PASSTHROUGH) {
