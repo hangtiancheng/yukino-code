@@ -50,7 +50,7 @@ export function Sidebar({
       aria-hidden={!open}
     >
       {/* Drag strip clearing the traffic lights; close button on the right. */}
-      <div className="titlebar-drag flex h-12 shrink-0 items-center justify-end pr-2 pl-19">
+      <div className="titlebar-drag flex h-12 shrink-0 items-center justify-end pr-2 pl-21">
         <Tooltip>
           <TooltipTrigger
             render={

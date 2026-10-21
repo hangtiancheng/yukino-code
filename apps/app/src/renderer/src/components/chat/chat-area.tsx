@@ -1,6 +1,6 @@
 // Virtualized chat surface built on @tanstack/react-virtual. The scroll
 // viewport spans the full width of the chat column so the scrollbar sits at
-// the app's right edge; rows are centered in a max-w-3xl column inside.
+// the app's right edge; rows are centered in a max-w-4xl column inside.
 // Auto-scroll sticks to the bottom while the user hasn't scrolled away, so
 // streaming output keeps the view pinned without fighting the user.
 
@@ -145,7 +145,7 @@ export function ChatArea({
                 className="absolute top-0 left-0 w-full"
                 style={{ transform: `translateY(${vrow.start}px)` }}
               >
-                <div className="mx-auto w-full max-w-3xl">
+                <div className="mx-auto w-full max-w-4xl">
                   {isIndicator ? (
                     <StreamingIndicator subagents={activeSubagents} />
                   ) : item ? (

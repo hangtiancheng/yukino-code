@@ -14,7 +14,6 @@ import type { ChatItem } from "@renderer/lib/chat-state";
 import { cn } from "cn";
 import {
   CheckIcon,
-  ChevronDownIcon,
   CircleDotIcon,
   FileTextIcon,
   WrenchIcon,
@@ -67,7 +66,7 @@ export function ToolCard({ item }: { item: ToolItem }): React.JSX.Element {
 
   return (
     <TraceCollapsible>
-      <TraceCollapsibleTrigger className="group w-full max-w-full">
+      <TraceCollapsibleTrigger className="w-full max-w-full">
         <TraceLine status={status} className="w-full">
           <TraceIcon>
             {item.running ? (
@@ -90,7 +89,6 @@ export function ToolCard({ item }: { item: ToolItem }): React.JSX.Element {
             </span>
           ) : null}
         </TraceLine>
-        <ChevronDownIcon className="size-3.5 shrink-0 transition-transform group-aria-expanded:rotate-180" />
       </TraceCollapsibleTrigger>
 
       <TraceCollapsibleContent className="font-mono text-xs leading-relaxed">

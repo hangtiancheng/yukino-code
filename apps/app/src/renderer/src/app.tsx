@@ -78,7 +78,6 @@ function App(): React.JSX.Element {
         <div className="flex h-full min-w-0 flex-1 flex-col">
           <Header
             cwd={init?.ok ? init.cwd : null}
-            model={init?.ok ? init.model : null}
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => {
               setSidebarOpen((open) => !open);
@@ -113,7 +112,7 @@ function App(): React.JSX.Element {
                 onRespondAsk={chat.respondAsk}
               />
               <div className="from-background via-background/95 pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-linear-to-t pt-6 pb-4">
-                <div className="pointer-events-auto mx-auto w-full max-w-3xl px-4">
+                <div className="pointer-events-auto mx-auto w-full max-w-4xl px-4">
                   <Composer
                     streaming={state.streaming}
                     disabled={booting || failed || !init}
@@ -135,10 +134,10 @@ function App(): React.JSX.Element {
             // Empty conversation: centered hero + static composer.
             <>
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-                <EmptyState onHint={chat.send} />
+                <EmptyState />
               </div>
               <footer className="shrink-0 px-4 pt-3 pb-4">
-                <div className="mx-auto w-full max-w-3xl">
+                <div className="mx-auto w-full max-w-4xl">
                   <Composer
                     streaming={state.streaming}
                     disabled={booting || failed || !init}
