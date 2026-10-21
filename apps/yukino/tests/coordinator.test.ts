@@ -174,6 +174,41 @@ describe("TaskStop", () => {
     expect(task.status).toBe("cancelled");
   });
 
+  it("waits for cleanup on repeated background stops without repeating cancellation", async () => {
+    const tasks = new TaskManager();
+    const mgr = new TeamManager(cwd());
+    let finish!: (output: string) => void;
+    let cancellations = 0;
+    const task = tasks.create(
+      "long-running tool",
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+      () => {
+        cancellations += 1;
+      },
+    );
+    await Promise.resolve();
+    const stop = new TaskStopTool(mgr, tasks);
+    const first = stop.execute(ctx, { task_id: task.id });
+    let settled = false;
+    const repeated = stop.execute(ctx, { task_id: task.id }).then((result) => {
+      settled = true;
+      return result;
+    });
+    await Promise.resolve();
+    expect(task.status).toBe("cancelled");
+    expect(cancellations).toBe(1);
+    expect(settled).toBe(false);
+    expect(tasks.drainNotifications()).toEqual([]);
+    finish("late output");
+    const results = await Promise.all([first, repeated]);
+    expect(results.every((result) => !result.isError)).toBe(true);
+    expect(tasks.drainNotifications()).toEqual([task]);
+    expect(tasks.drainNotifications()).toEqual([]);
+  });
+
   it("resolves task_id against the calling loop's manager before the shared one", async () => {
     const mgr = new TeamManager(cwd());
     const shared = new TaskManager();

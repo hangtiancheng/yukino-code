@@ -3,6 +3,10 @@ import { DARK_THEME, type ThemePalette } from "@/theme/constants.js";
 
 export const THEME: ThemePalette = { ...DARK_THEME };
 
+export const AGENTS_DIALOG_TITLE = "Agents & tasks";
+export const AGENTS_DIALOG_SUBTITLE = "teammates and running background tasks";
+export const AGENTS_DIALOG_EMPTY = "No teammates or running background tasks";
+
 export const ICONS = {
   active: "◉",
   arrow: "→" satisfies "→" | "←",

@@ -1,13 +1,18 @@
 import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AgentTask } from "@/subagent/task-manager.js";
 import type { TeammateUIState } from "@/teams/progress.js";
 import { formatTokens } from "@/teams/progress.js";
 import { toDisplayPreview } from "@/tool-result/index.js";
 import type { SubagentProgress } from "@/ui/agent-tool-progress.js";
-import { THEME } from "@/ui/constants.js";
+import {
+  AGENTS_DIALOG_EMPTY,
+  AGENTS_DIALOG_SUBTITLE,
+  AGENTS_DIALOG_TITLE,
+  THEME,
+} from "@/ui/constants.js";
 import { getListWindowStart } from "@/ui/list-window.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { selectorChrome } from "@/ui/selector-layout.js";
@@ -54,26 +59,43 @@ export function AgentsDialog({
         : undefined,
     })),
     ...backgroundTasks
-      .filter((task) => task.kind !== "shell")
+      .filter((task) => task.status === "running")
+      .sort((a, b) => Number(a.kind === "shell") - Number(b.kind === "shell"))
       .map((task) => {
-        const progress = subagents.find(
-          (subagent) => subagent.taskId === task.id,
-        );
+        const progress =
+          task.kind === "shell"
+            ? undefined
+            : subagents.find((subagent) => subagent.taskId === task.id);
+        const kind =
+          task.kind === "shell"
+            ? task.id.startsWith("ps-")
+              ? "PowerShell"
+              : "Bash"
+            : "subagent";
         return {
-          id: `subagent:${task.id}`,
+          id: `task:${task.id}`,
           label: `${task.id}: ${task.name}`,
-          summary: `background subagent · ${task.status}${progress ? ` · ${String(progress.turnCount)} turns${progress.lastTool ? ` · ${progress.lastTool}` : ""}` : ""}`,
-          detail: <SubagentDetail task={task} progress={progress} />,
-          kill:
-            task.status === "running" && onStopBackground
-              ? () => {
-                  onStopBackground(task.id);
-                }
-              : undefined,
+          summary: `background ${kind} · ${task.status}${progress ? ` · ${String(progress.turnCount)} turns${progress.lastTool ? ` · ${progress.lastTool}` : ""}` : ""}`,
+          detail: <BackgroundTaskDetail task={task} progress={progress} />,
+          kill: onStopBackground
+            ? () => {
+                onStopBackground(task.id);
+              }
+            : undefined,
           shutdown: undefined,
         };
       }),
   ];
+  useEffect(() => {
+    if (agents.length === 0) {
+      onClose();
+    }
+  }, [agents.length, onClose]);
+  useEffect(() => {
+    if (detailId && !agents.some((agent) => agent.id === detailId)) {
+      setDetailId(null);
+    }
+  }, [agents, detailId]);
   const cursor = Math.min(selectedIndex, Math.max(0, agents.length - 1));
   const selected = agents[cursor];
   const detail = detailId
@@ -137,11 +159,11 @@ export function AgentsDialog({
       hint={["↑↓ navigate", "Enter detail", ...actions, "Escape close"].join(
         " · ",
       )}
-      title="Agents"
-      subtitle={`${String(agents.length ? cursor + 1 : 0)}/${String(agents.length)} · teammates and background subagents`}
+      title={AGENTS_DIALOG_TITLE}
+      subtitle={`${String(agents.length ? cursor + 1 : 0)}/${String(agents.length)} · ${AGENTS_DIALOG_SUBTITLE}`}
     >
       {agents.length === 0 ? (
-        <Text color={THEME.muted}>No teammates or background subagents</Text>
+        <Text color={THEME.muted}>{AGENTS_DIALOG_EMPTY}</Text>
       ) : null}
       {agents.slice(start, start + visibleCount).map((agent) => {
         const active = agent === selected;
@@ -202,7 +224,7 @@ function TeamDetail({ teammate }: { teammate: TeammateUIState }) {
   );
 }
 
-function SubagentDetail({
+function BackgroundTaskDetail({
   task,
   progress,
 }: {

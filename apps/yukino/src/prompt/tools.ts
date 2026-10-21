@@ -6,6 +6,7 @@ import {
 import {
   AGENT_DELEGATION_RULE,
   AGENT_ONE_SHOT_RULE,
+  BACKGROUND_TASK_STOP_RULE,
   DEFERRED_INSTRUCTIONS_RULE,
   DEFERRED_MCP_DISPATCH_RULE,
   DEFERRED_TOOLS_INTRO,
@@ -62,6 +63,9 @@ export function buildToolGuidance(
   }
   if (has("TaskOutput")) {
     rules.push(TASK_OUTPUT_RULE);
+  }
+  if (has("TaskStop")) {
+    rules.push(BACKGROUND_TASK_STOP_RULE);
   }
   if (has("LSP")) {
     rules.push(LSP_RULE);

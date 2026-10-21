@@ -12,7 +12,7 @@ export const INHERITED_TOOL_RESULT =
 export const SUBAGENT_TYPE_DESCRIPTION =
   'Agent role. Defaults to general-purpose, independently of fork. With kind="teammate", plan starts a planning phase and continues implementation after approval; with kind="subagent", plan remains read-only.';
 export const FORK_PARAMETER_DESCRIPTION =
-  "Copy the parent conversation when true; start a fresh conversation when false. Independent of subagent_type. Defaults to the session's enable_fork setting (true when unset).";
+  "Copy the parent conversation when true; start a fresh conversation when false. This does not restore a previous subagent's private conversation. Independent of subagent_type. Defaults to the session's enable_fork setting (true when unset).";
 
 export function buildAgentToolDescription(
   definitions: AgentDefinition[],
@@ -27,14 +27,16 @@ export function buildAgentToolDescription(
 Available roles (pass a role as subagent_type, not as a tool name):
 ${roles.join("\n")}
 
-With kind="subagent", foreground calls return results inline; run_in_background=true returns a task ID immediately and delivers the final result through a task notification. With kind="teammate", the agent joins the current team, creating one if needed; use the returned teammate name with SendMessage for follow-up assignments. With kind="teammate" and subagent_type="plan", the teammate starts in plan mode, submits a plan, and continues implementation after approval. The fork setting seeds a teammate's initial conversation only. Do not predict results before receiving them.
+With kind="subagent", foreground calls return results inline; run_in_background=true returns a task ID immediately and delivers the final result through a task notification. A background subagent is a cancellable asynchronous tool call, like background Bash or PowerShell: use TaskStop with task_id to stop it early. Completed, failed, or cancelled tasks leave the active UI; TaskOutput can still inspect their archived results. One-shot subagents cannot receive messages or resume after termination.
+
+For communication, follow-up assignments, or iterative collaboration, use an agent team with kind="teammate". The agent joins the current team, creating one if needed; use the returned teammate name with SendMessage. With kind="teammate" and subagent_type="plan", the teammate starts in plan mode, submits a plan, and continues implementation after approval. Forking seeds the new agent from the parent conversation; it does not restore a previous subagent's private conversation. Do not predict results before receiving them.
 Role tool restrictions and max_turns apply equally with fork=true and fork=false. Roles have no default model-turn limit; max_turns supplies an explicit limit. Reaching a limit is unfinished work, not successful task completion.
 
 Launch independent tasks together; avoid concurrent writes to the same files. Review returned evidence and integrate it before reporting completion. Worktree isolation separates edits but does not merge them.`;
 }
 
 export const AGENT_KIND_DESCRIPTION =
-  "Execution kind. Defaults to teammate: a persistent agent in the current team, created automatically if needed. Use subagent for a one-shot result.";
+  "Execution kind. Defaults to teammate: a persistent agent in the current team, created automatically if needed. Use an agent team with teammate when communication or follow-up assignments are needed. Use subagent for a one-shot tool result without messaging or resumption.";
 export const AGENT_MODEL_DESCRIPTION =
   "Override the model for this agent. Most tasks do not need this field; omit it to use the configured model.";
 export const AGENT_WORKTREE_DESCRIPTION =
@@ -44,4 +46,4 @@ export const PLAN_TEAMMATE_DESCRIPTION =
   "Investigate the task, submit a concrete implementation plan, then implement it after approval under current tool permissions.";
 
 export const AGENT_BACKGROUND_DESCRIPTION =
-  'Only for kind="subagent". Run asynchronously, returning a task ID immediately and delivering the final result through a task notification.';
+  'Only for kind="subagent". Run as an asynchronous tool call: return task_id immediately and deliver the final result through a task notification. Use TaskStop with task_id to stop it early. For communication or follow-ups, use an agent team with kind="teammate" instead.';

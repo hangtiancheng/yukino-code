@@ -101,7 +101,11 @@ function Scene({
     status: createElement(
       Box,
       { width: "100%", justifyContent: "flex-end" },
-      createElement(AgentStatus, { teammates: 8, backgroundSubagents: 0 }),
+      createElement(AgentStatus, {
+        teammates: 8,
+        backgroundSubagents: 0,
+        backgroundShells: 0,
+      }),
     ),
     dock: nativeCursor
       ? createElement(InputBox, {

@@ -353,6 +353,14 @@ describe("delegated prompt contracts", () => {
       default: "teammate",
     });
     expect(properties.worktree).toMatchObject({ type: "boolean" });
+    expect(tool.schema().description).toContain(
+      "cancellable asynchronous tool call",
+    );
+    expect(tool.schema().description).toContain("use an agent team");
+    expect(tool.schema().description).toContain(
+      "cannot receive messages or resume",
+    );
+    expect(JSON.stringify(properties.run_in_background)).toContain("TaskStop");
     expect(JSON.stringify(properties.model)).toContain(
       "Most tasks do not need this field",
     );

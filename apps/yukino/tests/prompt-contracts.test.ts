@@ -213,7 +213,14 @@ describe("system prompt contracts", () => {
     );
     const agent = buildToolGuidance(["Agent"]);
     expect(agent).toContain("run_in_background=true");
+    expect(agent).toContain(
+      "For communication or follow-up assignments, use an agent team",
+    );
+    expect(agent).toContain("cannot receive messages or resume");
     expect(agent).not.toMatch(/TeamCreate|SendMessage|team_name/);
+    expect(buildToolGuidance(["Agent", "TaskStop"])).toContain(
+      "stop a running background subagent, Bash, or PowerShell tool call early",
+    );
     const coordinator = buildToolGuidance(["Agent", "SendMessage"]);
     expect(coordinator).toContain("create a team on demand");
     expect(coordinator).not.toContain("TeamCreate");

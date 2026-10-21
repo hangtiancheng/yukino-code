@@ -97,6 +97,7 @@ export class TaskStopTool implements Tool {
         };
       }
       if (task.status !== "running") {
+        await task.done;
         return {
           output: `Background task '${taskId}' is ${task.status}, nothing to stop`,
           isError: false,

@@ -36,6 +36,7 @@ import { FileMailbox } from "@/teams/file-mailbox.js";
 import { TeamManager } from "@/teams/index.js";
 import { getNameRegistry } from "@/teams/registry.js";
 import { SharedTaskStore } from "@/teams/shared-task.js";
+import { TaskStopTool } from "@/teams/task-stop.js";
 import { readTeamFile } from "@/teams/team-file.js";
 import { McpCallTool } from "@/tools/mcp-call.js";
 import { ToolRegistry } from "@/tools/registry.js";
@@ -506,6 +507,136 @@ describe("delegated lifecycle regressions", () => {
     await tasks.stopAndWait(task.id);
     expect(task.status).toBe("cancelled");
     expect(task.output).toBe("Stopped by user");
+  });
+
+  it("stops a background subagent's model request and owned shell tasks through TaskStop", async () => {
+    const tasks = new TaskManager();
+    const registry = new ToolRegistry();
+    let childTasks: TaskManager | undefined;
+    let shellTaskId: string | undefined;
+    let shellCancelled = false;
+    registry.register({
+      ...tool("Bash", "command"),
+      execute: (context) => {
+        childTasks = context.taskManager ?? undefined;
+        if (!childTasks) {
+          throw new Error("Missing subagent task registry");
+        }
+        let finish!: (output: string) => void;
+        const pending = new Promise<string>((resolve) => {
+          finish = resolve;
+        });
+        const task = childTasks.create(
+          "long command",
+          () => pending,
+          () => {
+            shellCancelled = true;
+            finish("stopped command");
+          },
+          { kind: "shell", idPrefix: "bash" },
+        );
+        shellTaskId = task.id;
+        return Promise.resolve({
+          output: "Command backgrounded",
+          isError: false,
+        });
+      },
+    });
+    let markStarted!: (signal: AbortSignal) => void;
+    const started = new Promise<AbortSignal>((resolve) => {
+      markStarted = resolve;
+    });
+    let calls = 0;
+    const runClient: LLMClient = {
+      setSystemPrompt: () => undefined,
+      async *stream(_conversation, _tools, signal) {
+        if (calls++ === 0) {
+          yield {
+            type: "tool_call_complete",
+            toolId: "shell",
+            toolName: "Bash",
+            arguments: { command: "long command", run_in_background: true },
+          };
+          yield { ...end, stopReason: "tool_use" };
+          return;
+        }
+        if (!signal) {
+          throw new Error("Missing subagent cancellation signal");
+        }
+        const aborted = new Promise<void>((resolve) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              resolve();
+            },
+            { once: true },
+          );
+        });
+        markStarted(signal);
+        await aborted;
+        yield end;
+      },
+    };
+    const agent = new AgentTool(
+      directory,
+      registry,
+      (definition, prompt, background, _model, _cwd, context) =>
+        spawnSubagent(
+          definition,
+          prompt,
+          runClient,
+          registry,
+          provider,
+          directory,
+          undefined,
+          undefined,
+          undefined,
+          new PermissionChecker(directory, "bypassPermissions"),
+          {
+            sessionId: context?.subagentSessionId,
+            background,
+            abortSignal: context?.abortSignal,
+          },
+        ),
+      undefined,
+      tasks,
+    );
+    try {
+      await agent.execute(
+        { cwd: directory },
+        {
+          kind: "subagent",
+          description: "worker",
+          prompt: "work",
+          fork: false,
+          run_in_background: true,
+        },
+      );
+      const signal = await started;
+      const task = tasks.list()[0];
+      expect(signal.aborted).toBe(false);
+      expect(childTasks?.hasRunning()).toBe(true);
+      const result = await new TaskStopTool(manager, tasks).execute(
+        { cwd: directory },
+        { task_id: task.id },
+      );
+      expect(result.isError).toBe(false);
+      expect(signal.aborted).toBe(true);
+      expect(shellCancelled).toBe(true);
+      expect(childTasks?.get(shellTaskId ?? "")?.status).toBe("cancelled");
+      expect(childTasks?.get(shellTaskId ?? "")?.completedAt).toBeGreaterThan(
+        0,
+      );
+      expect(childTasks?.hasRunning()).toBe(false);
+      expect(task.status).toBe("cancelled");
+      expect(task.completedAt).toBeGreaterThan(0);
+      expect(tasks.drainNotifications()).toEqual([task]);
+      expect(tasks.drainNotifications()).toEqual([]);
+      expect(manager.list()).toEqual([]);
+    } finally {
+      await tasks.stopAll();
+      await registry.dispose();
+    }
   });
 });
 

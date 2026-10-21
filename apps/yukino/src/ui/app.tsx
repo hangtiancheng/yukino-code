@@ -97,7 +97,7 @@ import {
   GENERAL_PURPOSE_AGENT_TYPE,
   SUBAGENT_INTERRUPTED_MARKER,
 } from "@/subagent/constants.js";
-import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
+import { spawnSubagent } from "@/subagent/spawn.js";
 import {
   TaskManager,
   formatAgentTaskNotification,
@@ -132,7 +132,7 @@ import {
 } from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
 import type { PermissionRequestHandler } from "@/tools/types.js";
-import { AgentActivity, type SubagentProgress } from "@/ui/agent-activity.js";
+import { AgentActivity } from "@/ui/agent-activity.js";
 import { AgentStatus } from "@/ui/agent-status.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "@/ui/chat.js";
 import { MAX_RECENT_TOOLS, THEME } from "@/ui/constants.js";
@@ -159,13 +159,11 @@ import { TodoProgress } from "@/ui/todo-progress.js";
 import { ToolBlock } from "@/ui/tool-display.js";
 import { Transcript } from "@/ui/transcript.js";
 import { UpdateNotice } from "@/ui/update-notice.js";
-import {
-  useAgentOutput,
-  type AgentCardDecoration,
-} from "@/ui/use-agent-output.js";
+import { useAgentOutput } from "@/ui/use-agent-output.js";
 import { useFollowUpQueue } from "@/ui/use-follow-up-queue.js";
 import { useIdeInput } from "@/ui/use-ide-input.js";
 import { useNotificationWakeup } from "@/ui/use-notification-wakeup.js";
+import { useSubagents } from "@/ui/use-subagents.js";
 import { useTaskProgress } from "@/ui/use-task-progress.js";
 import { useTeammateStates } from "@/ui/use-teammate-states.js";
 import { useTerminalControls } from "@/ui/use-terminal-controls.js";
@@ -629,18 +627,23 @@ export function App({
   );
   const teammateStates = useTeammateStates(teamManagerRef.current);
   const [agentsDialogOpen, setAgentsDialogOpen] = useState(false);
-  const [subagents, setSubagents] = useState<SubagentProgress[]>([]);
+  const {
+    subagents,
+    cardsRef: subagentCardsRef,
+    track: trackSubagent,
+    prepareTurn: prepareSubagentTurn,
+    reset: resetSubagents,
+  } = useSubagents(backgroundTaskManagerRef.current);
   const [backgroundTasks, setBackgroundTasks] = useState<AgentTask[]>([]);
-  const backgroundSubagents = backgroundTasks.filter(
+  const runningBackgroundTasks = backgroundTasks.filter(
+    (task) => task.status === "running",
+  );
+  const backgroundSubagents = runningBackgroundTasks.filter(
     (task) => task.kind !== "shell",
   );
+  const backgroundShells =
+    runningBackgroundTasks.length - backgroundSubagents.length;
   const subagentIdRef = useRef(0);
-  // Terminal card decoration (status + progress line) for Agent calls, keyed by
-  // tool call id. Consulted when the tool result is committed to transcript
-  // history so an interrupted run shows red "stopped" instead of a green
-  // success card whose only hint is an "[Interrupted]" tail. Background calls
-  // resolve before their subagent finalizes, so they commit undecorated.
-  const subagentCardsRef = useRef(new Map<string, AgentCardDecoration>());
   const { insertInputTextRef, clearInputRef } = useIdeInput(cwd);
 
   useEffect(
@@ -1128,118 +1131,6 @@ export function App({
           skillHostRef.current,
         );
 
-        // Track a subagent run for the UI. Maintains the live progress card
-        // (SubagentProgress) and records the terminal decoration (status +
-        // progress line) consumed when the Agent call is committed to the
-        // transcript, so an interrupted run renders as red "stopped" instead
-        // of a green success card. Shared by the definition spawn path and
-        // the fork path.
-        const trackSubagent = async (
-          tracking: {
-            toolCallId: string;
-            role: string;
-            taskId?: string;
-            abortSignal?: AbortSignal;
-          },
-          run: (onEvent: AgentEventSink) => Promise<string>,
-        ): Promise<string> => {
-          const { toolCallId, role, taskId, abortSignal } = tracking;
-          const runningTools = new Map<string, string>();
-          let turns = 0;
-          // Last started tool name — kept after the tool finishes so the card's
-          // progress line shows it until the next tool call replaces it.
-          let lastTool: string | undefined;
-          const syncRunningTools = () => {
-            const tools = [...runningTools].map(([toolId, toolName]) => ({
-              toolId,
-              toolName,
-            }));
-            setSubagents((prev) =>
-              prev.map((subagent) =>
-                subagent.toolCallId === toolCallId
-                  ? { ...subagent, activeTools: tools, lastTool }
-                  : subagent,
-              ),
-            );
-          };
-          setSubagents((prev) => [
-            ...prev.filter((subagent) => subagent.toolCallId !== toolCallId),
-            {
-              toolCallId,
-              ...(taskId ? { taskId } : {}),
-              role,
-              turnCount: 0,
-              activeTools: [],
-              status: "running",
-            },
-          ]);
-          const finalize = (
-            status: SubagentProgress["status"],
-            output: string,
-          ) => {
-            subagentCardsRef.current.set(toolCallId, {
-              status,
-              progress: `${role} subagent | ${String(turns)} turns`,
-            });
-            setSubagents((prev) =>
-              prev.map((subagent) =>
-                subagent.toolCallId === toolCallId
-                  ? {
-                      ...subagent,
-                      activeTools: [],
-                      lastTool: undefined,
-                      status,
-                      output,
-                    }
-                  : subagent,
-              ),
-            );
-          };
-          const onEvent: AgentEventSink = (event) => {
-            switch (event.type) {
-              case "tool_use":
-                lastTool = event.toolName;
-                runningTools.set(event.toolId, event.toolName);
-                syncRunningTools();
-                break;
-              case "tool_result":
-                runningTools.delete(event.toolId);
-                syncRunningTools();
-                break;
-              case "turn_complete":
-                runningTools.clear();
-                turns += 1;
-                setSubagents((prev) =>
-                  prev.map((subagent) =>
-                    subagent.toolCallId === toolCallId
-                      ? {
-                          ...subagent,
-                          turnCount: subagent.turnCount + 1,
-                          activeTools: [],
-                        }
-                      : subagent,
-                  ),
-                );
-                break;
-              case "usage":
-                break;
-            }
-          };
-          try {
-            const result = await run(onEvent);
-            // An abort that lands while the subagent is finishing still means
-            // the user stopped it — render "stopped", never "completed".
-            finalize(abortSignal?.aborted ? "stopped" : "completed", result);
-            return result;
-          } catch (error) {
-            finalize(
-              abortSignal?.aborted ? "stopped" : "failed",
-              `Agent error: ${asErrorString(error)}`,
-            );
-            throw error;
-          }
-        };
-
         const agentTool = new AgentTool(
           cwd,
           registryRef.current,
@@ -1304,7 +1195,15 @@ export function App({
         setError(`Failed to initialize agent: ${asErrorString(err)}`);
       }
     },
-    [cwd, mcpServers, connectMcpServers, memoryEnabled, hooks, forkDisabled],
+    [
+      cwd,
+      mcpServers,
+      connectMcpServers,
+      memoryEnabled,
+      hooks,
+      forkDisabled,
+      trackSubagent,
+    ],
   );
 
   useEffect(() => {
@@ -1792,8 +1691,7 @@ export function App({
           backgroundTaskManagerRef.current.useSession(sessionId);
           taskListRef.current.useStore(new TaskStore(sessionId));
           backgroundTaskManagerRef.current.clear();
-          setSubagents([]);
-          subagentCardsRef.current.clear();
+          resetSubagents();
           // Clear messages and start a fresh conversation. Reset in place —
           // AgentTool captures the manager for its fork path, so swapping the
           // instance would leave it pointing at the discarded history.
@@ -1943,6 +1841,7 @@ export function App({
           await stopMemoryTasks();
           taskListRef.current.useStore(new TaskStore(arg));
           backgroundTaskManagerRef.current.useSession(arg);
+          resetSubagents();
           const conv = conversationRef.current;
           conv.reset();
           // Resumed baseline: files read in the old/other session are not
@@ -2191,7 +2090,7 @@ export function App({
         setError(null);
         setMessages((prev) => [...prev, { role: "user", content: text }]);
         setIsStreaming(true);
-        setSubagents([]);
+        prepareSubagentTurn();
         output.prepareTurn();
         try {
           const result = await runSubagentCommand(
@@ -2234,7 +2133,7 @@ export function App({
           content: promptText,
         });
         setIsStreaming(true);
-        setSubagents([]);
+        prepareSubagentTurn();
         output.prepareTurn();
         await runAgentLoopWithStats()
           .then(() => {
@@ -2599,7 +2498,7 @@ export function App({
     }
 
     setIsStreaming(true);
-    setSubagents([]);
+    prepareSubagentTurn();
     output.prepareTurn();
     setError(null);
     // Uniformly (re)initialize the plan-approval state at every run entry so a
@@ -2984,7 +2883,7 @@ export function App({
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setIsStreaming(true);
-    setSubagents([]);
+    prepareSubagentTurn();
     const provider = selectedProviderRef.current;
     const sessionId = sessionIdRef.current;
 
@@ -3262,6 +3161,7 @@ export function App({
               <AgentStatus
                 teammates={teammateStates.length}
                 backgroundSubagents={backgroundSubagents.length}
+                backgroundShells={backgroundShells}
               />
             </Box>
           </Box>
@@ -3406,7 +3306,7 @@ export function App({
             agentsDialogOpen
               ? {
                   teammates: teammateStates,
-                  backgroundTasks: backgroundSubagents,
+                  backgroundTasks: runningBackgroundTasks,
                   subagents,
                   onClose: () => {
                     setAgentsDialogOpen(false);
@@ -3418,7 +3318,11 @@ export function App({
                     }
                   },
                   onStopBackground: (taskId) => {
-                    backgroundTaskManagerRef.current.stop(taskId);
+                    void backgroundTaskManagerRef.current
+                      .stopAndWait(taskId)
+                      .catch((error: unknown) => {
+                        setError(asErrorString(error));
+                      });
                   },
                   onShutdown: (name, teamName) => {
                     const team = teamManagerRef.current.get(teamName);
@@ -3443,7 +3347,7 @@ export function App({
             thinkingLevels: availableThinkingLevels,
             onRecallQueuedMessage: recallQueuedMessage,
             onOpenAgents:
-              teammateStates.length > 0 || backgroundSubagents.length > 0
+              teammateStates.length > 0 || runningBackgroundTasks.length > 0
                 ? () => {
                     setAgentsDialogOpen(true);
                   }

@@ -5,11 +5,13 @@ import { THEME } from "@/ui/constants.js";
 interface AgentStatusProps {
   teammates: number;
   backgroundSubagents: number;
+  backgroundShells: number;
 }
 
 export function AgentStatus({
   teammates,
   backgroundSubagents,
+  backgroundShells,
 }: AgentStatusProps) {
   const counts = [
     ...(teammates
@@ -18,6 +20,11 @@ export function AgentStatus({
     ...(backgroundSubagents
       ? [
           `${String(backgroundSubagents)} background ${backgroundSubagents === 1 ? "subagent" : "subagents"}`,
+        ]
+      : []),
+    ...(backgroundShells
+      ? [
+          `${String(backgroundShells)} background ${backgroundShells === 1 ? "command" : "commands"}`,
         ]
       : []),
   ];

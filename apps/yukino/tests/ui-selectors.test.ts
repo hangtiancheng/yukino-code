@@ -224,16 +224,22 @@ describe("agents list and detail", () => {
       "Third?": "One",
     });
   });
-  it("lists teammates and background subagents, excludes shells, and routes each action", () => {
+  it("orders teammates, subagents and shell tasks and routes each action", () => {
     const onClose = vi.fn();
     const onKill = vi.fn();
     const onShutdown = vi.fn();
     const onStopBackground = vi.fn();
     const task = backgroundTask("agent-1");
+    const bash = { ...backgroundTask("bash-2"), kind: "shell" as const };
+    const powershell = {
+      ...backgroundTask("ps-3"),
+      kind: "shell" as const,
+      output: "command output",
+    };
     mount(
       createElement(AgentsDialog, {
         teammates: [teammate("reviewer")],
-        backgroundTasks: [task, { ...backgroundTask("bash-2"), kind: "shell" }],
+        backgroundTasks: [bash, task, powershell],
         subagents: [
           {
             toolCallId: "call-1",
@@ -253,7 +259,11 @@ describe("agents list and detail", () => {
     );
     expect(frame).toContain("@reviewer");
     expect(frame).toContain("agent-1: review-agent-1");
-    expect(frame).not.toContain("bash-2");
+    expect(frame.indexOf("@reviewer")).toBeLessThan(frame.indexOf("agent-1:"));
+    expect(frame.indexOf("agent-1:")).toBeLessThan(frame.indexOf("bash-2:"));
+    expect(frame.indexOf("bash-2:")).toBeLessThan(frame.indexOf("ps-3:"));
+    expect(frame).toContain("background Bash");
+    expect(frame).toContain("background PowerShell");
     send("k", { ctrl: true });
     expect(onKill).not.toHaveBeenCalled();
     send("k");
@@ -270,31 +280,75 @@ describe("agents list and detail", () => {
     expect(onStopBackground).toHaveBeenCalledWith(task.id);
     send("", { escape: true });
     expect(onClose).not.toHaveBeenCalled();
+    send("", { downArrow: true });
+    send("k");
+    expect(onStopBackground).toHaveBeenLastCalledWith(bash.id);
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("command output");
+    send("k");
+    expect(onStopBackground).toHaveBeenLastCalledWith(powershell.id);
+    send("s");
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    send("", { escape: true });
     send("", { escape: true });
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it.each(["completed", "failed", "cancelled"] as const)(
-    "shows %s background results without teammates",
+    "unloads %s background tasks and closes their selected detail",
     (status) => {
+      const onClose = vi.fn();
       const onStopBackground = vi.fn();
-      mount(
+      const view = (tasks: AgentTask[]) =>
         createElement(AgentsDialog, {
           teammates: [],
-          backgroundTasks: [backgroundTask("agent-1", status)],
+          backgroundTasks: tasks,
           subagents: [],
-          onClose: vi.fn(),
+          onClose,
           onStopBackground,
-        }),
-      );
-      expect(frame).toContain(status);
+        });
+      const tasks = [
+        backgroundTask("agent-1"),
+        { ...backgroundTask("bash-2"), kind: "shell" as const },
+        { ...backgroundTask("ps-3"), kind: "shell" as const },
+      ];
+      mount(view(tasks));
       send("", { return: true });
-      expect(frame).toContain("review findings");
+      expect(frame).toContain("No output yet");
+      rerender(
+        view(
+          tasks.map((task) => ({ ...task, status, output: "archived result" })),
+        ),
+      );
+      expect(frame).not.toContain("agent-1");
+      expect(frame).not.toContain("bash-2");
+      expect(frame).not.toContain("ps-3");
+      expect(frame).not.toContain("archived result");
       expect(frame).not.toContain("k stop");
+      expect(onClose).toHaveBeenCalledOnce();
       send("k");
       expect(onStopBackground).not.toHaveBeenCalled();
     },
   );
+
+  it("returns to the list when a selected task finishes while others run", () => {
+    const onClose = vi.fn();
+    const view = (status: AgentTask["status"]) =>
+      createElement(AgentsDialog, {
+        teammates: [teammate("reviewer")],
+        backgroundTasks: [backgroundTask("agent-1", status)],
+        subagents: [],
+        onClose,
+      });
+    mount(view("running"));
+    send("", { downArrow: true });
+    send("", { return: true });
+    rerender(view("completed"));
+    expect(frame).toContain("@reviewer");
+    expect(frame).not.toContain("agent-1");
+    expect(onClose).not.toHaveBeenCalled();
+  });
 
   it("identifies teammates by both team and member names", () => {
     mount(
@@ -346,17 +400,46 @@ describe("agents list and detail", () => {
   it("advertises Down for background-only work and hides the status when empty", () => {
     expect(
       staticFrame(
-        createElement(AgentStatus, { teammates: 0, backgroundSubagents: 0 }),
+        createElement(AgentStatus, {
+          teammates: 0,
+          backgroundSubagents: 0,
+          backgroundShells: 0,
+        }),
         80,
       ),
     ).toBe("");
     const output = staticFrame(
-      createElement(AgentStatus, { teammates: 0, backgroundSubagents: 2 }),
+      createElement(AgentStatus, {
+        teammates: 0,
+        backgroundSubagents: 2,
+        backgroundShells: 0,
+      }),
       80,
     );
     expect(output).toContain("2 background subagents");
     expect(output).toContain("↓ on last input line to view");
     expect(output).not.toContain("teammate");
+    const shellOnly = staticFrame(
+      createElement(AgentStatus, {
+        teammates: 0,
+        backgroundSubagents: 0,
+        backgroundShells: 1,
+      }),
+      120,
+    );
+    expect(shellOnly).toContain("1 background command");
+    expect(shellOnly).toContain("↓ on last input line to view");
+    const mixed = staticFrame(
+      createElement(AgentStatus, {
+        teammates: 1,
+        backgroundSubagents: 1,
+        backgroundShells: 2,
+      }),
+      160,
+    );
+    expect(mixed).toContain(
+      "1 teammate · 1 background subagent · 2 background commands",
+    );
   });
 });
 
