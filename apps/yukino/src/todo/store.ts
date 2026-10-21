@@ -24,21 +24,23 @@ export const StoredTaskStatusSchema = z.enum([
 
 export type StoredTaskStatus = z.infer<typeof StoredTaskStatusSchema>;
 
+const TaskIdSchema = z.string().regex(/^[1-9]\d*$/u);
+
 export const StoredTaskSchema = z.object({
-  id: z.string().regex(/^[1-9]\d*$/u),
+  id: TaskIdSchema,
   subject: z.string().trim().min(1),
   description: z.string(),
   status: StoredTaskStatusSchema,
   owner: z.string().optional(),
-  blocks: z.array(z.string()),
-  blockedBy: z.array(z.string()),
+  blocks: z.array(TaskIdSchema),
+  blockedBy: z.array(TaskIdSchema),
   metadata: z.record(z.string(), z.unknown()),
   priority: z.enum(["high", "medium", "low"]).optional(),
 });
 
 export type StoredTask = z.infer<typeof StoredTaskSchema>;
 
-const TaskSnapshotSchema = z.object({
+export const TaskSnapshotSchema = z.object({
   nextId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   tasks: z.array(StoredTaskSchema),
 });

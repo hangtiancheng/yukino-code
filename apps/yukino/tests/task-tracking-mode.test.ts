@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -7,9 +7,13 @@ import z from "zod";
 
 import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { buildToolGuidance } from "@/prompt/tools.js";
+import { sessionPath } from "@/storage/index.js";
 import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import { TeamManager } from "@/teams/index.js";
+import { SharedTaskStore } from "@/teams/shared-task.js";
+import { teamDir } from "@/teams/team-file.js";
 import { TaskList } from "@/todo/index.js";
+import { StoredTaskSchema, TaskStore } from "@/todo/store.js";
 import { TaskCreateTool, TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 
@@ -50,6 +54,168 @@ function trackingNames(registry: ToolRegistry) {
 
 describe("tracking tool modes", () => {
   it.each(["private", "shared"])(
+    "round-trips metadata through TaskCreate, TaskUpdate, TaskGet and the %s task file",
+    async (board) => {
+      const list = new TaskList(new TaskStore("metadata"));
+      const tools = registry("interactive", list);
+      if (board === "shared") {
+        manager.create("squad");
+      }
+      const create = tools.get("TaskCreate");
+      const update = tools.get("TaskUpdate");
+      const get = tools.get("TaskGet");
+      if (!create || !update || !get) {
+        throw new Error("Missing task tools");
+      }
+      for (const tool of [create, update]) {
+        expect(tool.schema().input_schema.properties.metadata).toMatchObject({
+          type: "object",
+          additionalProperties: {},
+        });
+      }
+      expect(
+        (
+          await create.execute(
+            { cwd },
+            {
+              subject: "keep structured context",
+              description: "",
+              metadata: {
+                ticket: "issue-20",
+                labels: ["bug"],
+                evidence: { reviewed: false },
+                obsolete: "remove",
+              },
+            },
+          )
+        ).isError,
+      ).toBe(false);
+      const created = await get.execute({ cwd }, { taskId: "1" });
+      expect(created.isError).toBe(false);
+      expect(
+        StoredTaskSchema.parse(JSON.parse(created.output)).metadata,
+      ).toEqual({
+        ticket: "issue-20",
+        labels: ["bug"],
+        evidence: { reviewed: false },
+        obsolete: "remove",
+      });
+      expect(
+        (
+          await update.execute(
+            { cwd },
+            {
+              taskId: "1",
+              metadata: {
+                ticket: "issue-21",
+                evidence: { checked: true },
+                obsolete: null,
+                added: [null, 2],
+              },
+            },
+          )
+        ).isError,
+      ).toBe(false);
+      expect(
+        (
+          await update.execute(
+            { cwd },
+            { taskId: "1", description: "updated without metadata" },
+          )
+        ).isError,
+      ).toBe(false);
+      const expected = {
+        ticket: "issue-21",
+        labels: ["bug"],
+        evidence: { checked: true },
+        added: [null, 2],
+      };
+      const updated = await get.execute({ cwd }, { taskId: "1" });
+      expect(updated.isError).toBe(false);
+      expect(
+        StoredTaskSchema.parse(JSON.parse(updated.output)).metadata,
+      ).toEqual(expected);
+      const restored =
+        board === "shared"
+          ? new SharedTaskStore(join(teamDir(cwd, "squad"), "tasks.json")).get(
+              "1",
+            )
+          : new TaskList(new TaskStore("metadata")).get("1");
+      expect(restored?.metadata).toEqual(expected);
+      const taskFile =
+        board === "shared"
+          ? join(teamDir(cwd, "squad"), "tasks.json")
+          : sessionPath("metadata", "tasks.json");
+      expect(JSON.parse(readFileSync(taskFile, "utf8"))).toEqual({
+        nextId: 2,
+        tasks: [expect.objectContaining({ id: "1", metadata: expected })],
+      });
+    },
+  );
+
+  it.each(["private", "shared"])(
+    "rejects malformed task and dependency IDs consistently on the %s board",
+    async (board) => {
+      const list = new TaskList();
+      const tools = registry("interactive", list);
+      if (board === "shared") {
+        manager.create("squad");
+      }
+      const create = tools.get("TaskCreate");
+      const get = tools.get("TaskGet");
+      const update = tools.get("TaskUpdate");
+      if (!create || !get || !update) {
+        throw new Error("Missing task tools");
+      }
+      await create.execute({ cwd }, { subject: "original", description: "" });
+      for (const tool of [get, update]) {
+        expect(tool.schema().input_schema.properties.taskId).toMatchObject({
+          type: "string",
+          pattern: "^[1-9]\\d*$",
+        });
+        for (const taskId of [
+          undefined,
+          1,
+          "",
+          "0",
+          "01",
+          "-1",
+          "1.0",
+          " 1 ",
+          "1\n",
+          "task-1",
+        ]) {
+          const result = await tool.execute({ cwd }, { taskId });
+          expect(result.isError).toBe(true);
+          expect(result.output).toContain("taskId");
+        }
+      }
+      for (const field of ["addBlocks", "addBlockedBy"]) {
+        for (const id of [1, "0", "01", "-1", "1.0", " 1 ", "task-1"]) {
+          const result = await update.execute(
+            { cwd },
+            { taskId: "1", subject: "must not change", [field]: [id] },
+          );
+          expect(result.isError).toBe(true);
+          expect(result.output).toContain(field);
+        }
+      }
+      const task = await get.execute({ cwd }, { taskId: "1" });
+      expect(task.isError).toBe(false);
+      expect(JSON.parse(task.output)).toMatchObject({
+        subject: "original",
+        blocks: [],
+        blockedBy: [],
+      });
+      const missing = await get.execute({ cwd }, { taskId: "999" });
+      expect(missing).toMatchObject({
+        isError: true,
+        output: "Task not found",
+      });
+    },
+  );
+
+  it.each(["private", "shared"])(
     "rejects unsupported Task fields on the %s board without mutating tasks",
     async (board) => {
       const list = new TaskList();
@@ -69,6 +235,7 @@ describe("tracking tool modes", () => {
       expect(Object.keys(create.schema().input_schema.properties)).toEqual([
         "subject",
         "description",
+        "metadata",
       ]);
       expect(Object.keys(update.schema().input_schema.properties)).toEqual([
         "taskId",
@@ -77,12 +244,16 @@ describe("tracking tool modes", () => {
         "description",
         "owner",
         "priority",
+        "metadata",
         "addBlocks",
         "addBlockedBy",
       ]);
       for (const fields of [
         { unknownField: "unsupported" },
-        { metadata: { evidence: "tests" } },
+        { metadata: null },
+        { metadata: [] },
+        { metadata: "invalid" },
+        { metadata: 42 },
       ]) {
         const result = await create.execute(
           { cwd },
@@ -99,7 +270,10 @@ describe("tracking tool modes", () => {
       expect(before[0]?.id).toBe("1");
       for (const fields of [
         { unknownField: "unsupported" },
-        { metadata: { evidence: "tests" } },
+        { metadata: null },
+        { metadata: [] },
+        { metadata: "invalid" },
+        { metadata: 42 },
       ]) {
         const result = await update.execute(
           { cwd },

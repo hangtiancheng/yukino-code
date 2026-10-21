@@ -5,19 +5,91 @@ import type { TaskBoard, TaskList } from "@/todo/index.js";
 import { taskProgress } from "@/todo/progress.js";
 import {
   TASK_CREATE_DESCRIPTION,
+  TASK_CREATE_METADATA_DESCRIPTION,
+  TASK_FIELD_DESCRIPTIONS,
   TASK_GET_DESCRIPTION,
   TASK_LIST_DESCRIPTION,
   TASK_UPDATE_DESCRIPTION,
+  TASK_UPDATE_METADATA_DESCRIPTION,
   TODO_WRITE_DESCRIPTION,
 } from "@/todo/prompts.js";
-import { StoredTaskStatusSchema } from "@/todo/store.js";
+import { StoredTaskSchema } from "@/todo/store.js";
 import type {
   Tool,
   ToolResult,
   ToolContext,
   ToolSchema,
 } from "@/tools/types.js";
-import { asErrorString, strArg } from "@/utils/index.js";
+import { asErrorString } from "@/utils/index.js";
+
+const TaskCreateArgsSchema = z.strictObject({
+  subject: StoredTaskSchema.shape.subject.describe(
+    TASK_FIELD_DESCRIPTIONS.subject,
+  ),
+  description: StoredTaskSchema.shape.description.describe(
+    TASK_FIELD_DESCRIPTIONS.description,
+  ),
+  metadata: StoredTaskSchema.shape.metadata
+    .optional()
+    .describe(TASK_CREATE_METADATA_DESCRIPTION),
+});
+
+const TaskGetArgsSchema = z.strictObject({
+  taskId: StoredTaskSchema.shape.id.describe(TASK_FIELD_DESCRIPTIONS.taskId),
+});
+
+const TaskUpdateArgsSchema = z.strictObject({
+  taskId: TaskGetArgsSchema.shape.taskId,
+  status: StoredTaskSchema.shape.status
+    .or(z.literal("deleted"))
+    .optional()
+    .describe(TASK_FIELD_DESCRIPTIONS.status),
+  subject: TaskCreateArgsSchema.shape.subject.optional(),
+  description: TaskCreateArgsSchema.shape.description.optional(),
+  owner: StoredTaskSchema.shape.owner
+    .optional()
+    .describe(TASK_FIELD_DESCRIPTIONS.owner),
+  priority: StoredTaskSchema.shape.priority.optional(),
+  metadata: StoredTaskSchema.shape.metadata
+    .optional()
+    .describe(TASK_UPDATE_METADATA_DESCRIPTION),
+  addBlocks: StoredTaskSchema.shape.blocks
+    .optional()
+    .describe(TASK_FIELD_DESCRIPTIONS.addBlocks),
+  addBlockedBy: StoredTaskSchema.shape.blockedBy
+    .optional()
+    .describe(TASK_FIELD_DESCRIPTIONS.addBlockedBy),
+});
+
+const TodoWriteArgsSchema = z.strictObject({
+  todos: z
+    .array(
+      z.strictObject({
+        id: StoredTaskSchema.shape.id
+          .optional()
+          .describe(TASK_FIELD_DESCRIPTIONS.todoId),
+        subject: TaskCreateArgsSchema.shape.subject,
+        description: TaskCreateArgsSchema.shape.description.optional(),
+        status: StoredTaskSchema.shape.status,
+        priority: StoredTaskSchema.shape.priority,
+      }),
+    )
+    .max(200),
+});
+
+const TaskToolInputSchema = z.looseObject({
+  type: z.literal("object"),
+  properties: z.record(z.string(), z.looseObject({})),
+  required: z.array(z.string()).optional(),
+});
+
+function taskInputSchema(schema: z.ZodObject): ToolSchema["input_schema"] {
+  const { $schema: _schema, ...inputSchema } = z.toJSONSchema(schema, {
+    target: "draft-7",
+    io: "input",
+  });
+  return TaskToolInputSchema.parse(inputSchema);
+}
 
 export class TaskCreateTool implements Tool {
   name = "TaskCreate";
@@ -37,15 +109,7 @@ export class TaskCreateTool implements Tool {
     return {
       name: this.name,
       description: this.description,
-      input_schema: {
-        type: "object",
-        properties: {
-          subject: { type: "string", description: "Brief task title" },
-          description: { type: "string", description: "What needs to be done" },
-        },
-        required: ["subject", "description"],
-        additionalProperties: false,
-      },
+      input_schema: taskInputSchema(TaskCreateArgsSchema),
     };
   }
 
@@ -53,20 +117,14 @@ export class TaskCreateTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
-    const parsed = z
-      .object({
-        subject: z.string().trim().min(1),
-        description: z.string(),
-      })
-      .strict()
-      .safeParse(args);
+    const parsed = TaskCreateArgsSchema.safeParse(args);
     if (!parsed.success) {
       return Promise.resolve({ output: parsed.error.message, isError: true });
     }
-    const { subject, description } = parsed.data;
+    const { subject, description, metadata } = parsed.data;
     try {
       ctx.abortSignal?.throwIfAborted();
-      const task = this.list.create(subject, description);
+      const task = this.list.create(subject, description, metadata);
       return Promise.resolve({
         output: `Task #${task.id} created successfully: ${task.subject}\n${taskProgress(this.list.list()).label}`,
         isError: false,
@@ -99,11 +157,7 @@ export class TaskGetTool implements Tool {
     return {
       name: this.name,
       description: this.description,
-      input_schema: {
-        type: "object",
-        properties: { taskId: { type: "string", description: "Task ID" } },
-        required: ["taskId"],
-      },
+      input_schema: taskInputSchema(TaskGetArgsSchema),
     };
   }
 
@@ -111,11 +165,14 @@ export class TaskGetTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
-    const id = strArg(args, "taskId");
+    const parsed = TaskGetArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return Promise.resolve({ output: parsed.error.message, isError: true });
+    }
     let task;
     try {
       ctx.abortSignal?.throwIfAborted();
-      task = this.list.get(id);
+      task = this.list.get(parsed.data.taskId);
     } catch (error) {
       return Promise.resolve({
         output: `Error: ${asErrorString(error)}`,
@@ -204,34 +261,7 @@ export class TaskUpdateTool implements Tool {
     return {
       name: this.name,
       description: this.description,
-      input_schema: {
-        type: "object",
-        properties: {
-          taskId: { type: "string", description: "Task ID" },
-          status: {
-            type: "string",
-            enum: [...StoredTaskStatusSchema.options, "deleted"],
-            description:
-              "New task status; deleted removes the item and its dependency links",
-          },
-          subject: { type: "string", description: "New subject" },
-          description: { type: "string", description: "New description" },
-          owner: { type: "string", description: "New owner" },
-          priority: { type: "string", enum: ["high", "medium", "low"] },
-          addBlocks: {
-            type: "array",
-            items: { type: "string" },
-            description: "Existing task IDs this one blocks",
-          },
-          addBlockedBy: {
-            type: "array",
-            items: { type: "string" },
-            description: "Existing task IDs blocking this one",
-          },
-        },
-        required: ["taskId"],
-        additionalProperties: false,
-      },
+      input_schema: taskInputSchema(TaskUpdateArgsSchema),
     };
   }
 
@@ -288,19 +318,6 @@ export class TaskUpdateTool implements Tool {
   }
 }
 
-const TaskUpdateArgsSchema = z
-  .object({
-    taskId: z.string().trim().min(1),
-    subject: z.string().trim().min(1).optional(),
-    description: z.string().optional(),
-    status: z.enum([...StoredTaskStatusSchema.options, "deleted"]).optional(),
-    owner: z.string().optional(),
-    priority: z.enum(["high", "medium", "low"]).optional(),
-    addBlocks: z.array(z.string().trim().min(1)).optional(),
-    addBlockedBy: z.array(z.string().trim().min(1)).optional(),
-  })
-  .strict();
-
 export class TodoWriteTool implements Tool {
   name = "TodoWrite";
   description = TODO_WRITE_DESCRIPTION;
@@ -313,59 +330,14 @@ export class TodoWriteTool implements Tool {
     return {
       name: this.name,
       description: this.description,
-      input_schema: {
-        type: "object",
-        properties: {
-          todos: {
-            type: "array",
-            maxItems: 200,
-            items: {
-              type: "object",
-              properties: {
-                id: {
-                  type: "string",
-                  description: "Existing task ID; omit for a new item",
-                },
-                subject: { type: "string", description: "Brief task title" },
-                description: { type: "string" },
-                status: {
-                  type: "string",
-                  enum: StoredTaskStatusSchema.options,
-                },
-                priority: { type: "string", enum: ["high", "medium", "low"] },
-              },
-              required: ["subject", "status"],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ["todos"],
-        additionalProperties: false,
-      },
+      input_schema: taskInputSchema(TodoWriteArgsSchema),
     };
   }
   execute(
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
-    const parsed = z
-      .object({
-        todos: z
-          .array(
-            z
-              .object({
-                id: z.string().trim().min(1).optional(),
-                subject: z.string().trim().min(1),
-                description: z.string().optional(),
-                status: StoredTaskStatusSchema,
-                priority: z.enum(["high", "medium", "low"]).optional(),
-              })
-              .strict(),
-          )
-          .max(200),
-      })
-      .strict()
-      .safeParse(args);
+    const parsed = TodoWriteArgsSchema.safeParse(args);
     if (!parsed.success) {
       return Promise.resolve({ output: parsed.error.message, isError: true });
     }

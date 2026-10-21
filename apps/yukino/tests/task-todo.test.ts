@@ -23,7 +23,7 @@ import {
 import { SharedTaskStore } from "@/teams/shared-task.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
-import { TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
+import { TaskCreateTool, TaskUpdateTool, TodoWriteTool } from "@/todo/tools.js";
 import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
 import { TaskOutputTool } from "@/tools/task-output.js";
 import { TodoProgress } from "@/ui/todo-progress.js";
@@ -56,6 +56,7 @@ describe("atomic task/TODO list", () => {
         status: "in_progress",
         addBlocks: [second.id],
         priority: "high",
+        metadata: { evidence: "tests" },
       },
     );
     expect(result.isError).toBe(false);
@@ -65,6 +66,7 @@ describe("atomic task/TODO list", () => {
       status: "in_progress",
       blocks: [second.id],
       priority: "high",
+      metadata: { evidence: "tests" },
     });
     expect(restored.get(second.id)?.blockedBy).toEqual([first.id]);
   });
@@ -76,7 +78,11 @@ describe("atomic task/TODO list", () => {
     const before = list.list();
     for (const dependency of [a.id, b.id, "missing"]) {
       expect(() =>
-        list.update(b.id, { subject: "changed", addBlocks: [dependency] }),
+        list.update(b.id, {
+          subject: "changed",
+          metadata: { leaked: true },
+          addBlocks: [dependency],
+        }),
       ).toThrow();
       expect(list.list()).toEqual(before);
     }
@@ -121,13 +127,32 @@ describe("atomic task/TODO list", () => {
     expect(list.get(c.id)?.blockedBy).toEqual([]);
   });
   it("preserves identity and metadata when replacing TODOs, rejecting duplicate and unknown IDs", async () => {
-    const list = new TaskList();
-    const a = list.create("a", "description");
-    list.update(a.id, {
-      owner: "leader",
-      metadata: { count: 2 },
-      priority: "high",
-    });
+    const list = new TaskList(new TaskStore("metadata-todos"));
+    expect(
+      (
+        await new TaskCreateTool(list).execute(
+          { cwd: "/tmp" },
+          {
+            subject: "a",
+            description: "description",
+            metadata: { count: 2 },
+          },
+        )
+      ).isError,
+    ).toBe(false);
+    const [a] = list.list();
+    expect(
+      (
+        await new TaskUpdateTool(list).execute(
+          { cwd: "/tmp" },
+          {
+            taskId: a.id,
+            owner: "leader",
+            priority: "high",
+          },
+        )
+      ).isError,
+    ).toBe(false);
     const tool = new TodoWriteTool(list);
     const result = await tool.execute(
       { cwd: "/tmp" },
@@ -146,6 +171,9 @@ describe("atomic task/TODO list", () => {
       priority: "high",
     });
     expect(list.list()[1]?.id).toBe("2");
+    expect(
+      new TaskList(new TaskStore("metadata-todos")).get(a.id)?.metadata,
+    ).toEqual({ count: 2 });
     const before = list.list();
     for (const todos of [
       [{ id: "missing", subject: "bad", status: "pending" }],
@@ -228,6 +256,21 @@ describe("atomic task/TODO list", () => {
       ).isError,
     ).toBe(true);
     expect(list.list()).toHaveLength(1);
+  });
+  it("rejects malformed TODO IDs without replacing existing items or consuming IDs", async () => {
+    const list = new TaskList();
+    const item = list.create("original", "");
+    const write = new TodoWriteTool(list);
+    for (const id of [1, "", "0", "01", "-1", "1.0", " 1 ", "1\n", "task-1"]) {
+      const result = await write.execute(
+        { cwd: "/tmp" },
+        { todos: [{ id, subject: "must not change", status: "pending" }] },
+      );
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("id");
+      expect(list.list()).toEqual([item]);
+    }
+    expect(list.create("next", "").id).toBe("2");
   });
   it.each(["subagent", "background", "fork", "teammate"])(
     "isolates %s private tasks from the parent and siblings",
@@ -472,7 +515,7 @@ describe("strict shared task transactions", () => {
     const store = new SharedTaskStore(path);
     store.create("a");
     const corrupt = JSON.stringify({
-      next_id: 2,
+      nextId: 2,
       tasks: [
         {
           id: "1",
@@ -482,6 +525,7 @@ describe("strict shared task transactions", () => {
           owner: "",
           blocks: ["2"],
           blockedBy: [],
+          metadata: {},
           createdBy: "",
         },
       ],
@@ -509,6 +553,47 @@ describe("strict shared task transactions", () => {
     expect(() => store.update(a.id, { status: "done" })).toThrow();
     expect(readFileSync(path, "utf8")).toBe(before);
   });
+});
+
+describe("task snapshot validation", () => {
+  it.each(["private", "shared"])(
+    "validates IDs and nextId consistently in %s storage and retains the counter after deletion",
+    (board) => {
+      const path =
+        board === "shared"
+          ? join(temporaryDirectory(), "tasks.json")
+          : sessionPath("snapshot", "tasks.json");
+      const load = () =>
+        board === "shared"
+          ? new SharedTaskStore(path)
+          : new TaskList(new TaskStore("snapshot"));
+      const store = load();
+      const task = store.create("first", "");
+      const snapshot = { nextId: 2, tasks: [task] };
+      for (const invalid of [
+        { ...snapshot, nextId: undefined },
+        { ...snapshot, nextId: 0 },
+        { ...snapshot, nextId: 1 },
+        { ...snapshot, nextId: 2.5 },
+        { ...snapshot, nextId: Number.MAX_SAFE_INTEGER + 1 },
+        { ...snapshot, tasks: [{ ...task, id: "01" }] },
+        { ...snapshot, tasks: [{ ...task, blocks: ["01"] }] },
+        { ...snapshot, tasks: [{ ...task, blockedBy: ["01"] }] },
+      ]) {
+        const serialized = JSON.stringify(invalid);
+        writeFileSync(path, serialized);
+        expect(load).toThrow("unreadable");
+        expect(readFileSync(path, "utf8")).toBe(serialized);
+      }
+      writeFileSync(path, JSON.stringify(snapshot));
+      expect(load().delete(task.id)).toBe(true);
+      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+        nextId: 2,
+        tasks: [],
+      });
+      expect(load().create("next", "").id).toBe("2");
+    },
+  );
 });
 
 describe("background task output", () => {

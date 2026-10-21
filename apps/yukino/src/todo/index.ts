@@ -3,7 +3,7 @@ import {
   unresolvedTaskDependencies,
   validateTaskDependencies,
 } from "@/todo/dependencies.js";
-import type { StoredTaskStatus, TaskStore } from "@/todo/store.js";
+import type { StoredTask, TaskStore } from "@/todo/store.js";
 
 // Submodule namespaces for library consumers (Todo.<Sub>.*).
 export * as Dependencies from "@/todo/dependencies.js";
@@ -12,25 +12,10 @@ export * as Prompts from "@/todo/prompts.js";
 export * as Store from "@/todo/store.js";
 export * as Tools from "@/todo/tools.js";
 
-export interface Task {
-  id: string;
-  subject: string;
-  description: string;
-  status: StoredTaskStatus;
-  owner?: string;
-  blocks: string[];
-  blockedBy: string[];
-  metadata: Record<string, unknown>;
-  priority?: "high" | "medium" | "low";
-}
+export type Task = StoredTask;
 
-export interface TodoInput {
-  id?: string;
-  subject: string;
-  description?: string;
-  status: StoredTaskStatus;
-  priority?: Task["priority"];
-}
+export type TodoInput = Pick<Task, "subject" | "status"> &
+  Partial<Pick<Task, "id" | "description" | "priority">>;
 
 export type TaskUpdates = Partial<Omit<Task, "id" | "blocks" | "blockedBy">> & {
   addBlocks?: string[];

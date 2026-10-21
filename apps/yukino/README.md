@@ -94,7 +94,7 @@ curl -fsSL https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/inst
 irm https://raw.githubusercontent.com/hangtiancheng/yukino-code/main/install.ps1 | iex
 ```
 
-Both installers write a default `~/.yukino/config.yaml` if none exists, verify Node.js >= 20, and support uninstall / pinned-version / dist-tag options (see their `--help` / `-Help` output).
+Both installers write a default `~/.yukino/config.yaml` if none exists, verify Node.js >= 20, and support uninstall / pinned-version / dist-tag options (see their `--help` / `-h` output).
 
 Update a global npm, yarn, or pnpm installation with:
 
@@ -104,7 +104,7 @@ yukino update --tag=canary
 yukino --version
 ```
 
-The command checks npm's `latest` dist-tag by default. Use `--tag=canary` (or `--tag canary`) to check another dist-tag. If its version is newer according to SemVer, the command installs that exact version using the package manager that provides the current installation. For example, `0.0.14-canary` is newer than `0.0.13-dev`. Equal or older versions are not installed. Both one-line installers use npm, so their installations support `yukino update` too. Source checkouts must be updated from the repository.
+The command checks npm's `latest` dist-tag by default. Use `--tag=canary` (or `--tag canary`) to check another dist-tag. If its version is newer according to SemVer, the command installs that exact version using the package manager that provides the current installation. For example, `0.0.10-canary` is newer than `0.0.8-dev`. Equal or older versions are not installed. Both one-line installers use npm, so their installations support `yukino update` too. Source checkouts must be updated from the repository.
 
 The TUI checks npm's `latest` dist-tag for a newer release asynchronously and shows a `yukino update` hint on entry when one is available. The hint disappears after the first input submission or when a session is resumed; late check results stay hidden during the conversation. Available updates are shown again on the last line of the exit summary. Network errors do not interrupt the UI. Set `YUKINO_SKIP_VERSION_CHECK=1` to disable automatic checks; explicit `yukino update` still checks for updates.
 
@@ -162,7 +162,7 @@ Yukino stores its configuration and runtime state under `~/.yukino`. The current
 │   └── <project-key>/                     # Teams belonging to one canonical cwd; prevents unrelated projects from sharing rosters, tasks or mailboxes.
 │       └── <team>/                        # One sanitized team-name namespace containing its roster, shared task board, mailboxes and teammate diagnostics.
 │           ├── config.json                # Team metadata, leader ID, permission mode and member IDs/types/models/activity flags/worktree paths.
-│           ├── tasks.json                 # Team-wide task board with creators, owners, statuses, dependencies, task metadata and next_id counter.
+│           ├── tasks.json                 # Team-wide task board with creators, owners, statuses, dependencies, task metadata and nextId counter.
 │           ├── inboxes/                   # Recipient-specific persistent mailboxes for communication between the leader and teammates.
 │           │   └── <member>.json          # Message array with sender, text, timestamp, read state and optional protocol type/request ID/approval response.
 │           └── logs/                      # Structured diagnostics from teammate processes, separated from main-process logs.
@@ -196,6 +196,8 @@ For example, starting Yukino in `/workspace/repo/app` and in `/workspace/other` 
 Session cleanup removes conversations inactive for more than 30 days together with their artifact directories. Logs older than 30 days are cleaned separately. Shell output falls back to an operating-system temporary file if session storage is unavailable.
 
 Each `teams/<project-key>/<team>/` contains team membership and process metadata in `config.json`, the shared task board in `tasks.json`, one JSON mailbox per member in `inboxes/`, and teammate logs in `logs/`. The private session task list and the team task board use separate files.
+
+Both task files use `{ nextId, tasks }`. `nextId` is the positive integer allocated to the next new task; each task's `id` and tool parameter `taskId` are positive decimal strings such as `"1"`. Deleting tasks preserves the counter, so later tasks do not reuse deleted IDs. TaskCreate and TaskUpdate accept structured `metadata`, and TaskGet returns it. TaskUpdate merges top-level metadata keys, with `null` deleting a key; TodoWrite preserves metadata when an existing task ID is retained.
 
 ### Git worktrees
 

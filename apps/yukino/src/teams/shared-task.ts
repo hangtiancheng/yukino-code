@@ -17,20 +17,17 @@ import {
 } from "@/todo/dependencies.js";
 import type { Task, TaskUpdates } from "@/todo/index.js";
 import { mergeTaskMetadata } from "@/todo/index.js";
-import { StoredTaskSchema, StoredTaskStatusSchema } from "@/todo/store.js";
+import { StoredTaskSchema, TaskSnapshotSchema } from "@/todo/store.js";
 
 export interface SharedTask extends Task {
   createdBy: string;
 }
 
 const SerializedTaskSchema = StoredTaskSchema.extend({
-  id: z.string().regex(/^[1-9]\d*$/u),
   createdBy: z.string(),
 });
 
-/** Top-level structure of tasks.json: next available id + task list. */
-const StoreDataSchema = z.object({
-  next_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+const StoreDataSchema = TaskSnapshotSchema.extend({
   tasks: z.array(SerializedTaskSchema),
 });
 
@@ -75,10 +72,10 @@ export class SharedTaskStore {
       const data = parse(StoreDataSchema, raw);
       const tasks = data.tasks;
       validateTaskDependencies(tasks);
-      if (tasks.some((task) => Number(task.id) >= data.next_id)) {
+      if (tasks.some((task) => Number(task.id) >= data.nextId)) {
         throw new Error("Invalid shared task ID counter");
       }
-      this.nextId = data.next_id;
+      this.nextId = data.nextId;
       this.tasks = tasks;
     } catch (error) {
       throw new Error("Cannot load an unreadable shared task board", {
@@ -90,7 +87,7 @@ export class SharedTaskStore {
   private save(): void {
     mkdirSync(dirname(this.path), { recursive: true });
     const data: StoreData = {
-      next_id: this.nextId,
+      nextId: this.nextId,
       tasks: this.tasks,
     };
     // Write-then-rename so a concurrent reader (or a crash) never sees a
@@ -147,7 +144,7 @@ export class SharedTaskStore {
     return this.mutate(() => {
       const task: SharedTask = {
         id: String(this.nextId++),
-        subject: z.string().trim().min(1).parse(subject),
+        subject: StoredTaskSchema.shape.subject.parse(subject),
         description,
         status: "pending",
         owner,
@@ -210,7 +207,7 @@ export class SharedTaskStore {
         task.owner = actor;
       }
       if (fields.status !== undefined) {
-        task.status = StoredTaskStatusSchema.parse(fields.status);
+        task.status = StoredTaskSchema.shape.status.parse(fields.status);
       }
       if (fields.owner !== undefined) {
         task.owner = fields.owner;
@@ -219,7 +216,7 @@ export class SharedTaskStore {
         task.description = fields.description;
       }
       if (fields.subject !== undefined) {
-        task.subject = z.string().trim().min(1).parse(fields.subject);
+        task.subject = StoredTaskSchema.shape.subject.parse(fields.subject);
       }
       if (fields.priority !== undefined) {
         task.priority = fields.priority;
