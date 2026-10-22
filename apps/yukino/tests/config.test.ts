@@ -304,6 +304,8 @@ describe("config", () => {
   describe("enable_fork", () => {
     const bare = (): AppConfig => ({
       default_provider: 0,
+      mcp_loading: "auto",
+      theme: "auto",
       providers: [],
       mcp_servers: [],
       hooks: [],
@@ -326,6 +328,8 @@ describe("config", () => {
   describe("memory", () => {
     const bare = (): AppConfig => ({
       default_provider: 0,
+      mcp_loading: "auto",
+      theme: "auto",
       providers: [],
       mcp_servers: [],
       hooks: [],
@@ -365,9 +369,54 @@ describe("config", () => {
     });
   });
 
-  // The `env` block provides defaults for any environment variable Yukino
-  // reads: a value is applied only when the variable is unset in the real
-  // environment, so explicit environment always wins.
+  describe("runtime preferences", () => {
+    function loadPreferences(settings: string): AppConfig {
+      const dir = mkdtempSync(join(tmpdir(), "yukino-preferences-"));
+      try {
+        const path = join(dir, "config.yaml");
+        writeFileSync(path, `providers: []\n${settings}\n`);
+        return loadConfig(path, { allowEmptyProviders: true });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it("defaults to auto with an absent or minimal config", () => {
+      expect(
+        loadConfig(undefined, { allowEmptyProviders: true }),
+      ).toMatchObject({
+        mcp_loading: "auto",
+        theme: "auto",
+      });
+      expect(loadPreferences("")).toMatchObject({
+        mcp_loading: "auto",
+        theme: "auto",
+      });
+    });
+
+    it.each(["auto", "eager", "native", "dispatch"] as const)(
+      "parses mcp_loading: %s",
+      (loading) => {
+        expect(loadPreferences(`mcp_loading: ${loading}`).mcp_loading).toBe(
+          loading,
+        );
+      },
+    );
+
+    it.each(["auto", "dark", "light"] as const)("parses theme: %s", (theme) => {
+      expect(loadPreferences(`theme: ${theme}`).theme).toBe(theme);
+    });
+
+    it.each([
+      "mcp_loading: invalid",
+      "mcp_loading: 1",
+      "theme: invalid",
+      "theme: true",
+    ])("rejects invalid preferences: %s", (settings) => {
+      expect(() => loadPreferences(settings)).toThrow(/Invalid configuration/);
+    });
+  });
+
   describe("env block", () => {
     const ENV_A = "YUKINO_ENV_BLOCK_TEST_A";
     const ENV_B = "YUKINO_ENV_BLOCK_TEST_B";
@@ -597,6 +646,8 @@ describe("config", () => {
       const user: MCPServerConfig = { name: "shared", command: "user-binary" };
       const base: AppConfig = {
         default_provider: 0,
+        mcp_loading: "auto",
+        theme: "auto",
         providers: [],
         mcp_servers: [user],
         hooks: [],
@@ -613,6 +664,8 @@ describe("config", () => {
     it("returns the config unchanged when there is no .mcp.json", () => {
       const base: AppConfig = {
         default_provider: 0,
+        mcp_loading: "auto",
+        theme: "auto",
         providers: [],
         mcp_servers: [],
         hooks: [],

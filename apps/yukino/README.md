@@ -106,7 +106,7 @@ yukino --version
 
 The command checks npm's `latest` dist-tag by default. Use `--tag=canary` (or `--tag canary`) to check another dist-tag. If its version is newer according to SemVer, the command installs that exact version using the package manager that provides the current installation. For example, `0.0.10-canary` is newer than `0.0.8-dev`. Equal or older versions are not installed. Both one-line installers use npm, so their installations support `yukino update` too. Source checkouts must be updated from the repository.
 
-The TUI checks npm's `latest` dist-tag for a newer release asynchronously and shows a `yukino update` hint on entry when one is available. The hint disappears after the first input submission or when a session is resumed; late check results stay hidden during the conversation. Available updates are shown again on the last line of the exit summary. Network errors do not interrupt the UI. Set `YUKINO_SKIP_VERSION_CHECK=1` to disable automatic checks; explicit `yukino update` still checks for updates.
+The TUI always checks npm's `latest` dist-tag for a newer release asynchronously and shows a `yukino update` hint on entry when one is available. The hint disappears after the first input submission or when a session is resumed; late check results stay hidden during the conversation. Available updates are shown again on the last line of the exit summary. Network errors do not interrupt the UI. Explicit `yukino update` also checks for updates.
 
 Or run directly from the monorepo:
 
@@ -266,26 +266,29 @@ enable_coordinator_mode: false
 # Default: true. Each call can explicitly set fork: true or fork: false to override it.
 enable_fork: true
 
-# Environment variable defaults. Any variable Yukino reads may be listed here; a value takes
-# effect only when the variable is unset in the real environment — explicit environment always
-# wins. Scalars are stringified (1 → "1"); an empty value becomes ""; a bare `env:` (every
-# entry commented out) is a no-op. Applied before telemetry starts, and re-applied on every
-# config (re)load. A list of single-key mappings (`- KEY: value`) is also accepted.
+# MCP tool loading: auto | eager | native | dispatch. Default: auto, decided per session
+# from the provider protocol, endpoint and schema size. Native loading on a non-Anthropic
+# protocol falls back to dispatch. Applies to TUI, print, remote, ACP and A2A modes.
+mcp_loading: auto
+
+# Terminal theme: auto | dark | light. Default: auto, detected from COLORFGBG or terminal
+# color reports; falls back to dark when detection is unavailable.
+theme: auto
+
+# Environment variable defaults. Supported configuration is limited to Yukino-specific
+# YUKINO_* test/integration inputs and OTEL_*, LANGFUSE_*, SENTRY_* telemetry settings.
+# Product settings use the typed YAML fields above. Other environment
+# variables are read-only inputs from the host environment; configure them outside this block.
+# Explicit environment always wins, including an explicitly empty string. Scalars are
+# stringified (1 → "1"); an empty value becomes ""; a bare `env:` is a no-op. Unset variables
+# are filled before telemetry starts and on config loads. A list of single-key mappings
+# (`- KEY: value`) is also accepted. See the variable reference below for scope and defaults.
 env:
-  # ── Yukino switches ──────────────────────────────────────────────────────────────
-  YUKINO_SKIP_VERSION_CHECK: 1 # 1 disables the automatic update check; `yukino update` still checks
-  # MCP tool loading: eager | native | dispatch. Default: auto-decided per session from the
-  # provider protocol, endpoint and schema size; `native` on a non-anthropic protocol downgrades
-  # to dispatch.
-  YUKINO_MCP_LOADING: eager
-  # 1 removes run_in_background from Bash/PowerShell/Agent, makes shell timeouts kill instead of
-  # backgrounding, and disables Ctrl+B.
-  YUKINO_DISABLE_BACKGROUND_TASKS: 0
-  # YUKINO_BYPASS_PERMISSIONS: 1      # 1 skips permission prompts (cf. permission_mode above)
-  # YUKINO_THEME: dark                # Force the terminal theme: dark | light (default: detect)
-  # ── Provider credentials — fallback when a provider omits api_key ──────────────────
-  # ANTHROPIC_API_KEY: sk-ant-xxx     # anthropic protocol
-  # OPENAI_API_KEY: sk-xxx            # openai and openai-compat protocols
+  # ── E2E test settings ────────────────────────────────────────────────────────────
+  # YUKINO_TEST_API_KEY: test-key     # Enables the real-provider memory consolidation test
+  # YUKINO_TEST_BASE_URL: https://api.deepseek.com # Default test provider endpoint
+  # YUKINO_TEST_MODEL: deepseek-flash # Default test model
+  # YUKINO_TEST_PROTOCOL: openai-compat # anthropic | openai | openai-compat (default)
   # ── OpenTelemetry — see the Telemetry section; telemetry stays off without exporters ─
   # OTEL_SDK_DISABLED: "true"         # true disables OpenTelemetry and Langfuse tracing
   # OTEL_SERVICE_NAME: yukino         # Service name; defaults to yukino
@@ -317,18 +320,6 @@ env:
   # SENTRY_ENVIRONMENT: production
   # SENTRY_RELEASE: 1.0.0                         # Defaults to the Yukino version
   # SENTRY_DEBUG: "true"                          # true enables Sentry SDK diagnostics
-  # ── /feedback gist upload credentials ──────────────────────────────────────────────
-  # GH_TOKEN: ghp_xxx                             # Checked before GITHUB_TOKEN
-  # GITHUB_TOKEN: ghp_xxx
-  # ── IDE integration (Claude Code compatible) ───────────────────────────────────────
-  # CLAUDE_CODE_SSE_PORT: 12345                   # VS Code extension SSE port
-  # CLAUDE_CONFIG_DIR: /home/me/.claude           # IDE lockfile directory; defaults to ~/.claude
-  # ── Read-only probes (normally set by the terminal/OS, rarely defaulted here) ───────
-  # Terminal/feature detection reads TERM, TERM_PROGRAM, TMUX, VTE_VERSION, KITTY_WINDOW_ID,
-  # ZED_TERM, WT_SESSION, COLORFGBG, SHELL, DISPLAY, WAYLAND_DISPLAY, CI and SSH_CONNECTION /
-  # SSH_CLIENT / SSH_TTY; HTTP_PROXY / HTTPS_PROXY / ALL_PROXY / NO_PROXY (and lowercase) are
-  # picked up by /feedback diagnostics. Test-only: YUKINO_TEST_API_KEY / YUKINO_TEST_BASE_URL /
-  # YUKINO_TEST_MODEL.
 
 # User-level MCP servers. Merged with the project-level .mcp.json; on a name collision the
 # user-level entry wins.
@@ -403,6 +394,37 @@ hooks:
     # tool call on pre_tool_use).
     on_error: ignore
 ```
+
+Runtime preferences use `permission_mode`, `mcp_loading`, and `theme` in `config.yaml` and take effect on startup. To bypass permission prompts in the TUI, set `permission_mode: bypassPermissions`. Automatic TUI update checks and background task support are always enabled. Background shell tasks can be started explicitly, created on timeout, or moved from foreground with Ctrl+B when a task manager is attached.
+
+Yukino's E2E test environment settings are:
+
+| Variable               | Values / default                                                | Purpose                                                                                               |
+| ---------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `YUKINO_TEST_API_KEY`  | Unset                                                           | Enable the E2E memory consolidation test against a real provider; without a key it is skipped.        |
+| `YUKINO_TEST_BASE_URL` | `https://api.deepseek.com`                                      | Provider endpoint for that E2E test.                                                                  |
+| `YUKINO_TEST_MODEL`    | `deepseek-flash`                                                | Model for that E2E test.                                                                              |
+| `YUKINO_TEST_PROTOCOL` | `anthropic`, `openai`, `openai-compat`; default `openai-compat` | Select the matching Anthropic, OpenAI Responses, or OpenAI Chat Completions client for that E2E test. |
+
+The standalone test runner reads `YUKINO_TEST_API_KEY`, `YUKINO_TEST_BASE_URL`, `YUKINO_TEST_MODEL`, and `YUKINO_TEST_PROTOCOL` from its process environment and does not load `config.yaml`; export them before running the E2E test. The protocol must match the provider endpoint; an unsupported value fails validation. CLI environment defaults fill only unset variables. Restart Yukino to change or remove a default that has already been applied.
+
+Yukino also sets the following variables for hooks, native helpers, and test infrastructure. These are internal process inputs, managed by their caller rather than user configuration:
+
+| Variable                   | Set by             | Value                                                                           |
+| -------------------------- | ------------------ | ------------------------------------------------------------------------------- |
+| `YUKINO_EVENT`             | Hook runner        | Current hook event name.                                                        |
+| `YUKINO_TOOL`              | Hook runner        | Current tool name, or an empty string when absent.                              |
+| `YUKINO_FILE_PATH`         | Hook runner        | Current file path, or an empty string when absent.                              |
+| `YUKINO_COMPUTER_INPUT`    | Computer-use tool  | Base64-encoded JSON action passed to macOS and Windows native helpers.          |
+| `YUKINO_COMPUTER_ASSEMBLY` | Computer-use tool  | Temporary Windows helper assembly path for compilation and execution.           |
+| `YUKINO_SCREENSHOT_PATH`   | Computer-use tool  | Temporary output path for a Windows screenshot.                                 |
+| `YUKINO_CLIPBOARD_PATH`    | Clipboard reader   | Temporary output path for a Windows clipboard image.                            |
+| `YUKINO_TEST_HOME`         | Test setup         | A fresh temporary home directory for each test; used by the mocked `homedir()`. |
+| `YUKINO_LIB_ENTRY`         | Library entry test | File URL of the built library imported by the child Node.js process.            |
+
+The companion [Yukino MCP server](../mcp/README.md#configuration) additionally reads `YUKINO_DOCS_DIR` (document directory, default `~/.yukino/docs`) and `YUKINO_INDEX_DB` (index database, default `~/.yukino/index.sqlite`). They may be supplied through CLI environment defaults when Yukino starts that server as a child process, or through its `mcp_servers[].env`. The examples use `YUKINO_MCP_API_KEY` and the repository's `mcp.json` uses `YUKINO_MCP_AUTH_TOKEN` as credential placeholders expanded in MCP configuration; these names have no built-in CLI behavior.
+
+Other environment variables are read-only inputs to Yukino and belong in the host environment, outside the global `env` block. These include provider key fallbacks (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), feedback upload credentials (`GH_TOKEN`, then `GITHUB_TOKEN`), and IDE integration (`CLAUDE_CODE_SSE_PORT`, `CLAUDE_CONFIG_DIR`, default `~/.claude`). Terminal and OS probes include `TERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`, `COLORTERM`, `TMUX`, `VTE_VERSION`, `KITTY_WINDOW_ID`, `ZED_TERM`, `WT_SESSION`, `COLORFGBG`, `SHELL`, `DISPLAY`, `WAYLAND_DISPLAY`, `CI`, `SSH_CONNECTION`, `SSH_CLIENT`, and `SSH_TTY`; color and hyperlink controls such as `FORCE_COLOR`, `NO_COLOR`, and `FORCE_HYPERLINK` are also host inputs. Feedback diagnostics read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, and their lowercase forms.
 
 Main agents, subagents, and teammates use the same path sandbox policy: read-only tools can access paths outside the working directory without path approval. Writes outside the agent's working directory, the system temp directory, or an explicitly allowed root require approval unless an explicit allow rule applies. `bypassPermissions` disables this path sandbox; switching back restores it. Explicit deny/ask rules and an agent's own plan approval lock still apply. The OS-level Bash sandbox is separate and remains controlled by the `sandbox` configuration or the TUI's `/sandbox` command. Isolated worktree agents instead receive their own worktree write root, without the parent workspace or a shared system-temp write grant; per-command output directories remain writable. Explicit OS deny-write entries still take precedence.
 

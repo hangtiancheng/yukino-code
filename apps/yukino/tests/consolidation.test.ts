@@ -13,7 +13,8 @@ import { join } from "node:path";
 
 import { afterEach, describe, it, expect, vi } from "vitest";
 
-import type { LLMClient } from "@/llm/client.js";
+import { ProviderConfigSchema } from "@/config/provider-config.js";
+import { createClient, type LLMClient } from "@/llm/client.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
 import { getSessionsDir, projectPath } from "@/storage/index.js";
 
@@ -75,7 +76,53 @@ function createNoNetworkClient(): LLMClient {
   };
 }
 
+async function createE2eClient(
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<LLMClient> {
+  return createClient(
+    ProviderConfigSchema.parse({
+      name: "test",
+      protocol: environment.YUKINO_TEST_PROTOCOL ?? "openai-compat",
+      base_url: environment.YUKINO_TEST_BASE_URL ?? "https://api.deepseek.com",
+      api_key: environment.YUKINO_TEST_API_KEY,
+      model: environment.YUKINO_TEST_MODEL ?? "deepseek-flash",
+      context_window: 200000,
+    }),
+    "",
+  );
+}
+
 describe("MemoryConsolidator", () => {
+  describe("E2E client configuration", () => {
+    it("defaults to the openai-compat protocol", async () => {
+      const client = await createE2eClient({ YUKINO_TEST_API_KEY: "test-key" });
+      expect(client.protocol).toBe("openai-compat");
+    });
+
+    it.each(["anthropic", "openai", "openai-compat"])(
+      "selects the %s client from YUKINO_TEST_PROTOCOL",
+      async (protocol) => {
+        const client = await createE2eClient({
+          YUKINO_TEST_API_KEY: "test-key",
+          YUKINO_TEST_PROTOCOL: protocol,
+        });
+        expect(client.protocol).toBe(protocol);
+      },
+    );
+
+    it.each(["", "unsupported"])(
+      "rejects the invalid test protocol %j",
+      async (protocol) => {
+        await expect(
+          createE2eClient({
+            YUKINO_TEST_API_KEY: "test-key",
+            YUKINO_TEST_PROTOCOL: protocol,
+          }),
+        ).rejects.toThrow(/protocol/);
+      },
+    );
+  });
+
   describe("Gate logic", () => {
     it("skips when memory dir does not exist", async () => {
       const dir = makeTempDir();
@@ -202,10 +249,7 @@ describe("MemoryConsolidator", () => {
     it.skipIf(!process.env.YUKINO_TEST_API_KEY)(
       "merges duplicate memories with real LLM",
       async () => {
-        const apiKey = process.env.YUKINO_TEST_API_KEY;
-        const baseURL =
-          process.env.YUKINO_TEST_BASE_URL ?? "https://api.deepseek.com";
-        const model = process.env.YUKINO_TEST_MODEL ?? "deepseek-flash";
+        const client = await createE2eClient();
 
         const dir = makeTempDir();
         const memDir = projectPath(dir, "memory");
@@ -253,19 +297,6 @@ describe("MemoryConsolidator", () => {
         console.log(
           "  MEMORY.md:",
           readFileSync(join(memDir, "MEMORY.md"), "utf-8"),
-        );
-
-        const { OpenAICompatClient } = await import("../src/llm/openai.js");
-        const client = new OpenAICompatClient(
-          {
-            name: "test",
-            protocol: "openai-compat",
-            base_url: baseURL,
-            api_key: apiKey,
-            model: model,
-            context_window: 200000,
-          },
-          "",
         );
 
         let notified = "";

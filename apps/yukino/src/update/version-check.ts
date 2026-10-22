@@ -84,9 +84,6 @@ export async function getLatestVersion({
 export async function checkForUpdate(
   signal?: AbortSignal,
 ): Promise<string | undefined> {
-  if (process.env.YUKINO_SKIP_VERSION_CHECK === "1") {
-    return undefined;
-  }
   try {
     const latest = await getLatestVersion({ signal });
     return isNewerVersion(latest, version) ? latest : undefined;

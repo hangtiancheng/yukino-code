@@ -20,6 +20,7 @@ import * as clients from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { OpenAIClient } from "@/llm/openai.js";
 import { MCPManager } from "@/mcp/manager.js";
+import * as mcpStrategy from "@/mcp/strategy.js";
 import { runPrintMode } from "@/print-mode.js";
 import { createRemoteAgent } from "@/remote/server.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
@@ -79,6 +80,8 @@ beforeEach(() => {
   process.exitCode = 0;
   cfg = {
     default_provider: 0,
+    mcp_loading: "auto",
+    theme: "auto",
     providers: [
       {
         name: "test",
@@ -126,6 +129,20 @@ afterEach(() => {
   process.exitCode = previousExitCode;
   vi.restoreAllMocks();
   rmSync(cwd, { recursive: true, force: true });
+});
+
+it("uses configured MCP loading in print mode", async () => {
+  cfg.mcp_loading = "dispatch";
+  const decide = vi.spyOn(mcpStrategy, "decideAndApply");
+  await runPrintMode({ prompt: "hello", outputFormat: "text" });
+  expect(decide).toHaveBeenCalledWith(
+    expect.anything(),
+    cfg.providers[0].base_url,
+    cfg.providers[0].protocol,
+    expect.any(Number),
+    "dispatch",
+  );
+  expect(decide.mock.calls[0][0].mcpLoadingMode).toBe("dispatch");
 });
 
 function delegate(args: Record<string, unknown>): StreamEvent[] {

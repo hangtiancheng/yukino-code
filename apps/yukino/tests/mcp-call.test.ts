@@ -1,8 +1,9 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { needsToolSearchBeta } from "@/llm/anthropic.js";
 import {
   applyMode,
+  decideAndApply,
   decideMode,
   isOfficialAnthropicEndpoint,
   measureSchemaChars,
@@ -338,15 +339,41 @@ describe("three-way routing", () => {
     expect(decideMode("", "openai-compat", 200000, 500000)).toBe("dispatch");
   });
 
-  test("native override maps non-Anthropic protocols to dispatch", () => {
-    vi.stubEnv("YUKINO_MCP_LOADING", "native");
-    try {
-      expect(decideMode("", "openai", 200000, 500000)).toBe("dispatch");
-      expect(decideMode("", "openai-compat", 200000, 500000)).toBe("dispatch");
-      expect(decideMode("", "anthropic", 200000, 500000)).toBe("native");
-    } finally {
-      vi.unstubAllEnvs();
-    }
+  test("native configuration maps non-Anthropic protocols to dispatch", () => {
+    expect(decideMode("", "openai", 200000, 500000, "native")).toBe("dispatch");
+    expect(decideMode("", "openai-compat", 200000, 500000, "native")).toBe(
+      "dispatch",
+    );
+    expect(decideMode("", "anthropic", 200000, 500000, "native")).toBe(
+      "native",
+    );
+  });
+
+  test.each(["eager", "dispatch"] as const)(
+    "uses configured %s loading regardless of schema size",
+    (loading) => {
+      expect(decideMode("", "anthropic", 200000, 0, loading)).toBe(loading);
+      expect(decideMode("", "anthropic", 200000, 500000, loading)).toBe(
+        loading,
+      );
+    },
+  );
+
+  test("applies the configured loading to MCP tool exposure", () => {
+    const registry = new ToolRegistry();
+    const tool = new FakeMcpTool("linear", "create_issue", inputSchema);
+    registry.register(tool);
+    expect(decideAndApply(registry, "", "anthropic", 200000, "dispatch")).toBe(
+      "dispatch",
+    );
+    expect(registry.mcpLoadingMode).toBe("dispatch");
+    expect(registry.exposeMcpCall).toBe(true);
+    expect(tool.deferred).toBe(true);
+    expect(decideAndApply(registry, "", "anthropic", 200000, "eager")).toBe(
+      "eager",
+    );
+    expect(registry.exposeMcpCall).toBe(false);
+    expect(tool.deferred).toBe(false);
   });
 
   test("third-party endpoint uses McpCall dispatch", () => {

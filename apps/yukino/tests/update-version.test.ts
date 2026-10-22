@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   checkForUpdate,
@@ -7,11 +7,7 @@ import {
 } from "@/update/version-check.js";
 import { version } from "@/version.js";
 
-beforeEach(() => {
-  vi.stubEnv("YUKINO_SKIP_VERSION_CHECK", "");
-});
 afterEach(() => {
-  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
@@ -126,17 +122,6 @@ describe("update versions", () => {
       'No Yukino release found for npm dist-tag "canary".',
     );
     expect(fetch).toHaveBeenCalledOnce();
-  });
-
-  it("disables only automatic checks", async () => {
-    vi.stubEnv("YUKINO_SKIP_VERSION_CHECK", "1");
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(Response.json({ version: "999.0.0" }));
-    vi.stubGlobal("fetch", fetch);
-    await expect(checkForUpdate()).resolves.toBeUndefined();
-    expect(fetch).not.toHaveBeenCalled();
-    await expect(getLatestVersion()).resolves.toBe("999.0.0");
   });
 
   it("suppresses background failures but reports explicit check failures", async () => {

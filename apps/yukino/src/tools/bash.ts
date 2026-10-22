@@ -102,17 +102,8 @@ export class BashTool implements Tool {
     return typeof command === "string" && isSafeCommand(command);
   }
 
-  /**
-   * The background subsystem needs a task manager and can be disabled
-   * wholesale with YUKINO_DISABLE_BACKGROUND_TASKS=1 (schema parameter
-   * removed, timeouts kill, Ctrl+B becomes a no-op). Instance-level gate used
-   * by the schema; execute() re-checks with the ctx-resolved manager.
-   */
   backgroundEnabled(): boolean {
-    return (
-      this.taskManager !== null &&
-      process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1"
-    );
+    return this.taskManager !== null;
   }
 
   /** True while at least one foreground Bash command runs (gates the Ctrl+B handler). */
@@ -209,8 +200,7 @@ export class BashTool implements Tool {
     // manager; only `undefined` (no loop-level decision) falls back.
     const manager =
       ctx.taskManager !== undefined ? ctx.taskManager : this.taskManager;
-    const backgroundAvailable =
-      manager !== null && process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1";
+    const backgroundAvailable = manager !== null;
     const runInBackground =
       boolArg(args, "run_in_background") && backgroundAvailable;
 
@@ -457,8 +447,7 @@ export class BashTool implements Tool {
         terminate();
       };
 
-      const backgroundAvailableHere =
-        manager !== null && process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1";
+      const backgroundAvailableHere = manager !== null;
       let timedOut = false;
       const timeoutTimer = ctx.shellTimeoutDisabled
         ? undefined

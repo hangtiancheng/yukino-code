@@ -124,6 +124,14 @@ enable_coordinator_mode: false
 # a fresh general-purpose subagent instead.
 enable_fork: true
 
+# MCP tool loading: auto | eager | native | dispatch. Default: auto, selected from the
+# provider protocol, endpoint and schema size. Native falls back to dispatch for non-Anthropic
+# protocols.
+mcp_loading: auto
+
+# Terminal theme: auto | dark | light. Default: auto, detected from the terminal.
+theme: auto
+
 # User-level MCP servers. Merged with the project-level .mcp.json; on a name collision the
 # user-level entry wins.
 mcp_servers:

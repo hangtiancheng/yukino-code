@@ -759,7 +759,6 @@ describe("App plan approval", () => {
   ])(
     "uses $mode after $approval for a plan entered with /plan",
     async ({ keys, mode, effect, message }) => {
-      vi.stubEnv("YUKINO_BYPASS_PERMISSIONS", "");
       const entered = vi.spyOn(PermissionChecker.prototype, "enterPlanMode");
       await start();
       await finishRequest(0);
@@ -840,6 +839,8 @@ describe("App MCP reload", () => {
     }));
     const loadConfig = vi.spyOn(config, "loadConfig").mockReturnValue({
       default_provider: 0,
+      mcp_loading: "auto",
+      theme: "auto",
       providers: [],
       mcp_servers: servers,
       hooks: [],
@@ -880,6 +881,8 @@ describe("App MCP reload", () => {
     changed = true;
     loadConfig.mockReturnValue({
       default_provider: 0,
+      mcp_loading: "auto",
+      theme: "auto",
       providers: [],
       mcp_servers: servers.filter(({ name }) => name !== "removed"),
       hooks: [],

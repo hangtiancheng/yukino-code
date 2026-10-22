@@ -58,8 +58,7 @@ describe("terminal theme detection", () => {
     expect(themeForRgb({ r: 24, g: 24, b: 30 })).toBe("dark");
   });
 
-  it("honors explicit theme and COLORFGBG", () => {
-    expect(themeFromEnvironment({ YUKINO_THEME: "light" })).toBe("light");
+  it("detects the theme from COLORFGBG", () => {
     expect(themeFromEnvironment({ COLORFGBG: "15;0" })).toBe("dark");
     expect(themeFromEnvironment({ COLORFGBG: "0;15" })).toBe("light");
   });

@@ -28,6 +28,7 @@ import {
 } from "@/config/constants.js";
 import type {
   AppConfig,
+  McpLoading,
   MCPServerConfig,
   HookConfig,
   SandboxYamlConfig,
@@ -190,6 +191,7 @@ interface Props {
   providers: ProviderConfig[];
   permissionMode?: string;
   mcpServers: MCPServerConfig[];
+  mcpLoading?: McpLoading;
   lspServers?: LspServerConfig[];
   hooks: HookConfig[];
   sandboxConfig?: SandboxYamlConfig;
@@ -207,6 +209,7 @@ export function App({
   providers: initialProviders,
   permissionMode,
   mcpServers,
+  mcpLoading = "auto",
   lspServers,
   hooks,
   sandboxConfig: sandboxYaml,
@@ -257,9 +260,6 @@ export function App({
   const [isStreaming, setIsStreaming] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
   const [permMode, setPermMode] = useState<PermissionMode>(() => {
-    if (process.env.YUKINO_BYPASS_PERMISSIONS === "1") {
-      return "bypassPermissions";
-    }
     const isInitialPermissionMode = (
       mode: string,
     ): mode is Exclude<PermissionMode, "plan"> =>
@@ -842,6 +842,7 @@ export function App({
             provider.base_url,
             provider.protocol,
             getContextWindow(provider),
+            mcpLoading,
           );
           mcpModeDecidedRef.current = true;
         }
@@ -849,7 +850,7 @@ export function App({
 
       syncMcpInstructions(mgr);
     },
-    [syncMcpInstructions],
+    [mcpLoading, syncMcpInstructions],
   );
 
   const runMcpOperation = useCallback(
@@ -1271,6 +1272,7 @@ export function App({
           provider.base_url,
           provider.protocol,
           contextWindowRef.current,
+          mcpLoading,
         );
         setMessages((current) => [
           ...current,
@@ -1333,6 +1335,7 @@ export function App({
         updated.base_url,
         updated.protocol,
         contextWindowRef.current,
+        mcpLoading,
       );
     } catch (err) {
       setError(`Failed to switch model: ${asErrorString(err)}`);
@@ -3040,6 +3043,7 @@ export function App({
         saved.provider.base_url,
         saved.provider.protocol,
         contextWindowRef.current,
+        mcpLoading,
       );
       setMessages((current) => [
         ...current,

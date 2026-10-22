@@ -13,11 +13,20 @@ import { WebSocket } from "ws";
 import { z } from "zod";
 
 import { Agent } from "@/agent/index.js";
-import type { ProviderConfig } from "@/config/provider-config.js";
+import {
+  globalConfigPath,
+  type ProviderConfig,
+} from "@/config/provider-config.js";
 import * as providerLogin from "@/config/provider-login.js";
 import * as historyMod from "@/history/index.js";
-import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
+import { MCPClient } from "@/mcp/client.js";
+import {
+  createRemoteAgent,
+  RemoteServer,
+  type CreateRemoteAgentOptions,
+} from "@/remote/server.js";
 import { loadSession, listSessions, saveUserMessage } from "@/session/index.js";
+import { writePrivateFileSync } from "@/storage/private.js";
 import type { Asker } from "@/tools/ask-user.js";
 import { contentToText } from "@/utils/index.js";
 
@@ -106,6 +115,66 @@ async function setup(cwd: string): Promise<{
 }
 
 describe("remote terminal-UI parity", () => {
+  it("keeps configured MCP loading through initialization, switching and reload", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-mcp-loading-"));
+    vi.spyOn(MCPClient.prototype, "connect").mockResolvedValue();
+    vi.spyOn(MCPClient.prototype, "listTools").mockResolvedValue([
+      {
+        name: "echo",
+        description: "Echo",
+        inputSchema: { type: "object", properties: {} },
+      },
+    ]);
+    const mcpServers = [{ name: "test", command: "unused" }];
+    let handle: Awaited<ReturnType<typeof createRemoteAgent>> | undefined;
+    const factory = vi.fn(async (options: CreateRemoteAgentOptions) => {
+      handle = await createRemoteAgent({ ...options, cwd });
+      return handle;
+    });
+    const server = new RemoteServer({
+      providers: [provider],
+      addr: ":18888",
+      mcpServers,
+      mcpLoading: "dispatch",
+      enableCoordinatorMode: false,
+      forkDisabled: true,
+      memoryEnabled: false,
+      agentFactory: factory,
+    });
+    try {
+      await invokePrivateAsync(server, "ensureAgent");
+      expect(factory).toHaveBeenCalledWith(
+        expect.objectContaining({ mcpLoading: "dispatch" }),
+      );
+      if (!handle) {
+        throw new Error("Expected the remote agent");
+      }
+      const registry = handle.registry;
+      expect(registry.mcpLoadingMode).toBe("dispatch");
+      await invokePrivateAsync(server, "applyProviderSwitch", [0]);
+      expect(registry.mcpLoadingMode).toBe("dispatch");
+      await invokePrivateAsync(server, "applyModel", ["next-model"]);
+      expect(registry.mcpLoadingMode).toBe("dispatch");
+      writePrivateFileSync(
+        globalConfigPath(),
+        JSON.stringify({
+          providers: [provider],
+          mcp_servers: mcpServers,
+        }),
+      );
+      await invokePrivateAsync(server, "reloadMcpServers");
+      expect(registry.mcpLoadingMode).toBe("dispatch");
+      expect(registry.exposeMcpCall).toBe(true);
+      expect(
+        registry.listTools().some((tool) => tool.name.startsWith("mcp__")),
+      ).toBe(true);
+    } finally {
+      await server.stop();
+      vi.restoreAllMocks();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("binds steering received during cold initialization when its queued turn is dispatched", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-remote-cold-steering-"));
     const { server, handle } = await setup(cwd);

@@ -24,7 +24,6 @@ export const CHARS_PER_TOKEN = 2.5;
 export const NATIVE_TOOL_USE_BETA = "advanced-tool-use-2025-11-20";
 
 export const OFFICIAL_HOSTS = new Set(["api.anthropic.com"]);
-export const ENV_OVERRIDE = "YUKINO_MCP_LOADING";
 
 // MCP image content uses {type:"image", data, mimeType}; providers use
 // {type:"image", source:{type:"base64", media_type, data}}. Unsupported mime

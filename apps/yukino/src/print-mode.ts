@@ -269,6 +269,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         provider.base_url,
         provider.protocol,
         getContextWindow(provider),
+        cfg.mcp_loading,
       );
     }
 

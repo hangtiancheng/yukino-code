@@ -65,12 +65,8 @@ export class PowerShellTool implements Tool {
   private foreground = new Map<string, { background: () => boolean }>();
   private nextForegroundId = 1;
 
-  /** Instance-level background gate; see BashTool.backgroundEnabled. */
   backgroundEnabled(): boolean {
-    return (
-      this.taskManager !== null &&
-      process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1"
-    );
+    return this.taskManager !== null;
   }
 
   /** True while at least one foreground PowerShell command runs. */
@@ -164,8 +160,7 @@ export class PowerShellTool implements Tool {
     // manager; only `undefined` (no loop-level decision) falls back.
     const manager =
       ctx.taskManager !== undefined ? ctx.taskManager : this.taskManager;
-    const backgroundAvailable =
-      manager !== null && process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1";
+    const backgroundAvailable = manager !== null;
     const runInBackground =
       boolArg(args, "run_in_background") && backgroundAvailable;
 
@@ -374,8 +369,7 @@ export class PowerShellTool implements Tool {
         terminate();
       };
 
-      const backgroundAvailableHere =
-        manager !== null && process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1";
+      const backgroundAvailableHere = manager !== null;
       let timedOut = false;
       const timeoutTimer = ctx.shellTimeoutDisabled
         ? undefined

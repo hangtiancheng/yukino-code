@@ -57,7 +57,6 @@ beforeEach(() => {
     configurable: true,
     value: true,
   });
-  vi.stubEnv("YUKINO_THEME", "");
   vi.stubEnv("COLORFGBG", "");
   vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 });
@@ -253,7 +252,7 @@ describe("terminal input report filtering", () => {
 
   it("filters responses arriving after the detection timeout", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const theme = detectTerminalTheme(input, 5);
+    const theme = detectTerminalTheme(input, { timeoutMs: 5 });
     await vi.advanceTimersByTimeAsync(5);
     expect(await theme).toBe("dark");
     expect(terminal.controls.isRaw).toBe(true);
@@ -277,15 +276,18 @@ describe("terminal input report filtering", () => {
     },
   );
 
-  it("keeps echo disabled with an explicit theme until input is disposed", async () => {
-    vi.stubEnv("YUKINO_THEME", "light");
-    const write = vi.spyOn(process.stdout, "write");
-    expect(await detectTerminalTheme(input)).toBe("light");
-    expect(write).not.toHaveBeenCalled();
-    expect(terminal.controls.isRaw).toBe(true);
-    input.dispose();
-    expect(terminal.controls.isRaw).toBe(false);
-  });
+  it.each(["dark", "light"] as const)(
+    "uses the configured %s theme without probing or enabling echo",
+    async (theme) => {
+      vi.stubEnv("COLORFGBG", theme === "dark" ? "0;15" : "15;0");
+      const write = vi.spyOn(process.stdout, "write");
+      expect(await detectTerminalTheme(input, { theme })).toBe(theme);
+      expect(write).not.toHaveBeenCalled();
+      expect(terminal.controls.isRaw).toBe(true);
+      input.dispose();
+      expect(terminal.controls.isRaw).toBe(false);
+    },
+  );
 
   it("accepts every split point of OSC and CSI reports, including BEL", async () => {
     for (const report of [osc, osc.replace("\x1b\\", "\x07"), colorScheme]) {

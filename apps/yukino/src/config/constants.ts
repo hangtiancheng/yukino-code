@@ -49,5 +49,13 @@ export const ENV_KEY_MAP = {
 
 export const VALID_PROTOCOLS = new Set(Object.keys(ENV_KEY_MAP));
 
+export const MCP_LOADING_MODES = [
+  "auto",
+  "eager",
+  "native",
+  "dispatch",
+] as const;
+export const THEME_MODES = ["auto", "dark", "light"] as const;
+
 /** Project-level MCP config file, compatible with the Claude Code format. */
 export const PROJECT_MCP_FILENAME = ".mcp.json";

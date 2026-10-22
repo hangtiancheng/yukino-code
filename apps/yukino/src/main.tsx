@@ -98,6 +98,7 @@ async function runRemoteMode(
     providers: cfg.providers,
     defaultProvider: cfg.default_provider,
     mcpServers: cfg.mcp_servers,
+    mcpLoading: cfg.mcp_loading,
     lspServers: cfg.lsp_servers,
     hookConfigs: cfg.hooks,
     sandboxConfig: cfg.sandbox,
@@ -153,7 +154,9 @@ async function runUiMode(
   let restoreTerminalOutput: (() => void) | undefined;
   let interactionSummary: InteractionSummary | undefined;
   try {
-    setThemeMode(await detectTerminalTheme(terminalInput));
+    setThemeMode(
+      await detectTerminalTheme(terminalInput, { theme: cfg.theme }),
+    );
     restoreTerminalOutput = installTerminalOutput();
     if (process.stdout.isTTY) {
       process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
@@ -163,6 +166,7 @@ async function runUiMode(
       providers: cfg.providers,
       permissionMode: cfg.permission_mode,
       mcpServers: cfg.mcp_servers,
+      mcpLoading: cfg.mcp_loading,
       lspServers: cfg.lsp_servers,
       hooks: cfg.hooks,
       sandboxConfig: cfg.sandbox,

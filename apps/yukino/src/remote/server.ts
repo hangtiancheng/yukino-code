@@ -35,7 +35,7 @@ import { currentContextTokens, forceCompact } from "@/compact/compact.js";
 import { RecoveryState } from "@/compact/recovery.js";
 import { DEFAULT_THINKING_LEVEL } from "@/config/constants.js";
 import { loadConfig, withProjectMcpServers } from "@/config/index.js";
-import type { SandboxYamlConfig } from "@/config/index.js";
+import type { McpLoading, SandboxYamlConfig } from "@/config/index.js";
 import type { HookConfig, MCPServerConfig } from "@/config/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import {
@@ -695,6 +695,7 @@ export interface CreateRemoteAgentOptions {
   cwd: string;
   hooks?: HookConfig[];
   mcpServers?: MCPServerConfig[];
+  mcpLoading?: McpLoading;
   lspServers?: LspServerConfig[];
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
@@ -1034,6 +1035,7 @@ export async function createRemoteAgent(
         provider.base_url,
         provider.protocol,
         getContextWindow(provider),
+        opts.mcpLoading,
       );
     }
   }
@@ -1123,6 +1125,7 @@ interface RemoteServerOptions {
   /** Index of the provider the server starts with; defaults to 0. */
   defaultProvider?: number;
   mcpServers?: MCPServerConfig[];
+  mcpLoading?: McpLoading;
   lspServers?: LspServerConfig[];
   hookConfigs?: HookConfig[];
   addr: string;
@@ -1664,6 +1667,7 @@ export class RemoteServer {
           cwd: cwd(),
           hooks: this.opts.hookConfigs,
           mcpServers: this.opts.mcpServers,
+          mcpLoading: this.opts.mcpLoading,
           lspServers: this.opts.lspServers,
           sandboxConfig: this.opts.sandboxConfig,
           askUser: this.createAskUserCallback(),
@@ -2787,6 +2791,7 @@ export class RemoteServer {
         updated.base_url,
         updated.protocol,
         handle.contextWindow,
+        this.opts.mcpLoading,
       );
     } catch (err) {
       this.broadcast({
@@ -2869,6 +2874,7 @@ export class RemoteServer {
         provider.base_url,
         provider.protocol,
         handle.contextWindow,
+        this.opts.mcpLoading,
       );
       this.opts.defaultProvider = index;
     } catch (err) {
@@ -3215,6 +3221,7 @@ export class RemoteServer {
         handle.provider.base_url,
         handle.provider.protocol,
         handle.contextWindow,
+        this.opts.mcpLoading,
       );
     }
     this.broadcast({
@@ -4110,6 +4117,7 @@ export class RemoteServer {
         cwd: cwd(),
         hooks: this.opts.hookConfigs,
         mcpServers: this.opts.mcpServers,
+        mcpLoading: this.opts.mcpLoading,
         lspServers: this.opts.lspServers,
         sandboxConfig: this.opts.sandboxConfig,
         askUser: this.createAskUserCallback(),

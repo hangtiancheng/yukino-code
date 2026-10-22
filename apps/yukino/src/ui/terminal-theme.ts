@@ -103,10 +103,6 @@ function ansiColor(index: number): RgbColor {
 export function themeFromEnvironment(
   env: NodeJS.ProcessEnv = process.env,
 ): TerminalTheme | undefined {
-  const requested = env.YUKINO_THEME?.toLowerCase();
-  if (requested === "dark" || requested === "light") {
-    return requested;
-  }
   const background = env.COLORFGBG?.split(";").findLast((part) =>
     /^\d+$/u.test(part.trim()),
   );
@@ -118,8 +114,14 @@ export function themeFromEnvironment(
 
 export async function detectTerminalTheme(
   input: TerminalInput,
-  timeoutMs = 100,
+  {
+    theme = "auto",
+    timeoutMs = 100,
+  }: { theme?: "auto" | TerminalTheme; timeoutMs?: number } = {},
 ): Promise<TerminalTheme> {
+  if (theme !== "auto") {
+    return theme;
+  }
   const environmentTheme = themeFromEnvironment();
   if (environmentTheme) {
     return environmentTheme;

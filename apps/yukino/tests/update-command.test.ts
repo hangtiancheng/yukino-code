@@ -23,13 +23,11 @@ beforeEach(() => {
 afterEach(() => {
   process.exitCode = initialExitCode;
   vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
 describe("yukino update", () => {
   it("installs the checked version without provider configuration", async () => {
-    vi.stubEnv("YUKINO_SKIP_VERSION_CHECK", "1");
     const fetch = vi
       .fn()
       .mockResolvedValue(Response.json({ version: "999.0.0" }));

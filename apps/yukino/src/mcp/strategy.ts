@@ -19,11 +19,11 @@
  * cache hit rate from 99.4% to 9.5%, effectively recomputing the whole history.
  */
 
+import type { McpLoading } from "@/config/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import {
   CHARS_PER_TOKEN,
   DEFAULT_EAGER_THRESHOLD_PERCENT,
-  ENV_OVERRIDE,
   MCP_TOOL_PREFIX,
   OFFICIAL_HOSTS,
 } from "@/mcp/constants.js";
@@ -57,19 +57,15 @@ export function decideMode(
   protocol: ProviderConfig["protocol"],
   contextWindow: number,
   mcpSchemaChars: number,
+  loading: McpLoading = "auto",
   thresholdPercent = DEFAULT_EAGER_THRESHOLD_PERCENT,
 ): McpLoadingMode {
-  const override = (process.env[ENV_OVERRIDE] ?? "").trim().toLowerCase();
-  if (
-    override === "eager" ||
-    override === "native" ||
-    override === "dispatch"
-  ) {
+  if (loading !== "auto") {
     // Native deferred loading is part of the Anthropic wire protocol. Even an
     // explicit override must not hide every deferred tool from other clients.
-    return override === "native" && protocol !== "anthropic"
+    return loading === "native" && protocol !== "anthropic"
       ? "dispatch"
-      : override;
+      : loading;
   }
 
   // No MCP tools, any mode would behave the same, and eager is the simplest
@@ -139,12 +135,14 @@ export function decideAndApply(
   baseUrl: string,
   protocol: ProviderConfig["protocol"],
   contextWindow: number,
+  loading: McpLoading = "auto",
 ): McpLoadingMode {
   const mode = decideMode(
     baseUrl,
     protocol,
     contextWindow,
     measureSchemaChars(registry),
+    loading,
   );
   applyMode(registry, mode);
   return mode;

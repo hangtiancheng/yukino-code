@@ -55,7 +55,6 @@ function taskIdFrom(output: string): string {
 }
 
 afterEach(() => {
-  delete process.env.YUKINO_DISABLE_BACKGROUND_TASKS;
   for (const directory of tempDirs) {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -73,13 +72,6 @@ describe("bash background execution", () => {
     const schema = JSON.stringify(bash.schema());
     expect(schema).toContain("run_in_background");
     expect(schema).toContain("task notification");
-  });
-
-  it("honors YUKINO_DISABLE_BACKGROUND_TASKS", () => {
-    const { bash } = makeTool();
-    process.env.YUKINO_DISABLE_BACKGROUND_TASKS = "1";
-    expect(bash.backgroundEnabled()).toBe(false);
-    expect(JSON.stringify(bash.schema())).not.toContain("run_in_background");
   });
 
   it("runs run_in_background commands as tasks and notifies with the output", async () => {

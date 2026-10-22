@@ -2,8 +2,11 @@ import { render } from "ink";
 import { isValidElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { globalConfigPath } from "@/config/provider-config.js";
 import type * as loggerModule from "@/logger/index.js";
 import { runMode } from "@/main.js";
+import { writePrivateFileSync } from "@/storage/private.js";
+import { detectTerminalTheme } from "@/ui/terminal-theme.js";
 
 vi.mock("ink", () => ({
   render: vi.fn(() => ({ waitUntilExit: () => Promise.resolve() })),
@@ -16,7 +19,7 @@ vi.mock("@/ui/terminal-input.js", () => ({
   },
 }));
 vi.mock("@/ui/terminal-theme.js", () => ({
-  detectTerminalTheme: () => Promise.resolve("dark"),
+  detectTerminalTheme: vi.fn(() => Promise.resolve("dark")),
 }));
 vi.mock("@/ui/terminal-output.js", () => ({
   installTerminalOutput: () => () => undefined,
@@ -52,5 +55,24 @@ describe("CLI runtime", () => {
       throw new Error("Expected the interactive application");
     }
     expect(application.props.providers).toEqual([]);
+  });
+
+  it("passes configured theme, permissions and MCP loading to the UI", async () => {
+    writePrivateFileSync(
+      globalConfigPath(),
+      "providers: []\npermission_mode: acceptEdits\nmcp_loading: dispatch\ntheme: light\n",
+    );
+    await runMode({ kind: "ui" });
+    expect(detectTerminalTheme).toHaveBeenCalledWith(expect.anything(), {
+      theme: "light",
+    });
+    const application = vi.mocked(render).mock.calls[0]?.[0];
+    if (!isValidElement(application)) {
+      throw new Error("Expected the interactive application");
+    }
+    expect(application.props).toMatchObject({
+      permissionMode: "acceptEdits",
+      mcpLoading: "dispatch",
+    });
   });
 });

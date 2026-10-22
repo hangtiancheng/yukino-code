@@ -38,7 +38,6 @@ function mount(columns = 80) {
 }
 
 beforeEach(() => {
-  vi.stubEnv("YUKINO_SKIP_VERSION_CHECK", "");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.spyOn(process.stdout, "write").mockImplementation(
     (chunk: string | Uint8Array) => {
@@ -64,7 +63,6 @@ afterEach(() => {
   }
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
 });
 
 describe("TUI update notice", () => {
@@ -158,19 +156,6 @@ describe("TUI update notice", () => {
       await Promise.resolve();
     });
     expect(latestVersionRef?.current).toBeUndefined();
-  });
-
-  it("skips automatic checks when disabled", async () => {
-    vi.stubEnv("YUKINO_SKIP_VERSION_CHECK", "1");
-    const fetch = vi.fn<typeof globalThis.fetch>();
-    vi.stubGlobal("fetch", fetch);
-    await act(async () => {
-      mount();
-      await Promise.resolve();
-    });
-    expect(frame.trim()).toBe("TUI ready");
-    expect(updateNotice?.latestVersionRef.current).toBeUndefined();
-    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("keeps the UI quiet when the installed version is current", async () => {

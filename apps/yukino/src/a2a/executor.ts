@@ -101,6 +101,7 @@ export async function createA2aRuntime(
     cwd,
     hooks: config.hooks,
     mcpServers: config.mcp_servers,
+    mcpLoading: config.mcp_loading,
     lspServers: config.lsp_servers,
     sandboxConfig: config.sandbox,
     enableCoordinatorMode: config.enable_coordinator_mode ?? false,

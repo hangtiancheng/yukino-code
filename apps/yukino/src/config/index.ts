@@ -10,7 +10,9 @@ import { z } from "zod";
 
 import {
   ENV_KEY_MAP,
+  MCP_LOADING_MODES,
   PROJECT_MCP_FILENAME,
+  THEME_MODES,
   VALID_PROTOCOLS,
 } from "@/config/constants.js";
 import {
@@ -135,6 +137,8 @@ const AppConfigSchema = z.looseObject({
   default_provider: z.number().default(0),
   providers: z.array(ProviderConfigSchema),
   permission_mode: z.string().optional(),
+  mcp_loading: z.enum(MCP_LOADING_MODES).default("auto"),
+  theme: z.enum(THEME_MODES).default("auto"),
   mcp_servers: z.array(MCPServerConfigSchema).default([]),
   lsp_servers: z
     .array(LspServerConfigSchema)
@@ -162,10 +166,8 @@ const AppConfigSchema = z.looseObject({
    */
   enable_memory: z.boolean().optional(),
   /**
-   * Environment variable defaults. Every variable Yukino reads may be listed;
-   * a value only takes effect when the variable is unset in the real
-   * environment, so explicit environment always wins. Hydrated before
-   * telemetry starts (hydrateConfigEnv) and re-applied on every config load.
+   * Environment defaults for telemetry and Yukino integrations, applied only
+   * to unset variables. Product settings use their typed config fields.
    */
   env: EnvBlockSchema.optional(),
 });
@@ -212,6 +214,7 @@ export function hydrateConfigEnv(): void {
 }
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
+export type McpLoading = AppConfig["mcp_loading"];
 
 // Reports a js-yaml failure as reason + line/column only. The exception's
 // full message embeds a source snippet, which could contain secrets, so it is
@@ -473,7 +476,7 @@ export function loadConfig(
 
   if (!existsSync(candidate)) {
     if (options.allowEmptyProviders) {
-      return { default_provider: 0, providers: [], mcp_servers: [], hooks: [] };
+      return AppConfigSchema.parse({ providers: [] });
     }
     throw new ConfigError(`No config file found, expected ${candidate}.`);
   }

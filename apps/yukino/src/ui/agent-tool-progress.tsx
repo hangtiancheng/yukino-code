@@ -76,13 +76,7 @@ function decorateTool(
   teammates: Map<string, TeammateUIState>,
 ): ToolBlockInfo {
   if (tool.toolName === "Bash" || tool.toolName === "PowerShell") {
-    // A running foreground command can be moved to the background with Ctrl+B
-    // — but only while the background subsystem is on: the UI always wires a
-    // task manager, so the env switch is the only runtime disable, and
-    // advertising a no-op keypress would be misleading.
-    const backgroundAvailable =
-      process.env.YUKINO_DISABLE_BACKGROUND_TASKS !== "1";
-    return tool.loading && !tool.progress && backgroundAvailable
+    return tool.loading && !tool.progress
       ? { ...tool, progress: "(Ctrl+B to run in background)" }
       : tool;
   }

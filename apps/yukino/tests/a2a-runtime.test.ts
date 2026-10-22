@@ -73,6 +73,8 @@ describe("A2A runtime cleanup", () => {
         });
       vi.spyOn(config, "loadConfig").mockReturnValue({
         default_provider: 0,
+        mcp_loading: "dispatch",
+        theme: "auto",
         providers: [provider],
         hooks: [],
         mcp_servers: [],
@@ -82,7 +84,10 @@ describe("A2A runtime cleanup", () => {
       try {
         const runtime = await createA2aRuntime(cwd);
         expect(remote.createRemoteAgent).toHaveBeenCalledWith(
-          expect.objectContaining({ interactionMode: "non-interactive" }),
+          expect.objectContaining({
+            interactionMode: "non-interactive",
+            mcpLoading: "dispatch",
+          }),
         );
         const cleanup = runtime.dispose().catch((error: unknown) => error);
         expect(abort).toHaveBeenCalledOnce();
