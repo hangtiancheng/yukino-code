@@ -6,6 +6,7 @@ import {
   SYSTEM_PROMPT,
   TOOLS_PROMPT,
   UPDATES_PROMPT,
+  buildEnvironmentPrompt,
 } from "@/prompt/prompts.js";
 
 export interface Section {
@@ -74,22 +75,8 @@ export interface EnvironmentContext {
 }
 
 export function environmentSection(env: EnvironmentContext): Section {
-  const lines = [
-    "# Environment",
-    ` - Working directory: ${env.cwd}`,
-    ` - Platform: ${env.os}/${env.arch}`,
-    ` - Shell: ${env.shell}`,
-    ` - Git repository: ${env.isGitRepo ? "true" : "false"}`,
-  ];
-  if (env.isGitRepo && env.gitBranch) {
-    lines.push(` - Git branch: ${env.gitBranch}`);
-  }
-  if (env.model) {
-    lines.push(` - Model: ${env.model}`);
-  }
-  lines.push(` - Date: ${env.date}`);
   return {
     name: "Environment",
-    content: lines.join("\n"),
+    content: buildEnvironmentPrompt(env),
   };
 }

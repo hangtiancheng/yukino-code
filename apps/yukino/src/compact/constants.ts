@@ -4,6 +4,11 @@
 
 export const MAX_CONSECUTIVE_FAILURES = 3;
 export const MAX_PTL_RETRIES = 3;
+// Prompt-too-long retries truncate roughly one fifth of the summarized
+// prefix: the token gap is estimated as prefixTokens / PTL_TRUNCATE_DIVISOR,
+// and when the provider reports no usable gap, that fraction of API round
+// groups is dropped instead.
+export const PTL_TRUNCATE_DIVISOR = 5;
 export const CHARS_PER_TOKEN = 3.5;
 
 // Recent-history retention budget for compaction. When we compact we keep the tail of
@@ -60,3 +65,27 @@ export const IMAGE_CHAR_EQUIV = 7000;
 export const RECOVERY_FILE_LIMIT = 5;
 export const RECOVERY_TOKENS_PER_FILE = 5_000;
 export const RECOVERY_CHARS_PER_TOKEN = 3.5;
+
+// Summary output protocol: the summarizer is instructed (see
+// SUMMARY_INSTRUCTIONS in prompts.ts) to wrap its answer in <summary> tags;
+// an unprompted <analysis> block may precede it and is stripped before use.
+export const SUMMARY_OPEN_TAG = "<summary>";
+export const SUMMARY_CLOSE_TAG = "</summary>";
+export const ANALYSIS_OPEN_TAG = "<analysis>";
+export const ANALYSIS_CLOSE_TAG = "</analysis>";
+export const SUMMARY_BLOCK_RE = /<summary>([\s\S]*?)<\/summary>/;
+export const ANALYSIS_BLOCK_RE = /<analysis>[\s\S]*?<\/analysis>/;
+
+// Synthetic user message left at the head of the summarized prefix after a
+// prompt-too-long retry drops the oldest API rounds.
+export const PTL_RETRY_MARKER =
+  "[earlier conversation truncated for compaction retry]";
+
+export const COMPACTION_TOOL_CALL_ERROR =
+  "Compaction requested a tool instead of a summary";
+export const COMPACTION_STREAM_INCOMPLETE_ERROR =
+  "Compaction summary stream ended without a completion event";
+export const COMPACTION_EMPTY_SUMMARY_ERROR =
+  "Compaction returned an empty or incomplete summary";
+export const COMPACTION_CONVERSATION_CHANGED_ERROR =
+  "Conversation changed during compaction; keeping the current history";

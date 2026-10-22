@@ -1,6 +1,19 @@
 import type { DangerousPattern } from "@/permissions/index.js";
 import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/constants.js";
 
+export const PERMISSIONS_RULES_FILENAME = "permissions.yaml";
+
+/** Truncation cap for a single argument value in HITL action descriptions. */
+export const MAX_ACTION_ARG_VALUE_CHARS = 80;
+
+export const PATH_PATTERN_TRAVERSAL_ERROR =
+  "Permission path patterns cannot traverse after a wildcard";
+
+export const RULES_PARSE_ERROR = "Cannot parse permission rules";
+
+export const ISOLATED_WORKTREE_CLAIM_ERROR =
+  "Cannot claim an existing worktree for an isolated agent";
+
 // Intentionally empty: no command patterns are currently classified as
 // dangerous, so detectDangerous() never matches and the Layer-3 deny stays
 // inert until patterns are added.

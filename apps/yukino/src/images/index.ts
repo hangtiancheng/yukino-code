@@ -2,6 +2,7 @@ import { open, readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 
 import {
+  IMAGE_FILE_EMPTY_ERROR,
   MAX_IMAGE_BYTES,
   MAX_IMAGE_BYTES_PASSTHROUGH,
   MAX_IMAGE_INPUT_BYTES,
@@ -169,7 +170,7 @@ export async function maybeResizeAndDownsampleImage(
 ): Promise<ResizedImage> {
   signal?.throwIfAborted();
   if (buf.length === 0) {
-    throw new ImageTooLargeError("Image file is empty (0 bytes)");
+    throw new ImageTooLargeError(IMAGE_FILE_EMPTY_ERROR);
   }
   if (buf.length <= MAX_IMAGE_BYTES_PASSTHROUGH) {
     return toResult(buf, mediaType);

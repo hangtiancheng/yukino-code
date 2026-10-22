@@ -10,6 +10,7 @@ import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
 } from "@/storage/private.js";
+import { TEAM_CONFIG_FILENAME, TEAMS_DIR_NAME } from "@/teams/constants.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 /** Metadata for a single team member. */
@@ -57,7 +58,7 @@ export type TeamFile = z.infer<typeof TeamFileSchema>;
  * other's teams.
  */
 export function teamsBaseDir(cwd: string): string {
-  return yukinoPath("teams", projectKey(cwd));
+  return yukinoPath(TEAMS_DIR_NAME, projectKey(cwd));
 }
 
 /**
@@ -92,7 +93,7 @@ export function listTeamNames(cwd: string): string[] {
 }
 
 export function teamConfigPath(cwd: string, name: string): string {
-  return join(teamDir(cwd, name), "config.json");
+  return join(teamDir(cwd, name), TEAM_CONFIG_FILENAME);
 }
 
 /**

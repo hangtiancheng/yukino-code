@@ -1,11 +1,20 @@
 import { createChildLogger } from "@/logger/index.js";
-import { MAX_RETAINED_FINISHED_TASKS } from "@/subagent/constants.js";
+import {
+  DEFAULT_TASK_ID_PREFIX,
+  MAX_RETAINED_FINISHED_TASKS,
+  MAX_TASK_WAIT_TIMEOUT_MS,
+  TASKS_PENDING_CLEAR_ERROR,
+  TASKS_PENDING_SESSION_SWITCH_ERROR,
+  TASK_RESTORE_INTERRUPTED_ERROR,
+  TASK_STOPPED_OUTPUT,
+  TASK_WAIT_INTERRUPTED_ERROR,
+  TASK_WAIT_TIMEOUT_RANGE_ERROR,
+} from "@/subagent/constants.js";
 import {
   BackgroundTaskStore,
   type StoredBackgroundTask,
 } from "@/subagent/task-store.js";
 import { asErrorString } from "@/utils/index.js";
-import { escapeXml } from "@/utils/xml.js";
 
 const log = createChildLogger({ module: "tasks" });
 
@@ -72,7 +81,7 @@ export class TaskManager {
 
   useSession(sessionId: string): void {
     if (this.pendingTaskIds.size > 0) {
-      throw new Error("Stop and await tasks before switching their session");
+      throw new Error(TASKS_PENDING_SESSION_SWITCH_ERROR);
     }
     const store = new BackgroundTaskStore(sessionId);
     const records = store.load();
@@ -87,7 +96,7 @@ export class TaskManager {
       const task = this.restore(record);
       if (task.status === "running") {
         task.status = "failed";
-        task.error = "Task interrupted before completion (session restored)";
+        task.error = TASK_RESTORE_INTERRUPTED_ERROR;
         task.output = `${task.output}${task.output ? "\n\n" : ""}${task.error}`;
         task.completedAt = Date.now();
         record.notified = false;
@@ -121,7 +130,9 @@ export class TaskManager {
     cancel: () => void,
     options: CreateTaskOptions = {},
   ): AgentTask {
-    const id = `${options.idPrefix ?? "agent"}-${String(nextTaskId++)}`;
+    const id = `${options.idPrefix ?? DEFAULT_TASK_ID_PREFIX}-${String(
+      nextTaskId++,
+    )}`;
     const task: AgentTask = {
       id,
       name,
@@ -232,7 +243,7 @@ export class TaskManager {
       return false;
     }
     task.status = "cancelled";
-    task.output = "Stopped by user";
+    task.output = TASK_STOPPED_OUTPUT;
     try {
       task.cancel();
     } catch (error) {
@@ -297,9 +308,9 @@ export class TaskManager {
     if (
       !Number.isInteger(options.timeoutMs) ||
       options.timeoutMs < 0 ||
-      options.timeoutMs > 60_000
+      options.timeoutMs > MAX_TASK_WAIT_TIMEOUT_MS
     ) {
-      throw new Error("Task wait timeout must be between 0 and 60000ms");
+      throw new Error(TASK_WAIT_TIMEOUT_RANGE_ERROR);
     }
     const task = this.get(id);
     if (!task) {
@@ -321,7 +332,7 @@ export class TaskManager {
           reject(
             reason instanceof Error
               ? reason
-              : new Error("Task wait interrupted"),
+              : new Error(TASK_WAIT_INTERRUPTED_ERROR),
           );
         };
         options.abortSignal?.addEventListener("abort", abort, { once: true });
@@ -394,22 +405,10 @@ export class TaskManager {
 
   clear(): void {
     if (this.pendingTaskIds.size > 0) {
-      throw new Error("Stop and await tasks before clearing their manager");
+      throw new Error(TASKS_PENDING_CLEAR_ERROR);
     }
     this.tasks.clear();
     this.notifiedTaskIds.clear();
     this.emitChange();
   }
-}
-
-export function formatAgentTaskNotification(task: AgentTask): string {
-  return [
-    `<task-notification task_id="${escapeXml(task.id)}" status="${escapeXml(task.status)}">`,
-    `name=${escapeXml(task.name)}`,
-    ...(task.transcriptPath
-      ? [`transcript_path=${escapeXml(task.transcriptPath)}`]
-      : []),
-    escapeXml(task.output),
-    "</task-notification>",
-  ].join("\n");
 }

@@ -1,4 +1,8 @@
 import type { TaskManager } from "@/subagent/task-manager.js";
+import {
+  TASK_STOP_TARGET_REQUIRED_ERROR,
+  TEAMMATE_STOP_LEADER_ONLY_ERROR,
+} from "@/teams/constants.js";
 import type { TeamManager } from "@/teams/index.js";
 import {
   TASK_STOP_SUBAGENT_TOOL_DESCRIPTION,
@@ -80,7 +84,7 @@ export class TaskStopTool implements Tool {
     const taskId = strArg(args, "task_id", "");
     if ((!name && !taskId) || (name && taskId)) {
       return {
-        output: "Error: pass exactly one of teammate or task_id",
+        output: TASK_STOP_TARGET_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -108,7 +112,7 @@ export class TaskStopTool implements Tool {
     }
 
     if (!this.leaderAccess) {
-      return { output: "Only the leader can stop teammates.", isError: true };
+      return { output: TEAMMATE_STOP_LEADER_ONLY_ERROR, isError: true };
     }
 
     // Teammate names may collide across teams; only stop within the team that actually has this member to avoid killing a namesake

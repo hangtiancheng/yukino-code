@@ -5,9 +5,16 @@ import {
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
   MSG_TEXT,
+  NO_ACTIVE_TEAM_FOR_SENDER_ERROR,
+  NO_ACTIVE_TEAM_MESSAGE,
+  PLAN_APPROVAL_LEADER_ONLY_ERROR,
+  PLAN_APPROVAL_RESPONSE_REQUIRED_ERROR,
+  SHUTDOWN_LEADER_ONLY_ERROR,
+  SHUTDOWN_RESPONSE_APPROVE_REQUIRED_ERROR,
 } from "@/teams/constants.js";
 import type { TeamManager, Team } from "@/teams/index.js";
 import {
+  buildSendMessageTypeDescription,
   LIST_TEAM_TOOL_DESCRIPTION,
   SEND_MESSAGE_TOOL_DESCRIPTION,
   TEAM_CREATE_TOOL_DESCRIPTION,
@@ -112,12 +119,9 @@ export class SendMessageTool implements Tool {
               MSG_SHUTDOWN_RESPONSE,
               ...(this.mgr.coordinatorMode ? [MSG_PLAN_APPROVAL_RESPONSE] : []),
             ],
-            description:
-              "Message kind, defaults to 'text'. Use 'shutdown_request' to ask a teammate " +
-              "to wrap up (it replies with shutdown_response). " +
-              (this.mgr.coordinatorMode
-                ? "The leader must review each plan_approval_request and reply with plan_approval_response, approve, request_id, and substantive feedback in content."
-                : "Teammate plans are automatically approved by the runtime."),
+            description: buildSendMessageTypeDescription(
+              this.mgr.coordinatorMode,
+            ),
           },
           request_id: {
             type: "string",
@@ -143,7 +147,7 @@ export class SendMessageTool implements Tool {
     const message = strArg(args, "content");
     const t = this.senderTeam();
     if (!t) {
-      return { output: "No active team found for this sender.", isError: true };
+      return { output: NO_ACTIVE_TEAM_FOR_SENDER_ERROR, isError: true };
     }
 
     // Structured messages use a dedicated channel: they carry a requestId and an
@@ -164,14 +168,13 @@ export class SendMessageTool implements Tool {
             ctx.permissionChecker?.isSubagent
           ) {
             return {
-              output: "Only the leader can approve or reject teammate plans.",
+              output: PLAN_APPROVAL_LEADER_ONLY_ERROR,
               isError: true,
             };
           }
           if (!requestId || approve === undefined || !message.trim()) {
             return {
-              output:
-                "plan_approval_response requires request_id, approve, and review feedback in content.",
+              output: PLAN_APPROVAL_RESPONSE_REQUIRED_ERROR,
               isError: true,
             };
           }
@@ -187,7 +190,7 @@ export class SendMessageTool implements Tool {
         case MSG_SHUTDOWN_REQUEST:
           if (this.senderName !== LEADER_NAME) {
             return {
-              output: "Only the leader can request teammate shutdown.",
+              output: SHUTDOWN_LEADER_ONLY_ERROR,
               isError: true,
             };
           }
@@ -196,7 +199,7 @@ export class SendMessageTool implements Tool {
         case MSG_SHUTDOWN_RESPONSE:
           if (approve === undefined) {
             return {
-              output: "shutdown_response requires 'approve'.",
+              output: SHUTDOWN_RESPONSE_APPROVE_REQUIRED_ERROR,
               isError: true,
             };
           }
@@ -289,7 +292,7 @@ export class TeamListTool implements Tool {
     const team = this.mgr.list()[0];
     if (!team) {
       return Promise.resolve({
-        output: "No active team.",
+        output: NO_ACTIVE_TEAM_MESSAGE,
         isError: false,
       });
     }
@@ -325,7 +328,7 @@ export class TeamDeleteTool implements Tool {
   async execute(): Promise<ToolResult> {
     const team = this.mgr.list()[0];
     if (!team) {
-      return { output: "No active team.", isError: false };
+      return { output: NO_ACTIVE_TEAM_MESSAGE, isError: false };
     }
     await this.mgr.delete(team.name);
     return { output: `Team '${team.name}' deleted.`, isError: false };

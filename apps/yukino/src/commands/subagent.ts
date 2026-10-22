@@ -5,6 +5,7 @@ import { SUBAGENT_COMMAND_UNAVAILABLE } from "@/commands/constants.js";
 import type { ConversationManager } from "@/conversation/index.js";
 import { recordInput, type InputEntry } from "@/history/index.js";
 import { saveMessage, saveUserMessage } from "@/session/index.js";
+import { PLAN_AGENT_NAME } from "@/subagent/constants.js";
 import { runPlanAgent } from "@/subagent/plan.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type { ToolContext, ToolResult } from "@/tools/types.js";
@@ -55,7 +56,7 @@ export async function runSubagentCommand(
   const args = {
     kind: "subagent",
     subagent_type: agentName,
-    fork: agentName === "plan",
+    fork: agentName === PLAN_AGENT_NAME,
     description: input,
     prompt,
     run_in_background: false,
@@ -64,7 +65,7 @@ export async function runSubagentCommand(
   context.onEvent({ type: "tool_use", toolName: "Agent", toolId, args });
   const toolContext = { ...context, toolCallId: toolId };
   const result =
-    agentName === "plan"
+    agentName === PLAN_AGENT_NAME
       ? await runPlanAgent(context.registry, toolContext, prompt)
       : await agent.execute(toolContext, args);
   record("assistant", result.output);

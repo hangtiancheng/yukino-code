@@ -6,3 +6,5 @@
 // catch.
 export const MESSAGE_AGGREGATE_LIMIT = 200000;
 export const TOOL_RESULT_PREVIEW_CHARS = 2000;
+export const SPILL_DIR_NAME = "tool-results";
+export const SPILL_FILE_EXTENSION = ".txt";

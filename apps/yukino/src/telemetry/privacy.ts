@@ -1,12 +1,16 @@
 import { homedir } from "node:os";
 
+import {
+  REDACTED_PLACEHOLDER,
+  SENSITIVE_KEY_PATTERN,
+} from "@/telemetry/constants.js";
 import { isRecord } from "@/utils/index.js";
 import { redactCredentials, environmentSecrets } from "@/utils/redact.js";
 
 export function scrubTelemetryPayload(value: unknown): void {
   const secrets = environmentSecrets();
   const redact = (text: string) => {
-    text = redactCredentials(text, secrets, "[redacted]");
+    text = redactCredentials(text, secrets, REDACTED_PLACEHOLDER);
     const home = homedir();
     if (home && home !== "/") {
       text = text
@@ -32,12 +36,8 @@ export function scrubTelemetryPayload(value: unknown): void {
       }
     } else if (isRecord(item)) {
       for (const [key, entry] of Object.entries(item)) {
-        if (
-          /(?:authorization|api[_-]?key|password|secret|credential|(?:^|[_-])token(?:$|[_-])|access[_-]?token|refresh[_-]?token|private[_-]?key|(?:^|[_-])dsn(?:$|[_-])|^(?:cookie|set-cookie)$)/iu.test(
-            key,
-          )
-        ) {
-          item[key] = "[redacted]";
+        if (SENSITIVE_KEY_PATTERN.test(key)) {
+          item[key] = REDACTED_PLACEHOLDER;
         } else if (typeof entry === "string") {
           item[key] = redact(entry);
         } else {

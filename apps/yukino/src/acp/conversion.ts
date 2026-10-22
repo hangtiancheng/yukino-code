@@ -11,6 +11,23 @@ import type {
   Usage,
 } from "@agentclientprotocol/sdk";
 
+import {
+  AUDIO_PROMPT_UNSUPPORTED_ERROR,
+  BINARY_RESOURCE_UNSUPPORTED_ERROR,
+  EMPTY_PROMPT_ERROR,
+  IMAGE_PROMPT_UNSUPPORTED_ERROR,
+  SESSION_UPDATE_AGENT_MESSAGE_CHUNK,
+  SESSION_UPDATE_AGENT_THOUGHT_CHUNK,
+  SESSION_UPDATE_TOOL_CALL,
+  SESSION_UPDATE_TOOL_CALL_UPDATE,
+  SESSION_UPDATE_USAGE_UPDATE,
+  SESSION_UPDATE_USER_MESSAGE_CHUNK,
+  STOP_REASON_CANCELLED,
+  STOP_REASON_END_TURN,
+  STOP_REASON_MAX_TOKENS,
+  STOP_REASON_MAX_TURN_REQUESTS,
+  STOP_REASON_REFUSAL,
+} from "@/acp/constants.js";
 import type { AgentEvent } from "@/agent/events.js";
 import { COMPACT_BOUNDARY } from "@/session/constants.js";
 import { type SessionMessage } from "@/session/index.js";
@@ -36,27 +53,24 @@ export function promptToText(prompt: ContentBlock[]): string {
         }
         throw RequestError.invalidParams(
           undefined,
-          "Binary resources are not supported.",
+          BINARY_RESOURCE_UNSUPPORTED_ERROR,
         );
       case "image":
         throw RequestError.invalidParams(
           undefined,
-          "Image prompts are not supported.",
+          IMAGE_PROMPT_UNSUPPORTED_ERROR,
         );
       case "audio":
         throw RequestError.invalidParams(
           undefined,
-          "Audio prompts are not supported.",
+          AUDIO_PROMPT_UNSUPPORTED_ERROR,
         );
     }
   }
 
   const text = parts.join("\n\n").trim();
   if (!text) {
-    throw RequestError.invalidParams(
-      undefined,
-      "Prompt must contain text or a resource link.",
-    );
+    throw RequestError.invalidParams(undefined, EMPTY_PROMPT_ERROR);
   }
   return text;
 }
@@ -104,7 +118,7 @@ function toolCallUpdate(
   cwd: string,
 ): SessionUpdate {
   return {
-    sessionUpdate: "tool_call",
+    sessionUpdate: SESSION_UPDATE_TOOL_CALL,
     toolCallId,
     title: toolName,
     kind: toolKind(toolName),
@@ -121,7 +135,7 @@ function toolResultUpdate(
   elapsed?: number,
 ): SessionUpdate {
   return {
-    sessionUpdate: "tool_call_update",
+    sessionUpdate: SESSION_UPDATE_TOOL_CALL_UPDATE,
     toolCallId,
     status: isError ? "failed" : "completed",
     content: output
@@ -143,12 +157,12 @@ export function agentEventToUpdate(
   switch (event.type) {
     case "stream_text":
       return {
-        sessionUpdate: "agent_message_chunk",
+        sessionUpdate: SESSION_UPDATE_AGENT_MESSAGE_CHUNK,
         content: { type: "text", text: event.text },
       };
     case "thinking_text":
       return {
-        sessionUpdate: "agent_thought_chunk",
+        sessionUpdate: SESSION_UPDATE_AGENT_THOUGHT_CHUNK,
         content: { type: "text", text: event.text },
       };
     case "tool_use":
@@ -162,7 +176,7 @@ export function agentEventToUpdate(
       );
     case "usage":
       return {
-        sessionUpdate: "usage_update",
+        sessionUpdate: SESSION_UPDATE_USAGE_UPDATE,
         used:
           event.usage.inputTokens +
           event.usage.cacheReadInputTokens +
@@ -207,16 +221,16 @@ export function emptyUsage(): Usage {
 export function stopReason(reason: string): StopReason {
   switch (reason) {
     case "max_tokens":
-      return "max_tokens";
+      return STOP_REASON_MAX_TOKENS;
     case "max_turn_requests":
-      return "max_turn_requests";
+      return STOP_REASON_MAX_TURN_REQUESTS;
     case "refusal":
-      return "refusal";
+      return STOP_REASON_REFUSAL;
     case "cancelled":
     case "interrupted":
-      return "cancelled";
+      return STOP_REASON_CANCELLED;
     default:
-      return "end_turn";
+      return STOP_REASON_END_TURN;
   }
 }
 
@@ -240,8 +254,8 @@ export function* historyNotifications(
         update: {
           sessionUpdate:
             message.role === "assistant"
-              ? "agent_message_chunk"
-              : "user_message_chunk",
+              ? SESSION_UPDATE_AGENT_MESSAGE_CHUNK
+              : SESSION_UPDATE_USER_MESSAGE_CHUNK,
           content: { type: "text", text },
         },
       };

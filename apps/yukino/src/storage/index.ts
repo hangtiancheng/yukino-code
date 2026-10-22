@@ -4,7 +4,9 @@ import { join } from "node:path";
 
 import {
   ARTIFACTS_DIR_NAME,
+  INVALID_SESSION_ID_ERROR,
   PROJECTS_DIR_NAME,
+  SESSION_ID_RE,
   SESSIONS_DIR_NAME,
   YUKINO_DIR_NAME,
 } from "@/storage/constants.js";
@@ -22,8 +24,8 @@ export function yukinoPath(...segments: string[]): string {
 }
 
 export function sessionPath(sessionId: string, ...segments: string[]): string {
-  if (!/^[A-Za-z0-9_-]+$/u.test(sessionId)) {
-    throw new Error("Invalid session ID");
+  if (!SESSION_ID_RE.test(sessionId)) {
+    throw new Error(INVALID_SESSION_ID_ERROR);
   }
   return yukinoPath(
     SESSIONS_DIR_NAME,

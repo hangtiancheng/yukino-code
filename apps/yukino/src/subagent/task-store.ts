@@ -10,6 +10,11 @@ import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
 } from "@/storage/private.js";
+import {
+  BACKGROUND_TASKS_DIR_NAME,
+  TASK_RECORD_EXTENSION,
+  TASK_RECORD_TMP_SUFFIX,
+} from "@/subagent/constants.js";
 
 const TaskId = z.string().regex(/^[\w-]+-[1-9]\d*$/u);
 const TaskRecord = z.object({
@@ -32,14 +37,14 @@ export class BackgroundTaskStore {
   private directory: string;
 
   constructor(sessionId: string) {
-    this.directory = sessionPath(sessionId, "background-tasks");
+    this.directory = sessionPath(sessionId, BACKGROUND_TASKS_DIR_NAME);
   }
 
   get(id: string): StoredBackgroundTask | undefined {
     if (!TaskId.safeParse(id).success) {
       return undefined;
     }
-    const path = join(this.directory, `${id}.json`);
+    const path = join(this.directory, `${id}${TASK_RECORD_EXTENSION}`);
     if (!existsSync(path)) {
       return undefined;
     }
@@ -55,8 +60,8 @@ export class BackgroundTaskStore {
       return [];
     }
     return readdirSync(this.directory)
-      .filter((file) => file.endsWith(".json"))
-      .map((file) => this.get(file.slice(0, -5)))
+      .filter((file) => file.endsWith(TASK_RECORD_EXTENSION))
+      .map((file) => this.get(file.slice(0, -TASK_RECORD_EXTENSION.length)))
       .filter((record): record is StoredBackgroundTask => record !== undefined)
       .sort(
         (a, b) =>
@@ -68,8 +73,8 @@ export class BackgroundTaskStore {
   save(record: StoredBackgroundTask): void {
     TaskRecord.parse(record);
     mkdirSync(this.directory, { recursive: true });
-    const path = join(this.directory, `${record.id}.json`);
-    const temporary = `${path}.${randomUUID()}.tmp`;
+    const path = join(this.directory, `${record.id}${TASK_RECORD_EXTENSION}`);
+    const temporary = `${path}.${randomUUID()}${TASK_RECORD_TMP_SUFFIX}`;
     try {
       writeFileSync(temporary, JSON.stringify(record), "utf8");
       renameSync(temporary, path);

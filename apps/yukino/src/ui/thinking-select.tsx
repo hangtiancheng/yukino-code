@@ -4,7 +4,12 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { THINKING_LEVELS } from "@/config/constants.js";
 import { type ThinkingLevel } from "@/config/provider-config.js";
-import { ICONS, THEME, THINKING_DESCRIPTIONS } from "@/ui/constants.js";
+import {
+  ICONS,
+  TERMINAL_TOO_SHORT,
+  THEME,
+  THINKING_DESCRIPTIONS,
+} from "@/ui/constants.js";
 import { getListWindowStart } from "@/ui/list-window.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { selectorChrome } from "@/ui/selector-layout.js";
@@ -95,7 +100,7 @@ export function ThinkingSelect({
       >
         {count === 0 && levels.length > 0 ? (
           <Text color={THEME.muted} wrap="truncate-end">
-            {truncateToWidth("Terminal too short", contentWidth)}
+            {truncateToWidth(TERMINAL_TOO_SHORT, contentWidth)}
           </Text>
         ) : (
           levels.slice(start, start + count).map((level, index) => {

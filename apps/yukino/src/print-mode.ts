@@ -31,11 +31,9 @@ import {
 } from "@/session/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/constants.js";
+import { formatAgentTaskNotification } from "@/subagent/prompts.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
-import {
-  TaskManager,
-  formatAgentTaskNotification,
-} from "@/subagent/task-manager.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,

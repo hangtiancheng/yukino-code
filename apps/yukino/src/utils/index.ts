@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 
 import { createChildLogger } from "@/logger/index.js";
-import { NUMERIC_LITERAL } from "@/utils/constants.js";
+import { NUMERIC_LITERAL, TOOL_ARGS_SUMMARY_CHARS } from "@/utils/constants.js";
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
 export * as Constants from "@/utils/constants.js";
@@ -220,13 +220,13 @@ export function formatToolArgs(args: Record<string, unknown>): string {
     return strArg(args, "command");
   }
   if (args.file_path) {
-    return truncate(strArg(args, "file_path"), 80);
+    return truncate(strArg(args, "file_path"), TOOL_ARGS_SUMMARY_CHARS);
   }
   if (args.pattern) {
-    return truncate(strArg(args, "pattern"), 80);
+    return truncate(strArg(args, "pattern"), TOOL_ARGS_SUMMARY_CHARS);
   }
   if (args.description) {
-    return truncate(strArg(args, "description"), 80);
+    return truncate(strArg(args, "description"), TOOL_ARGS_SUMMARY_CHARS);
   }
   return "";
 }

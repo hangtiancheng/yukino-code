@@ -1,10 +1,15 @@
-import { REVIEW_COMMAND_DESCRIPTION } from "@/commands/constants.js";
+import {
+  REVIEW_COMMAND_DESCRIPTION,
+  SESSION_ACTIVE_MESSAGE,
+  THINKING_LEVEL_CONTROL_UNAVAILABLE,
+} from "@/commands/constants.js";
 import { buildPlanPrompt, buildReviewPrompt } from "@/commands/prompts.js";
 import { THINKING_LEVELS } from "@/config/constants.js";
 import {
   isValidThinkingLevel,
   type ThinkingLevel,
 } from "@/config/provider-config.js";
+import { PLAN_AGENT_NAME, REVIEW_AGENT_NAME } from "@/subagent/constants.js";
 
 export type CommandType = "local" | "local_ui" | "prompt" | "skill_fork";
 
@@ -219,13 +224,13 @@ export function createDefaultRegistry(): CommandRegistry {
     name: "session",
     type: "local",
     description: "Show session info",
-    handler: () => "Session is active. Use /resume to list past sessions.",
+    handler: () => SESSION_ACTIVE_MESSAGE,
   });
 
   registry.register({
     name: "plan",
     type: "prompt",
-    agent: "plan",
+    agent: PLAN_AGENT_NAME,
     description: "Plan the current task in a foreground agent",
     handler: (ctx) => buildPlanPrompt(ctx.args),
   });
@@ -278,7 +283,7 @@ export function createDefaultRegistry(): CommandRegistry {
     name: "review",
     type: "prompt",
     description: REVIEW_COMMAND_DESCRIPTION,
-    agent: "review",
+    agent: REVIEW_AGENT_NAME,
     handler: ({ args }) => buildReviewPrompt(args),
   });
 
@@ -334,7 +339,7 @@ export function createDefaultRegistry(): CommandRegistry {
         return `Thinking level "${arg}" is not supported. Available levels: ${available.join(", ")}`;
       }
       if (!ctx.setThinkingLevel) {
-        return "Thinking level control is not available in this context.";
+        return THINKING_LEVEL_CONTROL_UNAVAILABLE;
       }
       let effective: ThinkingLevel;
       try {

@@ -17,13 +17,23 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import {
+  DEFAULT_MEMORY_TYPE,
+  FRONTMATTER_BLOCK_RE,
   MAX_ENTRYPOINT_BYTES,
   MAX_ENTRYPOINT_LINES,
+  MAX_SELECTED_MEMORIES,
+  MEMORY_DIR_NAME,
   MEMORY_INDEX_NAME,
   SELECTOR_ANSWER_RESERVE_TOKENS,
 } from "@/memory/constants.js";
-import { memoryAge, memoryFreshnessText } from "@/memory/memory-age.js";
-import { SELECT_MEMORIES_SYSTEM_PROMPT } from "@/memory/prompts.js";
+import { memoryAge } from "@/memory/memory-age.js";
+import {
+  ACTIVE_MEMORIES_HEADER,
+  RELEVANT_MEMORIES_PREAMBLE,
+  SELECT_MEMORIES_SYSTEM_PROMPT,
+  buildPartialIndexWarning,
+  memoryFreshnessText,
+} from "@/memory/prompts.js";
 import type { PermissionChecker } from "@/permissions/index.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
 import {
@@ -123,8 +133,8 @@ export class MemoryManager {
     cwd: string,
     private checker?: PermissionChecker,
   ) {
-    this.userDir = yukinoPath("memory");
-    this.projectDir = projectPath(cwd, "memory");
+    this.userDir = yukinoPath(MEMORY_DIR_NAME);
+    this.projectDir = projectPath(cwd, MEMORY_DIR_NAME);
   }
 
   private readMemory(
@@ -148,7 +158,7 @@ export class MemoryManager {
           path: fullPath,
           name: parsed.name ?? basename(fullPath, ".md"),
           description: parsed.description ?? "",
-          type: parsed.type ?? "reference",
+          type: parsed.type ?? DEFAULT_MEMORY_TYPE,
           content: parsed.body,
         },
         mtimeMs: stat.mtimeMs,
@@ -232,7 +242,7 @@ export class MemoryManager {
     const overBytes = byteCount > MAX_ENTRYPOINT_BYTES;
 
     if (!overLines && !overBytes) {
-      return `Active memories:\n${joined}`;
+      return `${ACTIVE_MEMORIES_HEADER}\n${joined}`;
     }
 
     const body = capEntrypoint(lines.slice(0, MAX_ENTRYPOINT_LINES).join("\n"));
@@ -249,9 +259,8 @@ export class MemoryManager {
     }
 
     return (
-      `Active memories:\n${body}\n\n` +
-      `> WARNING: Partial ${MEMORY_INDEX_NAME}: ${reason}. Check topic files before adding duplicates. ` +
-      `Keep entries under ~200 chars; move details into topic files.`
+      `${ACTIVE_MEMORIES_HEADER}\n${body}\n\n` +
+      buildPartialIndexWarning(reason)
     );
   }
 
@@ -452,7 +461,7 @@ export class MemoryManager {
       }
       selected.push({ path: h.filePath, mtimeMs: h.mtimeMs });
       seen.add(h.filePath);
-      if (selected.length >= 5) {
+      if (selected.length >= MAX_SELECTED_MEMORIES) {
         break;
       }
     }
@@ -500,9 +509,7 @@ export class MemoryManager {
       return "";
     }
 
-    const parts: string[] = [
-      "Relevant memories: prior evidence, not current authorization.\n",
-    ];
+    const parts: string[] = [`${RELEVANT_MEMORIES_PREAMBLE}\n`];
     for (const mem of memories) {
       let content: string;
       try {
@@ -597,7 +604,7 @@ function parseFrontmatter(content: string): ParsedFrontmatter {
     return { body: content };
   }
 
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
+  const match = FRONTMATTER_BLOCK_RE.exec(content);
   if (!match) {
     throw new Error("Memory frontmatter is missing its closing delimiter");
   }

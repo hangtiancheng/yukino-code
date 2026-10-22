@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { PACKAGE_URL, VERSION_PATTERN } from "@/update/constants.js";
+import {
+  DEFAULT_DIST_TAG,
+  PACKAGE_URL,
+  REGISTRY_FETCH_TIMEOUT_MS,
+  VERSION_PATTERN,
+} from "@/update/constants.js";
 import { version } from "@/version.js";
 
 function parseVersion(value: string) {
@@ -50,7 +55,7 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 }
 
 export async function getLatestVersion({
-  tag = "latest",
+  tag = DEFAULT_DIST_TAG,
   signal,
 }: {
   tag?: string;
@@ -59,7 +64,7 @@ export async function getLatestVersion({
   if (!tag || encodeURIComponent(tag) !== tag || [".", ".."].includes(tag)) {
     throw new Error(`Invalid npm dist-tag: ${tag}`);
   }
-  const timeout = AbortSignal.timeout(10_000);
+  const timeout = AbortSignal.timeout(REGISTRY_FETCH_TIMEOUT_MS);
   const response = await fetch(`${PACKAGE_URL}/${encodeURIComponent(tag)}`, {
     headers: {
       accept: "application/json",

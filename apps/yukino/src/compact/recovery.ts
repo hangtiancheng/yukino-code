@@ -3,6 +3,12 @@ import {
   RECOVERY_FILE_LIMIT,
   RECOVERY_TOKENS_PER_FILE,
 } from "@/compact/constants.js";
+import {
+  RECOVERY_FILES_HEADER,
+  RECOVERY_FILES_NOTE,
+  RECOVERY_FOOTER_NOTE,
+  RECOVERY_TOOLS_INTRO,
+} from "@/compact/prompts.js";
 
 function approxTokens(s: string): number {
   if (!s) {
@@ -66,10 +72,8 @@ export class RecoveryState {
 
     const recentFiles = this.snapshotFiles();
     if (recentFiles.length > 0) {
-      sections.push("## Recently read files\n");
-      sections.push(
-        "These snapshots are what the file-reading tool last returned. Re-open with the tool if you need the current bytes.\n",
-      );
+      sections.push(RECOVERY_FILES_HEADER);
+      sections.push(RECOVERY_FILES_NOTE);
       for (const f of recentFiles) {
         const content = truncateByTokens(f.content, RECOVERY_TOKENS_PER_FILE);
         const ts = new Date(f.timestamp)
@@ -83,8 +87,7 @@ export class RecoveryState {
 
     if (toolSchemaNames.length > 0) {
       sections.push(
-        "## Available tools\n\nYou still have access to the following tools — call them directly when the task needs one:\n\n" +
-          toolSchemaNames.map((n) => `- ${n}`).join("\n"),
+        RECOVERY_TOOLS_INTRO + toolSchemaNames.map((n) => `- ${n}`).join("\n"),
       );
     }
 
@@ -92,9 +95,7 @@ export class RecoveryState {
       return "";
     }
 
-    sections.push(
-      "## Note\n\nEverything above the divider is reconstructed context. For exact code, error strings, or user-typed text, re-read the source rather than guess from the summary.",
-    );
+    sections.push(RECOVERY_FOOTER_NOTE);
 
     return sections.join("\n\n");
   }

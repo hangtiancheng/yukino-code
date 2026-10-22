@@ -3,7 +3,7 @@ import type { DOMElement } from "ink";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { ICONS, THEME } from "@/ui/constants.js";
+import { ICONS, TERMINAL_TOO_SHORT, THEME } from "@/ui/constants.js";
 import { CursorText } from "@/ui/cursor-text.js";
 import { getListWindowStart } from "@/ui/list-window.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
@@ -127,7 +127,7 @@ export function SelectorList({
           </Text>
         ) : visibleCount === 0 ? (
           <Text color={THEME.muted} wrap="truncate-end">
-            {truncateToWidth("Terminal too short", contentWidth)}
+            {truncateToWidth(TERMINAL_TOO_SHORT, contentWidth)}
           </Text>
         ) : (
           children(windowStart, visibleCount, contentWidth)

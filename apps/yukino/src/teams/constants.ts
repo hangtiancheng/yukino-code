@@ -61,3 +61,24 @@ export const IDLE_POLL_INTERVAL_MS = 500;
 export const MAX_READ_MESSAGES = 500;
 
 export const MAX_RETAINED_TERMINATED_MEMBERS = 200;
+
+export const TEAM_CONFIG_FILENAME = "config.json";
+export const TEAMS_DIR_NAME = "teams";
+
+export const EMPTY_TEAMMATE_PLAN_MESSAGE = "(The teammate returned no plan.)";
+
+export const NO_ACTIVE_TEAM_MESSAGE = "No active team.";
+export const NO_ACTIVE_TEAM_FOR_SENDER_ERROR =
+  "No active team found for this sender.";
+export const PLAN_APPROVAL_LEADER_ONLY_ERROR =
+  "Only the leader can approve or reject teammate plans.";
+export const PLAN_APPROVAL_RESPONSE_REQUIRED_ERROR =
+  "plan_approval_response requires request_id, approve, and review feedback in content.";
+export const SHUTDOWN_LEADER_ONLY_ERROR =
+  "Only the leader can request teammate shutdown.";
+export const SHUTDOWN_RESPONSE_APPROVE_REQUIRED_ERROR =
+  "shutdown_response requires 'approve'.";
+export const TASK_STOP_TARGET_REQUIRED_ERROR =
+  "Error: pass exactly one of teammate or task_id";
+export const TEAMMATE_STOP_LEADER_ONLY_ERROR =
+  "Only the leader can stop teammates.";

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createChildLogger } from "@/logger/index.js";
+import { PRIVATE_BOARD_ID_PREFIX } from "@/todo/constants.js";
 import { validateTaskDependencies } from "@/todo/dependencies.js";
 import type { StoredTask, TaskStore } from "@/todo/store.js";
 import {
@@ -32,7 +33,7 @@ export class TaskList implements TaskBoard {
   private nextId = 1;
   private store?: TaskStore;
   private listeners = new Set<(tasks: Task[]) => void>();
-  private memoryId = `private:${randomUUID()}`;
+  private memoryId = `${PRIVATE_BOARD_ID_PREFIX}${randomUUID()}`;
 
   constructor(store?: TaskStore) {
     if (store) {

@@ -20,7 +20,20 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 
-import { SESSION_ID_PATTERN } from "@/acp/constants.js";
+import {
+  ADDITIONAL_DIRECTORIES_UNSUPPORTED_ERROR,
+  AGENT_NAME,
+  AGENT_TITLE,
+  CLIENT_MCP_SERVERS_UNSUPPORTED_ERROR,
+  INVALID_SESSION_ID_ERROR,
+  NO_PROVIDER_ERROR,
+  SESSION_CWD_MISMATCH_ERROR,
+  SESSION_CWD_NOT_ABSOLUTE_ERROR,
+  SESSION_ID_PATTERN,
+  SESSION_PAGINATION_UNSUPPORTED_ERROR,
+  STOP_REASON_CANCELLED,
+  STOP_REASON_END_TURN,
+} from "@/acp/constants.js";
 import {
   addUsage,
   agentEventToUpdate,
@@ -97,7 +110,7 @@ async function createRuntime(
     config.default_provider,
   );
   if (!provider) {
-    throw acp.RequestError.internalError(undefined, "No provider configured.");
+    throw acp.RequestError.internalError(undefined, NO_PROVIDER_ERROR);
   }
   const runtime = await createRemoteAgent({
     enableModelPlanMode: false,
@@ -130,14 +143,14 @@ function validateCwd(cwd: string): void {
   if (!isAbsolute(cwd)) {
     throw acp.RequestError.invalidParams(
       undefined,
-      "Session cwd must be absolute.",
+      SESSION_CWD_NOT_ABSOLUTE_ERROR,
     );
   }
 }
 
 function validateSessionId(sessionId: string): void {
   if (!SESSION_ID_PATTERN.test(sessionId)) {
-    throw acp.RequestError.invalidParams(undefined, "Invalid session ID.");
+    throw acp.RequestError.invalidParams(undefined, INVALID_SESSION_ID_ERROR);
   }
 }
 
@@ -150,13 +163,13 @@ function validateWorkspaceInputs(params: {
   if ((params.mcpServers?.length ?? 0) > 0) {
     throw acp.RequestError.invalidParams(
       undefined,
-      "Client-provided MCP servers are not supported.",
+      CLIENT_MCP_SERVERS_UNSUPPORTED_ERROR,
     );
   }
   if ((params.additionalDirectories?.length ?? 0) > 0) {
     throw acp.RequestError.invalidParams(
       undefined,
-      "Additional workspace directories are not supported.",
+      ADDITIONAL_DIRECTORIES_UNSUPPORTED_ERROR,
     );
   }
 }
@@ -173,8 +186,8 @@ export class YukinoAcpAgent {
       protocolVersion: acp.PROTOCOL_VERSION,
       authMethods: [],
       agentInfo: {
-        name: "yukino",
-        title: "Yukino",
+        name: AGENT_NAME,
+        title: AGENT_TITLE,
         version,
       },
       agentCapabilities: {
@@ -224,7 +237,7 @@ export class YukinoAcpAgent {
     if (session && session.runtime.cwd !== params.cwd) {
       throw acp.RequestError.invalidParams(
         undefined,
-        "Session cwd does not match.",
+        SESSION_CWD_MISMATCH_ERROR,
       );
     }
     if (session && !replay) {
@@ -261,7 +274,7 @@ export class YukinoAcpAgent {
     if (params.cursor) {
       throw acp.RequestError.invalidParams(
         undefined,
-        "Session pagination is not supported.",
+        SESSION_PAGINATION_UNSUPPORTED_ERROR,
       );
     }
     const cwd = params.cwd ?? process.cwd();
@@ -291,7 +304,7 @@ export class YukinoAcpAgent {
           generation !== session.generation ||
           context.signal.aborted
         ) {
-          return { stopReason: "cancelled" };
+          return { stopReason: STOP_REASON_CANCELLED };
         }
 
         const turnAbort = new AbortController();
@@ -396,7 +409,7 @@ export class YukinoAcpAgent {
       commandName: parseCommand(text)?.name === "goal" ? "goal" : null,
     });
 
-    let reason: PromptResponse["stopReason"] = "end_turn";
+    let reason: PromptResponse["stopReason"] = STOP_REASON_END_TURN;
     let sawUsage = false;
     let usage = emptyUsage();
 
@@ -505,7 +518,7 @@ export function createYukinoAcpApp(
 ): YukinoAcpApp {
   const implementation = new YukinoAcpAgent(runtimeFactory);
   const app = acp
-    .agent({ name: "yukino" })
+    .agent({ name: AGENT_NAME })
     .onRequest(acp.methods.agent.initialize, (context) =>
       implementation.initialize(context.params),
     )

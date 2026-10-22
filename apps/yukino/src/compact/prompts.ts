@@ -51,5 +51,17 @@ export function buildCompactionSummaryMessage(
   );
 }
 
-export const PTL_RETRY_MARKER =
-  "[earlier conversation truncated for compaction retry]";
+export function buildSessionTranscriptHint(sessionFilePath: string): string {
+  return `\n\nIf you need specific details from before compaction (code snippets, error messages, etc.), use ReadFile to read the full session transcript: ${sessionFilePath}`;
+}
+
+// Recovery attachment sections appended to the compaction summary message
+// (assembled by RecoveryState.buildRecoveryAttachment in recovery.ts).
+export const RECOVERY_FILES_HEADER = "## Recently read files\n";
+export const RECOVERY_FILES_NOTE =
+  "These snapshots are what the file-reading tool last returned. Re-open with the tool if you need the current bytes.\n";
+export const RECOVERY_TOOLS_INTRO =
+  "## Available tools\n\nYou still have access to the following tools — call them directly when the task needs one:\n\n";
+export const RECOVERY_FOOTER_NOTE =
+  "## Note\n\nEverything above the divider is reconstructed context. For exact code, error strings, or user-typed text, re-read the source rather than guess from the summary.";
+export const RECOVERY_ATTACHMENT_DIVIDER = "\n\n---\n\n";

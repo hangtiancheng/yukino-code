@@ -1,7 +1,14 @@
 import {
+  ANALYSIS_BLOCK_RE,
+  ANALYSIS_CLOSE_TAG,
+  ANALYSIS_OPEN_TAG,
   AUTO_COMPACT_SAFETY_MARGIN,
   AUTO_MARGIN_RATIO,
   CHARS_PER_TOKEN,
+  COMPACTION_CONVERSATION_CHANGED_ERROR,
+  COMPACTION_EMPTY_SUMMARY_ERROR,
+  COMPACTION_STREAM_INCOMPLETE_ERROR,
+  COMPACTION_TOOL_CALL_ERROR,
   IMAGE_CHAR_EQUIV,
   KEEP_MAX_TOKENS,
   KEEP_RECENT_TOKENS,
@@ -11,14 +18,20 @@ import {
   MAX_PTL_RETRIES,
   MIN_COMPACT_PREFIX,
   MIN_KEEP_MESSAGES,
+  PTL_RETRY_MARKER,
+  PTL_TRUNCATE_DIVISOR,
   SUMMARY_ANSWER_RESERVE_TOKENS,
+  SUMMARY_BLOCK_RE,
+  SUMMARY_CLOSE_TAG,
+  SUMMARY_OPEN_TAG,
   SUMMARY_OUTPUT_RESERVE,
 } from "@/compact/constants.js";
 import {
   buildCompactionSummaryMessage,
+  buildSessionTranscriptHint,
   buildSummaryInstructions,
   buildSummaryPrompt,
-  PTL_RETRY_MARKER,
+  RECOVERY_ATTACHMENT_DIVIDER,
 } from "@/compact/prompts.js";
 import type { RecoveryState } from "@/compact/recovery.js";
 import { DEFAULT_MAX_OUTPUT_TOKENS } from "@/config/constants.js";
@@ -412,7 +425,7 @@ function truncateHeadForPTL(
       }
     }
   } else {
-    dropCount = Math.max(1, Math.floor(groups.length / 5));
+    dropCount = Math.max(1, Math.floor(groups.length / PTL_TRUNCATE_DIVISOR));
   }
 
   dropCount = Math.min(dropCount, groups.length - 1);
@@ -448,11 +461,11 @@ function serializePrefixText(messages: Message[]): string {
 // present, strip any unprompted <analysis> block and fall back to the remaining
 // raw text.
 function formatCompactSummary(raw: string): string {
-  const summaryMatch = /<summary>([\s\S]*?)<\/summary>/.exec(raw);
+  const summaryMatch = SUMMARY_BLOCK_RE.exec(raw);
   if (summaryMatch) {
     return summaryMatch[1].trim();
   }
-  const analysisMatch = /<analysis>[\s\S]*?<\/analysis>/.exec(raw);
+  const analysisMatch = ANALYSIS_BLOCK_RE.exec(raw);
   if (analysisMatch) {
     return raw.replace(analysisMatch[0], "").trim();
   }
@@ -522,7 +535,7 @@ async function collectSummaryAttempt(
       event.type === "tool_call_start" ||
       event.type === "tool_call_complete"
     ) {
-      throw new Error("Compaction requested a tool instead of a summary");
+      throw new Error(COMPACTION_TOOL_CALL_ERROR);
     }
     if (event.type === "text_delta") {
       text += event.text;
@@ -540,17 +553,15 @@ async function collectSummaryAttempt(
   }
   abortSignal?.throwIfAborted();
   if (!completed) {
-    throw new Error(
-      "Compaction summary stream ended without a completion event",
-    );
+    throw new Error(COMPACTION_STREAM_INCOMPLETE_ERROR);
   }
   const summary = formatCompactSummary(text);
   if (
     !summary ||
-    (text.includes("<summary>") && !text.includes("</summary>")) ||
-    (text.includes("<analysis>") && !text.includes("</analysis>"))
+    (text.includes(SUMMARY_OPEN_TAG) && !text.includes(SUMMARY_CLOSE_TAG)) ||
+    (text.includes(ANALYSIS_OPEN_TAG) && !text.includes(ANALYSIS_CLOSE_TAG))
   ) {
-    throw new Error("Compaction returned an empty or incomplete summary");
+    throw new Error(COMPACTION_EMPTY_SUMMARY_ERROR);
   }
   return summary;
 }
@@ -587,7 +598,8 @@ async function requestSummaryWithPTLRetry(
         throw e;
       }
       const tokenGap =
-        currentPrefix.reduce((sum, m) => sum + estimateOne(m), 0) / 5;
+        currentPrefix.reduce((sum, m) => sum + estimateOne(m), 0) /
+        PTL_TRUNCATE_DIVISOR;
       const truncated = truncateHeadForPTL(currentPrefix, tokenGap);
       if (!truncated) {
         throw e;
@@ -662,9 +674,7 @@ async function doCompact(
       (message, index) => message !== estimationMessages[index],
     )
   ) {
-    throw new Error(
-      "Conversation changed during compaction; keeping the current history",
-    );
+    throw new Error(COMPACTION_CONVERSATION_CHANGED_ERROR);
   }
 
   const recoveryAttachment = recoveryState
@@ -676,10 +686,10 @@ async function doCompact(
     toKeep.length > 0,
   );
   if (sessionFilePath) {
-    summaryContent += `\n\nIf you need specific details from before compaction (code snippets, error messages, etc.), use ReadFile to read the full session transcript: ${sessionFilePath}`;
+    summaryContent += buildSessionTranscriptHint(sessionFilePath);
   }
   if (recoveryAttachment) {
-    summaryContent += `\n\n---\n\n${recoveryAttachment}`;
+    summaryContent += RECOVERY_ATTACHMENT_DIVIDER + recoveryAttachment;
   }
   conv.replaceWithCompacted(summaryContent, toKeep);
 
@@ -693,7 +703,7 @@ async function doCompact(
   // readable.
   let persistedSummary = summary;
   if (sessionFilePath) {
-    persistedSummary += `\n\nIf you need specific details from before compaction (code snippets, error messages, etc.), use ReadFile to read the full session transcript: ${sessionFilePath}`;
+    persistedSummary += buildSessionTranscriptHint(sessionFilePath);
   }
   const keep = toKeep
     .filter(

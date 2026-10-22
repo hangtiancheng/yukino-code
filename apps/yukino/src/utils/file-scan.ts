@@ -6,14 +6,26 @@ import { join } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
 import { SKIP_DIRS } from "@/tools/constants.js";
+import {
+  DEFAULT_FILE_MATCH_LIMIT,
+  DEFAULT_SCAN_MAX_FILES,
+  MIN_SCAN_VISITED_BUDGET,
+  SCAN_VISITED_BUDGET_MULTIPLIER,
+} from "@/utils/constants.js";
 
 const log = createChildLogger({ module: "file-scan" });
 
 /** Lists cwd-relative file paths (max entries, skipping hidden/SKIP_DIRS). */
-export function scanCwdFiles(root: string, max = 2000): string[] {
+export function scanCwdFiles(
+  root: string,
+  max = DEFAULT_SCAN_MAX_FILES,
+): string[] {
   const out: string[] = [];
   let visited = 0;
-  const budget = Math.max(2000, max * 10);
+  const budget = Math.max(
+    MIN_SCAN_VISITED_BUDGET,
+    max * SCAN_VISITED_BUDGET_MULTIPLIER,
+  );
   const walk = (dir: string, rel: string): void => {
     if (out.length >= max || visited >= budget) {
       return;
@@ -70,7 +82,7 @@ export function scanCwdFiles(root: string, max = 2000): string[] {
 export function filterFileMatches(
   files: readonly string[],
   query: string,
-  limit = 8,
+  limit = DEFAULT_FILE_MATCH_LIMIT,
 ): string[] {
   const q = query.toLowerCase();
   if (!q) {

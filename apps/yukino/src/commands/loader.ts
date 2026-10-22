@@ -6,7 +6,11 @@ import { z, parse } from "zod";
 
 import type { Command } from "@/commands/commands.js";
 import {
+  ARGUMENT_PLACEHOLDER_RE,
   COMMAND_FILE_EXTENSION,
+  COMMAND_FILE_EXTENSION_RE,
+  CUSTOM_COMMAND_TAG,
+  FRONTMATTER_BLOCK_RE,
   PROMPTS_DIR_NAME,
 } from "@/commands/constants.js";
 import { createChildLogger } from "@/logger/index.js";
@@ -77,7 +81,9 @@ function walkDir(base: string, dir: string): LoadedCommand[] {
 }
 
 function commandName(base: string, full: string): string {
-  const rel = full.slice(base.length + 1).replace(/\.md$/, "");
+  const rel = full
+    .slice(base.length + 1)
+    .replace(COMMAND_FILE_EXTENSION_RE, "");
   return rel
     .split(/[/\\]/)
     .map((p) => p.toLowerCase().replace(/ /g, "-"))
@@ -101,8 +107,7 @@ function parseCommandFile(base: string, full: string): Command | null {
   let argumentHint = "";
   let body = raw;
 
-  const frontmatterMatch =
-    /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u.exec(raw);
+  const frontmatterMatch = FRONTMATTER_BLOCK_RE.exec(raw);
   if (frontmatterMatch) {
     const frontmatter = frontmatterMatch[1].trim();
     body = raw.slice(frontmatterMatch[0].length).trim();
@@ -130,7 +135,7 @@ function parseCommandFile(base: string, full: string): Command | null {
       (argumentHint
         ? `custom command (args: ${argumentHint})`
         : "custom command")
-    } [custom]`,
+    } ${CUSTOM_COMMAND_TAG}`,
     handler: (ctx) => renderBody(body, ctx.args),
   };
 }
@@ -180,7 +185,7 @@ export function renderBody(body: string, args: string): string {
   const positional = parseCommandArgs(args);
   let substituted = false;
   const rendered = body.replace(
-    /\$\{(\d+|ARGUMENTS|@):-([^}]*)\}|\$\{@:(\d+)(?::(\d+))?\}|\$(ARGUMENTS|@|\d+)/gu,
+    ARGUMENT_PLACEHOLDER_RE,
     (
       _match,
       target: string | undefined,

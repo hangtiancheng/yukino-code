@@ -2,6 +2,11 @@ import type { ConversationManager, Message } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
+import {
+  EXTRACT_SUMMARY_WINDOW,
+  MIN_EXTRACT_MESSAGES,
+  MIN_SUMMARY_LINE_CHARS,
+} from "@/memory/constants.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { contentToText } from "@/utils/index.js";
 
@@ -58,15 +63,15 @@ export class BackgroundMemoryTasks {
       const messages = this.pending;
       this.pending = null;
       const start = this.cursor ? messages.indexOf(this.cursor) + 1 : 0;
-      if (messages.length - start < 2) {
+      if (messages.length - start < MIN_EXTRACT_MESSAGES) {
         continue;
       }
       const summary = messages
-        .slice(Math.max(start, messages.length - 40))
+        .slice(Math.max(start, messages.length - EXTRACT_SUMMARY_WINDOW))
         .map(
           (message) => `[${message.role}]: ${contentToText(message.content)}`,
         )
-        .filter((text) => text.length > 12)
+        .filter((text) => text.length > MIN_SUMMARY_LINE_CHARS)
         .join("\n");
       try {
         const saved = await this.extractor.extract(summary);

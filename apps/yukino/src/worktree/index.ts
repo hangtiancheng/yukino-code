@@ -12,14 +12,25 @@ import { dirname, isAbsolute, join, resolve } from "path";
 import { promisify } from "util";
 
 import { createChildLogger } from "@/logger/index.js";
+import { AGENTS_DIR_NAME } from "@/skills/constants.js";
 import { yukinoPath, projectKey } from "@/storage/index.js";
 import { canonicalPath } from "@/utils/paths.js";
 import {
+  GIT_DIR_NAME,
+  GITDIR_PREFIX,
+  MAX_REF_RESOLUTION_DEPTH,
+  REF_PREFIX,
+  REFS_HEADS_PREFIX,
   SAFE_REF_RE,
   SHA_RE,
   SHARED_AGENTS_ENTRIES,
   WORKTREE_SLUG_PATTERN,
+  WORKTREES_DIR_NAME,
 } from "@/worktree/constants.js";
+import {
+  buildWorktreeChangesGuidance,
+  WORKTREE_STATE_UNVERIFIED_GUIDANCE,
+} from "@/worktree/prompts.js";
 
 export * as Constants from "@/worktree/constants.js";
 export * as Prompts from "@/worktree/prompts.js";
@@ -85,7 +96,7 @@ async function pathExists(path: string): Promise<boolean> {
  * Returns an empty string to indicate it is not a git repository
  */
 export async function resolveGitDir(root: string): Promise<string> {
-  const gitPath = join(root, ".git");
+  const gitPath = join(root, GIT_DIR_NAME);
   if (!(await pathExists(gitPath))) {
     return "";
   }
@@ -96,10 +107,10 @@ export async function resolveGitDir(root: string): Promise<string> {
 
   // Worktree / submodule: .git is a file containing `gitdir: <path>`
   const raw = (await readFile(gitPath, "utf-8")).trim();
-  if (!raw.startsWith("gitdir:")) {
+  if (!raw.startsWith(GITDIR_PREFIX)) {
     return "";
   }
-  const rel = raw.slice("gitdir:".length).trim();
+  const rel = raw.slice(GITDIR_PREFIX.length).trim();
   return isAbsolute(rel) ? rel : join(root, rel);
 }
 
@@ -138,10 +149,10 @@ async function readGitHead(gitDir: string): Promise<GitHead | null> {
     return null;
   }
 
-  if (raw.startsWith("ref:")) {
-    const ref = raw.slice("ref:".length).trim();
-    if (ref.startsWith("refs/heads/")) {
-      const name = ref.slice("refs/heads/".length);
+  if (raw.startsWith(REF_PREFIX)) {
+    const ref = raw.slice(REF_PREFIX.length).trim();
+    if (ref.startsWith(REFS_HEADS_PREFIX)) {
+      const name = ref.slice(REFS_HEADS_PREFIX.length);
       if (!isSafeRefName(name)) {
         return null;
       }
@@ -175,14 +186,14 @@ async function resolveRefInDir(
   seen: Set<string>,
 ): Promise<string> {
   const key = `${dir}\0${ref}`;
-  if (seen.size >= 64 || seen.has(key)) {
+  if (seen.size >= MAX_REF_RESOLUTION_DEPTH || seen.has(key)) {
     return "";
   }
   seen.add(key);
   try {
     const content = (await readFile(join(dir, ref), "utf-8")).trim();
-    if (content.startsWith("ref:")) {
-      const target = content.slice("ref:".length).trim();
+    if (content.startsWith(REF_PREFIX)) {
+      const target = content.slice(REF_PREFIX.length).trim();
       if (!isSafeRefName(target)) {
         return "";
       }
@@ -254,18 +265,18 @@ export async function readWorktreeHeadSha(
 ): Promise<string> {
   let raw: string;
   try {
-    raw = (await readFile(join(worktreePath, ".git"), "utf-8")).trim();
+    raw = (await readFile(join(worktreePath, GIT_DIR_NAME), "utf-8")).trim();
   } catch (err) {
     // Candidates that are not worktrees fail here — that is the probe's
     // "no" answer, not an error.
     log.debug({ err }, "worktree .git probe failed");
     return "";
   }
-  if (!raw.startsWith("gitdir:")) {
+  if (!raw.startsWith(GITDIR_PREFIX)) {
     return "";
   }
 
-  const rel = raw.slice("gitdir:".length).trim();
+  const rel = raw.slice(GITDIR_PREFIX.length).trim();
   const gitDir = isAbsolute(rel) ? rel : join(worktreePath, rel);
 
   const head = await readGitHead(gitDir);
@@ -274,7 +285,7 @@ export async function readWorktreeHeadSha(
   }
 
   if (head.branch) {
-    return resolveRef(gitDir, "refs/heads/" + head.branch);
+    return resolveRef(gitDir, REFS_HEADS_PREFIX + head.branch);
   }
   return head.sha ?? "";
 }
@@ -313,7 +324,7 @@ export async function createAgentWorktree(
       })
     ).stdout.trim();
 
-  const worktreeDir = yukinoPath("worktrees", projectKey(root), slug);
+  const worktreeDir = yukinoPath(WORKTREES_DIR_NAME, projectKey(root), slug);
   const branch = `worktree/${slug}/work`;
 
   // Validate that an existing directory is really a worktree root before reusing
@@ -513,7 +524,7 @@ export class OwnedWorktrees {
     );
     if (
       canonicalPath(resolve(record.gitDir, backlink)) !==
-        canonicalPath(join(path, ".git")) ||
+        canonicalPath(join(path, GIT_DIR_NAME)) ||
       canonicalPath(resolve(record.gitRoot, repositoryCommon.trim())) !==
         record.commonDir ||
       (await getCurrentBranch(path)) !== record.branch
@@ -525,9 +536,7 @@ export class OwnedWorktrees {
     const changes = await countWorktreeChanges(path, record.headCommit);
     if (!discardChanges) {
       if (!changes) {
-        throw new Error(
-          'Could not verify worktree state. Refusing to remove. Confirm with the user, then retry with discard_changes: true, or use action: "keep".',
-        );
+        throw new Error(WORKTREE_STATE_UNVERIFIED_GUIDANCE);
       }
       if (
         changes.changedFiles > 0 ||
@@ -535,7 +544,7 @@ export class OwnedWorktrees {
         (await hasWorktreeChanges(path, record.headCommit))
       ) {
         throw new Error(
-          `Worktree has ${changes.changedFiles} uncommitted files and ${changes.commits} commits. Confirm with the user, then retry with discard_changes: true, or use action: "keep".`,
+          buildWorktreeChangesGuidance(changes.changedFiles, changes.commits),
         );
       }
     }
@@ -649,11 +658,11 @@ async function copyAgentsSettings(
   repoRoot: string,
   wtPath: string,
 ): Promise<void> {
-  const agentsDir = join(repoRoot, ".agents");
+  const agentsDir = join(repoRoot, AGENTS_DIR_NAME);
   if (!(await pathExists(agentsDir))) {
     return;
   }
-  const dstRoot = join(wtPath, ".agents");
+  const dstRoot = join(wtPath, AGENTS_DIR_NAME);
   try {
     await mkdir(dstRoot, { recursive: true });
   } catch (err) {

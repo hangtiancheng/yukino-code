@@ -16,7 +16,8 @@ import type { StreamEvent } from "@/llm/events.js";
 import { MemoryConsolidator } from "@/memory/consolidation.js";
 import { MemoryExtractor } from "@/memory/extractor.js";
 import { MemoryManager } from "@/memory/manager.js";
-import { memoryAge, memoryFreshnessText } from "@/memory/memory-age.js";
+import { memoryAge } from "@/memory/memory-age.js";
+import { memoryFreshnessText } from "@/memory/prompts.js";
 import { buildSystemPrompt, PromptBuilder } from "@/prompt/builder.js";
 import { coordinatorReminder } from "@/prompt/coordinator.js";
 import {

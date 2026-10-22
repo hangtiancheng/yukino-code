@@ -1,4 +1,9 @@
-import { MAX_DELAY_MS, MAX_RETRIES } from "@/llm/constants.js";
+import {
+  BACKOFF_BASE_DELAY_MS,
+  MAX_DELAY_MS,
+  MAX_RETRIES,
+  RATE_LIMIT_BASE_DELAY_MS,
+} from "@/llm/constants.js";
 import { NetworkError, RateLimitError, ServerError } from "@/llm/errors.js";
 
 function retryAfterDelay(header: string | undefined, fallback: number): number {
@@ -23,9 +28,12 @@ export function llmRetryDelay(
     return undefined;
   }
   if (error instanceof RateLimitError) {
-    return retryAfterDelay(error.retryAfter, 5000 * 2 ** attempt);
+    return retryAfterDelay(
+      error.retryAfter,
+      RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt,
+    );
   }
-  const delay = Math.min(1000 * 2 ** attempt, MAX_DELAY_MS);
+  const delay = Math.min(BACKOFF_BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
   if (error instanceof ServerError) {
     return retryAfterDelay(error.retryAfter, delay);
   }

@@ -4,6 +4,7 @@ export const MCP_INSTRUCTIONS_MARKER = "# MCP Server Instructions";
 export const MCP_TOOL_PREFIX = "mcp__";
 export const MCP_APPS_EXTENSION = "io.modelcontextprotocol/ui";
 export const MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
+export const MCP_APP_URI_PREFIX = "ui://";
 /**
  * Separator between the server segment and the tool segment in a tool name. A double
  * underscore marks the boundary — server names and tool names may themselves contain
@@ -34,3 +35,5 @@ export const MCP_IMAGE_MEDIA_TYPES = new Set([
   "image/gif",
   "image/webp",
 ]);
+
+export const MCP_NOT_CONNECTED_ERROR = "Not connected";

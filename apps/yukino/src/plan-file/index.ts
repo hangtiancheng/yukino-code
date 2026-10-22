@@ -2,7 +2,11 @@ import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
-import { PLANS_DIR_NAME } from "@/plan-file/constants.js";
+import {
+  PLAN_FILE_EXTENSION,
+  PLAN_PATH_OUTSIDE_STORAGE_MESSAGE,
+  PLANS_DIR_NAME,
+} from "@/plan-file/constants.js";
 import { yukinoPath } from "@/storage/index.js";
 import {
   readPrivateFileSync as readFileSync,
@@ -32,7 +36,7 @@ export function getOrCreatePlanPath(owner: PlanOwner): string {
     if (!isPlanInStorage(owner.planFilePath)) {
       log.warn(
         { planPath: owner.planFilePath },
-        "current plan path is outside plan storage",
+        PLAN_PATH_OUTSIDE_STORAGE_MESSAGE,
       );
     } else {
       return owner.planFilePath;
@@ -47,7 +51,7 @@ export function createPlanPath(): string {
   const dir = yukinoPath(PLANS_DIR_NAME);
   mkdirSync(dir, { recursive: true });
   const slug = generateSlug();
-  const path = join(dir, `${slug}.md`);
+  const path = join(dir, `${slug}${PLAN_FILE_EXTENSION}`);
   writeFileSync(path, "", { encoding: "utf-8", flag: "wx" });
   return path;
 }
@@ -71,7 +75,7 @@ export function planExists(owner: PlanOwner): boolean {
   if (!isPlanInStorage(owner.planFilePath)) {
     log.warn(
       { planPath: owner.planFilePath },
-      "current plan path is outside plan storage",
+      PLAN_PATH_OUTSIDE_STORAGE_MESSAGE,
     );
     return false;
   }

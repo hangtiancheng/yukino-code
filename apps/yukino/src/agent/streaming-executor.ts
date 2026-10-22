@@ -3,6 +3,7 @@ import {
   observeToolExecution,
   type AgentTelemetry,
 } from "@/telemetry/instrumentation.js";
+import { EXECUTION_CANCELLED_ERROR } from "@/tools/constants.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type { ToolResult, ToolContext } from "@/tools/types.js";
 import { asErrorString } from "@/utils/index.js";
@@ -102,7 +103,7 @@ export class StreamingExecutor {
         toolId: call.toolId,
         toolName: call.toolName,
         result: {
-          output: "Tool execution was cancelled before it started.",
+          output: EXECUTION_CANCELLED_ERROR,
           isError: true,
         },
         elapsed: 0,

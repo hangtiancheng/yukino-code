@@ -15,6 +15,7 @@ import {
   BACKGROUND_NOTIFICATION_BYTES,
   COMMAND_INTERRUPTED_ERROR,
   COMMAND_REQUIRED_ERROR,
+  DEFAULT_TIMEOUT,
   KILL_GRACE_MS,
   MAX_SHELL_OUTPUT_BYTES,
   MAX_SHELL_OUTPUT_FILE_BYTES,
@@ -27,6 +28,8 @@ import { withCommandExecution } from "@/tools/execution-coordinator.js";
 import {
   BASH_BACKGROUND_DESCRIPTION,
   BASH_DESCRIPTION,
+  RUN_IN_BACKGROUND_DESCRIPTION,
+  SHELL_TIMEOUT_DESCRIPTION,
 } from "@/tools/prompts.js";
 import {
   backgroundMessage,
@@ -133,16 +136,15 @@ export class BashTool implements Tool {
       },
       timeout: {
         type: "integer",
-        description: "Timeout in seconds (max 600)",
-        default: 120,
+        description: SHELL_TIMEOUT_DESCRIPTION,
+        default: DEFAULT_TIMEOUT,
       },
     };
     let description = this.description;
     if (this.backgroundEnabled()) {
       properties.run_in_background = {
         type: "boolean",
-        description:
-          "Run the command in the background. Returns a task ID immediately; the result arrives later as a task notification.",
+        description: RUN_IN_BACKGROUND_DESCRIPTION,
         default: false,
       };
       description = `${this.description}\n${BASH_BACKGROUND_DESCRIPTION}`;
@@ -184,7 +186,7 @@ export class BashTool implements Tool {
       };
     }
 
-    let timeout = intArg(args, "timeout", 120);
+    let timeout = intArg(args, "timeout", DEFAULT_TIMEOUT);
     if (!Number.isFinite(timeout) || timeout <= 0) {
       return {
         output: TIMEOUT_INVALID_ERROR,

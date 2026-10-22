@@ -4,6 +4,7 @@ import {
   MAX_OUTPUT_CHARS,
   MAX_TOKENS_CEILING,
   MAX_TOKENS_RECOVERIES,
+  PERSISTENT_GOAL_MARKER,
   WORKING_DIRECTORY_MARKER,
 } from "@/agent/constants.js";
 import type { AgentEvent } from "@/agent/events.js";
@@ -16,6 +17,7 @@ import {
   NO_CALLABLE_TOOLS_REMINDER,
   NO_DEFERRED_TOOLS_REMINDER,
   NO_PERSISTENT_GOAL_REMINDER,
+  buildPermissionDeniedOutput,
   buildWorkingDirectoryReminder,
 } from "@/agent/prompts.js";
 import { StreamingExecutor } from "@/agent/streaming-executor.js";
@@ -86,6 +88,7 @@ import {
   persistLargeResult,
   replaceToolResultContent,
 } from "@/tool-result/index.js";
+import { COMMAND_INTERRUPTED_ERROR } from "@/tools/constants.js";
 import type { FileStateCache } from "@/tools/file-state-cache.js";
 import { McpCallTool } from "@/tools/mcp-call.js";
 import type { ToolRegistry } from "@/tools/registry.js";
@@ -474,12 +477,12 @@ export class Agent {
 
         const goalReminder =
           this.goalManager?.reminder() ||
-          (this.conversation.hasReminderContaining("<persistent-goal>")
+          (this.conversation.hasReminderContaining(PERSISTENT_GOAL_MARKER)
             ? NO_PERSISTENT_GOAL_REMINDER
             : "");
         if (goalReminder) {
           this.conversation.addSystemReminderIfChanged(
-            "<persistent-goal>",
+            PERSISTENT_GOAL_MARKER,
             goalReminder,
           );
         }
@@ -1303,7 +1306,7 @@ export class Agent {
           type: "tool_result",
           toolName: tu.toolName,
           toolId: tu.toolUseId,
-          output: "Error: command interrupted",
+          output: COMMAND_INTERRUPTED_ERROR,
           isError: true,
           elapsed: 0,
         };
@@ -1405,7 +1408,7 @@ export class Agent {
           type: "tool_result",
           toolName: tu.toolName,
           toolId: tu.toolUseId,
-          output: `Permission denied: ${decision.reason}. This operation has been blocked by the security policy. Inform the user that the command was denied; do not describe what the command would do.`,
+          output: buildPermissionDeniedOutput(decision.reason),
           isError: true,
           elapsed: 0,
         };

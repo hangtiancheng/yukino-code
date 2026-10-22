@@ -13,6 +13,7 @@ import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,
   DEFAULT_THINKING_LEVEL,
+  GLOBAL_CONFIG_FILENAME,
   MIN_THINKING_ANSWER_TOKENS,
   MIN_THINKING_BUDGET_TOKENS,
   THINKING_BUDGETS,
@@ -21,7 +22,7 @@ import {
 import { yukinoPath } from "@/storage/index.js";
 
 export function globalConfigPath(): string {
-  return yukinoPath("config.yaml");
+  return yukinoPath(GLOBAL_CONFIG_FILENAME);
 }
 
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];

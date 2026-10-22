@@ -51,12 +51,13 @@ import {
   saveProvider,
 } from "@/config/provider-login.js";
 import { expandAtRefsWithImages } from "@/conversation/at-expand.js";
+import { SYSTEM_REMINDER_OPEN } from "@/conversation/constants.js";
 import { ConversationManager } from "@/conversation/index.js";
 import type { UserBashResult } from "@/conversation/index.js";
+import { userBashContext } from "@/conversation/prompts.js";
 import {
   executeUserBash,
   parseUserBashCommand,
-  userBashContext,
 } from "@/conversation/user-bash.js";
 import { FileHistory, fileHistoryDir } from "@/file-history/index.js";
 import type { Snapshot } from "@/file-history/index.js";
@@ -97,13 +98,19 @@ import {
   FILE_CACHE_TTL_MS,
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_STALE_MS,
+  INPUT_HISTORY_LIMIT,
   MAX_UPLOAD_IMAGE_BYTES,
   MIME_TYPES,
   PENDING_REQUEST_TIMEOUT_MINUTES,
   PENDING_REQUEST_TIMEOUT_MS,
+  SESSION_LIST_LIMIT,
+  SHUTDOWN_GRACE_MS,
+  TEAMMATE_POLL_INTERVAL_MS,
+  WAKEUP_POLL_INTERVAL_MS,
 } from "@/remote/constants.js";
 import { AgentEventLogger } from "@/remote/log.js";
 import { RemoteMcpApps } from "@/remote/mcp-apps.js";
+import { buildPlanExecutionPrompt } from "@/remote/prompts.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import {
@@ -126,12 +133,10 @@ import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
+import { BUILTIN_AGENTS, PLAN_AGENT_NAME } from "@/subagent/constants.js";
+import { formatAgentTaskNotification } from "@/subagent/prompts.js";
 import { spawnSubagent, type AgentEventSink } from "@/subagent/spawn.js";
-import {
-  TaskManager,
-  formatAgentTaskNotification,
-} from "@/subagent/task-manager.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,
@@ -1317,7 +1322,9 @@ export class RemoteServer {
       this.send(ws, { type: "commands", data: this.buildCommandList() });
       this.send(ws, {
         type: "history",
-        data: { entries: historyMod.loadInputTexts().slice(-200) },
+        data: {
+          entries: historyMod.loadInputTexts().slice(-INPUT_HISTORY_LIMIT),
+        },
       });
       this.sendUsageSnapshot(ws);
       for (const payload of this.mcpApps.entries()) {
@@ -2332,7 +2339,7 @@ export class RemoteServer {
                 },
               },
             );
-            if (cmd.agent === "plan" && !result.isError) {
+            if (cmd.agent === PLAN_AGENT_NAME && !result.isError) {
               this.broadcastStatus();
               this.broadcastPlanApprovalRequest();
             }
@@ -2571,7 +2578,7 @@ export class RemoteServer {
         this.broadcast({ type: "command_done", data: null });
         setTimeout(() => {
           void this.stop();
-        }, 250).unref();
+        }, SHUTDOWN_GRACE_MS).unref();
         break;
 
       case "skills": {
@@ -3042,7 +3049,7 @@ export class RemoteServer {
       content: string | Record<string, unknown>[],
     ): void => {
       const displayContent = contentToText(content);
-      if (!displayContent || displayContent.startsWith("<system-reminder>")) {
+      if (!displayContent || displayContent.startsWith(SYSTEM_REMINDER_OPEN)) {
         return;
       }
       this.broadcast({
@@ -3498,7 +3505,7 @@ export class RemoteServer {
           })),
         },
       });
-    }, 500);
+    }, TEAMMATE_POLL_INTERVAL_MS);
     this.teammateTimer.unref();
     this.wakeupTimer = setInterval(() => {
       const current = this.agentHandle;
@@ -3511,7 +3518,7 @@ export class RemoteServer {
       ) {
         void this.runNotificationTurn();
       }
-    }, 250);
+    }, WAKEUP_POLL_INTERVAL_MS);
     this.wakeupTimer.unref();
   }
 
@@ -3774,7 +3781,7 @@ export class RemoteServer {
       },
     });
     if (planContent) {
-      const execution = `Execute this plan:\n\n${planContent}`;
+      const execution = buildPlanExecutionPrompt(planContent);
       if (this.streaming) {
         this.pendingPlanExecution = execution;
       } else {
@@ -3851,7 +3858,7 @@ export class RemoteServer {
       this.broadcast({
         type: "session_list",
         data: {
-          sessions: sessions.slice(0, 50).map((sess) => ({
+          sessions: sessions.slice(0, SESSION_LIST_LIMIT).map((sess) => ({
             id: sess.id,
             firstMessage: sess.firstMessage,
             messageCount: sess.messageCount,

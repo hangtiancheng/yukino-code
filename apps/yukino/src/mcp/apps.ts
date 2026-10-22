@@ -1,10 +1,12 @@
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import { MCP_APP_URI_PREFIX } from "@/mcp/constants.js";
+
 export const McpAppSchema = z.object({
   serverName: z.string(),
   toolName: z.string(),
-  resourceUri: z.string().startsWith("ui://"),
+  resourceUri: z.string().startsWith(MCP_APP_URI_PREFIX),
   arguments: z.record(z.string(), z.unknown()),
   result: CallToolResultSchema,
 });

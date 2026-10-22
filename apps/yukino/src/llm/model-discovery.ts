@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 import type { ProviderConfig } from "@/config/provider-config.js";
-import { DISCOVERY_TIMEOUT_MS, MAX_MODEL_PAGES } from "@/llm/constants.js";
+import {
+  ANTHROPIC_API_VERSION,
+  DISCOVERY_TIMEOUT_MS,
+  MAX_MODEL_PAGES,
+  MODEL_DISCOVERY_FAILED_ERROR,
+} from "@/llm/constants.js";
 
 const HttpUrlSchema = z.url();
 const ModelSchema = z.object({
@@ -75,7 +80,7 @@ export async function discoverModels(
   const apiKey = config.api_key?.trim();
   const headers: Record<string, string> = { Accept: "application/json" };
   if (config.protocol === "anthropic") {
-    headers["anthropic-version"] = "2023-06-01";
+    headers["anthropic-version"] = ANTHROPIC_API_VERSION;
     if (apiKey) {
       headers["x-api-key"] = apiKey;
     }
@@ -96,7 +101,7 @@ export async function discoverModels(
         redirect: "error",
       });
       if (!response.ok) {
-        throw new Error("Model discovery failed");
+        throw new Error(MODEL_DISCOVERY_FAILED_ERROR);
       }
       const body: unknown = await response.json();
       controller.signal.throwIfAborted();
@@ -110,12 +115,12 @@ export async function discoverModels(
         return [...models.values()];
       }
       if (!list.last_id || cursors.has(list.last_id)) {
-        throw new Error("Model discovery failed");
+        throw new Error(MODEL_DISCOVERY_FAILED_ERROR);
       }
       cursors.add(list.last_id);
       url.searchParams.set("after_id", list.last_id);
     }
-    throw new Error("Model discovery failed");
+    throw new Error(MODEL_DISCOVERY_FAILED_ERROR);
   } catch {
     if (controller.signal.aborted) {
       throw new DOMException(
@@ -123,7 +128,7 @@ export async function discoverModels(
         "AbortError",
       );
     }
-    throw new Error("Model discovery failed");
+    throw new Error(MODEL_DISCOVERY_FAILED_ERROR);
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener("abort", abort);

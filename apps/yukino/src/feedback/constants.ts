@@ -28,6 +28,11 @@ export const MIN_GLOBAL_SECRET_LENGTH = 8;
 export const GIST_UPLOAD_TOO_LARGE_MESSAGE =
   "Attachments exceed the 2 MB upload budget; use the local ZIP.";
 export const GH_COMMAND_FAILED_MESSAGE = "GitHub CLI failed";
+export const NO_GITHUB_TOKEN_MESSAGE = "No GitHub token available";
+
+// Session-storage directory shared by the bundle writer and the filed-issue records.
+export const FEEDBACK_DIR_NAME = "feedback";
+export const ISSUES_FILENAME = "issues.json";
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 20 * 1024 * 1024;

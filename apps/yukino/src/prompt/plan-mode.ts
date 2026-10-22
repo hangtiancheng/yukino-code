@@ -1,14 +1,36 @@
+import { REMINDER_INTERVAL } from "@/prompt/constants.js";
 import {
+  PLAN_MODE_APPROACH_BODY,
+  PLAN_MODE_APPROACH_HEADER,
+  PLAN_MODE_APPROACH_RETURN_VERB,
+  PLAN_MODE_APPROACH_WRITE_VERB,
+  PLAN_MODE_APPROVAL_HEADER,
   PLAN_MODE_ASK_USER_CLARIFICATION,
+  PLAN_MODE_CONTEXT_HEADER,
   PLAN_MODE_COORDINATOR_APPROVAL,
   PLAN_MODE_COORDINATOR_CLARIFICATION,
+  PLAN_MODE_COORDINATOR_CONTEXT,
+  PLAN_MODE_DELEGATE_CONTEXT,
+  PLAN_MODE_EXITED_BODY,
+  PLAN_MODE_EXITED_HEADER,
   PLAN_MODE_EXIT_FOR_APPROVAL,
+  PLAN_MODE_FILE_EXISTS,
+  PLAN_MODE_FILE_LABEL,
+  PLAN_MODE_FILE_MISSING,
   PLAN_MODE_FINISH_TURN_SUBMIT,
+  PLAN_MODE_GATE_READONLY,
+  PLAN_MODE_HEADER,
+  PLAN_MODE_INSPECT_CONTEXT,
+  PLAN_MODE_KEEP_CURRENT,
+  PLAN_MODE_NO_MUTATION,
+  PLAN_MODE_PERMANENT_READONLY,
   PLAN_MODE_READONLY_APPROVAL,
   PLAN_MODE_READONLY_CONSTRAINT,
+  PLAN_MODE_READ_BEFORE_EDIT,
   PLAN_MODE_READ_ONLY_RUN,
   PLAN_MODE_REPORT_TO_LEADER_CLARIFICATION,
   PLAN_MODE_RETURN_TO_PARENT_CLARIFICATION,
+  PLAN_MODE_STILL_ACTIVE,
   PLAN_MODE_SUBAGENT_EXIT_PLAN_MODE,
   PLAN_MODE_SUBAGENT_RETURN_PLAN,
   PLAN_MODE_TEAMMATE_AUTO_APPROVAL,
@@ -16,6 +38,9 @@ import {
   PLAN_MODE_TEAMMATE_RETURN_PLAN,
   PLAN_MODE_TEAMMATE_SUBMIT_PLAN,
   PLAN_MODE_WRITABLE_CONSTRAINT,
+  PLAN_MODE_WRITE_WITH_WRITEFILE,
+  buildPlanModeExitFileNote,
+  buildPlanModeReentryText,
 } from "@/prompt/prompts.js";
 
 interface PlanCapabilities {
@@ -75,27 +100,25 @@ export function buildPlanModeReminder(
             : canSendMessage
               ? PLAN_MODE_FINISH_TURN_SUBMIT
               : `${PLAN_MODE_SUBAGENT_RETURN_PLAN} ${PLAN_MODE_READ_ONLY_RUN}`;
-  if (iteration > 1 && (iteration - 1) % 5 !== 0) {
-    return `Plan mode still active. ${constraint} Plan file: ${planPath}. Keep Context, Approach, files, and Verification current. ${clarification} ${approval}`;
+  if (iteration > 1 && (iteration - 1) % REMINDER_INTERVAL !== 0) {
+    return `${PLAN_MODE_STILL_ACTIVE} ${constraint} ${PLAN_MODE_FILE_LABEL} ${planPath}. ${PLAN_MODE_KEEP_CURRENT} ${clarification} ${approval}`;
   }
-  const fileInfo = [`Plan file: ${planPath}`];
-  fileInfo.push(
-    planExist ? "A plan file already exists." : "No plan file exists yet.",
-  );
+  const fileInfo = [`${PLAN_MODE_FILE_LABEL} ${planPath}`];
+  fileInfo.push(planExist ? PLAN_MODE_FILE_EXISTS : PLAN_MODE_FILE_MISSING);
   if (writable) {
     fileInfo.push(
       planExist && canEditFile
-        ? "Read it before updating it with EditFile."
-        : "Write the recommended plan there with WriteFile.",
+        ? PLAN_MODE_READ_BEFORE_EDIT
+        : PLAN_MODE_WRITE_WITH_WRITEFILE,
     );
   }
   return [
-    "# Plan mode",
-    `${constraint} Do not run mutating tools, change configs, or commit. ${readOnly ? "This role is permanently read-only; do not begin implementation." : "Do not begin implementation before the runtime approval gate allows it."}`,
+    PLAN_MODE_HEADER,
+    `${constraint} ${PLAN_MODE_NO_MUTATION} ${readOnly ? PLAN_MODE_PERMANENT_READONLY : PLAN_MODE_GATE_READONLY}`,
     fileInfo.join("\n"),
-    `## Context\n${isCoordinator ? "Synthesize code evidence from workers; do not inspect files or run commands yourself." : "Inspect relevant code and reusable patterns."} ${clarification}${canDelegate ? " Delegate bounded read-only research only when useful; at most 3 independent explore agents, with no mandatory plan agent." : ""}`,
-    `## Approach\n${writable ? "Write" : "Return"} only the recommended approach, starting with Context. Include files to change, constraints, and a Verification section with concrete checks. Keep the plan proportional to the task; refine it as evidence arrives.`,
-    `## Approval\n${approval}`,
+    `${PLAN_MODE_CONTEXT_HEADER}\n${isCoordinator ? PLAN_MODE_COORDINATOR_CONTEXT : PLAN_MODE_INSPECT_CONTEXT} ${clarification}${canDelegate ? ` ${PLAN_MODE_DELEGATE_CONTEXT}` : ""}`,
+    `${PLAN_MODE_APPROACH_HEADER}\n${writable ? PLAN_MODE_APPROACH_WRITE_VERB : PLAN_MODE_APPROACH_RETURN_VERB} ${PLAN_MODE_APPROACH_BODY}`,
+    `${PLAN_MODE_APPROVAL_HEADER}\n${approval}`,
   ].join("\n\n");
 }
 
@@ -107,7 +130,7 @@ export function buildPlanModeExitReminder(
   planPath: string,
   planExists: boolean,
 ): string {
-  return `## Exited Plan Mode\n\nPlan mode has ended. Proceed within the user's requested scope and current permissions.${planExists ? ` The plan file is located at ${planPath} if you need to reference it.` : ""}`;
+  return `${PLAN_MODE_EXITED_HEADER}\n\n${PLAN_MODE_EXITED_BODY}${planExists ? ` ${buildPlanModeExitFileNote(planPath)}` : ""}`;
 }
 
 /**
@@ -121,5 +144,5 @@ export function buildPlanModeReentryReminder(
   if (!planFileExists) {
     return "";
   }
-  return `Plan mode is active again. Review the existing plan at ${planPath}; refine or replace it as needed. Stay read-only except that file, and use the current runtime approval gate before implementation.`;
+  return buildPlanModeReentryText(planPath);
 }

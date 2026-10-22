@@ -10,9 +10,11 @@ import {
   ACP_PATH,
   ACP_WS_DEFAULT_PORT,
   DEFAULT_ADDRESS,
-  LOOPBACK_HOSTS,
+  LOOPBACK_ADDRESS_REQUIRED_ERROR,
+  TCP_BIND_FAILED_ERROR,
 } from "@/acp/constants.js";
 import { parseRemoteAddress } from "@/remote/address.js";
+import { LOOPBACK_HOSTS } from "@/remote/constants.js";
 import {
   addWebSocketToken,
   authorizeWebSocketRequest,
@@ -34,7 +36,7 @@ export function parseAcpWebSocketAddress(address?: string): {
     allowEphemeral: true,
   });
   if (!LOOPBACK_HOSTS.has(parsed.host)) {
-    throw new Error("ACP WebSocket must listen on a loopback address.");
+    throw new Error(LOOPBACK_ADDRESS_REQUIRED_ERROR);
   }
   return parsed;
 }
@@ -86,7 +88,7 @@ export async function startAcpWebSocketServer(
 
   const bound = httpServer.address();
   if (!bound || typeof bound === "string") {
-    throw new Error("ACP WebSocket server did not bind to a TCP address.");
+    throw new Error(TCP_BIND_FAILED_ERROR);
   }
   const boundAddress: AddressInfo = bound;
   const displayHost =

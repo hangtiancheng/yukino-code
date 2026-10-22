@@ -40,7 +40,26 @@ import type * as Sentry from "@sentry/node";
 
 import { createChildLogger } from "@/logger/index.js";
 import {
+  ATTRIBUTE_ERROR_TYPE,
+  ATTRIBUTE_MODE,
   DEFAULT_EXPORT_INTERVAL_MS,
+  DEFAULT_OTLP_PROTOCOL,
+  EXPORTER_CONSOLE,
+  EXPORTER_NONE,
+  EXPORTER_OTLP,
+  EXPORTER_PROMETHEUS,
+  HISTOGRAM_UNIT,
+  INSTRUMENTATION_SCOPE_NAME,
+  LOG_ERROR,
+  OBSERVATION_KIND_AGENT,
+  OBSERVATION_KIND_GENERATION,
+  OBSERVATION_KIND_TOOL,
+  OBSERVATION_LEVEL_ERROR,
+  OTLP_PROTOCOL_GRPC,
+  OTLP_PROTOCOL_HTTP_JSON,
+  OTLP_PROTOCOL_HTTP_PROTOBUF,
+  SENTRY_TRACES_SAMPLE_RATE,
+  SERVICE_NAME,
   SHUTDOWN_TIMEOUT_MS,
 } from "@/telemetry/constants.js";
 import type {
@@ -64,7 +83,7 @@ export function parseExporterTypes(value: string | undefined): string[] {
   return (value ?? "")
     .split(",")
     .map((item) => item.trim())
-    .filter((item) => item.length > 0 && item !== "none");
+    .filter((item) => item.length > 0 && item !== EXPORTER_NONE);
 }
 
 function parsePositiveInteger(
@@ -80,11 +99,11 @@ function getProtocol(signal: "logs" | "metrics" | "traces"): OtlpProtocol {
   const configured =
     process.env[signalKey]?.trim() ||
     process.env.OTEL_EXPORTER_OTLP_PROTOCOL?.trim();
-  const protocol = configured || "http/protobuf";
+  const protocol = configured || DEFAULT_OTLP_PROTOCOL;
   if (
-    protocol === "grpc" ||
-    protocol === "http/json" ||
-    protocol === "http/protobuf"
+    protocol === OTLP_PROTOCOL_GRPC ||
+    protocol === OTLP_PROTOCOL_HTTP_JSON ||
+    protocol === OTLP_PROTOCOL_HTTP_PROTOBUF
   ) {
     return protocol;
   }
@@ -115,7 +134,7 @@ function parseResourceAttributes(
 
 function createResource() {
   return resourceFromAttributes({
-    [ATTR_SERVICE_NAME]: "yukino",
+    [ATTR_SERVICE_NAME]: SERVICE_NAME,
     [ATTR_SERVICE_VERSION]: version,
     ...parseResourceAttributes(process.env.OTEL_RESOURCE_ATTRIBUTES),
     ...(process.env.OTEL_SERVICE_NAME
@@ -128,17 +147,17 @@ async function createTraceExporter(
   protocol: OtlpProtocol,
 ): Promise<SpanExporter> {
   switch (protocol) {
-    case "grpc": {
+    case OTLP_PROTOCOL_GRPC: {
       const { OTLPTraceExporter } =
         await import("@opentelemetry/exporter-trace-otlp-grpc");
       return new OTLPTraceExporter();
     }
-    case "http/json": {
+    case OTLP_PROTOCOL_HTTP_JSON: {
       const { OTLPTraceExporter } =
         await import("@opentelemetry/exporter-trace-otlp-http");
       return new OTLPTraceExporter();
     }
-    case "http/protobuf": {
+    case OTLP_PROTOCOL_HTTP_PROTOBUF: {
       const { OTLPTraceExporter } =
         await import("@opentelemetry/exporter-trace-otlp-proto");
       return new OTLPTraceExporter();
@@ -150,17 +169,17 @@ async function createLogExporter(
   protocol: OtlpProtocol,
 ): Promise<LogRecordExporter> {
   switch (protocol) {
-    case "grpc": {
+    case OTLP_PROTOCOL_GRPC: {
       const { OTLPLogExporter } =
         await import("@opentelemetry/exporter-logs-otlp-grpc");
       return new OTLPLogExporter();
     }
-    case "http/json": {
+    case OTLP_PROTOCOL_HTTP_JSON: {
       const { OTLPLogExporter } =
         await import("@opentelemetry/exporter-logs-otlp-http");
       return new OTLPLogExporter();
     }
-    case "http/protobuf": {
+    case OTLP_PROTOCOL_HTTP_PROTOBUF: {
       const { OTLPLogExporter } =
         await import("@opentelemetry/exporter-logs-otlp-proto");
       return new OTLPLogExporter();
@@ -172,17 +191,17 @@ async function createMetricExporter(
   protocol: OtlpProtocol,
 ): Promise<PushMetricExporter> {
   switch (protocol) {
-    case "grpc": {
+    case OTLP_PROTOCOL_GRPC: {
       const { OTLPMetricExporter } =
         await import("@opentelemetry/exporter-metrics-otlp-grpc");
       return new OTLPMetricExporter();
     }
-    case "http/json": {
+    case OTLP_PROTOCOL_HTTP_JSON: {
       const { OTLPMetricExporter } =
         await import("@opentelemetry/exporter-metrics-otlp-http");
       return new OTLPMetricExporter();
     }
-    case "http/protobuf": {
+    case OTLP_PROTOCOL_HTTP_PROTOBUF: {
       const { OTLPMetricExporter } =
         await import("@opentelemetry/exporter-metrics-otlp-proto");
       return new OTLPMetricExporter();
@@ -196,9 +215,9 @@ async function createTracerProvider(
   const processors: SpanProcessor[] = [];
   const exporterTypes = parseExporterTypes(process.env.OTEL_TRACES_EXPORTER);
   for (const exporterType of exporterTypes) {
-    if (exporterType === "console") {
+    if (exporterType === EXPORTER_CONSOLE) {
       processors.push(new BatchSpanProcessor(new ConsoleSpanExporter()));
-    } else if (exporterType === "otlp") {
+    } else if (exporterType === EXPORTER_OTLP) {
       processors.push(
         new BatchSpanProcessor(
           await createTraceExporter(getProtocol("traces")),
@@ -238,9 +257,9 @@ async function createLoggerProvider(
     process.env.OTEL_LOGS_EXPORTER,
   )) {
     let exporter: LogRecordExporter;
-    if (exporterType === "console") {
+    if (exporterType === EXPORTER_CONSOLE) {
       exporter = new ConsoleLogRecordExporter();
-    } else if (exporterType === "otlp") {
+    } else if (exporterType === EXPORTER_OTLP) {
       exporter = await createLogExporter(getProtocol("logs"));
     } else {
       throw new Error(`Unsupported log exporter: ${exporterType}`);
@@ -262,7 +281,7 @@ async function createMetricReaders(): Promise<IMetricReader[]> {
   for (const exporterType of parseExporterTypes(
     process.env.OTEL_METRICS_EXPORTER,
   )) {
-    if (exporterType === "prometheus") {
+    if (exporterType === EXPORTER_PROMETHEUS) {
       const { PrometheusExporter } =
         await import("@opentelemetry/exporter-prometheus");
       readers.push(new PrometheusExporter());
@@ -270,9 +289,9 @@ async function createMetricReaders(): Promise<IMetricReader[]> {
     }
 
     let exporter: PushMetricExporter;
-    if (exporterType === "console") {
+    if (exporterType === EXPORTER_CONSOLE) {
       exporter = new ConsoleMetricExporter();
-    } else if (exporterType === "otlp") {
+    } else if (exporterType === EXPORTER_OTLP) {
       exporter = await createMetricExporter(getProtocol("metrics"));
     } else {
       throw new Error(`Unsupported metric exporter: ${exporterType}`);
@@ -314,7 +333,7 @@ async function initializeSentry(): Promise<SentryModule | null> {
       return event;
     },
     skipOpenTelemetrySetup: true,
-    tracesSampleRate: 0,
+    tracesSampleRate: SENTRY_TRACES_SAMPLE_RATE,
   });
   return sentry;
 }
@@ -365,26 +384,26 @@ function createRootObservation(
   attributes: TelemetryAttributes,
 ): LangfuseObservation {
   switch (kind) {
-    case "agent":
+    case OBSERVATION_KIND_AGENT:
       return startObservation(
         name,
         { metadata: attributes },
-        { asType: "agent" },
+        { asType: OBSERVATION_KIND_AGENT },
       );
-    case "generation": {
+    case OBSERVATION_KIND_GENERATION: {
       const model =
         typeof attributes.model === "string" ? attributes.model : undefined;
       return startObservation(
         name,
         { metadata: attributes, model },
-        { asType: "generation" },
+        { asType: OBSERVATION_KIND_GENERATION },
       );
     }
-    case "tool":
+    case OBSERVATION_KIND_TOOL:
       return startObservation(
         name,
         { metadata: attributes },
-        { asType: "tool" },
+        { asType: OBSERVATION_KIND_TOOL },
       );
   }
 }
@@ -396,26 +415,26 @@ function createChildObservation(
   attributes: TelemetryAttributes,
 ): LangfuseObservation {
   switch (kind) {
-    case "agent":
+    case OBSERVATION_KIND_AGENT:
       return parent.startObservation(
         name,
         { metadata: attributes },
-        { asType: "agent" },
+        { asType: OBSERVATION_KIND_AGENT },
       );
-    case "generation": {
+    case OBSERVATION_KIND_GENERATION: {
       const model =
         typeof attributes.model === "string" ? attributes.model : undefined;
       return parent.startObservation(
         name,
         { metadata: attributes, model },
-        { asType: "generation" },
+        { asType: OBSERVATION_KIND_GENERATION },
       );
     }
-    case "tool":
+    case OBSERVATION_KIND_TOOL:
       return parent.startObservation(
         name,
         { metadata: attributes },
-        { asType: "tool" },
+        { asType: OBSERVATION_KIND_TOOL },
       );
   }
 }
@@ -429,10 +448,10 @@ class ProviderObservation implements TelemetryObservation {
 
   recordException(error: unknown): void {
     const errorType = error instanceof Error ? error.name : typeof error;
-    this.observation.otelSpan.setAttribute("error.type", errorType);
+    this.observation.otelSpan.setAttribute(ATTRIBUTE_ERROR_TYPE, errorType);
     this.observation.otelSpan.setStatus({ code: SpanStatusCode.ERROR });
     this.observation.updateOtelSpanAttributes({
-      level: "ERROR",
+      level: OBSERVATION_LEVEL_ERROR,
       statusMessage: errorType,
     });
   }
@@ -473,9 +492,10 @@ class ProviderRuntime implements TelemetryRuntime {
     this.sentry?.captureException(error, {
       tags: { context, mode: this.mode },
     });
-    this.emitLog("yukino.error", "error", {
+    this.emitLog(LOG_ERROR, "error", {
       context,
-      "error.type": error instanceof Error ? error.name : typeof error,
+      [ATTRIBUTE_ERROR_TYPE]:
+        error instanceof Error ? error.name : typeof error,
     });
   }
 
@@ -485,7 +505,7 @@ class ProviderRuntime implements TelemetryRuntime {
     attributes: TelemetryAttributes = {},
   ): void {
     this.logger?.emit({
-      attributes: { ...attributes, "yukino.mode": this.mode },
+      attributes: { ...attributes, [ATTRIBUTE_MODE]: this.mode },
       body: name,
       severityNumber: severityNumber(severity),
       severityText: severity.toUpperCase(),
@@ -518,7 +538,7 @@ class ProviderRuntime implements TelemetryRuntime {
     if (!this.meter) {
       return;
     }
-    const mergedAttributes = { ...attributes, "yukino.mode": this.mode };
+    const mergedAttributes = { ...attributes, [ATTRIBUTE_MODE]: this.mode };
     if (kind === "counter") {
       let counter = this.counters.get(name);
       if (!counter) {
@@ -531,7 +551,7 @@ class ProviderRuntime implements TelemetryRuntime {
 
     let histogram = this.histograms.get(name);
     if (!histogram) {
-      histogram = this.meter.createHistogram(name, { unit: "ms" });
+      histogram = this.meter.createHistogram(name, { unit: HISTOGRAM_UNIT });
       this.histograms.set(name, histogram);
     }
     histogram.record(value, mergedAttributes);
@@ -539,7 +559,7 @@ class ProviderRuntime implements TelemetryRuntime {
 
   setMode(mode: TelemetryMode): void {
     this.mode = mode;
-    this.sentry?.setTag("yukino.mode", mode);
+    this.sentry?.setTag(ATTRIBUTE_MODE, mode);
   }
 
   async shutdown(): Promise<void> {
@@ -577,7 +597,7 @@ class ProviderRuntime implements TelemetryRuntime {
     return new ProviderObservation(
       createRootObservation(kind, name, {
         ...attributes,
-        "yukino.mode": this.mode,
+        [ATTRIBUTE_MODE]: this.mode,
       }),
     );
   }
@@ -605,9 +625,10 @@ export async function createTelemetryRuntime(): Promise<TelemetryRuntime> {
     metricReaders && metricReaders.length > 0
       ? new MeterProvider({ readers: metricReaders, resource })
       : null;
-  const meter = meterProvider?.getMeter("@yukino.js/yukino", version) ?? null;
+  const meter =
+    meterProvider?.getMeter(INSTRUMENTATION_SCOPE_NAME, version) ?? null;
   const logger =
-    loggerProvider?.getLogger("@yukino.js/yukino", version) ?? null;
+    loggerProvider?.getLogger(INSTRUMENTATION_SCOPE_NAME, version) ?? null;
 
   return new ProviderRuntime(
     tracerProvider,

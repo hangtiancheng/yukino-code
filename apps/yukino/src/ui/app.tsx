@@ -47,6 +47,7 @@ import {
   saveProvider,
 } from "@/config/provider-login.js";
 import { expandAtRefsWithImages } from "@/conversation/at-expand.js";
+import { SYSTEM_REMINDER_OPEN } from "@/conversation/constants.js";
 import {
   ConversationManager,
   type UserBashResult,
@@ -96,14 +97,12 @@ import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import {
   BUILTIN_AGENTS,
   GENERAL_PURPOSE_AGENT_TYPE,
+  PLAN_AGENT_NAME,
   SUBAGENT_INTERRUPTED_MARKER,
 } from "@/subagent/constants.js";
+import { formatAgentTaskNotification } from "@/subagent/prompts.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
-import {
-  TaskManager,
-  formatAgentTaskNotification,
-  type AgentTask,
-} from "@/subagent/task-manager.js";
+import { TaskManager, type AgentTask } from "@/subagent/task-manager.js";
 import { LEADER_NAME } from "@/teams/constants.js";
 import {
   coordinatorToolFilter,
@@ -136,7 +135,7 @@ import type { PermissionRequestHandler } from "@/tools/types.js";
 import { AgentActivity } from "@/ui/agent-activity.js";
 import { AgentStatus } from "@/ui/agent-status.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "@/ui/chat.js";
-import { MAX_RECENT_TOOLS, THEME } from "@/ui/constants.js";
+import { CLIENT_NOT_READY, MAX_RECENT_TOOLS, THEME } from "@/ui/constants.js";
 import { Footer } from "@/ui/footer.js";
 import { InteractionDock } from "@/ui/interaction-dock.js";
 import {
@@ -151,6 +150,11 @@ import {
   type PermissionRequest,
 } from "@/ui/permission-request.js";
 import type { PlanChoice } from "@/ui/plan-approval.js";
+import {
+  buildFeedbackIssueRejectionReminder,
+  buildFeedbackRejectionPrompt,
+  buildPlanExecutionPrompt,
+} from "@/ui/prompts.js";
 import { ProviderLogin } from "@/ui/provider-login.js";
 import { ProviderSelect } from "@/ui/provider-select.js";
 import type { RewindAction } from "@/ui/rewind-dialog.js";
@@ -1662,7 +1666,7 @@ export function App({
           } else {
             setMessages((current) => [
               ...current,
-              { role: "system", content: "Client not ready." },
+              { role: "system", content: CLIENT_NOT_READY },
             ]);
           }
           break;
@@ -2114,7 +2118,7 @@ export function App({
               ),
             },
           );
-          if (cmd.agent === "plan" && !result.isError) {
+          if (cmd.agent === PLAN_AGENT_NAME && !result.isError) {
             setPlanApprovalActive(true);
           }
         } finally {
@@ -2164,7 +2168,7 @@ export function App({
       if (!client) {
         setMessages((prev) => [
           ...prev,
-          { role: "system", content: "Client not ready." },
+          { role: "system", content: CLIENT_NOT_READY },
         ]);
         return true;
       }
@@ -2593,7 +2597,7 @@ export function App({
           { role: "system", content: "Plan approved. Entered YOLO mode." },
         ]);
         if (planContent) {
-          handleSubmit(`Execute this plan:\n\n${planContent}`);
+          handleSubmit(buildPlanExecutionPrompt(planContent));
         }
       } else if (choice === "manual") {
         planOwner().exitPlanMode("default");
@@ -2608,7 +2612,7 @@ export function App({
           },
         ]);
         if (planContent) {
-          handleSubmit(`Execute this plan:\n\n${planContent}`);
+          handleSubmit(buildPlanExecutionPrompt(planContent));
         }
       } else if (choice === "feedback" && feedback) {
         handleSubmit(feedback);
@@ -2656,7 +2660,7 @@ export function App({
         .filter(
           (message) =>
             message.role !== "system" &&
-            !contentToText(message.content).startsWith("<system-reminder>"),
+            !contentToText(message.content).startsWith(SYSTEM_REMINDER_OPEN),
         ),
     );
   };
@@ -2877,7 +2881,7 @@ export function App({
     if (!client) {
       setMessages((prev) => [
         ...prev,
-        { role: "system", content: "Client not ready." },
+        { role: "system", content: CLIENT_NOT_READY },
       ]);
       return;
     }
@@ -2999,15 +3003,12 @@ export function App({
         // to the agent as a user turn, with the rejected titles as context.
         const reason = rejection?.reason;
         if (reason) {
-          const titles = (rejection?.issues ?? [])
-            .map((issue) => `- ${issue.title}`)
-            .join("\n");
           conversationRef.current.addSystemReminder(
-            `<feedback_issue_rejection>\nThe user rejected filing these /feedback issues and asked you not to re-file them:\n${titles}\n</feedback_issue_rejection>`,
+            buildFeedbackIssueRejectionReminder(
+              (rejection?.issues ?? []).map((issue) => issue.title),
+            ),
           );
-          handleSubmit(
-            `Feedback on the rejected /feedback issues:\n\n${reason}`,
-          );
+          handleSubmit(buildFeedbackRejectionPrompt(reason));
         }
       });
   };

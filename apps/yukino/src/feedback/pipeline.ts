@@ -16,7 +16,11 @@ import {
   type EnvironmentSnapshot,
   type RuntimeInfo,
 } from "@/feedback/collect.js";
-import { GIST_FILENAME, MAX_ANALYSIS_LOG_BYTES } from "@/feedback/constants.js";
+import {
+  FEEDBACK_DIR_NAME,
+  GIST_FILENAME,
+  MAX_ANALYSIS_LOG_BYTES,
+} from "@/feedback/constants.js";
 import {
   filterDuplicateDrafts,
   issueFingerprint,
@@ -111,7 +115,7 @@ async function writeBundle(
   sessionId: string,
   collected: CollectOutput,
 ): Promise<string> {
-  const dir = sessionPath(sessionId, "feedback");
+  const dir = sessionPath(sessionId, FEEDBACK_DIR_NAME);
   mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const path = join(dir, `bundle-${stamp}.zip`);

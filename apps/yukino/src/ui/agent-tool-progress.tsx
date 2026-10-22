@@ -1,5 +1,9 @@
 import { Box } from "ink";
 
+import {
+  DEFAULT_AGENT_KIND,
+  GENERAL_PURPOSE_AGENT_TYPE,
+} from "@/subagent/constants.js";
 import type { AgentTask } from "@/subagent/task-manager.js";
 import { formatTokens, type TeammateUIState } from "@/teams/progress.js";
 import {
@@ -122,9 +126,10 @@ function decorateTool(
     };
   }
 
-  const teammateKind = (tool.args.kind ?? "teammate") === "teammate";
+  const teammateKind =
+    (tool.args.kind ?? DEFAULT_AGENT_KIND) === DEFAULT_AGENT_KIND;
   const background = tool.args.run_in_background === true;
-  const role = strArg(tool.args, "subagent_type") || "general-purpose";
+  const role = strArg(tool.args, "subagent_type") || GENERAL_PURPOSE_AGENT_TYPE;
   return {
     ...tool,
     progress: teammateKind

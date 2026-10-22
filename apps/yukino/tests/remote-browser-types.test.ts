@@ -4,6 +4,7 @@ import {
   isServerMessage,
   type ServerMessage,
 } from "@/remote/browser/src/types.js";
+import { PRIVATE_BOARD_ID_PREFIX } from "@/todo/constants.js";
 
 const validMessages: Record<ServerMessage["type"], ServerMessage> = {
   mcp_app_response: {
@@ -126,7 +127,7 @@ const validMessages: Record<ServerMessage["type"], ServerMessage> = {
   todo_update: {
     type: "todo_update",
     data: {
-      boardId: "private:0",
+      boardId: `${PRIVATE_BOARD_ID_PREFIX}0`,
       tasks: [{ id: "1", subject: "task", status: "pending" }],
     },
   },

@@ -1,6 +1,9 @@
 import { existsSync, realpathSync } from "node:fs";
 
-import { SANDBOX_EXEC_PATH } from "@/sandbox/constants.js";
+import {
+  SANDBOX_EXEC_PATH,
+  SEATBELT_PATH_INVALID_CHARACTERS_ERROR,
+} from "@/sandbox/constants.js";
 import type {
   Sandbox,
   SandboxConfig,
@@ -64,7 +67,7 @@ function pathVariants(path: string): string[] {
 
 function quoteProfileString(value: string): string {
   if (/\0|[\r\n]/u.test(value)) {
-    throw new Error("Seatbelt paths cannot contain NUL or newline characters");
+    throw new Error(SEATBELT_PATH_INVALID_CHARACTERS_ERROR);
   }
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

@@ -25,7 +25,9 @@ import { createChildLogger } from "@/logger/index.js";
 import {
   MCP_APPS_EXTENSION,
   MCP_APP_MIME_TYPE,
+  MCP_APP_URI_PREFIX,
   MCP_IMAGE_MEDIA_TYPES,
+  MCP_NOT_CONNECTED_ERROR,
 } from "@/mcp/constants.js";
 import type {
   ToolResult,
@@ -279,7 +281,7 @@ export class MCPClient {
 
   async listTools(): Promise<MCPTool[]> {
     if (!this.client) {
-      throw new Error("Not connected");
+      throw new Error(MCP_NOT_CONNECTED_ERROR);
     }
     const client = this.client;
     const tools: MCPTool[] = [];
@@ -329,7 +331,7 @@ export class MCPClient {
   async readResource(uri: string, signal?: AbortSignal) {
     signal?.throwIfAborted();
     if (!this.client) {
-      throw new Error("Not connected");
+      throw new Error(MCP_NOT_CONNECTED_ERROR);
     }
     return this.client.readResource({ uri }, { signal });
   }
@@ -341,7 +343,7 @@ export class MCPClient {
   ): Promise<CallToolResult> {
     abortSignal?.throwIfAborted();
     if (!this.client) {
-      throw new Error("Not connected");
+      throw new Error(MCP_NOT_CONNECTED_ERROR);
     }
     return CallToolResultSchema.parse(
       await this.client.callTool(
@@ -367,7 +369,7 @@ export class MCPClient {
       isError: result.isError === true,
       ...(this.appsEnabled &&
       typeof resourceUri === "string" &&
-      resourceUri.startsWith("ui://")
+      resourceUri.startsWith(MCP_APP_URI_PREFIX)
         ? {
             mcpApp: {
               serverName: this.name,

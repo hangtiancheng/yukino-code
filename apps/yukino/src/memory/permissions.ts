@@ -1,5 +1,11 @@
 import { extname } from "node:path";
 
+import {
+  GLOB_ESCAPE_RE,
+  GLOB_MAGIC_RE,
+  MEMORY_DIR_NAME,
+  MEMORY_TASK_TOOLS,
+} from "@/memory/constants.js";
 import { PermissionChecker, type Decision } from "@/permissions/index.js";
 import { projectPath, yukinoPath, getSessionsDir } from "@/storage/index.js";
 import type { ToolCategory } from "@/tools/types.js";
@@ -15,7 +21,10 @@ export class MemoryPermissionChecker extends PermissionChecker {
     allowProjectReads = false,
   ) {
     super(memoryCwd, "default");
-    this.memoryRoots = [projectPath(memoryCwd, "memory"), yukinoPath("memory")];
+    this.memoryRoots = [
+      projectPath(memoryCwd, MEMORY_DIR_NAME),
+      yukinoPath(MEMORY_DIR_NAME),
+    ];
     this.readRoots = [
       ...this.memoryRoots,
       ...(allowProjectReads ? [memoryCwd, getSessionsDir(memoryCwd)] : []),
@@ -63,12 +72,7 @@ export class MemoryPermissionChecker extends PermissionChecker {
           reason: `Background memory cannot approve: ${explicit.reason}`,
         };
       }
-      if (
-        !new Set(["ReadFile", "Grep", "Glob", "WriteFile", "EditFile"]).has(
-          name,
-        ) ||
-        category === "command"
-      ) {
+      if (!MEMORY_TASK_TOOLS.has(name) || category === "command") {
         return {
           effect: "deny",
           reason: "Background memory tasks only support scoped file operations",
@@ -96,14 +100,14 @@ export class MemoryPermissionChecker extends PermissionChecker {
       }
       if (name === "Glob") {
         const pattern = strArg(args, "pattern");
-        if (!pattern || /\\|[{(][^})]*\/|(?:^|\/)\.\.(?:\/|$)/u.test(pattern)) {
+        if (!pattern || GLOB_ESCAPE_RE.test(pattern)) {
           return {
             effect: "deny",
             reason: "Glob pattern escapes the memory task scope",
           };
         }
         const absolute = resolveToolPath(path, pattern);
-        const magic = absolute.search(/[*?{[(]/u);
+        const magic = absolute.search(GLOB_MAGIC_RE);
         const prefix =
           magic < 0
             ? absolute

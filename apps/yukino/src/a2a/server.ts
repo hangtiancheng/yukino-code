@@ -17,8 +17,10 @@ import express from "express";
 import { buildAgentCard } from "@/a2a/card.js";
 import {
   A2A_DEFAULT_PORT,
+  AGENT_CARD_PATH,
   DEFAULT_ADDRESS,
-  LOOPBACK_HOSTS,
+  LOOPBACK_REQUIRED_ERROR,
+  SERVER_NOT_BOUND_ERROR,
 } from "@/a2a/constants.js";
 import {
   createA2aRuntime,
@@ -26,6 +28,7 @@ import {
   type A2aRuntimeFactory,
 } from "@/a2a/executor.js";
 import { parseRemoteAddress } from "@/remote/address.js";
+import { LOOPBACK_HOSTS } from "@/remote/constants.js";
 
 export interface A2aServerHandle {
   /** Base URL of the running server, e.g. `http://127.0.0.1:18890/`. */
@@ -44,7 +47,7 @@ export function parseA2aAddress(address?: string): {
     allowEphemeral: true,
   });
   if (!LOOPBACK_HOSTS.has(parsed.host)) {
-    throw new Error("A2A server must listen on a loopback address.");
+    throw new Error(LOOPBACK_REQUIRED_ERROR);
   }
   return parsed;
 }
@@ -70,7 +73,7 @@ export async function startA2aServer(
 
   const bound = httpServer.address();
   if (!bound || typeof bound === "string") {
-    throw new Error("A2A server did not bind to a TCP address.");
+    throw new Error(SERVER_NOT_BOUND_ERROR);
   }
   const displayHost =
     bound.family === "IPv6" ? `[${bound.address}]` : bound.address;
@@ -90,7 +93,7 @@ export async function startA2aServer(
 
   const app = express();
   app.use(
-    "/.well-known/agent-card.json",
+    AGENT_CARD_PATH,
     agentCardHandler({
       agentCardProvider: requestHandler,
     }),
@@ -112,7 +115,7 @@ export async function startA2aServer(
   let closed = false;
   return {
     url,
-    cardUrl: `${url}.well-known/agent-card.json`,
+    cardUrl: `${url}${AGENT_CARD_PATH.slice(1)}`,
     async close(): Promise<void> {
       if (closed) {
         return;

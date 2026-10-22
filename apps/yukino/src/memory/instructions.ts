@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve, relative } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
+import { AGENTS_FILE_NAME } from "@/memory/constants.js";
 import { yukinoPath } from "@/storage/index.js";
 const log = createChildLogger({ module: "memory" });
 
@@ -54,7 +55,7 @@ export function discoverInstructions(cwd: string): InstructionSource[] {
 
   // 1. User-global instructions
   try {
-    addSource(sources, seen, yukinoPath("AGENTS.md"));
+    addSource(sources, seen, yukinoPath(AGENTS_FILE_NAME));
   } catch (err) {
     log.error({ err }, "memory operation failed");
 
@@ -64,7 +65,7 @@ export function discoverInstructions(cwd: string): InstructionSource[] {
   // 2. Every directory from git root to cwd
   const dirs = projectInstructionDirs(cwd);
   for (const dir of dirs) {
-    addSource(sources, seen, join(dir, "AGENTS.md"));
+    addSource(sources, seen, join(dir, AGENTS_FILE_NAME));
   }
 
   return sources;

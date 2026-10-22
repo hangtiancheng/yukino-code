@@ -1,6 +1,8 @@
+import { MCP_TOOL_PREFIX } from "@/mcp/constants.js";
 import type { PermissionMode } from "@/permissions/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import {
+  ALL_TOOLS_WILDCARD,
   ASYNC_AGENT_ALLOWED_TOOLS,
   SUBAGENT_DISALLOWED_TOOLS,
 } from "@/subagent/constants.js";
@@ -33,7 +35,7 @@ function registerScopedTool(
 }
 
 function isMCPTool(name: string): boolean {
-  return name.startsWith("mcp__");
+  return name.startsWith(MCP_TOOL_PREFIX);
 }
 
 /**
@@ -54,7 +56,7 @@ export function filterToolsForAgent(
 ): ToolRegistry {
   const disallowed = new Set(disallowedTools ?? []);
   const allowed = new Set(allowedTools ?? []);
-  const hasWhitelist = allowed.size > 0 && !allowed.has("*");
+  const hasWhitelist = allowed.size > 0 && !allowed.has(ALL_TOOLS_WILDCARD);
 
   const filtered = new ToolRegistry();
   const tasks = new TaskList();

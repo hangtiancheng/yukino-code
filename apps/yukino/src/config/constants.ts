@@ -57,5 +57,9 @@ export const MCP_LOADING_MODES = [
 ] as const;
 export const THEME_MODES = ["auto", "dark", "light"] as const;
 
+export const GLOBAL_CONFIG_FILENAME = "config.yaml";
 /** Project-level MCP config file, compatible with the Claude Code format. */
 export const PROJECT_MCP_FILENAME = ".mcp.json";
+
+export const NO_PROVIDERS_ERROR = "At least one provider MUST be configured.";
+export const YAML_PARSE_ERROR = "YAML parse error";

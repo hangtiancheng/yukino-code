@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { fileHistoryDir } from "@/file-history/index.js";
 import {
+  CLIPBOARD_NOT_PNG_ERROR,
+  CLIPBOARD_NO_SESSION_ERROR,
   CLIPBOARD_TIMEOUT_MS,
   MAX_CLIPBOARD_IMAGE_BYTES,
   MAX_STDERR_BYTES,
@@ -34,7 +36,7 @@ export async function storeClipboardImage(
   bytes: Buffer,
 ): Promise<string> {
   if (!isPngBuffer(bytes)) {
-    throw new Error("Clipboard data is not a PNG image.");
+    throw new Error(CLIPBOARD_NOT_PNG_ERROR);
   }
   if (bytes.length > MAX_CLIPBOARD_IMAGE_BYTES) {
     throw new Error(
@@ -187,9 +189,7 @@ async function readLinuxClipboard(): Promise<Buffer> {
     });
   }
   if (backends.length === 0) {
-    throw new Error(
-      "No Wayland or X11 session found (WAYLAND_DISPLAY and DISPLAY are unset).",
-    );
+    throw new Error(CLIPBOARD_NO_SESSION_ERROR);
   }
 
   let lastError = new Error(NO_IMAGE_MESSAGE);

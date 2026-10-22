@@ -19,12 +19,15 @@ import {
   saveTranscriptMessage,
 } from "@/session/index.js";
 import { sessionPath } from "@/storage/index.js";
-import { SUBAGENT_INTERRUPTED_MARKER } from "@/subagent/constants.js";
-import type { AgentDefinition } from "@/subagent/definition.js";
 import {
-  formatAgentTaskNotification,
-  TaskManager,
-} from "@/subagent/task-manager.js";
+  NO_OUTPUT_MARKER,
+  SUBAGENT_ERROR_RECORD_TYPE,
+  SUBAGENT_INTERRUPTED_MARKER,
+  TRANSCRIPT_FILENAME,
+} from "@/subagent/constants.js";
+import type { AgentDefinition } from "@/subagent/definition.js";
+import { formatAgentTaskNotification } from "@/subagent/prompts.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import { filterToolsForAgent } from "@/subagent/tool-filter.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import type { ToolRegistry } from "@/tools/registry.js";
@@ -110,7 +113,7 @@ export async function spawnSubagent(
           : definition.permissionMode,
       );
   const sessionId = options.sessionId ?? newSessionId();
-  const transcriptPath = sessionPath(sessionId, "transcript.jsonl");
+  const transcriptPath = sessionPath(sessionId, TRANSCRIPT_FILENAME);
   const taskManager =
     options.backgroundTasks === false ? null : new TaskManager(sessionId);
   let output = "";
@@ -211,18 +214,18 @@ export async function spawnSubagent(
           }
           return submittedPlan
             ? `${output}${output ? "\n\n" : ""}${submittedPlan}`
-            : output || "[No output]";
+            : output || NO_OUTPUT_MARKER;
         case "error":
           throw event.error;
       }
     }
 
-    return output || "[No output]";
+    return output || NO_OUTPUT_MARKER;
   } catch (error) {
     const detail = asErrorString(error);
     saveTranscriptMessage(transcriptPath, {
       role: "system",
-      type: "subagent_error",
+      type: SUBAGENT_ERROR_RECORD_TYPE,
       content: detail,
       timestamp: Math.floor(Date.now() / 1000),
     });

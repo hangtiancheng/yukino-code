@@ -4,7 +4,19 @@ import { request as httpsRequest } from "node:https";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 import { Readable } from "node:stream";
 
-import { MAX_REDIRECTS, REDIRECT_STATUSES } from "@/utils/constants.js";
+import {
+  BLOCKED_IPV4_SUBNETS,
+  BLOCKED_IPV6_SUBNETS,
+  MAX_REDIRECTS,
+  NO_BODY_STATUSES,
+  PUBLIC_HTTP_BODY_UNSUPPORTED_ERROR,
+  REDIRECT_STATUSES,
+  SKILL_URL_CREDENTIALS_ERROR,
+  SKILL_URL_MISSING_LOCATION_ERROR,
+  SKILL_URL_NON_PUBLIC_ERROR,
+  SKILL_URL_PROTOCOL_ERROR,
+  SKILL_URL_UNREACHABLE_ERROR,
+} from "@/utils/constants.js";
 
 export interface LookupAddress {
   address: string;
@@ -23,37 +35,11 @@ export interface PublicHttpDependencies {
 const blockedIpv4Addresses = new BlockList();
 const blockedIpv6Addresses = new BlockList();
 
-for (const [network, prefix] of [
-  ["0.0.0.0", 8],
-  ["10.0.0.0", 8],
-  ["100.64.0.0", 10],
-  ["127.0.0.0", 8],
-  ["169.254.0.0", 16],
-  ["172.16.0.0", 12],
-  ["192.0.0.0", 24],
-  ["192.0.2.0", 24],
-  ["192.88.99.0", 24],
-  ["192.168.0.0", 16],
-  ["198.18.0.0", 15],
-  ["198.51.100.0", 24],
-  ["203.0.113.0", 24],
-  ["224.0.0.0", 4],
-  ["240.0.0.0", 4],
-] as const) {
+for (const [network, prefix] of BLOCKED_IPV4_SUBNETS) {
   blockedIpv4Addresses.addSubnet(network, prefix, "ipv4");
 }
 
-for (const [network, prefix] of [
-  ["::", 3],
-  ["4000::", 2],
-  ["8000::", 1],
-  ["2001::", 32],
-  ["2001:2::", 48],
-  ["2001:10::", 28],
-  ["2001:db8::", 32],
-  ["2002::", 16],
-  ["3fff::", 20],
-] as const) {
+for (const [network, prefix] of BLOCKED_IPV6_SUBNETS) {
   blockedIpv6Addresses.addSubnet(network, prefix, "ipv6");
 }
 
@@ -83,10 +69,10 @@ async function resolvePublicHttpUrl(
 ): Promise<{ url: URL; addresses: LookupAddress[] }> {
   const url = input instanceof URL ? input : new URL(input);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Skill URL must use HTTP or HTTPS");
+    throw new Error(SKILL_URL_PROTOCOL_ERROR);
   }
   if (url.username || url.password) {
-    throw new Error("Skill URL must not contain credentials");
+    throw new Error(SKILL_URL_CREDENTIALS_ERROR);
   }
 
   const hostname = normalizedHostname(url);
@@ -106,7 +92,7 @@ async function resolvePublicHttpUrl(
         !isPublicIpAddress(entry.address),
     )
   ) {
-    throw new Error("Skill URL resolves to a non-public network address");
+    throw new Error(SKILL_URL_NON_PUBLIC_ERROR);
   }
   return { url, addresses };
 }
@@ -158,7 +144,7 @@ function fetchPinnedAddress(
       },
       (incoming) => {
         const status = incoming.statusCode ?? 500;
-        const noBody = [101, 204, 205, 304].includes(status);
+        const noBody = NO_BODY_STATUSES.has(status);
         resolve(
           new Response(noBody ? null : Readable.toWeb(incoming), {
             headers: responseHeaders(incoming.headers),
@@ -190,7 +176,7 @@ async function fetchPinnedAddresses(
   if (lastError instanceof Error) {
     throw lastError;
   }
-  throw new Error("Skill URL has no reachable public address", {
+  throw new Error(SKILL_URL_UNREACHABLE_ERROR, {
     cause: lastError,
   });
 }
@@ -207,7 +193,7 @@ function assertBodylessGetOrHead(init: RequestInit): void {
     );
   }
   if (init.body !== undefined && init.body !== null) {
-    throw new Error("fetchPublicHttpUrl does not support a request body");
+    throw new Error(PUBLIC_HTTP_BODY_UNSUPPORTED_ERROR);
   }
 }
 
@@ -238,7 +224,7 @@ export async function fetchPublicHttpUrl(
     }
     const location = response.headers.get("location");
     if (!location) {
-      throw new Error("Skill download redirect is missing a Location header");
+      throw new Error(SKILL_URL_MISSING_LOCATION_ERROR);
     }
     url = new URL(location, url);
   }

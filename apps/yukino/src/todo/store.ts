@@ -11,6 +11,7 @@ import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
 } from "@/storage/private.js";
+import { PRIVATE_BOARD_ID_PREFIX, TASKS_FILENAME } from "@/todo/constants.js";
 
 const log = createChildLogger({ module: "todo" });
 
@@ -53,8 +54,8 @@ export class TaskStore {
     if (!/^[A-Za-z0-9_-]+$/u.test(listId)) {
       throw new Error("Invalid task list ID");
     }
-    this.filePath = sessionPath(listId, "tasks.json");
-    this.boardId = `private:${listId}`;
+    this.filePath = sessionPath(listId, TASKS_FILENAME);
+    this.boardId = `${PRIVATE_BOARD_ID_PREFIX}${listId}`;
   }
 
   load(): z.infer<typeof TaskSnapshotSchema> {

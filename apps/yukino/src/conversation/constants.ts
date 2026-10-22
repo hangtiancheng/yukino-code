@@ -15,3 +15,22 @@ export const INTERRUPTED_TOOL_RESULT =
  *  model will assume the modification took effect and proceed accordingly. */
 export const REJECTED_TOOL_RESULT =
   "The user rejected this tool use. Nothing was changed (for file edits, the new content was NOT written).";
+
+// Protocol wrapper for model-facing reminders injected as user messages.
+export const SYSTEM_REMINDER_OPEN = "<system-reminder>";
+export const SYSTEM_REMINDER_CLOSE = "</system-reminder>";
+// Nested reminder tags in injected content are escaped so the wrapper boundary
+// stays unambiguous.
+export const SYSTEM_REMINDER_ESCAPE_RE = /<(?=\s*\/?\s*system-reminder\b)/giu;
+
+// An @ref may carry a #L3 or #L3-10 line-range suffix (inserted via the IDE integration).
+export const AT_REF_LINE_RANGE_RE = /^(.+)#L(\d+)(?:-(\d+))?$/;
+// Clipboard images and paths containing spaces use quoted mentions.
+export const AT_REF_RE =
+  /(?:^|\s)(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s]+))/g;
+
+// User-executed Bash ("!" prefix) protocol markers and inline-output budgets.
+export const USER_BASH_PREFIX = "!";
+export const USER_BASH_EXCLUDED_PREFIX = "!!";
+export const USER_BASH_INLINE_OUTPUT_BYTES = 50 * 1024;
+export const USER_BASH_INLINE_OUTPUT_LINES = 2000;

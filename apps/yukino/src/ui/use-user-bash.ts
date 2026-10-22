@@ -10,10 +10,8 @@ import {
 
 import type { UserBashResult } from "@/conversation/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
-import {
-  parseUserBashCommand,
-  userBashContext,
-} from "@/conversation/user-bash.js";
+import { userBashContext } from "@/conversation/prompts.js";
+import { parseUserBashCommand } from "@/conversation/user-bash.js";
 import type { InputEntry } from "@/history/index.js";
 import {
   saveMessage,
@@ -22,6 +20,10 @@ import {
 } from "@/session/index.js";
 import type { ToolResult } from "@/tools/types.js";
 import type { ChatMessage } from "@/ui/chat.js";
+import {
+  USER_BASH_PROGRESS_EXCLUDED,
+  USER_BASH_PROGRESS_INCLUDED,
+} from "@/ui/constants.js";
 import { plainTerminalLine } from "@/ui/terminal-text.js";
 import type { ToolBlockInfo } from "@/ui/tool-display.js";
 import { asErrorString, plainTerminalText } from "@/utils/index.js";
@@ -52,8 +54,8 @@ export function userBashCard(result: UserBashResult): ChatMessage {
         elapsed: result.elapsed,
         status: result.status,
         progress: result.excludeFromContext
-          ? "User command · excluded in next model context"
-          : "User command · included in next model context",
+          ? USER_BASH_PROGRESS_EXCLUDED
+          : USER_BASH_PROGRESS_INCLUDED,
       },
     ],
   };
@@ -144,8 +146,8 @@ export function useUserBash(options: Options) {
     const started = Date.now();
     const argsSummary = plainTerminalLine(command);
     const progress = excludeFromContext
-      ? "User command · excluded in next model context"
-      : "User command · included in next model context";
+      ? USER_BASH_PROGRESS_EXCLUDED
+      : USER_BASH_PROGRESS_INCLUDED;
     setBackgroundAllowed(!excludeFromContext);
     setTool({
       toolId: "user-bash",

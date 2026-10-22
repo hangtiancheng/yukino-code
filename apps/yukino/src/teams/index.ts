@@ -12,6 +12,7 @@ import {
 } from "@/storage/private.js";
 import type { SubagentProgressEvent } from "@/subagent/spawn.js";
 import {
+  EMPTY_TEAMMATE_PLAN_MESSAGE,
   IDLE_POLL_INTERVAL_MS,
   LEADER_NAME,
   MAX_RETAINED_TERMINATED_MEMBERS,
@@ -28,6 +29,14 @@ import {
   recordToolStart,
   recordTurnComplete,
 } from "@/teams/progress.js";
+import {
+  buildNewMessagesPrompt,
+  buildPlanApprovedMessage,
+  buildPlanRejectedMessage,
+  buildPlanReviewResumePrompt,
+  buildTasksReleasedMessage,
+  PLAN_AUTO_APPROVED_MESSAGE,
+} from "@/teams/prompts.js";
 import {
   isValidTeammateName,
   isShutdownRequest,
@@ -47,6 +56,7 @@ import {
   type TeamFile,
   type TeamMemberEntry,
 } from "@/teams/team-file.js";
+import { TASKS_FILENAME } from "@/todo/constants.js";
 import { asErrorString } from "@/utils/index.js";
 import { canonicalPath } from "@/utils/paths.js";
 import { escapeXml } from "@/utils/xml.js";
@@ -449,8 +459,7 @@ export class Team {
         return { prompt: "", shutdown };
       }
 
-      const prompt = msgs.map((m) => `From ${m.from}: ${m.text}`).join("\n\n");
-      return { prompt: `You have new messages from your team:\n\n${prompt}` };
+      return { prompt: buildNewMessagesPrompt(msgs) };
     }
     return {
       prompt: "",
@@ -468,7 +477,7 @@ export class Team {
     } catch {
       // Falls through to the fallback message below
     }
-    return result || "(The teammate returned no plan.)";
+    return result || EMPTY_TEAMMATE_PLAN_MESSAGE;
   }
 
   private async runPlanApproval(
@@ -503,10 +512,7 @@ export class Team {
         this.permissionMode === "plan" ? "default" : this.permissionMode,
       );
       member.planApprovalRequired = false;
-      return this.resumeAfterPlanReview(
-        member,
-        "Your plan was automatically approved. Begin execution within the current tool permissions; plan approval does not authorize individual tool calls.",
-      );
+      return this.resumeAfterPlanReview(member, PLAN_AUTO_APPROVED_MESSAGE);
     }
 
     while (member.active && !member.signal?.aborted) {
@@ -546,7 +552,7 @@ export class Team {
       if (!response.approve) {
         return this.resumeAfterPlanReview(
           member,
-          `The leader rejected your plan. Review feedback:\n${response.text}\n\nStay in plan mode. Revise the plan and submit it again with ExitPlanMode when available, otherwise return the revised plan in your final response.`,
+          buildPlanRejectedMessage(response.text),
         );
       }
       member.checker.exitPlanMode(
@@ -555,7 +561,7 @@ export class Team {
       member.planApprovalRequired = false;
       return this.resumeAfterPlanReview(
         member,
-        `The leader approved your plan. Review feedback:\n${response.text}\n\nBegin execution within the approved scope and current tool permissions; plan approval does not authorize individual tool calls.`,
+        buildPlanApprovedMessage(response.text),
       );
     }
     return null;
@@ -567,10 +573,7 @@ export class Team {
         (!message.type || message.type === MSG_TEXT) &&
         !isShutdownRequest(message),
     );
-    if (!messages.length) {
-      return review;
-    }
-    return `${review}\n\nMessages received while awaiting plan review. Apply scope corrections before executing or revising the plan:\n\n${messages.map((message) => `From ${message.from}: ${message.text}`).join("\n\n")}`;
+    return buildPlanReviewResumePrompt(review, messages);
   }
 
   submitPlan(name: string, plan: string): string {
@@ -664,13 +667,13 @@ export class Team {
   releaseMemberTasks(member: Member): void {
     try {
       const store = new SharedTaskStore(
-        join(teamDir(this.cwd, this.name), "tasks.json"),
+        join(teamDir(this.cwd, this.name), TASKS_FILENAME),
       );
       const tasks = store.releaseOwner(member.name);
       if (tasks.length) {
         this.leaderMailbox.sendSync(
           member.name,
-          `[tasks-released] ${member.name} exited. Unassigned tasks: ${tasks.map((task) => `#${task.id}`).join(", ")}. Use TodoWrite({}) to inspect and reassign them.`,
+          buildTasksReleasedMessage(member.name, tasks),
         );
       }
     } catch (error) {
@@ -853,7 +856,7 @@ export class TeamManager {
     team.leaderAgentId = opts.leaderAgentId ?? "";
     team.description = opts.description;
     this.teams.set(key, team);
-    const store = new SharedTaskStore(join(this.teamDir(name), "tasks.json"));
+    const store = new SharedTaskStore(join(this.teamDir(name), TASKS_FILENAME));
     store.initEmpty();
     this.taskStores.set(key, store);
     team.persist();
@@ -911,7 +914,7 @@ export class TeamManager {
       return cached;
     }
     const store = new SharedTaskStore(
-      join(this.teamDir(teamName), "tasks.json"),
+      join(this.teamDir(teamName), TASKS_FILENAME),
     );
     this.taskStores.set(key, store);
     return store;

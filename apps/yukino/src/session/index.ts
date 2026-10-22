@@ -19,6 +19,7 @@ import type {
   ToolResultBlock,
   UserBashResult,
 } from "@/conversation/index.js";
+import { GOAL_RECORD } from "@/goal/constants.js";
 import {
   listProjects,
   registerProject,
@@ -29,9 +30,17 @@ import {
 import { createChildLogger } from "@/logger/index.js";
 import {
   COMPACT_BOUNDARY,
-  SESSION_EXPIRY_DAYS,
+  FIRST_MESSAGE_PREVIEW_CHARS,
   INPUT_SESSION_MISMATCH,
+  REWIND_TMP_PATTERN,
+  REWIND_TMP_SUFFIX,
+  SESSION_EXPIRY_DAYS,
+  SESSION_FILE_EXTENSION,
 } from "@/session/constants.js";
+import {
+  INVALID_SESSION_ID_ERROR,
+  SESSION_ID_RE,
+} from "@/storage/constants.js";
 import { getSessionsDir, sessionPath } from "@/storage/index.js";
 import {
   readPrivateFileSync as readFileSync,
@@ -209,10 +218,10 @@ export function getSessionArtifactsDir(sessionId: string): string {
 }
 
 export function getSessionFilePath(cwd: string, sessionId: string): string {
-  if (!/^[A-Za-z0-9_-]+$/u.test(sessionId)) {
-    throw new Error("Invalid session ID");
+  if (!SESSION_ID_RE.test(sessionId)) {
+    throw new Error(INVALID_SESSION_ID_ERROR);
   }
-  return join(getSessionsDir(cwd), sessionId + ".jsonl");
+  return join(getSessionsDir(cwd), sessionId + SESSION_FILE_EXTENSION);
 }
 
 export function newSessionId(): string {
@@ -331,7 +340,7 @@ export function truncateSessionLines(
         kept.push(line);
       }
     }
-    const tmp = `${filePath}.${String(process.pid)}.rewind-tmp`;
+    const tmp = `${filePath}.${String(process.pid)}${REWIND_TMP_SUFFIX}`;
     try {
       writeFileSync(
         tmp,
@@ -603,7 +612,9 @@ export function listSessions(cwd: string): SessionInfo[] {
     return [];
   }
 
-  const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+  const files = readdirSync(dir).filter((f) =>
+    f.endsWith(SESSION_FILE_EXTENSION),
+  );
   const sessions: SessionInfo[] = [];
 
   for (const file of files) {
@@ -614,7 +625,7 @@ export function listSessions(cwd: string): SessionInfo[] {
           return null;
         }
         const stat = statSync(filePath);
-        const id = file.replace(".jsonl", "");
+        const id = file.replace(SESSION_FILE_EXTENSION, "");
         let firstMessage = "";
         let messageCount = 0;
         let lastUserTimestamp: number | null = null;
@@ -631,7 +642,7 @@ export function listSessions(cwd: string): SessionInfo[] {
             log.error({ err }, "session operation failed");
             continue;
           }
-          if (message.type === "goal_state") {
+          if (message.type === GOAL_RECORD) {
             continue;
           }
           messageCount++;
@@ -646,7 +657,10 @@ export function listSessions(cwd: string): SessionInfo[] {
             );
           }
           if (!firstMessage && message.role === "user" && message.content) {
-            firstMessage = contentToText(message.content).slice(0, 100);
+            firstMessage = contentToText(message.content).slice(
+              0,
+              FIRST_MESSAGE_PREVIEW_CHARS,
+            );
           }
         }
 
@@ -725,13 +739,13 @@ export function cleanExpiredSessions(cwd: string): number {
   try {
     const entries = readdirSync(dir);
     for (const entry of entries) {
-      if (entry.endsWith(".rewind-tmp")) {
+      if (entry.endsWith(REWIND_TMP_SUFFIX)) {
         // A rewind temp file is <session>.<pid>.rewind-tmp, and its writer
         // holds the session lock across write+rename (truncateSessionLines).
         // Reclaim it only under that same lock: a leftover seen there is
         // provably a crash artifact, and an in-flight rewrite is never raced.
         // Never delete by suffix alone.
-        const base = entry.replace(/\.\d+\.rewind-tmp$/u, "");
+        const base = entry.replace(REWIND_TMP_PATTERN, "");
         try {
           withFileSyncLock(join(dir, base), () => {
             rmSync(join(dir, entry), { force: true });
@@ -741,7 +755,7 @@ export function cleanExpiredSessions(cwd: string): number {
         }
       }
     }
-    files = entries.filter((f) => f.endsWith(".jsonl"));
+    files = entries.filter((f) => f.endsWith(SESSION_FILE_EXTENSION));
   } catch (err) {
     log.error({ err }, "session operation failed");
     return 0;
@@ -759,7 +773,7 @@ export function cleanExpiredSessions(cwd: string): number {
           return;
         }
         unlinkSync(filePath);
-        const id = file.replace(".jsonl", "");
+        const id = file.replace(SESSION_FILE_EXTENSION, "");
         try {
           rmSync(getSessionArtifactsDir(id), {
             recursive: true,

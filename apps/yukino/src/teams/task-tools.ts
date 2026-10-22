@@ -1,6 +1,7 @@
 import { LEADER_NAME } from "@/teams/constants.js";
 import type { Team, TeamManager } from "@/teams/index.js";
 import { buildTaskAssignmentPrompt } from "@/teams/prompts.js";
+import { PRIVATE_BOARD_ID_PREFIX } from "@/todo/constants.js";
 import type {
   Task,
   TaskBoard,
@@ -116,7 +117,9 @@ export function subscribeLeaderTasks(
     const tasks = team
       ? manager.getTaskStore(team.name).listTasks()
       : fallback.list();
-    const boardId = `${team ? `team:${team.name}` : "private"}:${generation}`;
+    const boardId = team
+      ? `team:${team.name}:${generation}`
+      : `${PRIVATE_BOARD_ID_PREFIX}${generation}`;
     const nextSignature = JSON.stringify([boardId, tasks]);
     if (signature !== nextSignature) {
       signature = nextSignature;

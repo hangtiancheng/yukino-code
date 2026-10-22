@@ -26,6 +26,11 @@ ${GIT_GUIDANCE}`;
  */
 export const POWERSHELL_BACKGROUND_DESCRIPTION = `- Set run_in_background to true to run the command in the background. The call returns a task ID immediately and the result arrives later as a task notification; do not poll or Start-Sleep waiting for it. Use this for long-running commands you do not need the result of right away. Use TaskStop with the task_id to kill a background command early. A foreground command that exceeds its timeout is moved to the background automatically instead of being killed.`;
 
+export const SHELL_TIMEOUT_DESCRIPTION = "Timeout in seconds (max 600)";
+
+export const RUN_IN_BACKGROUND_DESCRIPTION =
+  "Run the command in the background. Returns a task ID immediately; the result arrives later as a task notification.";
+
 export const READ_FILE_DESCRIPTION = `Read text with 1-based display line numbers, or images (png, jpg, jpeg, gif, webp) as visual content; not directories.
 - file_path is absolute or relative to the Agent's working directory. offset skips lines (0-based, default 0); limit defaults to 2000 lines, with a 50KB text output cap. Displayed line 101 starts at offset=100. Follow continuation/readback instructions for partial output.
 - Images ignore offset/limit. A successful read refreshes the file-state cache used by EditFile/WriteFile; re-read after an external-change error.`;
@@ -35,6 +40,9 @@ export const EDIT_FILE_DESCRIPTION = `Replace exact text in an existing file and
 - Each edits entry contains old_string and new_string, with optional replace_all. All matches use the original file; overlapping edits are rejected before writing. Merge overlapping changes into one entry.
 - old_string must be non-empty and unique unless replace_all=true (default false). LF and CRLF line endings match equivalently. Use enough context to disambiguate; preserve all other whitespace and exclude display line numbers. If matching fails, stray carriage returns in both edit strings are removed before retrying.
 - new_string must differ from old_string; an empty string deletes the match. The file's line endings and unchanged text are preserved.`;
+
+export const EDIT_FILE_OLD_STRING_DESCRIPTION =
+  "Non-empty text from the original file, without ReadFile line-number prefixes. LF and CRLF line endings match equivalently; all other whitespace must match exactly. If matching fails, stray carriage returns in the edit strings are removed and matching is retried. Must be unique unless replace_all is true.";
 
 export const WRITE_FILE_DESCRIPTION = `Write complete UTF-8 content to file_path, creating parent directories and overwriting existing content. Use for new files or complete rewrites; prefer EditFile for targeted changes.
 - file_path is absolute or relative to the Agent's working directory. Existing files require ReadFile first; re-read if the cached state is stale.
@@ -106,6 +114,9 @@ export const MCP_CALL_DESCRIPTION =
   "tool's schema, then pass its arguments here exactly as that schema requires, " +
   "using the same JSON types.";
 
+export const MCP_CALL_ARGUMENTS_DESCRIPTION =
+  "The target tool's arguments. Must match that tool's input_schema exactly, including JSON types: bare numbers for integer fields, bare true/false for boolean fields, quoted strings for string fields, and plain JSON arrays for array fields.";
+
 export const SYNTHETIC_OUTPUT_DESCRIPTION =
   "Return structured output in JSON format. Use this tool to return your final response " +
   "as structured data in non-interactive or coordinator mode sessions.";
@@ -115,6 +126,9 @@ export const TASK_OUTPUT_DESCRIPTION =
 
 export const TOOL_SEARCH_DESCRIPTION =
   "Search for and load deferred tools by name or keyword.";
+
+export const COMPUTER_USE_ACTION_TYPE_DESCRIPTION =
+  "OpenAI-style action type: click (button, x, y, keys), double_click (x, y, keys), drag (path, keys), keypress (keys), move (x, y, keys), screenshot, scroll (x, y, scrollX, scrollY, keys), type (text), wait.";
 
 export function computerUseDescription(environment: string): string {
   return (

@@ -6,7 +6,13 @@ import z, { parse } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath } from "@/storage/index.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
+import {
+  AGENT_FILE_EXTENSION,
+  AGENTS_DIR_NAME,
+  BUILTIN_AGENTS,
+  FRONTMATTER_BLOCK_RE,
+  MAX_FALLBACK_DESCRIPTION_CHARS,
+} from "@/subagent/constants.js";
 import type { AgentDefinition } from "@/subagent/definition.js";
 
 const log = createChildLogger({ module: "subagent" });
@@ -15,7 +21,7 @@ const log = createChildLogger({ module: "subagent" });
 export function loadAgentDefinitions(): AgentDefinition[] {
   const definitions = [...BUILTIN_AGENTS];
 
-  loadDir(yukinoPath("agents"), definitions);
+  loadDir(yukinoPath(AGENTS_DIR_NAME), definitions);
   return definitions;
 }
 
@@ -25,7 +31,9 @@ function loadDir(dir: string, definitions: AgentDefinition[]): void {
     return;
   }
 
-  const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
+  const files = readdirSync(dir).filter((f) =>
+    f.endsWith(AGENT_FILE_EXTENSION),
+  );
   for (const file of files) {
     try {
       const content = readFileSync(join(dir, file), "utf-8");
@@ -62,9 +70,7 @@ const YamlFrontmatterSchema = z.looseObject({
 
 function parseAgentDefinition(content: string): AgentDefinition | null {
   content = content.replace(/^\uFEFF/u, "");
-  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u.exec(
-    content,
-  );
+  const match = FRONTMATTER_BLOCK_RE.exec(content);
   if (!match) {
     return null;
   }
@@ -78,7 +84,8 @@ function parseAgentDefinition(content: string): AgentDefinition | null {
 
     return {
       name: parsed.name,
-      description: parsed.description ?? body.slice(0, 200),
+      description:
+        parsed.description ?? body.slice(0, MAX_FALLBACK_DESCRIPTION_CHARS),
       tools: parsed.tools,
       disallowedTools: parsed.disallowed_tools,
       systemPromptOverride: parsed.system_prompt,

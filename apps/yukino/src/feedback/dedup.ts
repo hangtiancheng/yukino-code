@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 
 import { z } from "zod";
 
+import { FEEDBACK_DIR_NAME, ISSUES_FILENAME } from "@/feedback/constants.js";
 import {
   FiledIssueRecordSchema,
   type FiledIssueRecord,
@@ -26,7 +27,7 @@ export function issueFingerprint(title: string): string {
 }
 
 function issuesFilePath(sessionId: string): string {
-  return sessionPath(sessionId, "feedback", "issues.json");
+  return sessionPath(sessionId, FEEDBACK_DIR_NAME, ISSUES_FILENAME);
 }
 
 /** Issues filed during this session; persisted so /resume keeps the dedup. */

@@ -12,8 +12,11 @@ import { dirname, join, resolve } from "path";
 import { safeParse, z } from "zod";
 
 import {
+  FILE_HISTORY_DIR_NAME,
   MAX_SNAPSHOTS,
   MAX_SUMMARY_TEXT_LENGTH,
+  PERSISTED_STATE_VERSION,
+  SNAPSHOTS_FILE_NAME,
 } from "@/file-history/constants.js";
 import { createChildLogger } from "@/logger/index.js";
 import { sessionPath } from "@/storage/index.js";
@@ -69,7 +72,7 @@ const FileBaselineSchema = z.discriminatedUnion("state", [
 type FileBaseline = z.infer<typeof FileBaselineSchema>;
 
 const PersistedStateSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(PERSISTED_STATE_VERSION),
   trackedFiles: z.array(z.string()),
   snapshots: z.array(SnapshotSchema),
   /** First-track file states used when rewinding before a file was tracked. */
@@ -99,7 +102,7 @@ function getBaselineBackupName(filePath: string): string {
 
 /** Single source of truth for a session's file-history directory layout. */
 export function fileHistoryDir(sessionId: string): string {
-  return sessionPath(sessionId, "file-history");
+  return sessionPath(sessionId, FILE_HISTORY_DIR_NAME);
 }
 
 export class FileHistory {
@@ -116,7 +119,7 @@ export class FileHistory {
 
   constructor(sessionID: string) {
     this.sessionDir = fileHistoryDir(sessionID);
-    this.statePath = join(this.sessionDir, "snapshots.json");
+    this.statePath = join(this.sessionDir, SNAPSHOTS_FILE_NAME);
     mkdirPrivateSync(this.sessionDir, { recursive: true });
     withFileSyncLock(this.statePath, () => {
       this.loadUnlocked();
@@ -389,7 +392,7 @@ export class FileHistory {
 
   private saveUnlocked(): void {
     const state: PersistedState = {
-      version: 2,
+      version: PERSISTED_STATE_VERSION,
       trackedFiles: [...this.trackedFiles],
       snapshots: this.snapshots,
       baselines: Object.fromEntries(this.baselines),

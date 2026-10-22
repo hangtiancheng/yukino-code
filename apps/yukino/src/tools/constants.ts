@@ -1,5 +1,6 @@
 import { TOOL_RESULT_PREVIEW_CHARS } from "@/tool-result/constants.js";
 
+export const DEFAULT_TIMEOUT = 120;
 export const MAX_TIMEOUT = 600;
 // Grace period between SIGTERM and the SIGKILL escalation when terminating a command.
 export const KILL_GRACE_MS = 3000;

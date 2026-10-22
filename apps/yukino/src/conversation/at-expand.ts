@@ -2,6 +2,8 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 import {
+  AT_REF_LINE_RANGE_RE,
+  AT_REF_RE,
   MAX_AT_REFS,
   MAX_INLINE_BYTES,
   MAX_INLINE_TOTAL_BYTES,
@@ -13,13 +15,12 @@ import { createChildLogger } from "@/logger/index.js";
 
 const log = createChildLogger({ module: "at-expand" });
 
-// An @ref may carry a #L3 or #L3-10 suffix (inserted via the IDE integration).
 function parseRef(ref: string): {
   path: string;
   lineStart?: number;
   lineEnd?: number;
 } {
-  const m = /^(.+)#L(\d+)(?:-(\d+))?$/.exec(ref);
+  const m = AT_REF_LINE_RANGE_RE.exec(ref);
   if (!m) {
     return { path: ref };
   }
@@ -43,10 +44,7 @@ function sliceLines(
 }
 
 function collectAtRefs(text: string): string[] {
-  // Clipboard images and paths containing spaces use quoted mentions.
-  const pattern =
-    /(?:^|\s)(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s]+))/g;
-  return [...text.matchAll(pattern)]
+  return [...text.matchAll(AT_REF_RE)]
     .slice(0, MAX_AT_REFS)
     .map((match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5]);
 }

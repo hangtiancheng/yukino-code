@@ -17,7 +17,8 @@ import {
   openPrivateFileSync as openSync,
 } from "@/storage/private.js";
 import { TaskManager } from "@/subagent/task-manager.js";
-import { buildPersistedOutputPreview, spillDir } from "@/tool-result/index.js";
+import { spillDir } from "@/tool-result/index.js";
+import { buildPersistedOutputPreview } from "@/tool-result/prompts.js";
 import {
   BACKGROUNDABLE_TOOL_NAMES,
   COMMAND_INTERRUPTED_ERROR,

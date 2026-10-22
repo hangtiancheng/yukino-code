@@ -2,6 +2,8 @@ import { savePlan } from "@/plan-file/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import {
   EMPTY_PLAN_ERROR,
+  NO_OUTPUT_MARKER,
+  PLAN_AGENT_NAME,
   PLAN_AGENT_UNAVAILABLE_ERROR,
   SUBAGENT_INTERRUPTED_MARKER,
 } from "@/subagent/constants.js";
@@ -30,7 +32,7 @@ export async function runPlanAgent(
   }
   ctx.abortSignal?.throwIfAborted();
   checker.enterPlanMode();
-  const result = await agent.runBuiltin("plan", ctx, prompt);
+  const result = await agent.runBuiltin(PLAN_AGENT_NAME, ctx, prompt);
   if (result.isError) {
     return result;
   }
@@ -40,7 +42,7 @@ export async function runPlanAgent(
   ) {
     return { ...result, isError: true };
   }
-  if (!result.output.trim() || result.output === "[No output]") {
+  if (!result.output.trim() || result.output === NO_OUTPUT_MARKER) {
     return { output: EMPTY_PLAN_ERROR, isError: true };
   }
   savePlan(checker, result.output);

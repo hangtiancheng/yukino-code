@@ -1,3 +1,5 @@
+import { EXPORTER_NONE } from "@/telemetry/constants.js";
+
 // Submodule namespaces for library consumers (Telemetry.<Sub>.*).
 // providers.js is deliberately NOT re-exported here: it statically imports the
 // optionalDependencies (@langfuse/*, @opentelemetry/*), so a static re-export
@@ -84,7 +86,7 @@ function hasExporter(value: string | undefined): boolean {
     value
       ?.split(",")
       .map((item) => item.trim())
-      .some((item) => item.length > 0 && item !== "none") ?? false
+      .some((item) => item.length > 0 && item !== EXPORTER_NONE) ?? false
   );
 }
 

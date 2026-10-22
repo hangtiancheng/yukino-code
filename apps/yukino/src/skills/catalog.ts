@@ -12,6 +12,13 @@ import yaml from "js-yaml";
 import { z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
+import {
+  AGENTS_DIR_NAME,
+  FRONTMATTER_BLOCK_RE,
+  MAX_SKILL_DESCRIPTION_CHARS,
+  SKILL_FILE_NAME,
+  SKILLS_DIR_NAME,
+} from "@/skills/constants.js";
 import type { Skill, SkillMeta } from "@/skills/index.js";
 import { yukinoPath } from "@/storage/index.js";
 import { asRecord, strArg } from "@/utils/index.js";
@@ -94,9 +101,9 @@ export class SkillCatalog {
 
   private skillDirPaths(): string[] {
     return [
-      join(homedir(), ".agents", "skills"),
-      yukinoPath("skills"),
-      ...(this.cwd ? [join(this.cwd, ".agents", "skills")] : []),
+      join(homedir(), AGENTS_DIR_NAME, SKILLS_DIR_NAME),
+      yukinoPath(SKILLS_DIR_NAME),
+      ...(this.cwd ? [join(this.cwd, AGENTS_DIR_NAME, SKILLS_DIR_NAME)] : []),
     ];
   }
 
@@ -109,7 +116,7 @@ export class SkillCatalog {
       }
       visited.add(canonical);
       this.dirModTimes.set(dir, statSync(dir).mtimeMs);
-      const skillFile = join(dir, "SKILL.md");
+      const skillFile = join(dir, SKILL_FILE_NAME);
       if (existsSync(skillFile)) {
         this.loadSkill(skillFile, dir);
         return;
@@ -124,7 +131,7 @@ export class SkillCatalog {
       const fullPath = join(dir, entry);
       if (
         (entry.startsWith(".") || entry === "node_modules") &&
-        !existsSync(join(fullPath, "SKILL.md"))
+        !existsSync(join(fullPath, SKILL_FILE_NAME))
       ) {
         continue;
       }
@@ -263,9 +270,7 @@ export function parseSkillFile(content: string): {
 } | null {
   // Delimiters occupy their own lines; `---` inside YAML strings is content.
   const normalized = content.replace(/^\uFEFF/, "");
-  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(
-    normalized,
-  );
+  const match = FRONTMATTER_BLOCK_RE.exec(normalized);
   if (!match) {
     return null;
   }
@@ -304,7 +309,7 @@ export function buildSkillSection(catalog: SkillCatalog): string {
   if (metas.length === 0) {
     return "";
   }
-  const skillsDir = yukinoPath("skills");
+  const skillsDir = yukinoPath(SKILLS_DIR_NAME);
   const lines = [
     "## Skills",
     'Load relevant instructions with LoadSkill {name: "<skill-name>"}, or user command /<skill-name>. Mode inline activates in this conversation; fork runs in a subagent when available, otherwise inline. Load resources only as needed, relative to the skill directory. Tool access remains host-controlled.',
@@ -315,7 +320,10 @@ export function buildSkillSection(catalog: SkillCatalog): string {
   ];
   for (const meta of metas) {
     const oneLine = meta.description.replace(/\s+/g, " ").trim();
-    const desc = oneLine.length > 200 ? oneLine.slice(0, 200) + "…" : oneLine;
+    const desc =
+      oneLine.length > MAX_SKILL_DESCRIPTION_CHARS
+        ? oneLine.slice(0, MAX_SKILL_DESCRIPTION_CHARS) + "…"
+        : oneLine;
     lines.push(
       `<skill><name>${escapeSkillXml(meta.name)}</name><description>${escapeSkillXml(desc)}</description><mode>${meta.mode ?? "inline"}</mode></skill>`,
     );

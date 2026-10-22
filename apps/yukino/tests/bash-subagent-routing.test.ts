@@ -11,11 +11,9 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import { PermissionChecker } from "@/permissions/index.js";
+import { formatAgentTaskNotification } from "@/subagent/prompts.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
-import {
-  formatAgentTaskNotification,
-  TaskManager,
-} from "@/subagent/task-manager.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import type { Tool, ToolContext } from "@/tools/types.js";

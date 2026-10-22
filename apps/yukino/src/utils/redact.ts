@@ -1,12 +1,12 @@
-import { REDACTED } from "@/utils/constants.js";
+import {
+  BEARER_TOKEN_RE,
+  REDACTED,
+  SENSITIVE_ENV_KEY_RE,
+} from "@/utils/constants.js";
 
 export function environmentSecrets(): string[] {
   return Object.entries(process.env).flatMap(([key, value]) =>
-    /api[_-]?key|token|secret|password|private[_-]?key|credential|dsn/iu.test(
-      key,
-    ) &&
-    value &&
-    value.length > 3
+    SENSITIVE_ENV_KEY_RE.test(key) && value && value.length > 3
       ? [value, encodeURIComponent(value)]
       : [],
   );
@@ -17,10 +17,7 @@ export function redactCredentials(
   secrets: readonly string[] = environmentSecrets(),
   replacement = REDACTED,
 ): string {
-  let out = text.replace(
-    /\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/giu,
-    `$1${replacement}`,
-  );
+  let out = text.replace(BEARER_TOKEN_RE, `$1${replacement}`);
   for (const secret of [...secrets]
     .filter(Boolean)
     .sort((a, b) => b.length - a.length)) {

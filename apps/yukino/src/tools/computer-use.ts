@@ -22,7 +22,10 @@ import {
   MAX_SCREENSHOT_WIDTH,
   OPENAI_ACTION_TYPES,
 } from "@/tools/constants.js";
-import { computerUseDescription } from "@/tools/prompts.js";
+import {
+  COMPUTER_USE_ACTION_TYPE_DESCRIPTION,
+  computerUseDescription,
+} from "@/tools/prompts.js";
 import {
   MACOS_SNIPPET,
   WINDOWS_PWSH_ACTION_SNIPPET,
@@ -542,8 +545,7 @@ export class ComputerUseTool implements Tool {
                 type: {
                   type: "string",
                   enum: OPENAI_ACTION_TYPES,
-                  description:
-                    "OpenAI-style action type: click (button, x, y, keys), double_click (x, y, keys), drag (path, keys), keypress (keys), move (x, y, keys), screenshot, scroll (x, y, scrollX, scrollY, keys), type (text), wait.",
+                  description: COMPUTER_USE_ACTION_TYPE_DESCRIPTION,
                 },
                 button: {
                   type: "string",

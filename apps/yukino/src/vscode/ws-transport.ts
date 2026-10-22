@@ -11,7 +11,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import WebSocket from "ws";
 
-import { START_TIMEOUT_MS } from "@/vscode/constants.js";
+import { MCP_WS_SUBPROTOCOL, START_TIMEOUT_MS } from "@/vscode/constants.js";
 
 export class WebSocketTransport implements Transport {
   private ws: WebSocket | null = null;
@@ -41,7 +41,7 @@ export class WebSocketTransport implements Transport {
     if (this.ws) {
       throw new Error("Start can only be called once per transport.");
     }
-    const ws = new WebSocket(this.url, ["mcp"], {
+    const ws = new WebSocket(this.url, [MCP_WS_SUBPROTOCOL], {
       headers: this.headers,
       // A server that accepts the TCP connection but never completes the
       // WebSocket handshake would otherwise leave start() pending forever.

@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
-import { PACKAGE_NAME } from "@/update/constants.js";
+import {
+  INSTALLATION_NOT_FOUND_ERROR,
+  NPM_REGISTRY_URL,
+  PACKAGE_MANAGER_QUERY_TIMEOUT_MS,
+  PACKAGE_NAME,
+  UNMANAGED_INSTALLATION_ERROR,
+} from "@/update/constants.js";
 
 type PackageManager = "npm" | "yarn" | "pnpm";
 export interface UpdateCommand {
@@ -54,7 +60,7 @@ function getPackageDirectory(): string {
     }
     const parent = dirname(directory);
     if (parent === directory) {
-      throw new Error("Could not locate the Yukino installation.");
+      throw new Error(INSTALLATION_NOT_FOUND_ERROR);
     }
     directory = parent;
   }
@@ -96,7 +102,7 @@ export async function getSelfUpdateCommand(
         query.args,
         {
           encoding: "utf8",
-          timeout: 10_000,
+          timeout: PACKAGE_MANAGER_QUERY_TIMEOUT_MS,
           windowsHide: true,
         },
         (error, stdout) => {
@@ -123,10 +129,7 @@ export async function getSelfUpdateCommand(
     roots.push(dirname(globalRoot));
   }
   if (!roots.some((root) => root && isInside(packageDirectory, root))) {
-    throw new Error(
-      "This Yukino installation is not managed by global npm, yarn, or pnpm. " +
-        "Update the source checkout or reinstall using yukino-code/install.sh or yukino-code/install.ps1.",
-    );
+    throw new Error(UNMANAGED_INSTALLATION_ERROR);
   }
 
   return {
@@ -135,7 +138,7 @@ export async function getSelfUpdateCommand(
       ...(command === "yarn" ? ["global", "add"] : ["install", "-g"]),
       ...(inferredNpmPrefix ? ["--prefix", inferredNpmPrefix] : []),
       `${PACKAGE_NAME}@${latest}`,
-      "--registry=https://registry.npmjs.org/",
+      `--registry=${NPM_REGISTRY_URL}`,
     ],
   };
 }

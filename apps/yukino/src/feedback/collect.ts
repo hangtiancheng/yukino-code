@@ -50,7 +50,9 @@ import {
   secretValues,
 } from "@/feedback/redact.js";
 import type { AttachmentKind, CollectedFile } from "@/feedback/types.js";
+import { SNAPSHOTS_FILE_NAME } from "@/file-history/constants.js";
 import { fileHistoryDir } from "@/file-history/index.js";
+import { LOGS_DIR_NAME } from "@/logger/constants.js";
 import { flushLogger, getLogFilePath } from "@/logger/index.js";
 import {
   getSessionFilePath,
@@ -60,6 +62,7 @@ import {
 } from "@/session/index.js";
 import { yukinoPath } from "@/storage/index.js";
 import { spillDir } from "@/tool-result/index.js";
+import { REDACTED } from "@/utils/constants.js";
 import { version } from "@/version.js";
 
 const execFileAsync = promisify(execFile);
@@ -98,7 +101,7 @@ export interface CollectOutput {
 
 export function feedbackLogPath(sessionId: string): string {
   flushLogger();
-  return getLogFilePath() ?? yukinoPath("logs", `${sessionId}.jsonl`);
+  return getLogFilePath() ?? yukinoPath(LOGS_DIR_NAME, `${sessionId}.jsonl`);
 }
 
 export function feedbackRedactor(
@@ -292,9 +295,9 @@ function collectFileHistory(
     return;
   }
   for (const entry of entries.sort((a, b) =>
-    a === "snapshots.json"
+    a === SNAPSHOTS_FILE_NAME
       ? -1
-      : b === "snapshots.json"
+      : b === SNAPSHOTS_FILE_NAME
         ? 1
         : a.localeCompare(b),
   )) {
@@ -328,7 +331,7 @@ function collectFileHistory(
     }
     add(
       name,
-      entry === "snapshots.json" ? redactJsonLines(text) : redactText(text),
+      entry === SNAPSHOTS_FILE_NAME ? redactJsonLines(text) : redactText(text),
       false,
     );
   }
@@ -483,7 +486,7 @@ function collectYukinoVars(): Record<string, string> {
       continue;
     }
     const value = process.env[name] ?? "";
-    out[name] = isSensitiveKey(name) ? "<redacted>" : value;
+    out[name] = isSensitiveKey(name) ? REDACTED : value;
   }
   return out;
 }

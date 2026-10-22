@@ -13,10 +13,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Sandbox, SandboxConfig } from "@/sandbox/index.js";
 import { sessionPath } from "@/storage/index.js";
-import {
-  formatAgentTaskNotification,
-  TaskManager,
-} from "@/subagent/task-manager.js";
+import { formatAgentTaskNotification } from "@/subagent/prompts.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import { BashTool } from "@/tools/bash.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import {

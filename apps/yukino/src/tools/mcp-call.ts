@@ -37,7 +37,10 @@ import {
   MCP_CALL_TOOL_REQUIRED,
   NUMBER_PATTERN,
 } from "@/tools/constants.js";
-import { MCP_CALL_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  MCP_CALL_ARGUMENTS_DESCRIPTION,
+  MCP_CALL_DESCRIPTION,
+} from "@/tools/prompts.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type {
   MCPToolLike,
@@ -208,11 +211,7 @@ export class McpCallTool implements Tool {
           },
           arguments: {
             type: "object",
-            description:
-              "The target tool's arguments. Must match that tool's input_schema " +
-              "exactly, including JSON types: bare numbers for integer fields, bare " +
-              "true/false for boolean fields, quoted strings for string fields, and " +
-              "plain JSON arrays for array fields.",
+            description: MCP_CALL_ARGUMENTS_DESCRIPTION,
           },
         },
         required: ["server", "tool", "arguments"],

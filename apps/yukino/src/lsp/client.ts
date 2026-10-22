@@ -7,6 +7,43 @@ import { pathToFileURL } from "node:url";
 
 import { registerExitCleanup } from "@/bootstrap/exit-cleanup.js";
 import type { LspServerConfig } from "@/lsp/config.js";
+import {
+  APPLY_EDIT_FAILURE_REASON,
+  CLIENT_DISPOSED_ERROR,
+  CLIENT_NAME,
+  CONTENT_LENGTH_EXPECTED_ERROR,
+  CONTENT_LENGTH_HEADER,
+  CONTENT_LENGTH_HEADER_PATTERN,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  HEADER_DELIMITER,
+  HEADER_TOO_LARGE_ERROR,
+  INVALID_INITIALIZE_RESPONSE_ERROR,
+  INVALID_JSONRPC_ERROR,
+  JSONRPC_VERSION,
+  KILL_DELAY_MS,
+  MAX_HEADER_BYTES,
+  MAX_MESSAGE_BYTES,
+  MAX_STDERR_CHARS,
+  MESSAGE_TOO_LARGE_ERROR,
+  METHOD_APPLY_EDIT,
+  METHOD_CANCEL_REQUEST,
+  METHOD_CONFIGURATION,
+  METHOD_DID_CHANGE_CONFIGURATION,
+  METHOD_EXIT,
+  METHOD_INITIALIZE,
+  METHOD_INITIALIZED,
+  METHOD_NOT_FOUND_ERROR_CODE,
+  METHOD_SHOW_MESSAGE_REQUEST,
+  METHOD_SHUTDOWN,
+  METHOD_WORKSPACE_FOLDERS,
+  METHOD_WORK_DONE_PROGRESS_CREATE,
+  POSITION_ENCODING_UTF16,
+  REQUEST_FAILED_ERROR,
+  REQUEST_INTERRUPTED_ERROR,
+  SHUTDOWN_TIMEOUT_MS,
+  UNSUPPORTED_METHOD_ERROR,
+  UNSUPPORTED_POSITION_ENCODING_ERROR,
+} from "@/lsp/constants.js";
 import { asErrorString, isRecord } from "@/utils/index.js";
 
 interface PendingRequest {
@@ -62,7 +99,9 @@ export class LspClient {
       this.fail(error);
     });
     this.child.stderr.on("data", (chunk: Buffer) => {
-      this.stderr = (this.stderr + chunk.toString("utf8")).slice(-4000);
+      this.stderr = (this.stderr + chunk.toString("utf8")).slice(
+        -MAX_STDERR_CHARS,
+      );
     });
     this.child.stdout.on("data", (chunk: Buffer) => {
       try {
@@ -108,12 +147,15 @@ export class LspClient {
       throw new Error(`LSP server '${this.config.name}' is not running`);
     }
     const body = Buffer.from(
-      JSON.stringify({ jsonrpc: "2.0", ...message }),
+      JSON.stringify({ jsonrpc: JSONRPC_VERSION, ...message }),
       "utf8",
     );
     this.child.stdin.write(
       Buffer.concat([
-        Buffer.from(`Content-Length: ${String(body.length)}\r\n\r\n`, "ascii"),
+        Buffer.from(
+          `${CONTENT_LENGTH_HEADER}: ${String(body.length)}${HEADER_DELIMITER}`,
+          "ascii",
+        ),
         body,
       ]),
     );
@@ -127,7 +169,7 @@ export class LspClient {
     method: string,
     params?: unknown,
     signal?: AbortSignal,
-    timeoutMs = this.config.timeout_ms ?? 15_000,
+    timeoutMs = this.config.timeout_ms ?? DEFAULT_REQUEST_TIMEOUT_MS,
   ): Promise<unknown> {
     signal?.throwIfAborted();
     const id = this.nextId++;
@@ -140,14 +182,14 @@ export class LspClient {
         this.pending.delete(id);
         request.cleanup();
         try {
-          this.notify("$/cancelRequest", { id });
+          this.notify(METHOD_CANCEL_REQUEST, { id });
         } catch {
           /* The server may already have exited. */
         }
         reject(error);
       };
       const abort = () => {
-        cancel(new Error("LSP request interrupted"));
+        cancel(new Error(REQUEST_INTERRUPTED_ERROR));
       };
       const timer = setTimeout(() => {
         cancel(
@@ -175,40 +217,39 @@ export class LspClient {
   private receive(chunk: Buffer): void {
     this.buffer = Buffer.concat([this.buffer, chunk]);
     while (this.buffer.length) {
-      const headerEnd = this.buffer.indexOf("\r\n\r\n");
+      const headerEnd = this.buffer.indexOf(HEADER_DELIMITER);
       if (headerEnd < 0) {
-        if (this.buffer.length > 8192) {
-          throw new Error("LSP header exceeds 8KB");
+        if (this.buffer.length > MAX_HEADER_BYTES) {
+          throw new Error(HEADER_TOO_LARGE_ERROR);
         }
         return;
       }
-      if (headerEnd > 8192) {
-        throw new Error("LSP header exceeds 8KB");
+      if (headerEnd > MAX_HEADER_BYTES) {
+        throw new Error(HEADER_TOO_LARGE_ERROR);
       }
       const matches = [
         ...this.buffer
           .subarray(0, headerEnd)
           .toString("ascii")
-          .matchAll(/^Content-Length:\s*(\d+)\s*$/gimu),
+          .matchAll(CONTENT_LENGTH_HEADER_PATTERN),
       ];
       if (matches.length !== 1) {
-        throw new Error("Expected one Content-Length header");
+        throw new Error(CONTENT_LENGTH_EXPECTED_ERROR);
       }
       const length = Number(matches[0]?.[1]);
-      if (!Number.isSafeInteger(length) || length > 16 * 1024 * 1024) {
-        throw new Error("LSP message exceeds 16MB");
+      if (!Number.isSafeInteger(length) || length > MAX_MESSAGE_BYTES) {
+        throw new Error(MESSAGE_TOO_LARGE_ERROR);
       }
-      if (this.buffer.length < headerEnd + 4 + length) {
+      const bodyStart = headerEnd + HEADER_DELIMITER.length;
+      if (this.buffer.length < bodyStart + length) {
         return;
       }
       const message: unknown = JSON.parse(
-        this.buffer
-          .subarray(headerEnd + 4, headerEnd + 4 + length)
-          .toString("utf8"),
+        this.buffer.subarray(bodyStart, bodyStart + length).toString("utf8"),
       );
-      this.buffer = this.buffer.subarray(headerEnd + 4 + length);
-      if (!isRecord(message) || message.jsonrpc !== "2.0") {
-        throw new Error("Invalid JSON-RPC message");
+      this.buffer = this.buffer.subarray(bodyStart + length);
+      if (!isRecord(message) || message.jsonrpc !== JSONRPC_VERSION) {
+        throw new Error(INVALID_JSONRPC_ERROR);
       }
       if (typeof message.method === "string") {
         if (message.id !== undefined) {
@@ -230,7 +271,7 @@ export class LspClient {
             new Error(
               typeof message.error.message === "string"
                 ? message.error.message
-                : "LSP request failed",
+                : REQUEST_FAILED_ERROR,
             ),
           );
         } else {
@@ -243,17 +284,16 @@ export class LspClient {
   private respond(message: Record<string, unknown>): void {
     const params = isRecord(message.params) ? message.params : {};
     switch (message.method) {
-      case "workspace/applyEdit":
+      case METHOD_APPLY_EDIT:
         this.send({
           id: message.id,
           result: {
             applied: false,
-            failureReason:
-              "Yukino LSP is read-only; use authorized file tools for edits.",
+            failureReason: APPLY_EDIT_FAILURE_REASON,
           },
         });
         return;
-      case "workspace/configuration": {
+      case METHOD_CONFIGURATION: {
         const items = Array.isArray(params.items) ? params.items : [];
         this.send({
           id: message.id,
@@ -269,22 +309,22 @@ export class LspClient {
         });
         return;
       }
-      case "workspace/workspaceFolders":
+      case METHOD_WORKSPACE_FOLDERS:
         this.send({
           id: message.id,
           result: [{ uri: pathToFileURL(this.cwd).href, name: this.cwd }],
         });
         return;
-      case "window/showMessageRequest":
-      case "window/workDoneProgress/create":
+      case METHOD_SHOW_MESSAGE_REQUEST:
+      case METHOD_WORK_DONE_PROGRESS_CREATE:
         this.send({ id: message.id, result: null });
         return;
       default:
         this.send({
           id: message.id,
           error: {
-            code: -32601,
-            message: "Unsupported read-only client method",
+            code: METHOD_NOT_FOUND_ERROR_CODE,
+            message: UNSUPPORTED_METHOD_ERROR,
           },
         });
     }
@@ -300,14 +340,14 @@ export class LspClient {
   }
 
   async initialize(): Promise<void> {
-    const result = await this.request("initialize", {
+    const result = await this.request(METHOD_INITIALIZE, {
       processId: process.pid,
-      clientInfo: { name: "yukino" },
+      clientInfo: { name: CLIENT_NAME },
       rootUri: pathToFileURL(this.cwd).href,
       workspaceFolders: [{ uri: pathToFileURL(this.cwd).href, name: this.cwd }],
       initializationOptions: this.config.initialization_options,
       capabilities: {
-        general: { positionEncodings: ["utf-16"] },
+        general: { positionEncodings: [POSITION_ENCODING_UTF16] },
         workspace: {
           configuration: true,
           workspaceFolders: true,
@@ -321,18 +361,18 @@ export class LspClient {
       },
     });
     if (!isRecord(result) || !isRecord(result.capabilities)) {
-      throw new Error("Invalid LSP initialize response");
+      throw new Error(INVALID_INITIALIZE_RESPONSE_ERROR);
     }
     this.capabilities = result.capabilities;
     if (
       this.capabilities.positionEncoding &&
-      this.capabilities.positionEncoding !== "utf-16"
+      this.capabilities.positionEncoding !== POSITION_ENCODING_UTF16
     ) {
-      throw new Error("Only UTF-16 LSP positions are supported");
+      throw new Error(UNSUPPORTED_POSITION_ENCODING_ERROR);
     }
-    this.notify("initialized", {});
+    this.notify(METHOD_INITIALIZED, {});
     if (this.config.settings) {
-      this.notify("workspace/didChangeConfiguration", {
+      this.notify(METHOD_DID_CHANGE_CONFIGURATION, {
         settings: this.config.settings,
       });
     }
@@ -345,18 +385,23 @@ export class LspClient {
   private async close(): Promise<void> {
     if (!this.closed) {
       try {
-        await this.request("shutdown", undefined, undefined, 500);
-        this.notify("exit");
+        await this.request(
+          METHOD_SHUTDOWN,
+          undefined,
+          undefined,
+          SHUTDOWN_TIMEOUT_MS,
+        );
+        this.notify(METHOD_EXIT);
       } catch {
         /* Force termination below if graceful shutdown fails. */
       }
     }
-    this.fail(new Error("LSP client disposed"));
+    this.fail(new Error(CLIENT_DISPOSED_ERROR));
     this.notifications.clear();
     this.child.stdin.end();
     const timer = setTimeout(() => {
       this.killTree();
-    }, 500);
+    }, KILL_DELAY_MS);
     try {
       await this.exited;
     } finally {

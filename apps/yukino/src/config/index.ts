@@ -11,9 +11,11 @@ import { z } from "zod";
 import {
   ENV_KEY_MAP,
   MCP_LOADING_MODES,
+  NO_PROVIDERS_ERROR,
   PROJECT_MCP_FILENAME,
   THEME_MODES,
   VALID_PROTOCOLS,
+  YAML_PARSE_ERROR,
 } from "@/config/constants.js";
 import {
   globalConfigPath,
@@ -221,13 +223,13 @@ export type McpLoading = AppConfig["mcp_loading"];
 // deliberately not surfaced.
 function yamlErrorDetail(err: unknown): string {
   if (!err || typeof err !== "object") {
-    return "YAML parse error";
+    return YAML_PARSE_ERROR;
   }
   const e = asRecord(err);
   const reason =
     typeof e.reason === "string" && e.reason.length > 0
       ? e.reason
-      : "YAML parse error";
+      : YAML_PARSE_ERROR;
   const mark = asRecord(e.mark);
   if (typeof mark.line === "number") {
     const line = String(mark.line + 1);
@@ -268,7 +270,7 @@ function loadSingleFile(path: string): AppConfig {
 
 function validateProviders(config: AppConfig): void {
   if (config.providers.length === 0) {
-    throw new ConfigError("At least one provider MUST be configured.");
+    throw new ConfigError(NO_PROVIDERS_ERROR);
   }
 
   const requiredFields = ["name", "protocol", "base_url", "model"] as const;

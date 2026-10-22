@@ -18,14 +18,21 @@ import pino, { type Logger, type LoggerOptions } from "pino";
 
 import {
   CAUSE_MAX_DEPTH,
+  DEFAULT_NAME_SEGMENT,
+  LOG_EXPIRY_DAYS,
+  LOG_FILE_EXTENSION,
   LOG_LEVEL,
+  LOGS_DIR_NAME,
   RESERVED_KEYS,
+  SILENT_LOG_LEVEL,
+  UNSAFE_NAME_SEGMENT_PATTERN,
 } from "@/logger/constants.js";
 import { yukinoPath } from "@/storage/index.js";
 import {
   openPrivateFileSync as openSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
+import { TEAMS_DIR_NAME } from "@/teams/constants.js";
 
 export * as Constants from "@/logger/constants.js";
 
@@ -66,14 +73,14 @@ export function flushLogger(): void {
 }
 
 function resolveLogPath(opts: InitLoggerOptions): string {
-  const dir = opts.logDir ?? yukinoPath("logs");
-  return join(dir, `${opts.sessionId}.jsonl`);
+  const dir = opts.logDir ?? yukinoPath(LOGS_DIR_NAME);
+  return join(dir, `${opts.sessionId}${LOG_FILE_EXTENSION}`);
 }
 
 /** Sanitize a filename segment to prevent path traversal (member names, etc.). */
 export function sanitizeNameSegment(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9_-]/g, "_");
-  return cleaned || "unnamed";
+  const cleaned = name.replace(UNSAFE_NAME_SEGMENT_PATTERN, "_");
+  return cleaned || DEFAULT_NAME_SEGMENT;
 }
 
 /** Flush a pino destination via Reflect.get, avoiding type assertions. */
@@ -174,7 +181,7 @@ export function closeLogger(): void {
 // initLogger(); afterwards every access is forwarded to the current logger.
 // Using a real Logger instance as the target gives the correct return type
 // without type assertions.
-const silentFallback = pino({ level: "silent" });
+const silentFallback = pino({ level: SILENT_LOG_LEVEL });
 
 /**
  * Global logger export. Modules can import and use it at file top level:
@@ -256,18 +263,19 @@ export function createChildLogger(bindings: { module: string }): Logger {
 async function cleanDir(dir: string): Promise<number> {
   let files: string[];
   try {
-    files = (await readdir(dir)).filter((f) => f.endsWith(".jsonl"));
+    files = (await readdir(dir)).filter((f) => f.endsWith(LOG_FILE_EXTENSION));
   } catch {
     return 0; // missing or unreadable directory
   }
 
   const now = Date.now();
+  const expiryMs = LOG_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
   let removed = 0;
   for (const file of files) {
     const filePath = join(dir, file);
     try {
       const s = await stat(filePath);
-      if (now - s.mtimeMs > 30 * 24 * 60 * 60 * 1000) {
+      if (now - s.mtimeMs > expiryMs) {
         await unlink(filePath);
         removed++;
       }
@@ -286,9 +294,9 @@ async function cleanDir(dir: string): Promise<number> {
  */
 async function cleanExpiredLogs(): Promise<number> {
   let removed = 0;
-  removed += await cleanDir(yukinoPath("logs"));
+  removed += await cleanDir(yukinoPath(LOGS_DIR_NAME));
 
-  const teamsDir = yukinoPath("teams");
+  const teamsDir = yukinoPath(TEAMS_DIR_NAME);
   let teams: string[];
   try {
     teams = await readdir(teamsDir);
@@ -303,7 +311,9 @@ async function cleanExpiredLogs(): Promise<number> {
       continue;
     }
     for (const teamName of teamNames) {
-      removed += await cleanDir(join(teamsDir, namespace, teamName, "logs"));
+      removed += await cleanDir(
+        join(teamsDir, namespace, teamName, LOGS_DIR_NAME),
+      );
     }
   }
   return removed;

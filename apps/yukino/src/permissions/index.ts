@@ -10,8 +10,13 @@ import {
   CONTENT_FIELDS,
   DANGEROUS_PATTERNS,
   FILE_TOOLS,
+  ISOLATED_WORKTREE_CLAIM_ERROR,
+  MAX_ACTION_ARG_VALUE_CHARS,
+  PATH_PATTERN_TRAVERSAL_ERROR,
+  PERMISSIONS_RULES_FILENAME,
   PLAN_COORDINATION_TOOLS,
   RULE_RE,
+  RULES_PARSE_ERROR,
   SAFE_PREFIXES,
 } from "@/permissions/constants.js";
 import { analyzeShell } from "@/permissions/shell.js";
@@ -99,9 +104,7 @@ function normalizePathPattern(cwd: string, pattern: string): string {
   const fixed = slash < 0 ? "." : pattern.slice(0, slash + 1);
   const suffix = pattern.slice(slash + 1);
   if (suffix.split("/").includes("..")) {
-    throw new Error(
-      "Permission path patterns cannot traverse after a wildcard",
-    );
+    throw new Error(PATH_PATTERN_TRAVERSAL_ERROR);
   }
   return `${escapeRuleLiteral(
     canonicalPath(resolveToolPath(cwd, literal(fixed)))
@@ -231,7 +234,7 @@ function loadRulesFile(path: string): Rule[] {
     }
     yamlData = parse(z.array(YamlEntrySchema), parsed);
   } catch (err) {
-    throw new Error("Cannot parse permission rules", { cause: err });
+    throw new Error(RULES_PARSE_ERROR, { cause: err });
   }
   const rules: Rule[] = [];
   for (const entry of yamlData) {
@@ -303,8 +306,8 @@ export class RuleEngine {
   private cache = new Map<string, CachedRules>();
 
   constructor(cwd: string) {
-    this.userPath = yukinoPath("permissions.yaml");
-    this.projectPath = projectPath(cwd, "permissions.yaml");
+    this.userPath = yukinoPath(PERMISSIONS_RULES_FILENAME);
+    this.projectPath = projectPath(cwd, PERMISSIONS_RULES_FILENAME);
   }
 
   // Read a single rules file; skips re-reading and parsing on cache hit.
@@ -769,9 +772,7 @@ export class PermissionChecker {
     checker.extraRoots = [];
     checker.worktrees = new OwnedWorktrees();
     if (!(await checker.worktrees.register(worktree))) {
-      throw new Error(
-        "Cannot claim an existing worktree for an isolated agent",
-      );
+      throw new Error(ISOLATED_WORKTREE_CLAIM_ERROR);
     }
     return checker;
   }
@@ -961,8 +962,8 @@ export class PermissionChecker {
     const parts: string[] = [];
     for (const [k, v] of Object.entries(args)) {
       let s = String(v);
-      if (s.length > 80) {
-        s = s.slice(0, 80) + "...";
+      if (s.length > MAX_ACTION_ARG_VALUE_CHARS) {
+        s = s.slice(0, MAX_ACTION_ARG_VALUE_CHARS) + "...";
       }
       parts.push(`${k}: ${s}`);
     }

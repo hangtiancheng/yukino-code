@@ -10,6 +10,11 @@ import {
   sep,
 } from "node:path";
 
+import {
+  MAX_SYMLINK_DEPTH,
+  TOO_MANY_SYMLINKS_ERROR,
+} from "@/utils/constants.js";
+
 export function resolveToolPath(cwd: string, path: string): string {
   const expanded =
     path === "~"
@@ -22,8 +27,8 @@ export function resolveToolPath(cwd: string, path: string): string {
 
 /** Resolve symlinks even when the final file or some parent directories do not exist yet. */
 export function canonicalPath(path: string, links = 0): string {
-  if (links >= 40) {
-    throw new Error("Too many symbolic links while resolving path");
+  if (links >= MAX_SYMLINK_DEPTH) {
+    throw new Error(TOO_MANY_SYMLINKS_ERROR);
   }
   let current = resolve(path);
   const missing: string[] = [];

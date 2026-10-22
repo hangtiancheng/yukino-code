@@ -10,6 +10,15 @@ import { z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import { version } from "@/version.js";
+import {
+  CLAUDE_CODE_SSE_PORT_ENV_VAR,
+  IDE_AUTH_HEADER,
+  IDE_CONNECTED_METHOD,
+  IDE_DETECT_POLL_INTERVAL_MS,
+  IDE_DETECT_TIMEOUT_MS,
+  TERM_PROGRAM_ENV_VAR,
+  TERM_PROGRAM_VSCODE,
+} from "@/vscode/constants.js";
 import { detectIde } from "@/vscode/lockfile.js";
 import { WebSocketTransport } from "@/vscode/ws-transport.js";
 
@@ -39,8 +48,8 @@ const AtMentionedSchema = z.object({
 
 function inIdeTerminal(): boolean {
   return (
-    process.env.CLAUDE_CODE_SSE_PORT !== undefined ||
-    process.env.TERM_PROGRAM === "vscode"
+    process.env[CLAUDE_CODE_SSE_PORT_ENV_VAR] !== undefined ||
+    process.env[TERM_PROGRAM_ENV_VAR] === TERM_PROGRAM_VSCODE
   );
 }
 
@@ -52,7 +61,7 @@ export async function connectToIde(opts: {
 }): Promise<IdeConnection | null> {
   // Only poll when we're plausibly inside an IDE terminal — the extension
   // may still be activating right after the window opens.
-  const deadline = Date.now() + (inIdeTerminal() ? 30_000 : 0);
+  const deadline = Date.now() + (inIdeTerminal() ? IDE_DETECT_TIMEOUT_MS : 0);
 
   if (opts.signal?.aborted) {
     return null;
@@ -60,7 +69,9 @@ export async function connectToIde(opts: {
   let ide = await detectIde(opts.cwd);
   while (!ide && Date.now() < deadline) {
     try {
-      await delay(1000, undefined, { signal: opts.signal });
+      await delay(IDE_DETECT_POLL_INTERVAL_MS, undefined, {
+        signal: opts.signal,
+      });
     } catch {
       return null;
     }
@@ -71,7 +82,7 @@ export async function connectToIde(opts: {
   }
 
   const transport = new WebSocketTransport(ide.url, {
-    ...(ide.authToken && { "X-Claude-Code-Ide-Authorization": ide.authToken }),
+    ...(ide.authToken && { [IDE_AUTH_HEADER]: ide.authToken }),
   });
   const client = new Client({ name: "yukino", version }, {});
 
@@ -111,7 +122,7 @@ export async function connectToIde(opts: {
 
   try {
     await client.notification({
-      method: "ide_connected",
+      method: IDE_CONNECTED_METHOD,
       params: { pid: process.pid },
     });
   } catch (err) {

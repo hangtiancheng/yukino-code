@@ -3,6 +3,30 @@ import { createHash } from "node:crypto";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@/llm/events.js";
 import {
+  ATTRIBUTE_ERROR_TYPE,
+  ATTRIBUTE_SESSION_HASH,
+  ATTRIBUTE_TOKEN_TYPE,
+  LOG_LLM_ERROR,
+  LOG_TOOL_ERROR,
+  METRIC_AGENT_DURATION,
+  METRIC_AGENT_RUNS,
+  METRIC_LLM_DURATION,
+  METRIC_LLM_REQUESTS,
+  METRIC_LLM_TIME_TO_FIRST_TOKEN,
+  METRIC_LLM_TOKENS,
+  METRIC_TOOL_CALLS,
+  METRIC_TOOL_DURATION,
+  OBSERVATION_AGENT_RUN,
+  OBSERVATION_KIND_AGENT,
+  OBSERVATION_KIND_GENERATION,
+  OBSERVATION_KIND_TOOL,
+  OBSERVATION_LEVEL_DEFAULT,
+  OBSERVATION_LEVEL_ERROR,
+  OBSERVATION_LLM_GENERATE,
+  OBSERVATION_TOOL_EXECUTE,
+  TOOL_ERROR_STATUS_MESSAGE,
+} from "@/telemetry/constants.js";
+import {
   getTelemetryRuntime,
   type TelemetryObservation,
 } from "@/telemetry/index.js";
@@ -56,9 +80,9 @@ function recordUsage(
   };
   for (const [tokenType, value] of Object.entries(values)) {
     if (value > 0) {
-      runtime.recordMetric("yukino.llm.tokens", "counter", value, {
+      runtime.recordMetric(METRIC_LLM_TOKENS, "counter", value, {
         ...attributes,
-        "token.type": tokenType,
+        [ATTRIBUTE_TOKEN_TYPE]: tokenType,
       });
     }
   }
@@ -81,15 +105,15 @@ export function startAgentTelemetry(
   const hashedSessionId = sessionHash(sessionId);
   const attributes = {
     protocol: metadata.protocol,
-    ...(hashedSessionId ? { "session.hash": hashedSessionId } : {}),
+    ...(hashedSessionId ? { [ATTRIBUTE_SESSION_HASH]: hashedSessionId } : {}),
   };
-  runtime.recordMetric("yukino.agent.runs", "counter", 1, {
+  runtime.recordMetric(METRIC_AGENT_RUNS, "counter", 1, {
     protocol: metadata.protocol,
   });
   return {
     observation: runtime.startObservation(
-      "agent",
-      "yukino.agent.run",
+      OBSERVATION_KIND_AGENT,
+      OBSERVATION_AGENT_RUN,
       attributes,
     ),
     protocol: metadata.protocol,
@@ -104,11 +128,11 @@ export function endAgentTelemetry(
   const runtime = getTelemetryRuntime();
   telemetry.observation.update({
     metadata: { outcome },
-    ...(outcome === "error" ? { level: "ERROR" } : {}),
+    ...(outcome === "error" ? { level: OBSERVATION_LEVEL_ERROR } : {}),
   });
   telemetry.observation.end();
   runtime.recordMetric(
-    "yukino.agent.duration",
+    METRIC_AGENT_DURATION,
     "histogram",
     elapsedMilliseconds(telemetry.startedAt),
     { outcome, protocol: telemetry.protocol },
@@ -127,22 +151,22 @@ export async function* observeLlmStream(
     protocol: metadata.protocol,
   };
   const observation = parent.observation.startChild(
-    "generation",
-    "yukino.llm.generate",
+    OBSERVATION_KIND_GENERATION,
+    OBSERVATION_LLM_GENERATE,
     attributes,
   );
   const startedAt = performance.now();
   let completionStartTime: Date | undefined;
   let outcome = "incomplete";
 
-  runtime.recordMetric("yukino.llm.requests", "counter", 1, attributes);
+  runtime.recordMetric(METRIC_LLM_REQUESTS, "counter", 1, attributes);
 
   try {
     for await (const event of stream) {
       if (!completionStartTime && event.type !== "stream_end") {
         completionStartTime = new Date();
         runtime.recordMetric(
-          "yukino.llm.time_to_first_token",
+          METRIC_LLM_TIME_TO_FIRST_TOKEN,
           "histogram",
           elapsedMilliseconds(startedAt),
           attributes,
@@ -176,15 +200,16 @@ export async function* observeLlmStream(
     outcome = "error";
     observation.recordException(error);
     observation.update({ metadata: { outcome, protocol: metadata.protocol } });
-    runtime.emitLog("yukino.llm.error", "error", {
-      "error.type": error instanceof Error ? error.name : typeof error,
+    runtime.emitLog(LOG_LLM_ERROR, "error", {
+      [ATTRIBUTE_ERROR_TYPE]:
+        error instanceof Error ? error.name : typeof error,
       ...attributes,
     });
     throw error;
   } finally {
     observation.end();
     runtime.recordMetric(
-      "yukino.llm.duration",
+      METRIC_LLM_DURATION,
       "histogram",
       elapsedMilliseconds(startedAt),
       {
@@ -203,35 +228,38 @@ export async function observeToolExecution<T extends ToolResult>(
   const runtime = getTelemetryRuntime();
   const attributes = { tool: toolName };
   const observation = parent.observation.startChild(
-    "tool",
-    "yukino.tool.execute",
+    OBSERVATION_KIND_TOOL,
+    OBSERVATION_TOOL_EXECUTE,
     attributes,
   );
   const startedAt = performance.now();
   let outcome = "error";
 
-  runtime.recordMetric("yukino.tool.calls", "counter", 1, attributes);
+  runtime.recordMetric(METRIC_TOOL_CALLS, "counter", 1, attributes);
 
   try {
     const result = await operation();
     outcome = result.isError ? "error" : "completed";
     observation.update({
-      level: result.isError ? "ERROR" : "DEFAULT",
+      level: result.isError
+        ? OBSERVATION_LEVEL_ERROR
+        : OBSERVATION_LEVEL_DEFAULT,
       metadata: { outcome, tool: toolName },
-      ...(result.isError ? { statusMessage: "Tool returned an error" } : {}),
+      ...(result.isError ? { statusMessage: TOOL_ERROR_STATUS_MESSAGE } : {}),
     });
     return result;
   } catch (error) {
     observation.recordException(error);
-    runtime.emitLog("yukino.tool.error", "error", {
-      "error.type": error instanceof Error ? error.name : typeof error,
+    runtime.emitLog(LOG_TOOL_ERROR, "error", {
+      [ATTRIBUTE_ERROR_TYPE]:
+        error instanceof Error ? error.name : typeof error,
       tool: toolName,
     });
     throw error;
   } finally {
     observation.end();
     runtime.recordMetric(
-      "yukino.tool.duration",
+      METRIC_TOOL_DURATION,
       "histogram",
       elapsedMilliseconds(startedAt),
       {

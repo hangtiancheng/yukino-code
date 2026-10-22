@@ -24,6 +24,7 @@ import type {
   LLMOutputBudget,
   LLMStreamOptions,
 } from "@/llm/client.js";
+import { OPENAI_API_KEY_MISSING_ERROR } from "@/llm/constants.js";
 import {
   AuthenticationError,
   containsContextLengthError,
@@ -206,9 +207,7 @@ export class OpenAIClient implements LLMClient {
   constructor(config: ProviderConfig, systemPrompt: string) {
     const apiKey = resolveAPIKey(config);
     if (!apiKey) {
-      throw new AuthenticationError(
-        "OpenAI API key not found, set OPENAI_API_KEY in ~/.yukino/config.yaml, or via OPENAI_API_KEY env variable.",
-      );
+      throw new AuthenticationError(OPENAI_API_KEY_MISSING_ERROR);
     }
 
     this.client = new OpenAI({
@@ -899,9 +898,7 @@ export class OpenAICompatClient implements LLMClient {
   constructor(config: ProviderConfig, systemPrompt: string) {
     const apiKey = resolveAPIKey(config);
     if (!apiKey) {
-      throw new AuthenticationError(
-        "OpenAI API key not found. Set OPENAI_API_KEY in ~/.yukino/config.yaml, or via OPENAI_API_KEY env variable.",
-      );
+      throw new AuthenticationError(OPENAI_API_KEY_MISSING_ERROR);
     }
     this.client = new OpenAI({ apiKey, baseURL: config.base_url });
     this.model = config.model;

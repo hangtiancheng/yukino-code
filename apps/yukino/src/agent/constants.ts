@@ -14,3 +14,4 @@ export const MAX_TOKENS_RECOVERIES = 3;
 export const MAX_OUTPUT_CHARS = 50000;
 
 export const WORKING_DIRECTORY_MARKER = "<working-directory>";
+export const PERSISTENT_GOAL_MARKER = "<persistent-goal>";

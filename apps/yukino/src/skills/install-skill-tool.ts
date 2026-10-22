@@ -17,8 +17,22 @@ import yaml from "js-yaml";
 
 import { createChildLogger } from "@/logger/index.js";
 import { parseSkillFile, type SkillCatalog } from "@/skills/catalog.js";
-import { MAX_SKILL_DOWNLOAD_BYTES } from "@/skills/constants.js";
+import {
+  INVALID_SKILL_NAME_ERROR,
+  INVALID_SKILL_SOURCE_ERROR,
+  MAX_SKILL_DOWNLOAD_BYTES,
+  SKILL_DOWNLOAD_INVALID_CHUNK_ERROR,
+  SKILL_DOWNLOAD_INVALID_STREAM_ERROR,
+  SKILL_DOWNLOAD_TIMEOUT_ERROR,
+  SKILL_DOWNLOAD_TIMEOUT_MS,
+  SKILL_DOWNLOAD_TOO_LARGE_ERROR,
+  SKILL_FILE_NAME,
+  SKILL_NAME_RE,
+  SKILLS_DIR_NAME,
+  SOURCE_REQUIRED_ERROR,
+} from "@/skills/constants.js";
 import { INSTALL_SKILL_DESCRIPTION } from "@/skills/prompts.js";
+import { YUKINO_DIR_NAME } from "@/storage/constants.js";
 import type {
   Tool,
   ToolContext,
@@ -42,7 +56,7 @@ async function readSkillResponse(
     Number.isFinite(contentLength) &&
     contentLength > MAX_SKILL_DOWNLOAD_BYTES
   ) {
-    throw new Error("Skill download exceeds the 1 MiB size limit");
+    throw new Error(SKILL_DOWNLOAD_TOO_LARGE_ERROR);
   }
   if (!response.body) {
     return "";
@@ -56,18 +70,18 @@ async function readSkillResponse(
       signal.throwIfAborted();
       const result: unknown = await reader.read();
       if (!isRecord(result) || typeof result.done !== "boolean") {
-        throw new Error("Skill download returned an invalid response stream");
+        throw new Error(SKILL_DOWNLOAD_INVALID_STREAM_ERROR);
       }
       if (result.done) {
         break;
       }
       if (!(result.value instanceof Uint8Array)) {
-        throw new Error("Skill download returned a non-byte response chunk");
+        throw new Error(SKILL_DOWNLOAD_INVALID_CHUNK_ERROR);
       }
       totalBytes += result.value.byteLength;
       if (totalBytes > MAX_SKILL_DOWNLOAD_BYTES) {
         await reader.cancel();
-        throw new Error("Skill download exceeds the 1 MiB size limit");
+        throw new Error(SKILL_DOWNLOAD_TOO_LARGE_ERROR);
       }
       chunks.push(result.value);
     }
@@ -120,7 +134,7 @@ export class InstallSkillTool implements Tool {
   ): Promise<ToolResult> {
     const source = strArg(args, "source");
     if (!source) {
-      return { output: "Error: source is required", isError: true };
+      return { output: SOURCE_REQUIRED_ERROR, isError: true };
     }
 
     try {
@@ -130,12 +144,9 @@ export class InstallSkillTool implements Tool {
         const timeout = new AbortController();
         const timer = setTimeout(() => {
           timeout.abort(
-            new DOMException(
-              "Skill download timed out after 30 seconds",
-              "TimeoutError",
-            ),
+            new DOMException(SKILL_DOWNLOAD_TIMEOUT_ERROR, "TimeoutError"),
           );
-        }, 30_000);
+        }, SKILL_DOWNLOAD_TIMEOUT_MS);
         timer.unref();
         const signal = ctx.abortSignal
           ? AbortSignal.any([ctx.abortSignal, timeout.signal])
@@ -165,16 +176,14 @@ export class InstallSkillTool implements Tool {
       const parsed = parseSkillFile(content);
       if (!parsed) {
         return {
-          output:
-            "Error: source must be a valid SKILL.md with a frontmatter name",
+          output: INVALID_SKILL_SOURCE_ERROR,
           isError: true,
         };
       }
       const name = strArg(args, "name") || parsed.meta.name;
-      if (!/^[a-zA-Z0-9_-][a-zA-Z0-9._-]*$/.test(name) || name.endsWith(".")) {
+      if (!SKILL_NAME_RE.test(name) || name.endsWith(".")) {
         return {
-          output:
-            "Error: invalid skill name; use letters, digits, dots, underscores and hyphens",
+          output: INVALID_SKILL_NAME_ERROR,
           isError: true,
         };
       }
@@ -187,7 +196,7 @@ export class InstallSkillTool implements Tool {
       // Resolve the home directory (which may be reached via a symlink), then
       // reject symlinks in every installation component, including dangling links.
       let dir = realpathSync(homedir());
-      for (const segment of [".yukino", "skills", name]) {
+      for (const segment of [YUKINO_DIR_NAME, SKILLS_DIR_NAME, name]) {
         dir = join(dir, segment);
         const stat = lstatSync(dir, { throwIfNoEntry: false });
         if (stat) {
@@ -200,7 +209,7 @@ export class InstallSkillTool implements Tool {
           mkdirSync(dir);
         }
       }
-      const destination = join(dir, "SKILL.md");
+      const destination = join(dir, SKILL_FILE_NAME);
       const stat = lstatSync(destination, { throwIfNoEntry: false });
       if (stat && (stat.isSymbolicLink() || !stat.isFile())) {
         throw new Error(

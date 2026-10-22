@@ -14,7 +14,10 @@ import { buildEditDiff, type TextReplacement } from "@/tools/diff.js";
 import { describeEditMismatch } from "@/tools/edit-file-diagnostics.js";
 import { withWorkspaceMutation } from "@/tools/execution-coordinator.js";
 import { withFileMutationQueue } from "@/tools/file-mutation-queue.js";
-import { EDIT_FILE_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  EDIT_FILE_DESCRIPTION,
+  EDIT_FILE_OLD_STRING_DESCRIPTION,
+} from "@/tools/prompts.js";
 import {
   type Tool,
   type ToolCategory,
@@ -150,8 +153,7 @@ export class EditFileTool implements Tool {
               old_string: {
                 type: "string" as const,
                 minLength: 1,
-                description:
-                  "Non-empty text from the original file, without ReadFile line-number prefixes. LF and CRLF line endings match equivalently; all other whitespace must match exactly. If matching fails, stray carriage returns in the edit strings are removed and matching is retried. Must be unique unless replace_all is true.",
+                description: EDIT_FILE_OLD_STRING_DESCRIPTION,
               },
               new_string: {
                 type: "string" as const,

@@ -1,3 +1,4 @@
+import { CUSTOM_COMMAND_TAG } from "@/commands/constants.js";
 import type { ThinkingLevel } from "@/config/provider-config.js";
 import type { AttachmentKind } from "@/feedback/types.js";
 import type { NonPlanPermissionMode } from "@/permissions/index.js";
@@ -24,7 +25,7 @@ export const ICONS = {
   tree: "│",
 } as const;
 
-export const COMMAND_TAGS = ["[skill]", "[custom]"];
+export const COMMAND_TAGS = ["[skill]", CUSTOM_COMMAND_TAG];
 
 // @-mention cache lifetime: covers edits made outside the app (user editor,
 // git) that produce no fileFactsVersion bump.
@@ -139,6 +140,15 @@ export const STATUS_MESSAGES: Record<
   empty: "No models returned by this provider",
   error: "Model discovery failed for this provider",
 };
+
+export const CLIENT_NOT_READY = "Client not ready.";
+
+export const TERMINAL_TOO_SHORT = "Terminal too short";
+
+export const USER_BASH_PROGRESS_EXCLUDED =
+  "User command · excluded in next model context";
+export const USER_BASH_PROGRESS_INCLUDED =
+  "User command · included in next model context";
 
 export const THINKING_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   off: "Reasoning off",

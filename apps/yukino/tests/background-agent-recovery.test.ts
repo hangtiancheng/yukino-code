@@ -19,11 +19,9 @@ import {
 import { sessionPath } from "@/storage/index.js";
 import { AgentTool } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@/subagent/constants.js";
+import { formatAgentTaskNotification } from "@/subagent/prompts.js";
 import { spawnSubagent } from "@/subagent/spawn.js";
-import {
-  formatAgentTaskNotification,
-  TaskManager,
-} from "@/subagent/task-manager.js";
+import { TaskManager } from "@/subagent/task-manager.js";
 import { ToolRegistry } from "@/tools/registry.js";
 import { TaskOutputTool } from "@/tools/task-output.js";
 import { contentToText } from "@/utils/index.js";

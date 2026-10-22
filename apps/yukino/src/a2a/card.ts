@@ -1,6 +1,11 @@
 import type { AgentCard, AgentInterface } from "@a2a-js/sdk";
 
-import { DESCRIPTION, SKILL_DESCRIPTION } from "@/a2a/prompts.js";
+import { A2A_PROTOCOL_VERSION } from "@/a2a/constants.js";
+import {
+  DESCRIPTION,
+  SKILL_DESCRIPTION,
+  SKILL_EXAMPLES,
+} from "@/a2a/prompts.js";
 import { version } from "@/version.js";
 
 /**
@@ -10,8 +15,18 @@ import { version } from "@/version.js";
  */
 export function buildAgentCard(url: string): AgentCard {
   const interfaces: AgentInterface[] = [
-    { url, protocolBinding: "JSONRPC", protocolVersion: "1.0", tenant: "" },
-    { url, protocolBinding: "HTTP+JSON", protocolVersion: "1.0", tenant: "" },
+    {
+      url,
+      protocolBinding: "JSONRPC",
+      protocolVersion: A2A_PROTOCOL_VERSION,
+      tenant: "",
+    },
+    {
+      url,
+      protocolBinding: "HTTP+JSON",
+      protocolVersion: A2A_PROTOCOL_VERSION,
+      tenant: "",
+    },
   ];
   return {
     name: "yukino",
@@ -34,10 +49,7 @@ export function buildAgentCard(url: string): AgentCard {
         name: "Coding",
         description: SKILL_DESCRIPTION,
         tags: ["code", "development", "programming"],
-        examples: [
-          "Fix the failing tests in this repository.",
-          "Add a dark mode toggle to the settings page.",
-        ],
+        examples: SKILL_EXAMPLES,
         inputModes: ["text/plain"],
         outputModes: ["text/plain"],
         securityRequirements: [],

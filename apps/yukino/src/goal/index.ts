@@ -1,14 +1,30 @@
 import z from "zod";
 
 import {
+  BUDGET_ARG_PATTERN,
+  BUDGET_EXHAUSTED_ERROR,
+  CONTINUE_NOT_TURN_LIMITED_ERROR,
+  GOAL_ALREADY_EXISTS_ERROR,
   GOAL_RECORD,
+  GOAL_USAGE,
+  MAX_BLOCKED_ATTEMPTS,
   MAX_GOAL_TURNS,
-  NO_GOAL_MESSAGE,
+  MAX_OBJECTIVE_CHARS,
+  NO_GOAL_SET_ERROR,
+  PAUSE_INACTIVE_GOAL_ERROR,
+  REASON_REQUIRED_ERROR,
+  RESUME_INVALID_STATE_ERROR,
+  RESUME_TURN_LIMITED_ERROR,
+  UPDATE_INACTIVE_GOAL_ERROR,
 } from "@/goal/constants.js";
 import {
-  BUDGET_LIMIT_INSTRUCTION,
-  CONTINUATION_INSTRUCTION,
-  REMINDER_INSTRUCTION,
+  buildBlockedAuditNotice,
+  buildBudgetLimitPrompt,
+  buildContinuationPrompt,
+  buildGoalReminder,
+  buildGoalSetPrompt,
+  DUPLICATE_BLOCKER_NOTICE,
+  formatGoalStatus,
 } from "@/goal/prompts.js";
 import { loadSession, saveMessage } from "@/session/index.js";
 
@@ -16,7 +32,7 @@ export * as Constants from "@/goal/constants.js";
 export * as Prompts from "@/goal/prompts.js";
 
 export const GoalSchema = z.object({
-  objective: z.string().trim().min(1).max(4000),
+  objective: z.string().trim().min(1).max(MAX_OBJECTIVE_CHARS),
   status: z.enum([
     "active",
     "paused",
@@ -104,9 +120,7 @@ export class GoalManager {
     replace = false,
   ): void {
     if (this.state && this.state.status !== "complete" && !replace) {
-      throw new Error(
-        "An unfinished goal already exists. Use /goal replace <objective> to replace it explicitly.",
-      );
+      throw new Error(GOAL_ALREADY_EXISTS_ERROR);
     }
     this.state = GoalSchema.parse({
       objective,
@@ -134,7 +148,7 @@ export class GoalManager {
 
   transition(status: GoalState["status"]): void {
     if (!this.state) {
-      throw new Error("No goal is set.");
+      throw new Error(NO_GOAL_SET_ERROR);
     }
     this.state.activeMs = this.elapsed();
     this.activeSince = null;
@@ -146,22 +160,16 @@ export class GoalManager {
   resume(resetTurns = false): void {
     const goal = this.state;
     if (!goal || !["paused", "blocked", "max_turns"].includes(goal.status)) {
-      throw new Error(
-        "Only a paused, blocked, or turn-limited goal can resume.",
-      );
+      throw new Error(RESUME_INVALID_STATE_ERROR);
     }
     if (goal.status === "max_turns" && !resetTurns) {
-      throw new Error("Use /goal continue to reset the continuation limit.");
+      throw new Error(RESUME_TURN_LIMITED_ERROR);
     }
     if (resetTurns && goal.status !== "max_turns") {
-      throw new Error(
-        "/goal continue only resets a turn-limited goal. Use /goal resume.",
-      );
+      throw new Error(CONTINUE_NOT_TURN_LIMITED_ERROR);
     }
     if (goal.tokenBudget !== null && goal.tokensUsed >= goal.tokenBudget) {
-      throw new Error(
-        "The token budget is exhausted; replace the goal with an explicit new budget.",
-      );
+      throw new Error(BUDGET_EXHAUSTED_ERROR);
     }
     if (resetTurns) {
       goal.turnsExecuted = 0;
@@ -223,10 +231,10 @@ export class GoalManager {
   ): string {
     const goal = this.state;
     if (goal?.status !== "active") {
-      throw new Error("Only an active goal can be updated by the agent.");
+      throw new Error(UPDATE_INACTIVE_GOAL_ERROR);
     }
     if (!reason.trim()) {
-      throw new Error("A reason is required.");
+      throw new Error(REASON_REQUIRED_ERROR);
     }
     if (status === "in_progress") {
       goal.blockedAttempts = 0;
@@ -240,7 +248,7 @@ export class GoalManager {
       return this.format();
     }
     if (goal.lastBlockedTurn === goal.turnsExecuted) {
-      return "A blocker was already recorded for this turn; reassess on the next continuation turn.";
+      return DUPLICATE_BLOCKER_NOTICE;
     }
     const same =
       goal.lastBlockReason?.trim().toLowerCase() ===
@@ -249,12 +257,12 @@ export class GoalManager {
     goal.blockedAttempts = same ? goal.blockedAttempts + 1 : 1;
     goal.lastBlockReason = reason.trim();
     goal.lastBlockedTurn = goal.turnsExecuted;
-    if (goal.blockedAttempts >= 3) {
+    if (goal.blockedAttempts >= MAX_BLOCKED_ATTEMPTS) {
       this.transition("blocked");
     } else {
       this.persist();
     }
-    return `Blocked audit: ${String(goal.blockedAttempts)}/3 consecutive turns.\n${this.format()}`;
+    return buildBlockedAuditNotice(goal.blockedAttempts, this.format());
   }
 
   continuation(): string | null {
@@ -265,7 +273,7 @@ export class GoalManager {
       this.transition("max_turns");
       return null;
     }
-    return `Continue working toward the persistent goal: ${this.state.objective}\n${CONTINUATION_INSTRUCTION}`;
+    return buildContinuationPrompt(this.state.objective);
   }
 
   takeBudgetSummary(): string | null {
@@ -276,22 +284,15 @@ export class GoalManager {
     goal.budgetSummaryPending = false;
     this.trackingUsage = true;
     this.persist();
-    return `<goal-budget-limit>\n${this.format()}\n${BUDGET_LIMIT_INSTRUCTION}\n</goal-budget-limit>`;
+    return buildBudgetLimitPrompt(this.format());
   }
 
   reminder(): string {
-    const goal = this.get();
-    return goal
-      ? `<persistent-goal>\n${this.format()}\n${REMINDER_INSTRUCTION}\n</persistent-goal>`
-      : "";
+    return this.get() ? buildGoalReminder(this.format()) : "";
   }
 
   format(): string {
-    const goal = this.get();
-    if (!goal) {
-      return NO_GOAL_MESSAGE;
-    }
-    return `Goal: ${goal.objective}\nStatus: ${goal.status}\nTokens: ${String(goal.tokensUsed)}${goal.tokenBudget === null ? "" : ` / ${String(goal.tokenBudget)}`}\nActive time: ${String(Math.floor(goal.activeMs / 1000))}s\nContinuation turns: ${String(goal.turnsExecuted)} / ${String(MAX_GOAL_TURNS)}${goal.lastBlockReason ? `\nBlocker: ${goal.lastBlockReason}` : ""}`;
+    return formatGoalStatus(this.get());
   }
 }
 
@@ -310,7 +311,7 @@ export function handleGoalCommand(
     }
     if (input === "pause" || input === "complete") {
       if (input === "pause" && manager.get()?.status !== "active") {
-        throw new Error("Only an active goal can be paused.");
+        throw new Error(PAUSE_INACTIVE_GOAL_ERROR);
       }
       manager.transition(input === "pause" ? "paused" : "complete");
       return { message: manager.format() };
@@ -328,11 +329,9 @@ export function handleGoalCommand(
     }
     let budget: number | null = null;
     if (input.startsWith("--budget ")) {
-      const match = /^--budget\s+(\d+)\s+([\s\S]+)$/u.exec(input);
+      const match = BUDGET_ARG_PATTERN.exec(input);
       if (!match) {
-        throw new Error(
-          "Usage: /goal [replace] [--budget <positive integer>] <objective>",
-        );
+        throw new Error(GOAL_USAGE);
       }
       budget = Number(match[1]);
       input = match[2];
@@ -340,7 +339,7 @@ export function handleGoalCommand(
     manager.set(input, budget, replace);
     return {
       message: manager.format(),
-      prompt: `Work toward this persistent goal: ${input}`,
+      prompt: buildGoalSetPrompt(input),
     };
   } catch (error) {
     return {

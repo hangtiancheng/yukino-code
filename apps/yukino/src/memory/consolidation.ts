@@ -6,9 +6,14 @@ import { ConversationManager } from "@/conversation/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import {
+  CONSOLIDATION_MAX_ITERATIONS,
   DEFAULT_MIN_HOURS,
   DEFAULT_MIN_SESSIONS,
   LOCK_FILE,
+  MEMORY_DIR_NAME,
+  MEMORY_INDEX_NAME,
+  MILLISECONDS_PER_HOUR,
+  RUNNING_LOCK_FILE,
   SCAN_THROTTLE_MS,
 } from "@/memory/constants.js";
 import { MemoryPermissionChecker } from "@/memory/permissions.js";
@@ -70,13 +75,13 @@ export class MemoryConsolidator {
     if (this.disposed) {
       return Promise.resolve();
     }
-    const memDir = projectPath(this.cwd, "memory");
+    const memDir = projectPath(this.cwd, MEMORY_DIR_NAME);
     if (!existsSync(memDir)) {
       return Promise.resolve();
     }
 
     const lastAt = readLastConsolidatedAt(memDir);
-    const hoursSince = (Date.now() - lastAt) / 3_600_000;
+    const hoursSince = (Date.now() - lastAt) / MILLISECONDS_PER_HOUR;
     if (hoursSince < this.minHours) {
       return Promise.resolve();
     }
@@ -92,9 +97,7 @@ export class MemoryConsolidator {
       return Promise.resolve();
     }
 
-    const releaseLock = tryAcquireFileSyncLock(
-      join(memDir, ".consolidate-running"),
-    );
+    const releaseLock = tryAcquireFileSyncLock(join(memDir, RUNNING_LOCK_FILE));
     if (!releaseLock) {
       return Promise.resolve();
     }
@@ -142,7 +145,7 @@ export class MemoryConsolidator {
   private async execute(memDir: string, sessionIDs: string[]): Promise<void> {
     const controller = new AbortController();
     this.controller = controller;
-    const userMemDir = yukinoPath("memory");
+    const userMemDir = yukinoPath(MEMORY_DIR_NAME);
     const transcriptDir = getSessionsDir(this.cwd);
     const prompt = buildConsolidationPrompt(
       memDir,
@@ -169,7 +172,7 @@ export class MemoryConsolidator {
       conversation: conv,
       cwd: this.cwd,
       fileStateCache: new FileStateCache(),
-      maxIterations: 15,
+      maxIterations: CONSOLIDATION_MAX_ITERATIONS,
       abortSignal: controller.signal,
     });
 
@@ -181,7 +184,9 @@ export class MemoryConsolidator {
     controller.signal.throwIfAborted();
 
     const writtenPaths = extractWrittenPaths(conv.getMessages());
-    const memoryPaths = writtenPaths.filter((p) => basename(p) !== "MEMORY.md");
+    const memoryPaths = writtenPaths.filter(
+      (p) => basename(p) !== MEMORY_INDEX_NAME,
+    );
 
     if (memoryPaths.length > 0 && this.appendSystem) {
       const names = memoryPaths.map((p) => basename(p));

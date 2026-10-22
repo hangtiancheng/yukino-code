@@ -11,11 +11,20 @@ import type {
 } from "@a2a-js/sdk";
 import { z } from "zod";
 
-import { MAX_TOOL_OUTPUT_LENGTH, YUKINO_DATA_KEY } from "@/a2a/constants.js";
+import {
+  MAX_TOOL_OUTPUT_LENGTH,
+  PERMISSION_REQUEST_KIND,
+  PERMISSION_RESPONSE_KIND,
+  THINKING_KIND,
+  TOOL_CALL_KIND,
+  TOOL_RESULT_KIND,
+  TRUNCATION_MARKER,
+  YUKINO_DATA_KEY,
+} from "@/a2a/constants.js";
 import type { AgentEvent } from "@/agent/events.js";
 
 export const PermissionRequestDataSchema = z.object({
-  [YUKINO_DATA_KEY]: z.literal("permission-request"),
+  [YUKINO_DATA_KEY]: z.literal(PERMISSION_REQUEST_KIND),
   permissionId: z.string(),
   toolCallId: z.string(),
   toolName: z.string(),
@@ -26,7 +35,7 @@ export const PermissionRequestDataSchema = z.object({
 export type PermissionRequestData = z.infer<typeof PermissionRequestDataSchema>;
 
 export const PermissionResponseDataSchema = z.object({
-  [YUKINO_DATA_KEY]: z.literal("permission-response"),
+  [YUKINO_DATA_KEY]: z.literal(PERMISSION_RESPONSE_KIND),
   permissionId: z.string(),
   decision: z.enum(["allow", "deny", "allowAlways"]),
 });
@@ -38,19 +47,19 @@ export type PermissionResponseData = z.infer<
 export type PermissionDecision = PermissionResponseData["decision"];
 
 export const ThinkingDataSchema = z.object({
-  [YUKINO_DATA_KEY]: z.literal("thinking"),
+  [YUKINO_DATA_KEY]: z.literal(THINKING_KIND),
   text: z.string(),
 });
 
 export const ToolCallDataSchema = z.object({
-  [YUKINO_DATA_KEY]: z.literal("tool-call"),
+  [YUKINO_DATA_KEY]: z.literal(TOOL_CALL_KIND),
   toolCallId: z.string(),
   toolName: z.string(),
   args: z.record(z.string(), z.unknown()),
 });
 
 export const ToolResultDataSchema = z.object({
-  [YUKINO_DATA_KEY]: z.literal("tool-result"),
+  [YUKINO_DATA_KEY]: z.literal(TOOL_RESULT_KIND),
   toolCallId: z.string(),
   toolName: z.string(),
   isError: z.boolean(),
@@ -183,12 +192,12 @@ export function agentEventToMessage(
       return agentMessage(taskId, contextId, [textPart(event.text)]);
     case "thinking_text":
       return agentMessage(taskId, contextId, [
-        dataPart({ yukino: "thinking", text: event.text }),
+        dataPart({ [YUKINO_DATA_KEY]: THINKING_KIND, text: event.text }),
       ]);
     case "tool_use":
       return agentMessage(taskId, contextId, [
         dataPart({
-          yukino: "tool-call",
+          [YUKINO_DATA_KEY]: TOOL_CALL_KIND,
           toolCallId: event.toolId,
           toolName: event.toolName,
           args: event.args,
@@ -197,11 +206,11 @@ export function agentEventToMessage(
     case "tool_result": {
       const truncated = event.output.length > MAX_TOOL_OUTPUT_LENGTH;
       const output = truncated
-        ? `${event.output.slice(0, MAX_TOOL_OUTPUT_LENGTH)}\n… [truncated]`
+        ? `${event.output.slice(0, MAX_TOOL_OUTPUT_LENGTH)}${TRUNCATION_MARKER}`
         : event.output;
       return agentMessage(taskId, contextId, [
         dataPart({
-          yukino: "tool-result",
+          [YUKINO_DATA_KEY]: TOOL_RESULT_KIND,
           toolCallId: event.toolId,
           toolName: event.toolName,
           isError: event.isError,

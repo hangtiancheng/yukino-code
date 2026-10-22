@@ -1,4 +1,6 @@
 import type { AgentDefinition } from "@/subagent/definition.js";
+import type { AgentTask } from "@/subagent/task-manager.js";
+import { escapeXml } from "@/utils/xml.js";
 
 export const AGENT_TOOL_DESCRIPTION =
   "Launch an agent to handle complex, multi-step tasks.";
@@ -47,3 +49,15 @@ export const PLAN_TEAMMATE_DESCRIPTION =
 
 export const AGENT_BACKGROUND_DESCRIPTION =
   'Only for kind="subagent". Run as an asynchronous tool call: return task_id immediately and deliver the final result through a task notification. Use TaskStop with task_id to stop it early. For communication or follow-ups, use an agent team with kind="teammate" instead.';
+
+export function formatAgentTaskNotification(task: AgentTask): string {
+  return [
+    `<task-notification task_id="${escapeXml(task.id)}" status="${escapeXml(task.status)}">`,
+    `name=${escapeXml(task.name)}`,
+    ...(task.transcriptPath
+      ? [`transcript_path=${escapeXml(task.transcriptPath)}`]
+      : []),
+    escapeXml(task.output),
+    "</task-notification>",
+  ].join("\n");
+}

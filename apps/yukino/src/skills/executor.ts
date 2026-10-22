@@ -1,10 +1,15 @@
 import { escapeSkillXml } from "@/skills/catalog.js";
+import {
+  ARGUMENTS_PLACEHOLDER,
+  FORK_CONTEXT_FULL_MESSAGES,
+  FORK_CONTEXT_RECENT_MESSAGES,
+} from "@/skills/constants.js";
 import type { Skill, SkillHost, SkillForkHost } from "@/skills/index.js";
 import { SKILL_INSTRUCTIONS } from "@/skills/prompts.js";
 import type { ToolContext } from "@/tools/types.js";
 
 function buildSkillPrompt(skill: Skill, args: string): string {
-  const body = skill.body.replaceAll("$ARGUMENTS", () => args);
+  const body = skill.body.replaceAll(ARGUMENTS_PLACEHOLDER, () => args);
   return [
     SKILL_INSTRUCTIONS,
     `<skill-metadata><name>${escapeSkillXml(skill.meta.name)}</name><directory>${escapeSkillXml(skill.sourceDir)}</directory></skill-metadata>`,
@@ -61,7 +66,9 @@ export async function runFork(
   const contextMode = skill.meta.forkContext ?? "none";
   if (contextMode !== "none") {
     const context = host.snapshotParentMessages(
-      contextMode === "recent" ? 5 : 100,
+      contextMode === "recent"
+        ? FORK_CONTEXT_RECENT_MESSAGES
+        : FORK_CONTEXT_FULL_MESSAGES,
     );
     prompt = `<parent-context>\n${escapeSkillXml(context)}\n</parent-context>\n\n${prompt}`;
   }

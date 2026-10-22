@@ -15,7 +15,13 @@ import { open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
-import { PUBLIC_STATE_SEGMENTS, YUKINO_DIR_NAME } from "@/storage/constants.js";
+import {
+  PRIVATE_DIR_MODE,
+  PRIVATE_FILE_MODE,
+  PRIVATE_STATE_NOT_FILE_ERROR,
+  PUBLIC_STATE_SEGMENTS,
+  YUKINO_DIR_NAME,
+} from "@/storage/constants.js";
 import { isPathWithin } from "@/utils/paths.js";
 
 export function isPrivateStatePath(path: string): boolean {
@@ -35,7 +41,7 @@ export function mkdirPrivateSync(
   const absolute = resolve(path);
   const root = join(homedir(), YUKINO_DIR_NAME);
   if (!isPathWithin(root, absolute)) {
-    mkdirSync(absolute, { recursive: true, mode: 0o700 });
+    mkdirSync(absolute, { recursive: true, mode: PRIVATE_DIR_MODE });
     return;
   }
   // Tighten only Yukino state ancestors, never HOME or workspace directories.
@@ -53,7 +59,7 @@ export function mkdirPrivateSync(
     }
     if (!existing) {
       try {
-        mkdirSync(directory, { mode: 0o700 });
+        mkdirSync(directory, { mode: PRIVATE_DIR_MODE });
       } catch (error) {
         if (
           !(error instanceof Error) ||
@@ -74,7 +80,7 @@ export function mkdirPrivateSync(
         constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
       );
       try {
-        fchmodSync(fd, 0o700);
+        fchmodSync(fd, PRIVATE_DIR_MODE);
       } finally {
         closeSync(fd);
       }
@@ -108,7 +114,7 @@ function fileFlags(flag: string | number): number {
 export function openPrivateFileSync(
   path: string,
   flag: string | number,
-  _mode = 0o600,
+  _mode = PRIVATE_FILE_MODE,
 ): number {
   mkdirPrivateSync(dirname(path));
   const flags = fileFlags(flag);
@@ -117,14 +123,14 @@ export function openPrivateFileSync(
   const fd = openSync(
     path,
     (flags & ~constants.O_TRUNC) | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    0o600,
+    PRIVATE_FILE_MODE,
   );
   try {
     if (!fstatSync(fd).isFile()) {
-      throw new Error("Private state must be a regular file");
+      throw new Error(PRIVATE_STATE_NOT_FILE_ERROR);
     }
     if (process.platform !== "win32") {
-      fchmodSync(fd, 0o600);
+      fchmodSync(fd, PRIVATE_FILE_MODE);
     }
     if (flags & constants.O_TRUNC) {
       ftruncateSync(fd, 0);
@@ -191,14 +197,14 @@ export async function writePrivateFile(
       constants.O_CREAT |
       constants.O_NOFOLLOW |
       constants.O_NONBLOCK,
-    0o600,
+    PRIVATE_FILE_MODE,
   );
   try {
     if (!(await file.stat()).isFile()) {
-      throw new Error("Private state must be a regular file");
+      throw new Error(PRIVATE_STATE_NOT_FILE_ERROR);
     }
     if (process.platform !== "win32") {
-      await file.chmod(0o600);
+      await file.chmod(PRIVATE_FILE_MODE);
     }
     await file.truncate(0);
     await file.writeFile(data, encoding);

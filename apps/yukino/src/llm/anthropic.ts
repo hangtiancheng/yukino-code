@@ -22,6 +22,7 @@ import type {
   LLMOutputBudget,
   LLMStreamOptions,
 } from "@/llm/client.js";
+import { ANTHROPIC_API_KEY_MISSING_ERROR } from "@/llm/constants.js";
 import {
   AuthenticationError,
   containsContextLengthError,
@@ -266,9 +267,7 @@ export class AnthropicClient implements LLMClient {
   constructor(config: ProviderConfig, systemPrompt: string) {
     const apiKey = resolveAPIKey(config);
     if (!apiKey) {
-      throw new AuthenticationError(
-        "Anthropic API key not found, set ANTHROPIC_API_KEY in ~/.yukino/config.yaml, or via ANTHROPIC_API_KEY env variable.",
-      );
+      throw new AuthenticationError(ANTHROPIC_API_KEY_MISSING_ERROR);
     }
 
     this.client = new Anthropic({

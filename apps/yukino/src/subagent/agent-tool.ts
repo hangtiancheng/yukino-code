@@ -14,6 +14,17 @@ import {
   PLAN_TEAMMATE_AGENT,
   GENERAL_PURPOSE_AGENT_TYPE,
   FORK_CONTEXT_REQUIRED_ERROR,
+  AGENT_ARGS_REQUIRED_ERROR,
+  AGENT_BACKGROUND_INVALID_ERROR,
+  AGENT_FORK_INVALID_ERROR,
+  AGENT_KIND_INVALID_ERROR,
+  AGENT_WORKTREE_INVALID_ERROR,
+  MAX_TEAMMATE_NAME_CHARS,
+  PLAN_AGENT_NAME,
+  TEAMMATE_NO_TEAM_ERROR,
+  TEAMMATE_RUNNER_UNAVAILABLE_ERROR,
+  TEAMMATE_UNAVAILABLE_ERROR,
+  TRANSCRIPT_FILENAME,
 } from "@/subagent/constants.js";
 import type { AgentDefinition } from "@/subagent/definition.js";
 import { loadAgentDefinitions } from "@/subagent/loader.js";
@@ -37,6 +48,7 @@ import { LEADER_NAME } from "@/teams/constants.js";
 import type { TeamManager, RunAgent } from "@/teams/index.js";
 import { TeamTodoWriteTool } from "@/teams/task-tools.js";
 import { SendMessageTool } from "@/teams/tools.js";
+import { OPERATION_INTERRUPTED_ERROR } from "@/tools/constants.js";
 import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type {
@@ -253,13 +265,13 @@ export class AgentTool implements Tool {
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     if (ctx.abortSignal?.aborted) {
-      return { output: "Error: operation interrupted", isError: true };
+      return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
     }
     const description = strArg(args, "description");
     const prompt = strArg(args, "prompt");
     if (!description || !prompt) {
       return {
-        output: "Error: description and prompt are required",
+        output: AGENT_ARGS_REQUIRED_ERROR,
         isError: true,
       };
     }
@@ -267,20 +279,20 @@ export class AgentTool implements Tool {
     const kindArg = z.enum(AGENT_KINDS).optional().safeParse(args.kind);
     if (!kindArg.success) {
       return {
-        output: "Error: kind must be subagent or teammate",
+        output: AGENT_KIND_INVALID_ERROR,
         isError: true,
       };
     }
     const kind = kindArg.data ?? DEFAULT_AGENT_KIND;
     const worktreeArg = z.boolean().optional().safeParse(args.worktree);
     if (!worktreeArg.success) {
-      return { output: "Error: worktree must be a boolean", isError: true };
+      return { output: AGENT_WORKTREE_INVALID_ERROR, isError: true };
     }
     const subagentType =
       strArg(args, "subagent_type") || GENERAL_PURPOSE_AGENT_TYPE;
     const forkArg = z.boolean().optional().safeParse(args.fork);
     if (!forkArg.success) {
-      return { output: "Error: fork must be a boolean", isError: true };
+      return { output: AGENT_FORK_INVALID_ERROR, isError: true };
     }
     const fork = forkArg.data ?? this.defaultFork;
     let definition = this.definitions.find(
@@ -299,7 +311,7 @@ export class AgentTool implements Tool {
       .safeParse(args.run_in_background);
     if (!backgroundArg.success) {
       return {
-        output: "Error: run_in_background must be a boolean",
+        output: AGENT_BACKGROUND_INVALID_ERROR,
         isError: true,
       };
     }
@@ -307,12 +319,14 @@ export class AgentTool implements Tool {
     if (kind === "teammate") {
       if (!this.teamManager || !this.teamRunAgentFactory) {
         return {
-          output:
-            "Error: teammate execution is unavailable; no team was created.",
+          output: TEAMMATE_NO_TEAM_ERROR,
           isError: true,
         };
       }
-      if (definition.name === "plan" && BUILTIN_AGENTS.includes(definition)) {
+      if (
+        definition.name === PLAN_AGENT_NAME &&
+        BUILTIN_AGENTS.includes(definition)
+      ) {
         definition = PLAN_TEAMMATE_AGENT;
       }
       let contextSnapshot: ConversationManager | undefined;
@@ -446,7 +460,7 @@ ${prompt}`;
       {
         originToolCallId: ctx.toolCallId,
         transcriptPath: ctx.subagentSessionId
-          ? sessionPath(ctx.subagentSessionId, "transcript.jsonl")
+          ? sessionPath(ctx.subagentSessionId, TRANSCRIPT_FILENAME)
           : undefined,
       },
     );
@@ -467,7 +481,7 @@ ${prompt}`;
   ): Promise<ToolResult> {
     if (!this.teamManager) {
       return {
-        output: "Error: teammate execution is unavailable.",
+        output: TEAMMATE_UNAVAILABLE_ERROR,
         isError: true,
       };
     }
@@ -478,11 +492,11 @@ ${prompt}`;
         description,
       });
     const teamName = team.name;
-    const planModeRequired = definition.name === "plan";
+    const planModeRequired = definition.name === PLAN_AGENT_NAME;
 
     let memberName = sanitizeNameSegment(
       description.replace(/\s+/g, "-").toLowerCase(),
-    ).slice(0, 30);
+    ).slice(0, MAX_TEAMMATE_NAME_CHARS);
     let suffix = 2;
     const base = memberName;
     while (memberName === LEADER_NAME || team.getMember(memberName)) {
@@ -595,7 +609,7 @@ ${prompt}`;
       team.removeMember(memberName);
       await teammateRegistry.dispose();
       return {
-        output: "Error: teammate runner is unavailable.",
+        output: TEAMMATE_RUNNER_UNAVAILABLE_ERROR,
         isError: true,
       };
     } catch (error) {

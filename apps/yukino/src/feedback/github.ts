@@ -20,6 +20,7 @@ import {
   GITHUB_URL_LIMIT,
   MAX_GIST_BYTES,
   NETWORK_TIMEOUT_MS,
+  NO_GITHUB_TOKEN_MESSAGE,
   PROBE_TIMEOUT_MS,
 } from "@/feedback/constants.js";
 import type { CollectedFile, FeedbackChannel } from "@/feedback/types.js";
@@ -141,7 +142,7 @@ async function uploadGist(
 
   const token = githubToken();
   if (!token) {
-    throw new Error("No GitHub token available");
+    throw new Error(NO_GITHUB_TOKEN_MESSAGE);
   }
   const response = await fetch("https://api.github.com/gists", {
     method: "POST",
@@ -296,7 +297,7 @@ export async function createIssue(
 
   const token = githubToken();
   if (!token) {
-    throw new Error("No GitHub token available");
+    throw new Error(NO_GITHUB_TOKEN_MESSAGE);
   }
   const response = await fetch(
     `https://api.github.com/repos/${FEEDBACK_REPO}/issues`,

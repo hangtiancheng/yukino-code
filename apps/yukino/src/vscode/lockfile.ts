@@ -11,6 +11,16 @@ import { join, resolve, sep } from "node:path";
 import { z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
+import {
+  CLAUDE_CODE_SSE_PORT_ENV_VAR,
+  CLAUDE_CONFIG_DIR_ENV_VAR,
+  DEFAULT_CONFIG_DIR_NAME,
+  DEFAULT_IDE_NAME,
+  IDE_LOCK_DIR_NAME,
+  IDE_WS_HOST,
+  LOCKFILE_EXTENSION,
+  LOCKFILE_WS_TRANSPORT,
+} from "@/vscode/constants.js";
 
 const log = createChildLogger({ module: "vscode" });
 
@@ -32,8 +42,10 @@ export interface DetectedIde {
 }
 
 function ideLockDir(): string {
-  const configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
-  return join(configDir, "ide");
+  const configDir =
+    process.env[CLAUDE_CONFIG_DIR_ENV_VAR] ??
+    join(homedir(), DEFAULT_CONFIG_DIR_NAME);
+  return join(configDir, IDE_LOCK_DIR_NAME);
 }
 
 function cwdInWorkspace(cwd: string, workspaceFolders: string[]): boolean {
@@ -54,22 +66,22 @@ async function readLockfile(
   dir: string,
   filename: string,
 ): Promise<DetectedIde | null> {
-  const port = parseInt(filename.replace(".lock", ""), 10);
+  const port = parseInt(filename.replace(LOCKFILE_EXTENSION, ""), 10);
   if (Number.isNaN(port)) {
     return null;
   }
   try {
     const content = await readFile(join(dir, filename), "utf-8");
     const parsed = LockfileSchema.parse(JSON.parse(content));
-    if (parsed.transport !== "ws") {
+    if (parsed.transport !== LOCKFILE_WS_TRANSPORT) {
       // Only `transport: "ws"` is supported; legacy SSE lockfiles and entries
       // without a transport field are both rejected.
       return null;
     }
     return {
-      ideName: parsed.ideName ?? "IDE",
+      ideName: parsed.ideName ?? DEFAULT_IDE_NAME,
       port,
-      url: `ws://127.0.0.1:${String(port)}`,
+      url: `ws://${IDE_WS_HOST}:${String(port)}`,
       workspaceFolders: parsed.workspaceFolders ?? [],
       authToken: parsed.authToken,
       pid: parsed.pid,
@@ -97,7 +109,9 @@ export async function detectIde(cwd: string): Promise<DetectedIde | null> {
   const dir = ideLockDir();
   let filenames: string[];
   try {
-    filenames = (await readdir(dir)).filter((f) => f.endsWith(".lock"));
+    filenames = (await readdir(dir)).filter((f) =>
+      f.endsWith(LOCKFILE_EXTENSION),
+    );
   } catch {
     return null; // no IDE lock directory → extension never ran
   }
@@ -111,8 +125,8 @@ export async function detectIde(cwd: string): Promise<DetectedIde | null> {
       l !== null && (l.pid === undefined || isPidAlive(l.pid)),
   );
 
-  const envPort = process.env.CLAUDE_CODE_SSE_PORT
-    ? parseInt(process.env.CLAUDE_CODE_SSE_PORT, 10)
+  const envPort = process.env[CLAUDE_CODE_SSE_PORT_ENV_VAR]
+    ? parseInt(process.env[CLAUDE_CODE_SSE_PORT_ENV_VAR], 10)
     : null;
   if (envPort !== null) {
     const byPort = lockfiles.find((l) => l.port === envPort);

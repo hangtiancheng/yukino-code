@@ -12,9 +12,20 @@ import type {
 } from "@a2a-js/sdk/server";
 
 import {
+  A2A_CONTEXTS_DIR_NAME,
+  buildContextBusyReason,
   DEFAULT_IDLE_TIMEOUT_MS,
+  INVALID_CONTEXT_MAPPING_ERROR,
   MAX_TRACKED_SESSIONS,
+  MESSAGE_CONTENT_REQUIRED,
   NO_ACTIVE_RUN,
+  NO_PROVIDER_ERROR,
+  PERMISSION_REQUEST_KIND,
+  SESSION_CAPACITY_ERROR,
+  SESSION_CLOSED_DURING_INIT,
+  TASK_CANCELED_TEXT,
+  TRANSCRIPT_UNAVAILABLE_ERROR,
+  YUKINO_DATA_KEY,
 } from "@/a2a/constants.js";
 import {
   agentEventToMessage,
@@ -44,6 +55,7 @@ import {
   rebuildFromSession,
   saveMessage,
 } from "@/session/index.js";
+import { PRIVATE_FILE_MODE, SESSION_ID_RE } from "@/storage/constants.js";
 import { projectPath } from "@/storage/index.js";
 import {
   mkdirPrivateSync as mkdirSync,
@@ -83,9 +95,7 @@ export async function createA2aRuntime(
 ): Promise<A2aRuntime> {
   const saved = sessionId ? loadSession(cwd, sessionId) : [];
   if (sessionId && saved.length === 0) {
-    throw new Error(
-      "A2A context transcript is no longer available. Start a new context.",
-    );
+    throw new Error(TRANSCRIPT_UNAVAILABLE_ERROR);
   }
   const config = withProjectMcpServers(loadConfig(), cwd);
   const provider = resolveDefaultProvider(
@@ -93,7 +103,7 @@ export async function createA2aRuntime(
     config.default_provider,
   );
   if (!provider) {
-    throw new Error("No provider configured.");
+    throw new Error(NO_PROVIDER_ERROR);
   }
   const runtime = await createRemoteAgent({
     interactionMode: "non-interactive",
@@ -246,7 +256,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
         eventBus,
         taskId,
         contextId,
-        "Message must contain text or a yukino permission-response data part.",
+        MESSAGE_CONTENT_REQUIRED,
       );
       return;
     }
@@ -258,8 +268,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
         eventBus,
         taskId,
         contextId,
-        `Context ${contextId} is busy with task ${existing.run.taskId}. ` +
-          "Cancel it or wait for it to finish before sending a new message.",
+        buildContextBusyReason(contextId, existing.run.taskId),
       );
       return;
     }
@@ -290,7 +299,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
         eventBus,
         taskId,
         contextId,
-        "Session closed during initialization.",
+        SESSION_CLOSED_DURING_INIT,
       );
       return;
     }
@@ -301,8 +310,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
         eventBus,
         taskId,
         contextId,
-        `Context ${contextId} is busy with task ${active.taskId}. ` +
-          "Cancel it or wait for it to finish before sending a new message.",
+        buildContextBusyReason(contextId, active.taskId),
       );
       return;
     }
@@ -332,9 +340,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
             taskId,
             contextId,
             TaskState.TASK_STATE_CANCELED,
-            agentMessage(taskId, contextId, [
-              textPart("Task canceled by user request."),
-            ]),
+            agentMessage(taskId, contextId, [textPart(TASK_CANCELED_TEXT)]),
           ),
         ),
       );
@@ -385,16 +391,14 @@ export class YukinoA2aExecutor implements AgentExecutor {
   private createSession(contextId: string): A2aSession {
     this.evictOverflowSessions();
     if (this.sessions.size >= MAX_TRACKED_SESSIONS) {
-      throw new Error(
-        "A2A session capacity reached; retry when an active context finishes.",
-      );
+      throw new Error(SESSION_CAPACITY_ERROR);
     }
     const mappingPath = this.contextMappingPath(contextId);
     const sessionId = existsSync(mappingPath)
       ? readFileSync(mappingPath, "utf8")
       : undefined;
-    if (sessionId !== undefined && !/^[A-Za-z0-9_-]+$/u.test(sessionId)) {
-      throw new Error("Invalid persisted A2A context mapping.");
+    if (sessionId !== undefined && !SESSION_ID_RE.test(sessionId)) {
+      throw new Error(INVALID_CONTEXT_MAPPING_ERROR);
     }
     const session: A2aSession = {
       contextId,
@@ -411,7 +415,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
   private contextMappingPath(contextId: string): string {
     return projectPath(
       this.cwd,
-      "a2a-contexts",
+      A2A_CONTEXTS_DIR_NAME,
       createHash("sha256").update(contextId).digest("hex"),
     );
   }
@@ -441,7 +445,10 @@ export class YukinoA2aExecutor implements AgentExecutor {
         withFileSyncLock(path, () => {
           const temporary = `${path}.${randomUUID()}.tmp`;
           try {
-            writeFileSync(temporary, sessionId, { flag: "wx", mode: 0o600 });
+            writeFileSync(temporary, sessionId, {
+              flag: "wx",
+              mode: PRIVATE_FILE_MODE,
+            });
             renameSync(temporary, path);
           } finally {
             rmSync(temporary, { force: true });
@@ -678,7 +685,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
     this.permissionCounter += 1;
     const permissionId = `perm-${String(this.permissionCounter)}-${randomUUID().slice(0, 8)}`;
     const data: PermissionRequestData = {
-      yukino: "permission-request",
+      [YUKINO_DATA_KEY]: PERMISSION_REQUEST_KIND,
       permissionId,
       toolCallId,
       toolName,

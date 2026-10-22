@@ -8,10 +8,10 @@ import type { ToolResultBlock } from "@/conversation/index.js";
 import { sessionPath } from "@/storage/index.js";
 import {
   applyBudget,
-  buildPersistedOutputPreview,
   isSpillReadback,
   persistLargeResult,
 } from "@/tool-result/index.js";
+import { buildPersistedOutputPreview } from "@/tool-result/prompts.js";
 
 const tempDirs = new Set<string>();
 
