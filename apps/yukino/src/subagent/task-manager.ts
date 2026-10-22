@@ -28,7 +28,7 @@ export type AgentTaskStatus = "running" | "completed" | "failed" | "cancelled";
  * shell tasks, which can run indefinitely (dev servers) and are killed at
  * exit instead. Absent kind means "agent" (the original TaskManager use).
  */
-export type TaskKind = "agent" | "shell";
+export type TaskKind = "agent" | "shell" | "workflow";
 
 export interface AgentTask {
   id: string;
@@ -150,8 +150,13 @@ export class TaskManager {
     this.tasks.set(id, task);
     this.pendingTaskIds.add(id);
 
+    // Cancelled workflow runners still finalize their journal and killed state.
     task.done = Promise.resolve()
-      .then(() => (task.status === "cancelled" ? task.output : runner(task)))
+      .then(() =>
+        task.status === "cancelled" && options.kind !== "workflow"
+          ? task.output
+          : runner(task),
+      )
       .then((output) => {
         if (task.status === "running") {
           task.status = "completed";

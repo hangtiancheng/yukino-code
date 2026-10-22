@@ -46,6 +46,7 @@ export const TEAMMATE_COORDINATION_TOOLS: ReadonlySet<string> = new Set([
 // Team if none exists — the Leader simply dispatches teammates
 // without a separate team-creation step.
 export const COORDINATOR_ALLOWED_TOOLS = new Set([
+  "Workflow",
   "Goal",
   "Agent",
   "SendMessage",

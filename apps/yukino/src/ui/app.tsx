@@ -186,6 +186,7 @@ import {
   formatToolArgs,
   strArg,
 } from "@/utils/index.js";
+import { attachWorkflow, getWorkflowService } from "@/workflow/wiring.js";
 
 const log = createChildLogger({ module: "terminal" });
 
@@ -632,6 +633,7 @@ export function App({
   );
   const teammateStates = useTeammateStates(teamManagerRef.current);
   const [agentsDialogOpen, setAgentsDialogOpen] = useState(false);
+  const [workflowsDialogOpen, setWorkflowsDialogOpen] = useState(false);
   const {
     subagents,
     cardsRef: subagentCardsRef,
@@ -772,7 +774,8 @@ export function App({
     resumeDialogActive ||
     permissionRequest !== null ||
     askRequest !== null ||
-    agentsDialogOpen;
+    agentsDialogOpen ||
+    workflowsDialogOpen;
   const { toolsExpanded, ctrlCHint } = useTerminalControls({
     hasRunningWork: foregroundBusy,
     clearInputRef,
@@ -1191,6 +1194,19 @@ export function App({
         // Wire the team manager into AgentTool to enable the teammate path (teammates receive shared task-board tools)
         agentTool.setTeamManager(teamManagerRef.current, teamRunAgentFactory);
         registryRef.current.register(agentTool);
+        const workflows = attachWorkflow({
+          cwd,
+          registry: registryRef.current,
+          taskManager: backgroundTaskManagerRef.current,
+          getClient: () => {
+            if (!clientRef.current) {
+              throw new Error("The model client is not initialized");
+            }
+            return clientRef.current;
+          },
+          getProvider: () => selectedProviderRef.current,
+        });
+        await workflows.registerNamedCommands(cmdRegistryRef.current);
 
         if (mcpServers.length > 0) {
           const mgr = new MCPManager();
@@ -1655,6 +1671,30 @@ export function App({
     if (cmd.type === "local_ui") {
       const action = cmd.handler({ cwd, args: parsed.args });
       switch (action) {
+        case "workflows": {
+          const service = getWorkflowService(registryRef.current);
+          if (!service) {
+            break;
+          }
+          if (parsed.args.trim()) {
+            try {
+              const output = await service.command(parsed.args, {
+                cwd,
+                permissionChecker: checkerRef.current ?? undefined,
+                onPermissionRequest: requestPermission,
+              });
+              setMessages((previous) => [
+                ...previous,
+                { role: "system", content: output },
+              ]);
+            } catch (error) {
+              setError(asErrorString(error));
+            }
+          } else {
+            setWorkflowsDialogOpen(true);
+          }
+          break;
+        }
         case "login": {
           setLoginActive(true);
           break;
@@ -2769,6 +2809,7 @@ export function App({
     await runUserTurn(text, input ?? recordCliInput(text));
   };
 
+  const workflowService = getWorkflowService(registryRef.current);
   const turnBlocked =
     exitingRef.current ||
     appState !== "chat" ||
@@ -2788,7 +2829,8 @@ export function App({
     resumeDialogActive ||
     permissionRequest !== null ||
     askRequest !== null ||
-    agentsDialogOpen;
+    agentsDialogOpen ||
+    workflowsDialogOpen;
   const followUps = useFollowUpQueue({
     blocked: turnBlocked,
     send: processSubmission,
@@ -3304,6 +3346,21 @@ export function App({
                       setAskRequestId(next.id);
                     }
                     setAskRequest(next ? next.questions : null);
+                  },
+                }
+              : undefined
+          }
+          workflows={
+            workflowsDialogOpen && workflowService
+              ? {
+                  service: workflowService,
+                  context: () => ({
+                    cwd,
+                    permissionChecker: checkerRef.current ?? undefined,
+                    onPermissionRequest: requestPermission,
+                  }),
+                  onClose: () => {
+                    setWorkflowsDialogOpen(false);
                   },
                 }
               : undefined

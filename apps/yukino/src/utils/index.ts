@@ -176,7 +176,7 @@ export function strList(raw: unknown): string[] {
 export function strArg(
   args: Record<string, unknown>,
   key: string,
-  fallback?: string,
+  fallback?: string | null,
 ): string {
   const v = args[key];
   if (typeof v === "string") {
@@ -189,7 +189,7 @@ export function strArg(
 export function boolArg(
   args: Record<string, unknown>,
   key: string,
-  fallback?: boolean,
+  fallback?: boolean | null,
 ): boolean {
   const v = args[key];
   if (typeof v === "boolean") {

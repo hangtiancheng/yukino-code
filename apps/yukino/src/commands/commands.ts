@@ -10,6 +10,8 @@ import {
   type ThinkingLevel,
 } from "@/config/provider-config.js";
 import { PLAN_AGENT_NAME, REVIEW_AGENT_NAME } from "@/subagent/constants.js";
+import { WORKFLOW_COMMAND_DESCRIPTION } from "@/workflow/constants.js";
+import { ULTRACODE_PROMPT } from "@/workflow/prompts.js";
 
 export type CommandType = "local" | "local_ui" | "prompt" | "skill_fork";
 
@@ -124,6 +126,18 @@ export function resolve(
 
 export function createDefaultRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
+  registry.register({
+    name: "workflows",
+    type: "local_ui",
+    description: WORKFLOW_COMMAND_DESCRIPTION,
+    handler: () => "workflows",
+  });
+  registry.register({
+    name: "ultracode",
+    type: "prompt",
+    description: "Orchestrate and verify a task with workflow subagents",
+    handler: (context) => `${ULTRACODE_PROMPT}\n\nTask: ${context.args}`,
+  });
 
   registry.register({
     name: "login",

@@ -71,7 +71,9 @@ export function AgentsDialog({
             ? task.id.startsWith("ps-")
               ? "PowerShell"
               : "Bash"
-            : "subagent";
+            : task.kind === "workflow"
+              ? "workflow"
+              : "subagent";
         return {
           id: `task:${task.id}`,
           label: `${task.id}: ${task.name}`,

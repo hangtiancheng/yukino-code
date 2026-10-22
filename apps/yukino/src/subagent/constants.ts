@@ -113,6 +113,7 @@ export const TASK_RECORD_EXTENSION = ".json";
 export const TASK_RECORD_TMP_SUFFIX = ".tmp";
 
 type AllTools =
+  | "Workflow"
   | "InstallSkill"
   | "LoadSkill"
   | "Agent"
@@ -153,6 +154,7 @@ type AllTools =
 //   EnterPlanMode — only the main agent can initiate a planning phase.
 //   ExitPlanMode  — excluded by default; plan definitions can submit a plan.
 export const MAIN_AGENT_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  "Workflow",
   "ComputerUse",
   "AskUserQuestion",
   "EnterPlanMode",

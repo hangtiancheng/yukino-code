@@ -14,6 +14,7 @@ import { ProviderSelect } from "@/ui/provider-select.js";
 import RewindDialog from "@/ui/rewind-dialog.js";
 import { SessionSelector } from "@/ui/session-selector.js";
 import { ThinkingSelect } from "@/ui/thinking-select.js";
+import { WorkflowsDialog } from "@/ui/workflows-dialog.js";
 
 interface Props {
   login?: ComponentProps<typeof ProviderLogin>;
@@ -28,6 +29,7 @@ interface Props {
   feedback?: ComponentProps<typeof FeedbackDialog>;
   issueApproval?: ComponentProps<typeof IssueApprovalDialog>;
   agents?: ComponentProps<typeof AgentsDialog>;
+  workflows?: ComponentProps<typeof WorkflowsDialog>;
   composer: ComponentProps<typeof InputBox>;
 }
 
@@ -44,6 +46,7 @@ export function InteractionDock({
   feedback,
   issueApproval,
   agents,
+  workflows,
   composer,
 }: Props) {
   const draftRef = useRef<InputDraft | null>(null);
@@ -79,6 +82,9 @@ export function InteractionDock({
   }
   if (agents) {
     return <AgentsDialog {...agents} />;
+  }
+  if (workflows) {
+    return <WorkflowsDialog {...workflows} />;
   }
   if (thinking) {
     return <ThinkingSelect {...thinking} />;

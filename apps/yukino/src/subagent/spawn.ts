@@ -47,6 +47,7 @@ export type SubagentProgressEvent =
 export type AgentEventSink = (event: SubagentProgressEvent) => void;
 
 export interface SubagentRunOptions {
+  maxOutputTokens?: number;
   sessionId?: string;
   memoryContent?: string;
   agentName?: string;
@@ -91,6 +92,8 @@ export async function spawnSubagent(
     definition.systemPromptOverride ?? buildSystemPrompt(env);
   const provider = {
     ...parentProvider,
+    max_output_tokens:
+      options.maxOutputTokens ?? parentProvider.max_output_tokens,
     model: resolvedModel,
     thinking: parentClient.getThinkingLevel?.() ?? parentProvider.thinking,
   };

@@ -180,6 +180,7 @@ import {
   createWebSocketAccessToken,
   rejectWebSocketUpgrade,
 } from "@/websocket-security.js";
+import { attachWorkflow, getWorkflowService } from "@/workflow/wiring.js";
 
 const log = createChildLogger({ module: "remote" });
 
@@ -996,6 +997,13 @@ export async function createRemoteAgent(
   // effect (teammates receive shared team task-board tools).
   agentTool.setTeamManager(teamManager, teamRunAgentFactory);
   registry.register(agentTool);
+  const workflows = attachWorkflow({
+    cwd,
+    registry,
+    taskManager: backgroundTaskManager,
+    getClient: () => handle.client,
+    getProvider: () => handle.provider,
+  });
 
   const cmdRegistry = createCommandRegistry();
   // Terminal-only registration mirrored here so /provider reaches the browser.
@@ -1014,6 +1022,7 @@ export async function createRemoteAgent(
   }
 
   wireSkillsToCommands(catalog, skillHost, cmdRegistry);
+  await workflows.registerNamedCommands(cmdRegistry);
 
   let mcpManager: MCPManager | null = null;
 
@@ -2489,6 +2498,27 @@ export class RemoteServer {
     }
 
     switch (name) {
+      case "workflows": {
+        const handle = this.agentHandle;
+        const service = getWorkflowService(handle.registry);
+        try {
+          const message = service
+            ? await service.command(args, {
+                cwd: handle.cwd,
+                permissionChecker: handle.checker,
+                onPermissionRequest: this.createPermissionCallback(),
+              })
+            : "Workflow service is not initialized";
+          this.broadcast({ type: "system", data: { message } });
+        } catch (error) {
+          this.broadcast({
+            type: "error",
+            data: { message: asErrorString(error) },
+          });
+        }
+        this.broadcast({ type: "command_done", data: null });
+        break;
+      }
       case "clear": {
         // Stop the old teammates AND background tasks before rotating the
         // session, and wait for both (parity with the TUI clear), so no

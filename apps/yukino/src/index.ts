@@ -46,6 +46,7 @@ export * as Tools from "@/tools/index.js";
 export * as Update from "@/update/index.js";
 export * as Utils from "@/utils/index.js";
 export * as VSCode from "@/vscode/index.js";
+export * as Workflow from "@/workflow/index.js";
 export * as Worktree from "@/worktree/index.js";
 
 // Process-level headless entry points. They carry no UI, but they own process

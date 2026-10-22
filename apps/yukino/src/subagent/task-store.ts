@@ -20,7 +20,7 @@ const TaskId = z.string().regex(/^[\w-]+-[1-9]\d*$/u);
 const TaskRecord = z.object({
   id: TaskId,
   name: z.string(),
-  kind: z.enum(["agent", "shell"]).optional(),
+  kind: z.enum(["agent", "shell", "workflow"]).optional(),
   originToolCallId: z.string().optional(),
   status: z.enum(["running", "completed", "failed", "cancelled"]),
   output: z.string(),

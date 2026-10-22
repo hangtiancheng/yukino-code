@@ -24,6 +24,7 @@ import {
   buildShellToolRule,
   buildTeammateMessagingRule,
 } from "@/prompt/prompts.js";
+import { WORKFLOW_RULE } from "@/workflow/prompts.js";
 
 export function buildToolGuidance(
   toolNames: readonly string[],
@@ -72,6 +73,9 @@ export function buildToolGuidance(
   }
   if (has("WebFetch")) {
     rules.push(WEB_FETCH_RULE);
+  }
+  if (has("Workflow")) {
+    rules.push(WORKFLOW_RULE);
   }
   if (has("Agent")) {
     rules.push(AGENT_DELEGATION_RULE);

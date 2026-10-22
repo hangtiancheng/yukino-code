@@ -1,3 +1,5 @@
+import { join } from "node:path";
+
 import type { AgentEvent } from "@/agent/events.js";
 import { Agent } from "@/agent/index.js";
 import { configureBashSandbox } from "@/bootstrap/sandbox.js";
@@ -49,6 +51,13 @@ import { TaskList } from "@/todo/index.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
 import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
+import { WORKFLOW_DIR_NAME } from "@/workflow/constants.js";
+import { listNamedWorkflows } from "@/workflow/named-workflows.js";
+import {
+  buildNamedWorkflowPrompt,
+  ULTRACODE_PROMPT,
+} from "@/workflow/prompts.js";
+import { attachWorkflow } from "@/workflow/wiring.js";
 
 export type OutputFormat = "text" | "stream-json";
 
@@ -132,6 +141,17 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
       return;
     }
     prompt = result.prompt;
+  }
+
+  if (command?.name === "ultracode") {
+    prompt = `${ULTRACODE_PROMPT}\n\nTask: ${command.args}`;
+  } else if (
+    command &&
+    (await listNamedWorkflows(join(cwd, WORKFLOW_DIR_NAME))).includes(
+      command.name,
+    )
+  ) {
+    prompt = buildNamedWorkflowPrompt(command.name, command.args);
   }
 
   const env = detectEnvironment(cwd);
@@ -241,6 +261,13 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     },
   );
   registry.register(agentTool);
+  const workflows = attachWorkflow({
+    cwd,
+    registry,
+    taskManager: backgroundTaskManager,
+    getClient: () => client,
+    getProvider: () => provider,
+  });
 
   // Connect to MCP. Done after all built-in tools are registered: the MCP tool
   // load mode compares total schema size against the context window, so it only
@@ -269,6 +296,46 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
         getContextWindow(provider),
         cfg.mcp_loading,
       );
+    }
+
+    if (command?.name === "workflows") {
+      const message = await workflows.command(command.args, {
+        cwd,
+        permissionChecker: checker,
+        abortSignal: abortController.signal,
+      });
+      if (args.outputFormat === "text") {
+        process.stdout.write(`${message}\n`);
+      }
+      await backgroundTaskManager.waitAll((task) => task.kind !== "shell");
+      for (const task of backgroundTaskManager.drainNotifications()) {
+        const notification = formatAgentTaskNotification(task);
+        if (args.outputFormat === "stream-json") {
+          console.log(
+            JSON.stringify({ type: "task_notification", notification }),
+          );
+        } else {
+          process.stdout.write(`${notification}\n`);
+        }
+      }
+      if (args.outputFormat === "stream-json") {
+        console.log(
+          JSON.stringify({
+            type: "result",
+            result: message,
+            duration_ms: Date.now() - startTime,
+            num_turns: 0,
+            tool_calls: [],
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          }),
+        );
+      }
+      return;
     }
 
     const agent = new Agent({
@@ -372,9 +439,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     // indefinitely (dev servers, auto-backgrounded timeouts) and would hang
     // -p mode forever — whatever finished by now is drained below, and the
     // finally block's stopAll() kills the rest.
-    await backgroundTaskManager.waitAll(
-      (task) => (task.kind ?? "agent") === "agent",
-    );
+    await backgroundTaskManager.waitAll((task) => task.kind !== "shell");
     const backgroundNotifications = backgroundTaskManager.drainNotifications();
     const durationMs = Date.now() - startTime;
 

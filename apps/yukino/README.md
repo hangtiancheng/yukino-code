@@ -14,7 +14,7 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 - Multi-provider LLM support with Anthropic (Anthropic Messages), OpenAI (OpenAI Responses), and OpenAI-compatible (OpenAI Chat Completions) protocols
 - Interactive terminal UI with streaming text, thinking indicators, and tool execution display
-- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, LSP, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, Goal, the TodoWrite tracking tool, plus Agent, LoadSkill, InstallSkill, AskUserQuestion, SyntheticOutput, TeamCreate, SendMessage, TeamDelete, TaskOutput, and TaskStop
+- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, LSP, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, Goal, the TodoWrite tracking tool, plus Workflow, Agent, LoadSkill, InstallSkill, AskUserQuestion, SyntheticOutput, TeamCreate, SendMessage, TeamDelete, TaskOutput, and TaskStop
 - MCP (Model Context Protocol) server integration for extending the tool set with external services
 - Permission system with four modes: default, acceptEdits, plan (read-only), and bypassPermissions
 - Sandbox support for isolated command execution (bwrap on Linux, seatbelt on macOS)
@@ -599,6 +599,34 @@ Task tracking and task execution are separate:
 
 The common built-in registry is used by terminal, print, Remote/ACP/A2A, and in-process teammates. Delegation, coordinator, and per-agent tool restrictions still filter that registry.
 
+### Workflows
+
+`Workflow` runs a plain JavaScript script that orchestrates Yukino subagents in the background. Start with `/ultracode <task>`, invoke a named script with `/<name>`, or call the tool with one of `script`, `name`, or `scriptPath` plus JSON `args`. Named scripts live in `.yukino/workflows/<name>.js`, `.mjs`, or `.ts` in the project. TypeScript syntax is not transpiled.
+
+```js
+export const meta = {
+  name: "review-files",
+  description: "Review files independently, then collect the findings",
+  phases: [{ title: "Review" }],
+};
+phase("Review");
+const results = await parallel(
+  args.files.map(
+    (file) => () =>
+      agent("Review " + file, { agentType: "review", label: file }),
+  ),
+);
+return results.filter(Boolean);
+```
+
+Scripts receive `agent(prompt, options)`, `parallel(thunks)`, `pipeline(items, ...stages)`, `phase(title)`, `log(message)`, `workflow(name | {scriptPath}, args)`, `args`, and `budget`. A pipeline runs stages sequentially within each item while items overlap. A nested workflow may invoke agents but cannot nest another workflow. Use top-level `return` for results; imports and extra exports are rejected. Time and randomness must be supplied through args for replay. Scripts run in the host process.
+
+Agent options include JSON `schema`, `agentType`, `model`, `maxTokens`, `allowedTools`, `label`, `phase`, and `isolation: "worktree"`. Agent roles, tool restrictions, and permissions still apply. Failed agents retry once and return `null` if both attempts fail; scripts must handle null results. A script can complete with partial results. Concurrent agents default to 3, with `maxConcurrency` configurable up to 16; the per-run agent-call limit is 1000. Worktree changes remain separate and are not merged automatically.
+
+The tool returns `run_id`, `task_id`, and a saved script path. Results arrive through the normal task-notification channel; `TaskOutput` and `TaskStop` use `task_id`. Print mode waits for workflow tasks before exiting. `/workflows` opens the terminal monitor with phase and agent progress: Tab switches runs, ↑↓ selects agents, x stops one agent, K stops a run, r resumes a finished run, and Esc closes the panel. In every host, `/workflows list`, `/workflows <run_id>`, `/workflows stop <run_id>`, and `/workflows resume <run_id>` provide text controls.
+
+Source snapshots, JSON arguments, journals, and run state live under `~/.yukino/projects/<project-key>/workflow-runs/<run_id>/`. Resume with `Workflow({resumeFromRunId: "..."})` to reuse the saved source and arguments. Supply a new source or args to override them. Matching successful agent calls replay from the journal; a divergence preserves the matching prefix and executes the rest again. Ordinary JavaScript runs again during replay. Keep side effects inside agents and keep script control flow deterministic.
+
 ### Worker lifecycle
 
 Agent defaults to `kind: "teammate"`, joins the current team or creates one automatically, and generates the teammate name from its description. Use `kind: "subagent"` for one-shot runs and `worktree: true` for Git worktree isolation; agent definitions also accept a boolean `worktree` default, which a call can override. The optional `model` field is unnecessary for most tasks. `TeamCreate` generates its team name automatically, `TeamList` lists the current team, and `TeamDelete` deletes it without a name argument.
@@ -759,32 +787,53 @@ Serves Yukino as an Agent2Agent (`@a2a-js/sdk`) agent so other A2A-compatible ag
 
 Inside the UI, these commands are available:
 
-| Command              | Description                                                                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| /login               | Configure, save, and activate an LLM provider                                                                                                                                               |
-| /provider            | Switch the active provider                                                                                                                                                                  |
-| /model [model]       | Switch the model of the current provider; without an argument, open the model picker                                                                                                        |
-| /help [command]      | Show available commands, or details for a single command                                                                                                                                    |
-| /status              | Show current session status (mode, model, provider, tokens, tools, sandbox, memories, skills, MCP, session, directory)                                                                      |
-| /session             | Confirm the session is active; use /resume to list past sessions                                                                                                                            |
-| /memory              | List stored memories                                                                                                                                                                        |
-| /memory clear        | Clear all memories                                                                                                                                                                          |
-| /skills              | List available skills                                                                                                                                                                       |
-| /skills reload       | Hot-reload skills from disk                                                                                                                                                                 |
-| /skill <name> [args] | Run a skill by name (shorthand for `/<name> [args]`; `/skill reload` routes to `/skills reload`)                                                                                            |
-| /plan [task]         | Run the built-in read-only plan agent synchronously with the main conversation context                                                                                                      |
-| /goal [args]         | Set or view a persistent goal; pause, resume, replace, complete, clear, or continue after the turn limit                                                                                    |
-| /compact             | Force conversation compaction                                                                                                                                                               |
-| /clear               | Reset the session and clear the terminal                                                                                                                                                    |
-| /resume [id]         | List or restore a previous session                                                                                                                                                          |
-| /rewind              | Open checkpoint rewind dialog                                                                                                                                                               |
-| /sandbox [mode]      | Configure sandbox (auto=on+auto, manual=on+manual, off)                                                                                                                                     |
-| /worktree            | List git worktrees                                                                                                                                                                          |
-| /mcp                 | Show MCP server status                                                                                                                                                                      |
-| /mcp reload          | Re-read MCP config; disconnect every server and reconnect the freshly read list                                                                                                             |
-| /thinking [level]    | Without an argument, open a picker of the supported thinking levels; with one, set the level (off, minimal, low, medium, high, xhigh, max). The setting persists to `~/.yukino/config.yaml` |
-| /review [PR or URL]  | Review a pull request in a foreground subagent; without arguments, list open PRs                                                                                                            |
-| /quit                | Exit the application                                                                                                                                                                        |
+| Command                      | Description                                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| /login                       | Configure, save, and activate an LLM provider                                                                                                                                               |
+| /provider                    | Switch the active provider                                                                                                                                                                  |
+| /model [model]               | Switch the model of the current provider; without an argument, open the model picker                                                                                                        |
+| /help [command]              | Show available commands, or details for a single command                                                                                                                                    |
+| /status                      | Show current session status (mode, model, provider, tokens, tools, sandbox, memories, skills, MCP, session, directory)                                                                      |
+| /session                     | Confirm the session is active; use /resume to list past sessions                                                                                                                            |
+| /memory                      | List stored memories                                                                                                                                                                        |
+| /memory clear                | Clear all memories                                                                                                                                                                          |
+| /skills                      | List available skills                                                                                                                                                                       |
+| /skills reload               | Hot-reload skills from disk                                                                                                                                                                 |
+| /skill <name> [args]         | Run a skill by name (shorthand for `/<name> [args]`; `/skill reload` routes to `/skills reload`)                                                                                            |
+| /plan [task]                 | Run the built-in read-only plan agent synchronously with the main conversation context                                                                                                      |
+| /goal [args]                 | Set or view a persistent goal; pause, resume, replace, complete, clear, or continue after the turn limit                                                                                    |
+| /compact                     | Force conversation compaction                                                                                                                                                               |
+| /clear                       | Reset the session and clear the terminal                                                                                                                                                    |
+| /resume [id]                 | List or restore a previous session                                                                                                                                                          |
+| /rewind                      | Open checkpoint rewind dialog                                                                                                                                                               |
+| /sandbox [mode]              | Configure sandbox (auto=on+auto, manual=on+manual, off)                                                                                                                                     |
+| `/ultracode <task>`          | Ask the main agent to create and execute a multi-agent workflow for the task                                                                                                                |
+| `/workflows`                 | Open the terminal workflow monitor; in other hosts, list workflow runs                                                                                                                      |
+| `/workflows list`            | List workflow run IDs, names, statuses, agent counts, and task IDs                                                                                                                          |
+| `/workflows <run_id>`        | Show a workflow run's status, result, or error                                                                                                                                              |
+| `/workflows stop <run_id>`   | Stop a running workflow and cancel its agents                                                                                                                                               |
+| `/workflows resume <run_id>` | Resume a saved workflow using its script, JSON arguments, and journal                                                                                                                       |
+| /worktree                    | List git worktrees                                                                                                                                                                          |
+| /mcp                         | Show MCP server status                                                                                                                                                                      |
+| /mcp reload                  | Re-read MCP config; disconnect every server and reconnect the freshly read list                                                                                                             |
+| /thinking [level]            | Without an argument, open a picker of the supported thinking levels; with one, set the level (off, minimal, low, medium, high, xhigh, max). The setting persists to `~/.yukino/config.yaml` |
+| /review [PR or URL]          | Review a pull request in a foreground subagent; without arguments, list open PRs                                                                                                            |
+| /quit                        | Exit the application                                                                                                                                                                        |
+
+`/ultracode` gives the main agent workflow orchestration instructions. The agent scopes the task, writes a JavaScript workflow, and invokes the `Workflow` tool. Agents run in the background with a default concurrency of 3; their final result returns through a task notification.
+
+```text
+/ultracode Review the current changes for correctness, security, and test coverage; verify the findings and summarize.
+/workflows
+/workflows list
+/workflows <run_id>
+/workflows stop <run_id>
+/workflows resume <run_id>
+```
+
+Replace `<run_id>` with the `run_id` returned by `Workflow` or listed by `/workflows list`. These commands use workflow run IDs; `TaskOutput` and `TaskStop` use the separate `task_id`. Resuming replays matching successful agent calls and reruns unfinished or divergent work.
+
+In the terminal monitor, Tab/Shift+Tab switches runs, ↑/↓ selects agents, x stops the selected agent, K stops the whole workflow, r resumes a finished run, and Esc/q closes the monitor. Stopping work requires confirmation in the monitor. See [Workflows](#workflows) for script primitives, named workflows, and persistence details.
 
 ### User Bash Commands
 
