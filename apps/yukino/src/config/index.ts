@@ -95,6 +95,42 @@ const SandboxYamlConfigSchema = z.object({
 
 export type SandboxYamlConfig = z.infer<typeof SandboxYamlConfigSchema>;
 
+/**
+ * One `env` block value. YAML scalars arrive as string/number/boolean and are
+ * stringified for process.env; an empty value (`KEY:`) becomes "".
+ */
+const EnvValueSchema = z
+  .union([z.string(), z.number(), z.boolean()])
+  .nullish()
+  .transform((value) => (value == null ? "" : String(value)));
+
+/**
+ * The `env` block accepts a plain mapping (`env: {KEY: value}`) or a list of
+ * single-key mappings (`env:\n  - KEY: value`), normalized to one record. A
+ * bare `env:` (null — every entry commented out) is treated as empty.
+ */
+const EnvBlockSchema = z
+  .union([
+    z.record(z.string(), EnvValueSchema),
+    z.array(z.record(z.string(), EnvValueSchema)),
+    z.null(),
+  ])
+  .transform((block) => {
+    if (block === null) {
+      return {};
+    }
+    if (!Array.isArray(block)) {
+      return block;
+    }
+    const merged: Record<string, string> = {};
+    for (const entry of block) {
+      for (const [key, value] of Object.entries(entry)) {
+        merged[key] = value;
+      }
+    }
+    return merged;
+  });
+
 const AppConfigSchema = z.looseObject({
   default_provider: z.number().default(0),
   providers: z.array(ProviderConfigSchema),
@@ -125,6 +161,13 @@ const AppConfigSchema = z.looseObject({
    * stay distinguishable, mirroring enable_fork.
    */
   enable_memory: z.boolean().optional(),
+  /**
+   * Environment variable defaults. Every variable Yukino reads may be listed;
+   * a value only takes effect when the variable is unset in the real
+   * environment, so explicit environment always wins. Hydrated before
+   * telemetry starts (hydrateConfigEnv) and re-applied on every config load.
+   */
+  env: EnvBlockSchema.optional(),
 });
 
 /** Default context inheritance for Agent calls. Defaults to true when unset. */
@@ -135,6 +178,37 @@ export function forkEnabled(cfg: AppConfig): boolean {
 /** Whether auto memory is enabled. Defaults to enabled when not specified in config. */
 export function memoryEnabled(cfg: AppConfig): boolean {
   return cfg.enable_memory !== false;
+}
+
+/**
+ * Applies the config's `env` block to process.env, filling only variables
+ * that are unset in the real environment — explicit environment always wins.
+ * Idempotent: repeated config loads never clobber anything.
+ */
+export function applyConfigEnv(env: Record<string, string> | undefined): void {
+  if (!env) {
+    return;
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+/**
+ * Early-startup hydration: fills process.env from the global config's `env`
+ * block before anything reads it — telemetry initializes before the mode
+ * runners load the config. Tolerant by design: a missing or broken config is
+ * reported by the real loadConfig call later; hydration must never block
+ * startup.
+ */
+export function hydrateConfigEnv(): void {
+  try {
+    loadConfig(undefined, { allowEmptyProviders: true });
+  } catch {
+    // The real load at startup reports config errors.
+  }
 }
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -180,6 +254,9 @@ function loadSingleFile(path: string): AppConfig {
     );
   }
   const config = parsed.data;
+  // Hydrate before loadConfig's validation below, so the defaults apply even
+  // when the real load later reports a provider/MCP validation error.
+  applyConfigEnv(config.env);
   return {
     ...config,
     providers: config.providers.map(withProviderDefaults),

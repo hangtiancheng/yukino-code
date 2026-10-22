@@ -1,5 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
@@ -14,6 +14,7 @@ import {
   withProjectMcpServers,
   resolveAPIKey,
   forkEnabled,
+  hydrateConfigEnv,
   memoryEnabled,
   type AppConfig,
   type MCPServerConfig,
@@ -361,6 +362,130 @@ describe("config", () => {
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    });
+  });
+
+  // The `env` block provides defaults for any environment variable Yukino
+  // reads: a value is applied only when the variable is unset in the real
+  // environment, so explicit environment always wins.
+  describe("env block", () => {
+    const ENV_A = "YUKINO_ENV_BLOCK_TEST_A";
+    const ENV_B = "YUKINO_ENV_BLOCK_TEST_B";
+    const dirs: string[] = [];
+
+    afterEach(() => {
+      delete process.env.YUKINO_ENV_BLOCK_TEST_A;
+      delete process.env.YUKINO_ENV_BLOCK_TEST_B;
+      for (const dir of dirs) {
+        rmSync(dir, { recursive: true, force: true });
+      }
+      dirs.length = 0;
+    });
+
+    const writeConfig = (envLines: string[]): string => {
+      const dir = mkdtempSync(join(tmpdir(), "yukino-env-"));
+      dirs.push(dir);
+      const path = join(dir, "config.yaml");
+      writeFileSync(
+        path,
+        [
+          "providers:",
+          "  - name: provider",
+          "    protocol: anthropic",
+          "    base_url: https://provider.example.com",
+          "    model: model",
+          ...envLines,
+          "",
+        ].join("\n"),
+      );
+      return path;
+    };
+
+    it("hydrates unset variables from a mapping block", () => {
+      const cfg = loadConfig(
+        writeConfig(["env:", `  ${ENV_A}: "1"`, `  ${ENV_B}: eager`]),
+      );
+      expect(cfg.env).toEqual({ [ENV_A]: "1", [ENV_B]: "eager" });
+      expect(process.env[ENV_A]).toBe("1");
+      expect(process.env[ENV_B]).toBe("eager");
+    });
+
+    it("never overrides a variable set in the real environment", () => {
+      process.env[ENV_A] = "from-real-env";
+      loadConfig(writeConfig(["env:", `  ${ENV_A}: "from-config"`]));
+      expect(process.env[ENV_A]).toBe("from-real-env");
+    });
+
+    it("accepts the list-of-single-key-mappings form", () => {
+      const cfg = loadConfig(
+        writeConfig(["env:", `  - ${ENV_A}: 1`, `  - ${ENV_B}: eager`]),
+      );
+      expect(cfg.env).toEqual({ [ENV_A]: "1", [ENV_B]: "eager" });
+      expect(process.env[ENV_A]).toBe("1");
+      expect(process.env[ENV_B]).toBe("eager");
+    });
+
+    it("stringifies scalars and maps an empty value to the empty string", () => {
+      const cfg = loadConfig(
+        writeConfig(["env:", `  ${ENV_A}: 1`, `  ${ENV_B}:`]),
+      );
+      expect(cfg.env).toEqual({ [ENV_A]: "1", [ENV_B]: "" });
+      expect(process.env[ENV_A]).toBe("1");
+      expect(process.env[ENV_B]).toBe("");
+    });
+
+    it("treats a bare env key (null block) as empty", () => {
+      const cfg = loadConfig(writeConfig(["env:"]));
+      expect(cfg.env).toEqual({});
+    });
+
+    it("hydrates before provider validation reports an error", () => {
+      const dir = mkdtempSync(join(tmpdir(), "yukino-env-"));
+      dirs.push(dir);
+      const path = join(dir, "config.yaml");
+      writeFileSync(
+        path,
+        [
+          "providers:",
+          "  - name: a",
+          "    protocol: anthropic",
+          "    base_url: https://dup.example.com",
+          "    model: m",
+          "  - name: b",
+          "    protocol: anthropic",
+          "    base_url: https://dup.example.com",
+          "    model: m",
+          "env:",
+          `  ${ENV_A}: hydrated`,
+          "",
+        ].join("\n"),
+      );
+      expect(() => loadConfig(path)).toThrow(/duplicate base_url/);
+      expect(process.env[ENV_A]).toBe("hydrated");
+    });
+
+    it("hydrateConfigEnv reads the global config", () => {
+      const configDir = join(homedir(), ".yukino");
+      mkdirSync(configDir, { recursive: true });
+      writeFileSync(
+        join(configDir, "config.yaml"),
+        ["providers: []", "env:", `  ${ENV_A}: "1"`].join("\n"),
+      );
+      hydrateConfigEnv();
+      expect(process.env[ENV_A]).toBe("1");
+    });
+
+    it("hydrateConfigEnv tolerates a missing or broken config", () => {
+      expect(() => {
+        hydrateConfigEnv();
+      }).not.toThrow();
+      const configDir = join(homedir(), ".yukino");
+      mkdirSync(configDir, { recursive: true });
+      writeFileSync(join(configDir, "config.yaml"), "providers: [");
+      expect(() => {
+        hydrateConfigEnv();
+      }).not.toThrow();
+      expect(process.env[ENV_A]).toBeUndefined();
     });
   });
 

@@ -4,6 +4,7 @@ import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
 import type { RuntimeMode } from "@/cli.js";
 import {
   forkEnabled,
+  hydrateConfigEnv,
   loadConfig,
   memoryEnabled,
   withProjectMcpServers,
@@ -195,6 +196,10 @@ async function runUiMode(
 }
 
 async function run(mode: RuntimeMode): Promise<void> {
+  // Fill process.env from the config's `env` block before anything reads it:
+  // every mode runner initializes telemetry (which reads OTEL_*/SENTRY_*/
+  // LANGFUSE_*) before it loads the config.
+  hydrateConfigEnv();
   recover();
   switch (mode.kind) {
     case "acp":

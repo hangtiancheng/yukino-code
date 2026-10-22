@@ -266,6 +266,70 @@ enable_coordinator_mode: false
 # Default: true. Each call can explicitly set fork: true or fork: false to override it.
 enable_fork: true
 
+# Environment variable defaults. Any variable Yukino reads may be listed here; a value takes
+# effect only when the variable is unset in the real environment — explicit environment always
+# wins. Scalars are stringified (1 → "1"); an empty value becomes ""; a bare `env:` (every
+# entry commented out) is a no-op. Applied before telemetry starts, and re-applied on every
+# config (re)load. A list of single-key mappings (`- KEY: value`) is also accepted.
+env:
+  # ── Yukino switches ──────────────────────────────────────────────────────────────
+  YUKINO_SKIP_VERSION_CHECK: 1 # 1 disables the automatic update check; `yukino update` still checks
+  # MCP tool loading: eager | native | dispatch. Default: auto-decided per session from the
+  # provider protocol, endpoint and schema size; `native` on a non-anthropic protocol downgrades
+  # to dispatch.
+  YUKINO_MCP_LOADING: eager
+  # 1 removes run_in_background from Bash/PowerShell/Agent, makes shell timeouts kill instead of
+  # backgrounding, and disables Ctrl+B.
+  YUKINO_DISABLE_BACKGROUND_TASKS: 0
+  # YUKINO_BYPASS_PERMISSIONS: 1      # 1 skips permission prompts (cf. permission_mode above)
+  # YUKINO_THEME: dark                # Force the terminal theme: dark | light (default: detect)
+  # ── Provider credentials — fallback when a provider omits api_key ──────────────────
+  # ANTHROPIC_API_KEY: sk-ant-xxx     # anthropic protocol
+  # OPENAI_API_KEY: sk-xxx            # openai and openai-compat protocols
+  # ── OpenTelemetry — see the Telemetry section; telemetry stays off without exporters ─
+  # OTEL_SDK_DISABLED: "true"         # true disables OpenTelemetry and Langfuse tracing
+  # OTEL_SERVICE_NAME: yukino         # Service name; defaults to yukino
+  # OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=production
+  # OTEL_TRACES_EXPORTER: otlp        # Comma-separated: otlp | console | none
+  # OTEL_LOGS_EXPORTER: otlp          # Comma-separated: otlp | console | none
+  # OTEL_METRICS_EXPORTER: otlp       # Comma-separated: otlp | console | prometheus | none
+  # OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf # Shared protocol: grpc | http/json | http/protobuf
+  # OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf # Per-signal protocol overrides
+  # OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: http/protobuf
+  # OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: http/protobuf
+  # OTEL_EXPORTER_OTLP_ENDPOINT: https://collector.example.com # Shared collector endpoint
+  # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://collector.example.com/v1/traces
+  # OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: https://collector.example.com/v1/logs
+  # OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: https://collector.example.com/v1/metrics
+  # OTEL_EXPORTER_OTLP_HEADERS: authorization=Bearer token
+  # OTEL_METRIC_EXPORT_INTERVAL: 60000 # Metric export interval in ms; defaults to 60000
+  # ── Langfuse — enabled when both keys are set ──────────────────────────────────────
+  # LANGFUSE_PUBLIC_KEY: pk-lf-xxx
+  # LANGFUSE_SECRET_KEY: sk-lf-xxx
+  # LANGFUSE_BASE_URL: https://cloud.langfuse.com # Cloud or self-hosted endpoint
+  # LANGFUSE_TRACING_ENVIRONMENT: production      # Environment attached to traces
+  # LANGFUSE_RELEASE: 1.0.0                       # Defaults to the Yukino version
+  # LANGFUSE_FLUSH_AT: 15                         # Spans accumulated before export
+  # LANGFUSE_FLUSH_INTERVAL: 0.5                  # Batch flush interval in seconds
+  # LANGFUSE_TIMEOUT: 3                           # Export request timeout in seconds
+  # ── Sentry — enabled when SENTRY_DSN is set ────────────────────────────────────────
+  # SENTRY_DSN: https://xxx@yyy.ingest.sentry.io/1
+  # SENTRY_ENVIRONMENT: production
+  # SENTRY_RELEASE: 1.0.0                         # Defaults to the Yukino version
+  # SENTRY_DEBUG: "true"                          # true enables Sentry SDK diagnostics
+  # ── /feedback gist upload credentials ──────────────────────────────────────────────
+  # GH_TOKEN: ghp_xxx                             # Checked before GITHUB_TOKEN
+  # GITHUB_TOKEN: ghp_xxx
+  # ── IDE integration (Claude Code compatible) ───────────────────────────────────────
+  # CLAUDE_CODE_SSE_PORT: 12345                   # VS Code extension SSE port
+  # CLAUDE_CONFIG_DIR: /home/me/.claude           # IDE lockfile directory; defaults to ~/.claude
+  # ── Read-only probes (normally set by the terminal/OS, rarely defaulted here) ───────
+  # Terminal/feature detection reads TERM, TERM_PROGRAM, TMUX, VTE_VERSION, KITTY_WINDOW_ID,
+  # ZED_TERM, WT_SESSION, COLORFGBG, SHELL, DISPLAY, WAYLAND_DISPLAY, CI and SSH_CONNECTION /
+  # SSH_CLIENT / SSH_TTY; HTTP_PROXY / HTTPS_PROXY / ALL_PROXY / NO_PROXY (and lowercase) are
+  # picked up by /feedback diagnostics. Test-only: YUKINO_TEST_API_KEY / YUKINO_TEST_BASE_URL /
+  # YUKINO_TEST_MODEL.
+
 # User-level MCP servers. Merged with the project-level .mcp.json; on a name collision the
 # user-level entry wins.
 mcp_servers:
