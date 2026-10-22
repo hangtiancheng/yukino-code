@@ -46,6 +46,14 @@ export function buildContextBusyReason(
   );
 }
 
+export function buildPermissionTaskMismatchReason(taskId: string): string {
+  return `Permission responses must be sent with taskId "${taskId}".`;
+}
+
+export function buildUnknownPermissionIdReason(permissionId: string): string {
+  return `Unknown or already resolved permission id "${permissionId}".`;
+}
+
 export const TRANSCRIPT_UNAVAILABLE_ERROR =
   "A2A context transcript is no longer available. Start a new context.";
 

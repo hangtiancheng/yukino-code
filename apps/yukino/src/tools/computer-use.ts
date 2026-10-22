@@ -23,7 +23,30 @@ import {
   OPENAI_ACTION_TYPES,
 } from "@/tools/constants.js";
 import {
+  COMPUTER_USE_ACTION_DESCRIPTION,
+  COMPUTER_USE_ACTIONS_DESCRIPTION,
   COMPUTER_USE_ACTION_TYPE_DESCRIPTION,
+  COMPUTER_USE_BATCH_BUTTON_DESCRIPTION,
+  COMPUTER_USE_BATCH_KEYS_DESCRIPTION,
+  COMPUTER_USE_BATCH_PATH_DESCRIPTION,
+  COMPUTER_USE_BATCH_SCROLL_X_DESCRIPTION,
+  COMPUTER_USE_BATCH_SCROLL_Y_DESCRIPTION,
+  COMPUTER_USE_BATCH_TEXT_DESCRIPTION,
+  COMPUTER_USE_BUTTON_DESCRIPTION,
+  COMPUTER_USE_COORDINATE_DESCRIPTION,
+  COMPUTER_USE_DURATION_DESCRIPTION,
+  COMPUTER_USE_KEYS_DESCRIPTION,
+  COMPUTER_USE_PATH_DESCRIPTION,
+  COMPUTER_USE_REGION_DESCRIPTION,
+  COMPUTER_USE_SAFETY_CHECKS_DESCRIPTION,
+  COMPUTER_USE_SCROLL_AMOUNT_DESCRIPTION,
+  COMPUTER_USE_SCROLL_X_DESCRIPTION,
+  COMPUTER_USE_SCROLL_Y_DESCRIPTION,
+  COMPUTER_USE_START_COORDINATE_DESCRIPTION,
+  COMPUTER_USE_STATUS_DESCRIPTION,
+  COMPUTER_USE_TEXT_DESCRIPTION,
+  COMPUTER_USE_X_DESCRIPTION,
+  COMPUTER_USE_Y_DESCRIPTION,
   computerUseDescription,
 } from "@/tools/prompts.js";
 import {
@@ -534,8 +557,7 @@ export class ComputerUseTool implements Tool {
           action: {
             type: "string",
             enum: ACTIONS,
-            description:
-              "Anthropic-style single computer action. Send either action or actions, not both.",
+            description: COMPUTER_USE_ACTION_DESCRIPTION,
           },
           actions: {
             type: "array",
@@ -550,7 +572,7 @@ export class ComputerUseTool implements Tool {
                 button: {
                   type: "string",
                   enum: ["left", "right", "wheel", "back", "forward"],
-                  description: "Button for type=click.",
+                  description: COMPUTER_USE_BATCH_BUTTON_DESCRIPTION,
                 },
                 x: { type: "integer", minimum: 0 },
                 y: { type: "integer", minimum: 0 },
@@ -558,8 +580,7 @@ export class ComputerUseTool implements Tool {
                   type: "array",
                   items: { type: "string" },
                   maxItems: 8,
-                  description:
-                    "Keys held during the action, or pressed by keypress.",
+                  description: COMPUTER_USE_BATCH_KEYS_DESCRIPTION,
                 },
                 path: {
                   type: "array",
@@ -574,19 +595,19 @@ export class ComputerUseTool implements Tool {
                   },
                   minItems: 2,
                   maxItems: 200,
-                  description: "Drag path for type=drag.",
+                  description: COMPUTER_USE_BATCH_PATH_DESCRIPTION,
                 },
                 scrollX: {
                   type: "number",
-                  description: "Horizontal scroll delta for type=scroll.",
+                  description: COMPUTER_USE_BATCH_SCROLL_X_DESCRIPTION,
                 },
                 scrollY: {
                   type: "number",
-                  description: "Vertical scroll delta for type=scroll.",
+                  description: COMPUTER_USE_BATCH_SCROLL_Y_DESCRIPTION,
                 },
                 text: {
                   type: "string",
-                  description: "Text to type for type=type.",
+                  description: COMPUTER_USE_BATCH_TEXT_DESCRIPTION,
                 },
               },
               required: ["type"],
@@ -594,8 +615,7 @@ export class ComputerUseTool implements Tool {
             },
             minItems: 1,
             maxItems: MAX_BATCH_ACTIONS,
-            description:
-              "OpenAI-style ordered batch of computer actions, executed in sequence; a screenshot is returned after the batch.",
+            description: COMPUTER_USE_ACTIONS_DESCRIPTION,
           },
           pendingSafetyChecks: {
             type: "array",
@@ -609,40 +629,36 @@ export class ComputerUseTool implements Tool {
               required: ["id"],
               additionalProperties: false,
             },
-            description:
-              "OpenAI-style safety checks raised with the batch; acknowledged in the tool result.",
+            description: COMPUTER_USE_SAFETY_CHECKS_DESCRIPTION,
           },
           status: {
             type: "string",
             enum: ["in_progress", "completed", "incomplete"],
-            description:
-              "OpenAI-style status of the computer call; echoed in the tool result.",
+            description: COMPUTER_USE_STATUS_DESCRIPTION,
           },
           coordinate: {
             type: "array",
             items: { type: "integer", minimum: 0 },
             minItems: 2,
             maxItems: 2,
-            description:
-              "Anthropic-style [x, y] coordinate in the latest screenshot space.",
+            description: COMPUTER_USE_COORDINATE_DESCRIPTION,
           },
           duration: {
             type: "number",
             minimum: 0,
             maximum: 60,
-            description: "Seconds for hold_key or wait.",
+            description: COMPUTER_USE_DURATION_DESCRIPTION,
           },
           region: {
             type: "array",
             items: { type: "integer", minimum: 0 },
             minItems: 4,
             maxItems: 4,
-            description:
-              "Zoom region [x1, y1, x2, y2] in the latest screenshot space.",
+            description: COMPUTER_USE_REGION_DESCRIPTION,
           },
           scroll_amount: {
             type: "number",
-            description: "Anthropic-style number of wheel clicks to scroll.",
+            description: COMPUTER_USE_SCROLL_AMOUNT_DESCRIPTION,
           },
           scroll_direction: {
             type: "string",
@@ -653,33 +669,32 @@ export class ComputerUseTool implements Tool {
             items: { type: "integer", minimum: 0 },
             minItems: 2,
             maxItems: 2,
-            description: "Anthropic-style drag start coordinate.",
+            description: COMPUTER_USE_START_COORDINATE_DESCRIPTION,
           },
           text: {
             type: "string",
-            description: "Text to type, or a '+'-separated key combination.",
+            description: COMPUTER_USE_TEXT_DESCRIPTION,
           },
           x: {
             type: "integer",
             minimum: 0,
-            description: "OpenAI-style x coordinate.",
+            description: COMPUTER_USE_X_DESCRIPTION,
           },
           y: {
             type: "integer",
             minimum: 0,
-            description: "OpenAI-style y coordinate.",
+            description: COMPUTER_USE_Y_DESCRIPTION,
           },
           button: {
             type: "string",
             enum: ["left", "right", "wheel", "middle", "back", "forward"],
-            description: "Button for action=click.",
+            description: COMPUTER_USE_BUTTON_DESCRIPTION,
           },
           keys: {
             type: "array",
             items: { type: "string" },
             maxItems: 8,
-            description:
-              "OpenAI-style keys held during an action or pressed by keypress.",
+            description: COMPUTER_USE_KEYS_DESCRIPTION,
           },
           path: {
             type: "array",
@@ -694,15 +709,15 @@ export class ComputerUseTool implements Tool {
             },
             minItems: 2,
             maxItems: 200,
-            description: "OpenAI-style drag path.",
+            description: COMPUTER_USE_PATH_DESCRIPTION,
           },
           scroll_x: {
             type: "number",
-            description: "OpenAI-style horizontal scroll delta.",
+            description: COMPUTER_USE_SCROLL_X_DESCRIPTION,
           },
           scroll_y: {
             type: "number",
-            description: "OpenAI-style vertical scroll delta.",
+            description: COMPUTER_USE_SCROLL_Y_DESCRIPTION,
           },
         },
         // Either action (Anthropic-style) or actions (OpenAI-style) is required;

@@ -86,13 +86,15 @@ import { PermissionChecker, type PermissionMode } from "@/permissions/index.js";
 import { getOrCreatePlanPath, planExists } from "@/plan-file/index.js";
 import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
 import { buildPlanModeExitReminder } from "@/prompt/plan-mode.js";
+import { buildPlanExecutionPrompt } from "@/prompt/prompts.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import * as sessionMod from "@/session/index.js";
-import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
+import { SkillCatalog } from "@/skills/catalog.js";
 import { runFork as runSkillFork } from "@/skills/executor.js";
 import type { SkillHost, SkillForkHost } from "@/skills/index.js";
 import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
+import { buildSkillSection } from "@/skills/prompts.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import {
   BUILTIN_AGENTS,
@@ -153,7 +155,6 @@ import type { PlanChoice } from "@/ui/plan-approval.js";
 import {
   buildFeedbackIssueRejectionReminder,
   buildFeedbackRejectionPrompt,
-  buildPlanExecutionPrompt,
 } from "@/ui/prompts.js";
 import { ProviderLogin } from "@/ui/provider-login.js";
 import { ProviderSelect } from "@/ui/provider-select.js";

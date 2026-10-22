@@ -10,7 +10,10 @@ import {
   MAX_MARKDOWN_LENGTH,
   URL_REQUIRED_ERROR,
 } from "@/tools/constants.js";
-import { WEB_FETCH_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  WEB_FETCH_DESCRIPTION,
+  WEB_FETCH_URL_DESCRIPTION,
+} from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
@@ -168,7 +171,7 @@ export class WebFetchTool implements Tool {
       properties: {
         url: {
           type: "string" as const,
-          description: "The http or https URL to fetch content from.",
+          description: WEB_FETCH_URL_DESCRIPTION,
         },
       },
       required: ["url"],

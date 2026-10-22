@@ -15,7 +15,6 @@ import { createChildLogger } from "@/logger/index.js";
 import {
   AGENTS_DIR_NAME,
   FRONTMATTER_BLOCK_RE,
-  MAX_SKILL_DESCRIPTION_CHARS,
   SKILL_FILE_NAME,
   SKILLS_DIR_NAME,
 } from "@/skills/constants.js";
@@ -294,40 +293,4 @@ export function parseSkillFile(content: string): {
     log.error({ err }, "skills operation failed");
     return null;
   }
-}
-
-export function escapeSkillXml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-/** Metadata-only conversation reminder; bodies load on demand without changing the system prefix. */
-export function buildSkillSection(catalog: SkillCatalog): string {
-  const metas = catalog.list();
-  if (metas.length === 0) {
-    return "";
-  }
-  const skillsDir = yukinoPath(SKILLS_DIR_NAME);
-  const lines = [
-    "## Skills",
-    'Load relevant instructions with LoadSkill {name: "<skill-name>"}, or user command /<skill-name>. Mode inline activates in this conversation; fork runs in a subagent when available, otherwise inline. Load resources only as needed, relative to the skill directory. Tool access remains host-controlled.',
-    'InstallSkill {source: "<local path or raw SKILL.md URL>"} makes skills available immediately. skills.sh pages and GitHub tree/blob pages are not supported.',
-    "Create skills under the following directory as <skill-name>/SKILL.md:",
-    `<skills-directory>${escapeSkillXml(skillsDir)}</skills-directory>`,
-    "<available-skills>",
-  ];
-  for (const meta of metas) {
-    const oneLine = meta.description.replace(/\s+/g, " ").trim();
-    const desc =
-      oneLine.length > MAX_SKILL_DESCRIPTION_CHARS
-        ? oneLine.slice(0, MAX_SKILL_DESCRIPTION_CHARS) + "…"
-        : oneLine;
-    lines.push(
-      `<skill><name>${escapeSkillXml(meta.name)}</name><description>${escapeSkillXml(desc)}</description><mode>${meta.mode ?? "inline"}</mode></skill>`,
-    );
-  }
-  lines.push("</available-skills>");
-  return lines.join("\n");
 }

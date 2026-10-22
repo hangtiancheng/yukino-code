@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { MAX_RECENT_ACTIVITIES } from "@/teams/constants.js";
 import { strArg } from "@/utils/index.js";
 
 export const ToolActivitySchema = z.object({
@@ -62,7 +63,7 @@ export function recordToolUse(
   };
   p.lastActivity = activity;
   p.recentActivities.push(activity);
-  if (p.recentActivities.length > 5) {
+  if (p.recentActivities.length > MAX_RECENT_ACTIVITIES) {
     p.recentActivities.shift();
   }
 }

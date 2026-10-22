@@ -1,7 +1,18 @@
 import { safeParseAsync, z } from "zod";
 
-import { QUESTION_COUNT_ERROR } from "@/tools/constants.js";
-import { ASK_USER_QUESTION_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  OPERATION_INTERRUPTED_ERROR,
+  QUESTION_COUNT_ERROR,
+} from "@/tools/constants.js";
+import {
+  ASK_USER_MULTI_SELECT_DESCRIPTION,
+  ASK_USER_OPTION_DESCRIPTION_DESCRIPTION,
+  ASK_USER_OPTION_LABEL_DESCRIPTION,
+  ASK_USER_OPTIONS_DESCRIPTION,
+  ASK_USER_QUESTION_DESCRIPTION,
+  ASK_USER_QUESTION_TEXT_DESCRIPTION,
+  ASK_USER_QUESTIONS_DESCRIPTION,
+} from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
@@ -54,7 +65,7 @@ export class AskUserQuestionTool implements Tool {
       properties: {
         questions: {
           type: "array" as const,
-          description: "question",
+          description: ASK_USER_QUESTIONS_DESCRIPTION,
           minItems: 1,
           maxItems: 4,
           items: {
@@ -62,11 +73,11 @@ export class AskUserQuestionTool implements Tool {
             properties: {
               question: {
                 type: "string" as const,
-                description: "The question to ask",
+                description: ASK_USER_QUESTION_TEXT_DESCRIPTION,
               },
               options: {
                 type: "array" as const,
-                description: "options",
+                description: ASK_USER_OPTIONS_DESCRIPTION,
                 minItems: 2,
                 maxItems: 4,
                 items: {
@@ -74,11 +85,11 @@ export class AskUserQuestionTool implements Tool {
                   properties: {
                     label: {
                       type: "string" as const,
-                      description: "label",
+                      description: ASK_USER_OPTION_LABEL_DESCRIPTION,
                     },
                     description: {
                       type: "string" as const,
-                      description: "description",
+                      description: ASK_USER_OPTION_DESCRIPTION_DESCRIPTION,
                     },
                   },
                   required: ["label"],
@@ -86,8 +97,7 @@ export class AskUserQuestionTool implements Tool {
               },
               multiSelect: {
                 type: "boolean" as const,
-                description:
-                  "Set to true for multiple-choice, false for single-choice",
+                description: ASK_USER_MULTI_SELECT_DESCRIPTION,
               },
             },
             required: ["question", "options", "multiSelect"],
@@ -147,7 +157,7 @@ export class AskUserQuestionTool implements Tool {
     }
 
     if (ctx.abortSignal?.aborted) {
-      return { output: "Error: operation interrupted", isError: true };
+      return { output: OPERATION_INTERRUPTED_ERROR, isError: true };
     }
     const answer = await this.ask(questions, ctx.abortSignal);
     if (Object.keys(answer).length === 0) {

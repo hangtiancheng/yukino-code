@@ -1,4 +1,10 @@
-import { LEADER_NAME } from "@/teams/constants.js";
+import {
+  buildTeammateUnavailableForAssignmentError,
+  LEADER_NAME,
+  LEADER_TASK_REFRESH_INTERVAL_MS,
+  NO_TEAM_TASK_BOARD_ERROR,
+  TEAM_BOARD_ID_PREFIX,
+} from "@/teams/constants.js";
 import type { Team, TeamManager } from "@/teams/index.js";
 import { buildTaskAssignmentPrompt } from "@/teams/prompts.js";
 import { PRIVATE_BOARD_ID_PREFIX } from "@/todo/constants.js";
@@ -28,14 +34,14 @@ class TeamTaskBoard implements TaskBoard {
     if (this.fallback) {
       return { fallback: this.fallback };
     }
-    throw new Error("No active team task board");
+    throw new Error(NO_TEAM_TASK_BOARD_ERROR);
   }
 
   get boardId(): string {
     const board = this.board();
     return "fallback" in board
       ? board.fallback.boardId
-      : `team:${board.team.name}`;
+      : `${TEAM_BOARD_ID_PREFIX}${board.team.name}`;
   }
 
   write(input: TodoWriteInput): Task[] {
@@ -54,7 +60,7 @@ class TeamTaskBoard implements TaskBoard {
         }
         const owner = team.getMember(name);
         if (!owner || (!owner.active && owner.uiState)) {
-          throw new Error(`Teammate '${name}' is not available for assignment`);
+          throw new Error(buildTeammateUnavailableForAssignmentError(name));
         }
       },
     });
@@ -118,7 +124,7 @@ export function subscribeLeaderTasks(
       ? manager.getTaskStore(team.name).listTasks()
       : fallback.list();
     const boardId = team
-      ? `team:${team.name}:${generation}`
+      ? `${TEAM_BOARD_ID_PREFIX}${team.name}:${generation}`
       : `${PRIVATE_BOARD_ID_PREFIX}${generation}`;
     const nextSignature = JSON.stringify([boardId, tasks]);
     if (signature !== nextSignature) {
@@ -128,7 +134,7 @@ export function subscribeLeaderTasks(
   };
   const unsubscribePrivate = fallback.subscribe(refresh);
   const unsubscribeTeams = manager.subscribe(refresh);
-  const timer = setInterval(refresh, 500);
+  const timer = setInterval(refresh, LEADER_TASK_REFRESH_INTERVAL_MS);
   timer.unref();
   return () => {
     disposed = true;

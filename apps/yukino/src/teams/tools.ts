@@ -1,5 +1,14 @@
 import { createChildLogger } from "@/logger/index.js";
 import {
+  BROADCAST_TARGET,
+  buildBroadcastSentMessage,
+  buildMessageSentMessage,
+  buildPlanResponseSentMessage,
+  buildTeamCreatedMessage,
+  buildTeamDeletedMessage,
+  buildTeammateNotFoundError,
+  buildTypedMessageSentMessage,
+  buildUnsupportedMessageTypeError,
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
@@ -16,9 +25,14 @@ import type { TeamManager, Team } from "@/teams/index.js";
 import {
   buildSendMessageTypeDescription,
   LIST_TEAM_TOOL_DESCRIPTION,
+  SEND_MESSAGE_APPROVE_DESCRIPTION,
+  SEND_MESSAGE_CONTENT_DESCRIPTION,
+  SEND_MESSAGE_REQUEST_ID_DESCRIPTION,
+  SEND_MESSAGE_TO_DESCRIPTION,
   SEND_MESSAGE_TOOL_DESCRIPTION,
   TEAM_CREATE_TOOL_DESCRIPTION,
   TEAM_DELETE_TOOL_DESCRIPTION,
+  TEAM_DESCRIPTION_PARAM_DESCRIPTION,
 } from "@/teams/prompts.js";
 import { shutdownRequest, shutdownResponse } from "@/teams/protocol.js";
 import { getNameRegistry } from "@/teams/registry.js";
@@ -45,7 +59,7 @@ export class TeamCreateTool implements Tool {
         properties: {
           description: {
             type: "string",
-            description: "What this team will work on",
+            description: TEAM_DESCRIPTION_PARAM_DESCRIPTION,
           },
         },
         required: [],
@@ -65,9 +79,7 @@ export class TeamCreateTool implements Tool {
       description,
     });
     return {
-      output:
-        `Team '${team.name}' created. ` +
-        `Use Agent with kind="teammate" to add teammates.`,
+      output: buildTeamCreatedMessage(team.name),
       isError: false,
     };
   }
@@ -103,13 +115,11 @@ export class SendMessageTool implements Tool {
         properties: {
           to: {
             type: "string",
-            description:
-              "Teammate name, 'leader' for the coordinator, or '*' to broadcast",
+            description: SEND_MESSAGE_TO_DESCRIPTION,
           },
           content: {
             type: "string",
-            description:
-              "Message content, shutdown reason, or the leader's plan review feedback.",
+            description: SEND_MESSAGE_CONTENT_DESCRIPTION,
           },
           type: {
             type: "string",
@@ -125,13 +135,11 @@ export class SendMessageTool implements Tool {
           },
           request_id: {
             type: "string",
-            description:
-              "Copy the requestId from the shutdown or plan approval request when responding.",
+            description: SEND_MESSAGE_REQUEST_ID_DESCRIPTION,
           },
           approve: {
             type: "boolean",
-            description:
-              "Required for shutdown_response and plan_approval_response: whether the request was accepted.",
+            description: SEND_MESSAGE_APPROVE_DESCRIPTION,
           },
         },
         required: ["to", "content"],
@@ -181,7 +189,7 @@ export class SendMessageTool implements Tool {
           try {
             t.respondToPlan(to, requestId, approve, message);
             return {
-              output: `Plan ${approve ? "approval" : "revision feedback"} sent to '${to}'.`,
+              output: buildPlanResponseSentMessage(approve, to),
               isError: false,
             };
           } catch (error) {
@@ -212,19 +220,22 @@ export class SendMessageTool implements Tool {
           break;
         default:
           return {
-            output: `Unsupported message type ${msgType}.`,
+            output: buildUnsupportedMessageTypeError(msgType),
             isError: true,
           };
       }
       const target =
         to === LEADER_NAME ? t.leaderMailbox : t.getMember(to)?.mailbox;
       if (!target) {
-        return { output: `Teammate '${to}' not found.`, isError: true };
+        return { output: buildTeammateNotFoundError(to), isError: true };
       }
       await target.send(this.senderName, structured.text, structured);
-      return { output: `${msgType} sent to '${to}'.`, isError: false };
+      return {
+        output: buildTypedMessageSentMessage(msgType, to),
+        isError: false,
+      };
     }
-    if (to === "*") {
+    if (to === BROADCAST_TARGET) {
       let count = 0;
       for (const member of t.listMembers()) {
         if (member.name === this.senderName) {
@@ -237,7 +248,7 @@ export class SendMessageTool implements Tool {
         count++;
       }
       return {
-        output: `Message broadcast to ${String(count)} teammate(s).`,
+        output: buildBroadcastSentMessage(count),
         isError: false,
       };
     }
@@ -247,7 +258,7 @@ export class SendMessageTool implements Tool {
     // mirroring the structured-message path above.
     if (to === LEADER_NAME) {
       await t.leaderMailbox.send(this.senderName, message);
-      return { output: `Message sent to '${to}'.`, isError: false };
+      return { output: buildMessageSentMessage(to), isError: false };
     }
 
     const recipient =
@@ -265,7 +276,7 @@ export class SendMessageTool implements Tool {
       };
     }
     return {
-      output: `Message sent to '${to}'.`,
+      output: buildMessageSentMessage(to),
       isError: false,
     };
   }
@@ -331,6 +342,6 @@ export class TeamDeleteTool implements Tool {
       return { output: NO_ACTIVE_TEAM_MESSAGE, isError: false };
     }
     await this.mgr.delete(team.name);
-    return { output: `Team '${team.name}' deleted.`, isError: false };
+    return { output: buildTeamDeletedMessage(team.name), isError: false };
   }
 }

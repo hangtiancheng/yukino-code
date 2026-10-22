@@ -63,21 +63,6 @@ export function backgroundTaskName(command: string): string {
   return flat.length > 80 ? `${flat.slice(0, 77)}...` : flat;
 }
 
-export function backgroundMessage(
-  reason: BackgroundReason,
-  taskId: string,
-  timeout: number,
-): string {
-  switch (reason) {
-    case "explicit":
-      return `Command running in background (task_id: ${taskId}). You will be notified when it completes; do not poll. Use TaskStop with task_id to kill it early.`;
-    case "timeout":
-      return `Command exceeded its ${String(timeout)}s timeout and was moved to the background (task_id: ${taskId}). It is still running — you will be notified when it completes.`;
-    case "user":
-      return `Command was manually backgrounded by the user (task_id: ${taskId}). It is still running — you will be notified when it completes.`;
-  }
-}
-
 /** Slice buf to at most maxBytes, ending on a UTF-8 character boundary. */
 export function sliceUtf8Safe(buf: Buffer, maxBytes: number): Buffer {
   if (buf.length <= maxBytes) {

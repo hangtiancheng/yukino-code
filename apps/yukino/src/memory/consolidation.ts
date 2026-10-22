@@ -17,7 +17,10 @@ import {
   SCAN_THROTTLE_MS,
 } from "@/memory/constants.js";
 import { MemoryPermissionChecker } from "@/memory/permissions.js";
-import { buildConsolidationPrompt } from "@/memory/prompts.js";
+import {
+  buildConsolidationPrompt,
+  buildMemoryImprovedReminder,
+} from "@/memory/prompts.js";
 import { extractWrittenPaths } from "@/memory/written-paths.js";
 import { listSessions } from "@/session/index.js";
 import { projectPath, yukinoPath, getSessionsDir } from "@/storage/index.js";
@@ -190,7 +193,7 @@ export class MemoryConsolidator {
 
     if (memoryPaths.length > 0 && this.appendSystem) {
       const names = memoryPaths.map((p) => basename(p));
-      this.appendSystem(`Memory improved: ${names.join(", ")}`);
+      this.appendSystem(buildMemoryImprovedReminder(names));
     }
   }
 }

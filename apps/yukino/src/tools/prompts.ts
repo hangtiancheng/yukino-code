@@ -1,3 +1,24 @@
+import type { BackgroundReason } from "@/tools/shell-background.js";
+
+/**
+ * Model-facing status text returned when a shell command moves to the
+ * background (explicit run_in_background, foreground timeout, or Ctrl+B).
+ */
+export function backgroundMessage(
+  reason: BackgroundReason,
+  taskId: string,
+  timeout: number,
+): string {
+  switch (reason) {
+    case "explicit":
+      return `Command running in background (task_id: ${taskId}). You will be notified when it completes; do not poll. Use TaskStop with task_id to kill it early.`;
+    case "timeout":
+      return `Command exceeded its ${String(timeout)}s timeout and was moved to the background (task_id: ${taskId}). It is still running — you will be notified when it completes.`;
+    case "user":
+      return `Command was manually backgrounded by the user (task_id: ${taskId}). It is still running — you will be notified when it completes.`;
+  }
+}
+
 const GIT_GUIDANCE = `Git: commit or push only when requested. Destructive operations (push --force, reset --hard, checkout ., clean -f, branch -D), amending, or skipping hooks/signing require explicit authorization; never bypass permission/hook denials. Prefer new commits. When committing, include Co-Authored-By: Yukino <usr161043261@outlook.com>.`;
 
 export const BASH_DESCRIPTION = `Execute command in Bash; return stdout and stderr. Prefer PowerShell on Windows.
@@ -14,6 +35,8 @@ ${GIT_GUIDANCE}`;
  */
 export const BASH_BACKGROUND_DESCRIPTION = `- Set run_in_background to true to run the command in the background. The call returns a task ID immediately and the result arrives later as a task notification; do not poll or sleep waiting for it. Use this for long-running commands you do not need the result of right away. Use TaskStop with the task_id to kill a background command early. A foreground command that exceeds its timeout is moved to the background automatically instead of being killed.`;
 
+export const BASH_COMMAND_DESCRIPTION = "Shell command to execute";
+
 export const POWERSHELL_DESCRIPTION = `Execute command in PowerShell; return stdout and stderr. Recommended on Windows (powershell.exe); uses pwsh elsewhere.
 - timeout is in seconds: default 120, maximum 600. Each call starts a fresh, independent shell in the Agent's working directory; location, variables, and options do not persist.
 - Quote paths with spaces; use Set-Location -LiteralPath "path" in the same call. Separate independent commands. For dependencies, check $LASTEXITCODE for native commands and use -ErrorAction Stop for cmdlets; ; does not stop on failure. Do not assume PowerShell 7 syntax.
@@ -26,6 +49,8 @@ ${GIT_GUIDANCE}`;
  */
 export const POWERSHELL_BACKGROUND_DESCRIPTION = `- Set run_in_background to true to run the command in the background. The call returns a task ID immediately and the result arrives later as a task notification; do not poll or Start-Sleep waiting for it. Use this for long-running commands you do not need the result of right away. Use TaskStop with the task_id to kill a background command early. A foreground command that exceeds its timeout is moved to the background automatically instead of being killed.`;
 
+export const POWERSHELL_COMMAND_DESCRIPTION = "PowerShell command to execute";
+
 export const SHELL_TIMEOUT_DESCRIPTION = "Timeout in seconds (max 600)";
 
 export const RUN_IN_BACKGROUND_DESCRIPTION =
@@ -35,23 +60,56 @@ export const READ_FILE_DESCRIPTION = `Read text with 1-based display line number
 - file_path is absolute or relative to the Agent's working directory. offset skips lines (0-based, default 0); limit defaults to 2000 lines, with a 50KB text output cap. Displayed line 101 starts at offset=100. Follow continuation/readback instructions for partial output.
 - Images ignore offset/limit. A successful read refreshes the file-state cache used by EditFile/WriteFile; re-read after an external-change error.`;
 
+export const READ_FILE_FILE_PATH_DESCRIPTION =
+  "File path, absolute or relative to the Agent's working directory. Supports text and image files.";
+
+export const READ_FILE_OFFSET_DESCRIPTION =
+  "Number of text lines to skip (0-based). Use 0 for the first line, 100 for displayed line 101. Ignored for images.";
+
+export const READ_FILE_LIMIT_DESCRIPTION =
+  "Maximum number of text lines to return (default 2000), subject to a 50KB output limit. Ignored for images.";
+
 export const EDIT_FILE_DESCRIPTION = `Replace exact text in an existing file and return a diff. Prefer this over whole-file rewrites; batch disjoint changes in one edits array to read and write the file once.
 - file_path is absolute or relative to the Agent's working directory. ReadFile is required first; stale file-state errors require a fresh read and revised edit.
 - Each edits entry contains old_string and new_string, with optional replace_all. All matches use the original file; overlapping edits are rejected before writing. Merge overlapping changes into one entry.
 - old_string must be non-empty and unique unless replace_all=true (default false). LF and CRLF line endings match equivalently. Use enough context to disambiguate; preserve all other whitespace and exclude display line numbers. If matching fails, stray carriage returns in both edit strings are removed before retrying.
 - new_string must differ from old_string; an empty string deletes the match. The file's line endings and unchanged text are preserved.`;
 
+export const EDIT_FILE_FILE_PATH_DESCRIPTION =
+  "Path to the existing file, absolute or relative to the Agent's working directory. Read it first with ReadFile.";
+
+export const EDIT_FILE_EDITS_DESCRIPTION =
+  "Targeted replacements matched against the original file. Batch disjoint changes in one call; overlapping edits are rejected before writing.";
+
 export const EDIT_FILE_OLD_STRING_DESCRIPTION =
   "Non-empty text from the original file, without ReadFile line-number prefixes. LF and CRLF line endings match equivalently; all other whitespace must match exactly. If matching fails, stray carriage returns in the edit strings are removed and matching is retried. Must be unique unless replace_all is true.";
+
+export const EDIT_FILE_NEW_STRING_DESCRIPTION =
+  "Replacement text. An empty string deletes the match. The file's line endings are preserved.";
+
+export const EDIT_FILE_REPLACE_ALL_DESCRIPTION =
+  "Replace all occurrences (default false)";
 
 export const WRITE_FILE_DESCRIPTION = `Write complete UTF-8 content to file_path, creating parent directories and overwriting existing content. Use for new files or complete rewrites; prefer EditFile for targeted changes.
 - file_path is absolute or relative to the Agent's working directory. Existing files require ReadFile first; re-read if the cached state is stale.
 - content includes any desired trailing newline; an empty string creates or truncates an empty file. Avoid unrelated files or unsolicited documentation.`;
 
+export const WRITE_FILE_FILE_PATH_DESCRIPTION =
+  "File path, absolute or relative to the Agent's working directory. Missing parent directories are created; existing files must be read first.";
+
+export const WRITE_FILE_CONTENT_DESCRIPTION =
+  "Complete UTF-8 file contents. Replaces all existing content; an empty string creates or truncates an empty file.";
+
 export const GLOB_DESCRIPTION = `Find files by glob pattern (e.g. "**/*.ts", "*.{ts,tsx}"). Return paths relative to path, sorted newest modification first.
 - path is absolute or relative to the Agent's working directory (default "."); never search the filesystem root.
 - Includes dotfiles; traversal skips fixed directories such as .git, .agents, .yukino, node_modules, dist, and __pycache__, not rules from .gitignore.
 - At most 1000 matches; narrow limited searches rather than treating them as exhaustive. Prefer this over shell find/ls.`;
+
+export const GLOB_PATTERN_DESCRIPTION =
+  "Filename glob relative to path, e.g. '**/*.ts' for recursive search or '*.{ts,tsx}' for direct children.";
+
+export const GLOB_PATH_DESCRIPTION =
+  "Search base, absolute or relative to the Agent's working directory (default '.'). Returned filenames are relative to this base.";
 
 export const GREP_DESCRIPTION = `Search file content with a case-insensitive, line-by-line JavaScript-style regex pattern; return file:line:content with 1-based lines and working-directory-relative paths.
 - path is a file or directory, absolute or relative to the Agent's working directory (default "."). Escape regex backslashes in JSON. No multiline matching or general PCRE support.
@@ -59,15 +117,40 @@ export const GREP_DESCRIPTION = `Search file content with a case-insensitive, li
 - Traversal includes dotfiles but skips fixed directories such as .git, .agents, .yukino, node_modules, dist, and __pycache__, not .gitignore rules. Binary/unreadable files are skipped; directory symlinks are not traversed.
 - At most 500 matching lines. Narrow searches; never search the filesystem root. Use ReadFile for context and this tool instead of shell grep/rg.`;
 
+export const GREP_PATTERN_DESCRIPTION =
+  "Case-insensitive regular expression matched against each line. Escape backslashes in JSON; use ReadFile for surrounding context.";
+
+export const GREP_PATH_DESCRIPTION =
+  "Directory or file, absolute or relative to the Agent's working directory (default '.'). Narrow the path to reduce output.";
+
+export const GREP_INCLUDE_DESCRIPTION =
+  "Optional filename glob. Bare patterns such as '*.ts' match at any depth; patterns with '/' match paths relative to the Agent's working directory.";
+
 export const WEB_FETCH_DESCRIPTION = `Fetch a URL over HTTP(S) and return its content as Markdown. Use it to retrieve and analyze web pages.
 - url must be a fully-formed http or https URL; redirects are followed automatically and the final URL is reported when it differs.
 - HTML is converted to Markdown; other text formats (plain text, JSON, XML, Markdown) are returned as-is. Binary content (images, PDFs, archives) are rejected.
 - Responses over 10MB are rejected and results are truncated at 100K characters. Successful fetches are cached for 15 minutes.`;
 
+export const WEB_FETCH_URL_DESCRIPTION =
+  "The http or https URL to fetch content from.";
+
 export const ASK_USER_QUESTION_DESCRIPTION = `
   Ask the user 1 to 4 single-choice or multiple-choices questions and wait for their answers. Each question needs 2 to 4 options; an "Other" option for custom input is added automatically.
   Set multiSelect=true when the user may choose multiple options, or false for one mutually exclusive choice. Ask only for missing information that changes the task; do not re-request authorization already given.
   `;
+
+export const ASK_USER_QUESTIONS_DESCRIPTION = "question";
+
+export const ASK_USER_QUESTION_TEXT_DESCRIPTION = "The question to ask";
+
+export const ASK_USER_OPTIONS_DESCRIPTION = "options";
+
+export const ASK_USER_OPTION_LABEL_DESCRIPTION = "label";
+
+export const ASK_USER_OPTION_DESCRIPTION_DESCRIPTION = "description";
+
+export const ASK_USER_MULTI_SELECT_DESCRIPTION =
+  "Set to true for multiple-choice, false for single-choice";
 
 export const ENTER_PLAN_MODE_DESCRIPTION = `Use this tool proactively before a non-trivial implementation when the right approach is genuinely unclear and user review would prevent significant rework. It runs the built-in plan agent synchronously in the foreground with a fork of your conversation. The read-only agent investigates and returns a concrete plan; the host saves the plan and presents it for user approval. A successful call ends this turn. Do not implement until the user approves.
 
@@ -114,6 +197,11 @@ export const MCP_CALL_DESCRIPTION =
   "tool's schema, then pass its arguments here exactly as that schema requires, " +
   "using the same JSON types.";
 
+export const MCP_CALL_SERVER_DESCRIPTION = "MCP server name, e.g. 'linear'.";
+
+export const MCP_CALL_TOOL_DESCRIPTION =
+  "Full tool name as returned by ToolSearch, e.g. 'mcp__linear__create_issue'.";
+
 export const MCP_CALL_ARGUMENTS_DESCRIPTION =
   "The target tool's arguments. Must match that tool's input_schema exactly, including JSON types: bare numbers for integer fields, bare true/false for boolean fields, quoted strings for string fields, and plain JSON arrays for array fields.";
 
@@ -121,14 +209,85 @@ export const SYNTHETIC_OUTPUT_DESCRIPTION =
   "Return structured output in JSON format. Use this tool to return your final response " +
   "as structured data in non-interactive or coordinator mode sessions.";
 
+export const SYNTHETIC_OUTPUT_OUTPUT_DESCRIPTION =
+  "The structured result: an object, an array, or a plain string";
+
 export const TASK_OUTPUT_DESCRIPTION =
   "Inspect a background Agent/Bash/PowerShell task by its task_id, or wait once for at most timeout_ms (maximum 60000). This does not consume completion notifications or cancel timed-out tasks. Prefer automatic task notifications over repeated polling. TodoWrite item IDs belong to the separate TODO board and cannot be used here.";
 
 export const TOOL_SEARCH_DESCRIPTION =
   "Search for and load deferred tools by name or keyword.";
 
+export const TOOL_SEARCH_QUERY_DESCRIPTION =
+  'Search query. Use "select:name1,name2" to load specific tools by name, or keywords to search.';
+
+export const TOOL_SEARCH_MAX_RESULTS_DESCRIPTION = "Max results to return";
+
 export const COMPUTER_USE_ACTION_TYPE_DESCRIPTION =
   "OpenAI-style action type: click (button, x, y, keys), double_click (x, y, keys), drag (path, keys), keypress (keys), move (x, y, keys), screenshot, scroll (x, y, scrollX, scrollY, keys), type (text), wait.";
+
+export const COMPUTER_USE_ACTION_DESCRIPTION =
+  "Anthropic-style single computer action. Send either action or actions, not both.";
+
+export const COMPUTER_USE_ACTIONS_DESCRIPTION =
+  "OpenAI-style ordered batch of computer actions, executed in sequence; a screenshot is returned after the batch.";
+
+export const COMPUTER_USE_BATCH_BUTTON_DESCRIPTION = "Button for type=click.";
+
+export const COMPUTER_USE_BATCH_KEYS_DESCRIPTION =
+  "Keys held during the action, or pressed by keypress.";
+
+export const COMPUTER_USE_BATCH_PATH_DESCRIPTION = "Drag path for type=drag.";
+
+export const COMPUTER_USE_BATCH_SCROLL_X_DESCRIPTION =
+  "Horizontal scroll delta for type=scroll.";
+
+export const COMPUTER_USE_BATCH_SCROLL_Y_DESCRIPTION =
+  "Vertical scroll delta for type=scroll.";
+
+export const COMPUTER_USE_BATCH_TEXT_DESCRIPTION =
+  "Text to type for type=type.";
+
+export const COMPUTER_USE_SAFETY_CHECKS_DESCRIPTION =
+  "OpenAI-style safety checks raised with the batch; acknowledged in the tool result.";
+
+export const COMPUTER_USE_STATUS_DESCRIPTION =
+  "OpenAI-style status of the computer call; echoed in the tool result.";
+
+export const COMPUTER_USE_COORDINATE_DESCRIPTION =
+  "Anthropic-style [x, y] coordinate in the latest screenshot space.";
+
+export const COMPUTER_USE_DURATION_DESCRIPTION =
+  "Seconds for hold_key or wait.";
+
+export const COMPUTER_USE_REGION_DESCRIPTION =
+  "Zoom region [x1, y1, x2, y2] in the latest screenshot space.";
+
+export const COMPUTER_USE_SCROLL_AMOUNT_DESCRIPTION =
+  "Anthropic-style number of wheel clicks to scroll.";
+
+export const COMPUTER_USE_START_COORDINATE_DESCRIPTION =
+  "Anthropic-style drag start coordinate.";
+
+export const COMPUTER_USE_TEXT_DESCRIPTION =
+  "Text to type, or a '+'-separated key combination.";
+
+export const COMPUTER_USE_X_DESCRIPTION = "OpenAI-style x coordinate.";
+
+export const COMPUTER_USE_Y_DESCRIPTION = "OpenAI-style y coordinate.";
+
+export const COMPUTER_USE_BUTTON_DESCRIPTION = "Button for action=click.";
+
+export const COMPUTER_USE_KEYS_DESCRIPTION =
+  "OpenAI-style keys held during an action or pressed by keypress.";
+
+export const COMPUTER_USE_PATH_DESCRIPTION = "OpenAI-style drag path.";
+
+export const COMPUTER_USE_SCROLL_X_DESCRIPTION =
+  "OpenAI-style horizontal scroll delta.";
+
+export const COMPUTER_USE_SCROLL_Y_DESCRIPTION =
+  "OpenAI-style vertical scroll delta.";
 
 export function computerUseDescription(environment: string): string {
   return (

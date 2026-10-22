@@ -31,7 +31,11 @@ import {
   SKILLS_DIR_NAME,
   SOURCE_REQUIRED_ERROR,
 } from "@/skills/constants.js";
-import { INSTALL_SKILL_DESCRIPTION } from "@/skills/prompts.js";
+import {
+  INSTALL_SKILL_DESCRIPTION,
+  INSTALL_SKILL_NAME_DESCRIPTION,
+  INSTALL_SKILL_SOURCE_DESCRIPTION,
+} from "@/skills/prompts.js";
 import { YUKINO_DIR_NAME } from "@/storage/constants.js";
 import type {
   Tool,
@@ -114,13 +118,11 @@ export class InstallSkillTool implements Tool {
         properties: {
           source: {
             type: "string",
-            description:
-              "Local file path or raw SKILL.md URL (not an HTML or repository page)",
+            description: INSTALL_SKILL_SOURCE_DESCRIPTION,
           },
           name: {
             type: "string",
-            description:
-              "Optional skill name override; letters, digits, dots, underscores and hyphens",
+            description: INSTALL_SKILL_NAME_DESCRIPTION,
           },
         },
         required: ["source"],

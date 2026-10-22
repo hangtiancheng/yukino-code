@@ -10,6 +10,10 @@ import {
   writePrivateFileSync as writeFileSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
+import {
+  SHARED_TASK_INVALID_ID_COUNTER_ERROR,
+  SHARED_TASK_UNREADABLE_ERROR,
+} from "@/teams/constants.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import { validateTaskDependencies } from "@/todo/dependencies.js";
 import type { Task } from "@/todo/index.js";
@@ -76,12 +80,12 @@ export class SharedTaskStore {
       const tasks = data.tasks;
       validateTaskDependencies(tasks);
       if (tasks.some((task) => Number(task.id) >= data.nextId)) {
-        throw new Error("Invalid shared task ID counter");
+        throw new Error(SHARED_TASK_INVALID_ID_COUNTER_ERROR);
       }
       this.nextId = data.nextId;
       this.tasks = tasks;
     } catch (error) {
-      throw new Error("Cannot load an unreadable shared task board", {
+      throw new Error(SHARED_TASK_UNREADABLE_ERROR, {
         cause: error,
       });
     }

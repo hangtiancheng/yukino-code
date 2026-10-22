@@ -9,6 +9,7 @@ import {
   TEAMMATE_NAME_PATTERN,
 } from "@/teams/constants.js";
 import type { FileMailMessage } from "@/teams/file-mailbox.js";
+import { DEFAULT_SHUTDOWN_REASON } from "@/teams/prompts.js";
 
 export function isValidTeammateName(name: string): boolean {
   return name !== LEADER_NAME && TEAMMATE_NAME_PATTERN.test(name);
@@ -41,7 +42,7 @@ function typed(
  * teammate implementations always accept.
  */
 export function shutdownRequest(from: string, reason = ""): FileMailMessage {
-  const why = reason || "team is wrapping up";
+  const why = reason || DEFAULT_SHUTDOWN_REASON;
   return typed(from, MSG_SHUTDOWN_REQUEST, newRequestId(), why);
 }
 

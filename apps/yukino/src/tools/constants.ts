@@ -257,6 +257,7 @@ export const SANDBOX_UNAVAILABLE_ERROR =
   "Error: sandbox is enabled but unavailable; command was not executed";
 export const OPERATION_INTERRUPTED_ERROR = "Error: operation interrupted";
 export const FILE_PATH_REQUIRED_ERROR = "Error: file_path is required";
+export const CONTENT_REQUIRED_ERROR = "Error: content is required";
 export const OFFSET_LIMIT_INVALID_ERROR =
   "Error: offset must be >= 0 and limit must be >= 1";
 export const PATTERN_REQUIRED_ERROR = "Error: pattern is required";

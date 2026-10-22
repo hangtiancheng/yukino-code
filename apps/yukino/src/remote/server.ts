@@ -91,6 +91,7 @@ import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
 } from "@/prompt/plan-mode.js";
+import { buildPlanExecutionPrompt } from "@/prompt/prompts.js";
 import { parseRemoteAddress } from "@/remote/address.js";
 import {
   BROWSER_DIST,
@@ -110,7 +111,6 @@ import {
 } from "@/remote/constants.js";
 import { AgentEventLogger } from "@/remote/log.js";
 import { RemoteMcpApps } from "@/remote/mcp-apps.js";
-import { buildPlanExecutionPrompt } from "@/remote/prompts.js";
 import { restoreRemoteSession } from "@/remote/session-state.js";
 import { createSandbox, type Sandbox } from "@/sandbox/index.js";
 import {
@@ -124,13 +124,14 @@ import {
   truncateSessionLines,
   rebuildFromSession,
 } from "@/session/index.js";
-import { SkillCatalog, buildSkillSection } from "@/skills/catalog.js";
+import { SkillCatalog } from "@/skills/catalog.js";
 import {
   runFork as runSkillFork,
   runInline as runSkillInline,
 } from "@/skills/executor.js";
 import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
+import { buildSkillSection } from "@/skills/prompts.js";
 import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS, PLAN_AGENT_NAME } from "@/subagent/constants.js";

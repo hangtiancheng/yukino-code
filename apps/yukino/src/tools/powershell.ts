@@ -16,13 +16,14 @@ import {
 } from "@/tools/constants.js";
 import { withCommandExecution } from "@/tools/execution-coordinator.js";
 import {
+  backgroundMessage,
   POWERSHELL_BACKGROUND_DESCRIPTION,
+  POWERSHELL_COMMAND_DESCRIPTION,
   POWERSHELL_DESCRIPTION,
   RUN_IN_BACKGROUND_DESCRIPTION,
   SHELL_TIMEOUT_DESCRIPTION,
 } from "@/tools/prompts.js";
 import {
-  backgroundMessage,
   backgroundTaskName,
   buildShellResult,
   createShellOutputFile,
@@ -92,7 +93,7 @@ export class PowerShellTool implements Tool {
     const properties: Record<string, object> = {
       command: {
         type: "string",
-        description: "PowerShell command to execute",
+        description: POWERSHELL_COMMAND_DESCRIPTION,
       },
       timeout: {
         type: "integer",

@@ -18,15 +18,12 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PermissionChecker } from "@/permissions/index.js";
-import {
-  buildSkillSection,
-  parseSkillFile,
-  SkillCatalog,
-} from "@/skills/catalog.js";
+import { parseSkillFile, SkillCatalog } from "@/skills/catalog.js";
 import { parseSkillPrompt, runFork, runInline } from "@/skills/executor.js";
 import type { Skill, SkillForkHost, SkillHost } from "@/skills/index.js";
 import { InstallSkillTool } from "@/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
+import { buildSkillSection } from "@/skills/prompts.js";
 
 vi.mock("node:os", async (importOriginal) => {
   const actual = await importOriginal<typeof os>();

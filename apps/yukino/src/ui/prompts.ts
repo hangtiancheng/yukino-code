@@ -8,7 +8,3 @@ export function buildFeedbackIssueRejectionReminder(
 export function buildFeedbackRejectionPrompt(reason: string): string {
   return `Feedback on the rejected /feedback issues:\n\n${reason}`;
 }
-
-export function buildPlanExecutionPrompt(planContent: string): string {
-  return `Execute this plan:\n\n${planContent}`;
-}

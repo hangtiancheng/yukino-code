@@ -12,12 +12,29 @@ import {
 } from "@/storage/private.js";
 import type { SubagentProgressEvent } from "@/subagent/spawn.js";
 import {
+  buildInactiveTeammateError,
+  buildInvalidTeammateNameError,
+  buildMemberNotFoundInTeamError,
+  buildStopActiveTeammateError,
+  buildTeammateAlreadyRunningError,
+  buildTeammateExistsError,
   EMPTY_TEAMMATE_PLAN_MESSAGE,
   IDLE_POLL_INTERVAL_MS,
+  INBOXES_DIR_NAME,
   LEADER_NAME,
+  MAX_LAST_MESSAGE_CHARS,
   MAX_RETAINED_TERMINATED_MEMBERS,
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_TEXT,
+  PLAN_RESPOND_ALREADY_RESPONDED_ERROR,
+  PLAN_RESPOND_AUTO_APPROVED_ERROR,
+  PLAN_RESPOND_FEEDBACK_REQUIRED_ERROR,
+  PLAN_RESPOND_NOT_PENDING_ERROR,
+  PLAN_SUBMIT_EMPTY_ERROR,
+  PLAN_SUBMIT_INACTIVE_ERROR,
+  PLAN_SUBMIT_PENDING_ERROR,
+  TEAMMATE_SPINNER_VERB,
+  TEAMMATE_STOPPED_MESSAGE,
 } from "@/teams/constants.js";
 import { FileMailbox, type FileMailMessage } from "@/teams/file-mailbox.js";
 import type { TeammateUIState } from "@/teams/progress.js";
@@ -30,12 +47,20 @@ import {
   recordTurnComplete,
 } from "@/teams/progress.js";
 import {
+  buildIdleAvailableMessage,
+  buildIdleFailedMessage,
+  buildIdleStoppedMessage,
   buildNewMessagesPrompt,
   buildPlanApprovedMessage,
   buildPlanRejectedMessage,
   buildPlanReviewResumePrompt,
   buildTasksReleasedMessage,
+  buildTeamNotification,
+  MEMBER_DEACTIVATED_SHUTDOWN_REASON,
+  PLAN_AUTO_APPROVED_ACK_MESSAGE,
   PLAN_AUTO_APPROVED_MESSAGE,
+  SHUTDOWN_ACK_MESSAGE,
+  STOPPED_AWAITING_PLAN_REVIEW_MESSAGE,
 } from "@/teams/prompts.js";
 import {
   isValidTeammateName,
@@ -59,7 +84,6 @@ import {
 import { TASKS_FILENAME } from "@/todo/constants.js";
 import { asErrorString } from "@/utils/index.js";
 import { canonicalPath } from "@/utils/paths.js";
-import { escapeXml } from "@/utils/xml.js";
 
 // Submodule namespaces for library consumers (Teams.<Sub>.*).
 export * as Constants from "@/teams/constants.js";
@@ -138,7 +162,7 @@ export class Team {
     // Mailboxes live in a dedicated inboxes/ subdirectory, separate from
     // config.json and tasks.json at the team root, keeping the layout clean
     // as membership grows.
-    this.mailboxDir = join(teamDir(cwd, name), "inboxes");
+    this.mailboxDir = join(teamDir(cwd, name), INBOXES_DIR_NAME);
     mkdirSync(this.mailboxDir, { recursive: true });
     this.leaderMailbox = new FileMailbox(this.mailboxDir, LEADER_NAME);
   }
@@ -155,10 +179,10 @@ export class Team {
 
   addMember(name: string): Member {
     if (!isValidTeammateName(name)) {
-      throw new Error(`Invalid teammate name '${name}'`);
+      throw new Error(buildInvalidTeammateNameError(name));
     }
     if (this.members.has(name)) {
-      throw new Error(`Teammate '${name}' already exists`);
+      throw new Error(buildTeammateExistsError(name));
     }
     const member = this.createMember(name);
     this.members.set(name, member);
@@ -168,7 +192,7 @@ export class Team {
 
   removeMember(name: string): void {
     if (this.members.get(name)?.active) {
-      throw new Error(`Stop teammate '${name}' before removing it`);
+      throw new Error(buildStopActiveTeammateError(name));
     }
     if (this.members.delete(name)) {
       getNameRegistry().unregister(name);
@@ -252,7 +276,7 @@ export class Team {
   ): void {
     const member = this.getMember(name) ?? this.addMember(name);
     if (member.active) {
-      throw new Error(`Teammate '${name}' is already running`);
+      throw new Error(buildTeammateAlreadyRunningError(name));
     }
     this.setMemberMeta(name, role);
     member.planApprovalRequired =
@@ -285,7 +309,7 @@ export class Team {
       progress: createProgress(),
       ...(originToolCallId ? { originToolCallId } : {}),
       startTime: Date.now(),
-      spinnerVerb: "Working",
+      spinnerVerb: TEAMMATE_SPINNER_VERB,
     };
     member.uiState = uiState;
 
@@ -329,10 +353,12 @@ export class Team {
           );
           clearActiveTools(uiState.progress);
           uiState.lastMessage =
-            result.length > 200 ? result.slice(0, 200) + "..." : result;
+            result.length > MAX_LAST_MESSAGE_CHARS
+              ? result.slice(0, MAX_LAST_MESSAGE_CHARS) + "..."
+              : result;
           if (abortController.signal.aborted || !member.active) {
             uiState.status = "stopped";
-            terminalMessage = `[idle] ${name} (reason: stopped)`;
+            terminalMessage = buildIdleStoppedMessage(name);
             break;
           }
           if (
@@ -353,10 +379,7 @@ export class Team {
           }
 
           uiState.status = "idle";
-          await this.leaderMailbox.send(
-            name,
-            `[idle] ${name} (reason: available)`,
-          );
+          await this.leaderMailbox.send(name, buildIdleAvailableMessage(name));
 
           const pollResult = await this.waitForNextPromptOrShutdown(member);
           if (pollResult.shutdown || !member.active) {
@@ -370,7 +393,7 @@ export class Team {
                 member.name,
                 req.requestId ?? "",
                 true,
-                "acknowledged, shutting down",
+                SHUTDOWN_ACK_MESSAGE,
               );
               await this.leaderMailbox.send(member.name, resp.text, resp);
             }
@@ -385,13 +408,13 @@ export class Team {
       } catch (err) {
         if (abortController.signal.aborted || !member.active) {
           uiState.status = "stopped";
-          uiState.lastMessage = "Stopped";
-          terminalMessage = `[idle] ${name} (reason: stopped)`;
+          uiState.lastMessage = TEAMMATE_STOPPED_MESSAGE;
+          terminalMessage = buildIdleStoppedMessage(name);
         } else {
           log.error({ err }, "teams operation failed");
           uiState.status = "failed";
           uiState.lastMessage = asErrorString(err);
-          terminalMessage = `[idle] ${name} (reason: failed): ${asErrorString(err)}`;
+          terminalMessage = buildIdleFailedMessage(name, asErrorString(err));
         }
       } finally {
         member.active = false;
@@ -410,7 +433,7 @@ export class Team {
             this.releaseMemberTasks(member);
             this.leaderMailbox.sendSync(
               name,
-              terminalMessage ?? `[idle] ${name} (reason: stopped)`,
+              terminalMessage ?? buildIdleStoppedMessage(name),
             );
           } finally {
             member.checker = undefined;
@@ -463,7 +486,10 @@ export class Team {
     }
     return {
       prompt: "",
-      shutdown: shutdownRequest(LEADER_NAME, "member deactivated"),
+      shutdown: shutdownRequest(
+        LEADER_NAME,
+        MEMBER_DEACTIVATED_SHUTDOWN_REASON,
+      ),
     };
   }
 
@@ -501,7 +527,7 @@ export class Team {
         LEADER_NAME,
         requestId,
         true,
-        "Plan automatically approved; tool permissions remain active.",
+        PLAN_AUTO_APPROVED_ACK_MESSAGE,
       );
       await this.leaderMailbox.send(LEADER_NAME, response.text, response);
       if (!member.active || member.signal?.aborted) {
@@ -533,7 +559,7 @@ export class Team {
           member.name,
           shutdown.requestId ?? "",
           true,
-          "Stopped while awaiting plan review",
+          STOPPED_AWAITING_PLAN_REVIEW_MESSAGE,
         );
         await this.leaderMailbox.send(member.name, response.text, response);
         return null;
@@ -584,15 +610,13 @@ export class Team {
       member.checker?.readOnly ||
       member.checker?.mode !== "plan"
     ) {
-      throw new Error(
-        "Only an active teammate in plan mode can submit a plan.",
-      );
+      throw new Error(PLAN_SUBMIT_INACTIVE_ERROR);
     }
     if (!plan.trim()) {
-      throw new Error("A non-empty plan is required for review.");
+      throw new Error(PLAN_SUBMIT_EMPTY_ERROR);
     }
     if (member.pendingPlanApproval) {
-      throw new Error("This teammate already has a plan awaiting review.");
+      throw new Error(PLAN_SUBMIT_PENDING_ERROR);
     }
     const request = planApprovalRequest(name, plan);
     this.leaderMailbox.sendSync(name, request.text, request);
@@ -610,9 +634,7 @@ export class Team {
     feedback: string,
   ): void {
     if (!this.requiresLeaderPlanApproval) {
-      throw new Error(
-        "Teammate plans are automatically approved outside coordinator mode.",
-      );
+      throw new Error(PLAN_RESPOND_AUTO_APPROVED_ERROR);
     }
     const member = this.getMember(name);
     const pending = member?.pendingPlanApproval;
@@ -621,19 +643,13 @@ export class Team {
       member.signal?.aborted ||
       pending?.request.requestId !== requestId
     ) {
-      throw new Error(
-        "No matching pending plan approval request for this teammate.",
-      );
+      throw new Error(PLAN_RESPOND_NOT_PENDING_ERROR);
     }
     if (pending.responded) {
-      throw new Error(
-        "This plan approval request already has a leader response.",
-      );
+      throw new Error(PLAN_RESPOND_ALREADY_RESPONDED_ERROR);
     }
     if (!feedback.trim()) {
-      throw new Error(
-        "Plan approval responses require the leader's review feedback.",
-      );
+      throw new Error(PLAN_RESPOND_FEEDBACK_REQUIRED_ERROR);
     }
     const response = planApprovalResponse(
       LEADER_NAME,
@@ -687,12 +703,10 @@ export class Team {
   async sendMessage(from: string, to: string, content: string): Promise<void> {
     const member = this.members.get(to);
     if (!member) {
-      throw new Error(`Member '${to}' not found in team '${this.name}'`);
+      throw new Error(buildMemberNotFoundInTeamError(to, this.name));
     }
     if (!member.active && member.uiState) {
-      throw new Error(
-        `Teammate '${to}' is ${member.uiState.status} and cannot receive work`,
-      );
+      throw new Error(buildInactiveTeammateError(to, member.uiState.status));
     }
     if (member.active && member.uiState && !member.pendingPlanApproval) {
       member.uiState.status = "running";
@@ -889,7 +903,7 @@ export class TeamManager {
         status: member.isActive ? "failed" : "stopped",
         progress: createProgress(),
         startTime: member.joinedAt * 1000,
-        spinnerVerb: "Working",
+        spinnerVerb: TEAMMATE_SPINNER_VERB,
       };
       team.releaseMemberTasks(hydrated);
     }
@@ -995,21 +1009,7 @@ export class TeamManager {
       if (msgs.length === 0) {
         continue;
       }
-      const lines: string[] = [];
-      lines.push(`<task-notification team="${escapeXml(team.name)}">`);
-      for (const msg of msgs) {
-        const metadata = [
-          `from="${escapeXml(msg.from)}"`,
-          msg.type ? `type="${escapeXml(msg.type)}"` : "",
-          msg.requestId ? `requestId="${escapeXml(msg.requestId)}"` : "",
-          msg.approve === undefined ? "" : `approve="${String(msg.approve)}"`,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        lines.push(`<message ${metadata}>${escapeXml(msg.text)}</message>`);
-      }
-      lines.push("</task-notification>");
-      out.push(lines.join("\n"));
+      out.push(buildTeamNotification(team.name, msgs));
     }
     return out;
   }

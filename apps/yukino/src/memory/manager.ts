@@ -32,6 +32,8 @@ import {
   RELEVANT_MEMORIES_PREAMBLE,
   SELECT_MEMORIES_SYSTEM_PROMPT,
   buildPartialIndexWarning,
+  buildSelectorUserMessage,
+  formatMemoryManifest,
   memoryFreshnessText,
 } from "@/memory/prompts.js";
 import type { PermissionChecker } from "@/permissions/index.js";
@@ -377,12 +379,7 @@ export class MemoryManager {
 
     // 2. Build the manifest and ask the LLM to select
     const manifest = formatMemoryManifest(candidates);
-    let toolsSection = "";
-    if (recentTools.length > 0) {
-      toolsSection = "\n\nRecently used tools: " + recentTools.join(", ");
-    }
-
-    const userMessage = `# Input\nQuery: ${query}\n\nAvailable memories:\n${manifest}${toolsSection}`;
+    const userMessage = buildSelectorUserMessage(query, manifest, recentTools);
 
     let rawResponse = "";
     let completed = false;
@@ -527,30 +524,6 @@ export class MemoryManager {
     }
     return capEntrypoint(parts.join("\n"));
   }
-}
-
-/**
- * Formats memory headers as a text manifest for the selector prompt.
- * One line per file: - [scope] [type] filepath (timestamp): description
- */
-function formatMemoryManifest(memories: MemoryHeader[]): string {
-  if (memories.length === 0) {
-    return "";
-  }
-
-  const lines: string[] = [];
-  for (const m of memories) {
-    const scope = m.scope ? `[${m.scope}-scope] ` : "";
-    const tag = m.type ? `[${m.type}] ` : "";
-    const ts = new Date(m.mtimeMs).toISOString();
-    const path = m.filePath || m.filename;
-    if (m.description) {
-      lines.push(`- ${scope}${tag}${path} (${ts}): ${m.description}`);
-    } else {
-      lines.push(`- ${scope}${tag}${path} (${ts})`);
-    }
-  }
-  return lines.join("\n");
 }
 
 /**

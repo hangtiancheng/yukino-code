@@ -5,12 +5,17 @@ import { dirname } from "node:path";
 import { createChildLogger } from "@/logger/index.js";
 import { isPrivateStatePath, writePrivateFile } from "@/storage/private.js";
 import {
+  CONTENT_REQUIRED_ERROR,
   FILE_PATH_REQUIRED_ERROR,
   OPERATION_INTERRUPTED_ERROR,
 } from "@/tools/constants.js";
 import { withWorkspaceMutation } from "@/tools/execution-coordinator.js";
 import { withFileMutationQueue } from "@/tools/file-mutation-queue.js";
-import { WRITE_FILE_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  WRITE_FILE_CONTENT_DESCRIPTION,
+  WRITE_FILE_DESCRIPTION,
+  WRITE_FILE_FILE_PATH_DESCRIPTION,
+} from "@/tools/prompts.js";
 import {
   type Tool,
   type ToolCategory,
@@ -39,13 +44,11 @@ export class WriteFileTool implements Tool {
       properties: {
         file_path: {
           type: "string" as const,
-          description:
-            "File path, absolute or relative to the Agent's working directory. Missing parent directories are created; existing files must be read first.",
+          description: WRITE_FILE_FILE_PATH_DESCRIPTION,
         },
         content: {
           type: "string" as const,
-          description:
-            "Complete UTF-8 file contents. Replaces all existing content; an empty string creates or truncates an empty file.",
+          description: WRITE_FILE_CONTENT_DESCRIPTION,
         },
       },
       required: ["file_path", "content"],
@@ -80,7 +83,7 @@ export class WriteFileTool implements Tool {
     }
     if (typeof args.content !== "string") {
       return Promise.resolve({
-        output: "Error: content is required",
+        output: CONTENT_REQUIRED_ERROR,
         isError: true,
       });
     }

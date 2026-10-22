@@ -40,6 +40,8 @@ import {
 import {
   MCP_CALL_ARGUMENTS_DESCRIPTION,
   MCP_CALL_DESCRIPTION,
+  MCP_CALL_SERVER_DESCRIPTION,
+  MCP_CALL_TOOL_DESCRIPTION,
 } from "@/tools/prompts.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import type {
@@ -202,12 +204,11 @@ export class McpCallTool implements Tool {
         properties: {
           server: {
             type: "string",
-            description: "MCP server name, e.g. 'linear'.",
+            description: MCP_CALL_SERVER_DESCRIPTION,
           },
           tool: {
             type: "string",
-            description:
-              "Full tool name as returned by ToolSearch, e.g. 'mcp__linear__create_issue'.",
+            description: MCP_CALL_TOOL_DESCRIPTION,
           },
           arguments: {
             type: "object",

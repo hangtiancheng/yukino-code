@@ -14,6 +14,8 @@ import type {
 import {
   A2A_CONTEXTS_DIR_NAME,
   buildContextBusyReason,
+  buildPermissionTaskMismatchReason,
+  buildUnknownPermissionIdReason,
   DEFAULT_IDLE_TIMEOUT_MS,
   INVALID_CONTEXT_MAPPING_ERROR,
   MAX_TRACKED_SESSIONS,
@@ -559,7 +561,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
         eventBus,
         taskId,
         contextId,
-        `Permission responses must be sent with taskId "${run.taskId}".`,
+        buildPermissionTaskMismatchReason(run.taskId),
       );
       return;
     }
@@ -570,7 +572,7 @@ export class YukinoA2aExecutor implements AgentExecutor {
         eventBus,
         taskId,
         contextId,
-        `Unknown or already resolved permission id "${response.permissionId}".`,
+        buildUnknownPermissionIdReason(response.permissionId),
       );
       return;
     }

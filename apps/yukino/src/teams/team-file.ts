@@ -10,7 +10,12 @@ import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
 } from "@/storage/private.js";
-import { TEAM_CONFIG_FILENAME, TEAMS_DIR_NAME } from "@/teams/constants.js";
+import {
+  TEAM_CONFIG_FILENAME,
+  TEAM_NAME_EMPTY_ERROR,
+  TEAM_NAME_SLUG_PATTERN,
+  TEAMS_DIR_NAME,
+} from "@/teams/constants.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 /** Metadata for a single team member. */
@@ -68,9 +73,9 @@ export function teamsBaseDir(cwd: string): string {
  */
 export function sanitizeTeamName(name: string): string {
   if (!name.trim()) {
-    throw new Error("Team name must not be empty or whitespace.");
+    throw new Error(TEAM_NAME_EMPTY_ERROR);
   }
-  return name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
+  return name.replace(TEAM_NAME_SLUG_PATTERN, "-").toLowerCase();
 }
 
 export function teamDir(cwd: string, name: string): string {

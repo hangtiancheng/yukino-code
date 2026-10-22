@@ -9,7 +9,11 @@ import {
   PATTERN_REQUIRED_ERROR,
   SKIP_DIRS,
 } from "@/tools/constants.js";
-import { GLOB_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  GLOB_DESCRIPTION,
+  GLOB_PATH_DESCRIPTION,
+  GLOB_PATTERN_DESCRIPTION,
+} from "@/tools/prompts.js";
 import { SearchOutput } from "@/tools/search-output.js";
 import {
   type Tool,
@@ -37,13 +41,11 @@ export class GlobTool implements Tool {
       properties: {
         pattern: {
           type: "string" as const,
-          description:
-            "Filename glob relative to path, e.g. '**/*.ts' for recursive search or '*.{ts,tsx}' for direct children.",
+          description: GLOB_PATTERN_DESCRIPTION,
         },
         path: {
           type: "string" as const,
-          description:
-            "Search base, absolute or relative to the Agent's working directory (default '.'). Returned filenames are relative to this base.",
+          description: GLOB_PATH_DESCRIPTION,
           default: ".",
         },
       },

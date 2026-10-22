@@ -1,5 +1,8 @@
 import { OUTPUT_REQUIRED_ERROR } from "@/tools/constants.js";
-import { SYNTHETIC_OUTPUT_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  SYNTHETIC_OUTPUT_DESCRIPTION,
+  SYNTHETIC_OUTPUT_OUTPUT_DESCRIPTION,
+} from "@/tools/prompts.js";
 import type {
   Tool,
   ToolCategory,
@@ -30,8 +33,7 @@ export class SyntheticOutputTool implements Tool {
         type: "object",
         properties: {
           output: {
-            description:
-              "The structured result: an object, an array, or a plain string",
+            description: SYNTHETIC_OUTPUT_OUTPUT_DESCRIPTION,
           },
         },
         required: ["output"],

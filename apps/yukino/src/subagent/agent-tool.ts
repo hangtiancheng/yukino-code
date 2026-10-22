@@ -35,7 +35,9 @@ import {
   AGENT_MODEL_DESCRIPTION,
   AGENT_WORKTREE_DESCRIPTION,
   buildAgentToolDescription,
+  DESCRIPTION_PARAMETER_DESCRIPTION,
   FORK_PARAMETER_DESCRIPTION,
+  PROMPT_PARAMETER_DESCRIPTION,
   SUBAGENT_TYPE_DESCRIPTION,
   INHERITED_TOOL_RESULT,
 } from "@/subagent/prompts.js";
@@ -218,7 +220,7 @@ export class AgentTool implements Tool {
         properties: {
           description: {
             type: "string",
-            description: "Short description of what the agent will do",
+            description: DESCRIPTION_PARAMETER_DESCRIPTION,
           },
           kind: {
             type: "string",
@@ -228,7 +230,7 @@ export class AgentTool implements Tool {
           },
           prompt: {
             type: "string",
-            description: "The task for the agent to perform",
+            description: PROMPT_PARAMETER_DESCRIPTION,
           },
           subagent_type: {
             type: "string",

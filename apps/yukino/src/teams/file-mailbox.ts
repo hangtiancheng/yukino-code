@@ -9,7 +9,12 @@ import {
   writePrivateFileSync as writeFileSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
-import { MAX_READ_MESSAGES, TEAMMATE_NAME_PATTERN } from "@/teams/constants.js";
+import {
+  MAILBOX_INVALID_MEMBER_NAME_ERROR,
+  MAILBOX_UNREADABLE_ERROR,
+  MAX_READ_MESSAGES,
+  TEAMMATE_NAME_PATTERN,
+} from "@/teams/constants.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
 const log = createChildLogger({ module: "teams" });
@@ -42,7 +47,7 @@ export class FileMailbox {
 
   constructor(dir: string, memberName: string) {
     if (!TEAMMATE_NAME_PATTERN.test(memberName)) {
-      throw new Error("Invalid mailbox member name");
+      throw new Error(MAILBOX_INVALID_MEMBER_NAME_ERROR);
     }
     mkdirSync(dir, { recursive: true });
     // Each recipient owns a dedicated JSON array file; read state is tracked per-message via the read field.
@@ -58,10 +63,7 @@ export class FileMailbox {
       return z.array(FileMailMessageSchema).parse(raw);
     } catch (err) {
       log.error({ err }, "teams operation failed");
-      throw new Error(
-        "Cannot load an unreadable teammate mailbox; original contents were preserved",
-        { cause: err },
-      );
+      throw new Error(MAILBOX_UNREADABLE_ERROR, { cause: err });
     }
   }
 

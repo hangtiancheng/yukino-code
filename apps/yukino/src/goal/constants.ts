@@ -22,5 +22,6 @@ export const UPDATE_INACTIVE_GOAL_ERROR =
   "Only an active goal can be updated by the agent.";
 export const REASON_REQUIRED_ERROR = "A reason is required.";
 export const PAUSE_INACTIVE_GOAL_ERROR = "Only an active goal can be paused.";
+export const GOAL_CLEARED_MESSAGE = "Goal cleared.";
 export const GOAL_USAGE =
   "Usage: /goal [replace] [--budget <positive integer>] <objective>";

@@ -19,7 +19,12 @@ import {
   OFFSET_LIMIT_INVALID_ERROR,
   OPERATION_INTERRUPTED_ERROR,
 } from "@/tools/constants.js";
-import { READ_FILE_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  READ_FILE_DESCRIPTION,
+  READ_FILE_FILE_PATH_DESCRIPTION,
+  READ_FILE_LIMIT_DESCRIPTION,
+  READ_FILE_OFFSET_DESCRIPTION,
+} from "@/tools/prompts.js";
 import { utf8ByteLength } from "@/tools/shell-output.js";
 import {
   type Tool,
@@ -50,20 +55,17 @@ export class ReadFileTool implements Tool {
       properties: {
         file_path: {
           type: "string" as const,
-          description:
-            "File path, absolute or relative to the Agent's working directory. Supports text and image files.",
+          description: READ_FILE_FILE_PATH_DESCRIPTION,
         },
         offset: {
           type: "integer" as const,
-          description:
-            "Number of text lines to skip (0-based). Use 0 for the first line, 100 for displayed line 101. Ignored for images.",
+          description: READ_FILE_OFFSET_DESCRIPTION,
           minimum: 0,
           default: 0,
         },
         limit: {
           type: "integer" as const,
-          description:
-            "Maximum number of text lines to return (default 2000), subject to a 50KB output limit. Ignored for images.",
+          description: READ_FILE_LIMIT_DESCRIPTION,
           minimum: 1,
           default: DEFAULT_LIMIT,
         },

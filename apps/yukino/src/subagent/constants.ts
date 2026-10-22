@@ -1,37 +1,40 @@
 import type { AgentDefinition } from "@/subagent/definition.js";
-import { PLAN_TEAMMATE_DESCRIPTION } from "@/subagent/prompts.js";
+import {
+  EXPLORE_AGENT_DESCRIPTION,
+  GENERAL_PURPOSE_AGENT_DESCRIPTION,
+  PLAN_AGENT_DESCRIPTION,
+  PLAN_TEAMMATE_DESCRIPTION,
+  REVIEW_AGENT_DESCRIPTION,
+} from "@/subagent/prompts.js";
 
 /** Default role, independent of context inheritance. */
 export const GENERAL_PURPOSE_AGENT_TYPE = "general-purpose";
 export const PLAN_AGENT_NAME = "plan";
+export const EXPLORE_AGENT_NAME = "explore";
 export const REVIEW_AGENT_NAME = "review";
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [
   {
     name: GENERAL_PURPOSE_AGENT_TYPE,
-    description:
-      "General-purpose agent for researching complex questions, exploring codebase, and executing multi-step tasks.",
+    description: GENERAL_PURPOSE_AGENT_DESCRIPTION,
   },
   {
     name: PLAN_AGENT_NAME,
-    description:
-      "Investigate the existing architecture and propose a concrete implementation plan with relevant files, constraints, and verification steps. Read-only: do not create, edit, or delete files. Return unresolved questions to the parent agent.",
+    description: PLAN_AGENT_DESCRIPTION,
     disallowedTools: ["EditFile", "WriteFile", "ExitPlanMode"],
     permissionMode: "plan",
     readOnly: true,
   },
   {
-    name: "explore",
-    description:
-      "Find code, trace relevant call paths, and report evidence with file paths and line numbers. Use Glob, Grep, ReadFile, and read-only shell commands. Do not modify files; return missing context or blockers to the parent agent.",
+    name: EXPLORE_AGENT_NAME,
+    description: EXPLORE_AGENT_DESCRIPTION,
     disallowedTools: ["EditFile", "WriteFile", "ExitPlanMode"],
     permissionMode: "plan",
     readOnly: true,
   },
   {
     name: REVIEW_AGENT_NAME,
-    description:
-      "Review pull requests for correctness, project conventions, performance, test coverage, and security. Read the diff and relevant code, then return concise findings with file paths, line numbers, impact, and suggested improvements. Do not modify files or publish reviews; return missing context or blockers to the parent.",
+    description: REVIEW_AGENT_DESCRIPTION,
     disallowedTools: ["EditFile", "WriteFile", "ExitPlanMode"],
   },
 ];

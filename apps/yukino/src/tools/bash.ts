@@ -27,12 +27,13 @@ import {
 import { withCommandExecution } from "@/tools/execution-coordinator.js";
 import {
   BASH_BACKGROUND_DESCRIPTION,
+  BASH_COMMAND_DESCRIPTION,
   BASH_DESCRIPTION,
+  backgroundMessage,
   RUN_IN_BACKGROUND_DESCRIPTION,
   SHELL_TIMEOUT_DESCRIPTION,
 } from "@/tools/prompts.js";
 import {
-  backgroundMessage,
   backgroundTaskName,
   buildShellResult,
   createShellOutputFile,
@@ -132,7 +133,7 @@ export class BashTool implements Tool {
     const properties: Record<string, object> = {
       command: {
         type: "string",
-        description: "Shell command to execute",
+        description: BASH_COMMAND_DESCRIPTION,
       },
       timeout: {
         type: "integer",

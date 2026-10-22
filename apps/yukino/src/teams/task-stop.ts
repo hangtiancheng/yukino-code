@@ -1,11 +1,20 @@
 import type { TaskManager } from "@/subagent/task-manager.js";
 import {
+  buildBackgroundTaskNotFoundError,
+  buildBackgroundTaskNotRunningMessage,
+  buildBackgroundTaskStoppedMessage,
+  buildTeammateNotRunningMessage,
+  buildTeammateStoppedMessage,
+  buildUnknownTeammateError,
   TASK_STOP_TARGET_REQUIRED_ERROR,
   TEAMMATE_STOP_LEADER_ONLY_ERROR,
 } from "@/teams/constants.js";
 import type { TeamManager } from "@/teams/index.js";
 import {
+  TASK_STOP_SUBAGENT_TASK_ID_DESCRIPTION,
   TASK_STOP_SUBAGENT_TOOL_DESCRIPTION,
+  TASK_STOP_TASK_ID_DESCRIPTION,
+  TASK_STOP_TEAMMATE_DESCRIPTION,
   TASK_STOP_TOOL_DESCRIPTION,
 } from "@/teams/prompts.js";
 import type {
@@ -48,7 +57,7 @@ export class TaskStopTool implements Tool {
           properties: {
             task_id: {
               type: "string",
-              description: "ID of this agent's background task",
+              description: TASK_STOP_SUBAGENT_TASK_ID_DESCRIPTION,
             },
           },
           required: ["task_id"],
@@ -64,12 +73,11 @@ export class TaskStopTool implements Tool {
         properties: {
           teammate: {
             type: "string",
-            description:
-              "Name of the teammate to stop, exactly as it appears in the from= field of a task-notification",
+            description: TASK_STOP_TEAMMATE_DESCRIPTION,
           },
           task_id: {
             type: "string",
-            description: "ID of a background task (Agent, Bash, PowerShell)",
+            description: TASK_STOP_TASK_ID_DESCRIPTION,
           },
         },
       },
@@ -96,19 +104,22 @@ export class TaskStopTool implements Tool {
       const task = manager?.get(taskId);
       if (!task) {
         return {
-          output: `Error: background task '${taskId}' not found`,
+          output: buildBackgroundTaskNotFoundError(taskId),
           isError: true,
         };
       }
       if (task.status !== "running") {
         await task.done;
         return {
-          output: `Background task '${taskId}' is ${task.status}, nothing to stop`,
+          output: buildBackgroundTaskNotRunningMessage(taskId, task.status),
           isError: false,
         };
       }
       await manager?.stopAndWait(taskId);
-      return { output: `Background task '${taskId}' stopped.`, isError: false };
+      return {
+        output: buildBackgroundTaskStoppedMessage(taskId),
+        isError: false,
+      };
     }
 
     if (!this.leaderAccess) {
@@ -124,19 +135,19 @@ export class TaskStopTool implements Tool {
 
       if (!member.active) {
         return {
-          output: `Teammate '${name}' in team '${team.name}' is not running, nothing to stop`,
+          output: buildTeammateNotRunningMessage(name, team.name),
           isError: false,
         };
       }
       await team.stopMember(name);
       return {
-        output: `Teammate '${name}' in team '${team.name}' stopped.`,
+        output: buildTeammateStoppedMessage(name, team.name),
         isError: false,
       };
     }
 
     return {
-      output: `Error: teammate '${name}' not found. Known teammates: ${this.knownMembers()}`,
+      output: buildUnknownTeammateError(name, this.knownMembers()),
       isError: true,
     };
   }

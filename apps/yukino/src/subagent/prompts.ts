@@ -5,6 +5,23 @@ import { escapeXml } from "@/utils/xml.js";
 export const AGENT_TOOL_DESCRIPTION =
   "Launch an agent to handle complex, multi-step tasks.";
 
+export const GENERAL_PURPOSE_AGENT_DESCRIPTION =
+  "General-purpose agent for researching complex questions, exploring codebase, and executing multi-step tasks.";
+
+export const PLAN_AGENT_DESCRIPTION =
+  "Investigate the existing architecture and propose a concrete implementation plan with relevant files, constraints, and verification steps. Read-only: do not create, edit, or delete files. Return unresolved questions to the parent agent.";
+
+export const EXPLORE_AGENT_DESCRIPTION =
+  "Find code, trace relevant call paths, and report evidence with file paths and line numbers. Use Glob, Grep, ReadFile, and read-only shell commands. Do not modify files; return missing context or blockers to the parent agent.";
+
+export const REVIEW_AGENT_DESCRIPTION =
+  "Review pull requests for correctness, project conventions, performance, test coverage, and security. Read the diff and relevant code, then return concise findings with file paths, line numbers, impact, and suggested improvements. Do not modify files or publish reviews; return missing context or blockers to the parent.";
+
+export const DESCRIPTION_PARAMETER_DESCRIPTION =
+  "Short description of what the agent will do";
+
+export const PROMPT_PARAMETER_DESCRIPTION = "The task for the agent to perform";
+
 export const PLAN_AGENT_PROMPT =
   "Use the inherited conversation to investigate the user's current task and return a concrete implementation plan with relevant files, constraints, verification steps, and unresolved questions. Do not modify files. Return the complete plan directly; the parent host will save it and request user approval.";
 

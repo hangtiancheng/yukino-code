@@ -16,7 +16,11 @@ import { withWorkspaceMutation } from "@/tools/execution-coordinator.js";
 import { withFileMutationQueue } from "@/tools/file-mutation-queue.js";
 import {
   EDIT_FILE_DESCRIPTION,
+  EDIT_FILE_EDITS_DESCRIPTION,
+  EDIT_FILE_FILE_PATH_DESCRIPTION,
+  EDIT_FILE_NEW_STRING_DESCRIPTION,
   EDIT_FILE_OLD_STRING_DESCRIPTION,
+  EDIT_FILE_REPLACE_ALL_DESCRIPTION,
 } from "@/tools/prompts.js";
 import {
   type Tool,
@@ -139,14 +143,12 @@ export class EditFileTool implements Tool {
       properties: {
         file_path: {
           type: "string" as const,
-          description:
-            "Path to the existing file, absolute or relative to the Agent's working directory. Read it first with ReadFile.",
+          description: EDIT_FILE_FILE_PATH_DESCRIPTION,
         },
         edits: {
           type: "array" as const,
           minItems: 1,
-          description:
-            "Targeted replacements matched against the original file. Batch disjoint changes in one call; overlapping edits are rejected before writing.",
+          description: EDIT_FILE_EDITS_DESCRIPTION,
           items: {
             type: "object" as const,
             properties: {
@@ -157,12 +159,11 @@ export class EditFileTool implements Tool {
               },
               new_string: {
                 type: "string" as const,
-                description:
-                  "Replacement text. An empty string deletes the match. The file's line endings are preserved.",
+                description: EDIT_FILE_NEW_STRING_DESCRIPTION,
               },
               replace_all: {
                 type: "boolean" as const,
-                description: "Replace all occurrences (default false)",
+                description: EDIT_FILE_REPLACE_ALL_DESCRIPTION,
                 default: false,
               },
             },

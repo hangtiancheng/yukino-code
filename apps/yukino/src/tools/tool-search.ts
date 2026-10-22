@@ -1,6 +1,10 @@
 import { MCP_TOOL_PREFIX } from "@/mcp/constants.js";
 import { QUERY_REQUIRED_ERROR } from "@/tools/constants.js";
-import { TOOL_SEARCH_DESCRIPTION } from "@/tools/prompts.js";
+import {
+  TOOL_SEARCH_DESCRIPTION,
+  TOOL_SEARCH_MAX_RESULTS_DESCRIPTION,
+  TOOL_SEARCH_QUERY_DESCRIPTION,
+} from "@/tools/prompts.js";
 import type { ToolRegistry } from "@/tools/registry.js";
 import {
   type Tool,
@@ -30,12 +34,11 @@ export class ToolSearchTool implements Tool {
       properties: {
         query: {
           type: "string" as const,
-          description:
-            'Search query. Use "select:name1,name2" to load specific tools by name, or keywords to search.',
+          description: TOOL_SEARCH_QUERY_DESCRIPTION,
         },
         max_results: {
           type: "integer" as const,
-          description: "Max results to return",
+          description: TOOL_SEARCH_MAX_RESULTS_DESCRIPTION,
           default: 5,
         },
       },

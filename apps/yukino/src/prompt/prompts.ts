@@ -268,3 +268,7 @@ export function buildTeammateMessagingRule(
 export function buildCallableToolsLine(names: readonly string[]): string {
   return `Callable tools: ${JSON.stringify(names)}. Only the current schemas define available operations; earlier tool lists may be stale.`;
 }
+
+export function buildPlanExecutionPrompt(planContent: string): string {
+  return `Execute this plan:\n\n${planContent}`;
+}

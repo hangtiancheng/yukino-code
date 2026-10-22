@@ -5,6 +5,7 @@ import {
   BUDGET_EXHAUSTED_ERROR,
   CONTINUE_NOT_TURN_LIMITED_ERROR,
   GOAL_ALREADY_EXISTS_ERROR,
+  GOAL_CLEARED_MESSAGE,
   GOAL_RECORD,
   GOAL_USAGE,
   MAX_BLOCKED_ATTEMPTS,
@@ -307,7 +308,7 @@ export function handleGoalCommand(
     }
     if (input === "clear") {
       manager.clear();
-      return { message: "Goal cleared." };
+      return { message: GOAL_CLEARED_MESSAGE };
     }
     if (input === "pause" || input === "complete") {
       if (input === "pause" && manager.get()?.status !== "active") {
