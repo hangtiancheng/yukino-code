@@ -5,6 +5,7 @@ import {
   MAX_IMAGE_BYTES,
   MAX_IMAGE_BYTES_PASSTHROUGH,
   MAX_IMAGE_INPUT_BYTES,
+  MEDIA_TYPE_BY_EXTENSION,
 } from "@/images/constants.js";
 import type { ImageMediaType, ScreenshotOptions } from "@/images/types.js";
 import { processImage } from "@/images/worker.js";
@@ -45,16 +46,8 @@ export class ImageTooLargeError extends Error {
   }
 }
 
-const mediaType: Record<string, ImageMediaType> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-};
-
 export function getMediaType(path: string): ImageMediaType | null {
-  return mediaType[extname(path).toLowerCase()] ?? null;
+  return MEDIA_TYPE_BY_EXTENSION[extname(path).toLowerCase()] ?? null;
 }
 
 export function isImagePath(path: string): boolean {

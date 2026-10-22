@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type Theme = "dark" | "light";
+import { STORAGE_KEY } from "#/constants.js";
 
-const STORAGE_KEY = "yukino-theme";
+export type Theme = "dark" | "light";
 
 function systemTheme(): Theme {
   if (

@@ -11,6 +11,7 @@ import {
   LSP_DOCUMENT_TOO_LARGE_ERROR,
   LSP_FILE_TOO_LARGE_ERROR,
   LSP_INTERRUPTED_ERROR,
+  LSP_OPERATIONS,
   LSP_POSITION_OUT_OF_RANGE_ERROR,
   LSP_SERVER_EXITED_ERROR,
   MAX_CACHED_DIAGNOSTIC_BYTES,
@@ -27,22 +28,9 @@ import type {
 import { asErrorString, isRecord } from "@/utils/index.js";
 import { resolveToolPath } from "@/utils/paths.js";
 
-const operations = [
-  "definition",
-  "references",
-  "hover",
-  "documentSymbol",
-  "workspaceSymbol",
-  "implementation",
-  "typeDefinition",
-  "prepareCallHierarchy",
-  "incomingCalls",
-  "outgoingCalls",
-  "diagnostics",
-] as const;
 const Args = z
   .object({
-    operation: z.enum(operations),
+    operation: z.enum(LSP_OPERATIONS),
     file_path: z.string().min(1),
     line: z.number().int().min(1).optional(),
     character: z.number().int().min(1).optional(),
@@ -157,7 +145,7 @@ export class LspTool implements Tool {
       input_schema: {
         type: "object",
         properties: {
-          operation: { type: "string", enum: [...operations] },
+          operation: { type: "string", enum: [...LSP_OPERATIONS] },
           file_path: { type: "string" },
           line: { type: "integer", minimum: 1 },
           character: { type: "integer", minimum: 1 },

@@ -1,3 +1,4 @@
+import { MODE_LABEL } from "#/constants.js";
 import { formatTokens } from "#/lib/format.js";
 import type { ConnectionStatus, UsagePayload } from "#/types.js";
 
@@ -20,13 +21,6 @@ interface StatusBarProps {
   onOpenThinkingPicker: () => void;
   onOpenActivity: () => void;
 }
-
-const MODE_LABEL: Record<string, string> = {
-  default: "Default",
-  plan: "Plan",
-  bypassPermissions: "YOLO",
-  acceptEdits: "Accept Edits",
-};
 
 export function StatusBar(props: StatusBarProps) {
   const { usage, connection } = props;

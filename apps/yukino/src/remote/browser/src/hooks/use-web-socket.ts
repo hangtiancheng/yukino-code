@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 
+import {
+  ACCESS_TOKEN_KEY,
+  PING_INTERVAL_MS,
+  QUEUEABLE_OFFLINE,
+  RECONNECT_DELAY_MS,
+} from "#/constants.js";
 import { OfflineMessageQueue } from "#/hooks/offline-queue.js";
 import { McpAppRequests, type RequestApp } from "#/lib/mcp-app-requests.js";
 import type { ClientMessage, ServerMessage } from "#/types.js";
@@ -18,16 +24,6 @@ interface UseWebSocketResult {
   send: (message: ClientMessage) => SendStatus;
   requestApp: RequestApp;
 }
-
-const PING_INTERVAL_MS = 10_000;
-// Only a user's chat body is worth replaying after a reconnect. Approvals
-// (permission/ask/plan), pings and transient UI actions are stale by the time
-// the socket returns — replaying them could re-authorize or re-trigger an old
-// request — so they are dropped offline. Image uploads are large and resolve via
-// a server reply; the caller reports the drop instead of silently queueing it.
-const QUEUEABLE_OFFLINE = new Set<ClientMessage["type"]>(["user_message"]);
-const RECONNECT_DELAY_MS = 3_000;
-const ACCESS_TOKEN_KEY = "yukino.remote.accessToken";
 
 function readAccessToken(): string | null {
   const params = new URLSearchParams(window.location.hash.slice(1));

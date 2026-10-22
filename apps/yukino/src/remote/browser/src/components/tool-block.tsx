@@ -1,33 +1,13 @@
 import { Collapsible } from "#/components/collapsible.js";
 import { DiffLines } from "#/components/diff-lines.js";
 import { McpAppView } from "#/components/mcp-app.js";
+import { STATUS_META } from "#/constants.js";
 import { argsPreview, formatArgs } from "#/lib/format.js";
 import type { ToolItem } from "#/types.js";
 
 interface ToolBlockProps {
   item: ToolItem;
 }
-
-const STATUS_META: Record<
-  ToolItem["status"],
-  { label: string; pill: string; panel: string }
-> = {
-  running: {
-    label: "running…",
-    pill: "text-muted",
-    panel: "bg-tool",
-  },
-  ok: {
-    label: "✓",
-    pill: "text-green",
-    panel: "bg-tool-ok",
-  },
-  err: {
-    label: "✗",
-    pill: "text-red",
-    panel: "bg-tool-error",
-  },
-};
 
 export function ToolBlock({ item }: ToolBlockProps) {
   const meta = STATUS_META[item.status];

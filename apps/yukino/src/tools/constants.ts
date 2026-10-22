@@ -128,6 +128,20 @@ export const MAX_CACHED_DOCUMENTS = 40;
 export const MAX_CACHED_DOCUMENT_BYTES = 8 * 1024 * 1024;
 export const MAX_CACHED_DIAGNOSTIC_BYTES = 2 * 1024 * 1024;
 
+export const LSP_OPERATIONS = [
+  "definition",
+  "references",
+  "hover",
+  "documentSymbol",
+  "workspaceSymbol",
+  "implementation",
+  "typeDefinition",
+  "prepareCallHierarchy",
+  "incomingCalls",
+  "outgoingCalls",
+  "diagnostics",
+] as const;
+
 export const CONTEXT_LINES = 3;
 // Prevent excessively large diffs from overwhelming UI rendering and context window usage
 export const MAX_DIFF_LINES = 200;

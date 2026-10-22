@@ -1,5 +1,6 @@
 import { useCallback, useReducer } from "react";
 
+import { MAX_CHAT_ITEMS } from "#/constants.js";
 import type {
   BackgroundTaskInfo,
   ChatItem,
@@ -26,7 +27,6 @@ import { toolKey } from "#/types.js";
 
 /** Monotonic id generator for newly created chat items. */
 let idCounter = 0;
-const MAX_CHAT_ITEMS = 1000;
 
 function nextId(prefix: string): string {
   idCounter += 1;

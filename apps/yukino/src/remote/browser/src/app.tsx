@@ -11,24 +11,18 @@ import { SessionPicker } from "#/components/session-picker.js";
 import { StatusBar } from "#/components/status-bar.js";
 import { ThinkingPicker } from "#/components/thinking-picker.js";
 import { TodoProgress } from "#/components/todo-progress.js";
+import { MODE_CYCLE } from "#/constants.js";
 import { useChat } from "#/hooks/use-chat.js";
 import { useTheme } from "#/hooks/use-theme.js";
 import { useWebSocket } from "#/hooks/use-web-socket.js";
 import { McpAppContext } from "#/lib/mcp-app-context.js";
 import type {
   ClientMessage,
-  PermissionModeChoice,
   PermissionResponse,
   PlanChoice,
   ProviderSavePayload,
   RewindChoice,
 } from "#/types.js";
-
-const MODE_CYCLE: Exclude<PermissionModeChoice, "plan">[] = [
-  "default",
-  "acceptEdits",
-  "bypassPermissions",
-];
 
 export function App() {
   const {

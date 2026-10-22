@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Modal, ModalHeader } from "#/components/modal.js";
 import { PickerList } from "#/components/picker-list.js";
+import { PROTOCOLS } from "#/constants.js";
 import type { ProviderListPayload, ProviderSavePayload } from "#/types.js";
 
 interface ProviderDialogProps {
@@ -10,12 +11,6 @@ interface ProviderDialogProps {
   onSave: (form: ProviderSavePayload) => void;
   onClose: () => void;
 }
-
-const PROTOCOLS: ProviderSavePayload["protocol"][] = [
-  "anthropic",
-  "openai",
-  "openai-compat",
-];
 
 const inputClass =
   "w-full rounded-none border border-border bg-bg px-3 py-2 font-mono text-[13px] text-bright outline-none placeholder:text-dim focus:border-accent";

@@ -1,4 +1,5 @@
 import { Modal, ModalHeader } from "#/components/modal.js";
+import { STATUS_PILL } from "#/constants.js";
 import type {
   BackgroundTaskInfo,
   SubagentInfo,
@@ -11,15 +12,6 @@ interface ActivityPanelProps {
   teammates: TeammateInfo[];
   onClose: () => void;
 }
-
-const STATUS_PILL: Record<string, string> = {
-  running: "bg-yellow/15 text-yellow",
-  completed: "bg-green/15 text-green",
-  failed: "bg-red/15 text-red",
-  stopped: "bg-red/15 text-red",
-  cancelled: "bg-red/15 text-red",
-  idle: "bg-accent/15 text-accent",
-};
 
 function Pill({ status }: { status: string }) {
   return (

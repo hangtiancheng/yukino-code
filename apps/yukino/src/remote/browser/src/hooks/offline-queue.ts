@@ -1,5 +1,4 @@
-const MAX_PENDING_MESSAGES = 100;
-const MAX_PENDING_BYTES = 1_000_000;
+import { MAX_PENDING_BYTES, MAX_PENDING_MESSAGES } from "#/constants.js";
 
 export class OfflineMessageQueue {
   private entries: string[] = [];

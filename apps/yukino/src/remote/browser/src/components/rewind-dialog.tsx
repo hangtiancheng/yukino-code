@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { Modal, ModalHeader } from "#/components/modal.js";
+import { RESTORE_OPTIONS } from "#/constants.js";
 import type { RewindChoice, RewindSnapshot } from "#/types.js";
 
 interface RewindDialogProps {
@@ -8,12 +9,6 @@ interface RewindDialogProps {
   onAction: (snapshotId: string, action: RewindChoice) => void;
   onClose: () => void;
 }
-
-const RESTORE_OPTIONS: { action: RewindChoice; label: string }[] = [
-  { action: "code_and_conversation", label: "Restore code and conversation" },
-  { action: "conversation_only", label: "Restore conversation only" },
-  { action: "code_only", label: "Restore code only" },
-];
 
 function formatTimestamp(iso: string): string {
   const time = Date.parse(iso);

@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 
 import { attachmentSizePreview } from "@/feedback/collect.js";
 import type { AttachmentKind, FeedbackOptions } from "@/feedback/types.js";
-import { THEME } from "@/ui/constants.js";
+import { FEEDBACK_ITEMS, THEME } from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { truncateToWidth } from "@/ui/terminal-text.js";
 import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
@@ -17,38 +17,6 @@ interface Props {
   onSubmit: (options: FeedbackOptions) => void;
   onCancel: () => void;
 }
-
-const ITEMS: {
-  kind: AttachmentKind;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    kind: "session",
-    label: "Session history",
-    hint: "full conversation JSONL",
-  },
-  {
-    kind: "log",
-    label: "Warnings and errors",
-    hint: "yukino diagnostic log",
-  },
-  {
-    kind: "env",
-    label: "Environment info",
-    hint: "runtime, provider, terminal and config",
-  },
-  {
-    kind: "tools",
-    label: "Detailed tool output",
-    hint: "tool trace and full saved output; optional",
-  },
-  {
-    kind: "file-history",
-    label: "File history",
-    hint: "source snapshots and backups; optional",
-  },
-];
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) {
@@ -80,16 +48,22 @@ export function FeedbackDialog({
   const { columns } = useTerminalDimensions();
   // Sizes are computed once on mount; they only decorate the checklist.
   const [sizes] = useState(() =>
-    ITEMS.map((item) => attachmentSizePreview(cwd, sessionId, item.kind)),
+    FEEDBACK_ITEMS.map((item) =>
+      attachmentSizePreview(cwd, sessionId, item.kind),
+    ),
   );
 
   useInput((input, key) => {
     if (key.upArrow) {
-      setCursor((current) => (current > 0 ? current - 1 : ITEMS.length - 1));
+      setCursor((current) =>
+        current > 0 ? current - 1 : FEEDBACK_ITEMS.length - 1,
+      );
     } else if (key.downArrow) {
-      setCursor((current) => (current < ITEMS.length - 1 ? current + 1 : 0));
+      setCursor((current) =>
+        current < FEEDBACK_ITEMS.length - 1 ? current + 1 : 0,
+      );
     } else if (input === " ") {
-      const item = ITEMS[cursor];
+      const item = FEEDBACK_ITEMS[cursor];
       if (item) {
         setChecked((prev) => ({ ...prev, [item.kind]: !prev[item.kind] }));
       }
@@ -100,7 +74,7 @@ export function FeedbackDialog({
       submittingRef.current = true;
       onSubmit({
         description: description.trim(),
-        attachments: ITEMS.filter((item) => checked[item.kind]).map(
+        attachments: FEEDBACK_ITEMS.filter((item) => checked[item.kind]).map(
           (item) => item.kind,
         ),
       });
@@ -126,7 +100,7 @@ export function FeedbackDialog({
           {`${String(count)} attachment group(s) selected`}
         </Text>
       </Box>
-      {ITEMS.map((item, index) => {
+      {FEEDBACK_ITEMS.map((item, index) => {
         const selected = index === cursor;
         const size = sizes[index];
         return (
@@ -160,7 +134,7 @@ export function FeedbackDialog({
       })}
       <Box paddingX={1}>
         <Text color={THEME.muted} wrap="truncate-end">
-          {ITEMS[cursor]?.hint}
+          {FEEDBACK_ITEMS[cursor]?.hint}
         </Text>
       </Box>
       <Box paddingLeft={1} paddingRight={1} width="100%">

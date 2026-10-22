@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { THINKING_LEVELS } from "@/config/constants.js";
 import { type ThinkingLevel } from "@/config/provider-config.js";
-import { ICONS, THEME } from "@/ui/constants.js";
+import { ICONS, THEME, THINKING_DESCRIPTIONS } from "@/ui/constants.js";
 import { getListWindowStart } from "@/ui/list-window.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { selectorChrome } from "@/ui/selector-layout.js";
@@ -21,16 +21,6 @@ interface ThinkingSelectProps {
   onSelect: (level: ThinkingLevel) => void;
   onCancel: () => void;
 }
-
-const descriptions: Record<ThinkingLevel, string> = {
-  off: "Reasoning off",
-  minimal: "Brief reasoning",
-  low: "Light reasoning",
-  medium: "Balanced reasoning",
-  high: "Deep reasoning",
-  xhigh: "Extra-deep reasoning",
-  max: "Most thorough reasoning",
-};
 
 export function ThinkingSelect({
   currentLevel,
@@ -96,7 +86,9 @@ export function ThinkingSelect({
       <SelectorFrame
         compact
         title="Thinking level"
-        subtitle={selected ? descriptions[selected] : "No levels available"}
+        subtitle={
+          selected ? THINKING_DESCRIPTIONS[selected] : "No levels available"
+        }
         hint="↑↓/←→ navigate · Enter select · Esc cancel"
         width={width}
         rows={availableRows}
@@ -133,7 +125,7 @@ export function ThinkingSelect({
                   <Text color={THEME.success}>{marker}</Text>
                   {descriptionWidth >= 12 ? (
                     <Text color={THEME.muted}>
-                      {`  ${truncateToWidth(descriptions[level], descriptionWidth)}`}
+                      {`  ${truncateToWidth(THINKING_DESCRIPTIONS[level], descriptionWidth)}`}
                     </Text>
                   ) : null}
                 </Text>

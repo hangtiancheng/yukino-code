@@ -1,37 +1,10 @@
+import { RESPONSE_LABEL, RESPONSE_OPTIONS } from "#/constants.js";
 import type { PermissionItem, PermissionResponse } from "#/types.js";
 
 interface PermissionDialogProps {
   item: PermissionItem;
   onRespond: (id: string, response: PermissionResponse) => void;
 }
-
-const RESPONSE_OPTIONS: {
-  value: PermissionResponse;
-  label: string;
-  className: string;
-}[] = [
-  {
-    value: "allow",
-    label: "Allow",
-    className: "bg-accent text-accent-contrast  hover:bg-accent-dim",
-  },
-  {
-    value: "allowAlways",
-    label: "Remember Scopes for All Project Agents",
-    className: "border border-accent/40 text-accent hover:bg-accent/8",
-  },
-  {
-    value: "deny",
-    label: "Deny",
-    className: "border border-red/30 text-red hover:bg-red/6",
-  },
-];
-
-const RESPONSE_LABEL: Record<string, string> = {
-  allow: "Allowed once",
-  allowAlways: "Allowed for all project agents",
-  deny: "Denied",
-};
 
 export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
   return (

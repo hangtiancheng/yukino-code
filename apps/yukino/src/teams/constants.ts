@@ -14,6 +14,8 @@ export const MSG_PLAN_APPROVAL_REQUEST = "plan_approval_request";
 export const MSG_PLAN_APPROVAL_RESPONSE = "plan_approval_response";
 export const LEADER_NAME = "leader";
 
+export const TEAMMATE_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
 // Teammates run unattended, so messaging and TODO bookkeeping use coordination
 // permissions. Explicit deny/ask rules still take precedence.
 export const TEAMMATE_COORDINATION_TOOLS: ReadonlySet<string> = new Set([
@@ -53,6 +55,8 @@ export const LOCK_ACQUIRE_TIMEOUT_MS = 5_000;
 export const LOCK_STALE_MS = 10_000;
 export const LOCK_MIN_BACKOFF_MS = 5;
 export const LOCK_MAX_BACKOFF_MS = 80;
+
+export const IDLE_POLL_INTERVAL_MS = 500;
 
 export const MAX_READ_MESSAGES = 500;
 

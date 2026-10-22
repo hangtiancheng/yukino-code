@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SlashMenu } from "#/components/slash-menu.js";
+import { FILE_COMPLETE_DEBOUNCE_MS, MAX_TEXTAREA_HEIGHT } from "#/constants.js";
 import { useScrollFollow } from "#/hooks/use-scroll-follow.js";
 import type {
   FileCompleteResponsePayload,
@@ -29,9 +30,6 @@ interface InputAreaProps {
   onConsumeImageResult: (clientId: string) => void;
   onBackgroundShells: () => void;
 }
-
-const MAX_TEXTAREA_HEIGHT = 200;
-const FILE_COMPLETE_DEBOUNCE_MS = 150;
 
 let uploadCounter = 0;
 function nextUploadId(): string {

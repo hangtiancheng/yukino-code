@@ -12,6 +12,7 @@ import {
 } from "@/storage/private.js";
 import type { SubagentProgressEvent } from "@/subagent/spawn.js";
 import {
+  IDLE_POLL_INTERVAL_MS,
   LEADER_NAME,
   MAX_RETAINED_TERMINATED_MEMBERS,
   MSG_PLAN_APPROVAL_RESPONSE,
@@ -224,10 +225,6 @@ export class Team {
   persist(): void {
     writeTeamFile(this.cwd, this.name, this.snapshot());
   }
-
-  static readonly IDLE_POLL_INTERVAL_MS = 500;
-  // The leader writes a mailbox message with this prefix to notify
-  // teammates to exit.
 
   spawnTeammate(
     name: string,
@@ -659,7 +656,7 @@ export class Team {
         member.signal?.removeEventListener("abort", finish);
         resolve();
       };
-      const timer = setTimeout(finish, Team.IDLE_POLL_INTERVAL_MS);
+      const timer = setTimeout(finish, IDLE_POLL_INTERVAL_MS);
       member.signal?.addEventListener("abort", finish, { once: true });
     });
   }

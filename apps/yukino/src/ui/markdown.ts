@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { Marked } from "marked";
 import type { TokenizerExtension } from "marked";
 
-import { THEME } from "@/ui/constants.js";
+import { SCP_STYLE_REMOTE, THEME } from "@/ui/constants.js";
 import { markedTerminal } from "@/ui/marked-terminal.js";
 import { isLanguageSupported } from "@/ui/syntax-highlight.js";
 import { visibleWidth, wrapToLines } from "@/ui/terminal-text.js";
@@ -11,20 +11,6 @@ import { plainTerminalText } from "@/utils/index.js";
 chalk.level = 3;
 
 type MarkdownKind = "assistant" | "user" | "thinking";
-
-/**
- * An scp-style remote, as in `git clone git@github.com:owner/repo.git`.
- *
- * GFM's inline url rule autolinks the `user@host` part as an email address,
- * splitting the remote into a mailto link token (styled as a link, and a
- * clickable OSC-8 hyperlink where the terminal supports it) and a dangling
- * `:owner/repo.git` text tail. Claiming the pattern before that rule sees it
- * keeps such remotes verbatim as plain text; the colon has to be followed by
- * a non-space character, so ordinary addresses such as
- * "foo@example.com: see the docs" still autolink.
- */
-const SCP_STYLE_REMOTE =
-  /^[A-Za-z0-9._+-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+:(?=\S)/u;
 
 const scpStyleRemote: TokenizerExtension = {
   name: "scp-style-remote",

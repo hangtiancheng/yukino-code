@@ -6,13 +6,12 @@ import {
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
+  TEAMMATE_NAME_PATTERN,
 } from "@/teams/constants.js";
 import type { FileMailMessage } from "@/teams/file-mailbox.js";
 
-const teammateNamePattern = /^[a-zA-Z0-9_-]+$/;
-
 export function isValidTeammateName(name: string): boolean {
-  return name !== LEADER_NAME && teammateNamePattern.test(name);
+  return name !== LEADER_NAME && TEAMMATE_NAME_PATTERN.test(name);
 }
 
 export function newRequestId(): string {

@@ -1,5 +1,8 @@
+import type { ThinkingLevel } from "@/config/provider-config.js";
+import type { AttachmentKind } from "@/feedback/types.js";
 import type { NonPlanPermissionMode } from "@/permissions/index.js";
 import { DARK_THEME, type ThemePalette } from "@/theme/constants.js";
+import type { ModelPickerState } from "@/ui/model-select.js";
 
 export const THEME: ThemePalette = { ...DARK_THEME };
 
@@ -59,6 +62,20 @@ export const MAX_RECENT_TOOLS = 10;
 export const MARKER =
   /\[paste #\d+ (?:\+\d+ lines|\d+ chars)\]|\[Image #\d+\]/g;
 
+/**
+ * An scp-style remote, as in `git clone git@github.com:owner/repo.git`.
+ *
+ * GFM's inline url rule autolinks the `user@host` part as an email address,
+ * splitting the remote into a mailto link token (styled as a link, and a
+ * clickable OSC-8 hyperlink where the terminal supports it) and a dangling
+ * `:owner/repo.git` text tail. Claiming the pattern before that rule sees it
+ * keeps such remotes verbatim as plain text; the colon has to be followed by
+ * a non-space character, so ordinary addresses such as
+ * "foo@example.com: see the docs" still autolink.
+ */
+export const SCP_STYLE_REMOTE =
+  /^[A-Za-z0-9._+-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+:(?=\S)/u;
+
 export const PERMISSION_OPTIONS: {
   label: string;
   action: "allow" | "deny" | "allowAlways";
@@ -113,3 +130,54 @@ export const SYNC_OUTPUT_TERM_PROGRAMS = new Set([
 
 /** One space of padding on each side of a cell, in terminal columns. */
 export const CELL_PADDING = 2;
+
+export const STATUS_MESSAGES: Record<
+  Exclude<ModelPickerState["status"], "ready">,
+  string
+> = {
+  loading: "Fetching models…",
+  empty: "No models returned by this provider",
+  error: "Model discovery failed for this provider",
+};
+
+export const THINKING_DESCRIPTIONS: Record<ThinkingLevel, string> = {
+  off: "Reasoning off",
+  minimal: "Brief reasoning",
+  low: "Light reasoning",
+  medium: "Balanced reasoning",
+  high: "Deep reasoning",
+  xhigh: "Extra-deep reasoning",
+  max: "Most thorough reasoning",
+};
+
+export const FEEDBACK_ITEMS: {
+  kind: AttachmentKind;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    kind: "session",
+    label: "Session history",
+    hint: "full conversation JSONL",
+  },
+  {
+    kind: "log",
+    label: "Warnings and errors",
+    hint: "yukino diagnostic log",
+  },
+  {
+    kind: "env",
+    label: "Environment info",
+    hint: "runtime, provider, terminal and config",
+  },
+  {
+    kind: "tools",
+    label: "Detailed tool output",
+    hint: "tool trace and full saved output; optional",
+  },
+  {
+    kind: "file-history",
+    label: "File history",
+    hint: "source snapshots and backups; optional",
+  },
+];

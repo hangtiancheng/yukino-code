@@ -3,7 +3,13 @@ import { Box, Text, useInput } from "ink";
 import { useMemo, useState } from "react";
 
 import type { DiscoveredModel } from "@/llm/model-discovery.js";
-import { ICONS, OTHER, OTHER_LABEL, THEME } from "@/ui/constants.js";
+import {
+  ICONS,
+  OTHER,
+  OTHER_LABEL,
+  STATUS_MESSAGES,
+  THEME,
+} from "@/ui/constants.js";
 import { SelectorFrame } from "@/ui/selector-frame.js";
 import { SelectorList, SelectorListRow } from "@/ui/selector-list.js";
 import { updateSelectorQuery } from "@/ui/selector-search.js";
@@ -21,15 +27,6 @@ interface ModelSelectProps {
   onCancel: () => void;
   onSelect: (model: DiscoveredModel) => void;
 }
-
-const STATUS_MESSAGES: Record<
-  Exclude<ModelPickerState["status"], "ready">,
-  string
-> = {
-  loading: "Fetching models…",
-  empty: "No models returned by this provider",
-  error: "Model discovery failed for this provider",
-};
 
 type Entry = { kind: "model"; model: DiscoveredModel } | { kind: "other" };
 
