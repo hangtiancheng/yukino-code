@@ -2,17 +2,16 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { render, type Instance } from "ink";
-import { act } from "react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-
-import { VirtualTerminal } from "./helpers/virtual-terminal.js";
-
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { WorkflowsDialog } from "@yukino.js/ui/workflows-dialog.js";
 import { WorkflowService } from "@yukino.js/workflow/service.js";
+import { render, type Instance } from "ink";
+import { act } from "react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 let terminal: VirtualTerminal;
 let instance: Instance | undefined;

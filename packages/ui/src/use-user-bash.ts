@@ -1,13 +1,3 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-  type RefObject,
-} from "react";
-
 import type { UserBashResult } from "@yukino.js/conversation";
 import type { ConversationManager } from "@yukino.js/conversation";
 import { userBashContext } from "@yukino.js/conversation/prompts.js";
@@ -19,6 +9,17 @@ import {
   type SessionMessage,
 } from "@yukino.js/session";
 import type { ToolResult } from "@yukino.js/tools/types.js";
+import { asErrorString, plainTerminalText } from "@yukino.js/utils";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+  type RefObject,
+} from "react";
+
 import type { ChatMessage } from "./chat.js";
 import {
   USER_BASH_PROGRESS_EXCLUDED,
@@ -26,7 +27,6 @@ import {
 } from "./constants.js";
 import { plainTerminalLine } from "./terminal-text.js";
 import type { ToolBlockInfo } from "./tool-display.js";
-import { asErrorString, plainTerminalText } from "@yukino.js/utils";
 
 interface Options {
   execute: (

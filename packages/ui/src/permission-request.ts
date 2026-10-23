@@ -1,6 +1,7 @@
 import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
-import type { PermissionAction } from "./permission-dialog.js";
 import { formatToolArgs } from "@yukino.js/utils";
+
+import type { PermissionAction } from "./permission-dialog.js";
 
 export interface PermissionRequest {
   agentName: string;

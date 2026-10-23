@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
-
 import { TaskFailure, TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { describe, expect, it } from "vitest";
 
 const ok = (): Promise<string> => Promise.resolve("ok");
 const noop = (): void => undefined;

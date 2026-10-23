@@ -10,8 +10,6 @@ import {
 import * as os from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { PathSandbox } from "@yukino.js/permissions";
 import { MAX_SEARCH_OUTPUT_BYTES } from "@yukino.js/tools/constants.js";
 import { EditFileTool } from "@yukino.js/tools/edit-file.js";
@@ -23,6 +21,7 @@ import { ReadFileTool } from "@yukino.js/tools/read-file.js";
 import type { ToolContext } from "@yukino.js/tools/types.js";
 import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 import { resolveToolPath } from "@yukino.js/utils/paths.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

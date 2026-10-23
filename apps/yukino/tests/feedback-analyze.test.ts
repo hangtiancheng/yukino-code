@@ -1,5 +1,3 @@
-import { describe, expect, it, vi } from "vitest";
-
 import type { Message } from "@yukino.js/conversation";
 import { analyzeHarnessAnomalies } from "@yukino.js/feedback/analyze.js";
 import type { AnalyzeInput } from "@yukino.js/feedback/analyze.js";
@@ -7,6 +5,7 @@ import {
   ANALYSIS_INSTRUCTIONS,
   buildAnalysisPrompt,
 } from "@yukino.js/feedback/prompts.js";
+import { describe, expect, it, vi } from "vitest";
 
 function makeMessages(count: number, chars = 490): Message[] {
   const messages: Message[] = [];

@@ -1,9 +1,9 @@
 import type { Command, CommandRegistry } from "@yukino.js/commands/commands.js";
 import type { LspServerConfig } from "@yukino.js/lsp/config.js";
 import { MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
+import type { SkillHost } from "@yukino.js/skills";
 import type { SkillCatalog } from "@yukino.js/skills/catalog.js";
 import { runInline as runSkillInline } from "@yukino.js/skills/executor.js";
-import type { SkillHost } from "@yukino.js/skills";
 import type { TeamManager } from "@yukino.js/teams";
 import { TeamTodoWriteTool } from "@yukino.js/teams/task-tools.js";
 import type { TaskList } from "@yukino.js/todo";

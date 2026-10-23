@@ -1,5 +1,3 @@
-import { describe, expect, it } from "vitest";
-
 import {
   addUsage,
   agentEventToUpdate,
@@ -10,6 +8,7 @@ import {
   toolKind,
 } from "@yukino.js/acp/conversion.js";
 import type { SessionMessage } from "@yukino.js/session";
+import { describe, expect, it } from "vitest";
 
 describe("ACP conversion", () => {
   it("converts supported prompt blocks to text", () => {

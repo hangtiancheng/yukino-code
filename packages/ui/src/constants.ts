@@ -3,6 +3,7 @@ import type { ThinkingLevel } from "@yukino.js/config/provider-config.js";
 import type { AttachmentKind } from "@yukino.js/feedback/types.js";
 import type { NonPlanPermissionMode } from "@yukino.js/permissions";
 import { DARK_THEME, type ThemePalette } from "@yukino.js/theme/constants.js";
+
 import type { ModelPickerState } from "./model-select.js";
 
 export const THEME: ThemePalette = { ...DARK_THEME };

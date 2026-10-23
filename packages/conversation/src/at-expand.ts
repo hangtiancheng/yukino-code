@@ -1,6 +1,10 @@
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
+import { isImagePath, loadImageAttachment } from "@yukino.js/images";
+import { MAX_IMAGES_PER_MESSAGE } from "@yukino.js/images/constants.js";
+import { createChildLogger } from "@yukino.js/logger";
+
 import {
   AT_REF_LINE_RANGE_RE,
   AT_REF_RE,
@@ -9,9 +13,6 @@ import {
   MAX_INLINE_TOTAL_BYTES,
   MAX_RANGE_FILE_BYTES,
 } from "./constants.js";
-import { MAX_IMAGES_PER_MESSAGE } from "@yukino.js/images/constants.js";
-import { isImagePath, loadImageAttachment } from "@yukino.js/images";
-import { createChildLogger } from "@yukino.js/logger";
 
 const log = createChildLogger({ module: "at-expand" });
 

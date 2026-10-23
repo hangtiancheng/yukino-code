@@ -1,14 +1,16 @@
+import type { ToolContext } from "@yukino.js/tools/types.js";
+
 import {
   FORK_CONTEXT_FULL_MESSAGES,
   FORK_CONTEXT_RECENT_MESSAGES,
 } from "./constants.js";
-import type { Skill, SkillHost, SkillForkHost } from "./index.js";
 import {
   buildSkillPrompt,
   SKILL_INSTRUCTIONS,
   wrapParentContext,
 } from "./prompts.js";
-import type { ToolContext } from "@yukino.js/tools/types.js";
+
+import type { Skill, SkillHost, SkillForkHost } from "./index.js";
 
 export function parseSkillPrompt(
   prompt: string,

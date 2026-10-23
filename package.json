@@ -11,7 +11,7 @@
     "git:push": "pnpm git:commit && git push origin main",
     "git:push:skip": "pnpm git:commit:skip && git push origin main",
     "format": "concurrently \"pnpm --filter docs format\" \"pnpm --filter @yukino.js/app format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
-    "build": "concurrently \"pnpm --filter docs build\" \"pnpm --filter @yukino.js/app build\" \"pnpm --filter @yukino.js/mcp build\" \"pnpm --filter @yukino.js/yukino build\"",
+    "build": "pnpm --filter @yukino.js/yukino build && concurrently \"pnpm --filter docs build\" \"pnpm --filter @yukino.js/app build\" \"pnpm --filter @yukino.js/mcp build\"",
     "prepare": "husky"
   },
   "keywords": [
@@ -19,17 +19,25 @@
     "code"
   ],
   "devDependencies": {
-    "concurrently": "^10.0.6",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.6.0",
-    "typescript": "^5.9.3",
+    "@eslint/js": "^9.39.5",
+    "@types/express": "^5.0.6",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/express": "^5.0.6",
-    "@types/js-yaml": "^4.0.9",
     "@types/turndown": "^5.0.6",
-    "@types/ws": "^8.18.2"
+    "@types/ws": "^8.18.2",
+    "concurrently": "^10.0.6",
+    "eslint": "^9.39.5",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "eslint-plugin-unicorn": "^65.0.1",
+    "globals": "^17.13.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.0"
   },
   "lint-staged": {
     "*.{json,jsonc,js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue,css,scss,md,mdx}": [

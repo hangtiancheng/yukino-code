@@ -10,8 +10,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import z from "zod";
-
 import {
   mkdirPrivateSync as mkdirSync,
   openPrivateFileSync as openSync,
@@ -19,6 +17,8 @@ import {
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import { spillDir } from "@yukino.js/tool-result";
 import { buildPersistedOutputPreview } from "@yukino.js/tool-result/prompts.js";
+import z from "zod";
+
 import {
   BACKGROUNDABLE_TOOL_NAMES,
   COMMAND_INTERRUPTED_ERROR,

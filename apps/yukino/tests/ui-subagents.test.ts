@@ -1,7 +1,3 @@
-import { render, type Instance } from "ink";
-import { act, createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { AgentEventSink } from "@yukino.js/subagent/spawn.js";
 import {
   TaskManager,
@@ -9,6 +5,9 @@ import {
 } from "@yukino.js/subagent/task-manager.js";
 import { TaskOutputTool } from "@yukino.js/tools/task-output.js";
 import { useSubagents } from "@yukino.js/ui/use-subagents.js";
+import { render, type Instance } from "ink";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let instance: Instance | undefined;
 let tasks: TaskManager;

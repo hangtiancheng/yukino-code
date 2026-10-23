@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { configureBashSandbox } from "@yukino.js/bootstrap/sandbox.js";
 import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
 import { parse as parseCommand } from "@yukino.js/commands/commands.js";
@@ -39,11 +39,11 @@ import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
 import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
 import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { TeamManager } from "@yukino.js/teams";
 import {
   coordinatorToolFilter,
   coordinatorActive,
 } from "@yukino.js/teams/coordinator.js";
-import { TeamManager } from "@yukino.js/teams";
 import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
 import {
   TeamCreateTool,

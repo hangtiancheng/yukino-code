@@ -1,10 +1,9 @@
 import { existsSync } from "node:fs";
 
-import { describe, it, expect } from "vitest";
-
 import { sessionPath } from "@yukino.js/storage";
 import { TaskList } from "@yukino.js/todo";
 import { TaskStore } from "@yukino.js/todo/store.js";
+import { describe, it, expect } from "vitest";
 describe("todo store-backed persistence", () => {
   it("persists tasks to a sess-scoped file and reloads them", () => {
     const list = new TaskList(new TaskStore("sess1"));

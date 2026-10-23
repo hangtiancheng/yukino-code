@@ -2,12 +2,6 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, it, expect } from "vitest";
-
-import {
-  DEFAULT_MAX_OUTPUT_TOKENS,
-  THINKING_LEVELS,
-} from "@yukino.js/config/constants.js";
 import {
   loadConfig,
   loadProjectMcpServers,
@@ -19,6 +13,10 @@ import {
   type AppConfig,
   type MCPServerConfig,
 } from "@yukino.js/config";
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  THINKING_LEVELS,
+} from "@yukino.js/config/constants.js";
 import {
   clampThinkingLevel,
   getContextWindow,
@@ -32,6 +30,7 @@ import {
   withProviderDefaults,
   type ProviderConfig,
 } from "@yukino.js/config/provider-config.js";
+import { afterEach, beforeEach, describe, it, expect } from "vitest";
 
 describe("config", () => {
   describe("getContextWindow", () => {

@@ -1,3 +1,19 @@
+import { DEFAULT_MAX_OUTPUT_TOKENS } from "@yukino.js/config/constants.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { Message } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { ContextTooLongError } from "@yukino.js/llm/errors.js";
+import { llmRetryDelay, waitForLlmRetry } from "@yukino.js/llm/retry.js";
+import {
+  type CompactBoundaryPayload,
+  messageToKeptRecord,
+} from "@yukino.js/session";
+import type {
+  ProviderToolSchema,
+  ToolResultContentBlock,
+} from "@yukino.js/tools/types.js";
+import { asErrorString, contentToText, strArg } from "@yukino.js/utils";
+
 import {
   ANALYSIS_BLOCK_RE,
   ANALYSIS_CLOSE_TAG,
@@ -34,21 +50,6 @@ import {
   RECOVERY_ATTACHMENT_DIVIDER,
 } from "./prompts.js";
 import type { RecoveryState } from "./recovery.js";
-import { DEFAULT_MAX_OUTPUT_TOKENS } from "@yukino.js/config/constants.js";
-import { ConversationManager } from "@yukino.js/conversation";
-import type { Message } from "@yukino.js/conversation";
-import type { LLMClient } from "@yukino.js/llm/client.js";
-import { ContextTooLongError } from "@yukino.js/llm/errors.js";
-import { llmRetryDelay, waitForLlmRetry } from "@yukino.js/llm/retry.js";
-import {
-  type CompactBoundaryPayload,
-  messageToKeptRecord,
-} from "@yukino.js/session";
-import type {
-  ProviderToolSchema,
-  ToolResultContentBlock,
-} from "@yukino.js/tools/types.js";
-import { asErrorString, contentToText, strArg } from "@yukino.js/utils";
 
 // Structured outcome of a compaction. When `compacted` is true, `boundary`
 // carries the summary plus the verbatim kept tail (including tool blocks) so

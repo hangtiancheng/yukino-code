@@ -8,10 +8,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
-import { WebSocket } from "ws";
-import { z } from "zod";
-
 import { Agent } from "@yukino.js/agent";
 import {
   globalConfigPath,
@@ -29,6 +25,9 @@ import { loadSession, listSessions, saveUserMessage } from "@yukino.js/session";
 import { writePrivateFileSync } from "@yukino.js/storage/private.js";
 import type { Asker } from "@yukino.js/tools/ask-user.js";
 import { contentToText } from "@yukino.js/utils";
+import { describe, expect, it, vi } from "vitest";
+import { WebSocket } from "ws";
+import { z } from "zod";
 
 interface Broadcast {
   type: string;

@@ -5,6 +5,11 @@ import { join } from "node:path";
 
 import { fileHistoryDir } from "@yukino.js/file-history";
 import {
+  mkdirPrivateSync,
+  writePrivateFile,
+} from "@yukino.js/storage/private.js";
+
+import {
   CLIPBOARD_NOT_PNG_ERROR,
   CLIPBOARD_NO_SESSION_ERROR,
   CLIPBOARD_TIMEOUT_MS,
@@ -13,10 +18,6 @@ import {
   NO_IMAGE_MESSAGE,
   PNG_SIGNATURE,
 } from "./constants.js";
-import {
-  mkdirPrivateSync,
-  writePrivateFile,
-} from "@yukino.js/storage/private.js";
 
 export type SaveClipboardImageResult =
   { ok: true; value: string } | { ok: false; reason: string };

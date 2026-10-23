@@ -37,8 +37,9 @@ import {
   ATTR_SERVICE_VERSION,
 } from "@opentelemetry/semantic-conventions";
 import type * as Sentry from "@sentry/node";
-
 import { createChildLogger } from "@yukino.js/logger";
+import { version } from "@yukino.js/version";
+
 import {
   ATTRIBUTE_ERROR_TYPE,
   ATTRIBUTE_MODE,
@@ -62,6 +63,8 @@ import {
   SERVICE_NAME,
   SHUTDOWN_TIMEOUT_MS,
 } from "./constants.js";
+import { scrubTelemetryPayload } from "./privacy.js";
+
 import type {
   TelemetryAttributes,
   TelemetryMetricKind,
@@ -71,8 +74,6 @@ import type {
   TelemetryObservationUpdate,
   TelemetryRuntime,
 } from "./index.js";
-import { scrubTelemetryPayload } from "./privacy.js";
-import { version } from "@yukino.js/version";
 
 const log = createChildLogger({ module: "telemetry" });
 

@@ -1,9 +1,3 @@
-import {
-  REVIEW_COMMAND_DESCRIPTION,
-  SESSION_ACTIVE_MESSAGE,
-  THINKING_LEVEL_CONTROL_UNAVAILABLE,
-} from "./constants.js";
-import { buildPlanPrompt, buildReviewPrompt } from "./prompts.js";
 import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
 import {
   isValidThinkingLevel,
@@ -15,6 +9,13 @@ import {
 } from "@yukino.js/subagent/constants.js";
 import { WORKFLOW_COMMAND_DESCRIPTION } from "@yukino.js/workflow/constants.js";
 import { ULTRACODE_PROMPT } from "@yukino.js/workflow/prompts.js";
+
+import {
+  REVIEW_COMMAND_DESCRIPTION,
+  SESSION_ACTIVE_MESSAGE,
+  THINKING_LEVEL_CONTROL_UNAVAILABLE,
+} from "./constants.js";
+import { buildPlanPrompt, buildReviewPrompt } from "./prompts.js";
 
 export type CommandType = "local" | "local_ui" | "prompt" | "skill_fork";
 

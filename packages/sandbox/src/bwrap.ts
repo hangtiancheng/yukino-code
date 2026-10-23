@@ -1,12 +1,14 @@
 import { execFileSync } from "node:child_process";
 
+import { resolveToolPath } from "@yukino.js/utils/paths.js";
+
 import { BWRAP_BINARY_NAME } from "./constants.js";
+
 import type {
   Sandbox,
   SandboxConfig,
   SandboxExecutionContext,
 } from "./index.js";
-import { resolveToolPath } from "@yukino.js/utils/paths.js";
 
 /**
  * Linux bubblewrap (bwrap) sandbox implementation.

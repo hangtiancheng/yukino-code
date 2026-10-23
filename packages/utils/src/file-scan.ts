@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import { createChildLogger } from "@yukino.js/logger";
 import { SKIP_DIRS } from "@yukino.js/tools/constants.js";
+
 import {
   DEFAULT_FILE_MATCH_LIMIT,
   DEFAULT_SCAN_MAX_FILES,

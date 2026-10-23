@@ -3,8 +3,6 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, expect, it, vi } from "vitest";
-
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { PermissionChecker } from "@yukino.js/permissions";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
@@ -12,6 +10,7 @@ import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
 import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 import { WorkflowService } from "@yukino.js/workflow/service.js";
+import { afterEach, expect, it, vi } from "vitest";
 
 const directories: string[] = [];
 const managers: TaskManager[] = [];

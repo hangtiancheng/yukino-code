@@ -8,14 +8,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, it, expect } from "vitest";
-
 import {
   expandAtRefs,
   expandAtRefsWithImages,
 } from "@yukino.js/conversation/at-expand.js";
 import { collapseImage, expandPastes } from "@yukino.js/ui/input-paste.js";
 import { isRecord, strArg } from "@yukino.js/utils";
+import { afterEach, describe, it, expect } from "vitest";
 
 const TEST_PNG_PATH = join(dirname(fileURLToPath(import.meta.url)), "test.png");
 const tempDirs = new Set<string>();

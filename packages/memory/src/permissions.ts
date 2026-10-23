@@ -1,11 +1,5 @@
 import { extname } from "node:path";
 
-import {
-  GLOB_ESCAPE_RE,
-  GLOB_MAGIC_RE,
-  MEMORY_DIR_NAME,
-  MEMORY_TASK_TOOLS,
-} from "./constants.js";
 import { PermissionChecker, type Decision } from "@yukino.js/permissions";
 import { projectPath, yukinoPath, getSessionsDir } from "@yukino.js/storage";
 import type { ToolCategory } from "@yukino.js/tools/types.js";
@@ -15,6 +9,13 @@ import {
   isPathWithin,
   resolveToolPath,
 } from "@yukino.js/utils/paths.js";
+
+import {
+  GLOB_ESCAPE_RE,
+  GLOB_MAGIC_RE,
+  MEMORY_DIR_NAME,
+  MEMORY_TASK_TOOLS,
+} from "./constants.js";
 
 export class MemoryPermissionChecker extends PermissionChecker {
   private memoryRoots: string[];

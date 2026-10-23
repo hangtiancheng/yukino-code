@@ -1,8 +1,8 @@
+import type { DiscoveredModel } from "@yukino.js/llm/model-discovery.js";
 import Fuse from "fuse.js";
 import { Box, Text, useInput } from "ink";
 import { useMemo, useState } from "react";
 
-import type { DiscoveredModel } from "@yukino.js/llm/model-discovery.js";
 import {
   ICONS,
   OTHER,

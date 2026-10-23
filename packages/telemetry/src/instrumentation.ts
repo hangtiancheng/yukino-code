@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@yukino.js/llm/events.js";
+import type { ToolResult } from "@yukino.js/tools/types.js";
+
 import {
   ATTRIBUTE_ERROR_TYPE,
   ATTRIBUTE_SESSION_HASH,
@@ -26,8 +28,8 @@ import {
   OBSERVATION_TOOL_EXECUTE,
   TOOL_ERROR_STATUS_MESSAGE,
 } from "./constants.js";
+
 import { getTelemetryRuntime, type TelemetryObservation } from "./index.js";
-import type { ToolResult } from "@yukino.js/tools/types.js";
 
 interface LlmMetadata {
   model: string;

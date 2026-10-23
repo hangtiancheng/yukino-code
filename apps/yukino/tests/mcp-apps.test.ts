@@ -1,10 +1,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import type { McpAppToolResult } from "@yukino.js/mcp/apps.js";
 import { MCPClient } from "@yukino.js/mcp/client.js";
 import { MCPManager } from "@yukino.js/mcp/manager.js";
 import { PermissionChecker } from "@yukino.js/permissions";
+import {
+  RemoteMcpApps,
+  type McpAppHandle,
+} from "@yukino.js/remote/mcp-apps.js";
 import {
   chatReducer,
   initialState,
@@ -12,10 +14,7 @@ import {
 import { McpAppRequests } from "@yukino.js/remote-browser/lib/mcp-app-requests.js";
 import { buildAppCsp } from "@yukino.js/remote-browser/lib/mcp-app-sandbox.js";
 import type { ClientMessage } from "@yukino.js/remote-browser/types.js";
-import {
-  RemoteMcpApps,
-  type McpAppHandle,
-} from "@yukino.js/remote/mcp-apps.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => vi.restoreAllMocks());
 

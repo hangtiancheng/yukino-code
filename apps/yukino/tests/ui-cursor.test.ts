@@ -1,11 +1,3 @@
-import { Box, Text, render } from "ink";
-import type { Instance } from "ink";
-import { act, createElement, memo } from "react";
-import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { VirtualTerminal } from "./helpers/virtual-terminal.js";
-
 import { CursorText } from "@yukino.js/ui/cursor-text.js";
 import type { InputDraft } from "@yukino.js/ui/input-draft.js";
 import { InputBox } from "@yukino.js/ui/input.js";
@@ -14,6 +6,13 @@ import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
 import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
 import { TextField } from "@yukino.js/ui/text-field.js";
 import { Transcript } from "@yukino.js/ui/transcript.js";
+import type { Instance } from "ink";
+import { Box, Text, render } from "ink";
+import type { ReactNode } from "react";
+import { act, createElement, memo } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 let instance: Instance | undefined;
 let virtualTerminal: VirtualTerminal;

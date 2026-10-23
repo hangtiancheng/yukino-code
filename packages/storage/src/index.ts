@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { canonicalPath } from "@yukino.js/utils/paths.js";
+
 import {
   ARTIFACTS_DIR_NAME,
   INVALID_SESSION_ID_ERROR,
@@ -10,7 +12,6 @@ import {
   SESSIONS_DIR_NAME,
   YUKINO_DIR_NAME,
 } from "./constants.js";
-import { canonicalPath } from "@yukino.js/utils/paths.js";
 
 export * from "./constants.js";
 export * from "./private.js";

@@ -1,9 +1,3 @@
-import z from "zod";
-
-import type { TaskBoard, TaskList } from "./index.js";
-import { taskProgress } from "./progress.js";
-import { TODO_WRITE_DESCRIPTION } from "./prompts.js";
-import { TodoWriteSchema } from "./write.js";
 import type {
   Tool,
   ToolResult,
@@ -11,6 +5,13 @@ import type {
   ToolSchema,
 } from "@yukino.js/tools/types.js";
 import { asErrorString } from "@yukino.js/utils";
+import z from "zod";
+
+import { taskProgress } from "./progress.js";
+import { TODO_WRITE_DESCRIPTION } from "./prompts.js";
+import { TodoWriteSchema } from "./write.js";
+
+import type { TaskBoard, TaskList } from "./index.js";
 
 const TaskToolInputSchema = z.looseObject({
   type: z.literal("object"),

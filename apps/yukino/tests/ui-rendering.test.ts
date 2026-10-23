@@ -1,11 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
 
-import chalk, { Chalk } from "chalk";
-import { renderToString } from "ink";
-import type * as Ink from "ink";
-import { createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { runInline } from "@yukino.js/skills/executor.js";
 import { AgentActivity } from "@yukino.js/ui/agent-activity.js";
 import { CommittedMessage } from "@yukino.js/ui/chat.js";
@@ -25,6 +19,11 @@ import {
 import { ThinkingBlock } from "@yukino.js/ui/thinking-block.js";
 import { ToolBlock } from "@yukino.js/ui/tool-display.js";
 import { formatToolOutputPreview } from "@yukino.js/ui/tool-preview.js";
+import chalk, { Chalk } from "chalk";
+import type * as Ink from "ink";
+import { renderToString } from "ink";
+import { createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ToolCard and ThinkingBlock size themselves from useStdout().stdout.columns, which
 // renderToString never provides — Ink returns the process.stdout default (columns

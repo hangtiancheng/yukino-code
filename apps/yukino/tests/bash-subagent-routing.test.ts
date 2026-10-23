@@ -2,10 +2,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
@@ -18,6 +16,7 @@ import { BashTool } from "@yukino.js/tools/bash.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool, ToolContext } from "@yukino.js/tools/types.js";
 import { contentToText } from "@yukino.js/utils";
+import { describe, expect, it } from "vitest";
 
 const USAGE: UsageInfo = {
   inputTokens: 1,

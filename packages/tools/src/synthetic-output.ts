@@ -1,3 +1,5 @@
+import { asErrorString } from "@yukino.js/utils";
+
 import { OUTPUT_REQUIRED_ERROR } from "./constants.js";
 import {
   SYNTHETIC_OUTPUT_DESCRIPTION,
@@ -10,7 +12,6 @@ import type {
   ToolResult,
   ToolSchema,
 } from "./types.js";
-import { asErrorString } from "@yukino.js/utils";
 
 /**
  * Lets the Agent deliver its final result as structured data. In

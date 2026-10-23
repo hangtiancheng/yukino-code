@@ -2,8 +2,6 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import {
   attachmentSizePreview,
   buildEnvironment,
@@ -18,6 +16,7 @@ import { closeLogger, initLogger } from "@yukino.js/logger";
 import { saveMessage } from "@yukino.js/session";
 import { yukinoPath } from "@yukino.js/storage";
 import { spillDir } from "@yukino.js/tool-result";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const SESSION = "collect-test-session";
 

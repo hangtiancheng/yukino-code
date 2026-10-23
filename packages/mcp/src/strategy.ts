@@ -21,15 +21,16 @@
 
 import type { McpLoading } from "@yukino.js/config";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import { isMcpToolLike } from "@yukino.js/tools/mcp-call.js";
+import type { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { McpLoadingMode } from "@yukino.js/tools/types.js";
+
 import {
   CHARS_PER_TOKEN,
   DEFAULT_EAGER_THRESHOLD_PERCENT,
   MCP_TOOL_PREFIX,
   OFFICIAL_HOSTS,
 } from "./constants.js";
-import { isMcpToolLike } from "@yukino.js/tools/mcp-call.js";
-import type { ToolRegistry } from "@yukino.js/tools/registry.js";
-import type { McpLoadingMode } from "@yukino.js/tools/types.js";
 
 /**
  * An empty baseUrl means the SDK default address, i.e. the official one.

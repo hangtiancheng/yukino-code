@@ -9,13 +9,21 @@ import {
 } from "node:fs";
 import { join, relative, basename } from "node:path";
 
-import yaml from "js-yaml";
-import z, { parse } from "zod";
-
 import { DEFAULT_MAX_OUTPUT_TOKENS } from "@yukino.js/config/constants.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { createChildLogger } from "@yukino.js/logger";
+import type { PermissionChecker } from "@yukino.js/permissions";
+import { projectPath, yukinoPath } from "@yukino.js/storage";
+import {
+  readPrivateFileSync as readFileSync,
+  mkdirPrivateSync as mkdirSync,
+  writePrivateFileSync as writeFileSync,
+} from "@yukino.js/storage/private.js";
+import { withFileSyncLock } from "@yukino.js/teams/file-lock.js";
+import yaml from "js-yaml";
+import z, { parse } from "zod";
+
 import {
   DEFAULT_MEMORY_TYPE,
   FRONTMATTER_BLOCK_RE,
@@ -36,14 +44,6 @@ import {
   formatMemoryManifest,
   memoryFreshnessText,
 } from "./prompts.js";
-import type { PermissionChecker } from "@yukino.js/permissions";
-import { projectPath, yukinoPath } from "@yukino.js/storage";
-import {
-  readPrivateFileSync as readFileSync,
-  mkdirPrivateSync as mkdirSync,
-  writePrivateFileSync as writeFileSync,
-} from "@yukino.js/storage/private.js";
-import { withFileSyncLock } from "@yukino.js/teams/file-lock.js";
 
 const log = createChildLogger({ module: "memory" });
 

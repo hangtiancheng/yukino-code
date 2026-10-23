@@ -5,6 +5,18 @@ import { Agent } from "@yukino.js/agent";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { createChildLogger } from "@yukino.js/logger";
+import { listSessions } from "@yukino.js/session";
+import { projectPath, yukinoPath, getSessionsDir } from "@yukino.js/storage";
+import { writePrivateFileSync as writeFileSync } from "@yukino.js/storage/private.js";
+import { tryAcquireFileSyncLock } from "@yukino.js/teams/file-lock.js";
+import { EditFileTool } from "@yukino.js/tools/edit-file.js";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { GlobTool } from "@yukino.js/tools/glob.js";
+import { GrepTool } from "@yukino.js/tools/grep.js";
+import { ReadFileTool } from "@yukino.js/tools/read-file.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+
 import {
   CONSOLIDATION_MAX_ITERATIONS,
   DEFAULT_MIN_HOURS,
@@ -22,17 +34,6 @@ import {
   buildMemoryImprovedReminder,
 } from "./prompts.js";
 import { extractWrittenPaths } from "./written-paths.js";
-import { listSessions } from "@yukino.js/session";
-import { projectPath, yukinoPath, getSessionsDir } from "@yukino.js/storage";
-import { writePrivateFileSync as writeFileSync } from "@yukino.js/storage/private.js";
-import { tryAcquireFileSyncLock } from "@yukino.js/teams/file-lock.js";
-import { EditFileTool } from "@yukino.js/tools/edit-file.js";
-import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
-import { GlobTool } from "@yukino.js/tools/glob.js";
-import { GrepTool } from "@yukino.js/tools/grep.js";
-import { ReadFileTool } from "@yukino.js/tools/read-file.js";
-import { ToolRegistry } from "@yukino.js/tools/registry.js";
-import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 
 const log = createChildLogger({ module: "memory" });
 

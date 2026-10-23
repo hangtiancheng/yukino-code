@@ -6,6 +6,8 @@ import {
 import { pathToFileURL } from "node:url";
 
 import { registerExitCleanup } from "@yukino.js/bootstrap/exit-cleanup.js";
+import { asErrorString, isRecord } from "@yukino.js/utils";
+
 import type { LspServerConfig } from "./config.js";
 import {
   APPLY_EDIT_FAILURE_REASON,
@@ -44,7 +46,6 @@ import {
   UNSUPPORTED_METHOD_ERROR,
   UNSUPPORTED_POSITION_ENCODING_ERROR,
 } from "./constants.js";
-import { asErrorString, isRecord } from "@yukino.js/utils";
 
 interface PendingRequest {
   resolve: (value: unknown) => void;

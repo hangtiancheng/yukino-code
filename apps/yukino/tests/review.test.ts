@@ -2,8 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
 import { runSubagentCommand } from "@yukino.js/commands/subagent.js";
@@ -18,6 +16,7 @@ import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
 import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { contentToText } from "@yukino.js/utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let cwd: string;
 beforeEach(() => {

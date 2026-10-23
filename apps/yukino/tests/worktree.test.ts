@@ -10,8 +10,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, it, expect } from "vitest";
-
 import {
   yukinoPath,
   projectKey,
@@ -20,6 +18,7 @@ import {
   sessionPath,
 } from "@yukino.js/storage";
 import { createAgentWorktree } from "@yukino.js/worktree";
+import { afterEach, describe, it, expect } from "vitest";
 
 const tempDirs = new Set<string>();
 

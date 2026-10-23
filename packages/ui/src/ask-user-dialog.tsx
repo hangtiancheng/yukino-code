@@ -1,9 +1,9 @@
+import type { Question } from "@yukino.js/tools/ask-user.js";
 import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useReducer, useRef } from "react";
 import type { RefObject } from "react";
 
-import type { Question } from "@yukino.js/tools/ask-user.js";
 import { ICONS, THEME } from "./constants.js";
 import { SelectorFrame } from "./selector-frame.js";
 import { truncateToWidth, visibleWidth } from "./terminal-text.js";

@@ -7,6 +7,14 @@ import {
   type TaskManager,
 } from "@yukino.js/subagent/task-manager.js";
 import {
+  asErrorString,
+  asRecord,
+  boolArg,
+  intArg,
+  strArg,
+} from "@yukino.js/utils";
+
+import {
   BACKGROUND_NOTIFICATION_BYTES,
   COMMAND_INTERRUPTED_ERROR,
   COMMAND_REQUIRED_ERROR,
@@ -43,13 +51,6 @@ import {
   type ToolResult,
   type ToolSchema,
 } from "./types.js";
-import {
-  asErrorString,
-  asRecord,
-  boolArg,
-  intArg,
-  strArg,
-} from "@yukino.js/utils";
 
 export class PowerShellTool implements Tool {
   // Use a hardcoded string instead of PowerShellTool.name.replace("Tool", "")

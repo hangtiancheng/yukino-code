@@ -1,11 +1,12 @@
 import { RecoveryState } from "@yukino.js/compact/recovery.js";
 import { FileHistory } from "@yukino.js/file-history";
 import { GoalManager } from "@yukino.js/goal";
-import type { RemoteAgentHandle } from "./server.js";
 import { rebuildFromSession } from "@yukino.js/session";
 import type { SessionMessage } from "@yukino.js/session";
 import { TaskStore } from "@yukino.js/todo/store.js";
 import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+
+import type { RemoteAgentHandle } from "./server.js";
 
 type SessionState = Pick<
   RemoteAgentHandle,

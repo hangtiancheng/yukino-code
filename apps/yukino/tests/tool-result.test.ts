@@ -2,8 +2,6 @@ import { mkdtempSync as createTempDir, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { afterEach, describe, it, expect } from "vitest";
-
 import type { ToolResultBlock } from "@yukino.js/conversation";
 import { sessionPath } from "@yukino.js/storage";
 import {
@@ -12,6 +10,7 @@ import {
   persistLargeResult,
 } from "@yukino.js/tool-result";
 import { buildPersistedOutputPreview } from "@yukino.js/tool-result/prompts.js";
+import { afterEach, describe, it, expect } from "vitest";
 
 const tempDirs = new Set<string>();
 

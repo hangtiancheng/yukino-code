@@ -1,5 +1,6 @@
-import type { DangerousPattern } from "./index.js";
 import { TEAMMATE_COORDINATION_TOOLS } from "@yukino.js/teams/constants.js";
+
+import type { DangerousPattern } from "./index.js";
 
 export const PERMISSIONS_RULES_FILENAME = "permissions.yaml";
 

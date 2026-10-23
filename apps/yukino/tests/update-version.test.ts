@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import {
   checkForUpdate,
   getLatestVersion,
   isNewerVersion,
 } from "@yukino.js/update/version-check.js";
 import { version } from "@yukino.js/version";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   vi.unstubAllGlobals();

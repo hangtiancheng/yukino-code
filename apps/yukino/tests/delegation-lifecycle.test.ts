@@ -8,10 +8,8 @@ import {
 import * as os from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { PermissionChecker } from "@yukino.js/permissions";
@@ -34,9 +32,9 @@ import {
   cloneRegistryForTeammate,
   filterToolsForAgent,
 } from "@yukino.js/subagent/tool-filter.js";
+import { TeamManager } from "@yukino.js/teams";
 import { MSG_PLAN_APPROVAL_REQUEST } from "@yukino.js/teams/constants.js";
 import { FileMailbox } from "@yukino.js/teams/file-mailbox.js";
-import { TeamManager } from "@yukino.js/teams";
 import { getNameRegistry } from "@yukino.js/teams/registry.js";
 import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
 import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
@@ -49,6 +47,7 @@ import {
   createPermissionRequestHandler,
   type PermissionRequest,
 } from "@yukino.js/ui/permission-request.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

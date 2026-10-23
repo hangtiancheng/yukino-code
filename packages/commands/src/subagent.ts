@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import type { AgentEvent } from "@yukino.js/agent/events.js";
-import { SUBAGENT_COMMAND_UNAVAILABLE } from "./constants.js";
 import type { ConversationManager } from "@yukino.js/conversation";
 import { recordInput, type InputEntry } from "@yukino.js/history";
 import { saveMessage, saveUserMessage } from "@yukino.js/session";
@@ -9,6 +8,8 @@ import { PLAN_AGENT_NAME } from "@yukino.js/subagent/constants.js";
 import { runPlanAgent } from "@yukino.js/subagent/plan.js";
 import type { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { ToolContext, ToolResult } from "@yukino.js/tools/types.js";
+
+import { SUBAGENT_COMMAND_UNAVAILABLE } from "./constants.js";
 
 interface SubagentCommandContext extends ToolContext {
   registry: ToolRegistry;

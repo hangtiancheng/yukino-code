@@ -11,9 +11,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, it, expect } from "vitest";
-
-import { COMPACT_BOUNDARY } from "@yukino.js/session/constants.js";
 import {
   saveMessage,
   loadSession,
@@ -26,8 +23,10 @@ import {
   toolResultsToRecords,
   cleanExpiredSessions,
 } from "@yukino.js/session";
+import { COMPACT_BOUNDARY } from "@yukino.js/session/constants.js";
 import { getSessionsDir, sessionPath } from "@yukino.js/storage";
 import { asString, contentToText } from "@yukino.js/utils";
+import { afterEach, describe, it, expect } from "vitest";
 
 const t0 = Math.floor(Date.now() / 1000);
 const t1 = t0 + 1;

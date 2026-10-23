@@ -11,8 +11,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
-
 import { Agent } from "@yukino.js/agent";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
@@ -36,6 +34,7 @@ import {
   resolveGitDir,
   type WorktreeSession,
 } from "@yukino.js/worktree";
+import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
 
 const temporaryDirectories: string[] = [];
 

@@ -3,14 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import z from "zod";
-
 import {
   LspServerConfigSchema,
   type LspServerConfig,
 } from "@yukino.js/lsp/config.js";
 import { LspTool } from "@yukino.js/tools/lsp.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import z from "zod";
 
 const fixture = fileURLToPath(
   new URL("./fixtures/lsp-server.mjs", import.meta.url),

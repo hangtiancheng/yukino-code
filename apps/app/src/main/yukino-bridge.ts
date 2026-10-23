@@ -1,6 +1,6 @@
 // Electron main-process bridge over the @yukino.js/yukino library entry.
 //
-// The library barrel (Remote.Server.createRemoteAgent) initializes the full
+// The library barrel (createRemoteAgent) initializes the full
 // agent stack — tools, LLM client, conversation, session, MCP, memory — and
 // yields AgentEvents from handle.run(). This bridge adapts that generator
 // into push events over IPC, and adapts the permission/ask callbacks into
@@ -25,36 +25,57 @@ import type {
   SettingsSnapshot,
   UsagePayload,
 } from "@shared/ipc-types";
-import type { Agent, Permissions, Tools } from "@yukino.js/yukino";
+import type {
+  AgentEvent,
+  AppConfig,
+  Command,
+  CommandContext,
+  CreateRemoteAgentOptions,
+  Decision,
+  ProviderConfig,
+  Question as AskUserQuestion,
+  RemoteAgentHandle,
+  SkillForkHost,
+  ThinkingLevel,
+} from "@yukino.js/yukino";
 import {
-  Remote,
-  Config,
-  Commands,
-  Skills,
-  Prompt,
-  Subagent,
-  Compact,
-  MCP,
-  LLM,
-  Session,
-  Storage,
-  Teams,
+  DEFAULT_THINKING_LEVEL,
+  THINKING_LEVELS,
+  buildSystemPrompt,
+  coordinatorToolFilter,
+  createClient,
+  createRemoteAgent,
+  decideAndApply,
+  detectEnvironment,
+  discoverModels,
+  forkEnabled,
+  forceCompact,
+  getContextWindow,
+  getSessionFilePath,
+  getSupportedThinkingLevels,
+  globalConfigPath,
+  listAllSessions,
+  listSessions,
+  loadConfig,
+  loadSession,
+  memoryEnabled,
+  parse,
+  persistDefaultProvider,
+  persistModel,
+  persistThinkingLevel,
+  projectKey,
+  resolveDefaultProvider,
+  restoreRemoteSession,
+  runFork,
+  runSubagentCommand,
+  saveCompactBoundary,
+  saveMessage,
+  spawnSubagent,
+  withProjectMcpServers,
 } from "@yukino.js/yukino";
 import { BrowserWindow, dialog, ipcMain, nativeTheme, app } from "electron";
 
-type RemoteAgentHandle = Remote.Server.RemoteAgentHandle;
-type CreateRemoteAgentOptions = Remote.Server.CreateRemoteAgentOptions;
-type AgentEvent = Agent.Events.AgentEvent;
-type Decision = Permissions.Decision;
-type AskUserQuestion = Tools.AskUser.Question;
-type ProviderConfig = Config.ProviderConfig.ProviderConfig;
-type Command = Commands.Commands.Command;
-type CommandContext = Commands.Commands.CommandContext;
-type ThinkingLevel = Config.ProviderConfig.ThinkingLevel;
-type SkillForkHost = Skills.SkillForkHost;
 type ToolProtocol = "anthropic" | "openai" | "openai-compat";
-
-const DEFAULT_THINKING = Config.Constants.DEFAULT_THINKING_LEVEL;
 
 /** Commands that only make sense in the terminal/WS UIs. */
 const UNSUPPORTED_COMMANDS = new Set([
@@ -190,10 +211,10 @@ export class YukinoBridge {
   /** Loads config + initializes the agent stack for the current cwd. */
   async init(): Promise<InitState> {
     try {
-      const configPath = Config.ProviderConfig.globalConfigPath();
-      let config: Config.AppConfig;
+      const configPath = globalConfigPath();
+      let config: AppConfig;
       try {
-        config = Config.loadConfig();
+        config = loadConfig();
       } catch (error) {
         return this.initError(
           error instanceof Error
@@ -209,9 +230,9 @@ export class YukinoBridge {
         );
       }
 
-      const merged = Config.withProjectMcpServers(config, this.cwd);
+      const merged = withProjectMcpServers(config, this.cwd);
       this.providers = merged.providers;
-      const provider = Config.ProviderConfig.resolveDefaultProvider(
+      const provider = resolveDefaultProvider(
         merged.providers,
         merged.default_provider,
       );
@@ -240,7 +261,7 @@ export class YukinoBridge {
     return {
       ok: true,
       cwd: handle.cwd,
-      projectKey: Storage.projectKey(handle.cwd),
+      projectKey: projectKey(handle.cwd),
       providerName: handle.provider.name,
       model: handle.provider.model,
       sessionId: handle.sessionId,
@@ -254,14 +275,14 @@ export class YukinoBridge {
     return (
       handle.client.getThinkingLevel?.() ??
       handle.provider.thinking ??
-      DEFAULT_THINKING
+      DEFAULT_THINKING_LEVEL
     );
   }
 
   private supportedThinkingLevels(handle: RemoteAgentHandle): ThinkingLevel[] {
     return [
       ...(handle.client.getSupportedThinkingLevels?.() ??
-        Config.ProviderConfig.getSupportedThinkingLevels(handle.provider)),
+        getSupportedThinkingLevels(handle.provider)),
     ];
   }
 
@@ -277,15 +298,15 @@ export class YukinoBridge {
 
   private async createHandle(
     provider: ProviderConfig,
-    config: Config.AppConfig,
+    config: AppConfig,
   ): Promise<RemoteAgentHandle | null> {
     try {
       const options: CreateRemoteAgentOptions = {
         provider,
         cwd: this.cwd,
         enableCoordinatorMode: config.enable_coordinator_mode ?? false,
-        forkDisabled: !Config.forkEnabled(config),
-        memoryEnabled: Config.memoryEnabled(config),
+        forkDisabled: !forkEnabled(config),
+        memoryEnabled: memoryEnabled(config),
         askUser: this.createAsker(),
         onSubagentEvent: (event) => {
           emit({ type: "subagent", data: event });
@@ -303,7 +324,7 @@ export class YukinoBridge {
       if (config.sandbox) {
         options.sandboxConfig = config.sandbox;
       }
-      return await Remote.Server.createRemoteAgent(options);
+      return await createRemoteAgent(options);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit({
@@ -453,7 +474,7 @@ export class YukinoBridge {
 
     // Slash commands run through their own dispatch path (WS server parity);
     // /goal is handled inside handle.run, so plain text takes the run loop.
-    const parsed = Commands.Commands.parse(trimmed);
+    const parsed = parse(trimmed);
     if (parsed) {
       await this.runCommandInternal(handle, parsed.name, parsed.args);
       return;
@@ -582,7 +603,7 @@ export class YukinoBridge {
   /** Sessions across every known project, ordered by last user message. */
   listSessions(): SessionSummary[] {
     try {
-      return Session.listAllSessions().map((session) => ({
+      return listAllSessions().map((session) => ({
         id: session.id,
         firstMessage: session.firstMessage,
         messageCount: session.messageCount,
@@ -603,7 +624,7 @@ export class YukinoBridge {
     // cwd may be an unresolved alias (symlink, /var vs /private/var) of the
     // canonical path the activity registry recorded.
     let switchedCwd = false;
-    if (cwd && Storage.projectKey(cwd) !== Storage.projectKey(this.cwd)) {
+    if (cwd && projectKey(cwd) !== projectKey(this.cwd)) {
       await this.reinit(cwd);
       switchedCwd = true;
     }
@@ -611,12 +632,8 @@ export class YukinoBridge {
     if (!handle) {
       return { sessionId, messages: [], cwd: this.cwd, switchedCwd };
     }
-    const saved = Session.loadSession(handle.cwd, sessionId);
-    const replay = Remote.SessionState.restoreRemoteSession(
-      handle,
-      sessionId,
-      saved,
-    );
+    const saved = loadSession(handle.cwd, sessionId);
+    const replay = restoreRemoteSession(handle, sessionId, saved);
     const messages: HistoryMessage[] = replay.map((message) => ({
       role: message.role,
       content: contentToText(message.content),
@@ -713,7 +730,7 @@ export class YukinoBridge {
     if (!handle) {
       return;
     }
-    const parsed = Commands.Commands.parse(input);
+    const parsed = parse(input);
     if (!parsed) {
       return;
     }
@@ -786,10 +803,7 @@ export class YukinoBridge {
           }
         : undefined,
       persistThinkingLevel: (level) => {
-        Config.ProviderLogin.persistThinkingLevel(
-          handle.provider.base_url,
-          level,
-        );
+        persistThinkingLevel(handle.provider.base_url, level);
       },
     };
   }
@@ -943,23 +957,18 @@ export class YukinoBridge {
       const controller = new AbortController();
       this.commandController = controller;
       try {
-        await Commands.Subagent.runSubagentCommand(
-          cmd.agent,
-          prompt,
-          displayText,
-          {
-            cwd: handle.cwd,
-            sessionId: handle.sessionId,
-            registry: handle.registry,
-            conversation: handle.conv,
-            permissionChecker: handle.checker,
-            onPermissionRequest: this.createPermissionCallback(),
-            abortSignal: controller.signal,
-            onEvent: (event) => {
-              this.emitAgentEvent(event);
-            },
+        await runSubagentCommand(cmd.agent, prompt, displayText, {
+          cwd: handle.cwd,
+          sessionId: handle.sessionId,
+          registry: handle.registry,
+          conversation: handle.conv,
+          permissionChecker: handle.checker,
+          onPermissionRequest: this.createPermissionCallback(),
+          abortSignal: controller.signal,
+          onEvent: (event) => {
+            this.emitAgentEvent(event);
           },
-        );
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         emit({ type: "error", data: { message } });
@@ -971,7 +980,7 @@ export class YukinoBridge {
     }
 
     // Persist the display text ("/name args") — the run stores the expanded prompt.
-    Session.saveMessage(handle.cwd, handle.sessionId, {
+    saveMessage(handle.cwd, handle.sessionId, {
       role: "user",
       content: displayText,
       timestamp: Math.floor(Date.now() / 1000),
@@ -1012,7 +1021,7 @@ export class YukinoBridge {
             .join("\n");
         },
         runSubagent: (prompt, signal, context) =>
-          Subagent.Spawn.spawnSubagent(
+          spawnSubagent(
             {
               name: skill.meta.name,
               description: skill.meta.description,
@@ -1035,12 +1044,7 @@ export class YukinoBridge {
             },
           ),
       };
-      const result = await Skills.Executor.runFork(
-        skill,
-        args,
-        forkHost,
-        controller.signal,
-      );
+      const result = await runFork(skill, args, forkHost, controller.signal);
       emit({ type: "stream_text", data: { text: result } });
       emit({ type: "turn_complete" });
       emit({ type: "loop_complete", data: { stopReason: "end_turn" } });
@@ -1066,9 +1070,7 @@ export class YukinoBridge {
     emit({ type: "system", data: { message: "Compacting conversation..." } });
     try {
       const protocol: ToolProtocol = handle.client.protocol ?? "anthropic";
-      const toolFilter = Teams.Coordinator.coordinatorToolFilter(
-        handle.enableCoordinatorMode,
-      );
+      const toolFilter = coordinatorToolFilter(handle.enableCoordinatorMode);
       const composedFilter = (toolName: string): boolean =>
         toolFilter(toolName) && (handle.toolFilter?.(toolName) ?? true);
       const toolNames = handle.registry.listVisibleToolNames(
@@ -1079,13 +1081,13 @@ export class YukinoBridge {
         protocol,
         composedFilter,
       );
-      const result = await Compact.Compact.forceCompact(
+      const result = await forceCompact(
         handle.conv,
         handle.client,
         handle.recoveryState,
         toolNames,
         toolSchemas,
-        Session.getSessionFilePath(handle.cwd, handle.sessionId),
+        getSessionFilePath(handle.cwd, handle.sessionId),
         controller.signal,
         customInstructions,
       );
@@ -1094,11 +1096,7 @@ export class YukinoBridge {
         data: { message: `Compacted: ${result.message}` },
       });
       if (result.boundary) {
-        Session.saveCompactBoundary(
-          handle.cwd,
-          handle.sessionId,
-          result.boundary,
-        );
+        saveCompactBoundary(handle.cwd, handle.sessionId, result.boundary);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1113,7 +1111,7 @@ export class YukinoBridge {
     handle: RemoteAgentHandle,
     args: string,
   ): Promise<void> {
-    const sessions = Session.listSessions(handle.cwd);
+    const sessions = listSessions(handle.cwd);
     if (sessions.length === 0) {
       emit({
         type: "system",
@@ -1211,8 +1209,8 @@ export class YukinoBridge {
         providers: [],
         currentProvider: -1,
         model: "",
-        thinkingLevel: DEFAULT_THINKING,
-        thinkingLevels: [...Config.Constants.THINKING_LEVELS],
+        thinkingLevel: DEFAULT_THINKING_LEVEL,
+        thinkingLevels: [...THINKING_LEVELS],
       };
     }
     return {
@@ -1244,7 +1242,7 @@ export class YukinoBridge {
     this.modelListController = controller;
     const current = handle.provider.model;
     try {
-      const models = await LLM.ModelDiscovery.discoverModels(
+      const models = await discoverModels(
         {
           protocol: handle.provider.protocol,
           base_url: handle.provider.base_url,
@@ -1309,22 +1307,22 @@ export class YukinoBridge {
     this.setStreaming(true);
     try {
       try {
-        const environment = Prompt.Builder.detectEnvironment(handle.cwd);
+        const environment = detectEnvironment(handle.cwd);
         environment.model = updated.model;
-        const client = await LLM.Client.createClient(
+        const client = await createClient(
           updated,
-          Prompt.Builder.buildSystemPrompt(environment),
+          buildSystemPrompt(environment),
         );
         await handle.stopMemoryTasks();
         handle.client = client;
         handle.provider = updated;
-        handle.contextWindow = Config.ProviderConfig.getContextWindow(updated);
+        handle.contextWindow = getContextWindow(updated);
         this.providers = this.providers.map((entry) =>
           entry.base_url === updated.base_url
             ? { ...entry, model: updated.model }
             : entry,
         );
-        MCP.Strategy.decideAndApply(
+        decideAndApply(
           handle.registry,
           updated.base_url,
           updated.protocol,
@@ -1341,7 +1339,7 @@ export class YukinoBridge {
       // A save failure must not undo the runtime switch.
       let saved = true;
       try {
-        Config.ProviderLogin.persistModel(updated.base_url, updated.model);
+        persistModel(updated.base_url, updated.model);
       } catch {
         saved = false;
       }
@@ -1384,17 +1382,17 @@ export class YukinoBridge {
     this.setStreaming(true);
     try {
       try {
-        const environment = Prompt.Builder.detectEnvironment(handle.cwd);
+        const environment = detectEnvironment(handle.cwd);
         environment.model = provider.model;
-        const client = await LLM.Client.createClient(
+        const client = await createClient(
           provider,
-          Prompt.Builder.buildSystemPrompt(environment),
+          buildSystemPrompt(environment),
         );
         await handle.stopMemoryTasks();
         handle.client = client;
         handle.provider = provider;
-        handle.contextWindow = Config.ProviderConfig.getContextWindow(provider);
-        MCP.Strategy.decideAndApply(
+        handle.contextWindow = getContextWindow(provider);
+        decideAndApply(
           handle.registry,
           provider.base_url,
           provider.protocol,
@@ -1411,7 +1409,7 @@ export class YukinoBridge {
       // A save failure must not undo the runtime switch.
       let saved = true;
       try {
-        Config.ProviderLogin.persistDefaultProvider(index);
+        persistDefaultProvider(index);
       } catch {
         saved = false;
       }
@@ -1452,10 +1450,7 @@ export class YukinoBridge {
     }
     const effective = this.currentThinkingLevel(handle);
     try {
-      Config.ProviderLogin.persistThinkingLevel(
-        handle.provider.base_url,
-        effective,
-      );
+      persistThinkingLevel(handle.provider.base_url, effective);
     } catch {
       // Persistence is best-effort; the runtime change stands.
     }

@@ -1,5 +1,11 @@
 import { stripVTControlCharacters } from "node:util";
 
+import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
+import { type ThinkingLevel } from "@yukino.js/config/provider-config.js";
+import { ICONS } from "@yukino.js/ui/constants.js";
+import { setThemeMode, thinkingLevelColor } from "@yukino.js/ui/styles.js";
+import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
+import { ThinkingSelect } from "@yukino.js/ui/thinking-select.js";
 import chalk, { Chalk } from "chalk";
 import { Box, Text, render, useInput } from "ink";
 import type { Instance, Key } from "ink";
@@ -7,13 +13,6 @@ import type * as Ink from "ink";
 import { act, createElement } from "react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
-import { type ThinkingLevel } from "@yukino.js/config/provider-config.js";
-import { ICONS } from "@yukino.js/ui/constants.js";
-import { setThemeMode, thinkingLevelColor } from "@yukino.js/ui/styles.js";
-import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
-import { ThinkingSelect } from "@yukino.js/ui/thinking-select.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),

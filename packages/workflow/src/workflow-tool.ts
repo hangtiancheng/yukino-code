@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import type {
   Tool,
   ToolContext,
@@ -7,6 +5,8 @@ import type {
   ToolSchema,
 } from "@yukino.js/tools/types.js";
 import { asErrorString } from "@yukino.js/utils";
+import { z } from "zod";
+
 import { WORKFLOW_TOOL_NAME } from "./constants.js";
 import { WORKFLOW_TOOL_PROMPT, formatWorkflowLaunch } from "./prompts.js";
 import { workflowInputSchema } from "./schema.js";

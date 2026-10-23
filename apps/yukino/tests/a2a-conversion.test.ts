@@ -1,8 +1,5 @@
 import { Message, Role, TaskState } from "@a2a-js/sdk";
 import type { Part } from "@a2a-js/sdk";
-import { describe, expect, it } from "vitest";
-import { z } from "zod";
-
 import { MAX_TOOL_OUTPUT_LENGTH } from "@yukino.js/a2a/constants.js";
 import {
   agentEventToMessage,
@@ -12,6 +9,8 @@ import {
   taskSnapshot,
   textPart,
 } from "@yukino.js/a2a/conversion.js";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 function message(parts: Part[]) {
   return {

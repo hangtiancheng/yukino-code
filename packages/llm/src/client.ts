@@ -3,12 +3,13 @@ import type {
   ThinkingLevel,
 } from "@yukino.js/config/provider-config.js";
 import type { ConversationManager } from "@yukino.js/conversation";
-import type { StreamEvent } from "./events.js";
 import { registerLlmClient } from "@yukino.js/telemetry/instrumentation.js";
 import type {
   ProviderToolSchema,
   ToolProtocol,
 } from "@yukino.js/tools/types.js";
+
+import type { StreamEvent } from "./events.js";
 
 export interface LLMStreamOptions {
   systemPrompt?: string;

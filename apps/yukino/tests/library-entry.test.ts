@@ -91,8 +91,8 @@ describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
     if (!parsed.success) {
       return;
     }
-    // One namespace per source directory (plus the root-file namespaces), so
-    // the top level is small by design; the symbols check probes deep paths.
+    // The library entry is a flat barrel of named exports; the symbols check
+    // probes the core agent API directly at the top level.
     expect(parsed.data.totalExports).toBeGreaterThan(30);
     for (const [name, type] of Object.entries(parsed.data.symbols)) {
       expect(type, name).toBe("function");

@@ -1,3 +1,4 @@
+import { plainTerminalText } from "@yukino.js/utils";
 import chalk from "chalk";
 import { Marked } from "marked";
 import type { TokenizerExtension } from "marked";
@@ -6,7 +7,6 @@ import { SCP_STYLE_REMOTE, THEME } from "./constants.js";
 import { markedTerminal } from "./marked-terminal.js";
 import { isLanguageSupported } from "./syntax-highlight.js";
 import { visibleWidth, wrapToLines } from "./terminal-text.js";
-import { plainTerminalText } from "@yukino.js/utils";
 
 chalk.level = 3;
 

@@ -1,3 +1,5 @@
+import { compactPath } from "@yukino.js/utils/paths.js";
+import { version } from "@yukino.js/version";
 import { Box, Static, Text, useIsScreenReaderEnabled, useStdout } from "ink";
 import { memo, useInsertionEffect } from "react";
 
@@ -6,8 +8,6 @@ import { THEME } from "./constants.js";
 import { expectStaticTerminalOutput } from "./terminal-output.js";
 import { plainTerminalLine, truncateToWidth } from "./terminal-text.js";
 import { useTerminalDimensions } from "./use-terminal-layout.js";
-import { compactPath } from "@yukino.js/utils/paths.js";
-import { version } from "@yukino.js/version";
 
 interface Props {
   messages: ChatMessage[];

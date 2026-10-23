@@ -16,13 +16,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
 import { FileHistory } from "@yukino.js/file-history";
 import * as history from "@yukino.js/history";
 import { closeLogger, initLogger } from "@yukino.js/logger";
 import { createPlanPath, savePlan } from "@yukino.js/plan-file";
-import { record } from "@/recover.js";
 import {
   getSessionFilePath,
   loadSession,
@@ -41,6 +38,9 @@ import { TeamManager } from "@yukino.js/teams";
 import { persistLargeResult, spillDir } from "@yukino.js/tool-result";
 import { createShellOutputFile } from "@yukino.js/tools/shell-background.js";
 import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { record } from "@/recover.js";
 
 let previousUmask: number;
 let directory: string;

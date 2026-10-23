@@ -2,8 +2,6 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-import { describe, it, expect } from "vitest";
-
 import { fileHistoryDir } from "@yukino.js/file-history";
 import {
   clipboardImageFileName,
@@ -11,6 +9,7 @@ import {
   storeClipboardImage,
 } from "@yukino.js/images/clipboard.js";
 import { sessionPath } from "@yukino.js/storage";
+import { describe, it, expect } from "vitest";
 
 const PNG_BYTES = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),

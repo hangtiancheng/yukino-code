@@ -2,8 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
-
+import { TeamManager } from "@yukino.js/teams";
 import {
   MSG_PLAN_APPROVAL_REQUEST,
   MSG_PLAN_APPROVAL_RESPONSE,
@@ -11,7 +10,6 @@ import {
   MSG_SHUTDOWN_RESPONSE,
 } from "@yukino.js/teams/constants.js";
 import type { FileMailMessage } from "@yukino.js/teams/file-mailbox.js";
-import { TeamManager } from "@yukino.js/teams";
 import {
   isShutdownRequest,
   newRequestId,
@@ -21,6 +19,7 @@ import {
   shutdownResponse,
 } from "@yukino.js/teams/protocol.js";
 import { SendMessageTool } from "@yukino.js/teams/tools.js";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
 const plain = (from: string, text: string): FileMailMessage => ({
   from,

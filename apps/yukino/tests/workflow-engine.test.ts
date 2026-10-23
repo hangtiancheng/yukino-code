@@ -3,8 +3,6 @@ import { access, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import {
   AgentAdapterRegistry,
   type AgentAdapter,
@@ -20,6 +18,7 @@ import {
 } from "@yukino.js/workflow/run-workflow.js";
 import { parseScript } from "@yukino.js/workflow/script.js";
 import type { ProgressEvent } from "@yukino.js/workflow/types.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const directories: string[] = [];
 afterEach(() => {

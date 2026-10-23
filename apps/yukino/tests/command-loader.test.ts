@@ -2,8 +2,6 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
-
 import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
 import {
   loadUserCommands,
@@ -11,6 +9,7 @@ import {
   renderBody,
 } from "@yukino.js/commands/loader.js";
 import { yukinoPath } from "@yukino.js/storage";
+import { describe, it, expect } from "vitest";
 
 function cmdDir(): string {
   const cwd = mkdtempSync(join(tmpdir(), "yukino-cmd-"));

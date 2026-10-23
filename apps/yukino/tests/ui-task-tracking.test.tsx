@@ -3,10 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
-import { render, type Instance } from "ink";
-import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
 import { TeamManager } from "@yukino.js/teams";
 import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
@@ -15,6 +11,9 @@ import { TaskList } from "@yukino.js/todo";
 import type { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { TodoProgress } from "@yukino.js/ui/todo-progress.js";
 import { useTaskProgress } from "@yukino.js/ui/use-task-progress.js";
+import { render, type Instance } from "ink";
+import { act } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 let cwd: string;
 let manager: TeamManager;
 let list: TaskList;

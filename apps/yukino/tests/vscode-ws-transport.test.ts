@@ -1,9 +1,8 @@
 import { once } from "node:events";
 import { createServer, type Socket } from "node:net";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { WebSocketTransport } from "@yukino.js/vscode/ws-transport.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => vi.useRealTimers());
 

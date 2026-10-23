@@ -5,11 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { safeParse, z } from "zod";
-
 import { registerExitCleanup } from "@yukino.js/bootstrap/exit-cleanup.js";
 import { processScreenshot } from "@yukino.js/images";
 import { tryAcquireFileSyncLock } from "@yukino.js/teams/file-lock.js";
+import { asErrorString } from "@yukino.js/utils";
+import { safeParse, z } from "zod";
+
 import {
   ACTIONS,
   COMMAND_TIMEOUT_MS,
@@ -63,7 +64,6 @@ import type {
   ToolResultContentBlock,
   ToolSchema,
 } from "./types.js";
-import { asErrorString } from "@yukino.js/utils";
 
 const CoordinateSchema = z.tuple([
   z.number().int().nonnegative(),

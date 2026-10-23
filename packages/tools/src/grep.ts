@@ -3,13 +3,15 @@ import { lstat, open, opendir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { Worker } from "node:worker_threads";
 
-import { Minimatch } from "minimatch";
-
 import { createChildLogger } from "@yukino.js/logger";
 import {
   isPrivateStatePath,
   protectPrivateFileSync,
 } from "@yukino.js/storage/private.js";
+import { asErrorString, strArg } from "@yukino.js/utils";
+import { resolveToolPath } from "@yukino.js/utils/paths.js";
+import { Minimatch } from "minimatch";
+
 import {
   BINARY_SNIFF_BYTES,
   DEFAULT_MAX_TRAVERSED_ENTRIES,
@@ -41,8 +43,6 @@ import {
   type ToolResult,
   type ToolSchema,
 } from "./types.js";
-import { asErrorString, strArg } from "@yukino.js/utils";
-import { resolveToolPath } from "@yukino.js/utils/paths.js";
 
 const log = createChildLogger({ module: "tools" });
 

@@ -1,9 +1,9 @@
+import { plainTerminalText } from "@yukino.js/utils";
 import sliceAnsi from "slice-ansi";
 import stringWidth from "string-width";
 import wrapAnsi from "wrap-ansi";
 
 import { TAB_SIZE } from "./constants.js";
-import { plainTerminalText } from "@yukino.js/utils";
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: "grapheme",

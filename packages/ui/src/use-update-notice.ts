@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-
 import { checkForUpdate } from "@yukino.js/update/version-check.js";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useUpdateNotice() {
   const [latestVersion, setLatestVersion] = useState<string>();

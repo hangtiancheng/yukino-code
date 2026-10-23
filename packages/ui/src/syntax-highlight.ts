@@ -1,3 +1,4 @@
+import { defaultSyntaxTheme } from "@yukino.js/theme/syntax.js";
 import chalk from "chalk";
 import { createHighlighterCoreSync, isPlainLang } from "shiki/core";
 import type { HighlighterCore } from "shiki/core";
@@ -62,7 +63,6 @@ import yaml from "shiki/langs/yaml.mjs";
 import zig from "shiki/langs/zig.mjs";
 import type { LanguageRegistration } from "shiki/types";
 
-import { defaultSyntaxTheme } from "@yukino.js/theme/syntax.js";
 import { THEME } from "./constants.js";
 import { getThemeMode } from "./styles.js";
 

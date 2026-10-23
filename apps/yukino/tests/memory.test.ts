@@ -9,14 +9,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, it, expect } from "vitest";
-
 import type { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
 import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
 import { MemoryManager } from "@yukino.js/memory/manager.js";
 import { projectPath } from "@yukino.js/storage";
+import { afterEach, describe, it, expect } from "vitest";
 
 const tempDirs = new Set<string>();
 

@@ -1,11 +1,10 @@
 import { relative } from "node:path";
 
-import { useEffect, useRef } from "react";
-
 import {
   connectToIde,
   type IdeConnection,
 } from "@yukino.js/vscode/ide-client.js";
+import { useEffect, useRef } from "react";
 
 export function useIdeInput(cwd: string) {
   const insertInputTextRef = useRef<((text: string) => void) | null>(null);

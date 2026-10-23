@@ -4,10 +4,10 @@
 // both defer_loading and cache_control causes the API to reject the entire request,
 // and MCP tools are registered after built-in tools, so the array tail is often a deferred
 // tool — we cannot simply mark the last element.
-import { describe, it, expect } from "vitest";
 
 import { markToolsForCache } from "@yukino.js/llm/anthropic.js";
 import type { ToolSchema } from "@yukino.js/tools/types.js";
+import { describe, it, expect } from "vitest";
 
 function marked(tools: ToolSchema[]): string[] {
   return tools.filter((t) => t.cache_control !== undefined).map((t) => t.name);

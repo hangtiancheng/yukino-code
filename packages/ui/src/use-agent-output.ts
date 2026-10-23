@@ -1,3 +1,6 @@
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { toDisplayPreview } from "@yukino.js/tool-result";
+import { formatToolArgs } from "@yukino.js/utils";
 import {
   useEffect,
   useRef,
@@ -6,12 +9,9 @@ import {
   type SetStateAction,
 } from "react";
 
-import type { AgentEvent } from "@yukino.js/agent/events.js";
-import { toDisplayPreview } from "@yukino.js/tool-result";
 import type { ChatMessage, ToolSummaryItem } from "./chat.js";
 import { stableStreamingPrefix } from "./streaming-markdown.js";
 import type { ToolBlockInfo, ToolCardStatus } from "./tool-display.js";
-import { formatToolArgs } from "@yukino.js/utils";
 
 /**
  * Final decoration for a delegated tool card, resolved by the app when the tool

@@ -1,7 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent, type AgentConfig } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import { HookEngine } from "@yukino.js/hooks";
 import type { LLMClient } from "@yukino.js/llm/client.js";
@@ -17,6 +15,7 @@ import { PermissionChecker } from "@yukino.js/permissions";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 import { contentToText } from "@yukino.js/utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const end: StreamEvent = {
   type: "stream_end",

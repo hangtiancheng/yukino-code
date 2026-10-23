@@ -1,8 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
-
 import {
   getOrCreatePlanPath,
   savePlan,
@@ -12,6 +10,7 @@ import {
 } from "@yukino.js/plan-file";
 import { buildPlanModeReminder } from "@yukino.js/prompt/plan-mode.js";
 import { generateSlug } from "@yukino.js/utils/slug.js";
+import { describe, it, expect } from "vitest";
 
 describe("plan-file", () => {
   it("generates compact collision-resistant slugs without word lists", () => {

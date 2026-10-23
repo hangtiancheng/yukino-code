@@ -1,8 +1,8 @@
 import { Script } from "node:vm";
 
+import { asErrorString } from "@yukino.js/utils";
 import { z } from "zod";
 
-import { asErrorString } from "@yukino.js/utils";
 import type { WorkflowMeta } from "./types.js";
 
 export class ScriptError extends Error {

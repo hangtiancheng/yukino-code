@@ -2,10 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent, type AgentConfig } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import {
   registerExitCleanup,
   runExitCleanups,
@@ -18,7 +16,6 @@ import { ContextTooLongError } from "@yukino.js/llm/errors.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
 import { buildMcpToolName } from "@yukino.js/mcp/tool-wrapper.js";
 import { PermissionChecker } from "@yukino.js/permissions";
-import { COMPACT_BOUNDARY } from "@yukino.js/session/constants.js";
 import {
   loadSession,
   messageToKeptRecord,
@@ -26,11 +23,13 @@ import {
   saveCompactBoundary,
   saveMessage,
 } from "@yukino.js/session";
+import { COMPACT_BOUNDARY } from "@yukino.js/session/constants.js";
 import { McpCallTool } from "@yukino.js/tools/mcp-call.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { ToolSearchTool } from "@yukino.js/tools/tool-search.js";
 import type { MCPToolLike, Tool } from "@yukino.js/tools/types.js";
 import { contentToText } from "@yukino.js/utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const directories: string[] = [];
 afterEach(() => {

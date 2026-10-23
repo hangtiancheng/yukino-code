@@ -2,8 +2,6 @@ import { mkdtempSync as createTempDir, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { PermissionChecker } from "@yukino.js/permissions";
 import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
 import { TeamManager } from "@yukino.js/teams";
@@ -22,6 +20,7 @@ import {
   TeamDeleteTool,
 } from "@yukino.js/teams/tools.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The teams directory lives at <home>/.yukino/teams, so the tests redirect the
 // entire home directory to a temp dir to avoid leaving residue in the real

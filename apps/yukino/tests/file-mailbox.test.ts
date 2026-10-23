@@ -9,13 +9,12 @@ import {
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-import { describe, it, expect } from "vitest";
-
 import {
   tryAcquireFileSyncLock,
   withFileSyncLock,
 } from "@yukino.js/teams/file-lock.js";
 import { FileMailbox } from "@yukino.js/teams/file-mailbox.js";
+import { describe, it, expect } from "vitest";
 
 describe("FileMailbox", () => {
   it("delivers only unread messages and advances the cursor", async () => {

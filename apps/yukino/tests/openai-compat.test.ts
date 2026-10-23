@@ -1,11 +1,10 @@
-import { describe, it, expect } from "vitest";
-import z, { parse, safeParse } from "zod";
-
 import type { Message } from "@yukino.js/conversation";
 import {
   buildChatCompletionMessages,
   buildOpenAIInput,
 } from "@yukino.js/llm/openai.js";
+import { describe, it, expect } from "vitest";
+import z, { parse, safeParse } from "zod";
 
 describe("OpenAI Responses computer action replay", () => {
   function replayActions(actions: unknown) {

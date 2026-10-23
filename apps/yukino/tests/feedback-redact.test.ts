@@ -1,5 +1,3 @@
-import { describe, expect, it } from "vitest";
-
 import {
   isSensitiveKey,
   redactJsonLines,
@@ -7,6 +5,7 @@ import {
   redactText,
   redactUrl,
 } from "@yukino.js/feedback/redact.js";
+import { describe, expect, it } from "vitest";
 
 type SecretKind =
   "anthropic" | "openai" | "aws" | "gcp" | "github" | "slack" | "bearer";

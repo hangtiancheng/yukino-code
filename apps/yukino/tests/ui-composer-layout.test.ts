@@ -1,15 +1,6 @@
 import type * as fs from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 
-import chalk from "chalk";
-import { render, renderToString } from "ink";
-import type { Instance, Key } from "ink";
-import type * as Ink from "ink";
-import { act, createElement, useState } from "react";
-import type { ComponentProps } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MockInstance } from "vitest";
-
 import type { Command } from "@yukino.js/commands/commands.js";
 import { saveClipboardImage } from "@yukino.js/images/clipboard.js";
 import { ICONS, THEME } from "@yukino.js/ui/constants.js";
@@ -19,6 +10,14 @@ import type { InputDraft } from "@yukino.js/ui/input.js";
 import { InteractionDock } from "@yukino.js/ui/interaction-dock.js";
 import { StatusBorder } from "@yukino.js/ui/status-border.js";
 import { truncateToWidth, visibleWidth } from "@yukino.js/ui/terminal-text.js";
+import chalk from "chalk";
+import type * as Ink from "ink";
+import type { Instance, Key } from "ink";
+import { render, renderToString } from "ink";
+import type { ComponentProps } from "react";
+import { act, createElement, useState } from "react";
+import type { MockInstance } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const terminal = vi.hoisted(() => {
   const input: { current: ((text: string, key: Key) => void) | null } = {

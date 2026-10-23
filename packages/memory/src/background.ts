@@ -1,6 +1,8 @@
 import type { ConversationManager, Message } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { createChildLogger } from "@yukino.js/logger";
+import { contentToText } from "@yukino.js/utils";
+
 import { MemoryConsolidator } from "./consolidation.js";
 import {
   EXTRACT_SUMMARY_WINDOW,
@@ -8,7 +10,6 @@ import {
   MIN_SUMMARY_LINE_CHARS,
 } from "./constants.js";
 import { MemoryExtractor } from "./extractor.js";
-import { contentToText } from "@yukino.js/utils";
 
 const log = createChildLogger({ module: "memory" });
 

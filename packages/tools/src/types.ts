@@ -1,11 +1,11 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type OpenAI from "openai";
-
 import type { FileHistory } from "@yukino.js/file-history";
 import type { GoalManager } from "@yukino.js/goal";
 import type { McpApp } from "@yukino.js/mcp/apps.js";
 import type { Decision, PermissionChecker } from "@yukino.js/permissions";
 import type { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import type OpenAI from "openai";
+
 import { IMAGE_MEDIA_TYPES } from "./constants.js";
 import type { FileStateCache } from "./file-state-cache.js";
 

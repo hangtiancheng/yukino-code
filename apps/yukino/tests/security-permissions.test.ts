@@ -11,9 +11,6 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import yaml from "js-yaml";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { Agent } from "@yukino.js/agent";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
@@ -28,6 +25,8 @@ import { GrepTool } from "@yukino.js/tools/grep.js";
 import { ReadFileTool } from "@yukino.js/tools/read-file.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { canonicalPath } from "@yukino.js/utils/paths.js";
+import yaml from "js-yaml";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const directories: string[] = [];
 const cwd = () => {

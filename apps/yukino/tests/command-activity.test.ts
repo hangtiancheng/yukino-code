@@ -1,5 +1,3 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import {
   createDefaultRegistry,
   resolve,
@@ -10,6 +8,7 @@ import {
   getCommandUsage,
   recordInput,
 } from "@yukino.js/history";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   vi.restoreAllMocks();

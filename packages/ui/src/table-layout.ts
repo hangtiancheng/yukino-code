@@ -1,3 +1,4 @@
+import { plainTerminalText } from "@yukino.js/utils";
 import chalk from "chalk";
 
 import { CELL_PADDING, THEME } from "./constants.js";
@@ -7,7 +8,6 @@ import {
   visibleWidth,
   wrapWordsToLines,
 } from "./terminal-text.js";
-import { plainTerminalText } from "@yukino.js/utils";
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: "grapheme",

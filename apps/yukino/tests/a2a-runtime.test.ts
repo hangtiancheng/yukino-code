@@ -2,13 +2,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
-
 import { createA2aRuntime } from "@yukino.js/a2a/executor.js";
 import * as config from "@yukino.js/config";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import { MCPManager } from "@yukino.js/mcp/manager.js";
 import * as remote from "@yukino.js/remote/server.js";
+import { describe, expect, it, vi } from "vitest";
 
 describe("A2A runtime cleanup", () => {
   it("reports an expired transcript instead of starting an empty continuation", async () => {

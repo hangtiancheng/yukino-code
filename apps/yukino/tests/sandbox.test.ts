@@ -1,7 +1,6 @@
-import { describe, expect, it } from "vitest";
-
 import { BwrapSandbox } from "@yukino.js/sandbox/bwrap.js";
 import { SeatbeltSandbox } from "@yukino.js/sandbox/seatbelt.js";
+import { describe, expect, it } from "vitest";
 
 const config = {
   allowWrite: ["."],

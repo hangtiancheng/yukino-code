@@ -1,13 +1,12 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { createWebSocketStream } from "@agentclientprotocol/sdk/experimental/ws-client";
-import { describe, expect, it } from "vitest";
-import { WebSocket } from "ws";
-
 import { createYukinoAcpApp } from "@yukino.js/acp/agent.js";
 import {
   parseAcpWebSocketAddress,
   startAcpWebSocketServer,
 } from "@yukino.js/acp/websocket.js";
+import { describe, expect, it } from "vitest";
+import { WebSocket } from "ws";
 
 function rejectedWebSocketStatus(
   url: string,

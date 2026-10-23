@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { VirtualTerminal } from "./helpers/virtual-terminal.js";
-
 import {
   expectStaticTerminalOutput,
   installTerminalOutput,
 } from "@yukino.js/ui/terminal-output.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const originalTty = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");

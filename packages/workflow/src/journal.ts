@@ -7,6 +7,7 @@ import {
   appendPrivateFileSync,
 } from "@yukino.js/storage/private.js";
 import { asRecord } from "@yukino.js/utils";
+
 import { JOURNAL_FILENAME, RUN_ID_RE } from "./constants.js";
 import type { JournalStore } from "./ports.js";
 import { journalEntrySchema } from "./schema.js";

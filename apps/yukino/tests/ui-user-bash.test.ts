@@ -9,10 +9,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { render, type Instance } from "ink";
-import { act, createElement, useState } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { ConversationManager } from "@yukino.js/conversation";
 import {
   executeUserBash,
@@ -36,6 +32,9 @@ import {
   useUserBash,
   useUserBashHistory,
 } from "@yukino.js/ui/use-user-bash.js";
+import { render, type Instance } from "ink";
+import { act, createElement, useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Options = Omit<Parameters<typeof useUserBash>[0], "setMessages">;
 let instance: Instance | undefined;

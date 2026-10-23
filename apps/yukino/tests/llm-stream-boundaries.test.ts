@@ -1,6 +1,3 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import { AnthropicClient } from "@yukino.js/llm/anthropic.js";
@@ -14,6 +11,8 @@ import {
 } from "@yukino.js/llm/errors.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
 import { OpenAIClient, OpenAICompatClient } from "@yukino.js/llm/openai.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 afterEach(() => {
   vi.unstubAllGlobals();

@@ -11,8 +11,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { loadProjectMcpServers } from "@yukino.js/config";
 import { collectAttachments } from "@yukino.js/feedback/collect.js";
 import { redactText } from "@yukino.js/feedback/redact.js";
@@ -26,6 +24,7 @@ import { shutdownRequest } from "@yukino.js/teams/protocol.js";
 import { SendMessageTool } from "@yukino.js/teams/tools.js";
 import { scrubTelemetryPayload } from "@yukino.js/telemetry/privacy.js";
 import { scanCwdFiles } from "@yukino.js/utils/file-scan.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const directories: string[] = [];
 const managers: TeamManager[] = [];

@@ -1,10 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
-
+import { resolveAPIKey } from "@yukino.js/config";
 import {
   MIN_THINKING_ANSWER_TOKENS,
   MIN_THINKING_BUDGET_TOKENS,
 } from "@yukino.js/config/constants.js";
-import { resolveAPIKey } from "@yukino.js/config";
 import {
   clampThinkingLevel,
   getMaxOutputTokens,
@@ -17,18 +16,6 @@ import {
 } from "@yukino.js/config/provider-config.js";
 import type { ConversationManager, Message } from "@yukino.js/conversation";
 import { ensureToolPairing } from "@yukino.js/conversation/pairing.js";
-import type { LLMClient, LLMOutputBudget, LLMStreamOptions } from "./client.js";
-import { ANTHROPIC_API_KEY_MISSING_ERROR } from "./constants.js";
-import {
-  AuthenticationError,
-  containsContextLengthError,
-  ContextTooLongError,
-  LLMError,
-  NetworkError,
-  RateLimitError,
-  ServerError,
-} from "./errors.js";
-import { parseToolArguments, type StreamEvent } from "./events.js";
 import { createChildLogger } from "@yukino.js/logger";
 import { NATIVE_TOOL_USE_BETA } from "@yukino.js/mcp/constants.js";
 import { isOfficialAnthropicEndpoint } from "@yukino.js/mcp/strategy.js";
@@ -44,6 +31,19 @@ import {
   contentToText,
   strArg,
 } from "@yukino.js/utils";
+
+import type { LLMClient, LLMOutputBudget, LLMStreamOptions } from "./client.js";
+import { ANTHROPIC_API_KEY_MISSING_ERROR } from "./constants.js";
+import {
+  AuthenticationError,
+  containsContextLengthError,
+  ContextTooLongError,
+  LLMError,
+  NetworkError,
+  RateLimitError,
+  ServerError,
+} from "./errors.js";
+import { parseToolArguments, type StreamEvent } from "./events.js";
 
 /**
  * Place the cache breakpoint on the last non-deferred tool.

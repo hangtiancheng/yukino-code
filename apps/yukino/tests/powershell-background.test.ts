@@ -3,13 +3,12 @@ import { mkdtempSync as createTempDir, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import { PowerShellTool } from "@yukino.js/tools/powershell.js";
 import { readOutputFile } from "@yukino.js/tools/shell-background.js";
 import type { ToolContext } from "@yukino.js/tools/types.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const tempDirs = new Set<string>();
 

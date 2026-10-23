@@ -8,6 +8,9 @@ import {
   mkdirPrivateSync as mkdirSync,
   protectPrivateFileSync,
 } from "@yukino.js/storage/private.js";
+import { isObject } from "@yukino.js/utils";
+import { resolveToolPath } from "@yukino.js/utils/paths.js";
+
 import {
   MESSAGE_AGGREGATE_LIMIT,
   SPILL_DIR_NAME,
@@ -15,8 +18,6 @@ import {
   TOOL_RESULT_PREVIEW_CHARS,
 } from "./constants.js";
 import { buildSpillPreview } from "./prompts.js";
-import { isObject } from "@yukino.js/utils";
-import { resolveToolPath } from "@yukino.js/utils/paths.js";
 
 const log = createChildLogger({ module: "tool-result" });
 

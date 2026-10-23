@@ -1,10 +1,3 @@
-import { render, useInput } from "ink";
-import type { Instance, Key } from "ink";
-import type * as Ink from "ink";
-import { act, createElement } from "react";
-import type { RefObject } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { SubagentProgress } from "@yukino.js/ui/agent-tool-progress.js";
 import {
   createInterruptHandlers,
@@ -12,6 +5,12 @@ import {
   type InterruptDeps,
 } from "@yukino.js/ui/interrupt-scope.js";
 import { useTerminalControls } from "@yukino.js/ui/use-terminal-controls.js";
+import { render, useInput } from "ink";
+import type { Instance, Key } from "ink";
+import type * as Ink from "ink";
+import { act, createElement } from "react";
+import type { RefObject } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const stdoutStub = vi.hoisted(() => ({
   columns: 80,

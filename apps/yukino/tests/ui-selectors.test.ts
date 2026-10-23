@@ -1,13 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
 
-import chalk, { Chalk } from "chalk";
-import { Box, Text, render, renderToString, useInput, usePaste } from "ink";
-import type { Instance, Key } from "ink";
-import type * as Ink from "ink";
-import { act, createElement } from "react";
-import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import type { SessionInfo } from "@yukino.js/session";
 import type { AgentTask } from "@yukino.js/subagent/task-manager.js";
@@ -32,6 +24,13 @@ import { updateSelectorQuery } from "@yukino.js/ui/selector-search.js";
 import { SessionSelector } from "@yukino.js/ui/session-selector.js";
 import { setThemeMode } from "@yukino.js/ui/styles.js";
 import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
+import chalk, { Chalk } from "chalk";
+import type * as Ink from "ink";
+import type { Instance, Key } from "ink";
+import { Box, Text, render, renderToString, useInput, usePaste } from "ink";
+import type { ReactNode } from "react";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Keep Ink's real layout and React hooks; invoke only the captured input
 // callback. usePaste must be mocked too: the real hook enables raw mode,

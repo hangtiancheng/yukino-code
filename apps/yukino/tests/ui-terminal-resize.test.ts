@@ -1,12 +1,4 @@
 import type { Terminal } from "@xterm/headless";
-import { Box, Text, render } from "ink";
-import type { Instance } from "ink";
-import { act, createElement, Fragment } from "react";
-import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { VirtualTerminal } from "./helpers/virtual-terminal.js";
-
 import { AgentStatus } from "@yukino.js/ui/agent-status.js";
 import { ChatView, type ChatMessage } from "@yukino.js/ui/chat.js";
 import { THEME } from "@yukino.js/ui/constants.js";
@@ -18,6 +10,13 @@ import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
 import { ToolCard } from "@yukino.js/ui/tool-display.js";
 import { Transcript } from "@yukino.js/ui/transcript.js";
 import { useTerminalDimensions } from "@yukino.js/ui/use-terminal-layout.js";
+import type { Instance } from "ink";
+import { Box, Text, render } from "ink";
+import type { ReactNode } from "react";
+import { act, createElement, Fragment } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 let virtualTerminal: VirtualTerminal;
 let terminal: Terminal;

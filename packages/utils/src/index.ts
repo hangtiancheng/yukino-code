@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 
 import { createChildLogger } from "@yukino.js/logger";
+
 import { NUMERIC_LITERAL, TOOL_ARGS_SUMMARY_CHARS } from "./constants.js";
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).

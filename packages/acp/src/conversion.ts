@@ -10,6 +10,10 @@ import type {
   ToolKind,
   Usage,
 } from "@agentclientprotocol/sdk";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { type SessionMessage } from "@yukino.js/session";
+import { COMPACT_BOUNDARY } from "@yukino.js/session/constants.js";
+import { contentToText, strArg } from "@yukino.js/utils";
 
 import {
   AUDIO_PROMPT_UNSUPPORTED_ERROR,
@@ -28,10 +32,6 @@ import {
   STOP_REASON_MAX_TURN_REQUESTS,
   STOP_REASON_REFUSAL,
 } from "./constants.js";
-import type { AgentEvent } from "@yukino.js/agent/events.js";
-import { COMPACT_BOUNDARY } from "@yukino.js/session/constants.js";
-import { type SessionMessage } from "@yukino.js/session";
-import { contentToText, strArg } from "@yukino.js/utils";
 
 export function promptToText(prompt: ContentBlock[]): string {
   const parts: string[] = [];

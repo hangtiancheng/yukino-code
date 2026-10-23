@@ -1,6 +1,3 @@
-import OpenAI from "openai";
-import { z } from "zod";
-
 import { resolveAPIKey } from "@yukino.js/config";
 import {
   clampThinkingLevel,
@@ -19,6 +16,18 @@ import type {
   ToolUseBlock,
 } from "@yukino.js/conversation";
 import { ensureToolPairing } from "@yukino.js/conversation/pairing.js";
+import { createChildLogger } from "@yukino.js/logger";
+import type { ProviderToolSchema } from "@yukino.js/tools/types.js";
+import {
+  asRecord,
+  asString,
+  contentToText,
+  isRecord,
+  strArg,
+} from "@yukino.js/utils";
+import OpenAI from "openai";
+import { z } from "zod";
+
 import type { LLMClient, LLMOutputBudget, LLMStreamOptions } from "./client.js";
 import { OPENAI_API_KEY_MISSING_ERROR } from "./constants.js";
 import {
@@ -31,15 +40,6 @@ import {
   ServerError,
 } from "./errors.js";
 import { parseToolArguments, type StreamEvent } from "./events.js";
-import { createChildLogger } from "@yukino.js/logger";
-import type { ProviderToolSchema } from "@yukino.js/tools/types.js";
-import {
-  asRecord,
-  asString,
-  contentToText,
-  isRecord,
-  strArg,
-} from "@yukino.js/utils";
 
 const log = createChildLogger({ module: "llm" });
 

@@ -3,8 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import * as acp from "@agentclientprotocol/sdk";
-import { describe, expect, it, vi } from "vitest";
-
 import {
   createYukinoAcpApp,
   type AcpRuntime,
@@ -13,6 +11,7 @@ import {
 import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import { saveMessage } from "@yukino.js/session";
+import { describe, expect, it, vi } from "vitest";
 
 function fakeRuntime(
   sessionId: string,

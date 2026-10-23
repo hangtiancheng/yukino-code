@@ -1,10 +1,5 @@
 import { relative } from "path";
 
-import Fuse from "fuse.js";
-import { Box, Text, useInput, usePaste } from "ink";
-import type { Key } from "ink";
-import { useState, useMemo, useRef, useEffect } from "react";
-
 import type { Command } from "@yukino.js/commands/commands.js";
 import type { CommandUsageTracker } from "@yukino.js/commands/usage-tracker.js";
 import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
@@ -16,6 +11,12 @@ import type {
   NonPlanPermissionMode,
   PermissionMode,
 } from "@yukino.js/permissions";
+import { scanCwdFiles } from "@yukino.js/utils/file-scan.js";
+import Fuse from "fuse.js";
+import { Box, Text, useInput, usePaste } from "ink";
+import type { Key } from "ink";
+import { useState, useMemo, useRef, useEffect } from "react";
+
 import {
   COMMAND_TAGS,
   FILE_CACHE_TTL_MS,
@@ -45,7 +46,6 @@ import {
   useAvailableRows,
   useTerminalDimensions,
 } from "./use-terminal-layout.js";
-import { scanCwdFiles } from "@yukino.js/utils/file-scan.js";
 
 const log = createChildLogger({ module: "input" });
 

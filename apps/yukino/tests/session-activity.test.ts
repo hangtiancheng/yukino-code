@@ -7,8 +7,6 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { recordInput, registerProject } from "@yukino.js/history";
 import {
   getSessionFilePath,
@@ -22,6 +20,7 @@ import {
   truncateSessionLines,
 } from "@yukino.js/session";
 import { getYukinoDir } from "@yukino.js/storage";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   vi.restoreAllMocks();

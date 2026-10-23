@@ -1,8 +1,8 @@
 import type { AgentCard, AgentInterface } from "@a2a-js/sdk";
+import { version } from "@yukino.js/version";
 
 import { A2A_PROTOCOL_VERSION } from "./constants.js";
 import { DESCRIPTION, SKILL_DESCRIPTION, SKILL_EXAMPLES } from "./prompts.js";
-import { version } from "@yukino.js/version";
 
 /**
  * Builds the agent card for the given base URL. Both the JSON-RPC endpoint

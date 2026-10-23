@@ -9,8 +9,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import type { Sandbox, SandboxConfig } from "@yukino.js/sandbox";
 import { sessionPath } from "@yukino.js/storage";
 import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
@@ -23,6 +21,7 @@ import {
   hasAnyForegroundTasks,
 } from "@yukino.js/tools/shell-background.js";
 import type { ToolContext } from "@yukino.js/tools/types.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const tempDirs = new Set<string>();
 

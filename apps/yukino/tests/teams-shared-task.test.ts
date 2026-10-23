@@ -2,12 +2,11 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, test, expect, beforeEach, afterEach } from "vitest";
-
 import { TeamManager } from "@yukino.js/teams";
 import { NameRegistry, getNameRegistry } from "@yukino.js/teams/registry.js";
 import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
 import { TeamTodoWriteTool } from "@yukino.js/teams/task-tools.js";
+import { describe, test, expect, beforeEach, afterEach } from "vitest";
 // The teams directory lives at <home>/.yukino/teams, so the tests redirect the
 // entire home directory to a temp dir to avoid leaving residue in the real
 // ~/.yukino/teams. os.homedir() reads USERPROFILE on Windows and HOME on other

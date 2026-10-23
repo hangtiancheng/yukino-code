@@ -1,9 +1,3 @@
-import { Box, Text, render, type Instance } from "ink";
-import { act, createElement, useState } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { VirtualTerminal } from "./helpers/virtual-terminal.js";
-
 import type { AgentEvent } from "@yukino.js/agent/events.js";
 import {
   AskUserQuestionTool,
@@ -17,6 +11,11 @@ import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
 import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
 import { Transcript } from "@yukino.js/ui/transcript.js";
 import { useAgentOutput } from "@yukino.js/ui/use-agent-output.js";
+import { Box, Text, render, type Instance } from "ink";
+import { act, createElement, useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 let terminal: VirtualTerminal;
 let instance: Instance | undefined;

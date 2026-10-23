@@ -1,4 +1,6 @@
 import { loadPlan, planExists } from "@yukino.js/plan-file";
+import { asErrorString } from "@yukino.js/utils";
+
 import {
   NO_PLAN_APPROVAL_HANDLER_ERROR,
   NO_PLAN_FILE_ERROR,
@@ -13,7 +15,6 @@ import type {
   ToolResult,
   ToolSchema,
 } from "./types.js";
-import { asErrorString } from "@yukino.js/utils";
 
 export class ExitPlanModeTool implements Tool {
   // Use a hardcoded string instead of ExitPlanModeTool.name.replace("Tool", "")

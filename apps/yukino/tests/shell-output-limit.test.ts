@@ -3,12 +3,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { expect, it, vi } from "vitest";
-
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import { BashTool } from "@yukino.js/tools/bash.js";
 import type * as toolsConstants from "@yukino.js/tools/constants.js";
 import { PowerShellTool } from "@yukino.js/tools/powershell.js";
+import { expect, it, vi } from "vitest";
 
 vi.mock("@yukino.js/tools/constants.js", async (importOriginal) => ({
   ...(await importOriginal<typeof toolsConstants>()),

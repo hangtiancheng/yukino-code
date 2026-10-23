@@ -3,8 +3,6 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import type { LLMClient, LLMStreamOptions } from "@yukino.js/llm/client.js";
@@ -21,6 +19,7 @@ import { WORKFLOW_RUNS_DIR } from "@yukino.js/workflow/constants.js";
 import { WorkflowService } from "@yukino.js/workflow/service.js";
 import { attachWorkflow } from "@yukino.js/workflow/wiring.js";
 import { WorkflowTool } from "@yukino.js/workflow/workflow-tool.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const provider: ProviderConfig = {
   name: "test",

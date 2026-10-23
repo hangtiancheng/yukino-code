@@ -3,13 +3,12 @@ import { homedir } from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "path";
 
-import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-
 import { Agent } from "@yukino.js/agent";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { MemoryConsolidator } from "@yukino.js/memory/consolidation.js";
 import { PathSandbox, PermissionChecker } from "@yukino.js/permissions";
 import { yukinoPath, projectPath } from "@yukino.js/storage";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 const tempDirs = new Set<string>();
 let originalHome: string | undefined;

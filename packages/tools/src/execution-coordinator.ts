@@ -1,10 +1,11 @@
 import { isSafeCommand } from "@yukino.js/permissions";
+import { canonicalPath } from "@yukino.js/utils/paths.js";
+
 import {
   COMMAND_INTERRUPTED_ERROR,
   EXECUTION_CANCELLED_ERROR,
 } from "./constants.js";
 import type { ToolContext, ToolResult } from "./types.js";
-import { canonicalPath } from "@yukino.js/utils/paths.js";
 
 interface Waiter {
   start: () => void;

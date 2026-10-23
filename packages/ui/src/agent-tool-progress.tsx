@@ -1,5 +1,3 @@
-import { Box } from "ink";
-
 import {
   DEFAULT_AGENT_KIND,
   GENERAL_PURPOSE_AGENT_TYPE,
@@ -9,12 +7,14 @@ import {
   formatTokens,
   type TeammateUIState,
 } from "@yukino.js/teams/progress.js";
+import { strArg } from "@yukino.js/utils";
+import { Box } from "ink";
+
 import {
   ToolBlock,
   type ToolBlockInfo,
   type ToolCardStatus,
 } from "./tool-display.js";
-import { strArg } from "@yukino.js/utils";
 
 export interface SubagentProgress {
   toolCallId: string;

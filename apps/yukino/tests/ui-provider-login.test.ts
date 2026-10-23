@@ -1,15 +1,14 @@
 import { stripVTControlCharacters } from "node:util";
 
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import { ProviderLogin } from "@yukino.js/ui/provider-login.js";
+import { cursorWindow, visibleWidth } from "@yukino.js/ui/terminal-text.js";
 import { render, renderToString, useInput, usePaste } from "ink";
 import type { Instance, Key } from "ink";
 import type * as Ink from "ink";
 import { act, createElement } from "react";
 import stringWidth from "string-width";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
-import { ProviderLogin } from "@yukino.js/ui/provider-login.js";
-import { cursorWindow, visibleWidth } from "@yukino.js/ui/terminal-text.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),

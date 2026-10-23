@@ -2,10 +2,12 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import z from "zod";
-
 import { LspClient } from "@yukino.js/lsp/client.js";
 import type { LspServerConfig } from "@yukino.js/lsp/config.js";
+import { asErrorString, isRecord } from "@yukino.js/utils";
+import { resolveToolPath } from "@yukino.js/utils/paths.js";
+import z from "zod";
+
 import {
   LSP_DISPOSED_ERROR,
   LSP_DOCUMENT_TOO_LARGE_ERROR,
@@ -20,8 +22,6 @@ import {
 } from "./constants.js";
 import { LSP_DESCRIPTION } from "./prompts.js";
 import type { Tool, ToolContext, ToolResult, ToolSchema } from "./types.js";
-import { asErrorString, isRecord } from "@yukino.js/utils";
-import { resolveToolPath } from "@yukino.js/utils/paths.js";
 
 const Args = z
   .object({

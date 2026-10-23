@@ -2,8 +2,6 @@ import { randomUUID } from "node:crypto";
 import { existsSync, renameSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 
-import z, { parse } from "zod";
-
 import { createChildLogger } from "@yukino.js/logger";
 import { sessionPath } from "@yukino.js/storage";
 import {
@@ -11,6 +9,8 @@ import {
   readPrivateFileSync as readFileSync,
   writePrivateFileSync as writeFileSync,
 } from "@yukino.js/storage/private.js";
+import z, { parse } from "zod";
+
 import { PRIVATE_BOARD_ID_PREFIX, TASKS_FILENAME } from "./constants.js";
 
 const log = createChildLogger({ module: "todo" });

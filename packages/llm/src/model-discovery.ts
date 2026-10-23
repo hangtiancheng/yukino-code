@@ -1,6 +1,6 @@
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import { z } from "zod";
 
-import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import {
   ANTHROPIC_API_VERSION,
   DISCOVERY_TIMEOUT_MS,

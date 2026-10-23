@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { yukinoPath } from "@yukino.js/storage";
 import { describe, it, expect } from "vitest";
 
 import { isTerminalGone, record, recordError, recordExit } from "@/recover.js";
-import { yukinoPath } from "@yukino.js/storage";
 
 describe("crash log", () => {
   it("appends records with a timestamp", () => {

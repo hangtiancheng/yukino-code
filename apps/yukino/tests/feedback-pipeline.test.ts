@@ -9,8 +9,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { feedbackLogPath } from "@yukino.js/feedback/collect.js";
 import {
   issueFingerprint,
@@ -32,6 +30,7 @@ import { fileHistoryDir } from "@yukino.js/file-history";
 import { closeLogger, initLogger } from "@yukino.js/logger";
 import { saveCompactBoundary, saveMessage } from "@yukino.js/session";
 import { sessionPath } from "@yukino.js/storage";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   detectChannel: vi.fn<() => Promise<FeedbackChannel>>(),

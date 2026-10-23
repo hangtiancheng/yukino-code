@@ -1,11 +1,3 @@
-import { Box, Text, render } from "ink";
-import type { Instance } from "ink";
-import { act, createElement, useState } from "react";
-import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { VirtualTerminal } from "./helpers/virtual-terminal.js";
-
 import { ChatView, type ChatMessage } from "@yukino.js/ui/chat.js";
 import { THEME } from "@yukino.js/ui/constants.js";
 import { InputBox } from "@yukino.js/ui/input.js";
@@ -15,6 +7,13 @@ import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
 import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
 import { TodoProgress } from "@yukino.js/ui/todo-progress.js";
 import { Transcript } from "@yukino.js/ui/transcript.js";
+import type { Instance } from "ink";
+import { Box, Text, render } from "ink";
+import type { ReactNode } from "react";
+import { act, createElement, useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 let terminal: VirtualTerminal;
 let instance: Instance | undefined;

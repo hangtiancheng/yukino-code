@@ -5,6 +5,7 @@
 // usage, permission requests) are intentionally not logged.
 
 import type { AgentEvent } from "@yukino.js/agent/events.js";
+
 import { TEXT_PREVIEW_CHARS } from "./constants.js";
 
 /** Minimal pino Logger shape (warn/error) to keep this module generic. */

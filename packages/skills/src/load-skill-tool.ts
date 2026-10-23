@@ -1,10 +1,3 @@
-import type { SkillCatalog } from "./catalog.js";
-import { runFork, runInline } from "./executor.js";
-import type { SkillForkHost, SkillHost } from "./index.js";
-import {
-  LOAD_SKILL_DESCRIPTION,
-  LOAD_SKILL_NAME_DESCRIPTION,
-} from "./prompts.js";
 import type {
   Tool,
   ToolContext,
@@ -12,6 +5,15 @@ import type {
   ToolSchema,
 } from "@yukino.js/tools/types.js";
 import { asErrorString, strArg } from "@yukino.js/utils";
+
+import type { SkillCatalog } from "./catalog.js";
+import { runFork, runInline } from "./executor.js";
+import {
+  LOAD_SKILL_DESCRIPTION,
+  LOAD_SKILL_NAME_DESCRIPTION,
+} from "./prompts.js";
+
+import type { SkillForkHost, SkillHost } from "./index.js";
 
 // On-demand skill activation: returns the full SOP body so it enters the
 // conversation as a regular message (progressive disclosure). Fork-mode

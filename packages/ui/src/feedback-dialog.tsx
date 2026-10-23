@@ -1,12 +1,12 @@
-import { Box, Text, useInput } from "ink";
-import type { DOMElement } from "ink";
-import { useRef, useState } from "react";
-
 import { attachmentSizePreview } from "@yukino.js/feedback/collect.js";
 import type {
   AttachmentKind,
   FeedbackOptions,
 } from "@yukino.js/feedback/types.js";
+import { Box, Text, useInput } from "ink";
+import type { DOMElement } from "ink";
+import { useRef, useState } from "react";
+
 import { FEEDBACK_ITEMS, THEME } from "./constants.js";
 import { SelectorFrame } from "./selector-frame.js";
 import { truncateToWidth } from "./terminal-text.js";

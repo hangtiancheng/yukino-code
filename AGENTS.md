@@ -4,6 +4,8 @@ Yukino CLI (apps/yukino) is a terminal-based AI coding agent.
 
 Yukino MCP server (apps/mcp) is an official collection of MCP tools for yukino
 
+The former apps/yukino/src modules live in packages/* as source-level workspace packages (@yukino.js/<module>): their package.json "exports" map directly to ./src TypeScript sources, there is no per-package build step, and apps/yukino bundles them via tsup. The shared ESLint flat config lives at the repo root.
+
 - Fix all ESLint errors. Ignore all ESLint warnings.
 - Use `pnpm lint:fix` to automatically correct lint errors. This command is idempotent and non-destructive.
 - ZERO backward compatibility. Breaking changes are expected, acceptable, and preferred over legacy support.

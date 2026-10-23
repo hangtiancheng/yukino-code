@@ -1,6 +1,7 @@
+import { escapeXml } from "@yukino.js/utils/xml.js";
+
 import type { AgentDefinition } from "./definition.js";
 import type { AgentTask } from "./task-manager.js";
-import { escapeXml } from "@yukino.js/utils/xml.js";
 
 export const AGENT_TOOL_DESCRIPTION =
   "Launch an agent to handle complex, multi-step tasks.";

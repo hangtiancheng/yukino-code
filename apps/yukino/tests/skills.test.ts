@@ -15,19 +15,18 @@ import { homedir, tmpdir } from "node:os";
 import type * as os from "node:os";
 import { dirname, join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { PermissionChecker } from "@yukino.js/permissions";
+import type { Skill, SkillForkHost, SkillHost } from "@yukino.js/skills";
 import { parseSkillFile, SkillCatalog } from "@yukino.js/skills/catalog.js";
 import {
   parseSkillPrompt,
   runFork,
   runInline,
 } from "@yukino.js/skills/executor.js";
-import type { Skill, SkillForkHost, SkillHost } from "@yukino.js/skills";
 import { InstallSkillTool } from "@yukino.js/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@yukino.js/skills/load-skill-tool.js";
 import { buildSkillSection } from "@yukino.js/skills/prompts.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:os", async (importOriginal) => {
   const actual = await importOriginal<typeof os>();

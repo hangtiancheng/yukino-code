@@ -1,7 +1,5 @@
-import { describe, expect, it } from "vitest";
-
-import { INTERRUPTED_TOOL_RESULT } from "@yukino.js/conversation/constants.js";
 import type { Message } from "@yukino.js/conversation";
+import { INTERRUPTED_TOOL_RESULT } from "@yukino.js/conversation/constants.js";
 import { ensureToolPairing } from "@yukino.js/conversation/pairing.js";
 import {
   buildAnthropicMessages,
@@ -11,6 +9,7 @@ import {
   buildChatCompletionMessages,
   buildOpenAIInput,
 } from "@yukino.js/llm/openai.js";
+import { describe, expect, it } from "vitest";
 
 function call(...ids: string[]): Message {
   return {

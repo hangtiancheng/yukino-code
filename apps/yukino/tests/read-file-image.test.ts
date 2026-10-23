@@ -2,8 +2,6 @@ import { mkdtempSync as createTempDir, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, it, expect } from "vitest";
-
 import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
 import { ReadFileTool } from "@yukino.js/tools/read-file.js";
 import type {
@@ -11,6 +9,7 @@ import type {
   ToolResultContentBlock,
 } from "@yukino.js/tools/types.js";
 import { isRecord } from "@yukino.js/utils";
+import { afterEach, describe, it, expect } from "vitest";
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);

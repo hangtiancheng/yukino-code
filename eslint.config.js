@@ -10,7 +10,16 @@ import tseslint from "typescript-eslint";
 import importPlugin from "eslint-plugin-import";
 
 export default defineConfig(
-  globalIgnores(["dist", "node_modules", "eslint.config.js"]),
+  globalIgnores([
+    "**/dist",
+    "**/node_modules",
+    "**/coverage",
+    "eslint.config.js",
+    "apps/app",
+    "apps/docs",
+    "apps/mcp",
+    "rename.js",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

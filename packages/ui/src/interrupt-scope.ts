@@ -1,4 +1,5 @@
 import type { IssueConfirmation } from "@yukino.js/feedback/types.js";
+
 import type { SubagentProgress } from "./agent-tool-progress.js";
 import type { PermissionAction } from "./permission-dialog.js";
 

@@ -2,8 +2,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import type { ConversationManager } from "@yukino.js/conversation";
 import * as clients from "@yukino.js/llm/client.js";
@@ -20,6 +18,7 @@ import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool } from "@yukino.js/tools/types.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const directories: string[] = [];
 function cwd(): string {

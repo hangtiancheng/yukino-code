@@ -11,13 +11,6 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
-
-import {
-  ACTIVITY_FILE_NAME,
-  COMPACT_AFTER_RECORDS,
-  MAX_HISTORY_ENTRIES,
-} from "@yukino.js/history/constants.js";
 import {
   compactActivity,
   getCommandUsage,
@@ -28,7 +21,13 @@ import {
   registerProject,
   type InputEntry,
 } from "@yukino.js/history";
+import {
+  ACTIVITY_FILE_NAME,
+  COMPACT_AFTER_RECORDS,
+  MAX_HISTORY_ENTRIES,
+} from "@yukino.js/history/constants.js";
 import { getYukinoDir, projectKey, yukinoPath } from "@yukino.js/storage";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("node:fs", async (importOriginal) => {
   const original = await importOriginal<typeof fs>();
@@ -202,7 +201,7 @@ describe("activity history", () => {
   it("preserves updates from concurrent processes while compacting", async () => {
     registerProject(process.cwd());
     const home = dirname(getYukinoDir());
-    const source = `import { recordInput, compactActivity } from './src/history/index.ts'; for (let i = 0; i < 20; i++) { recordInput({ text: '/help', cwd: process.cwd(), sessionId: null, source: 'sdk', commandName: 'help' }); if (i % 7 === 0) compactActivity(); }`;
+    const source = `import { recordInput, compactActivity } from '@yukino.js/history'; for (let i = 0; i < 20; i++) { recordInput({ text: '/help', cwd: process.cwd(), sessionId: null, source: 'sdk', commandName: 'help' }); if (i % 7 === 0) compactActivity(); }`;
     const run = () =>
       new Promise<void>((resolve, reject) => {
         const child = spawn(

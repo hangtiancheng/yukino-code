@@ -2,9 +2,6 @@ import type * as childProcess from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-
 import {
   FEEDBACK_REPO,
   GIST_FILENAME,
@@ -19,6 +16,8 @@ import {
   fetchRepoLabels,
 } from "@yukino.js/feedback/github.js";
 import type { CollectedFile } from "@yukino.js/feedback/types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 interface ExecFileResult {
   stdout: string;

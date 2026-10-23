@@ -8,10 +8,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { renderToString } from "ink";
-import { createElement } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
 import { PermissionChecker } from "@yukino.js/permissions";
 import { sessionPath } from "@yukino.js/storage";
@@ -27,6 +23,9 @@ import { TodoWriteTool } from "@yukino.js/todo/tools.js";
 import { attachBackgroundTaskManager } from "@yukino.js/tools/shell-background.js";
 import { TaskOutputTool } from "@yukino.js/tools/task-output.js";
 import { TodoProgress } from "@yukino.js/ui/todo-progress.js";
+import { renderToString } from "ink";
+import { createElement } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 const directories: string[] = [];
 function temporaryDirectory(): string {
   const directory = mkdtempSync(join(tmpdir(), "yukino-task-regression-"));

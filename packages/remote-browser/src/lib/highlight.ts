@@ -1,3 +1,5 @@
+import { DARK_THEME, LIGHT_THEME } from "@yukino.js/theme/constants.js";
+import { defaultSyntaxTheme } from "@yukino.js/theme/syntax.js";
 import { createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import bash from "shiki/langs/bash.mjs";
@@ -13,9 +15,6 @@ import rust from "shiki/langs/rust.mjs";
 import tsx from "shiki/langs/tsx.mjs";
 import typescript from "shiki/langs/typescript.mjs";
 import yaml from "shiki/langs/yaml.mjs";
-
-import { DARK_THEME, LIGHT_THEME } from "@yukino.js/theme/constants.js";
-import { defaultSyntaxTheme } from "@yukino.js/theme/syntax.js";
 
 const highlighter = createHighlighterCoreSync({
   engine: createJavaScriptRegexEngine(),

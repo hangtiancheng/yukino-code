@@ -1,10 +1,9 @@
 import { existsSync, rmdirSync } from "node:fs";
 
-import { describe, expect, it, vi } from "vitest";
-
 import { yukinoPath } from "@yukino.js/storage";
 import type * as PrivateStorage from "@yukino.js/storage/private.js";
 import { withFileSyncLock } from "@yukino.js/teams/file-lock.js";
+import { describe, expect, it, vi } from "vitest";
 
 const race = vi.hoisted(() => ({ code: "", remaining: 0 }));
 vi.mock("@yukino.js/storage/private.js", async (importOriginal) => {

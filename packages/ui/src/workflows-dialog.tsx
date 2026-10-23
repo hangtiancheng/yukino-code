@@ -1,15 +1,4 @@
-import { Box, Text, useInput } from "ink";
-import { useEffect, useState, useSyncExternalStore } from "react";
-
 import type { ToolContext } from "@yukino.js/tools/types.js";
-import { THEME } from "./constants.js";
-import { getListWindowStart } from "./list-window.js";
-import { SelectorFrame } from "./selector-frame.js";
-import { plainTerminalLine } from "./terminal-text.js";
-import {
-  useAvailableRows,
-  useTerminalDimensions,
-} from "./use-terminal-layout.js";
 import { asErrorString } from "@yukino.js/utils";
 import {
   MAX_VISIBLE_RUNS,
@@ -18,6 +7,17 @@ import {
   WORKFLOW_PANEL_TITLE,
 } from "@yukino.js/workflow/constants.js";
 import type { WorkflowService } from "@yukino.js/workflow/service.js";
+import { Box, Text, useInput } from "ink";
+import { useEffect, useState, useSyncExternalStore } from "react";
+
+import { THEME } from "./constants.js";
+import { getListWindowStart } from "./list-window.js";
+import { SelectorFrame } from "./selector-frame.js";
+import { plainTerminalLine } from "./terminal-text.js";
+import {
+  useAvailableRows,
+  useTerminalDimensions,
+} from "./use-terminal-layout.js";
 
 interface Props {
   service: WorkflowService;

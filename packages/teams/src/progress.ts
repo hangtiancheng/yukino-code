@@ -1,7 +1,7 @@
+import { strArg } from "@yukino.js/utils";
 import { z } from "zod";
 
 import { MAX_RECENT_ACTIVITIES } from "./constants.js";
-import { strArg } from "@yukino.js/utils";
 
 export const ToolActivitySchema = z.object({
   toolName: z.string(),

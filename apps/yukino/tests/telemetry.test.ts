@@ -1,5 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { Agent, type AgentConfig } from "@yukino.js/agent";
 import { ConversationManager } from "@yukino.js/conversation";
 import { HookEngine } from "@yukino.js/hooks";
@@ -23,6 +21,7 @@ import {
 } from "@yukino.js/telemetry/instrumentation.js";
 import { parseExporterTypes } from "@yukino.js/telemetry/providers.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 class FakeObservation implements TelemetryObservation {
   readonly children: FakeObservation[] = [];

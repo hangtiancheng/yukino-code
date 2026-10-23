@@ -1,3 +1,4 @@
+import { version } from "@yukino.js/version";
 import { z } from "zod";
 
 import {
@@ -6,7 +7,6 @@ import {
   REGISTRY_FETCH_TIMEOUT_MS,
   VERSION_PATTERN,
 } from "./constants.js";
-import { version } from "@yukino.js/version";
 
 function parseVersion(value: string) {
   const match = VERSION_PATTERN.exec(value);

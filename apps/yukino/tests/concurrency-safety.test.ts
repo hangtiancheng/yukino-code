@@ -4,10 +4,10 @@
 // cat and rm are both Bash — the former doesn't mutate external state (like
 // ReadFile) and can run concurrently, while the latter would break the
 // model's intended execution order if run in parallel.
-import { describe, it, expect } from "vitest";
 
 import { isSafeCommand } from "@yukino.js/permissions";
 import { BashTool } from "@yukino.js/tools/bash.js";
+import { describe, it, expect } from "vitest";
 
 describe("Bash concurrency safety is determined per command", () => {
   const bash = new BashTool();

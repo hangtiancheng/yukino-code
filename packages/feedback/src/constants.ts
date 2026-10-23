@@ -1,5 +1,6 @@
-import type { AttachmentKind } from "./types.js";
 import { REDACTED } from "@yukino.js/utils/constants.js";
+
+import type { AttachmentKind } from "./types.js";
 
 export const CHARS_PER_TOKEN = 3.5;
 // Share of the REAL context window available to the whole analysis request.

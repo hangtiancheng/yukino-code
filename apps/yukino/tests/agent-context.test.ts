@@ -1,5 +1,3 @@
-import { describe, expect, it, vi } from "vitest";
-
 import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
@@ -12,6 +10,7 @@ import { TeamManager } from "@yukino.js/teams";
 import { TaskList } from "@yukino.js/todo";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { contentToText } from "@yukino.js/utils";
+import { describe, expect, it, vi } from "vitest";
 
 const cwd = process.cwd();
 const provider = {

@@ -1,8 +1,9 @@
-import type { Decision } from "./index.js";
 import type {
   PermissionRequestHandler,
   PermissionRequestSource,
 } from "@yukino.js/tools/types.js";
+
+import type { Decision } from "./index.js";
 
 export async function requestToolPermission(
   handler: PermissionRequestHandler,

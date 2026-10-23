@@ -3,14 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { PACKAGE_NAME } from "@yukino.js/update/constants.js";
 import {
   getSelfUpdateCommand,
   packageManagerInvocation,
   runSelfUpdate,
 } from "@yukino.js/update/install.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   execFile:

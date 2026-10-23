@@ -1,14 +1,14 @@
+import { parseSkillPrompt } from "@yukino.js/skills/executor.js";
+import { plainTerminalText } from "@yukino.js/utils";
 import { Box, Text } from "ink";
 import React, { useRef } from "react";
 
-import { parseSkillPrompt } from "@yukino.js/skills/executor.js";
 import { THEME } from "./constants.js";
 import { renderMarkdown, renderStreamingMarkdown } from "./markdown.js";
 import { expandTabs, plainTerminalLine } from "./terminal-text.js";
 import { ThinkingBlock } from "./thinking-block.js";
 import { ToolCard, type ToolCardStatus } from "./tool-display.js";
 import { useTerminalDimensions } from "./use-terminal-layout.js";
-import { plainTerminalText } from "@yukino.js/utils";
 
 export interface ToolSummaryItem {
   toolName: string;

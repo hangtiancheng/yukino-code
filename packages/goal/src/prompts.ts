@@ -1,9 +1,11 @@
 import { PERSISTENT_GOAL_MARKER } from "@yukino.js/agent/constants.js";
+
 import {
   MAX_BLOCKED_ATTEMPTS,
   MAX_GOAL_TURNS,
   NO_GOAL_MESSAGE,
 } from "./constants.js";
+
 import type { GoalState } from "./index.js";
 
 export const CONTINUATION_INSTRUCTION =

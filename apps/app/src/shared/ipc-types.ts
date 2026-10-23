@@ -93,7 +93,7 @@ export type InitState =
       configPath?: string;
     };
 
-/** Subagent lifecycle activity (mirrors Remote.RemoteSubagentEvent). */
+/** Subagent lifecycle activity (mirrors RemoteSubagentEvent). */
 export type SubagentActivity = {
   toolCallId: string;
   role: string;

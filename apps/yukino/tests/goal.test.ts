@@ -2,13 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { ConversationManager } from "@yukino.js/conversation";
-import { MAX_GOAL_TURNS } from "@yukino.js/goal/constants.js";
 import { GoalManager, handleGoalCommand } from "@yukino.js/goal";
+import { MAX_GOAL_TURNS } from "@yukino.js/goal/constants.js";
 import { HookEngine } from "@yukino.js/hooks";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { ContextTooLongError, RateLimitError } from "@yukino.js/llm/errors.js";
@@ -26,6 +24,7 @@ import { filterToolsForAgent } from "@yukino.js/subagent/tool-filter.js";
 import { GoalTool } from "@yukino.js/tools/goal.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { ProviderToolSchema } from "@yukino.js/tools/types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let cwd: string;
 beforeEach(() => {

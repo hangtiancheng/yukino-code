@@ -1,6 +1,6 @@
+import type { Message } from "@yukino.js/conversation";
 import { z } from "zod";
 
-import type { Message } from "@yukino.js/conversation";
 import { MAX_ISSUES } from "./constants.js";
 import {
   ANALYSIS_INSTRUCTIONS,

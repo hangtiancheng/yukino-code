@@ -1,7 +1,3 @@
-import { Box, Text, useInput, usePaste } from "ink";
-import type { DOMElement } from "ink";
-import { useCallback, useEffect, useRef, useState } from "react";
-
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,
@@ -19,6 +15,10 @@ import {
   modelListUrl,
   type DiscoveredModel,
 } from "@yukino.js/llm/model-discovery.js";
+import type { DOMElement } from "ink";
+import { Box, Text, useInput, usePaste } from "ink";
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import { PROTOCOLS, THEME } from "./constants.js";
 import { CursorText } from "./cursor-text.js";
 import { SelectorFrame } from "./selector-frame.js";

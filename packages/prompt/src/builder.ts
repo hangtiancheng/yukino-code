@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { platform, arch } from "node:os";
 
 import { createChildLogger } from "@yukino.js/logger";
+
 import { GIT_BRANCH_MAX_LENGTH, GIT_PROBE_TIMEOUT_MS } from "./constants.js";
 import type { Section, EnvironmentContext } from "./sections.js";
 import {

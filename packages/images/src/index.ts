@@ -1,6 +1,8 @@
 import { open, readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 
+import { createChildLogger } from "@yukino.js/logger";
+
 import {
   IMAGE_FILE_EMPTY_ERROR,
   MAX_IMAGE_BYTES,
@@ -10,7 +12,6 @@ import {
 } from "./constants.js";
 import type { ImageMediaType, ScreenshotOptions } from "./types.js";
 import { processImage } from "./worker.js";
-import { createChildLogger } from "@yukino.js/logger";
 
 // Submodule namespaces for library consumers (Images.<Sub>.*).
 export * from "./clipboard.js";

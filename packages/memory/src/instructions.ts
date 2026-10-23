@@ -2,8 +2,9 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve, relative } from "node:path";
 
 import { createChildLogger } from "@yukino.js/logger";
-import { AGENTS_FILE_NAME } from "./constants.js";
 import { yukinoPath } from "@yukino.js/storage";
+
+import { AGENTS_FILE_NAME } from "./constants.js";
 const log = createChildLogger({ module: "memory" });
 
 export interface InstructionSource {

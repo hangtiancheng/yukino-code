@@ -1,12 +1,11 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { afterEach, describe, expect, it } from "vitest";
-
 import type { InteractionSummary } from "@yukino.js/bootstrap/interaction-summary.js";
 import { THEME } from "@yukino.js/ui/constants.js";
 import { renderInteractionSummary } from "@yukino.js/ui/interaction-summary.js";
 import { setThemeMode } from "@yukino.js/ui/styles.js";
 import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
+import { afterEach, describe, expect, it } from "vitest";
 
 const summary: InteractionSummary = {
   agentActiveMs: 10_000,

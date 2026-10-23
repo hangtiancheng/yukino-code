@@ -14,6 +14,8 @@ import {
   TaskFailure,
   type TaskManager,
 } from "@yukino.js/subagent/task-manager.js";
+import { asErrorString, boolArg, intArg, strArg } from "@yukino.js/utils";
+
 import {
   BACKGROUND_NOTIFICATION_BYTES,
   COMMAND_INTERRUPTED_ERROR,
@@ -54,7 +56,6 @@ import {
   type ToolResult,
   type ToolSchema,
 } from "./types.js";
-import { asErrorString, boolArg, intArg, strArg } from "@yukino.js/utils";
 
 const log = createChildLogger({ module: "bash" });
 

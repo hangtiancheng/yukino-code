@@ -1,12 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { Box, Text, render, useInput } from "ink";
-import type { Instance, Key } from "ink";
-import type * as Ink from "ink";
-import { act, createElement } from "react";
-import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { AskUserDialog } from "@yukino.js/ui/ask-user-dialog.js";
 import { ChatView } from "@yukino.js/ui/chat.js";
 import type { ChatMessage } from "@yukino.js/ui/chat.js";
@@ -20,6 +13,12 @@ import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
 import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
 import { ToolBlock } from "@yukino.js/ui/tool-display.js";
 import { Transcript } from "@yukino.js/ui/transcript.js";
+import type * as Ink from "ink";
+import type { Instance, Key } from "ink";
+import { Box, Text, render, useInput } from "ink";
+import type { ReactNode } from "react";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const caret = vi.hoisted(() => {
   const state: {

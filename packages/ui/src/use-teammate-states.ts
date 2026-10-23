@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
-
 import type { TeamManager } from "@yukino.js/teams";
 import type { TeammateUIState } from "@yukino.js/teams/progress.js";
+import { useEffect, useState } from "react";
 
 export function useTeammateStates(manager: TeamManager) {
   const [states, setStates] = useState<TeammateUIState[]>([]);

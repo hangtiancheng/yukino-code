@@ -1,12 +1,11 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { Box, Text, render, type Instance } from "ink";
-import { act, createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { UpdateNotice } from "@yukino.js/ui/update-notice.js";
 import { useUpdateNotice } from "@yukino.js/ui/use-update-notice.js";
 import { version } from "@yukino.js/version";
+import { Box, Text, render, type Instance } from "ink";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const originalColumns = Object.getOwnPropertyDescriptor(
   process.stdout,

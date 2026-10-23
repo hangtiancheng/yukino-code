@@ -1,32 +1,29 @@
 async function script() {
   const m = await import(process.env.YUKINO_LIB_ENTRY);
-  // The barrel exports one namespace per source directory, so symbols are
-  // dot-separated paths (Namespace[.Sub].Symbol) resolved through the namespaces.
+  // The barrel is flat: every public symbol is a top-level named export.
   const symbols = [
-    "Agent.Agent",
-    "Tools.Registry.ToolRegistry",
-    "MCP.Manager.MCPManager",
-    "Permissions.PermissionChecker",
-    "Config.loadConfig",
-    "LLM.Client.createClient",
-    "Prompt.Builder.buildSystemPrompt",
-    "Teams.TeamManager",
-    "Todo.Tools.TodoWriteTool",
-    "Teams.TaskTools.TeamTodoWriteTool",
-    "Teams.TaskStop.TaskStopTool",
-    "Todo.Store.TaskStore",
-    "Recover.recover",
-    "PrintMode.runPrintMode",
-    "Remote.Server.RemoteServer",
-    "Tools.ComputerUse.ComputerUseTool",
+    "Agent",
+    "ToolRegistry",
+    "MCPManager",
+    "PermissionChecker",
+    "loadConfig",
+    "createClient",
+    "buildSystemPrompt",
+    "TeamManager",
+    "TodoWriteTool",
+    "TeamTodoWriteTool",
+    "TaskStopTool",
+    "TaskStore",
+    "recover",
+    "runPrintMode",
+    "RemoteServer",
+    "ComputerUseTool",
   ];
-  const resolve = (path) =>
-    path.split(".").reduce((object, key) => object?.[key], m);
   console.log(
     JSON.stringify({
       totalExports: Object.keys(m).length,
-      version: m.Version.version,
-      symbols: Object.fromEntries(symbols.map((k) => [k, typeof resolve(k)])),
+      version: m.version,
+      symbols: Object.fromEntries(symbols.map((k) => [k, typeof m[k]])),
     }),
   );
 }

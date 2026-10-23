@@ -1,7 +1,5 @@
-import { describe, it, expect } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import type { StreamEvent, UsageInfo } from "@yukino.js/llm/events.js";
@@ -9,6 +7,7 @@ import { PermissionChecker } from "@yukino.js/permissions";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool } from "@yukino.js/tools/types.js";
 import { contentToText } from "@yukino.js/utils";
+import { describe, it, expect } from "vitest";
 
 const USAGE: UsageInfo = {
   inputTokens: 1,

@@ -1,8 +1,9 @@
-import { SYSTEM_REMINDER_OPEN } from "./constants.js";
-import { buildLongTermMemoryReminder, wrapSystemReminder } from "./prompts.js";
 import type { UserInput } from "@yukino.js/history";
 import type { ToolResultContentBlock } from "@yukino.js/tools/types.js";
 import { contentToText } from "@yukino.js/utils";
+
+import { SYSTEM_REMINDER_OPEN } from "./constants.js";
+import { buildLongTermMemoryReminder, wrapSystemReminder } from "./prompts.js";
 
 // Submodule namespaces for library consumers (Conversation.<Sub>.*).
 export * from "./at-expand.js";

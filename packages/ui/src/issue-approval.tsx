@@ -1,8 +1,8 @@
+import type { IssueDraft } from "@yukino.js/feedback/types.js";
 import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import type { IssueDraft } from "@yukino.js/feedback/types.js";
 import { ICONS, THEME } from "./constants.js";
 import { SelectorFrame } from "./selector-frame.js";
 import { TextField } from "./text-field.js";

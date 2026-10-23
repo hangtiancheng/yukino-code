@@ -2,9 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
-import { WebSocket } from "ws";
-
 import { Agent } from "@yukino.js/agent";
 import { RecoveryState } from "@yukino.js/compact/recovery.js";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
@@ -20,6 +17,8 @@ import { TaskList } from "@yukino.js/todo";
 import { TaskStore } from "@yukino.js/todo/store.js";
 import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { describe, expect, it, vi } from "vitest";
+import { WebSocket } from "ws";
 
 function rejectedWebSocketStatus(
   url: string,

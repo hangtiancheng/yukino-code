@@ -8,8 +8,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
@@ -30,9 +28,9 @@ import {
   buildDeferredToolGuidance,
   buildToolGuidance,
 } from "@yukino.js/prompt/tools.js";
+import type { Skill, SkillForkHost } from "@yukino.js/skills";
 import { SkillCatalog } from "@yukino.js/skills/catalog.js";
 import { runFork, runInline } from "@yukino.js/skills/executor.js";
-import type { Skill, SkillForkHost } from "@yukino.js/skills";
 import { buildSkillSection } from "@yukino.js/skills/prompts.js";
 import { projectPath, yukinoPath } from "@yukino.js/storage";
 import {
@@ -45,6 +43,7 @@ import {
   WRITE_FILE_DESCRIPTION,
 } from "@yukino.js/tools/prompts.js";
 import type { ToolSchema } from "@yukino.js/tools/types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const env: EnvironmentContext = {
   cwd: "/project",

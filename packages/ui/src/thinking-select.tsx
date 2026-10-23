@@ -1,9 +1,9 @@
+import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
+import { type ThinkingLevel } from "@yukino.js/config/provider-config.js";
 import { Box, Text, measureElement, useBoxMetrics, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
-import { type ThinkingLevel } from "@yukino.js/config/provider-config.js";
 import {
   ICONS,
   TERMINAL_TOO_SHORT,

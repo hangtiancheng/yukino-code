@@ -8,13 +8,6 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import encodeWebp, { init as initWebp } from "@jsquash/webp/encode.js";
-import { Jimp, type JimpInstance } from "jimp";
-import { beforeAll, describe, expect, it } from "vitest";
-
-import {
-  MAX_DIMENSION_PX,
-  MAX_IMAGE_BYTES_PASSTHROUGH,
-} from "@yukino.js/images/constants.js";
 import {
   isImagePath,
   getMediaType,
@@ -24,6 +17,13 @@ import {
   maybeResizeAndDownsampleImage,
   processScreenshot,
 } from "@yukino.js/images";
+import {
+  MAX_DIMENSION_PX,
+  MAX_IMAGE_BYTES_PASSTHROUGH,
+} from "@yukino.js/images/constants.js";
+import { Jimp, type JimpInstance } from "jimp";
+import { beforeAll, describe, expect, it } from "vitest";
+
 const TEST_PNG_PATH = join(dirname(fileURLToPath(import.meta.url)), "test.png");
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

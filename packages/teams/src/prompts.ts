@@ -1,6 +1,7 @@
-import type { FileMailMessage } from "./file-mailbox.js";
 import type { Task } from "@yukino.js/todo";
 import { escapeXml } from "@yukino.js/utils/xml.js";
+
+import type { FileMailMessage } from "./file-mailbox.js";
 
 export const TEAM_CREATE_TOOL_DESCRIPTION =
   "Create an automatically named team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.";

@@ -1,4 +1,5 @@
 import { INTERRUPTED_TOOL_RESULT } from "./constants.js";
+
 import type { Message, ToolResultBlock } from "./index.js";
 
 // Both Anthropic and OpenAI reject the entire request when a tool use lacks its

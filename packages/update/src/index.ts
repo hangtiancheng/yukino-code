@@ -1,6 +1,7 @@
+import { version } from "@yukino.js/version";
+
 import { getSelfUpdateCommand, runSelfUpdate } from "./install.js";
 import { getLatestVersion, isNewerVersion } from "./version-check.js";
-import { version } from "@yukino.js/version";
 
 export * from "./constants.js";
 export * from "./install.js";

@@ -3,6 +3,7 @@ import {
   SYSTEM_REMINDER_ESCAPE_RE,
   SYSTEM_REMINDER_OPEN,
 } from "./constants.js";
+
 import type { UserBashResult } from "./index.js";
 
 export function wrapSystemReminder(content: string): string {

@@ -6,7 +6,6 @@
 //
 // Expected behavior: injected once across a multi-turn tool-call session; re-injected
 // when the pool changes; re-injected after history is compacted.
-import { describe, it, expect } from "vitest";
 
 import { Agent } from "@yukino.js/agent";
 import { ConversationManager } from "@yukino.js/conversation";
@@ -18,6 +17,7 @@ import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { ToolSearchTool } from "@yukino.js/tools/tool-search.js";
 import type { Tool } from "@yukino.js/tools/types.js";
 import { contentToText } from "@yukino.js/utils";
+import { describe, it, expect } from "vitest";
 
 const MARKER = "The following deferred tools are available via ToolSearch.";
 const USAGE: UsageInfo = {

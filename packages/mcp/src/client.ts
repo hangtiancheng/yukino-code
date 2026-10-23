@@ -14,7 +14,6 @@ import {
   CallToolResultSchema,
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
-
 import { registerExitCleanup } from "@yukino.js/bootstrap/exit-cleanup.js";
 import type { MCPServerConfig } from "@yukino.js/config";
 import {
@@ -22,13 +21,6 @@ import {
   maybeResizeAndDownsampleImage,
 } from "@yukino.js/images";
 import { createChildLogger } from "@yukino.js/logger";
-import {
-  MCP_APPS_EXTENSION,
-  MCP_APP_MIME_TYPE,
-  MCP_APP_URI_PREFIX,
-  MCP_IMAGE_MEDIA_TYPES,
-  MCP_NOT_CONNECTED_ERROR,
-} from "./constants.js";
 import type {
   ToolResult,
   ToolResultContentBlock,
@@ -36,6 +28,14 @@ import type {
 } from "@yukino.js/tools/types.js";
 import { isRecord } from "@yukino.js/utils";
 import { version } from "@yukino.js/version";
+
+import {
+  MCP_APPS_EXTENSION,
+  MCP_APP_MIME_TYPE,
+  MCP_APP_URI_PREFIX,
+  MCP_IMAGE_MEDIA_TYPES,
+  MCP_NOT_CONNECTED_ERROR,
+} from "./constants.js";
 
 const log = createChildLogger({ module: "mcp" });
 type MCPTransport =

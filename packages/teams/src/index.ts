@@ -11,6 +11,10 @@ import {
   readPrivateFileSync as readFileSync,
 } from "@yukino.js/storage/private.js";
 import type { SubagentProgressEvent } from "@yukino.js/subagent/spawn.js";
+import { TASKS_FILENAME } from "@yukino.js/todo/constants.js";
+import { asErrorString } from "@yukino.js/utils";
+import { canonicalPath } from "@yukino.js/utils/paths.js";
+
 import {
   buildInactiveTeammateError,
   buildInvalidTeammateNameError,
@@ -81,9 +85,6 @@ import {
   type TeamFile,
   type TeamMemberEntry,
 } from "./team-file.js";
-import { TASKS_FILENAME } from "@yukino.js/todo/constants.js";
-import { asErrorString } from "@yukino.js/utils";
-import { canonicalPath } from "@yukino.js/utils/paths.js";
 
 // Submodule namespaces for library consumers (Teams.<Sub>.*).
 export * from "./constants.js";

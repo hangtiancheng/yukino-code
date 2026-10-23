@@ -8,10 +8,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, it, expect } from "vitest";
-
 import { loadInstructions } from "@yukino.js/memory/instructions.js";
 import { yukinoPath } from "@yukino.js/storage";
+import { afterEach, describe, it, expect } from "vitest";
 
 const tempDirs = new Set<string>();
 

@@ -1,10 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
 import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
 import { runSubagentCommand } from "@yukino.js/commands/subagent.js";
@@ -19,6 +17,7 @@ import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
 import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
 import { TaskList } from "@yukino.js/todo";
+import { describe, expect, it, vi } from "vitest";
 
 const end: StreamEvent = {
   type: "stream_end",

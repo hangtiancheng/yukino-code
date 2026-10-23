@@ -1,9 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { Box, Text, useApp } from "ink";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-
 import { Agent } from "@yukino.js/agent";
 import type { InteractionSummary } from "@yukino.js/bootstrap/interaction-summary.js";
 import {
@@ -25,10 +22,6 @@ import {
   forceCompact,
 } from "@yukino.js/compact/compact.js";
 import { RecoveryState } from "@yukino.js/compact/recovery.js";
-import {
-  DEFAULT_CONTEXT_WINDOW,
-  DEFAULT_THINKING_LEVEL,
-} from "@yukino.js/config/constants.js";
 import type {
   AppConfig,
   McpLoading,
@@ -37,6 +30,10 @@ import type {
   SandboxYamlConfig,
 } from "@yukino.js/config";
 import { loadConfig, withProjectMcpServers } from "@yukino.js/config";
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_THINKING_LEVEL,
+} from "@yukino.js/config/constants.js";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import {
   getContextWindow,
@@ -49,12 +46,12 @@ import {
   persistThinkingLevel,
   saveProvider,
 } from "@yukino.js/config/provider-login.js";
-import { expandAtRefsWithImages } from "@yukino.js/conversation/at-expand.js";
-import { SYSTEM_REMINDER_OPEN } from "@yukino.js/conversation/constants.js";
 import {
   ConversationManager,
   type UserBashResult,
 } from "@yukino.js/conversation";
+import { expandAtRefsWithImages } from "@yukino.js/conversation/at-expand.js";
+import { SYSTEM_REMINDER_OPEN } from "@yukino.js/conversation/constants.js";
 import { executeUserBash } from "@yukino.js/conversation/user-bash.js";
 import {
   runFeedbackPipeline,
@@ -95,9 +92,9 @@ import { buildPlanModeExitReminder } from "@yukino.js/prompt/plan-mode.js";
 import { buildPlanExecutionPrompt } from "@yukino.js/prompt/prompts.js";
 import { createSandbox, type Sandbox } from "@yukino.js/sandbox";
 import * as sessionMod from "@yukino.js/session";
+import type { SkillHost, SkillForkHost } from "@yukino.js/skills";
 import { SkillCatalog } from "@yukino.js/skills/catalog.js";
 import { runFork as runSkillFork } from "@yukino.js/skills/executor.js";
-import type { SkillHost, SkillForkHost } from "@yukino.js/skills";
 import { InstallSkillTool } from "@yukino.js/skills/install-skill-tool.js";
 import { LoadSkillTool } from "@yukino.js/skills/load-skill-tool.js";
 import { buildSkillSection } from "@yukino.js/skills/prompts.js";
@@ -117,13 +114,13 @@ import {
   TaskManager,
   type AgentTask,
 } from "@yukino.js/subagent/task-manager.js";
+import type { RunAgent } from "@yukino.js/teams";
+import { TeamManager } from "@yukino.js/teams";
 import { LEADER_NAME } from "@yukino.js/teams/constants.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,
 } from "@yukino.js/teams/coordinator.js";
-import type { RunAgent } from "@yukino.js/teams";
-import { TeamManager } from "@yukino.js/teams";
 import { shutdownRequest } from "@yukino.js/teams/protocol.js";
 import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
 import {
@@ -149,6 +146,20 @@ import {
 } from "@yukino.js/tools/shell-background.js";
 import { SyntheticOutputTool } from "@yukino.js/tools/synthetic-output.js";
 import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
+import {
+  asErrorString,
+  asRecord,
+  contentToText,
+  formatToolArgs,
+  strArg,
+} from "@yukino.js/utils";
+import {
+  attachWorkflow,
+  getWorkflowService,
+} from "@yukino.js/workflow/wiring.js";
+import { Box, Text, useApp } from "ink";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+
 import { AgentActivity } from "./agent-activity.js";
 import { AgentStatus } from "./agent-status.js";
 import { ChatView, type ChatMessage, type ToolSummaryItem } from "./chat.js";
@@ -194,17 +205,6 @@ import {
   useUserBashHistory,
   userBashCard,
 } from "./use-user-bash.js";
-import {
-  asErrorString,
-  asRecord,
-  contentToText,
-  formatToolArgs,
-  strArg,
-} from "@yukino.js/utils";
-import {
-  attachWorkflow,
-  getWorkflowService,
-} from "@yukino.js/workflow/wiring.js";
 
 const log = createChildLogger({ module: "terminal" });
 

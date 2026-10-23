@@ -4,6 +4,7 @@ import {
   LIGHT_THEME,
   type ThemeMode,
 } from "@yukino.js/theme/constants.js";
+
 import { THEME } from "./constants.js";
 
 let themeMode: ThemeMode = "dark";

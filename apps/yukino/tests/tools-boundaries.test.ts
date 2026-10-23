@@ -12,8 +12,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import type { Sandbox } from "@yukino.js/sandbox";
 import { BashTool } from "@yukino.js/tools/bash.js";
 import { EditFileTool } from "@yukino.js/tools/edit-file.js";
@@ -29,6 +27,7 @@ import {
 } from "@yukino.js/tools/shell-output.js";
 import type { ToolContext } from "@yukino.js/tools/types.js";
 import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const tempDirs = new Set<string>();
 

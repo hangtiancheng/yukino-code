@@ -1,7 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { describe, expect, it } from "vitest";
-
 import {
   expandTabs,
   plainTerminalLine,
@@ -11,6 +9,7 @@ import {
 } from "@yukino.js/ui/terminal-text.js";
 import { formatToolOutputPreview } from "@yukino.js/ui/tool-preview.js";
 import { plainTerminalText } from "@yukino.js/utils";
+import { describe, expect, it } from "vitest";
 
 describe("UI v2 tool previews", () => {
   it.each([

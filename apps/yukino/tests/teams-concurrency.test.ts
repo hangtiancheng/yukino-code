@@ -11,12 +11,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
-
 import { FileHistory } from "@yukino.js/file-history";
 import { sessionPath } from "@yukino.js/storage";
 import { FileMailbox } from "@yukino.js/teams/file-mailbox.js";
 import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
+import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
 

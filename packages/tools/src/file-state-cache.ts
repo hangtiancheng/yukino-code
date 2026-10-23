@@ -2,12 +2,13 @@ import { statSync } from "fs";
 import { resolve } from "path";
 
 import { createChildLogger } from "@yukino.js/logger";
+import { canonicalPath } from "@yukino.js/utils/paths.js";
+
 import {
   FILE_DELETED_ERROR,
   FILE_MODIFIED_ERROR,
   FILE_NOT_READ_ERROR,
 } from "./constants.js";
-import { canonicalPath } from "@yukino.js/utils/paths.js";
 
 const log = createChildLogger({ module: "file-state-cache" });
 

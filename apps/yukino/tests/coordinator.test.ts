@@ -2,19 +2,18 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-
 import { coordinatorReminder } from "@yukino.js/prompt/coordinator.js";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { TeamManager } from "@yukino.js/teams";
 import {
   isCoordinatorTool,
   coordinatorToolFilter,
   coordinatorActive,
 } from "@yukino.js/teams/coordinator.js";
-import { TeamManager } from "@yukino.js/teams";
 import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
 import { SyntheticOutputTool } from "@yukino.js/tools/synthetic-output.js";
 import { asString } from "@yukino.js/utils";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // The teams directory lives at <home>/.yukino/teams, so the tests redirect the
 // entire home directory to a temp dir to avoid leaving residue in the real

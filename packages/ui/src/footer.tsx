@@ -1,7 +1,8 @@
+import type { ThinkingLevel } from "@yukino.js/config/provider-config.js";
+import { compactPath } from "@yukino.js/utils/paths.js";
 import chalk from "chalk";
 import { Box, Text } from "ink";
 
-import type { ThinkingLevel } from "@yukino.js/config/provider-config.js";
 import { MODE_DISPLAY, THEME } from "./constants.js";
 import { thinkingLevelColor } from "./styles.js";
 import {
@@ -13,7 +14,6 @@ import {
   useAvailableRows,
   useTerminalDimensions,
 } from "./use-terminal-layout.js";
-import { compactPath } from "@yukino.js/utils/paths.js";
 
 interface FooterProps {
   contextTokens: number;

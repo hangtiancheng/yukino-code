@@ -1,6 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-
 import {
   MIN_THINKING_ANSWER_TOKENS,
   THINKING_LEVELS,
@@ -14,6 +11,8 @@ import { AnthropicClient } from "@yukino.js/llm/anthropic.js";
 import type { LLMClient, LLMStreamOptions } from "@yukino.js/llm/client.js";
 import { OpenAIClient, OpenAICompatClient } from "@yukino.js/llm/openai.js";
 import type { ToolSchema } from "@yukino.js/tools/types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const protocols: ProviderConfig["protocol"][] = [
   "anthropic",

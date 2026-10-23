@@ -1,8 +1,7 @@
-import { describe, it, expect } from "vitest";
-
 import { removeMcpTools } from "@yukino.js/bootstrap/tool-registry.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool } from "@yukino.js/tools/types.js";
+import { describe, it, expect } from "vitest";
 
 function stubTool(name: string, deferred = false): Tool {
   return {

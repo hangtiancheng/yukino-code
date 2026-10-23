@@ -2,8 +2,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { PermissionChecker } from "@yukino.js/permissions";
@@ -11,11 +9,11 @@ import { createPlanPath } from "@yukino.js/plan-file";
 import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
 import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
 import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TeamManager } from "@yukino.js/teams";
 import {
   LEADER_NAME,
   MSG_PLAN_APPROVAL_RESPONSE,
 } from "@yukino.js/teams/constants.js";
-import { TeamManager } from "@yukino.js/teams";
 import {
   planApprovalResponse,
   shutdownRequest,
@@ -24,6 +22,7 @@ import { SendMessageTool } from "@yukino.js/teams/tools.js";
 import { EnterPlanModeTool } from "@yukino.js/tools/enter-plan-mode.js";
 import { ExitPlanModeTool } from "@yukino.js/tools/exit-plan-mode.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

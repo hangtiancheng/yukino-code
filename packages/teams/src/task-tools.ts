@@ -1,3 +1,12 @@
+import type {
+  Task,
+  TaskBoard,
+  TaskList,
+  TodoWriteInput,
+} from "@yukino.js/todo";
+import { PRIVATE_BOARD_ID_PREFIX } from "@yukino.js/todo/constants.js";
+import { TodoWriteTool } from "@yukino.js/todo/tools.js";
+
 import {
   buildTeammateUnavailableForAssignmentError,
   LEADER_NAME,
@@ -5,16 +14,9 @@ import {
   NO_TEAM_TASK_BOARD_ERROR,
   TEAM_BOARD_ID_PREFIX,
 } from "./constants.js";
-import type { Team, TeamManager } from "./index.js";
 import { buildTaskAssignmentPrompt } from "./prompts.js";
-import { PRIVATE_BOARD_ID_PREFIX } from "@yukino.js/todo/constants.js";
-import type {
-  Task,
-  TaskBoard,
-  TaskList,
-  TodoWriteInput,
-} from "@yukino.js/todo";
-import { TodoWriteTool } from "@yukino.js/todo/tools.js";
+
+import type { Team, TeamManager } from "./index.js";
 
 class TeamTaskBoard implements TaskBoard {
   constructor(

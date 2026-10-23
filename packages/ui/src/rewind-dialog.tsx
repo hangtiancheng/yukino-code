@@ -1,8 +1,8 @@
+import type { Snapshot } from "@yukino.js/file-history";
 import { Box, Text, useInput } from "ink";
 import type { DOMElement } from "ink";
 import { useRef, useState } from "react";
 
-import type { Snapshot } from "@yukino.js/file-history";
 import { ICONS, RESTORE_OPTIONS, THEME } from "./constants.js";
 import { SelectorFrame } from "./selector-frame.js";
 

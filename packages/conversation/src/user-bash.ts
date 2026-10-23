@@ -6,12 +6,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import {
-  USER_BASH_EXCLUDED_PREFIX,
-  USER_BASH_INLINE_OUTPUT_BYTES,
-  USER_BASH_INLINE_OUTPUT_LINES,
-  USER_BASH_PREFIX,
-} from "./constants.js";
-import {
   mkdirPrivateSync as mkdirSync,
   writePrivateFileSync as writeFileSync,
 } from "@yukino.js/storage/private.js";
@@ -19,6 +13,13 @@ import { spillDir } from "@yukino.js/tool-result";
 import type { BashTool } from "@yukino.js/tools/bash.js";
 import type { ToolContext, ToolResult } from "@yukino.js/tools/types.js";
 import { asErrorString, plainTerminalText } from "@yukino.js/utils";
+
+import {
+  USER_BASH_EXCLUDED_PREFIX,
+  USER_BASH_INLINE_OUTPUT_BYTES,
+  USER_BASH_INLINE_OUTPUT_LINES,
+  USER_BASH_PREFIX,
+} from "./constants.js";
 
 export function parseUserBashCommand(
   text: string,

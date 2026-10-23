@@ -3,8 +3,6 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
-
 import { TeamManager } from "@yukino.js/teams";
 import { getNameRegistry } from "@yukino.js/teams/registry.js";
 import {
@@ -13,6 +11,7 @@ import {
   teamDir,
   teamsBaseDir,
 } from "@yukino.js/teams/team-file.js";
+import { describe, expect, test, beforeEach, afterEach } from "vitest";
 
 // The teams directory lives at <home>/.yukino/teams, so redirect the entire
 // home directory to a temp dir to avoid leaving residue in the real

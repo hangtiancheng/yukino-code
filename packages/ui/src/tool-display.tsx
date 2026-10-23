@@ -1,6 +1,7 @@
+import { isDiffTool } from "@yukino.js/tools/is-diff-tool.js";
+import { formatToolArgs, plainTerminalText } from "@yukino.js/utils";
 import { Box, Text } from "ink";
 
-import { isDiffTool } from "@yukino.js/tools/is-diff-tool.js";
 import { THEME } from "./constants.js";
 import { DiffLines } from "./diff-render.js";
 import {
@@ -12,7 +13,6 @@ import {
 } from "./terminal-text.js";
 import { formatToolOutputPreview } from "./tool-preview.js";
 import { useTerminalDimensions } from "./use-terminal-layout.js";
-import { formatToolArgs, plainTerminalText } from "@yukino.js/utils";
 
 export type ToolCardStatus = "running" | "completed" | "failed" | "stopped";
 

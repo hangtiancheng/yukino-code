@@ -1,9 +1,9 @@
+import { isDiffTool } from "@yukino.js/tools/is-diff-tool.js";
+import { plainTerminalText } from "@yukino.js/utils";
 import { Chalk } from "chalk";
 
-import { isDiffTool } from "@yukino.js/tools/is-diff-tool.js";
 import { THEME } from "./constants.js";
 import { expandTabs, wrapToLines } from "./terminal-text.js";
-import { plainTerminalText } from "@yukino.js/utils";
 
 const colors = new Chalk({ level: 3 });
 

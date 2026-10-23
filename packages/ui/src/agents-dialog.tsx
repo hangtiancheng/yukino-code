@@ -1,11 +1,11 @@
-import { Box, Text, useInput } from "ink";
-import type { DOMElement } from "ink";
-import { useEffect, useRef, useState } from "react";
-
 import type { AgentTask } from "@yukino.js/subagent/task-manager.js";
 import type { TeammateUIState } from "@yukino.js/teams/progress.js";
 import { formatTokens } from "@yukino.js/teams/progress.js";
 import { toDisplayPreview } from "@yukino.js/tool-result";
+import type { DOMElement } from "ink";
+import { Box, Text, useInput } from "ink";
+import { useEffect, useRef, useState } from "react";
+
 import type { SubagentProgress } from "./agent-tool-progress.js";
 import {
   AGENTS_DIALOG_EMPTY,

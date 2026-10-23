@@ -15,6 +15,8 @@ import { open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
+import { isPathWithin } from "@yukino.js/utils/paths.js";
+
 import {
   PRIVATE_DIR_MODE,
   PRIVATE_FILE_MODE,
@@ -22,7 +24,6 @@ import {
   PUBLIC_STATE_SEGMENTS,
   YUKINO_DIR_NAME,
 } from "./constants.js";
-import { isPathWithin } from "@yukino.js/utils/paths.js";
 
 export function isPrivateStatePath(path: string): boolean {
   const root = join(homedir(), YUKINO_DIR_NAME);

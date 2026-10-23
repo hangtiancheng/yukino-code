@@ -2,8 +2,6 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
@@ -11,6 +9,7 @@ import { BackgroundMemoryTasks } from "@yukino.js/memory/background.js";
 import { MemoryConsolidator } from "@yukino.js/memory/consolidation.js";
 import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
 import { projectPath } from "@yukino.js/storage";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const directories: string[] = [];
 afterEach(() => {

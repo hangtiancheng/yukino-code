@@ -1,7 +1,7 @@
-import { memo } from "react";
-
 import type { AgentTask } from "@yukino.js/subagent/task-manager.js";
 import type { TeammateUIState } from "@yukino.js/teams/progress.js";
+import { memo } from "react";
+
 import {
   AgentToolProgress,
   type SubagentProgress,

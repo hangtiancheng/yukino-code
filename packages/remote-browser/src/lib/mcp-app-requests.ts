@@ -1,10 +1,11 @@
+import type { McpAppRequest } from "@yukino.js/mcp/apps.js";
+
 import {
   MCP_APP_DISCONNECTED,
   MCP_APP_REQUEST_TIMEOUT,
   MCP_APP_REQUEST_TIMEOUT_MS,
 } from "#/constants.js";
 import type { ClientMessage, ServerMessage } from "#/types.js";
-import type { McpAppRequest } from "@yukino.js/mcp/apps.js";
 
 export type AppOperation = McpAppRequest extends infer R
   ? R extends McpAppRequest

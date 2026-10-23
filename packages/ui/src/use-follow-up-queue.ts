@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-
 import type { InputEntry } from "@yukino.js/history";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Options {
   blocked: boolean;

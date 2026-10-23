@@ -10,9 +10,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-
 import { Agent } from "@yukino.js/agent";
 import { ConversationManager, type Message } from "@yukino.js/conversation";
 import {
@@ -39,6 +36,8 @@ import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { ToolContext } from "@yukino.js/tools/types.js";
 import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 import * as worktrees from "@yukino.js/worktree";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const end: StreamEvent = {
   type: "stream_end",

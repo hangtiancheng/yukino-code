@@ -1,5 +1,7 @@
 import { DEFAULT_MAX_OUTPUT_TOKENS } from "@yukino.js/config/constants.js";
 import type { Message } from "@yukino.js/conversation";
+import { contentToText } from "@yukino.js/utils";
+
 import type { AnalyzeInput } from "./analyze.js";
 import {
   ANSWER_RESERVE_TOKENS,
@@ -15,7 +17,6 @@ import {
   MIN_ANALYSIS_BUDGET_TOKENS,
   SYSTEM_PROMPT_RESERVE_TOKENS,
 } from "./constants.js";
-import { contentToText } from "@yukino.js/utils";
 
 export const ANALYSIS_INSTRUCTIONS = [
   "Prepare concise bug reports about yukino, the terminal coding agent, from this session.",

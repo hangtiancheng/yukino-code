@@ -1,3 +1,4 @@
+import { registerExitCleanup } from "@yukino.js/bootstrap/exit-cleanup.js";
 import {
   Box,
   Text,
@@ -10,7 +11,6 @@ import type { DOMElement } from "ink";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { registerExitCleanup } from "@yukino.js/bootstrap/exit-cleanup.js";
 import { visibleWidth } from "./terminal-text.js";
 import { useTerminalDimensions } from "./use-terminal-layout.js";
 

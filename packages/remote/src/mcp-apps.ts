@@ -2,14 +2,15 @@ import type { McpAppToolResult, McpAppRequest } from "@yukino.js/mcp/apps.js";
 import type { MCPClient } from "@yukino.js/mcp/client.js";
 import { buildMcpToolName } from "@yukino.js/mcp/tool-wrapper.js";
 import { requestToolPermission } from "@yukino.js/permissions/request.js";
+import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
+import { isRecord } from "@yukino.js/utils";
+
 import {
   MCP_APP_EXPIRED,
   MCP_APP_TOOL_UNAVAILABLE,
   MCP_APP_PERMISSION_DENIED,
 } from "./constants.js";
 import type { RemoteAgentHandle } from "./server.js";
-import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
-import { isRecord } from "@yukino.js/utils";
 
 export type McpAppHandle = Pick<
   RemoteAgentHandle,

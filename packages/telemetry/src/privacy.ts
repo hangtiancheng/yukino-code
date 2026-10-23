@@ -1,11 +1,12 @@
 import { homedir } from "node:os";
 
-import { REDACTED_PLACEHOLDER, SENSITIVE_KEY_PATTERN } from "./constants.js";
 import { isRecord } from "@yukino.js/utils";
 import {
   redactCredentials,
   environmentSecrets,
 } from "@yukino.js/utils/redact.js";
+
+import { REDACTED_PLACEHOLDER, SENSITIVE_KEY_PATTERN } from "./constants.js";
 
 export function scrubTelemetryPayload(value: unknown): void {
   const secrets = environmentSecrets();

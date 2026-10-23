@@ -1,9 +1,10 @@
+import { getCommandUsage, type CommandUsage } from "@yukino.js/history";
+
 import {
   COMMAND_RECENCY_HALF_LIFE_DAYS,
   COMMAND_MIN_RECENCY_WEIGHT,
   MILLISECONDS_PER_DAY,
 } from "./constants.js";
-import { getCommandUsage, type CommandUsage } from "@yukino.js/history";
 
 export class CommandUsageTracker {
   getScore(name: string): number {

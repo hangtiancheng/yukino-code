@@ -9,6 +9,7 @@ import type {
   TaskStatus,
   TaskStatusUpdateEvent,
 } from "@a2a-js/sdk";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { z } from "zod";
 
 import {
@@ -21,7 +22,6 @@ import {
   TRUNCATION_MARKER,
   YUKINO_DATA_KEY,
 } from "./constants.js";
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 
 export const PermissionRequestDataSchema = z.object({
   [YUKINO_DATA_KEY]: z.literal(PERMISSION_REQUEST_KIND),

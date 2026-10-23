@@ -3,10 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { closeLogger, initLogger } from "@yukino.js/logger";
 import { detectEnvironment } from "@yukino.js/prompt/builder.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let directory: string;
 let logPath: string;

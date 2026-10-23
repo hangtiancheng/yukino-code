@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify, stripVTControlCharacters } from "node:util";
 
+import { writePrivateFileSync as writeFileSync } from "@yukino.js/storage/private.js";
+import { version } from "@yukino.js/version";
 import { z } from "zod";
 
 import {
@@ -24,8 +26,6 @@ import {
   PROBE_TIMEOUT_MS,
 } from "./constants.js";
 import type { CollectedFile, FeedbackChannel } from "./types.js";
-import { writePrivateFileSync as writeFileSync } from "@yukino.js/storage/private.js";
-import { version } from "@yukino.js/version";
 
 const execFileAsync = promisify(execFile);
 

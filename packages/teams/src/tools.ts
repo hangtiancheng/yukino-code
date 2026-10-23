@@ -1,4 +1,12 @@
 import { createChildLogger } from "@yukino.js/logger";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@yukino.js/tools/types.js";
+import { asErrorString, strArg } from "@yukino.js/utils";
+
 import {
   BROADCAST_TARGET,
   buildBroadcastSentMessage,
@@ -21,7 +29,6 @@ import {
   SHUTDOWN_LEADER_ONLY_ERROR,
   SHUTDOWN_RESPONSE_APPROVE_REQUIRED_ERROR,
 } from "./constants.js";
-import type { TeamManager, Team } from "./index.js";
 import {
   buildSendMessageTypeDescription,
   LIST_TEAM_TOOL_DESCRIPTION,
@@ -36,13 +43,8 @@ import {
 } from "./prompts.js";
 import { shutdownRequest, shutdownResponse } from "./protocol.js";
 import { getNameRegistry } from "./registry.js";
-import type {
-  Tool,
-  ToolContext,
-  ToolResult,
-  ToolSchema,
-} from "@yukino.js/tools/types.js";
-import { asErrorString, strArg } from "@yukino.js/utils";
+
+import type { TeamManager, Team } from "./index.js";
 
 const log = createChildLogger({ module: "teams" });
 export class TeamCreateTool implements Tool {

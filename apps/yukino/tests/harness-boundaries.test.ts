@@ -2,10 +2,8 @@ import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent, type AgentConfig } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { ContextTooLongError } from "@yukino.js/llm/errors.js";
@@ -14,6 +12,7 @@ import { PermissionChecker } from "@yukino.js/permissions";
 import { yukinoPath, projectPath } from "@yukino.js/storage";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool } from "@yukino.js/tools/types.js";
+import { describe, expect, it, vi } from "vitest";
 
 const end: StreamEvent = {
   type: "stream_end",

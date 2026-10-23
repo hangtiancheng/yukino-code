@@ -17,10 +17,11 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitAny": false,
-    "noImplicitReturns": true,
+    // DOM lib is excluded: its ReadableStream/Response globals collide with
+    // node's when typechecking the @yukino.js/* sources that the
+    // @yukino.js/yukino types re-export, and the strictness flags here must
+    // stay compatible with that library compile environment.
+    "lib": ["esnext"],
     "composite": true,
     "types": ["electron-vite/node", "node"],
     "paths": {

@@ -2,8 +2,6 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { expect, it, vi } from "vitest";
-
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import { BashTool } from "@yukino.js/tools/bash.js";
 import { BACKGROUND_NOTIFICATION_BYTES } from "@yukino.js/tools/constants.js";
@@ -18,6 +16,7 @@ import {
   readOutputFile,
   type ShellExit,
 } from "@yukino.js/tools/shell-background.js";
+import { expect, it, vi } from "vitest";
 
 it.each([
   { exit: { code: 0 }, isError: false, message: "captured" },

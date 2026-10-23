@@ -2,8 +2,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import * as os from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
@@ -25,6 +23,7 @@ import { TodoWriteTool } from "@yukino.js/todo/tools.js";
 import { BashTool } from "@yukino.js/tools/bash.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool, ToolContext } from "@yukino.js/tools/types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("node:os", async (original) => ({
   ...(await original<typeof os>()),
   homedir: vi.fn(),

@@ -1,6 +1,4 @@
 import { createChildLogger } from "@yukino.js/logger";
-import type { MCPClient, MCPTool } from "./client.js";
-import { MCP_NAME_SEP, MCP_TOOL_PREFIX } from "./constants.js";
 import type {
   MCPToolLike,
   ToolResult,
@@ -9,6 +7,9 @@ import type {
   ToolSchema,
 } from "@yukino.js/tools/types.js";
 import { asErrorString } from "@yukino.js/utils";
+
+import type { MCPClient, MCPTool } from "./client.js";
+import { MCP_NAME_SEP, MCP_TOOL_PREFIX } from "./constants.js";
 
 const log = createChildLogger({ module: "mcp" });
 

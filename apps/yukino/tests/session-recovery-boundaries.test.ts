@@ -2,8 +2,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
-
 import {
   loadSession,
   rebuildFromSession,
@@ -11,6 +9,7 @@ import {
   saveMessage,
   type SessionMessage,
 } from "@yukino.js/session";
+import { afterEach, describe, expect, it } from "vitest";
 
 const directories: string[] = [];
 afterEach(() => {

@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { runUpdate } from "@yukino.js/update";
 import { version } from "@yukino.js/version";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const install = vi.hoisted(() => ({
   getSelfUpdateCommand: vi.fn(),

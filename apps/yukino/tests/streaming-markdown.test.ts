@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
-
 import { stableStreamingPrefix } from "@yukino.js/ui/streaming-markdown.js";
+import { describe, expect, it } from "vitest";
 
 describe("stable streaming blocks", () => {
   it("holds the final list across blank lines and continuation items", () => {

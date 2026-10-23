@@ -10,10 +10,6 @@ import { tmpdir } from "node:os";
 import type * as nodeOs from "node:os";
 import { join } from "node:path";
 
-import yaml from "js-yaml";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-
 import { createDefaultRegistry, parse } from "@yukino.js/commands/commands.js";
 import { loadConfig } from "@yukino.js/config";
 import { globalConfigPath } from "@yukino.js/config/provider-config.js";
@@ -22,6 +18,9 @@ import {
   saveProvider,
 } from "@yukino.js/config/provider-login.js";
 import { yukinoPath } from "@yukino.js/storage";
+import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 // Point os.homedir() at a temp dir so persistModel writes to an isolated
 // global config instead of the real ~/.yukino/config.yaml.

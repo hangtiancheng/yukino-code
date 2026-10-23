@@ -1,4 +1,6 @@
 import { createChildLogger } from "@yukino.js/logger";
+import { asErrorString } from "@yukino.js/utils";
+
 import {
   DEFAULT_TASK_ID_PREFIX,
   MAX_RETAINED_FINISHED_TASKS,
@@ -14,7 +16,6 @@ import {
   BackgroundTaskStore,
   type StoredBackgroundTask,
 } from "./task-store.js";
-import { asErrorString } from "@yukino.js/utils";
 
 const log = createChildLogger({ module: "tasks" });
 

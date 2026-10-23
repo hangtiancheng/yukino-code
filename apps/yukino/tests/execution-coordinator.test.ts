@@ -10,8 +10,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { PermissionChecker } from "@yukino.js/permissions";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import { BashTool } from "@yukino.js/tools/bash.js";
@@ -20,6 +18,7 @@ import {
   acquireWorkspaceMutation,
 } from "@yukino.js/tools/execution-coordinator.js";
 import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let cwd: string;
 let tasks: TaskManager;

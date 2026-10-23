@@ -1,7 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { MCPClient } from "@yukino.js/mcp/client.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => vi.restoreAllMocks());
 function connected() {

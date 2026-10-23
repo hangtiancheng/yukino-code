@@ -8,8 +8,6 @@ import {
 import * as os from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { Agent } from "@yukino.js/agent";
 import { configureBashSandbox } from "@yukino.js/bootstrap/sandbox.js";
 import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
@@ -35,6 +33,7 @@ import { EnterPlanModeTool } from "@yukino.js/tools/enter-plan-mode.js";
 import { ExitPlanModeTool } from "@yukino.js/tools/exit-plan-mode.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { WebFetchTool } from "@yukino.js/tools/web-fetch.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

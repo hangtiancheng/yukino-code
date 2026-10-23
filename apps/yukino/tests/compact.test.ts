@@ -1,5 +1,3 @@
-import { describe, it, expect } from "vitest";
-
 import {
   estimateTokens,
   estimateMessages,
@@ -14,6 +12,7 @@ import { ConversationManager, type Message } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
 import { contentToText } from "@yukino.js/utils";
+import { describe, it, expect } from "vitest";
 
 // A stub LLM that emits a fixed summary and records the text it was asked to
 // summarize, so tests can assert what the summary covered.

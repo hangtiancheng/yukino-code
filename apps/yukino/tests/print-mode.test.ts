@@ -8,11 +8,8 @@ import {
 import * as os from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MockInstance } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import * as config from "@yukino.js/config";
 import type { AppConfig } from "@yukino.js/config";
 import { GoalManager } from "@yukino.js/goal";
@@ -21,7 +18,6 @@ import type { StreamEvent } from "@yukino.js/llm/events.js";
 import { OpenAIClient } from "@yukino.js/llm/openai.js";
 import { MCPManager } from "@yukino.js/mcp/manager.js";
 import * as mcpStrategy from "@yukino.js/mcp/strategy.js";
-import { runPrintMode } from "@/print-mode.js";
 import { createRemoteAgent } from "@yukino.js/remote/server.js";
 import { restoreRemoteSession } from "@yukino.js/remote/session-state.js";
 import {
@@ -38,6 +34,10 @@ import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import type { ToolContext } from "@yukino.js/tools/types.js";
 import { contentToText } from "@yukino.js/utils";
 import * as worktrees from "@yukino.js/worktree";
+import type { MockInstance } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { runPrintMode } from "@/print-mode.js";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

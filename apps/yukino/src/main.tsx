@@ -1,7 +1,4 @@
-import { render } from "ink";
-
 import type { InteractionSummary } from "@yukino.js/bootstrap/interaction-summary.js";
-import type { RuntimeMode } from "@/cli.js";
 import {
   forkEnabled,
   hydrateConfigEnv,
@@ -10,8 +7,6 @@ import {
   withProjectMcpServers,
 } from "@yukino.js/config";
 import { initLogger, logger } from "@yukino.js/logger";
-import { runPrintMode } from "@/print-mode.js";
-import { recover, recordError, recordExit } from "@/recover.js";
 import { newSessionId } from "@yukino.js/session";
 import {
   captureTelemetryError,
@@ -27,6 +22,11 @@ import { TerminalInput } from "@yukino.js/ui/terminal-input.js";
 import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
 import { detectTerminalTheme } from "@yukino.js/ui/terminal-theme.js";
 import { asErrorString } from "@yukino.js/utils";
+import { render } from "ink";
+
+import type { RuntimeMode } from "@/cli.js";
+import { runPrintMode } from "@/print-mode.js";
+import { recover, recordError, recordExit } from "@/recover.js";
 
 async function runAcpMode(
   mode: Extract<RuntimeMode, { kind: "acp" | "acp-ws" }>,

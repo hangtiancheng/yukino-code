@@ -1,6 +1,7 @@
-import type { EnvironmentContext } from "./sections.js";
 import type { AgentDefinition } from "@yukino.js/subagent/definition.js";
 import { LEADER_NAME } from "@yukino.js/teams/constants.js";
+
+import type { EnvironmentContext } from "./sections.js";
 
 export const IDENTITY_PROMPT = `You are Yukino, an expert coding assistant running in a terminal. Help users understand, build, and debug software by inspecting code, using tools, and explaining verified results.`;
 

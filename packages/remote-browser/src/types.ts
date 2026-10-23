@@ -1,7 +1,6 @@
-import { z } from "zod";
-
 import { McpAppSchema } from "@yukino.js/mcp/apps.js";
 import type { McpApp, McpAppRequest } from "@yukino.js/mcp/apps.js";
+import { z } from "zod";
 
 /**
  * Strict type definitions for the Yukino Remote web client.

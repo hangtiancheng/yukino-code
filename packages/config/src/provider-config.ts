@@ -7,6 +7,7 @@
  * nested `Config.ProviderLogin` re-export.
  */
 
+import { yukinoPath } from "@yukino.js/storage";
 import { z } from "zod";
 
 import {
@@ -19,7 +20,6 @@ import {
   THINKING_BUDGETS,
   THINKING_LEVELS,
 } from "./constants.js";
-import { yukinoPath } from "@yukino.js/storage";
 
 export function globalConfigPath(): string {
   return yukinoPath(GLOBAL_CONFIG_FILENAME);

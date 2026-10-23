@@ -32,8 +32,11 @@ const dependencyNames = [
 /**
  * Recompute the ui-only set from the sources: a dependency is ui-only
  * when every module importing it belongs to the terminal layer
- * (apps/yukino/src/main.tsx and packages/ui). Type-only imports are ignored —
- * they are erased and cannot make a package reachable at runtime.
+ * (apps/yukino/src/main.tsx and packages/ui/src). Type-only imports are
+ * ignored — they are erased and cannot make a package reachable at runtime.
+ * Workspace packages (@yukino.js/*) are not candidates: they are source-level
+ * and always bundled into the library build, and the ui package itself is
+ * banned by its own rule in banUIOnlyPlugin.
  */
 const deriveUIOnlyDeps = (): string[] => {
   const importSites = new Map<string, Set<string>>();
@@ -97,8 +100,14 @@ const deriveUIOnlyDeps = (): string[] => {
   // (react, react-dom, dompurify, marked) must not count as import sites here.
   const browserPrefix = "packages/remote-browser/";
 
+  // Per-package pnpm node_modules trees hold symlinked dependencies whose
+  // shipped .d.ts files would otherwise count as non-terminal import sites.
   const walk = (directory: string): void => {
-    for (const entry of ts.sys.readDirectory(directory, [".ts", ".tsx"])) {
+    for (const entry of ts.sys.readDirectory(
+      directory,
+      [".ts", ".tsx"],
+      ["**/node_modules/**"],
+    )) {
       const relativeEntry = entry
         .slice(repoRoot.length + 1)
         .replaceAll("\\", "/");
@@ -116,6 +125,7 @@ const deriveUIOnlyDeps = (): string[] => {
     path.startsWith("packages/ui/src/") || path === "apps/yukino/src/main.tsx";
 
   return dependencyNames
+    .filter((dependency) => !dependency.startsWith("@yukino.js/"))
     .filter((dependency) => {
       const sites = importSites.get(dependency);
       return (

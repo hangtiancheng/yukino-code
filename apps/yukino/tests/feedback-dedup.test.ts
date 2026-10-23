@@ -1,5 +1,3 @@
-import { describe, expect, it } from "vitest";
-
 import {
   filterDuplicateDrafts,
   issueFingerprint,
@@ -7,6 +5,7 @@ import {
   recordFiledIssues,
 } from "@yukino.js/feedback/dedup.js";
 import type { FiledIssueRecord } from "@yukino.js/feedback/types.js";
+import { describe, expect, it } from "vitest";
 
 const SESSION = "dedup-test-session";
 

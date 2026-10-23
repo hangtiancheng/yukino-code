@@ -2,10 +2,6 @@ import { PassThrough } from "node:stream";
 import { setImmediate as nextTick } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
-import { Text, render, type Instance } from "ink";
-import { act, createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { ChatMessage } from "@yukino.js/ui/chat.js";
 import type { InputDraft } from "@yukino.js/ui/input-draft.js";
 import { InputBox } from "@yukino.js/ui/input.js";
@@ -15,6 +11,9 @@ import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
 import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
 import { detectTerminalTheme } from "@yukino.js/ui/terminal-theme.js";
 import { Transcript } from "@yukino.js/ui/transcript.js";
+import { Text, render, type Instance } from "ink";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function fakeTerminal() {
   const stream = new PassThrough();

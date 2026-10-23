@@ -1,5 +1,3 @@
-import { afterEach, describe, expect, it } from "vitest";
-
 import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
 import { DARK_THEME, LIGHT_THEME } from "@yukino.js/theme/constants.js";
 import { THEME } from "@yukino.js/ui/constants.js";
@@ -14,6 +12,7 @@ import {
   themeForRgb,
   themeFromEnvironment,
 } from "@yukino.js/ui/terminal-theme.js";
+import { afterEach, describe, expect, it } from "vitest";
 
 afterEach(() => {
   setThemeMode("dark");

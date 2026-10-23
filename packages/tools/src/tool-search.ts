@@ -1,4 +1,6 @@
 import { MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
+import { intArg, strArg } from "@yukino.js/utils";
+
 import { QUERY_REQUIRED_ERROR } from "./constants.js";
 import {
   TOOL_SEARCH_DESCRIPTION,
@@ -14,7 +16,6 @@ import {
   type ToolResultContentBlock,
   type ToolSchema,
 } from "./types.js";
-import { intArg, strArg } from "@yukino.js/utils";
 
 export class ToolSearchTool implements Tool {
   name = "ToolSearch";

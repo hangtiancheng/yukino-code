@@ -1,18 +1,17 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { render, useInput } from "ink";
-import type { Instance, Key } from "ink";
-import type * as Ink from "ink";
-import { act, createElement } from "react";
-import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { DiscoveredModel } from "@yukino.js/llm/model-discovery.js";
 import { ICONS, OTHER_LABEL } from "@yukino.js/ui/constants.js";
 import {
   ModelSelect,
   type ModelPickerState,
 } from "@yukino.js/ui/model-select.js";
+import { render, useInput } from "ink";
+import type { Instance, Key } from "ink";
+import type * as Ink from "ink";
+import { act, createElement } from "react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),

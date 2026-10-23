@@ -1,12 +1,12 @@
+import { globalConfigPath } from "@yukino.js/config/provider-config.js";
+import type * as loggerModule from "@yukino.js/logger";
+import { writePrivateFileSync } from "@yukino.js/storage/private.js";
+import { detectTerminalTheme } from "@yukino.js/ui/terminal-theme.js";
 import { render } from "ink";
 import { isValidElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { globalConfigPath } from "@yukino.js/config/provider-config.js";
-import type * as loggerModule from "@yukino.js/logger";
 import { runMode } from "@/main.js";
-import { writePrivateFileSync } from "@yukino.js/storage/private.js";
-import { detectTerminalTheme } from "@yukino.js/ui/terminal-theme.js";
 
 vi.mock("ink", () => ({
   render: vi.fn(() => ({ waitUntilExit: () => Promise.resolve() })),

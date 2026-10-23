@@ -1,5 +1,3 @@
-import { describe, expect, it } from "vitest";
-
 import { ConversationManager } from "@yukino.js/conversation";
 import { MCP_INSTRUCTIONS_MARKER } from "@yukino.js/mcp/constants.js";
 import {
@@ -9,6 +7,7 @@ import {
   type ReminderHistory,
 } from "@yukino.js/mcp/instructions.js";
 import { contentToText } from "@yukino.js/utils";
+import { describe, expect, it } from "vitest";
 
 class FakeHistory implements ReminderHistory {
   reminders: string[] = [];

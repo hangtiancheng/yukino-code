@@ -1,11 +1,5 @@
 import { join } from "node:path";
 
-import { render, type Instance } from "ink";
-import { act, createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { VirtualTerminal } from "./helpers/virtual-terminal.js";
-
 import * as config from "@yukino.js/config";
 import type { MCPServerConfig } from "@yukino.js/config";
 import type { ConversationManager } from "@yukino.js/conversation";
@@ -28,6 +22,11 @@ import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
 import { checkForUpdate } from "@yukino.js/update/version-check.js";
 import { contentToText } from "@yukino.js/utils";
 import { connectToIde } from "@yukino.js/vscode/ide-client.js";
+import { render, type Instance } from "ink";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
 const { createClientMock, feedbackMock } = vi.hoisted(() => ({
   createClientMock: vi.fn<() => Promise<LLMClient>>(),

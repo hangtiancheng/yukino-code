@@ -1,8 +1,9 @@
 import type { MCPServerConfig } from "@yukino.js/config";
 import { createChildLogger } from "@yukino.js/logger";
+import { asErrorString } from "@yukino.js/utils";
+
 import { MCPClient } from "./client.js";
 import type { MCPTool } from "./client.js";
-import { asErrorString } from "@yukino.js/utils";
 
 const log = createChildLogger({ module: "mcp" });
 

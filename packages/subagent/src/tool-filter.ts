@@ -1,11 +1,6 @@
 import { MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
 import type { PermissionMode } from "@yukino.js/permissions";
 import { LoadSkillTool } from "@yukino.js/skills/load-skill-tool.js";
-import {
-  ALL_TOOLS_WILDCARD,
-  ASYNC_AGENT_ALLOWED_TOOLS,
-  SUBAGENT_DISALLOWED_TOOLS,
-} from "./constants.js";
 import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
 import { TaskList } from "@yukino.js/todo";
 import { TodoWriteTool } from "@yukino.js/todo/tools.js";
@@ -13,6 +8,12 @@ import { McpCallTool } from "@yukino.js/tools/mcp-call.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import { ToolSearchTool } from "@yukino.js/tools/tool-search.js";
 import type { Tool } from "@yukino.js/tools/types.js";
+
+import {
+  ALL_TOOLS_WILDCARD,
+  ASYNC_AGENT_ALLOWED_TOOLS,
+  SUBAGENT_DISALLOWED_TOOLS,
+} from "./constants.js";
 
 function registerScopedTool(
   registry: ToolRegistry,

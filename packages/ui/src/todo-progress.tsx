@@ -1,8 +1,8 @@
+import type { Task } from "@yukino.js/todo";
+import { taskProgress } from "@yukino.js/todo/progress.js";
 import { Box, Text } from "ink";
 import { useEffect, useState } from "react";
 
-import type { Task } from "@yukino.js/todo";
-import { taskProgress } from "@yukino.js/todo/progress.js";
 import { THEME } from "./constants.js";
 import { plainTerminalLine } from "./terminal-text.js";
 

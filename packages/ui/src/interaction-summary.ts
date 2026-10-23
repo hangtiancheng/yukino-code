@@ -1,13 +1,13 @@
-import { Chalk } from "chalk";
-
 import {
   formatInteractionSummary,
   type InteractionSummary,
 } from "@yukino.js/bootstrap/interaction-summary.js";
+import { plainTerminalText } from "@yukino.js/utils";
+import { Chalk } from "chalk";
+
 import { THEME } from "./constants.js";
 import { renderMarkdown } from "./markdown.js";
 import { wrapWordsToLines } from "./terminal-text.js";
-import { plainTerminalText } from "@yukino.js/utils";
 
 interface SummaryOptions {
   columns?: number;

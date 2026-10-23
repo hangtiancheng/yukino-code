@@ -1,5 +1,3 @@
-import { describe, expect, test } from "vitest";
-
 import { needsToolSearchBeta } from "@yukino.js/llm/anthropic.js";
 import {
   applyMode,
@@ -28,6 +26,7 @@ import type {
   ToolSchema,
 } from "@yukino.js/tools/types.js";
 import { asRecord, strArg } from "@yukino.js/utils";
+import { describe, expect, test } from "vitest";
 
 const toolContext: ToolContext = { cwd: process.cwd() };
 

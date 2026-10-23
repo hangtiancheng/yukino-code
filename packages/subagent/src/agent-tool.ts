@@ -1,12 +1,28 @@
 import { randomBytes } from "node:crypto";
 
-import z from "zod";
-
 import type { ConversationManager } from "@yukino.js/conversation";
 import { sanitizeNameSegment } from "@yukino.js/logger";
 import { PermissionChecker } from "@yukino.js/permissions";
 import { newSessionId } from "@yukino.js/session";
 import { sessionPath } from "@yukino.js/storage";
+import type { TeamManager, RunAgent } from "@yukino.js/teams";
+import { LEADER_NAME } from "@yukino.js/teams/constants.js";
+import { TeamTodoWriteTool } from "@yukino.js/teams/task-tools.js";
+import { SendMessageTool } from "@yukino.js/teams/tools.js";
+import { OPERATION_INTERRUPTED_ERROR } from "@yukino.js/tools/constants.js";
+import { ExitPlanModeTool } from "@yukino.js/tools/exit-plan-mode.js";
+import type { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type {
+  Tool,
+  ToolResult,
+  ToolContext,
+  ToolSchema,
+} from "@yukino.js/tools/types.js";
+import { asErrorString, strArg } from "@yukino.js/utils";
+import { createAgentWorktree } from "@yukino.js/worktree";
+import { buildWorktreeNotice } from "@yukino.js/worktree/prompts.js";
+import z from "zod";
+
 import {
   AGENT_KINDS,
   DEFAULT_AGENT_KIND,
@@ -46,22 +62,6 @@ import {
   cloneRegistryForTeammate,
   filterToolsForAgent,
 } from "./tool-filter.js";
-import { LEADER_NAME } from "@yukino.js/teams/constants.js";
-import type { TeamManager, RunAgent } from "@yukino.js/teams";
-import { TeamTodoWriteTool } from "@yukino.js/teams/task-tools.js";
-import { SendMessageTool } from "@yukino.js/teams/tools.js";
-import { OPERATION_INTERRUPTED_ERROR } from "@yukino.js/tools/constants.js";
-import { ExitPlanModeTool } from "@yukino.js/tools/exit-plan-mode.js";
-import type { ToolRegistry } from "@yukino.js/tools/registry.js";
-import type {
-  Tool,
-  ToolResult,
-  ToolContext,
-  ToolSchema,
-} from "@yukino.js/tools/types.js";
-import { asErrorString, strArg } from "@yukino.js/utils";
-import { createAgentWorktree } from "@yukino.js/worktree";
-import { buildWorktreeNotice } from "@yukino.js/worktree/prompts.js";
 
 /** Worktree directory name. Uses a random string instead of the task description — spaces and non-ASCII characters in descriptions cannot be used directly as branch names. */
 function newAgentSlug(): string {

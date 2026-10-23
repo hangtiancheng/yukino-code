@@ -9,13 +9,9 @@ import { tmpdir } from "node:os";
 import { join, extname, normalize } from "node:path";
 import { cwd } from "node:process";
 
-import express, { type Express } from "express";
-import { WebSocketServer, WebSocket } from "ws";
-import z from "zod";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
 import type { SteeringMessage } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { configureBashSandbox } from "@yukino.js/bootstrap/sandbox.js";
 import {
   countMcpTools,
@@ -36,10 +32,10 @@ import {
   forceCompact,
 } from "@yukino.js/compact/compact.js";
 import { RecoveryState } from "@yukino.js/compact/recovery.js";
-import { DEFAULT_THINKING_LEVEL } from "@yukino.js/config/constants.js";
 import { loadConfig, withProjectMcpServers } from "@yukino.js/config";
 import type { McpLoading, SandboxYamlConfig } from "@yukino.js/config";
 import type { HookConfig, MCPServerConfig } from "@yukino.js/config";
+import { DEFAULT_THINKING_LEVEL } from "@yukino.js/config/constants.js";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import {
   getContextWindow,
@@ -53,10 +49,10 @@ import {
   persistThinkingLevel,
   saveProvider,
 } from "@yukino.js/config/provider-login.js";
-import { expandAtRefsWithImages } from "@yukino.js/conversation/at-expand.js";
-import { SYSTEM_REMINDER_OPEN } from "@yukino.js/conversation/constants.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { UserBashResult } from "@yukino.js/conversation";
+import { expandAtRefsWithImages } from "@yukino.js/conversation/at-expand.js";
+import { SYSTEM_REMINDER_OPEN } from "@yukino.js/conversation/constants.js";
 import { userBashContext } from "@yukino.js/conversation/prompts.js";
 import {
   executeUserBash,
@@ -101,26 +97,6 @@ import {
   buildPlanModeReentryReminder,
 } from "@yukino.js/prompt/plan-mode.js";
 import { buildPlanExecutionPrompt } from "@yukino.js/prompt/prompts.js";
-import { parseRemoteAddress } from "./address.js";
-import {
-  BROWSER_DIST,
-  MCP_APP_AGENT_DISCONNECTED,
-  FILE_CACHE_TTL_MS,
-  HEARTBEAT_INTERVAL_MS,
-  HEARTBEAT_STALE_MS,
-  INPUT_HISTORY_LIMIT,
-  MAX_UPLOAD_IMAGE_BYTES,
-  MIME_TYPES,
-  PENDING_REQUEST_TIMEOUT_MINUTES,
-  PENDING_REQUEST_TIMEOUT_MS,
-  SESSION_LIST_LIMIT,
-  SHUTDOWN_GRACE_MS,
-  TEAMMATE_POLL_INTERVAL_MS,
-  WAKEUP_POLL_INTERVAL_MS,
-} from "./constants.js";
-import { AgentEventLogger } from "./log.js";
-import { RemoteMcpApps } from "./mcp-apps.js";
-import { restoreRemoteSession } from "./session-state.js";
 import { createSandbox, type Sandbox } from "@yukino.js/sandbox";
 import {
   newSessionId,
@@ -133,12 +109,12 @@ import {
   truncateSessionLines,
   rebuildFromSession,
 } from "@yukino.js/session";
+import type { SkillForkHost, SkillHost } from "@yukino.js/skills";
 import { SkillCatalog } from "@yukino.js/skills/catalog.js";
 import {
   runFork as runSkillFork,
   runInline as runSkillInline,
 } from "@yukino.js/skills/executor.js";
-import type { SkillForkHost, SkillHost } from "@yukino.js/skills";
 import { LoadSkillTool } from "@yukino.js/skills/load-skill-tool.js";
 import { buildSkillSection } from "@yukino.js/skills/prompts.js";
 import {
@@ -159,11 +135,11 @@ import {
   type AgentEventSink,
 } from "@yukino.js/subagent/spawn.js";
 import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { TeamManager, type RunAgent } from "@yukino.js/teams";
 import {
   coordinatorToolFilter,
   coordinatorActive,
 } from "@yukino.js/teams/coordinator.js";
-import { TeamManager, type RunAgent } from "@yukino.js/teams";
 import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
 import { subscribeLeaderTasks } from "@yukino.js/teams/task-tools.js";
 import {
@@ -189,13 +165,13 @@ import {
 import { SyntheticOutputTool } from "@yukino.js/tools/synthetic-output.js";
 import type { ToolContext, ToolResult } from "@yukino.js/tools/types.js";
 import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
-import { filterFileMatches, scanCwdFiles } from "@yukino.js/utils/file-scan.js";
 import {
   asErrorString,
   contentToText,
   plainTerminalText,
   strArg,
 } from "@yukino.js/utils";
+import { filterFileMatches, scanCwdFiles } from "@yukino.js/utils/file-scan.js";
 import {
   authorizeWebSocketRequest,
   createWebSocketAccessToken,
@@ -205,6 +181,30 @@ import {
   attachWorkflow,
   getWorkflowService,
 } from "@yukino.js/workflow/wiring.js";
+import express, { type Express } from "express";
+import { WebSocketServer, WebSocket } from "ws";
+import z from "zod";
+
+import { parseRemoteAddress } from "./address.js";
+import {
+  BROWSER_DIST,
+  MCP_APP_AGENT_DISCONNECTED,
+  FILE_CACHE_TTL_MS,
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_STALE_MS,
+  INPUT_HISTORY_LIMIT,
+  MAX_UPLOAD_IMAGE_BYTES,
+  MIME_TYPES,
+  PENDING_REQUEST_TIMEOUT_MINUTES,
+  PENDING_REQUEST_TIMEOUT_MS,
+  SESSION_LIST_LIMIT,
+  SHUTDOWN_GRACE_MS,
+  TEAMMATE_POLL_INTERVAL_MS,
+  WAKEUP_POLL_INTERVAL_MS,
+} from "./constants.js";
+import { AgentEventLogger } from "./log.js";
+import { RemoteMcpApps } from "./mcp-apps.js";
+import { restoreRemoteSession } from "./session-state.js";
 
 const log = createChildLogger({ module: "remote" });
 

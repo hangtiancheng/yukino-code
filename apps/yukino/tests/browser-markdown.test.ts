@@ -1,10 +1,9 @@
-import { load } from "cheerio";
-import { describe, expect, it, vi } from "vitest";
-
 import {
   renderMarkdownBlock,
   tokenizeMarkdown,
 } from "@yukino.js/remote-browser/lib/markdown.js";
+import { load } from "cheerio";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("dompurify", () => ({
   default: { sanitize: (html: string) => html },

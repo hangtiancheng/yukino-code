@@ -1,8 +1,7 @@
+import { useNotificationWakeup } from "@yukino.js/ui/use-notification-wakeup.js";
 import { render, type Instance } from "ink";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { useNotificationWakeup } from "@yukino.js/ui/use-notification-wakeup.js";
 
 type Options = Parameters<typeof useNotificationWakeup>[0];
 let instance: Instance | undefined;

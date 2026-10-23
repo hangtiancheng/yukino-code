@@ -1,11 +1,11 @@
 import { stripVTControlCharacters } from "node:util";
 
+import { TaskList, type Task } from "@yukino.js/todo";
+import { TodoProgress } from "@yukino.js/ui/todo-progress.js";
 import { render, type Instance } from "ink";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TaskList, type Task } from "@yukino.js/todo";
-import { TodoProgress } from "@yukino.js/ui/todo-progress.js";
 let instance: Instance | undefined;
 let frame = "";
 beforeEach(() => {

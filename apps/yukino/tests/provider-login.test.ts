@@ -10,8 +10,6 @@ import { tmpdir } from "node:os";
 import type * as nodeOs from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
 import { loadConfig } from "@yukino.js/config";
 import { globalConfigPath } from "@yukino.js/config/provider-config.js";
@@ -22,6 +20,7 @@ import {
   saveProvider,
 } from "@yukino.js/config/provider-login.js";
 import { yukinoPath } from "@yukino.js/storage";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Point os.homedir() at a temp dir so saveProvider/persistThinkingLevel write
 // to an isolated global config instead of the real ~/.yukino/config.yaml.

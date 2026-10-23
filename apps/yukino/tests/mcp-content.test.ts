@@ -1,10 +1,9 @@
-import { describe, it, expect } from "vitest";
-
 import {
   expandMcpServerConfigEnvironment,
   mcpContentToToolOutput,
 } from "@yukino.js/mcp/client.js";
 import { isRecord } from "@yukino.js/utils";
+import { describe, it, expect } from "vitest";
 
 // Small buffers pass through maybeResizeAndDownsampleImage untouched (jimp is
 // only consulted above the passthrough limit), so fake bytes are fine here.

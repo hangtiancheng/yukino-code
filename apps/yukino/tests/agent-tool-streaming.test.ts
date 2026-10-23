@@ -1,7 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { ToolUseBlock } from "@yukino.js/conversation";
 import { HookEngine } from "@yukino.js/hooks";
@@ -13,6 +11,7 @@ import { TaskList } from "@yukino.js/todo";
 import { TodoWriteTool } from "@yukino.js/todo/tools.js";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool, ToolResult } from "@yukino.js/tools/types.js";
+import { describe, expect, it, vi } from "vitest";
 const end: StreamEvent = {
   type: "stream_end",
   stopReason: "end_turn",

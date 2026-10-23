@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
-
 import { MACOS_SNIPPET } from "@yukino.js/tools/snippets.js";
+import { describe, expect, it } from "vitest";
 
 describe("MACOS_SNIPPET", () => {
   it("emits a valid Swift backslash literal in the key map", () => {

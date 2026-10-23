@@ -1,15 +1,17 @@
 import { existsSync, realpathSync } from "node:fs";
 
+import { resolveToolPath } from "@yukino.js/utils/paths.js";
+
 import {
   SANDBOX_EXEC_PATH,
   SEATBELT_PATH_INVALID_CHARACTERS_ERROR,
 } from "./constants.js";
+
 import type {
   Sandbox,
   SandboxConfig,
   SandboxExecutionContext,
 } from "./index.js";
-import { resolveToolPath } from "@yukino.js/utils/paths.js";
 
 /**
  * macOS seatbelt sandbox implementation.

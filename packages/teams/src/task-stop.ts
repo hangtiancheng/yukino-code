@@ -1,4 +1,13 @@
 import type { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import type {
+  Tool,
+  ToolCategory,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@yukino.js/tools/types.js";
+import { strArg } from "@yukino.js/utils";
+
 import {
   buildBackgroundTaskNotFoundError,
   buildBackgroundTaskNotRunningMessage,
@@ -9,7 +18,6 @@ import {
   TASK_STOP_TARGET_REQUIRED_ERROR,
   TEAMMATE_STOP_LEADER_ONLY_ERROR,
 } from "./constants.js";
-import type { TeamManager } from "./index.js";
 import {
   TASK_STOP_SUBAGENT_TASK_ID_DESCRIPTION,
   TASK_STOP_SUBAGENT_TOOL_DESCRIPTION,
@@ -17,14 +25,8 @@ import {
   TASK_STOP_TEAMMATE_DESCRIPTION,
   TASK_STOP_TOOL_DESCRIPTION,
 } from "./prompts.js";
-import type {
-  Tool,
-  ToolCategory,
-  ToolContext,
-  ToolResult,
-  ToolSchema,
-} from "@yukino.js/tools/types.js";
-import { strArg } from "@yukino.js/utils";
+
+import type { TeamManager } from "./index.js";
 
 /** Abort a running teammate or one-shot background Agent/Bash/PowerShell task. */
 export class TaskStopTool implements Tool {

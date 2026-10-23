@@ -34,6 +34,8 @@ import {
   buildMcpToolName,
   sanitizeSegment,
 } from "@yukino.js/mcp/tool-wrapper.js";
+import { asRecord, strArg } from "@yukino.js/utils";
+
 import {
   INTEGER_PATTERN,
   MCP_CALL_ARGUMENTS_REQUIRED,
@@ -54,7 +56,6 @@ import type {
   ToolResult,
   ToolSchema,
 } from "./types.js";
-import { asRecord, strArg } from "@yukino.js/utils";
 
 function coerceScalar(value: unknown, want: string): unknown {
   // boolean must be excluded first: typeof true !== "number", but in other

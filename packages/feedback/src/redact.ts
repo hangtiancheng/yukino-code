@@ -1,3 +1,8 @@
+import { REDACTED } from "@yukino.js/utils/constants.js";
+import {
+  redactCredentials,
+  environmentSecrets,
+} from "@yukino.js/utils/redact.js";
 import { z } from "zod";
 
 import {
@@ -5,11 +10,6 @@ import {
   SENSITIVE_KEY,
   TEXT_PATTERNS,
 } from "./constants.js";
-import { REDACTED } from "@yukino.js/utils/constants.js";
-import {
-  redactCredentials,
-  environmentSecrets,
-} from "@yukino.js/utils/redact.js";
 const UnknownArraySchema = z.array(z.unknown());
 const UnknownRecordSchema = z.record(z.string(), z.unknown());
 

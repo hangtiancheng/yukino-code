@@ -8,6 +8,8 @@ import {
   ReadResourceResultSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { McpApp } from "@yukino.js/mcp/apps.js";
+import { MCP_APP_MIME_TYPE } from "@yukino.js/mcp/constants.js";
 import { useContext, useEffect, useRef, useState } from "react";
 
 import {
@@ -27,8 +29,6 @@ import {
 } from "#/constants.js";
 import { McpAppContext } from "#/lib/mcp-app-context.js";
 import { buildAppCsp } from "#/lib/mcp-app-sandbox.js";
-import type { McpApp } from "@yukino.js/mcp/apps.js";
-import { MCP_APP_MIME_TYPE } from "@yukino.js/mcp/constants.js";
 
 function sandboxAppHtml(html: string, csp?: McpUiResourceCsp): string {
   const doc = new DOMParser().parseFromString(html, "text/html");

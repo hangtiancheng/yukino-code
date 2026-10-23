@@ -2,10 +2,8 @@ import { mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, it, expect } from "vitest";
-
-import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { Agent } from "@yukino.js/agent";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 import { RecoveryState } from "@yukino.js/compact/recovery.js";
 import { ConversationManager } from "@yukino.js/conversation";
 import type { LLMClient } from "@yukino.js/llm/client.js";
@@ -16,6 +14,7 @@ import { sessionPath, getSessionsDir } from "@yukino.js/storage";
 import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import type { Tool, ToolResultContentBlock } from "@yukino.js/tools/types.js";
 import { asString, isRecord } from "@yukino.js/utils";
+import { describe, it, expect } from "vitest";
 
 // Wiring tests for the tool-result budget: these drive the full Agent main
 // loop and assert the budgeted final form is what enters conversation history.

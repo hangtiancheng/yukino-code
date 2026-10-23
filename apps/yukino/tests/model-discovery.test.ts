@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
 import {
   discoverModels,
   modelListUrl,
 } from "@yukino.js/llm/model-discovery.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const protocols: ProviderConfig["protocol"][] = [
   "anthropic",

@@ -1,4 +1,6 @@
 import { MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
+import { WORKFLOW_RULE } from "@yukino.js/workflow/prompts.js";
+
 import { DEFERRED_GUIDANCE_MARKER, TOOL_GUIDANCE_MARKER } from "./constants.js";
 import {
   AGENT_DELEGATION_RULE,
@@ -21,7 +23,6 @@ import {
   buildShellToolRule,
   buildTeammateMessagingRule,
 } from "./prompts.js";
-import { WORKFLOW_RULE } from "@yukino.js/workflow/prompts.js";
 
 export function buildToolGuidance(
   toolNames: readonly string[],

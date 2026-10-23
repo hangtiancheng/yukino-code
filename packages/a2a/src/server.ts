@@ -12,6 +12,8 @@ import {
   restHandler,
   UserBuilder,
 } from "@a2a-js/sdk/server/express";
+import { parseRemoteAddress } from "@yukino.js/remote/address.js";
+import { LOOPBACK_HOSTS } from "@yukino.js/remote/constants.js";
 import express from "express";
 
 import { buildAgentCard } from "./card.js";
@@ -27,8 +29,6 @@ import {
   YukinoA2aExecutor,
   type A2aRuntimeFactory,
 } from "./executor.js";
-import { parseRemoteAddress } from "@yukino.js/remote/address.js";
-import { LOOPBACK_HOSTS } from "@yukino.js/remote/constants.js";
 
 export interface A2aServerHandle {
   /** Base URL of the running server, e.g. `http://127.0.0.1:18890/`. */
