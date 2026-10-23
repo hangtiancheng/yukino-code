@@ -4,22 +4,22 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ProviderConfig } from "@/config/provider-config.js";
-import type { ConversationManager } from "@/conversation/index.js";
-import * as clients from "@/llm/client.js";
-import type { LLMClient } from "@/llm/client.js";
-import { OpenAIClient } from "@/llm/openai.js";
-import { PermissionChecker } from "@/permissions/index.js";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import type { ConversationManager } from "@yukino.js/conversation";
+import * as clients from "@yukino.js/llm/client.js";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { OpenAIClient } from "@yukino.js/llm/openai.js";
+import { PermissionChecker } from "@yukino.js/permissions";
 import {
   buildSubagentInstructions,
   buildTeammatePrompt,
-} from "@/prompt/prompts.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool } from "@/tools/types.js";
+} from "@yukino.js/prompt/prompts.js";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool } from "@yukino.js/tools/types.js";
 
 const directories: string[] = [];
 function cwd(): string {

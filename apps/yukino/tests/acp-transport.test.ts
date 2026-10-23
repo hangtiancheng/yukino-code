@@ -3,11 +3,11 @@ import { createWebSocketStream } from "@agentclientprotocol/sdk/experimental/ws-
 import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 
-import { createYukinoAcpApp } from "@/acp/agent.js";
+import { createYukinoAcpApp } from "@yukino.js/acp/agent.js";
 import {
   parseAcpWebSocketAddress,
   startAcpWebSocketServer,
-} from "@/acp/websocket.js";
+} from "@yukino.js/acp/websocket.js";
 
 function rejectedWebSocketStatus(
   url: string,

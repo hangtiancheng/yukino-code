@@ -5,13 +5,13 @@ import { act, createElement } from "react";
 import type { RefObject } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SubagentProgress } from "@/ui/agent-tool-progress.js";
+import type { SubagentProgress } from "@yukino.js/ui/agent-tool-progress.js";
 import {
   createInterruptHandlers,
   isForegroundBusy,
   type InterruptDeps,
-} from "@/ui/interrupt-scope.js";
-import { useTerminalControls } from "@/ui/use-terminal-controls.js";
+} from "@yukino.js/ui/interrupt-scope.js";
+import { useTerminalControls } from "@yukino.js/ui/use-terminal-controls.js";
 
 const stdoutStub = vi.hoisted(() => ({
   columns: 80,

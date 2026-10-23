@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 
 import { isTerminalGone, record, recordError, recordExit } from "@/recover.js";
-import { yukinoPath } from "@/storage/index.js";
+import { yukinoPath } from "@yukino.js/storage";
 
 describe("crash log", () => {
   it("appends records with a timestamp", () => {

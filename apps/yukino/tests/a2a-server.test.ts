@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import type { A2aRuntime, A2aRuntimeFactory } from "@/a2a/executor.js";
-import { parseA2aAddress, startA2aServer } from "@/a2a/server.js";
-import type { AgentEvent } from "@/agent/events.js";
+import type { A2aRuntime, A2aRuntimeFactory } from "@yukino.js/a2a/executor.js";
+import { parseA2aAddress, startA2aServer } from "@yukino.js/a2a/server.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
 
 const CardSchema = z.object({
   name: z.string(),

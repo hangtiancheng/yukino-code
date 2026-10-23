@@ -1,6 +1,6 @@
 import { render } from "ink";
 
-import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
+import type { InteractionSummary } from "@yukino.js/bootstrap/interaction-summary.js";
 import type { RuntimeMode } from "@/cli.js";
 import {
   forkEnabled,
@@ -8,25 +8,25 @@ import {
   loadConfig,
   memoryEnabled,
   withProjectMcpServers,
-} from "@/config/index.js";
-import { initLogger, logger } from "@/logger/index.js";
+} from "@yukino.js/config";
+import { initLogger, logger } from "@yukino.js/logger";
 import { runPrintMode } from "@/print-mode.js";
 import { recover, recordError, recordExit } from "@/recover.js";
-import { newSessionId } from "@/session/index.js";
+import { newSessionId } from "@yukino.js/session";
 import {
   captureTelemetryError,
   initializeTelemetry,
   installRemoteTelemetrySignalHandlers,
   setTelemetryMode,
   shutdownTelemetry,
-} from "@/telemetry/index.js";
-import { App } from "@/ui/app.js";
-import { renderInteractionSummary } from "@/ui/interaction-summary.js";
-import { setThemeMode } from "@/ui/styles.js";
-import { TerminalInput } from "@/ui/terminal-input.js";
-import { installTerminalOutput } from "@/ui/terminal-output.js";
-import { detectTerminalTheme } from "@/ui/terminal-theme.js";
-import { asErrorString } from "@/utils/index.js";
+} from "@yukino.js/telemetry";
+import { App } from "@yukino.js/ui/app.js";
+import { renderInteractionSummary } from "@yukino.js/ui/interaction-summary.js";
+import { setThemeMode } from "@yukino.js/ui/styles.js";
+import { TerminalInput } from "@yukino.js/ui/terminal-input.js";
+import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
+import { detectTerminalTheme } from "@yukino.js/ui/terminal-theme.js";
+import { asErrorString } from "@yukino.js/utils";
 
 async function runAcpMode(
   mode: Extract<RuntimeMode, { kind: "acp" | "acp-ws" }>,
@@ -35,10 +35,10 @@ async function runAcpMode(
   setTelemetryMode("acp");
   try {
     if (mode.kind === "acp") {
-      const { runAcpStdio } = await import("./acp/stdio.js");
+      const { runAcpStdio } = await import("@yukino.js/acp/stdio.js");
       await runAcpStdio();
     } else {
-      const { runAcpWebSocket } = await import("./acp/websocket.js");
+      const { runAcpWebSocket } = await import("@yukino.js/acp/websocket.js");
       await runAcpWebSocket(mode.address);
     }
   } finally {
@@ -50,7 +50,7 @@ async function runA2aMode(address?: string): Promise<void> {
   await initializeTelemetry();
   setTelemetryMode("a2a");
   try {
-    const { runA2aServer } = await import("./a2a/server.js");
+    const { runA2aServer } = await import("@yukino.js/a2a/server.js");
     await runA2aServer(address);
   } finally {
     await shutdownTelemetry();
@@ -92,7 +92,7 @@ async function runRemoteMode(
   }
 
   setTelemetryMode("remote");
-  const { RemoteServer } = await import("./remote/server.js");
+  const { RemoteServer } = await import("@yukino.js/remote/server.js");
   initLogger({ sessionId: newSessionId(), mode: "remote", stdout: true });
   const srv = new RemoteServer({
     providers: cfg.providers,

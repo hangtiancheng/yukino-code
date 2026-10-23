@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { OfflineMessageQueue } from "@/remote/browser/src/hooks/offline-queue.js";
+import { OfflineMessageQueue } from "@yukino.js/remote-browser/hooks/offline-queue.js";
 
 describe("offline chat queue", () => {
   it("rejects overflow while retaining every accepted message in FIFO order", () => {

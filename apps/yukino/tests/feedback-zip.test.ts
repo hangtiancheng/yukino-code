@@ -2,7 +2,7 @@ import { inflateRawSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import { crc32, createZipArchive } from "@/feedback/zip.js";
+import { crc32, createZipArchive } from "@yukino.js/feedback/zip.js";
 
 interface ParsedEntry {
   name: string;

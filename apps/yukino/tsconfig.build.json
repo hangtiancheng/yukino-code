@@ -1,17 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src",
     "noEmit": true,
     "incremental": false
   },
   "include": ["shims.d.ts", "src"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "docs",
-    "src/remote/browser",
-    "tests",
-    "examples"
-  ]
+  "exclude": ["node_modules", "dist", "docs", "tests", "examples"]
 }

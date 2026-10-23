@@ -1,0 +1,18 @@
+{
+  "name": "@yukino.js/update",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/version": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

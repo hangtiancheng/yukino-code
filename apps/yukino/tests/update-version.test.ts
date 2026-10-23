@@ -4,8 +4,8 @@ import {
   checkForUpdate,
   getLatestVersion,
   isNewerVersion,
-} from "@/update/version-check.js";
-import { version } from "@/version.js";
+} from "@yukino.js/update/version-check.js";
+import { version } from "@yukino.js/version";
 
 afterEach(() => {
   vi.unstubAllGlobals();

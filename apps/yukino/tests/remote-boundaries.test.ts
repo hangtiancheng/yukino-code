@@ -5,21 +5,21 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 
-import { Agent } from "@/agent/index.js";
-import { RecoveryState } from "@/compact/recovery.js";
-import type { ProviderConfig } from "@/config/provider-config.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { FileHistory } from "@/file-history/index.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { parseRemoteAddress } from "@/remote/address.js";
-import { createRemoteAgent, RemoteServer } from "@/remote/server.js";
-import { restoreRemoteSession } from "@/remote/session-state.js";
-import type { SessionMessage } from "@/session/index.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { TaskList } from "@/todo/index.js";
-import { TaskStore } from "@/todo/store.js";
-import { FileStateCache } from "@/tools/file-state-cache.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import { Agent } from "@yukino.js/agent";
+import { RecoveryState } from "@yukino.js/compact/recovery.js";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { FileHistory } from "@yukino.js/file-history";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { parseRemoteAddress } from "@yukino.js/remote/address.js";
+import { createRemoteAgent, RemoteServer } from "@yukino.js/remote/server.js";
+import { restoreRemoteSession } from "@yukino.js/remote/session-state.js";
+import type { SessionMessage } from "@yukino.js/session";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { TaskList } from "@yukino.js/todo";
+import { TaskStore } from "@yukino.js/todo/store.js";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 
 function rejectedWebSocketStatus(
   url: string,

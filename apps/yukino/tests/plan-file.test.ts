@@ -9,9 +9,9 @@ import {
   loadPlan,
   planExists,
   resetPlanPath,
-} from "@/plan-file/index.js";
-import { buildPlanModeReminder } from "@/prompt/plan-mode.js";
-import { generateSlug } from "@/utils/slug.js";
+} from "@yukino.js/plan-file";
+import { buildPlanModeReminder } from "@yukino.js/prompt/plan-mode.js";
+import { generateSlug } from "@yukino.js/utils/slug.js";
 
 describe("plan-file", () => {
   it("generates compact collision-resistant slugs without word lists", () => {

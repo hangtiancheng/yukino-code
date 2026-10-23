@@ -1,0 +1,20 @@
+{
+  "name": "@yukino.js/file-history",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/logger": "workspace:*",
+    "@yukino.js/storage": "workspace:*",
+    "@yukino.js/teams": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

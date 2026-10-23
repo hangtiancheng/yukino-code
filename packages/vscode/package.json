@@ -1,0 +1,21 @@
+{
+  "name": "@yukino.js/vscode",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/logger": "workspace:*",
+    "@yukino.js/version": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  }
+}

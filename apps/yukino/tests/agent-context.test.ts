@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createToolRegistry } from "@/bootstrap/tool-registry.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { TeamManager } from "@/teams/index.js";
-import { TaskList } from "@/todo/index.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { contentToText } from "@/utils/index.js";
+import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { TeamManager } from "@yukino.js/teams";
+import { TaskList } from "@yukino.js/todo";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { contentToText } from "@yukino.js/utils";
 
 const cwd = process.cwd();
 const provider = {

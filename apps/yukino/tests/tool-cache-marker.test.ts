@@ -6,8 +6,8 @@
 // tool — we cannot simply mark the last element.
 import { describe, it, expect } from "vitest";
 
-import { markToolsForCache } from "@/llm/anthropic.js";
-import type { ToolSchema } from "@/tools/types.js";
+import { markToolsForCache } from "@yukino.js/llm/anthropic.js";
+import type { ToolSchema } from "@yukino.js/tools/types.js";
 
 function marked(tools: ToolSchema[]): string[] {
   return tools.filter((t) => t.cache_control !== undefined).map((t) => t.name);

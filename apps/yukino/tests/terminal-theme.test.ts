@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { THINKING_LEVELS } from "@/config/constants.js";
-import { DARK_THEME, LIGHT_THEME } from "@/theme/constants.js";
-import { THEME } from "@/ui/constants.js";
+import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
+import { DARK_THEME, LIGHT_THEME } from "@yukino.js/theme/constants.js";
+import { THEME } from "@yukino.js/ui/constants.js";
 import {
   activityStatusColor,
   setThemeMode,
   thinkingLevelColor,
-} from "@/ui/styles.js";
+} from "@yukino.js/ui/styles.js";
 import {
   parseOsc11BackgroundColor,
   parseTerminalColorSchemeReport,
   themeForRgb,
   themeFromEnvironment,
-} from "@/ui/terminal-theme.js";
+} from "@yukino.js/ui/terminal-theme.js";
 
 afterEach(() => {
   setThemeMode("dark");

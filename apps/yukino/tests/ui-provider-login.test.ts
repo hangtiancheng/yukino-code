@@ -7,9 +7,9 @@ import { act, createElement } from "react";
 import stringWidth from "string-width";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ProviderConfig } from "@/config/provider-config.js";
-import { ProviderLogin } from "@/ui/provider-login.js";
-import { cursorWindow, visibleWidth } from "@/ui/terminal-text.js";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import { ProviderLogin } from "@yukino.js/ui/provider-login.js";
+import { cursorWindow, visibleWidth } from "@yukino.js/ui/terminal-text.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),

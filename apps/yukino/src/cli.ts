@@ -2,8 +2,8 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import type { OutputFormat } from "@/print-mode.js";
-import { runUpdate } from "@/update/index.js";
-import { version } from "@/version.js";
+import { runUpdate } from "@yukino.js/update";
+import { version } from "@yukino.js/version";
 
 export const CLI_HELP = `Yukino is a terminal-based AI coding agent.
 

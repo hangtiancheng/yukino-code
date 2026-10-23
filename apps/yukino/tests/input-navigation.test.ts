@@ -4,9 +4,9 @@ import {
   layoutInputRows,
   locateInputCursor,
   moveInputVertically,
-} from "@/ui/input-navigation.js";
-import { collapsePaste, inputBoundary } from "@/ui/input-paste.js";
-import { visibleWidth } from "@/ui/terminal-text.js";
+} from "@yukino.js/ui/input-navigation.js";
+import { collapsePaste, inputBoundary } from "@yukino.js/ui/input-paste.js";
+import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
 
 describe("input visual-row navigation", () => {
   it("uses two-column tab stops while preserving draft offsets and wrapping", () => {

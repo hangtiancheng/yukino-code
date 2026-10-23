@@ -4,20 +4,20 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { createDefaultRegistry } from "@/commands/commands.js";
-import { runSubagentCommand } from "@/commands/subagent.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { loadInputs } from "@/history/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { loadSession } from "@/session/index.js";
-import { yukinoPath } from "@/storage/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { contentToText } from "@/utils/index.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
+import { runSubagentCommand } from "@yukino.js/commands/subagent.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { loadInputs } from "@yukino.js/history";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { loadSession } from "@yukino.js/session";
+import { yukinoPath } from "@yukino.js/storage";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { contentToText } from "@yukino.js/utils";
 
 let cwd: string;
 beforeEach(() => {

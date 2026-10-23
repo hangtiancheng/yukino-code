@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
   THINKING_LEVELS,
-} from "@/config/constants.js";
+} from "@yukino.js/config/constants.js";
 import {
   loadConfig,
   loadProjectMcpServers,
@@ -18,7 +18,7 @@ import {
   memoryEnabled,
   type AppConfig,
   type MCPServerConfig,
-} from "@/config/index.js";
+} from "@yukino.js/config";
 import {
   clampThinkingLevel,
   getContextWindow,
@@ -31,7 +31,7 @@ import {
   toReasoningEffort,
   withProviderDefaults,
   type ProviderConfig,
-} from "@/config/provider-config.js";
+} from "@yukino.js/config/provider-config.js";
 
 describe("config", () => {
   describe("getContextWindow", () => {

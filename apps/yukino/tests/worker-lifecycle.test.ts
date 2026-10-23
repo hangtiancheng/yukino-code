@@ -4,27 +4,27 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createToolRegistry } from "@/bootstrap/tool-registry.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { filterToolsForAgent } from "@/subagent/tool-filter.js";
-import { TeamManager } from "@/teams/index.js";
-import { getNameRegistry } from "@/teams/registry.js";
-import { SharedTaskStore } from "@/teams/shared-task.js";
-import { TaskStopTool } from "@/teams/task-stop.js";
-import { TeamTodoWriteTool } from "@/teams/task-tools.js";
-import { readTeamFile } from "@/teams/team-file.js";
-import { TaskList } from "@/todo/index.js";
-import { TaskStore } from "@/todo/store.js";
-import { TodoWriteTool } from "@/todo/tools.js";
-import { BashTool } from "@/tools/bash.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool, ToolContext } from "@/tools/types.js";
+import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { filterToolsForAgent } from "@yukino.js/subagent/tool-filter.js";
+import { TeamManager } from "@yukino.js/teams";
+import { getNameRegistry } from "@yukino.js/teams/registry.js";
+import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
+import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
+import { TeamTodoWriteTool } from "@yukino.js/teams/task-tools.js";
+import { readTeamFile } from "@yukino.js/teams/team-file.js";
+import { TaskList } from "@yukino.js/todo";
+import { TaskStore } from "@yukino.js/todo/store.js";
+import { TodoWriteTool } from "@yukino.js/todo/tools.js";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool, ToolContext } from "@yukino.js/tools/types.js";
 vi.mock("node:os", async (original) => ({
   ...(await original<typeof os>()),
   homedir: vi.fn(),

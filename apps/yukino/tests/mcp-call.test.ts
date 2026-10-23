@@ -1,30 +1,33 @@
 import { describe, expect, test } from "vitest";
 
-import { needsToolSearchBeta } from "@/llm/anthropic.js";
+import { needsToolSearchBeta } from "@yukino.js/llm/anthropic.js";
 import {
   applyMode,
   decideAndApply,
   decideMode,
   isOfficialAnthropicEndpoint,
   measureSchemaChars,
-} from "@/mcp/strategy.js";
-import { buildMcpToolName, mcpToolNamePrefix } from "@/mcp/tool-wrapper.js";
-import { extractContent } from "@/permissions/index.js";
+} from "@yukino.js/mcp/strategy.js";
+import {
+  buildMcpToolName,
+  mcpToolNamePrefix,
+} from "@yukino.js/mcp/tool-wrapper.js";
+import { extractContent } from "@yukino.js/permissions";
 import {
   McpCallTool,
   coerceBySchema,
   mcpCallPermissionContent,
-} from "@/tools/mcp-call.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { ToolSearchTool } from "@/tools/tool-search.js";
+} from "@yukino.js/tools/mcp-call.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { ToolSearchTool } from "@yukino.js/tools/tool-search.js";
 import type {
   McpLoadingMode,
   MCPToolLike,
   ToolContext,
   ToolResult,
   ToolSchema,
-} from "@/tools/types.js";
-import { asRecord, strArg } from "@/utils/index.js";
+} from "@yukino.js/tools/types.js";
+import { asRecord, strArg } from "@yukino.js/utils";
 
 const toolContext: ToolContext = { cwd: process.cwd() };
 

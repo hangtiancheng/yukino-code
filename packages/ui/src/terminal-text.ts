@@ -1,0 +1,193 @@
+import sliceAnsi from "slice-ansi";
+import stringWidth from "string-width";
+import wrapAnsi from "wrap-ansi";
+
+import { TAB_SIZE } from "./constants.js";
+import { plainTerminalText } from "@yukino.js/utils";
+
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
+
+export function plainTerminalLine(text: string): string {
+  return expandTabs(plainTerminalText(text).replace(/\n+/gu, " "));
+}
+
+export function visibleWidth(text: string): number {
+  return stringWidth(text);
+}
+
+export function truncateToWidth(
+  text: string,
+  width: number,
+  suffix = "…",
+): string {
+  const columns = Math.max(0, Math.floor(width));
+  if (visibleWidth(text) <= columns) {
+    return text;
+  }
+  const ending = sliceAnsi(suffix, 0, columns);
+  return (
+    sliceAnsi(text, 0, Math.max(0, columns - visibleWidth(ending))) + ending
+  );
+}
+
+export interface CursorWindow {
+  before: string;
+  current: string;
+  after: string;
+  leadingEllipsis: boolean;
+  trailingEllipsis: boolean;
+}
+
+/** Builds a cursor-centered field view that never exceeds the given columns. */
+export function cursorWindow(
+  value: string,
+  cursor: number,
+  maxWidth: number,
+): CursorWindow {
+  const columns = Math.max(1, Math.floor(maxWidth));
+  const position = clampToGraphemeBoundary(value, cursor);
+  const currentEnd = nextGraphemeBoundary(value, position);
+  const current = value.slice(position, currentEnd) || " ";
+  const currentValue =
+    visibleWidth(current) > columns || visibleWidth(current) === 0
+      ? " "
+      : current;
+  const currentWidth = visibleWidth(currentValue);
+  const left = value.slice(0, position);
+  const right = value.slice(position < value.length ? currentEnd : position);
+  const fullWidth =
+    visibleWidth(value) + (position === value.length ? currentWidth : 0);
+
+  if (fullWidth <= columns) {
+    return {
+      before: left,
+      current: currentValue,
+      after: right,
+      leadingEllipsis: false,
+      trailingEllipsis: false,
+    };
+  }
+
+  let leadingEllipsis = left.length > 0;
+  let trailingEllipsis = right.length > 0;
+  while (
+    currentWidth + Number(leadingEllipsis) + Number(trailingEllipsis) >
+    columns
+  ) {
+    if (trailingEllipsis) {
+      trailingEllipsis = false;
+    } else {
+      leadingEllipsis = false;
+    }
+  }
+
+  const surroundingWidth = Math.max(
+    0,
+    columns - currentWidth - Number(leadingEllipsis) - Number(trailingEllipsis),
+  );
+  let leftWidth = Math.floor(surroundingWidth / 2);
+  let rightWidth = surroundingWidth - leftWidth;
+  const availableLeftWidth = visibleWidth(left);
+  const availableRightWidth = visibleWidth(right);
+  if (availableLeftWidth < leftWidth) {
+    rightWidth += leftWidth - availableLeftWidth;
+    leftWidth = availableLeftWidth;
+  } else if (availableRightWidth < rightWidth) {
+    leftWidth += rightWidth - availableRightWidth;
+    rightWidth = availableRightWidth;
+  }
+
+  return {
+    before: sliceAnsi(
+      left,
+      Math.max(0, availableLeftWidth - leftWidth),
+      availableLeftWidth,
+    ),
+    current: currentValue,
+    after: sliceAnsi(right, 0, rightWidth),
+    leadingEllipsis,
+    trailingEllipsis,
+  };
+}
+
+export function wrapToLines(text: string, width: number): string[] {
+  return wrapAnsi(expandTabs(text), Math.max(1, Math.floor(width)), {
+    hard: true,
+    wordWrap: false,
+    trim: false,
+  }).split("\n");
+}
+
+/**
+ * Like {@link wrapToLines}, but breaks at word boundaries where possible and
+ * only splits a word (or space-less text such as Chinese) when it cannot fit.
+ */
+export function wrapWordsToLines(text: string, width: number): string[] {
+  return wrapAnsi(expandTabs(text), Math.max(1, Math.floor(width)), {
+    hard: true,
+    wordWrap: true,
+    trim: true,
+  }).split("\n");
+}
+
+/** Expand tabs to two-column stops before measuring or rendering. */
+export function expandTabs(text: string): string {
+  if (!text.includes("\t")) {
+    return text;
+  }
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line.includes("\t")) {
+        return line;
+      }
+      const segments = line.split("\t");
+      let expanded = segments[0];
+      for (const segment of segments.slice(1)) {
+        const advance = TAB_SIZE - (visibleWidth(expanded) % TAB_SIZE);
+        expanded += " ".repeat(advance) + segment;
+      }
+      return expanded;
+    })
+    .join("\n");
+}
+
+/** Return the UTF-16 index immediately before the grapheme at `index`. */
+export function previousGraphemeBoundary(text: string, index: number): number {
+  const bounded = Math.max(0, Math.min(index, text.length));
+  let previous = 0;
+  for (const segment of graphemeSegmenter.segment(text)) {
+    if (segment.index >= bounded) {
+      return previous;
+    }
+    previous = segment.index;
+  }
+  return previous;
+}
+
+/** Return the UTF-16 index immediately after the grapheme at `index`. */
+export function nextGraphemeBoundary(text: string, index: number): number {
+  const bounded = Math.max(0, Math.min(index, text.length));
+  for (const segment of graphemeSegmenter.segment(text)) {
+    if (segment.index >= bounded) {
+      return segment.index === bounded
+        ? segment.index + segment.segment.length
+        : segment.index;
+    }
+    if (segment.index + segment.segment.length > bounded) {
+      return segment.index + segment.segment.length;
+    }
+  }
+  return text.length;
+}
+
+/** Clamp a cursor index to the nearest grapheme boundary on its left. */
+export function clampToGraphemeBoundary(text: string, index: number): number {
+  const bounded = Math.max(0, Math.min(index, text.length));
+  return nextGraphemeBoundary(text, previousGraphemeBoundary(text, bounded)) ===
+    bounded
+    ? bounded
+    : previousGraphemeBoundary(text, bounded);
+}

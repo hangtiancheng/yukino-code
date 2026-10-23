@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 
-import { INTERRUPTED_TOOL_RESULT } from "@/conversation/constants.js";
-import type { Message } from "@/conversation/index.js";
-import { ensureToolPairing } from "@/conversation/pairing.js";
+import { INTERRUPTED_TOOL_RESULT } from "@yukino.js/conversation/constants.js";
+import type { Message } from "@yukino.js/conversation";
+import { ensureToolPairing } from "@yukino.js/conversation/pairing.js";
 
 function assistantWithTool(id: string): Message {
   return {

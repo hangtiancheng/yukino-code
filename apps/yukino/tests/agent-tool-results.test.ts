@@ -4,15 +4,15 @@ import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import { runExitCleanups } from "@/bootstrap/exit-cleanup.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { getSessionsDir, sessionPath } from "@/storage/index.js";
-import { ReadFileTool } from "@/tools/read-file.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool } from "@/tools/types.js";
+import { Agent } from "@yukino.js/agent";
+import { runExitCleanups } from "@yukino.js/bootstrap/exit-cleanup.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { getSessionsDir, sessionPath } from "@yukino.js/storage";
+import { ReadFileTool } from "@yukino.js/tools/read-file.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool } from "@yukino.js/tools/types.js";
 
 const cwds: string[] = [];
 

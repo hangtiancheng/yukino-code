@@ -1,0 +1,19 @@
+{
+  "name": "@yukino.js/logger",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/storage": "workspace:*",
+    "@yukino.js/teams": "workspace:*",
+    "pino": "^10.4.0"
+  }
+}

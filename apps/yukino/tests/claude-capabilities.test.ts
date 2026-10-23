@@ -10,31 +10,31 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import { configureBashSandbox } from "@/bootstrap/sandbox.js";
-import { createToolRegistry } from "@/bootstrap/tool-registry.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { FileHistory } from "@/file-history/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
-import { MemoryManager } from "@/memory/manager.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { getOrCreatePlanPath } from "@/plan-file/index.js";
-import * as sandbox from "@/sandbox/index.js";
-import { yukinoPath, projectPath } from "@/storage/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import type { AgentDefinition } from "@/subagent/definition.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { FileMailbox } from "@/teams/file-mailbox.js";
-import { scrubTelemetryPayload } from "@/telemetry/privacy.js";
-import { TaskList } from "@/todo/index.js";
-import { BashTool } from "@/tools/bash.js";
-import { ComputerUseTool } from "@/tools/computer-use.js";
-import { EnterPlanModeTool } from "@/tools/enter-plan-mode.js";
-import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { WebFetchTool } from "@/tools/web-fetch.js";
+import { Agent } from "@yukino.js/agent";
+import { configureBashSandbox } from "@yukino.js/bootstrap/sandbox.js";
+import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { FileHistory } from "@yukino.js/file-history";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
+import { MemoryManager } from "@yukino.js/memory/manager.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { getOrCreatePlanPath } from "@yukino.js/plan-file";
+import * as sandbox from "@yukino.js/sandbox";
+import { yukinoPath, projectPath } from "@yukino.js/storage";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import type { AgentDefinition } from "@yukino.js/subagent/definition.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { FileMailbox } from "@yukino.js/teams/file-mailbox.js";
+import { scrubTelemetryPayload } from "@yukino.js/telemetry/privacy.js";
+import { TaskList } from "@yukino.js/todo";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import { ComputerUseTool } from "@yukino.js/tools/computer-use.js";
+import { EnterPlanModeTool } from "@yukino.js/tools/enter-plan-mode.js";
+import { ExitPlanModeTool } from "@yukino.js/tools/exit-plan-mode.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { WebFetchTool } from "@yukino.js/tools/web-fetch.js";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

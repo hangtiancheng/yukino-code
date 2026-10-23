@@ -12,14 +12,14 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PermissionChecker } from "@/permissions/index.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { BashTool } from "@/tools/bash.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { BashTool } from "@yukino.js/tools/bash.js";
 import {
   acquireCommandExecution,
   acquireWorkspaceMutation,
-} from "@/tools/execution-coordinator.js";
-import { WriteFileTool } from "@/tools/write-file.js";
+} from "@yukino.js/tools/execution-coordinator.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 
 let cwd: string;
 let tasks: TaskManager;

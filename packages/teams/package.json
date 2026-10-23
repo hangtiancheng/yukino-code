@@ -1,0 +1,26 @@
+{
+  "name": "@yukino.js/teams",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/logger": "workspace:*",
+    "@yukino.js/permissions": "workspace:*",
+    "@yukino.js/plan-file": "workspace:*",
+    "@yukino.js/prompt": "workspace:*",
+    "@yukino.js/storage": "workspace:*",
+    "@yukino.js/subagent": "workspace:*",
+    "@yukino.js/todo": "workspace:*",
+    "@yukino.js/tools": "workspace:*",
+    "@yukino.js/utils": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

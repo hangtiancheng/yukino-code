@@ -9,7 +9,7 @@ import {
   FEEDBACK_REPO,
   GIST_FILENAME,
   MAX_GIST_BYTES,
-} from "@/feedback/constants.js";
+} from "@yukino.js/feedback/constants.js";
 import {
   buildIssueUrl,
   createGist,
@@ -17,8 +17,8 @@ import {
   desiredLabels,
   detectChannel,
   fetchRepoLabels,
-} from "@/feedback/github.js";
-import type { CollectedFile } from "@/feedback/types.js";
+} from "@yukino.js/feedback/github.js";
+import type { CollectedFile } from "@yukino.js/feedback/types.js";
 
 interface ExecFileResult {
   stdout: string;

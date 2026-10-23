@@ -8,8 +8,8 @@ import {
   promptToText,
   stopReason,
   toolKind,
-} from "@/acp/conversion.js";
-import type { SessionMessage } from "@/session/index.js";
+} from "@yukino.js/acp/conversion.js";
+import type { SessionMessage } from "@yukino.js/session";
 
 describe("ACP conversion", () => {
   it("converts supported prompt blocks to text", () => {

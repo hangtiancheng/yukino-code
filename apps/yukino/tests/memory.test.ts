@@ -11,12 +11,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, it, expect } from "vitest";
 
-import type { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
-import { MemoryManager } from "@/memory/manager.js";
-import { projectPath } from "@/storage/index.js";
+import type { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
+import { MemoryManager } from "@yukino.js/memory/manager.js";
+import { projectPath } from "@yukino.js/storage";
 
 const tempDirs = new Set<string>();
 

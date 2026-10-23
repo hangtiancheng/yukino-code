@@ -3,7 +3,7 @@ import type { Part } from "@a2a-js/sdk";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { MAX_TOOL_OUTPUT_LENGTH } from "@/a2a/constants.js";
+import { MAX_TOOL_OUTPUT_LENGTH } from "@yukino.js/a2a/constants.js";
 import {
   agentEventToMessage,
   findPermissionResponse,
@@ -11,7 +11,7 @@ import {
   statusUpdate,
   taskSnapshot,
   textPart,
-} from "@/a2a/conversion.js";
+} from "@yukino.js/a2a/conversion.js";
 
 function message(parts: Part[]) {
   return {

@@ -11,18 +11,18 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Sandbox, SandboxConfig } from "@/sandbox/index.js";
-import { sessionPath } from "@/storage/index.js";
-import { formatAgentTaskNotification } from "@/subagent/prompts.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { BashTool } from "@/tools/bash.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import type { Sandbox, SandboxConfig } from "@yukino.js/sandbox";
+import { sessionPath } from "@yukino.js/storage";
+import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import {
   attachBackgroundTaskManager,
   backgroundAllForegroundTasks,
   hasAnyForegroundTasks,
-} from "@/tools/shell-background.js";
-import type { ToolContext } from "@/tools/types.js";
+} from "@yukino.js/tools/shell-background.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
 
 const tempDirs = new Set<string>();
 

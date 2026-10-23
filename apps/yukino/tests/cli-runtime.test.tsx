@@ -2,29 +2,29 @@ import { render } from "ink";
 import { isValidElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { globalConfigPath } from "@/config/provider-config.js";
-import type * as loggerModule from "@/logger/index.js";
+import { globalConfigPath } from "@yukino.js/config/provider-config.js";
+import type * as loggerModule from "@yukino.js/logger";
 import { runMode } from "@/main.js";
-import { writePrivateFileSync } from "@/storage/private.js";
-import { detectTerminalTheme } from "@/ui/terminal-theme.js";
+import { writePrivateFileSync } from "@yukino.js/storage/private.js";
+import { detectTerminalTheme } from "@yukino.js/ui/terminal-theme.js";
 
 vi.mock("ink", () => ({
   render: vi.fn(() => ({ waitUntilExit: () => Promise.resolve() })),
 }));
-vi.mock("@/ui/app.js", () => ({ App: () => null }));
-vi.mock("@/ui/terminal-input.js", () => ({
+vi.mock("@yukino.js/ui/app.js", () => ({ App: () => null }));
+vi.mock("@yukino.js/ui/terminal-input.js", () => ({
   TerminalInput: class {
     stdin = process.stdin;
     dispose = vi.fn();
   },
 }));
-vi.mock("@/ui/terminal-theme.js", () => ({
+vi.mock("@yukino.js/ui/terminal-theme.js", () => ({
   detectTerminalTheme: vi.fn(() => Promise.resolve("dark")),
 }));
-vi.mock("@/ui/terminal-output.js", () => ({
+vi.mock("@yukino.js/ui/terminal-output.js", () => ({
   installTerminalOutput: () => () => undefined,
 }));
-vi.mock("@/logger/index.js", async (importOriginal) => ({
+vi.mock("@yukino.js/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof loggerModule>()),
   initLogger: vi.fn(),
 }));
@@ -34,7 +34,7 @@ vi.mock("@/recover.js", () => ({
   recordExit: vi.fn(),
   recordError: vi.fn(),
 }));
-vi.mock("@/telemetry/index.js", () => ({
+vi.mock("@yukino.js/telemetry", () => ({
   initializeTelemetry: vi.fn(),
   shutdownTelemetry: vi.fn(),
   setTelemetryMode: vi.fn(),

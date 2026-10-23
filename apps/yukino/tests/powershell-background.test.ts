@@ -5,11 +5,11 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatAgentTaskNotification } from "@/subagent/prompts.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { PowerShellTool } from "@/tools/powershell.js";
-import { readOutputFile } from "@/tools/shell-background.js";
-import type { ToolContext } from "@/tools/types.js";
+import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { PowerShellTool } from "@yukino.js/tools/powershell.js";
+import { readOutputFile } from "@yukino.js/tools/shell-background.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
 
 const tempDirs = new Set<string>();
 

@@ -9,10 +9,10 @@ import {
   createYukinoAcpApp,
   type AcpRuntime,
   type AcpRuntimeFactory,
-} from "@/acp/agent.js";
-import type { AgentEvent } from "@/agent/events.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { saveMessage } from "@/session/index.js";
+} from "@yukino.js/acp/agent.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { saveMessage } from "@yukino.js/session";
 
 function fakeRuntime(
   sessionId: string,

@@ -6,25 +6,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
-import * as config from "@/config/index.js";
-import type { MCPServerConfig } from "@/config/index.js";
-import type { ConversationManager } from "@/conversation/index.js";
-import { runFeedbackPipeline } from "@/feedback/pipeline.js";
-import type { PipelineDeps, PipelineResult } from "@/feedback/pipeline.js";
-import type { FeedbackOptions } from "@/feedback/types.js";
-import { loadInputTexts as loadPromptHistory } from "@/history/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { MCPClient } from "@/mcp/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import * as sessionMod from "@/session/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { FileStateCache } from "@/tools/file-state-cache.js";
-import { App } from "@/ui/app.js";
-import { installTerminalOutput } from "@/ui/terminal-output.js";
-import { checkForUpdate } from "@/update/version-check.js";
-import { contentToText } from "@/utils/index.js";
-import { connectToIde } from "@/vscode/ide-client.js";
+import * as config from "@yukino.js/config";
+import type { MCPServerConfig } from "@yukino.js/config";
+import type { ConversationManager } from "@yukino.js/conversation";
+import { runFeedbackPipeline } from "@yukino.js/feedback/pipeline.js";
+import type {
+  PipelineDeps,
+  PipelineResult,
+} from "@yukino.js/feedback/pipeline.js";
+import type { FeedbackOptions } from "@yukino.js/feedback/types.js";
+import { loadInputTexts as loadPromptHistory } from "@yukino.js/history";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { MCPClient } from "@yukino.js/mcp/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import * as sessionMod from "@yukino.js/session";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { App } from "@yukino.js/ui/app.js";
+import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
+import { checkForUpdate } from "@yukino.js/update/version-check.js";
+import { contentToText } from "@yukino.js/utils";
+import { connectToIde } from "@yukino.js/vscode/ide-client.js";
 
 const { createClientMock, feedbackMock } = vi.hoisted(() => ({
   createClientMock: vi.fn<() => Promise<LLMClient>>(),
@@ -33,12 +36,14 @@ const { createClientMock, feedbackMock } = vi.hoisted(() => ({
       (options: FeedbackOptions, deps: PipelineDeps) => Promise<PipelineResult>
     >(),
 }));
-vi.mock("@/llm/client.js", () => ({ createClient: createClientMock }));
-vi.mock("@/feedback/pipeline.js", () => ({
+vi.mock("@yukino.js/llm/client.js", () => ({ createClient: createClientMock }));
+vi.mock("@yukino.js/feedback/pipeline.js", () => ({
   runFeedbackPipeline: feedbackMock,
 }));
-vi.mock("@/update/version-check.js", () => ({ checkForUpdate: vi.fn() }));
-vi.mock("@/vscode/ide-client.js", () => ({ connectToIde: vi.fn() }));
+vi.mock("@yukino.js/update/version-check.js", () => ({
+  checkForUpdate: vi.fn(),
+}));
+vi.mock("@yukino.js/vscode/ide-client.js", () => ({ connectToIde: vi.fn() }));
 
 class ControlledClient implements LLMClient {
   readonly protocol = "openai";

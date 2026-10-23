@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { version } from "@/version.js";
+import { version } from "@yukino.js/version";
 
 let directory = "";
 beforeAll(() => {

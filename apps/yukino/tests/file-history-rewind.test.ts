@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
-import { FileHistory, fileHistoryDir } from "@/file-history/index.js";
+import { FileHistory, fileHistoryDir } from "@yukino.js/file-history";
 import {
   getSessionFilePath,
   loadSession,
@@ -20,7 +20,7 @@ import {
   saveMessage,
   sessionLineCount,
   truncateSessionLines,
-} from "@/session/index.js";
+} from "@yukino.js/session";
 
 function makeTempProject(): { base: string; projectDir: string } {
   const base = mkdtempSync(join(tmpdir(), "yukino-fh-"));

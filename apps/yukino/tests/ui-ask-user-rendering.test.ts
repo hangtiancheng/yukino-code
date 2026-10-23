@@ -4,16 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { AskUserQuestionTool, type Question } from "@/tools/ask-user.js";
-import { AgentActivity } from "@/ui/agent-activity.js";
-import { AskUserDialog } from "@/ui/ask-user-dialog.js";
-import { ChatView, type ChatMessage } from "@/ui/chat.js";
-import { InputBox } from "@/ui/input.js";
-import { TerminalLayout } from "@/ui/terminal-layout.js";
-import { installTerminalOutput } from "@/ui/terminal-output.js";
-import { Transcript } from "@/ui/transcript.js";
-import { useAgentOutput } from "@/ui/use-agent-output.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import {
+  AskUserQuestionTool,
+  type Question,
+} from "@yukino.js/tools/ask-user.js";
+import { AgentActivity } from "@yukino.js/ui/agent-activity.js";
+import { AskUserDialog } from "@yukino.js/ui/ask-user-dialog.js";
+import { ChatView, type ChatMessage } from "@yukino.js/ui/chat.js";
+import { InputBox } from "@yukino.js/ui/input.js";
+import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
+import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
+import { Transcript } from "@yukino.js/ui/transcript.js";
+import { useAgentOutput } from "@yukino.js/ui/use-agent-output.js";
 
 let terminal: VirtualTerminal;
 let instance: Instance | undefined;

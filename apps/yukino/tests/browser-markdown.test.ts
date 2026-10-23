@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   renderMarkdownBlock,
   tokenizeMarkdown,
-} from "@/remote/browser/src/lib/markdown.js";
+} from "@yukino.js/remote-browser/lib/markdown.js";
 
 vi.mock("dompurify", () => ({
   default: { sanitize: (html: string) => html },

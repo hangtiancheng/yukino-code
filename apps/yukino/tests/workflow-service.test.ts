@@ -5,22 +5,22 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createDefaultRegistry } from "@/commands/commands.js";
-import type { ProviderConfig } from "@/config/provider-config.js";
-import type { LLMClient, LLMStreamOptions } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { newSessionId } from "@/session/index.js";
-import { projectPath } from "@/storage/index.js";
-import { formatAgentTaskNotification } from "@/subagent/prompts.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { ProviderToolSchema, Tool } from "@/tools/types.js";
-import { contentToText } from "@/utils/index.js";
-import { extractStructuredOutput } from "@/workflow/backend.js";
-import { WORKFLOW_RUNS_DIR } from "@/workflow/constants.js";
-import { WorkflowService } from "@/workflow/service.js";
-import { attachWorkflow } from "@/workflow/wiring.js";
-import { WorkflowTool } from "@/workflow/workflow-tool.js";
+import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import type { LLMClient, LLMStreamOptions } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { newSessionId } from "@yukino.js/session";
+import { projectPath } from "@yukino.js/storage";
+import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { ProviderToolSchema, Tool } from "@yukino.js/tools/types.js";
+import { contentToText } from "@yukino.js/utils";
+import { extractStructuredOutput } from "@yukino.js/workflow/backend.js";
+import { WORKFLOW_RUNS_DIR } from "@yukino.js/workflow/constants.js";
+import { WorkflowService } from "@yukino.js/workflow/service.js";
+import { attachWorkflow } from "@yukino.js/workflow/wiring.js";
+import { WorkflowTool } from "@yukino.js/workflow/workflow-tool.js";
 
 const provider: ProviderConfig = {
   name: "test",

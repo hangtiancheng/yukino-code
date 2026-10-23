@@ -9,9 +9,9 @@ import {
   MSG_PLAN_APPROVAL_RESPONSE,
   MSG_SHUTDOWN_REQUEST,
   MSG_SHUTDOWN_RESPONSE,
-} from "@/teams/constants.js";
-import type { FileMailMessage } from "@/teams/file-mailbox.js";
-import { TeamManager } from "@/teams/index.js";
+} from "@yukino.js/teams/constants.js";
+import type { FileMailMessage } from "@yukino.js/teams/file-mailbox.js";
+import { TeamManager } from "@yukino.js/teams";
 import {
   isShutdownRequest,
   newRequestId,
@@ -19,8 +19,8 @@ import {
   planApprovalResponse,
   shutdownRequest,
   shutdownResponse,
-} from "@/teams/protocol.js";
-import { SendMessageTool } from "@/teams/tools.js";
+} from "@yukino.js/teams/protocol.js";
+import { SendMessageTool } from "@yukino.js/teams/tools.js";
 
 const plain = (from: string, text: string): FileMailMessage => ({
   from,

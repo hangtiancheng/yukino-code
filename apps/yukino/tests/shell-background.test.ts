@@ -4,11 +4,11 @@ import { join } from "node:path";
 
 import { expect, it, vi } from "vitest";
 
-import { TaskManager } from "@/subagent/task-manager.js";
-import { BashTool } from "@/tools/bash.js";
-import { BACKGROUND_NOTIFICATION_BYTES } from "@/tools/constants.js";
-import { PowerShellTool } from "@/tools/powershell.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import { BACKGROUND_NOTIFICATION_BYTES } from "@yukino.js/tools/constants.js";
+import { PowerShellTool } from "@yukino.js/tools/powershell.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import {
   attachBackgroundTaskManager,
   backgroundAllForegroundTasks,
@@ -17,7 +17,7 @@ import {
   hasAnyForegroundTasks,
   readOutputFile,
   type ShellExit,
-} from "@/tools/shell-background.js";
+} from "@yukino.js/tools/shell-background.js";
 
 it.each([
   { exit: { code: 0 }, isError: false, message: "captured" },

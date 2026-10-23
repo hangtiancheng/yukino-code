@@ -4,9 +4,9 @@ import { join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
-import { SkillCatalog } from "@/skills/catalog.js";
-import { InstallSkillTool } from "@/skills/install-skill-tool.js";
-import { yukinoPath } from "@/storage/index.js";
+import { SkillCatalog } from "@yukino.js/skills/catalog.js";
+import { InstallSkillTool } from "@yukino.js/skills/install-skill-tool.js";
+import { yukinoPath } from "@yukino.js/storage";
 
 const SKILL = `---
 name: commit-helper

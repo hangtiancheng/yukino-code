@@ -14,11 +14,14 @@ import yaml from "js-yaml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { createDefaultRegistry, parse } from "@/commands/commands.js";
-import { loadConfig } from "@/config/index.js";
-import { globalConfigPath } from "@/config/provider-config.js";
-import { persistModel, saveProvider } from "@/config/provider-login.js";
-import { yukinoPath } from "@/storage/index.js";
+import { createDefaultRegistry, parse } from "@yukino.js/commands/commands.js";
+import { loadConfig } from "@yukino.js/config";
+import { globalConfigPath } from "@yukino.js/config/provider-config.js";
+import {
+  persistModel,
+  saveProvider,
+} from "@yukino.js/config/provider-login.js";
+import { yukinoPath } from "@yukino.js/storage";
 
 // Point os.homedir() at a temp dir so persistModel writes to an isolated
 // global config instead of the real ~/.yukino/config.yaml.

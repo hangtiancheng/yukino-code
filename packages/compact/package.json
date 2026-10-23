@@ -1,0 +1,22 @@
+{
+  "name": "@yukino.js/compact",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/config": "workspace:*",
+    "@yukino.js/conversation": "workspace:*",
+    "@yukino.js/llm": "workspace:*",
+    "@yukino.js/session": "workspace:*",
+    "@yukino.js/tools": "workspace:*",
+    "@yukino.js/utils": "workspace:*"
+  }
+}

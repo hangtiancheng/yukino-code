@@ -6,22 +6,22 @@ import { Jimp } from "jimp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { runExitCleanups } from "@/bootstrap/exit-cleanup.js";
-import { createToolRegistry } from "@/bootstrap/tool-registry.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { AnthropicClient } from "@/llm/anthropic.js";
-import { OpenAIClient } from "@/llm/openai.js";
-import { extractContent } from "@/permissions/index.js";
-import { filterToolsForAgent } from "@/subagent/tool-filter.js";
-import { TaskList } from "@/todo/index.js";
-import { ComputerUseTool } from "@/tools/computer-use.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import { runExitCleanups } from "@yukino.js/bootstrap/exit-cleanup.js";
+import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { AnthropicClient } from "@yukino.js/llm/anthropic.js";
+import { OpenAIClient } from "@yukino.js/llm/openai.js";
+import { extractContent } from "@yukino.js/permissions";
+import { filterToolsForAgent } from "@yukino.js/subagent/tool-filter.js";
+import { TaskList } from "@yukino.js/todo";
+import { ComputerUseTool } from "@yukino.js/tools/computer-use.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 import {
   WINDOWS_PWSH_ACTION_SNIPPET,
   WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
-} from "@/tools/snippets.js";
-import type { ToolContext } from "@/tools/types.js";
-import { asRecord } from "@/utils/index.js";
+} from "@yukino.js/tools/snippets.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
+import { asRecord } from "@yukino.js/utils";
 
 const context: ToolContext = { cwd: tmpdir() };
 

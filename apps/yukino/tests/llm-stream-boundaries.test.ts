@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import type { ProviderConfig } from "@/config/provider-config.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { AnthropicClient } from "@/llm/anthropic.js";
-import type { LLMClient } from "@/llm/client.js";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { AnthropicClient } from "@yukino.js/llm/anthropic.js";
+import type { LLMClient } from "@yukino.js/llm/client.js";
 import {
   ContextTooLongError,
   LLMError,
   NetworkError,
   RateLimitError,
   ServerError,
-} from "@/llm/errors.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { OpenAIClient, OpenAICompatClient } from "@/llm/openai.js";
+} from "@yukino.js/llm/errors.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { OpenAIClient, OpenAICompatClient } from "@yukino.js/llm/openai.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();

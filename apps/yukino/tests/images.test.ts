@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   MAX_DIMENSION_PX,
   MAX_IMAGE_BYTES_PASSTHROUGH,
-} from "@/images/constants.js";
+} from "@yukino.js/images/constants.js";
 import {
   isImagePath,
   getMediaType,
@@ -23,7 +23,7 @@ import {
   loadImageAttachment,
   maybeResizeAndDownsampleImage,
   processScreenshot,
-} from "@/images/index.js";
+} from "@yukino.js/images";
 const TEST_PNG_PATH = join(dirname(fileURLToPath(import.meta.url)), "test.png");
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

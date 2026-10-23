@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { buildDiff, buildEditDiff } from "@/tools/diff.js";
+import { buildDiff, buildEditDiff } from "@yukino.js/tools/diff.js";
 
 describe("buildDiff", () => {
   it("does not count unchanged lines between equal-size edits as replacements", () => {

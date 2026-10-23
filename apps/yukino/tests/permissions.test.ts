@@ -5,11 +5,11 @@ import { join } from "path";
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { PathSandbox, PermissionChecker } from "@/permissions/index.js";
-import { yukinoPath, projectPath } from "@/storage/index.js";
+import { Agent } from "@yukino.js/agent";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { MemoryConsolidator } from "@yukino.js/memory/consolidation.js";
+import { PathSandbox, PermissionChecker } from "@yukino.js/permissions";
+import { yukinoPath, projectPath } from "@yukino.js/storage";
 
 const tempDirs = new Set<string>();
 let originalHome: string | undefined;

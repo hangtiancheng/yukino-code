@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { INTERRUPTED_TOOL_RESULT } from "@/conversation/constants.js";
-import type { Message } from "@/conversation/index.js";
-import { ensureToolPairing } from "@/conversation/pairing.js";
+import { INTERRUPTED_TOOL_RESULT } from "@yukino.js/conversation/constants.js";
+import type { Message } from "@yukino.js/conversation";
+import { ensureToolPairing } from "@yukino.js/conversation/pairing.js";
 import {
   buildAnthropicMessages,
   markLastUserTailForCache,
-} from "@/llm/anthropic.js";
-import { buildChatCompletionMessages, buildOpenAIInput } from "@/llm/openai.js";
+} from "@yukino.js/llm/anthropic.js";
+import {
+  buildChatCompletionMessages,
+  buildOpenAIInput,
+} from "@yukino.js/llm/openai.js";
 
 function call(...ids: string[]): Message {
   return {

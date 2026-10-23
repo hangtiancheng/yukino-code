@@ -5,19 +5,19 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import z from "zod";
 
-import { createToolRegistry } from "@/bootstrap/tool-registry.js";
-import { buildToolGuidance } from "@/prompt/tools.js";
-import { sessionPath } from "@/storage/index.js";
+import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
+import { buildToolGuidance } from "@yukino.js/prompt/tools.js";
+import { sessionPath } from "@yukino.js/storage";
 import {
   cloneRegistryForTeammate,
   filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
-import { TeamManager } from "@/teams/index.js";
-import { SharedTaskStore } from "@/teams/shared-task.js";
-import { teamDir } from "@/teams/team-file.js";
-import { TaskList } from "@/todo/index.js";
-import { StoredTaskSchema, TaskStore } from "@/todo/store.js";
-import type { ToolRegistry } from "@/tools/registry.js";
+} from "@yukino.js/subagent/tool-filter.js";
+import { TeamManager } from "@yukino.js/teams";
+import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
+import { teamDir } from "@yukino.js/teams/team-file.js";
+import { TaskList } from "@yukino.js/todo";
+import { StoredTaskSchema, TaskStore } from "@yukino.js/todo/store.js";
+import type { ToolRegistry } from "@yukino.js/tools/registry.js";
 
 function snapshot(output: string) {
   return z

@@ -8,12 +8,12 @@ import { act, createElement } from "react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { THINKING_LEVELS } from "@/config/constants.js";
-import { type ThinkingLevel } from "@/config/provider-config.js";
-import { ICONS } from "@/ui/constants.js";
-import { setThemeMode, thinkingLevelColor } from "@/ui/styles.js";
-import { visibleWidth } from "@/ui/terminal-text.js";
-import { ThinkingSelect } from "@/ui/thinking-select.js";
+import { THINKING_LEVELS } from "@yukino.js/config/constants.js";
+import { type ThinkingLevel } from "@yukino.js/config/provider-config.js";
+import { ICONS } from "@yukino.js/ui/constants.js";
+import { setThemeMode, thinkingLevelColor } from "@yukino.js/ui/styles.js";
+import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
+import { ThinkingSelect } from "@yukino.js/ui/thinking-select.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),

@@ -52,7 +52,7 @@ describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
           `${file} must not import the ui-only dependency "${specifier}"`,
         ).toBe(false);
         expect(
-          specifier.startsWith("@/ui"),
+          specifier.startsWith("@yukino.js/ui"),
           `${file} must not import the UI layer via "${specifier}"`,
         ).toBe(false);
       }

@@ -4,19 +4,19 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { HookEngine } from "@/hooks/index.js";
-import type { LLMClient, LLMStreamOptions } from "@/llm/client.js";
-import type { StreamEvent, UsageInfo } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { getOrCreatePlanPath } from "@/plan-file/index.js";
-import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool } from "@/tools/types.js";
-import type { ProviderToolSchema } from "@/tools/types.js";
-import { contentToText } from "@/utils/index.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import { HookEngine } from "@yukino.js/hooks";
+import type { LLMClient, LLMStreamOptions } from "@yukino.js/llm/client.js";
+import type { StreamEvent, UsageInfo } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { getOrCreatePlanPath } from "@yukino.js/plan-file";
+import { ExitPlanModeTool } from "@yukino.js/tools/exit-plan-mode.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool } from "@yukino.js/tools/types.js";
+import type { ProviderToolSchema } from "@yukino.js/tools/types.js";
+import { contentToText } from "@yukino.js/utils";
 
 const USAGE: UsageInfo = {
   inputTokens: 1,

@@ -13,26 +13,32 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { Agent } from "@/agent/index.js";
-import { ConversationManager, type Message } from "@/conversation/index.js";
-import { AnthropicClient, buildAnthropicMessages } from "@/llm/anthropic.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { buildChatCompletionMessages, buildOpenAIInput } from "@/llm/openai.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
-import { MemoryPermissionChecker } from "@/memory/permissions.js";
-import { extractWrittenPaths } from "@/memory/written-paths.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { projectPath, yukinoPath } from "@/storage/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import type { AgentDefinition } from "@/subagent/definition.js";
-import { EditFileTool } from "@/tools/edit-file.js";
-import { FileStateCache } from "@/tools/file-state-cache.js";
-import { ReadFileTool } from "@/tools/read-file.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { ToolContext } from "@/tools/types.js";
-import { WriteFileTool } from "@/tools/write-file.js";
-import * as worktrees from "@/worktree/index.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager, type Message } from "@yukino.js/conversation";
+import {
+  AnthropicClient,
+  buildAnthropicMessages,
+} from "@yukino.js/llm/anthropic.js";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import {
+  buildChatCompletionMessages,
+  buildOpenAIInput,
+} from "@yukino.js/llm/openai.js";
+import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
+import { MemoryPermissionChecker } from "@yukino.js/memory/permissions.js";
+import { extractWrittenPaths } from "@yukino.js/memory/written-paths.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { projectPath, yukinoPath } from "@yukino.js/storage";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import type { AgentDefinition } from "@yukino.js/subagent/definition.js";
+import { EditFileTool } from "@yukino.js/tools/edit-file.js";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { ReadFileTool } from "@yukino.js/tools/read-file.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import * as worktrees from "@yukino.js/worktree";
 
 const end: StreamEvent = {
   type: "stream_end",

@@ -10,8 +10,8 @@ import { join } from "node:path";
 
 import { afterEach, describe, it, expect } from "vitest";
 
-import { loadInstructions } from "@/memory/instructions.js";
-import { yukinoPath } from "@/storage/index.js";
+import { loadInstructions } from "@yukino.js/memory/instructions.js";
+import { yukinoPath } from "@yukino.js/storage";
 
 const tempDirs = new Set<string>();
 

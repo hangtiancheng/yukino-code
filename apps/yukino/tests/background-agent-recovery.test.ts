@@ -5,26 +5,26 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
 import {
   loadSession,
   loadTranscript,
   rebuildFromSession,
   saveMessage,
-} from "@/session/index.js";
-import { sessionPath } from "@/storage/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
-import { formatAgentTaskNotification } from "@/subagent/prompts.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { TaskOutputTool } from "@/tools/task-output.js";
-import { contentToText } from "@/utils/index.js";
+} from "@yukino.js/session";
+import { sessionPath } from "@yukino.js/storage";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
+import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { TaskOutputTool } from "@yukino.js/tools/task-output.js";
+import { contentToText } from "@yukino.js/utils";
 
 const directories: string[] = [];
 afterEach(() => {
@@ -221,7 +221,7 @@ describe("background agent durable recovery", () => {
     await task.done;
     vi.resetModules();
     const { TaskManager: RestoredTaskManager } =
-      await import("@/subagent/task-manager.js");
+      await import("@yukino.js/subagent/task-manager.js");
     const restored = new RestoredTaskManager("leader");
     expect(restored.hasNotifications()).toBe(true);
     expect(restored.drainNotifications().map((item) => item.id)).toEqual([

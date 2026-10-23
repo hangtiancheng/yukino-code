@@ -8,11 +8,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
-import type { LLMClient } from "@/llm/client.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { WorkflowsDialog } from "@/ui/workflows-dialog.js";
-import { WorkflowService } from "@/workflow/service.js";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { WorkflowsDialog } from "@yukino.js/ui/workflows-dialog.js";
+import { WorkflowService } from "@yukino.js/workflow/service.js";
 
 let terminal: VirtualTerminal;
 let instance: Instance | undefined;

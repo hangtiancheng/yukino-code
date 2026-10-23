@@ -5,8 +5,8 @@ import {
   issueFingerprint,
   loadFiledIssues,
   recordFiledIssues,
-} from "@/feedback/dedup.js";
-import type { FiledIssueRecord } from "@/feedback/types.js";
+} from "@yukino.js/feedback/dedup.js";
+import type { FiledIssueRecord } from "@yukino.js/feedback/types.js";
 
 const SESSION = "dedup-test-session";
 

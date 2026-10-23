@@ -14,21 +14,21 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Sandbox } from "@/sandbox/index.js";
-import { BashTool } from "@/tools/bash.js";
-import { EditFileTool } from "@/tools/edit-file.js";
-import { withFileMutationQueue } from "@/tools/file-mutation-queue.js";
-import { FileStateCache } from "@/tools/file-state-cache.js";
-import { PowerShellTool } from "@/tools/powershell.js";
-import { ReadFileTool } from "@/tools/read-file.js";
-import { readOutputFile } from "@/tools/shell-background.js";
+import type { Sandbox } from "@yukino.js/sandbox";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import { EditFileTool } from "@yukino.js/tools/edit-file.js";
+import { withFileMutationQueue } from "@yukino.js/tools/file-mutation-queue.js";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { PowerShellTool } from "@yukino.js/tools/powershell.js";
+import { ReadFileTool } from "@yukino.js/tools/read-file.js";
+import { readOutputFile } from "@yukino.js/tools/shell-background.js";
 import {
   formatShellOutput,
   takeUtf8Prefix,
   utf8ByteLength,
-} from "@/tools/shell-output.js";
-import type { ToolContext } from "@/tools/types.js";
-import { WriteFileTool } from "@/tools/write-file.js";
+} from "@yukino.js/tools/shell-output.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 
 const tempDirs = new Set<string>();
 

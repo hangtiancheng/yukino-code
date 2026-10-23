@@ -4,14 +4,14 @@ import { join, relative } from "node:path";
 
 import { afterEach, describe, it, expect } from "vitest";
 
-import type { ToolResultBlock } from "@/conversation/index.js";
-import { sessionPath } from "@/storage/index.js";
+import type { ToolResultBlock } from "@yukino.js/conversation";
+import { sessionPath } from "@yukino.js/storage";
 import {
   applyBudget,
   isSpillReadback,
   persistLargeResult,
-} from "@/tool-result/index.js";
-import { buildPersistedOutputPreview } from "@/tool-result/prompts.js";
+} from "@yukino.js/tool-result";
+import { buildPersistedOutputPreview } from "@yukino.js/tool-result/prompts.js";
 
 const tempDirs = new Set<string>();
 

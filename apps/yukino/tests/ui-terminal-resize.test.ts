@@ -7,17 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
-import { AgentStatus } from "@/ui/agent-status.js";
-import { ChatView, type ChatMessage } from "@/ui/chat.js";
-import { THEME } from "@/ui/constants.js";
-import { Footer } from "@/ui/footer.js";
-import { InputBox } from "@/ui/input.js";
-import { setThemeMode } from "@/ui/styles.js";
-import { TerminalLayout } from "@/ui/terminal-layout.js";
-import { installTerminalOutput } from "@/ui/terminal-output.js";
-import { ToolCard } from "@/ui/tool-display.js";
-import { Transcript } from "@/ui/transcript.js";
-import { useTerminalDimensions } from "@/ui/use-terminal-layout.js";
+import { AgentStatus } from "@yukino.js/ui/agent-status.js";
+import { ChatView, type ChatMessage } from "@yukino.js/ui/chat.js";
+import { THEME } from "@yukino.js/ui/constants.js";
+import { Footer } from "@yukino.js/ui/footer.js";
+import { InputBox } from "@yukino.js/ui/input.js";
+import { setThemeMode } from "@yukino.js/ui/styles.js";
+import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
+import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
+import { ToolCard } from "@yukino.js/ui/tool-display.js";
+import { Transcript } from "@yukino.js/ui/transcript.js";
+import { useTerminalDimensions } from "@yukino.js/ui/use-terminal-layout.js";
 
 let virtualTerminal: VirtualTerminal;
 let terminal: Terminal;

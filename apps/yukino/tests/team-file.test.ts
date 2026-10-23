@@ -5,14 +5,14 @@ import { join } from "node:path";
 
 import { describe, expect, test, beforeEach, afterEach } from "vitest";
 
-import { TeamManager } from "@/teams/index.js";
-import { getNameRegistry } from "@/teams/registry.js";
+import { TeamManager } from "@yukino.js/teams";
+import { getNameRegistry } from "@yukino.js/teams/registry.js";
 import {
   readTeamFile,
   teamConfigPath,
   teamDir,
   teamsBaseDir,
-} from "@/teams/team-file.js";
+} from "@yukino.js/teams/team-file.js";
 
 // The teams directory lives at <home>/.yukino/teams, so redirect the entire
 // home directory to a temp dir to avoid leaving residue in the real

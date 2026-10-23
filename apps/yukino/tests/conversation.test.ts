@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 
-import { ConversationManager } from "@/conversation/index.js";
+import { ConversationManager } from "@yukino.js/conversation";
 import {
   buildAnthropicMessages,
   markLastUserTailForCache,
-} from "@/llm/anthropic.js";
-import { buildOpenAIInput } from "@/llm/openai.js";
-import { asRecord, strArg } from "@/utils/index.js";
+} from "@yukino.js/llm/anthropic.js";
+import { buildOpenAIInput } from "@yukino.js/llm/openai.js";
+import { asRecord, strArg } from "@yukino.js/utils";
 
 describe("ConversationManager", () => {
   it("deduplicates only the latest tagged reminder and restores it after compaction", () => {

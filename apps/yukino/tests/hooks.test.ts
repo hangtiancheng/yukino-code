@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { HookConfig } from "@/config/index.js";
-import { HookEngine, validate } from "@/hooks/index.js";
+import type { HookConfig } from "@yukino.js/config";
+import { HookEngine, validate } from "@yukino.js/hooks";
 
 afterEach(() => {
   vi.unstubAllGlobals();

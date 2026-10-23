@@ -5,12 +5,12 @@ import { join } from "node:path";
 
 import { expect, it, vi } from "vitest";
 
-import { TaskManager } from "@/subagent/task-manager.js";
-import { BashTool } from "@/tools/bash.js";
-import type * as toolsConstants from "@/tools/constants.js";
-import { PowerShellTool } from "@/tools/powershell.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import type * as toolsConstants from "@yukino.js/tools/constants.js";
+import { PowerShellTool } from "@yukino.js/tools/powershell.js";
 
-vi.mock("@/tools/constants.js", async (importOriginal) => ({
+vi.mock("@yukino.js/tools/constants.js", async (importOriginal) => ({
   ...(await importOriginal<typeof toolsConstants>()),
   MAX_SHELL_OUTPUT_FILE_BYTES: 1024,
 }));

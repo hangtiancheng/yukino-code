@@ -1,63 +1,66 @@
 import { join } from "node:path";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import { configureBashSandbox } from "@/bootstrap/sandbox.js";
-import { createToolRegistry } from "@/bootstrap/tool-registry.js";
-import { parse as parseCommand } from "@/commands/commands.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import { configureBashSandbox } from "@yukino.js/bootstrap/sandbox.js";
+import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
+import { parse as parseCommand } from "@yukino.js/commands/commands.js";
 import {
   forkEnabled,
   loadConfig,
   withProjectMcpServers,
-} from "@/config/index.js";
+} from "@yukino.js/config";
 import {
   getContextWindow,
   getMaxOutputTokens,
   resolveDefaultProvider,
-} from "@/config/provider-config.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { GoalManager, handleGoalCommand } from "@/goal/index.js";
-import { recordInput } from "@/history/index.js";
-import { createClient } from "@/llm/client.js";
-import { MCPManager } from "@/mcp/manager.js";
-import { decideAndApply } from "@/mcp/strategy.js";
-import { MCPToolWrapper } from "@/mcp/tool-wrapper.js";
-import { loadInstructions } from "@/memory/instructions.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { buildSystemPrompt, detectEnvironment } from "@/prompt/builder.js";
+} from "@yukino.js/config/provider-config.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { GoalManager, handleGoalCommand } from "@yukino.js/goal";
+import { recordInput } from "@yukino.js/history";
+import { createClient } from "@yukino.js/llm/client.js";
+import { MCPManager } from "@yukino.js/mcp/manager.js";
+import { decideAndApply } from "@yukino.js/mcp/strategy.js";
+import { MCPToolWrapper } from "@yukino.js/mcp/tool-wrapper.js";
+import { loadInstructions } from "@yukino.js/memory/instructions.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import {
+  buildSystemPrompt,
+  detectEnvironment,
+} from "@yukino.js/prompt/builder.js";
 import {
   newSessionId,
   saveMessage,
   saveUserMessage,
   messageToKeptRecord,
-} from "@/session/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
-import { formatAgentTaskNotification } from "@/subagent/prompts.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
+} from "@yukino.js/session";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
+import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import {
   coordinatorToolFilter,
   coordinatorActive,
-} from "@/teams/coordinator.js";
-import { TeamManager } from "@/teams/index.js";
-import { TaskStopTool } from "@/teams/task-stop.js";
+} from "@yukino.js/teams/coordinator.js";
+import { TeamManager } from "@yukino.js/teams";
+import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
 import {
   TeamCreateTool,
   SendMessageTool,
   TeamDeleteTool,
-} from "@/teams/tools.js";
-import { TaskList } from "@/todo/index.js";
-import { FileStateCache } from "@/tools/file-state-cache.js";
-import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
-import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
-import { WORKFLOW_DIR_NAME } from "@/workflow/constants.js";
-import { listNamedWorkflows } from "@/workflow/named-workflows.js";
+} from "@yukino.js/teams/tools.js";
+import { TaskList } from "@yukino.js/todo";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { attachBackgroundTaskManager } from "@yukino.js/tools/shell-background.js";
+import { SyntheticOutputTool } from "@yukino.js/tools/synthetic-output.js";
+import { WORKFLOW_DIR_NAME } from "@yukino.js/workflow/constants.js";
+import { listNamedWorkflows } from "@yukino.js/workflow/named-workflows.js";
 import {
   buildNamedWorkflowPrompt,
   ULTRACODE_PROMPT,
-} from "@/workflow/prompts.js";
-import { attachWorkflow } from "@/workflow/wiring.js";
+} from "@yukino.js/workflow/prompts.js";
+import { attachWorkflow } from "@yukino.js/workflow/wiring.js";
 
 export type OutputFormat = "text" | "stream-json";
 

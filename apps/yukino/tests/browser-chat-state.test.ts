@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   chatReducer,
   initialState,
-} from "@/remote/browser/src/hooks/use-chat.js";
+} from "@yukino.js/remote-browser/hooks/use-chat.js";
 
 describe("browser transcript identity", () => {
   it("does not close a new plan approval when an older request settles", () => {

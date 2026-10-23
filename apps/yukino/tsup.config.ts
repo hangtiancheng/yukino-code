@@ -12,7 +12,14 @@ import type * as TypeScript from "typescript";
 type EsbuildPlugin = NonNullable<Options["esbuildPlugins"]>[number];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const remoteBrowserDist = join(__dirname, "src", "remote", "browser", "dist");
+const remoteBrowserDist = join(
+  __dirname,
+  "..",
+  "..",
+  "packages",
+  "remote-browser",
+  "dist",
+);
 
 const copyRemoteBrowser = (): void => {
   cpSync(remoteBrowserDist, join(__dirname, "dist", "browser", "dist"), {
@@ -30,14 +37,14 @@ const pkg = JSON.parse(
 };
 
 // UI-only dependencies: reached exclusively from the terminal layer
-// (src/main.tsx and src/ui/**). The library barrel must never pull them in, or
-// a consumer embedding the library in a non-terminal host would get a
-// terminal-bound graph. `tests/build-guards.test.ts` recomputes this set from
-// the actual import sites and fails on drift, so it cannot go stale silently.
-// react is included: the barrel no longer re-exports src/ui, so react is
-// reached exclusively from the terminal layer. react-dom is absent — only the
-// standalone browser bundle (src/remote/browser, own tsup build) imports it, which
-// never enters the CLI/library graph.
+// (apps/yukino/src/main.tsx and packages/ui). The library barrel must never
+// pull them in, or a consumer embedding the library in a non-terminal host
+// would get a terminal-bound graph. `tests/build-guards.test.ts` recomputes
+// this set from the actual import sites and fails on drift, so it cannot go
+// stale silently. react is included: the barrel no longer re-exports the ui
+// package, so react is reached exclusively from the terminal layer. react-dom
+// is absent — only the standalone browser bundle (packages/remote-browser,
+// own tsup build) imports it, which never enters the CLI/library graph.
 const uiOnlyDeps = [
   "ink",
   "ansi-escapes",
@@ -90,11 +97,11 @@ const externalizeNodeBuiltinsPlugin: EsbuildPlugin = {
   },
 };
 
-const uiDirs = [join(__dirname, "src", "ui") + sep];
+const uiDirs = [join(__dirname, "..", "..", "packages", "ui", "src") + sep];
 
 // Library-build guard: the barrel entry (src/index.ts) must never reach the
 // terminal layer, neither through a bare ui-only specifier nor through a
-// path resolving into src/ui. Failing the build is the point.
+// path resolving into packages/ui. Failing the build is the point.
 //
 // The bare-specifier rule only fires because libConfig lists the ui-only
 // packages in `noExternal`: tsup registers its own resolver ahead of user
@@ -112,7 +119,7 @@ const banUIOnlyPlugin: EsbuildPlugin = {
     build.onResolve({ filter: uiOnlyPattern }, (args) =>
       ban(args.importer, args.path, "ui-only dependency"),
     );
-    build.onResolve({ filter: /^@\/ui(\/|$)/ }, (args) =>
+    build.onResolve({ filter: /^@yukino\.js\/ui(\/|$)/ }, (args) =>
       ban(args.importer, args.path, "UI module"),
     );
     build.onResolve({ filter: /^\.\.?\// }, (args) => {
@@ -167,11 +174,13 @@ const findAmbiguousExports = (
   });
 
   const srcPrefix = join(projectRoot, "src") + sep;
+  const packagesPrefix = resolve(projectRoot, "..", "..", "packages") + sep;
   const conflicts: ExportConflict[] = [];
   for (const sourceFile of program.getSourceFiles()) {
     if (
       sourceFile.isDeclarationFile ||
-      !sourceFile.fileName.startsWith(srcPrefix)
+      (!sourceFile.fileName.startsWith(srcPrefix) &&
+        !sourceFile.fileName.startsWith(packagesPrefix))
     ) {
       continue;
     }
@@ -223,7 +232,7 @@ const assertNoAmbiguousExports = (): void => {
 const cliConfig: Options = {
   entry: {
     main: "src/cli.ts",
-    "image-worker": "src/images/image-worker.js",
+    "image-worker": "../../packages/images/src/image-worker.js",
   },
   format: ["esm"],
   env: {
@@ -261,7 +270,7 @@ const cliConfig: Options = {
 const libConfig: Options = {
   entry: {
     index: "src/index.ts",
-    "image-worker": "src/images/image-worker.js",
+    "image-worker": "../../packages/images/src/image-worker.js",
   },
   format: ["esm"],
   platform: "node",
@@ -282,11 +291,13 @@ const libConfig: Options = {
   // optionalDependencies (the telemetry stack) are external too: they are
   // loaded lazily behind a guarded dynamic import and degrade to a noop
   // runtime when absent — bundling them would defeat their optionality.
+  // Workspace packages (@yukino.js/*) are source-level and always bundled,
+  // so the ban plugin and the dts rollup see the full workspace graph.
   external: [
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.optionalDependencies ?? {}),
-  ].filter((dep) => !uiOnlySet.has(dep)),
-  noExternal: [uiOnlyPattern],
+  ].filter((dep) => !uiOnlySet.has(dep) && !dep.startsWith("@yukino.js/")),
+  noExternal: [uiOnlyPattern, /^@yukino\.js\//],
   esbuildPlugins: [externalizeNodeBuiltinsPlugin, banUIOnlyPlugin],
   onSuccess: async () => {
     await Promise.resolve();

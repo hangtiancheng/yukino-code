@@ -10,42 +10,45 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
 import {
   createPlanPath,
   getCurrentPlanPath,
   getOrCreatePlanPath,
-} from "@/plan-file/index.js";
-import { SkillCatalog } from "@/skills/catalog.js";
-import { LoadSkillTool } from "@/skills/load-skill-tool.js";
-import { yukinoPath } from "@/storage/index.js";
-import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
-import type { AgentDefinition } from "@/subagent/definition.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
+} from "@yukino.js/plan-file";
+import { SkillCatalog } from "@yukino.js/skills/catalog.js";
+import { LoadSkillTool } from "@yukino.js/skills/load-skill-tool.js";
+import { yukinoPath } from "@yukino.js/storage";
+import {
+  AgentTool,
+  type TeammateRunOptions,
+} from "@yukino.js/subagent/agent-tool.js";
+import type { AgentDefinition } from "@yukino.js/subagent/definition.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import {
   cloneRegistryForTeammate,
   filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
-import { MSG_PLAN_APPROVAL_REQUEST } from "@/teams/constants.js";
-import { FileMailbox } from "@/teams/file-mailbox.js";
-import { TeamManager } from "@/teams/index.js";
-import { getNameRegistry } from "@/teams/registry.js";
-import { SharedTaskStore } from "@/teams/shared-task.js";
-import { TaskStopTool } from "@/teams/task-stop.js";
-import { readTeamFile } from "@/teams/team-file.js";
-import { McpCallTool } from "@/tools/mcp-call.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { ToolSearchTool } from "@/tools/tool-search.js";
-import type { Tool, PermissionRequestHandler } from "@/tools/types.js";
+} from "@yukino.js/subagent/tool-filter.js";
+import { MSG_PLAN_APPROVAL_REQUEST } from "@yukino.js/teams/constants.js";
+import { FileMailbox } from "@yukino.js/teams/file-mailbox.js";
+import { TeamManager } from "@yukino.js/teams";
+import { getNameRegistry } from "@yukino.js/teams/registry.js";
+import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
+import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
+import { readTeamFile } from "@yukino.js/teams/team-file.js";
+import { McpCallTool } from "@yukino.js/tools/mcp-call.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { ToolSearchTool } from "@yukino.js/tools/tool-search.js";
+import type { Tool, PermissionRequestHandler } from "@yukino.js/tools/types.js";
 import {
   createPermissionRequestHandler,
   type PermissionRequest,
-} from "@/ui/permission-request.js";
+} from "@yukino.js/ui/permission-request.js";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

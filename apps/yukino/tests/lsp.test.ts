@@ -6,8 +6,11 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import z from "zod";
 
-import { LspServerConfigSchema, type LspServerConfig } from "@/lsp/config.js";
-import { LspTool } from "@/tools/lsp.js";
+import {
+  LspServerConfigSchema,
+  type LspServerConfig,
+} from "@yukino.js/lsp/config.js";
+import { LspTool } from "@yukino.js/tools/lsp.js";
 
 const fixture = fileURLToPath(
   new URL("./fixtures/lsp-server.mjs", import.meta.url),

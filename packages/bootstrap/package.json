@@ -1,0 +1,26 @@
+{
+  "name": "@yukino.js/bootstrap",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/commands": "workspace:*",
+    "@yukino.js/config": "workspace:*",
+    "@yukino.js/lsp": "workspace:*",
+    "@yukino.js/mcp": "workspace:*",
+    "@yukino.js/permissions": "workspace:*",
+    "@yukino.js/sandbox": "workspace:*",
+    "@yukino.js/skills": "workspace:*",
+    "@yukino.js/teams": "workspace:*",
+    "@yukino.js/todo": "workspace:*",
+    "@yukino.js/tools": "workspace:*"
+  }
+}

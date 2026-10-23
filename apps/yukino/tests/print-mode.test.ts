@@ -11,19 +11,19 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import * as config from "@/config/index.js";
-import type { AppConfig } from "@/config/index.js";
-import { GoalManager } from "@/goal/index.js";
-import * as clients from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { OpenAIClient } from "@/llm/openai.js";
-import { MCPManager } from "@/mcp/manager.js";
-import * as mcpStrategy from "@/mcp/strategy.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import * as config from "@yukino.js/config";
+import type { AppConfig } from "@yukino.js/config";
+import { GoalManager } from "@yukino.js/goal";
+import * as clients from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { OpenAIClient } from "@yukino.js/llm/openai.js";
+import { MCPManager } from "@yukino.js/mcp/manager.js";
+import * as mcpStrategy from "@yukino.js/mcp/strategy.js";
 import { runPrintMode } from "@/print-mode.js";
-import { createRemoteAgent } from "@/remote/server.js";
-import { restoreRemoteSession } from "@/remote/session-state.js";
+import { createRemoteAgent } from "@yukino.js/remote/server.js";
+import { restoreRemoteSession } from "@yukino.js/remote/session-state.js";
 import {
   getSessionFilePath,
   loadSession,
@@ -31,13 +31,13 @@ import {
   rebuildFromSession,
   sessionLineCount,
   truncateSessionLines,
-} from "@/session/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import * as subagents from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import type { ToolContext } from "@/tools/types.js";
-import { contentToText } from "@/utils/index.js";
-import * as worktrees from "@/worktree/index.js";
+} from "@yukino.js/session";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import * as subagents from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
+import { contentToText } from "@yukino.js/utils";
+import * as worktrees from "@yukino.js/worktree";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

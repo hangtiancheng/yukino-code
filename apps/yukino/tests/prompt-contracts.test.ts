@@ -10,31 +10,31 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
-import { MemoryManager } from "@/memory/manager.js";
-import { memoryAge } from "@/memory/memory-age.js";
-import { memoryFreshnessText } from "@/memory/prompts.js";
-import { buildSystemPrompt, PromptBuilder } from "@/prompt/builder.js";
-import { coordinatorReminder } from "@/prompt/coordinator.js";
+import type { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { MemoryConsolidator } from "@yukino.js/memory/consolidation.js";
+import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
+import { MemoryManager } from "@yukino.js/memory/manager.js";
+import { memoryAge } from "@yukino.js/memory/memory-age.js";
+import { memoryFreshnessText } from "@yukino.js/memory/prompts.js";
+import { buildSystemPrompt, PromptBuilder } from "@yukino.js/prompt/builder.js";
+import { coordinatorReminder } from "@yukino.js/prompt/coordinator.js";
 import {
   buildPlanModeExitReminder,
   buildPlanModeReentryReminder,
   buildPlanModeReminder,
-} from "@/prompt/plan-mode.js";
-import type { EnvironmentContext } from "@/prompt/sections.js";
+} from "@yukino.js/prompt/plan-mode.js";
+import type { EnvironmentContext } from "@yukino.js/prompt/sections.js";
 import {
   buildDeferredToolGuidance,
   buildToolGuidance,
-} from "@/prompt/tools.js";
-import { SkillCatalog } from "@/skills/catalog.js";
-import { runFork, runInline } from "@/skills/executor.js";
-import type { Skill, SkillForkHost } from "@/skills/index.js";
-import { buildSkillSection } from "@/skills/prompts.js";
-import { projectPath, yukinoPath } from "@/storage/index.js";
+} from "@yukino.js/prompt/tools.js";
+import { SkillCatalog } from "@yukino.js/skills/catalog.js";
+import { runFork, runInline } from "@yukino.js/skills/executor.js";
+import type { Skill, SkillForkHost } from "@yukino.js/skills";
+import { buildSkillSection } from "@yukino.js/skills/prompts.js";
+import { projectPath, yukinoPath } from "@yukino.js/storage";
 import {
   BASH_DESCRIPTION,
   EDIT_FILE_DESCRIPTION,
@@ -43,8 +43,8 @@ import {
   POWERSHELL_DESCRIPTION,
   READ_FILE_DESCRIPTION,
   WRITE_FILE_DESCRIPTION,
-} from "@/tools/prompts.js";
-import type { ToolSchema } from "@/tools/types.js";
+} from "@yukino.js/tools/prompts.js";
+import type { ToolSchema } from "@yukino.js/tools/types.js";
 
 const env: EnvironmentContext = {
   cwd: "/project",

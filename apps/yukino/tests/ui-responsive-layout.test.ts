@@ -7,19 +7,19 @@ import { act, createElement } from "react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AskUserDialog } from "@/ui/ask-user-dialog.js";
-import { ChatView } from "@/ui/chat.js";
-import type { ChatMessage } from "@/ui/chat.js";
-import { Footer } from "@/ui/footer.js";
-import type { InputDraft } from "@/ui/input-draft.js";
-import { InputBox } from "@/ui/input.js";
-import { PermissionDialog } from "@/ui/permission-dialog.js";
-import { ProviderLogin } from "@/ui/provider-login.js";
-import RewindDialog from "@/ui/rewind-dialog.js";
-import { TerminalLayout } from "@/ui/terminal-layout.js";
-import { visibleWidth } from "@/ui/terminal-text.js";
-import { ToolBlock } from "@/ui/tool-display.js";
-import { Transcript } from "@/ui/transcript.js";
+import { AskUserDialog } from "@yukino.js/ui/ask-user-dialog.js";
+import { ChatView } from "@yukino.js/ui/chat.js";
+import type { ChatMessage } from "@yukino.js/ui/chat.js";
+import { Footer } from "@yukino.js/ui/footer.js";
+import type { InputDraft } from "@yukino.js/ui/input-draft.js";
+import { InputBox } from "@yukino.js/ui/input.js";
+import { PermissionDialog } from "@yukino.js/ui/permission-dialog.js";
+import { ProviderLogin } from "@yukino.js/ui/provider-login.js";
+import RewindDialog from "@yukino.js/ui/rewind-dialog.js";
+import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
+import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
+import { ToolBlock } from "@yukino.js/ui/tool-display.js";
+import { Transcript } from "@yukino.js/ui/transcript.js";
 
 const caret = vi.hoisted(() => {
   const state: {

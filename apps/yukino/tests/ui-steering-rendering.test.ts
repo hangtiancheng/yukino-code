@@ -6,15 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
-import { ChatView, type ChatMessage } from "@/ui/chat.js";
-import { THEME } from "@/ui/constants.js";
-import { InputBox } from "@/ui/input.js";
-import { PendingQueue } from "@/ui/pending-queue.js";
-import { setThemeMode } from "@/ui/styles.js";
-import { TerminalLayout } from "@/ui/terminal-layout.js";
-import { installTerminalOutput } from "@/ui/terminal-output.js";
-import { TodoProgress } from "@/ui/todo-progress.js";
-import { Transcript } from "@/ui/transcript.js";
+import { ChatView, type ChatMessage } from "@yukino.js/ui/chat.js";
+import { THEME } from "@yukino.js/ui/constants.js";
+import { InputBox } from "@yukino.js/ui/input.js";
+import { PendingQueue } from "@yukino.js/ui/pending-queue.js";
+import { setThemeMode } from "@yukino.js/ui/styles.js";
+import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
+import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
+import { TodoProgress } from "@yukino.js/ui/todo-progress.js";
+import { Transcript } from "@yukino.js/ui/transcript.js";
 
 let terminal: VirtualTerminal;
 let instance: Instance | undefined;

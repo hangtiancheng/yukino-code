@@ -10,15 +10,15 @@ import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 
-import type { Command } from "@/commands/commands.js";
-import { saveClipboardImage } from "@/images/clipboard.js";
-import { ICONS, THEME } from "@/ui/constants.js";
-import { Footer } from "@/ui/footer.js";
-import { InputBox } from "@/ui/input.js";
-import type { InputDraft } from "@/ui/input.js";
-import { InteractionDock } from "@/ui/interaction-dock.js";
-import { StatusBorder } from "@/ui/status-border.js";
-import { truncateToWidth, visibleWidth } from "@/ui/terminal-text.js";
+import type { Command } from "@yukino.js/commands/commands.js";
+import { saveClipboardImage } from "@yukino.js/images/clipboard.js";
+import { ICONS, THEME } from "@yukino.js/ui/constants.js";
+import { Footer } from "@yukino.js/ui/footer.js";
+import { InputBox } from "@yukino.js/ui/input.js";
+import type { InputDraft } from "@yukino.js/ui/input.js";
+import { InteractionDock } from "@yukino.js/ui/interaction-dock.js";
+import { StatusBorder } from "@yukino.js/ui/status-border.js";
+import { truncateToWidth, visibleWidth } from "@yukino.js/ui/terminal-text.js";
 
 const terminal = vi.hoisted(() => {
   const input: { current: ((text: string, key: Key) => void) | null } = {
@@ -88,7 +88,9 @@ vi.mock("fs", async (importOriginal) => ({
   }),
 }));
 
-vi.mock("@/images/clipboard.js", () => ({ saveClipboardImage: vi.fn() }));
+vi.mock("@yukino.js/images/clipboard.js", () => ({
+  saveClipboardImage: vi.fn(),
+}));
 
 const commands: Command[] = [
   {

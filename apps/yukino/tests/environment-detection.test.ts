@@ -5,8 +5,8 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { closeLogger, initLogger } from "@/logger/index.js";
-import { detectEnvironment } from "@/prompt/builder.js";
+import { closeLogger, initLogger } from "@yukino.js/logger";
+import { detectEnvironment } from "@yukino.js/prompt/builder.js";
 
 let directory: string;
 let logPath: string;

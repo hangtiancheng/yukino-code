@@ -12,11 +12,11 @@ import {
 import type { AgentExecutionEvent } from "@a2a-js/sdk/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { A2aRuntime, A2aRuntimeFactory } from "@/a2a/executor.js";
-import { YukinoA2aExecutor } from "@/a2a/executor.js";
-import type { AgentEvent } from "@/agent/events.js";
-import { projectPath } from "@/storage/index.js";
-import type { PermissionRequestHandler } from "@/tools/types.js";
+import type { A2aRuntime, A2aRuntimeFactory } from "@yukino.js/a2a/executor.js";
+import { YukinoA2aExecutor } from "@yukino.js/a2a/executor.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { projectPath } from "@yukino.js/storage";
+import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
 
 interface FakeRuntimeOptions {
   events?: AgentEvent[];

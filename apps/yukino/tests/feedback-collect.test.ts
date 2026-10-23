@@ -10,14 +10,14 @@ import {
   collectAttachments,
   readTextCapped,
   summarizeEnvironment,
-} from "@/feedback/collect.js";
-import { MAX_FILE_BYTES } from "@/feedback/constants.js";
-import { redactText } from "@/feedback/redact.js";
-import { fileHistoryDir } from "@/file-history/index.js";
-import { closeLogger, initLogger } from "@/logger/index.js";
-import { saveMessage } from "@/session/index.js";
-import { yukinoPath } from "@/storage/index.js";
-import { spillDir } from "@/tool-result/index.js";
+} from "@yukino.js/feedback/collect.js";
+import { MAX_FILE_BYTES } from "@yukino.js/feedback/constants.js";
+import { redactText } from "@yukino.js/feedback/redact.js";
+import { fileHistoryDir } from "@yukino.js/file-history";
+import { closeLogger, initLogger } from "@yukino.js/logger";
+import { saveMessage } from "@yukino.js/session";
+import { yukinoPath } from "@yukino.js/storage";
+import { spillDir } from "@yukino.js/tool-result";
 
 const SESSION = "collect-test-session";
 

@@ -1,61 +1,73 @@
-// Library entry: re-exports every terminal-independent module of
-// @yukino.js/yukino, one namespace per source directory
-// (`export * as Agent from "@/agent/index.js"`; each group barrel nests its
-// submodules the same way), so top-level export names cannot collide across
-// groups. The CLI entry (bin) is dist/main.js; nothing here may import from
-// src/ui or any ui-only dependency (ink, chalk, ...). That is enforced
+// Library entry: flat re-export of every terminal-independent workspace
+// package of the yukino monorepo (`export * from "@yukino.js/agent"`).
+// The CLI entry (bin) is dist/main.js; nothing here may import from
+// @yukino.js/ui or any ui-only dependency (ink, chalk, ...). That is enforced
 // at build time by the ban-ui-only-deps esbuild plugin in
 // tsup.config.ts: reaching one of them fails the build. react is in that set —
 // nothing outside the terminal layer may use it; react-dom is imported only by
-// the standalone browser bundle under src/remote/browser, outside this graph.
+// the standalone browser bundle (packages/remote-browser), outside this graph.
 
-export * as A2A from "@/a2a/index.js";
-export * as ACP from "@/acp/index.js";
-export * as Agent from "@/agent/index.js";
-export * as Bootstrap from "@/bootstrap/index.js";
-export * as Commands from "@/commands/index.js";
-export * as Compact from "@/compact/index.js";
-export * as Config from "@/config/index.js";
-export * as Conversation from "@/conversation/index.js";
-export * as Feedback from "@/feedback/index.js";
-export * as FileHistory from "@/file-history/index.js";
-export * as Goal from "@/goal/index.js";
-export * as History from "@/history/index.js";
-export * as Hooks from "@/hooks/index.js";
-export * as Images from "@/images/index.js";
-export * as LLM from "@/llm/index.js";
-export * as Logger from "@/logger/index.js";
-export * as LSP from "@/lsp/index.js";
-export * as MCP from "@/mcp/index.js";
-export * as Memory from "@/memory/index.js";
-export * as Permissions from "@/permissions/index.js";
-export * as PlanFile from "@/plan-file/index.js";
-export * as Prompt from "@/prompt/index.js";
-export * as Remote from "@/remote/index.js";
-export * as Sandbox from "@/sandbox/index.js";
-export * as Session from "@/session/index.js";
-export * as Skills from "@/skills/index.js";
-export * as Storage from "@/storage/index.js";
-export * as Subagent from "@/subagent/index.js";
-export * as Teams from "@/teams/index.js";
-export * as Telemetry from "@/telemetry/index.js";
-export * as Theme from "@/theme/index.js";
-export * as Todo from "@/todo/index.js";
-export * as ToolResult from "@/tool-result/index.js";
-export * as Tools from "@/tools/index.js";
-export * as Update from "@/update/index.js";
-export * as Utils from "@/utils/index.js";
-export * as VSCode from "@/vscode/index.js";
-export * as Workflow from "@/workflow/index.js";
-export * as Worktree from "@/worktree/index.js";
+export * from "@yukino.js/a2a";
+export * from "@yukino.js/acp";
+export * from "@yukino.js/agent";
+export * from "@yukino.js/bootstrap";
+export * from "@yukino.js/commands";
+export * from "@yukino.js/compact";
+export * from "@yukino.js/config";
+export * from "@yukino.js/conversation";
+export * from "@yukino.js/feedback";
+export * from "@yukino.js/file-history";
+export * from "@yukino.js/goal";
+export * from "@yukino.js/history";
+export * from "@yukino.js/hooks";
+export * from "@yukino.js/images";
+export * from "@yukino.js/llm";
+export * from "@yukino.js/logger";
+export * from "@yukino.js/lsp";
+export * from "@yukino.js/mcp";
+export * from "@yukino.js/memory";
+export * from "@yukino.js/permissions";
+export * from "@yukino.js/plan-file";
+export * from "@yukino.js/prompt";
+export * from "@yukino.js/remote";
+export * from "@yukino.js/sandbox";
+export * from "@yukino.js/session";
+export * from "@yukino.js/skills";
+export * from "@yukino.js/storage";
+export * from "@yukino.js/subagent";
+export * from "@yukino.js/teams";
+export * from "@yukino.js/telemetry";
+export * from "@yukino.js/theme";
+export * from "@yukino.js/todo";
+export * from "@yukino.js/tool-result";
+export * from "@yukino.js/tools";
+export * from "@yukino.js/update";
+export * from "@yukino.js/utils";
+export * from "@yukino.js/vscode";
+export * from "@yukino.js/workflow";
+export * from "@yukino.js/worktree";
 
 // Process-level headless entry points. They carry no UI, but they own process
 // lifecycle — recover installs crash logging to ~/.yukino/crash.log and calls
-// process.exit(), and print-mode owns signal exit codes — so prefer the
-// composable namespaces above (Agent, Bootstrap.ToolRegistry, ...) in
-// long-lived host processes. CLI argument parsing lives in the bin entry
-// (src/cli.ts) and is not part of the library surface.
-export * as PrintMode from "@/print-mode.js";
-export * as Recover from "@/recover.js";
-export * as Version from "@/version.js";
-export * as WebsocketSecurity from "@/websocket-security.js";
+// process.exit(), and print-mode owns signal exit codes — so prefer importing
+// the workspace packages above directly in long-lived host processes. CLI
+// argument parsing lives in the bin entry (src/cli.ts) and is not part of the
+// library surface.
+export * from "@/print-mode.js";
+export * from "@/recover.js";
+export * from "@yukino.js/version";
+export * from "@yukino.js/websocket-security";
+
+// Names exported by more than one package: bind each one explicitly to its
+// canonical owner so the flat aggregation above stays unambiguous (TS2308).
+// Consumers who need a specific package's constant should import that
+// workspace package directly.
+export { DEFAULT_ADDRESS, NO_PROVIDER_ERROR } from "@yukino.js/a2a";
+export { INVALID_SESSION_ID_ERROR } from "@yukino.js/acp";
+export { CHARS_PER_TOKEN } from "@yukino.js/compact";
+export {
+  FRONTMATTER_BLOCK_RE,
+  MILLISECONDS_PER_DAY,
+} from "@yukino.js/commands";
+export { SHUTDOWN_TIMEOUT_MS } from "@yukino.js/lsp";
+export { AGENTS_DIR_NAME } from "@yukino.js/skills";

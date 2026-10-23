@@ -4,13 +4,13 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { yukinoPath } from "@/storage/index.js";
-import { loadAgentDefinitions } from "@/subagent/loader.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import { Agent } from "@yukino.js/agent";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { yukinoPath } from "@yukino.js/storage";
+import { loadAgentDefinitions } from "@yukino.js/subagent/loader.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 
 let cwd: string;
 beforeEach(() => {

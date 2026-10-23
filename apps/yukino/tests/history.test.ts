@@ -17,7 +17,7 @@ import {
   ACTIVITY_FILE_NAME,
   COMPACT_AFTER_RECORDS,
   MAX_HISTORY_ENTRIES,
-} from "@/history/constants.js";
+} from "@yukino.js/history/constants.js";
 import {
   compactActivity,
   getCommandUsage,
@@ -27,8 +27,8 @@ import {
   recordInput,
   registerProject,
   type InputEntry,
-} from "@/history/index.js";
-import { getYukinoDir, projectKey, yukinoPath } from "@/storage/index.js";
+} from "@yukino.js/history";
+import { getYukinoDir, projectKey, yukinoPath } from "@yukino.js/storage";
 
 vi.mock("node:fs", async (importOriginal) => {
   const original = await importOriginal<typeof fs>();

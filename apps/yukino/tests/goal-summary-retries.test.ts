@@ -5,16 +5,16 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import type { ProviderConfig } from "@/config/provider-config.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { GoalManager } from "@/goal/index.js";
-import { AnthropicClient } from "@/llm/anthropic.js";
-import type { LLMClient } from "@/llm/client.js";
-import { RateLimitError, ServerError } from "@/llm/errors.js";
-import { OpenAIClient, OpenAICompatClient } from "@/llm/openai.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import { Agent } from "@yukino.js/agent";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { GoalManager } from "@yukino.js/goal";
+import { AnthropicClient } from "@yukino.js/llm/anthropic.js";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { RateLimitError, ServerError } from "@yukino.js/llm/errors.js";
+import { OpenAIClient, OpenAICompatClient } from "@yukino.js/llm/openai.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 
 let cwd: string;
 beforeEach(() => {

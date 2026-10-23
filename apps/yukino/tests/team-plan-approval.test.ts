@@ -4,20 +4,26 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { createPlanPath } from "@/plan-file/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { BUILTIN_AGENTS } from "@/subagent/constants.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { LEADER_NAME, MSG_PLAN_APPROVAL_RESPONSE } from "@/teams/constants.js";
-import { TeamManager } from "@/teams/index.js";
-import { planApprovalResponse, shutdownRequest } from "@/teams/protocol.js";
-import { SendMessageTool } from "@/teams/tools.js";
-import { EnterPlanModeTool } from "@/tools/enter-plan-mode.js";
-import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
-import { ToolRegistry } from "@/tools/registry.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { createPlanPath } from "@yukino.js/plan-file";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@yukino.js/subagent/constants.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import {
+  LEADER_NAME,
+  MSG_PLAN_APPROVAL_RESPONSE,
+} from "@yukino.js/teams/constants.js";
+import { TeamManager } from "@yukino.js/teams";
+import {
+  planApprovalResponse,
+  shutdownRequest,
+} from "@yukino.js/teams/protocol.js";
+import { SendMessageTool } from "@yukino.js/teams/tools.js";
+import { EnterPlanModeTool } from "@yukino.js/tools/enter-plan-mode.js";
+import { ExitPlanModeTool } from "@yukino.js/tools/exit-plan-mode.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

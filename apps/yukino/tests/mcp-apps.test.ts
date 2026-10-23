@@ -1,18 +1,21 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { McpAppToolResult } from "@/mcp/apps.js";
-import { MCPClient } from "@/mcp/client.js";
-import { MCPManager } from "@/mcp/manager.js";
-import { PermissionChecker } from "@/permissions/index.js";
+import type { McpAppToolResult } from "@yukino.js/mcp/apps.js";
+import { MCPClient } from "@yukino.js/mcp/client.js";
+import { MCPManager } from "@yukino.js/mcp/manager.js";
+import { PermissionChecker } from "@yukino.js/permissions";
 import {
   chatReducer,
   initialState,
-} from "@/remote/browser/src/hooks/use-chat.js";
-import { McpAppRequests } from "@/remote/browser/src/lib/mcp-app-requests.js";
-import { buildAppCsp } from "@/remote/browser/src/lib/mcp-app-sandbox.js";
-import type { ClientMessage } from "@/remote/browser/src/types.js";
-import { RemoteMcpApps, type McpAppHandle } from "@/remote/mcp-apps.js";
+} from "@yukino.js/remote-browser/hooks/use-chat.js";
+import { McpAppRequests } from "@yukino.js/remote-browser/lib/mcp-app-requests.js";
+import { buildAppCsp } from "@yukino.js/remote-browser/lib/mcp-app-sandbox.js";
+import type { ClientMessage } from "@yukino.js/remote-browser/types.js";
+import {
+  RemoteMcpApps,
+  type McpAppHandle,
+} from "@yukino.js/remote/mcp-apps.js";
 
 afterEach(() => vi.restoreAllMocks());
 

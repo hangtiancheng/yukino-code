@@ -14,20 +14,20 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
-import { MemoryPermissionChecker } from "@/memory/permissions.js";
-import { PermissionChecker, type PermissionMode } from "@/permissions/index.js";
-import { requestToolPermission } from "@/permissions/request.js";
-import { analyzeShell } from "@/permissions/shell.js";
-import { projectPath, yukinoPath, getSessionsDir } from "@/storage/index.js";
-import { GlobTool } from "@/tools/glob.js";
-import { GrepTool } from "@/tools/grep.js";
-import { ReadFileTool } from "@/tools/read-file.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { canonicalPath } from "@/utils/paths.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
+import { MemoryPermissionChecker } from "@yukino.js/memory/permissions.js";
+import { PermissionChecker, type PermissionMode } from "@yukino.js/permissions";
+import { requestToolPermission } from "@yukino.js/permissions/request.js";
+import { analyzeShell } from "@yukino.js/permissions/shell.js";
+import { projectPath, yukinoPath, getSessionsDir } from "@yukino.js/storage";
+import { GlobTool } from "@yukino.js/tools/glob.js";
+import { GrepTool } from "@yukino.js/tools/grep.js";
+import { ReadFileTool } from "@yukino.js/tools/read-file.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { canonicalPath } from "@yukino.js/utils/paths.js";
 
 const directories: string[] = [];
 const cwd = () => {

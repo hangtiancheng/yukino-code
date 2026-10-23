@@ -10,7 +10,7 @@ import {
   saveCompactBoundary,
   saveMessage,
   type SessionMessage,
-} from "@/session/index.js";
+} from "@yukino.js/session";
 
 const directories: string[] = [];
 afterEach(() => {

@@ -3,7 +3,7 @@ import { createServer, type Socket } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WebSocketTransport } from "@/vscode/ws-transport.js";
+import { WebSocketTransport } from "@yukino.js/vscode/ws-transport.js";
 
 afterEach(() => vi.useRealTimers());
 

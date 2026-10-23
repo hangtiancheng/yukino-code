@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { ConversationManager } from "@/conversation/index.js";
-import { MCP_INSTRUCTIONS_MARKER } from "@/mcp/constants.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import { MCP_INSTRUCTIONS_MARKER } from "@yukino.js/mcp/constants.js";
 import {
   syncMcpInstructions,
   type McpInstruction,
   type McpInstructionSource,
   type ReminderHistory,
-} from "@/mcp/instructions.js";
-import { contentToText } from "@/utils/index.js";
+} from "@yukino.js/mcp/instructions.js";
+import { contentToText } from "@yukino.js/utils";
 
 class FakeHistory implements ReminderHistory {
   reminders: string[] = [];

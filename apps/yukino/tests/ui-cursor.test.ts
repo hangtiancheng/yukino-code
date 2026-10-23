@@ -6,14 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 
-import { CursorText } from "@/ui/cursor-text.js";
-import type { InputDraft } from "@/ui/input-draft.js";
-import { InputBox } from "@/ui/input.js";
-import { renderInteractionSummary } from "@/ui/interaction-summary.js";
-import { TerminalLayout } from "@/ui/terminal-layout.js";
-import { installTerminalOutput } from "@/ui/terminal-output.js";
-import { TextField } from "@/ui/text-field.js";
-import { Transcript } from "@/ui/transcript.js";
+import { CursorText } from "@yukino.js/ui/cursor-text.js";
+import type { InputDraft } from "@yukino.js/ui/input-draft.js";
+import { InputBox } from "@yukino.js/ui/input.js";
+import { renderInteractionSummary } from "@yukino.js/ui/interaction-summary.js";
+import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
+import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
+import { TextField } from "@yukino.js/ui/text-field.js";
+import { Transcript } from "@yukino.js/ui/transcript.js";
 
 let instance: Instance | undefined;
 let virtualTerminal: VirtualTerminal;

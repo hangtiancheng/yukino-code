@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   isServerMessage,
   type ServerMessage,
-} from "@/remote/browser/src/types.js";
-import { PRIVATE_BOARD_ID_PREFIX } from "@/todo/constants.js";
+} from "@yukino.js/remote-browser/types.js";
+import { PRIVATE_BOARD_ID_PREFIX } from "@yukino.js/todo/constants.js";
 
 const validMessages: Record<ServerMessage["type"], ServerMessage> = {
   mcp_app_response: {

@@ -12,21 +12,21 @@ import { renderToString } from "ink";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createToolRegistry } from "@/bootstrap/tool-registry.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { sessionPath } from "@/storage/index.js";
-import { TaskManager } from "@/subagent/task-manager.js";
+import { createToolRegistry } from "@yukino.js/bootstrap/tool-registry.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { sessionPath } from "@yukino.js/storage";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import {
   cloneRegistryForTeammate,
   filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
-import { SharedTaskStore } from "@/teams/shared-task.js";
-import { TaskList } from "@/todo/index.js";
-import { TaskStore } from "@/todo/store.js";
-import { TodoWriteTool } from "@/todo/tools.js";
-import { attachBackgroundTaskManager } from "@/tools/shell-background.js";
-import { TaskOutputTool } from "@/tools/task-output.js";
-import { TodoProgress } from "@/ui/todo-progress.js";
+} from "@yukino.js/subagent/tool-filter.js";
+import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
+import { TaskList } from "@yukino.js/todo";
+import { TaskStore } from "@yukino.js/todo/store.js";
+import { TodoWriteTool } from "@yukino.js/todo/tools.js";
+import { attachBackgroundTaskManager } from "@yukino.js/tools/shell-background.js";
+import { TaskOutputTool } from "@yukino.js/tools/task-output.js";
+import { TodoProgress } from "@yukino.js/ui/todo-progress.js";
 const directories: string[] = [];
 function temporaryDirectory(): string {
   const directory = mkdtempSync(join(tmpdir(), "yukino-task-regression-"));

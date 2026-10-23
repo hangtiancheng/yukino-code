@@ -8,16 +8,16 @@
 // when the pool changes; re-injected after history is compacted.
 import { describe, it, expect } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent, UsageInfo } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { McpCallTool } from "@/tools/mcp-call.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { ToolSearchTool } from "@/tools/tool-search.js";
-import type { Tool } from "@/tools/types.js";
-import { contentToText } from "@/utils/index.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent, UsageInfo } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { McpCallTool } from "@yukino.js/tools/mcp-call.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { ToolSearchTool } from "@yukino.js/tools/tool-search.js";
+import type { Tool } from "@yukino.js/tools/types.js";
+import { contentToText } from "@yukino.js/utils";
 
 const MARKER = "The following deferred tools are available via ToolSearch.";
 const USAGE: UsageInfo = {

@@ -6,7 +6,7 @@ import {
   redactJsonValue,
   redactText,
   redactUrl,
-} from "@/feedback/redact.js";
+} from "@yukino.js/feedback/redact.js";
 
 type SecretKind =
   "anthropic" | "openai" | "aws" | "gcp" | "github" | "slack" | "bearer";

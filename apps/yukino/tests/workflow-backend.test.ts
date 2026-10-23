@@ -5,13 +5,13 @@ import { join } from "node:path";
 
 import { afterEach, expect, it, vi } from "vitest";
 
-import type { LLMClient } from "@/llm/client.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { PermissionRequestHandler } from "@/tools/types.js";
-import { WriteFileTool } from "@/tools/write-file.js";
-import { WorkflowService } from "@/workflow/service.js";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import { WorkflowService } from "@yukino.js/workflow/service.js";
 
 const directories: string[] = [];
 const managers: TaskManager[] = [];

@@ -12,23 +12,23 @@ import { describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { z } from "zod";
 
-import { Agent } from "@/agent/index.js";
+import { Agent } from "@yukino.js/agent";
 import {
   globalConfigPath,
   type ProviderConfig,
-} from "@/config/provider-config.js";
-import * as providerLogin from "@/config/provider-login.js";
-import * as historyMod from "@/history/index.js";
-import { MCPClient } from "@/mcp/client.js";
+} from "@yukino.js/config/provider-config.js";
+import * as providerLogin from "@yukino.js/config/provider-login.js";
+import * as historyMod from "@yukino.js/history";
+import { MCPClient } from "@yukino.js/mcp/client.js";
 import {
   createRemoteAgent,
   RemoteServer,
   type CreateRemoteAgentOptions,
-} from "@/remote/server.js";
-import { loadSession, listSessions, saveUserMessage } from "@/session/index.js";
-import { writePrivateFileSync } from "@/storage/private.js";
-import type { Asker } from "@/tools/ask-user.js";
-import { contentToText } from "@/utils/index.js";
+} from "@yukino.js/remote/server.js";
+import { loadSession, listSessions, saveUserMessage } from "@yukino.js/session";
+import { writePrivateFileSync } from "@yukino.js/storage/private.js";
+import type { Asker } from "@yukino.js/tools/ask-user.js";
+import { contentToText } from "@yukino.js/utils";
 
 interface Broadcast {
   type: string;

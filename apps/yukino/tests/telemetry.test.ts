@@ -1,28 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Agent, type AgentConfig } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { HookEngine } from "@/hooks/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { ContextTooLongError, RateLimitError } from "@/llm/errors.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import * as telemetry from "@/telemetry/index.js";
+import { Agent, type AgentConfig } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import { HookEngine } from "@yukino.js/hooks";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { ContextTooLongError, RateLimitError } from "@yukino.js/llm/errors.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import * as telemetry from "@yukino.js/telemetry";
 import type {
   TelemetryAttributes,
   TelemetryObservation,
   TelemetryObservationKind,
   TelemetryObservationUpdate,
   TelemetryRuntime,
-} from "@/telemetry/index.js";
+} from "@yukino.js/telemetry";
 import {
   endAgentTelemetry,
   observeLlmStream,
   observeToolExecution,
   registerLlmClient,
   startAgentTelemetry,
-} from "@/telemetry/instrumentation.js";
-import { parseExporterTypes } from "@/telemetry/providers.js";
-import { ToolRegistry } from "@/tools/registry.js";
+} from "@yukino.js/telemetry/instrumentation.js";
+import { parseExporterTypes } from "@yukino.js/telemetry/providers.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
 
 class FakeObservation implements TelemetryObservation {
   readonly children: FakeObservation[] = [];

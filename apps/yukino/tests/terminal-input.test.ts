@@ -6,15 +6,15 @@ import { Text, render, type Instance } from "ink";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChatMessage } from "@/ui/chat.js";
-import type { InputDraft } from "@/ui/input-draft.js";
-import { InputBox } from "@/ui/input.js";
-import { ProviderSelect } from "@/ui/provider-select.js";
-import { TerminalInput } from "@/ui/terminal-input.js";
-import { TerminalLayout } from "@/ui/terminal-layout.js";
-import { installTerminalOutput } from "@/ui/terminal-output.js";
-import { detectTerminalTheme } from "@/ui/terminal-theme.js";
-import { Transcript } from "@/ui/transcript.js";
+import type { ChatMessage } from "@yukino.js/ui/chat.js";
+import type { InputDraft } from "@yukino.js/ui/input-draft.js";
+import { InputBox } from "@yukino.js/ui/input.js";
+import { ProviderSelect } from "@yukino.js/ui/provider-select.js";
+import { TerminalInput } from "@yukino.js/ui/terminal-input.js";
+import { TerminalLayout } from "@yukino.js/ui/terminal-layout.js";
+import { installTerminalOutput } from "@yukino.js/ui/terminal-output.js";
+import { detectTerminalTheme } from "@yukino.js/ui/terminal-theme.js";
+import { Transcript } from "@yukino.js/ui/transcript.js";
 
 function fakeTerminal() {
   const stream = new PassThrough();

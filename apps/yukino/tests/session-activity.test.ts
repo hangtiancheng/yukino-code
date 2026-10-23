@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { recordInput, registerProject } from "@/history/index.js";
+import { recordInput, registerProject } from "@yukino.js/history";
 import {
   getSessionFilePath,
   listAllSessions,
@@ -20,8 +20,8 @@ import {
   saveMessage,
   saveUserMessage,
   truncateSessionLines,
-} from "@/session/index.js";
-import { getYukinoDir } from "@/storage/index.js";
+} from "@yukino.js/session";
+import { getYukinoDir } from "@yukino.js/storage";
 
 afterEach(() => {
   vi.restoreAllMocks();

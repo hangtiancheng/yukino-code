@@ -2,12 +2,12 @@ import { render, type Instance } from "ink";
 import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import type { ChatMessage } from "@/ui/chat.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import type { ChatMessage } from "@yukino.js/ui/chat.js";
 import {
   useAgentOutput,
   type AgentCardDecoration,
-} from "@/ui/use-agent-output.js";
+} from "@yukino.js/ui/use-agent-output.js";
 
 let instance: Instance | undefined;
 let current:

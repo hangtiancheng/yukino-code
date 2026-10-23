@@ -12,17 +12,17 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PathSandbox } from "@/permissions/index.js";
-import { MAX_SEARCH_OUTPUT_BYTES } from "@/tools/constants.js";
-import { EditFileTool } from "@/tools/edit-file.js";
-import { withFileMutationQueue } from "@/tools/file-mutation-queue.js";
-import { FileStateCache } from "@/tools/file-state-cache.js";
-import { GlobTool } from "@/tools/glob.js";
-import { GrepTool } from "@/tools/grep.js";
-import { ReadFileTool } from "@/tools/read-file.js";
-import type { ToolContext } from "@/tools/types.js";
-import { WriteFileTool } from "@/tools/write-file.js";
-import { resolveToolPath } from "@/utils/paths.js";
+import { PathSandbox } from "@yukino.js/permissions";
+import { MAX_SEARCH_OUTPUT_BYTES } from "@yukino.js/tools/constants.js";
+import { EditFileTool } from "@yukino.js/tools/edit-file.js";
+import { withFileMutationQueue } from "@yukino.js/tools/file-mutation-queue.js";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { GlobTool } from "@yukino.js/tools/glob.js";
+import { GrepTool } from "@yukino.js/tools/grep.js";
+import { ReadFileTool } from "@yukino.js/tools/read-file.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import { resolveToolPath } from "@yukino.js/utils/paths.js";
 
 vi.mock("node:os", async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),

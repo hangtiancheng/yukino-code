@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createDefaultRegistry, resolve } from "@/commands/commands.js";
-import { CommandUsageTracker } from "@/commands/usage-tracker.js";
+import {
+  createDefaultRegistry,
+  resolve,
+} from "@yukino.js/commands/commands.js";
+import { CommandUsageTracker } from "@yukino.js/commands/usage-tracker.js";
 import {
   compactActivity,
   getCommandUsage,
   recordInput,
-} from "@/history/index.js";
+} from "@yukino.js/history";
 
 afterEach(() => {
   vi.restoreAllMocks();

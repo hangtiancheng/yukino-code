@@ -6,25 +6,25 @@ import type * as Ink from "ink";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runInline } from "@/skills/executor.js";
-import { AgentActivity } from "@/ui/agent-activity.js";
-import { CommittedMessage } from "@/ui/chat.js";
-import { THEME } from "@/ui/constants.js";
-import { Footer } from "@/ui/footer.js";
+import { runInline } from "@yukino.js/skills/executor.js";
+import { AgentActivity } from "@yukino.js/ui/agent-activity.js";
+import { CommittedMessage } from "@yukino.js/ui/chat.js";
+import { THEME } from "@yukino.js/ui/constants.js";
+import { Footer } from "@yukino.js/ui/footer.js";
 import {
   renderMarkdown,
   renderStreamingMarkdown,
   type MarkdownCache,
-} from "@/ui/markdown.js";
-import { setThemeMode, thinkingLevelColor } from "@/ui/styles.js";
+} from "@yukino.js/ui/markdown.js";
+import { setThemeMode, thinkingLevelColor } from "@yukino.js/ui/styles.js";
 import {
   truncateToWidth,
   visibleWidth,
   wrapToLines,
-} from "@/ui/terminal-text.js";
-import { ThinkingBlock } from "@/ui/thinking-block.js";
-import { ToolBlock } from "@/ui/tool-display.js";
-import { formatToolOutputPreview } from "@/ui/tool-preview.js";
+} from "@yukino.js/ui/terminal-text.js";
+import { ThinkingBlock } from "@yukino.js/ui/thinking-block.js";
+import { ToolBlock } from "@yukino.js/ui/tool-display.js";
+import { formatToolOutputPreview } from "@yukino.js/ui/tool-preview.js";
 
 // ToolCard and ThinkingBlock size themselves from useStdout().stdout.columns, which
 // renderToString never provides — Ink returns the process.stdout default (columns

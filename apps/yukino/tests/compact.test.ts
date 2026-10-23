@@ -8,12 +8,12 @@ import {
   computeCompactThreshold,
   forceCompact,
   type UsageAnchor,
-} from "@/compact/compact.js";
-import { RecoveryState } from "@/compact/recovery.js";
-import { ConversationManager, type Message } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { contentToText } from "@/utils/index.js";
+} from "@yukino.js/compact/compact.js";
+import { RecoveryState } from "@yukino.js/compact/recovery.js";
+import { ConversationManager, type Message } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { contentToText } from "@yukino.js/utils";
 
 // A stub LLM that emits a fixed summary and records the text it was asked to
 // summarize, so tests can assert what the summary covered.

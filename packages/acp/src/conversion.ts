@@ -1,0 +1,288 @@
+import { isAbsolute, resolve } from "node:path";
+
+import { RequestError } from "@agentclientprotocol/sdk";
+import type {
+  ContentBlock,
+  SessionNotification,
+  SessionUpdate,
+  StopReason,
+  ToolCallLocation,
+  ToolKind,
+  Usage,
+} from "@agentclientprotocol/sdk";
+
+import {
+  AUDIO_PROMPT_UNSUPPORTED_ERROR,
+  BINARY_RESOURCE_UNSUPPORTED_ERROR,
+  EMPTY_PROMPT_ERROR,
+  IMAGE_PROMPT_UNSUPPORTED_ERROR,
+  SESSION_UPDATE_AGENT_MESSAGE_CHUNK,
+  SESSION_UPDATE_AGENT_THOUGHT_CHUNK,
+  SESSION_UPDATE_TOOL_CALL,
+  SESSION_UPDATE_TOOL_CALL_UPDATE,
+  SESSION_UPDATE_USAGE_UPDATE,
+  SESSION_UPDATE_USER_MESSAGE_CHUNK,
+  STOP_REASON_CANCELLED,
+  STOP_REASON_END_TURN,
+  STOP_REASON_MAX_TOKENS,
+  STOP_REASON_MAX_TURN_REQUESTS,
+  STOP_REASON_REFUSAL,
+} from "./constants.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { COMPACT_BOUNDARY } from "@yukino.js/session/constants.js";
+import { type SessionMessage } from "@yukino.js/session";
+import { contentToText, strArg } from "@yukino.js/utils";
+
+export function promptToText(prompt: ContentBlock[]): string {
+  const parts: string[] = [];
+
+  for (const block of prompt) {
+    switch (block.type) {
+      case "text":
+        if (block.text.trim()) {
+          parts.push(block.text);
+        }
+        break;
+      case "resource_link":
+        parts.push(`Resource: ${block.name} (${block.uri})`);
+        break;
+      case "resource":
+        if ("text" in block.resource) {
+          parts.push(`Resource: ${block.resource.uri}\n${block.resource.text}`);
+          break;
+        }
+        throw RequestError.invalidParams(
+          undefined,
+          BINARY_RESOURCE_UNSUPPORTED_ERROR,
+        );
+      case "image":
+        throw RequestError.invalidParams(
+          undefined,
+          IMAGE_PROMPT_UNSUPPORTED_ERROR,
+        );
+      case "audio":
+        throw RequestError.invalidParams(
+          undefined,
+          AUDIO_PROMPT_UNSUPPORTED_ERROR,
+        );
+    }
+  }
+
+  const text = parts.join("\n\n").trim();
+  if (!text) {
+    throw RequestError.invalidParams(undefined, EMPTY_PROMPT_ERROR);
+  }
+  return text;
+}
+
+export function toolKind(toolName: string): ToolKind {
+  if (/^(ReadFile)$/u.test(toolName)) {
+    return "read";
+  }
+  if (/^(WriteFile|EditFile)$/u.test(toolName)) {
+    return "edit";
+  }
+  if (/^(Glob|Grep|ToolSearch|LSP)$/u.test(toolName)) {
+    return "search";
+  }
+  if (/^(Bash|PowerShell|ComputerUse)$/u.test(toolName)) {
+    return "execute";
+  }
+  if (/^(Agent|TaskStop|TaskOutput|TodoWrite)$/u.test(toolName)) {
+    return "think";
+  }
+  if (toolName === "ExitPlanMode") {
+    return "switch_mode";
+  }
+  if (toolName === "WebFetch") {
+    return "fetch";
+  }
+  return "other";
+}
+
+export function toolLocations(
+  args: Record<string, unknown>,
+  cwd: string,
+): ToolCallLocation[] | undefined {
+  const path = strArg(args, "file_path") || strArg(args, "path");
+  if (!path) {
+    return undefined;
+  }
+  return [{ path: isAbsolute(path) ? path : resolve(cwd, path) }];
+}
+
+function toolCallUpdate(
+  toolName: string,
+  toolCallId: string,
+  args: Record<string, unknown>,
+  cwd: string,
+): SessionUpdate {
+  return {
+    sessionUpdate: SESSION_UPDATE_TOOL_CALL,
+    toolCallId,
+    title: toolName,
+    kind: toolKind(toolName),
+    status: "pending",
+    rawInput: args,
+    locations: toolLocations(args, cwd),
+  };
+}
+
+function toolResultUpdate(
+  toolCallId: string,
+  output: string,
+  isError: boolean,
+  elapsed?: number,
+): SessionUpdate {
+  return {
+    sessionUpdate: SESSION_UPDATE_TOOL_CALL_UPDATE,
+    toolCallId,
+    status: isError ? "failed" : "completed",
+    content: output
+      ? [{ type: "content", content: { type: "text", text: output } }]
+      : undefined,
+    rawOutput: {
+      output,
+      isError,
+      ...(elapsed === undefined ? {} : { elapsed }),
+    },
+  };
+}
+
+export function agentEventToUpdate(
+  event: AgentEvent,
+  cwd: string,
+  contextWindow: number,
+): SessionUpdate | null {
+  switch (event.type) {
+    case "stream_text":
+      return {
+        sessionUpdate: SESSION_UPDATE_AGENT_MESSAGE_CHUNK,
+        content: { type: "text", text: event.text },
+      };
+    case "thinking_text":
+      return {
+        sessionUpdate: SESSION_UPDATE_AGENT_THOUGHT_CHUNK,
+        content: { type: "text", text: event.text },
+      };
+    case "tool_use":
+      return toolCallUpdate(event.toolName, event.toolId, event.args, cwd);
+    case "tool_result":
+      return toolResultUpdate(
+        event.toolId,
+        event.output,
+        event.isError,
+        event.elapsed,
+      );
+    case "usage":
+      return {
+        sessionUpdate: SESSION_UPDATE_USAGE_UPDATE,
+        used:
+          event.usage.inputTokens +
+          event.usage.cacheReadInputTokens +
+          event.usage.cacheCreationInputTokens,
+        size: contextWindow,
+      };
+    default:
+      return null;
+  }
+}
+
+export function addUsage(
+  total: Usage,
+  event: Extract<AgentEvent, { type: "usage" }>,
+): Usage {
+  const inputTokens = total.inputTokens + event.usage.inputTokens;
+  const outputTokens = total.outputTokens + event.usage.outputTokens;
+  const cachedReadTokens =
+    (total.cachedReadTokens ?? 0) + event.usage.cacheReadInputTokens;
+  const cachedWriteTokens =
+    (total.cachedWriteTokens ?? 0) + event.usage.cacheCreationInputTokens;
+  return {
+    inputTokens,
+    outputTokens,
+    cachedReadTokens,
+    cachedWriteTokens,
+    totalTokens:
+      inputTokens + outputTokens + cachedReadTokens + cachedWriteTokens,
+  };
+}
+
+export function emptyUsage(): Usage {
+  return {
+    totalTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedReadTokens: 0,
+    cachedWriteTokens: 0,
+  };
+}
+
+export function stopReason(reason: string): StopReason {
+  switch (reason) {
+    case "max_tokens":
+      return STOP_REASON_MAX_TOKENS;
+    case "max_turn_requests":
+      return STOP_REASON_MAX_TURN_REQUESTS;
+    case "refusal":
+      return STOP_REASON_REFUSAL;
+    case "cancelled":
+    case "interrupted":
+      return STOP_REASON_CANCELLED;
+    default:
+      return STOP_REASON_END_TURN;
+  }
+}
+
+export function* historyNotifications(
+  sessionId: string,
+  messages: SessionMessage[],
+  cwd: string,
+): Generator<SessionNotification> {
+  for (const message of messages) {
+    if (
+      message.type === COMPACT_BOUNDARY ||
+      (message.role !== "user" && message.role !== "assistant")
+    ) {
+      continue;
+    }
+
+    const text = contentToText(message.content);
+    if (text) {
+      yield {
+        sessionId,
+        update: {
+          sessionUpdate:
+            message.role === "assistant"
+              ? SESSION_UPDATE_AGENT_MESSAGE_CHUNK
+              : SESSION_UPDATE_USER_MESSAGE_CHUNK,
+          content: { type: "text", text },
+        },
+      };
+    }
+
+    for (const tool of message.tool_uses ?? []) {
+      yield {
+        sessionId,
+        update: toolCallUpdate(
+          tool.tool_name,
+          tool.tool_use_id,
+          tool.arguments ?? {},
+          cwd,
+        ),
+      };
+    }
+
+    for (const result of message.tool_results ?? []) {
+      const output = contentToText(result.content);
+      yield {
+        sessionId,
+        update: toolResultUpdate(
+          result.tool_use_id,
+          output,
+          result.is_error ?? false,
+        ),
+      };
+    }
+  }
+}

@@ -4,12 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { TeamManager } from "@/teams/index.js";
-import { SharedTaskStore } from "@/teams/shared-task.js";
-import { TeamTodoWriteTool } from "@/teams/task-tools.js";
-import { TaskList } from "@/todo/index.js";
-import { TaskStore } from "@/todo/store.js";
-import { TodoWriteTool } from "@/todo/tools.js";
+import { TeamManager } from "@yukino.js/teams";
+import { SharedTaskStore } from "@yukino.js/teams/shared-task.js";
+import { TeamTodoWriteTool } from "@yukino.js/teams/task-tools.js";
+import { TaskList } from "@yukino.js/todo";
+import { TaskStore } from "@yukino.js/todo/store.js";
+import { TodoWriteTool } from "@yukino.js/todo/tools.js";
 
 const directories: string[] = [];
 function temporaryDirectory() {

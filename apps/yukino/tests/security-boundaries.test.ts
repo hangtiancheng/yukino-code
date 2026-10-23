@@ -13,19 +13,19 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { loadProjectMcpServers } from "@/config/index.js";
-import { collectAttachments } from "@/feedback/collect.js";
-import { redactText } from "@/feedback/redact.js";
-import { MCPClient } from "@/mcp/client.js";
-import { MCPManager } from "@/mcp/manager.js";
-import { loadInstructions } from "@/memory/instructions.js";
-import { saveMessage } from "@/session/index.js";
-import { yukinoPath } from "@/storage/index.js";
-import { TeamManager } from "@/teams/index.js";
-import { shutdownRequest } from "@/teams/protocol.js";
-import { SendMessageTool } from "@/teams/tools.js";
-import { scrubTelemetryPayload } from "@/telemetry/privacy.js";
-import { scanCwdFiles } from "@/utils/file-scan.js";
+import { loadProjectMcpServers } from "@yukino.js/config";
+import { collectAttachments } from "@yukino.js/feedback/collect.js";
+import { redactText } from "@yukino.js/feedback/redact.js";
+import { MCPClient } from "@yukino.js/mcp/client.js";
+import { MCPManager } from "@yukino.js/mcp/manager.js";
+import { loadInstructions } from "@yukino.js/memory/instructions.js";
+import { saveMessage } from "@yukino.js/session";
+import { yukinoPath } from "@yukino.js/storage";
+import { TeamManager } from "@yukino.js/teams";
+import { shutdownRequest } from "@yukino.js/teams/protocol.js";
+import { SendMessageTool } from "@yukino.js/teams/tools.js";
+import { scrubTelemetryPayload } from "@yukino.js/telemetry/privacy.js";
+import { scanCwdFiles } from "@yukino.js/utils/file-scan.js";
 
 const directories: string[] = [];
 const managers: TeamManager[] = [];

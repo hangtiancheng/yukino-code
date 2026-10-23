@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { connectToIde } from "@/vscode/ide-client.js";
-import { detectIde } from "@/vscode/lockfile.js";
+import { connectToIde } from "@yukino.js/vscode/ide-client.js";
+import { detectIde } from "@yukino.js/vscode/lockfile.js";
 
 vi.mock("../src/vscode/lockfile.js", () => ({
   detectIde: vi.fn().mockResolvedValue(null),

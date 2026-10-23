@@ -1,0 +1,23 @@
+{
+  "name": "@yukino.js/conversation",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/history": "workspace:*",
+    "@yukino.js/images": "workspace:*",
+    "@yukino.js/logger": "workspace:*",
+    "@yukino.js/storage": "workspace:*",
+    "@yukino.js/tool-result": "workspace:*",
+    "@yukino.js/tools": "workspace:*",
+    "@yukino.js/utils": "workspace:*"
+  }
+}

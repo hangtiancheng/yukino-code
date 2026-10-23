@@ -1,0 +1,211 @@
+import { randomUUID } from "node:crypto";
+import { existsSync, renameSync, unlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import yaml from "js-yaml";
+import { z } from "zod";
+
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  THINKING_LEVELS,
+} from "./constants.js";
+import {
+  getThinkingLevel,
+  globalConfigPath,
+  ProviderConfigSchema,
+  type ProviderConfig,
+  type ThinkingLevel,
+} from "./provider-config.js";
+import {
+  mkdirPrivateSync as mkdirSync,
+  readPrivateFileSync as readFileSync,
+  writePrivateFileSync as writeFileSync,
+} from "@yukino.js/storage/private.js";
+
+const tokenLimit = (fallback: number, min: number, max: number) =>
+  z.preprocess(
+    (value) =>
+      value === undefined || (typeof value === "string" && !value.trim())
+        ? fallback
+        : value,
+    z
+      .union([
+        z.number(),
+        z
+          .string()
+          .trim()
+          .regex(/^\d+$/, "Enter a whole number")
+          .transform(Number),
+      ])
+      .pipe(z.number().int().min(min).max(max)),
+  );
+
+export const ProviderLoginSchema = ProviderConfigSchema.extend({
+  name: z.string().trim().min(1, "Name is required"),
+  base_url: z
+    .url("Enter a valid HTTP(S) URL")
+    .refine((url) => /^https?:\/\//i.test(url), "Use an HTTP(S) URL"),
+  api_key: z.string().trim().min(1, "API key is required"),
+  model: z.string().trim().min(1, "Model is required"),
+  thinking: z.enum(THINKING_LEVELS).optional(),
+  context_window: tokenLimit(DEFAULT_CONTEXT_WINDOW, 1_000, 10_000_000),
+  max_output_tokens: tokenLimit(DEFAULT_MAX_OUTPUT_TOKENS, 1, 1_000_000),
+})
+  .refine((provider) => provider.max_output_tokens <= provider.context_window, {
+    path: ["max_output_tokens"],
+    message: "Max output tokens must not exceed the context window",
+  })
+  // Persist an explicit effective level, retaining all capability metadata.
+  .transform((provider) => ({
+    ...provider,
+    thinking: getThinkingLevel(provider),
+  }));
+
+/** Read the raw global config as a record; an absent file yields {}. */
+function readConfigRaw(path: string): Record<string, unknown> {
+  if (!existsSync(path)) {
+    return {};
+  }
+  let raw: unknown;
+  try {
+    raw = yaml.load(readFileSync(path, "utf-8"));
+  } catch {
+    throw new Error(
+      `Unable to read existing ${path}; it has not been changed.`,
+    );
+  }
+  return z.record(z.string(), z.unknown()).parse(raw ?? {});
+}
+
+/** Atomically write the global config with 0600 permissions. */
+function writeConfigAtomic(path: string, raw: Record<string, unknown>): void {
+  const directory = dirname(path);
+  mkdirSync(directory, { recursive: true });
+  const temporary = join(directory, `.config-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, yaml.dump(raw, { lineWidth: -1, noRefs: true }), {
+      encoding: "utf-8",
+      mode: 0o600,
+      flag: "wx",
+    });
+    renameSync(temporary, path);
+  } finally {
+    if (existsSync(temporary)) {
+      unlinkSync(temporary);
+    }
+  }
+}
+
+/**
+ * Save a provider to the single global config ($HOME/.yukino/config.yaml),
+ * retaining every currently available provider. `base_url` is the provider
+ * identity: an entry with the same base_url is replaced in place instead of
+ * appended, and names may repeat freely.
+ */
+export function saveProvider(
+  input: unknown,
+  available: ProviderConfig[],
+): {
+  provider: ProviderConfig;
+  providers: ProviderConfig[];
+  /** Whether an existing entry with the same base_url was replaced. */
+  replaced: boolean;
+  path: string;
+} {
+  const provider = ProviderLoginSchema.parse(input);
+  const path = globalConfigPath();
+  const config = readConfigRaw(path);
+  const existing = z
+    .array(z.record(z.string(), z.unknown()))
+    .parse(config.providers ?? []);
+  // Retain every currently available provider so an in-memory list never loses
+  // entries that are not yet written to the file.
+  const current = [...existing];
+  for (const entry of available) {
+    if (!current.some((stored) => stored.base_url === entry.base_url)) {
+      current.push({ ...entry });
+    }
+  }
+  const stored: Record<string, unknown>[] = [];
+  let replaced = false;
+  for (const entry of current) {
+    if (entry.base_url !== provider.base_url) {
+      stored.push(entry);
+      continue;
+    }
+    // Replace the first match in place and drop any further duplicates, so one
+    // endpoint keeps exactly one entry even in configs written by the old
+    // name-suffixing strategy.
+    if (replaced) {
+      continue;
+    }
+    replaced = true;
+    stored.push(provider);
+  }
+  if (!replaced) {
+    stored.push(provider);
+  }
+  const providers = stored.map((entry) => ProviderConfigSchema.parse(entry));
+  writeConfigAtomic(path, { ...config, providers: stored });
+  return { provider, providers, replaced, path };
+}
+
+/**
+ * Persist a single field of every provider entry matching `base_url`. The
+ * endpoint is the provider identity, so all entries for it change together.
+ * Throws when the endpoint is absent so callers can surface a clear error.
+ */
+function persistProviderField(
+  baseUrl: string,
+  field: "thinking" | "model",
+  value: string,
+): void {
+  const path = globalConfigPath();
+  const config = readConfigRaw(path);
+  const providers = z
+    .array(z.record(z.string(), z.unknown()))
+    .parse(config.providers ?? []);
+  const targets = providers.filter((entry) => entry.base_url === baseUrl);
+  if (targets.length === 0) {
+    throw new Error(
+      `Provider with base URL "${baseUrl}" not found in ${path}.`,
+    );
+  }
+  const changed = targets.filter((entry) => entry[field] !== value);
+  // Avoid rewriting (and reformatting) the file when nothing changes.
+  if (changed.length === 0) {
+    return;
+  }
+  for (const entry of changed) {
+    entry[field] = value;
+  }
+  writeConfigAtomic(path, { ...config, providers });
+}
+
+export function persistThinkingLevel(
+  baseUrl: string,
+  level: ThinkingLevel,
+): void {
+  persistProviderField(baseUrl, "thinking", level);
+}
+
+/** Persist the active model of a provider without touching any other field. */
+export function persistModel(baseUrl: string, model: string): void {
+  persistProviderField(baseUrl, "model", model);
+}
+
+/**
+ * Persist the index (into the config's providers array) of the provider the
+ * user selected last, so the next start selects it directly instead of showing
+ * the provider picker. No-op when the stored index already matches, so the file
+ * is not rewritten (and reformatted) on every selection.
+ */
+export function persistDefaultProvider(index: number): void {
+  const path = globalConfigPath();
+  const config = readConfigRaw(path);
+  if (config.default_provider === index) {
+    return;
+  }
+  writeConfigAtomic(path, { ...config, default_provider: index });
+}

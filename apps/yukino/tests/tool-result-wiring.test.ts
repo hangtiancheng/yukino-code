@@ -4,18 +4,18 @@ import { join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import { RecoveryState } from "@/compact/recovery.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent, UsageInfo } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { loadSession, rebuildFromSession } from "@/session/index.js";
-import { sessionPath, getSessionsDir } from "@/storage/index.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool, ToolResultContentBlock } from "@/tools/types.js";
-import { asString, isRecord } from "@/utils/index.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import { RecoveryState } from "@yukino.js/compact/recovery.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent, UsageInfo } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { loadSession, rebuildFromSession } from "@yukino.js/session";
+import { sessionPath, getSessionsDir } from "@yukino.js/storage";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool, ToolResultContentBlock } from "@yukino.js/tools/types.js";
+import { asString, isRecord } from "@yukino.js/utils";
 
 // Wiring tests for the tool-result budget: these drive the full Agent main
 // loop and assert the budgeted final form is what enters conversation history.

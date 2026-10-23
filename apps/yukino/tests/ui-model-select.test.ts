@@ -7,9 +7,12 @@ import { act, createElement } from "react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DiscoveredModel } from "@/llm/model-discovery.js";
-import { ICONS, OTHER_LABEL } from "@/ui/constants.js";
-import { ModelSelect, type ModelPickerState } from "@/ui/model-select.js";
+import type { DiscoveredModel } from "@yukino.js/llm/model-discovery.js";
+import { ICONS, OTHER_LABEL } from "@yukino.js/ui/constants.js";
+import {
+  ModelSelect,
+  type ModelPickerState,
+} from "@yukino.js/ui/model-select.js";
 
 vi.mock("ink", async (importOriginal) => ({
   ...(await importOriginal<typeof Ink>()),

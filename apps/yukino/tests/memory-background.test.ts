@@ -4,13 +4,13 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { BackgroundMemoryTasks } from "@/memory/background.js";
-import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { MemoryExtractor } from "@/memory/extractor.js";
-import { projectPath } from "@/storage/index.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { BackgroundMemoryTasks } from "@yukino.js/memory/background.js";
+import { MemoryConsolidator } from "@yukino.js/memory/consolidation.js";
+import { MemoryExtractor } from "@yukino.js/memory/extractor.js";
+import { projectPath } from "@yukino.js/storage";
 
 const directories: string[] = [];
 afterEach(() => {

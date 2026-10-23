@@ -13,26 +13,29 @@ import { render, type Instance } from "ink";
 import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ConversationManager } from "@/conversation/index.js";
+import { ConversationManager } from "@yukino.js/conversation";
 import {
   executeUserBash,
   parseUserBashCommand,
-} from "@/conversation/user-bash.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import type { Sandbox } from "@/sandbox/index.js";
+} from "@yukino.js/conversation/user-bash.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import type { Sandbox } from "@yukino.js/sandbox";
 import {
   loadSession,
   rebuildFromSession,
   messageToKeptRecord,
   saveCompactBoundary,
-} from "@/session/index.js";
-import { yukinoPath, getSessionsDir, sessionPath } from "@/storage/index.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { BashTool } from "@/tools/bash.js";
-import type { ToolResult } from "@/tools/types.js";
-import type { ChatMessage } from "@/ui/chat.js";
-import { useFollowUpQueue } from "@/ui/use-follow-up-queue.js";
-import { useUserBash, useUserBashHistory } from "@/ui/use-user-bash.js";
+} from "@yukino.js/session";
+import { yukinoPath, getSessionsDir, sessionPath } from "@yukino.js/storage";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import type { ToolResult } from "@yukino.js/tools/types.js";
+import type { ChatMessage } from "@yukino.js/ui/chat.js";
+import { useFollowUpQueue } from "@yukino.js/ui/use-follow-up-queue.js";
+import {
+  useUserBash,
+  useUserBashHistory,
+} from "@yukino.js/ui/use-user-bash.js";
 
 type Options = Omit<Parameters<typeof useUserBash>[0], "setMessages">;
 let instance: Instance | undefined;

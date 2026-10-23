@@ -1,0 +1,38 @@
+{
+  "name": "@yukino.js/tools",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/bootstrap": "workspace:*",
+    "@yukino.js/file-history": "workspace:*",
+    "@yukino.js/goal": "workspace:*",
+    "@yukino.js/images": "workspace:*",
+    "@yukino.js/logger": "workspace:*",
+    "@yukino.js/lsp": "workspace:*",
+    "@yukino.js/mcp": "workspace:*",
+    "@yukino.js/permissions": "workspace:*",
+    "@yukino.js/plan-file": "workspace:*",
+    "@yukino.js/sandbox": "workspace:*",
+    "@yukino.js/storage": "workspace:*",
+    "@yukino.js/subagent": "workspace:*",
+    "@yukino.js/teams": "workspace:*",
+    "@yukino.js/tool-result": "workspace:*",
+    "@yukino.js/utils": "workspace:*",
+    "@yukino.js/worktree": "workspace:*",
+    "@anthropic-ai/sdk": "^0.104.2",
+    "glob": "^13.0.6",
+    "minimatch": "^10.2.6",
+    "openai": "^6.49.0",
+    "turndown": "^7.2.4",
+    "zod": "^4.6.7"
+  }
+}

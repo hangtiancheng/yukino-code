@@ -13,29 +13,29 @@ import { join } from "node:path";
 
 import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
 
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import type { SandboxConfig } from "@/sandbox/index.js";
-import { SeatbeltSandbox } from "@/sandbox/seatbelt.js";
-import { yukinoPath, projectKey } from "@/storage/index.js";
-import { BashTool } from "@/tools/bash.js";
-import { EnterWorktreeTool } from "@/tools/enter-worktree.js";
-import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
-import { FileStateCache } from "@/tools/file-state-cache.js";
-import { ReadFileTool } from "@/tools/read-file.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { WriteFileTool } from "@/tools/write-file.js";
-import type { WorktreeResult } from "@/worktree/index.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import type { SandboxConfig } from "@yukino.js/sandbox";
+import { SeatbeltSandbox } from "@yukino.js/sandbox/seatbelt.js";
+import { yukinoPath, projectKey } from "@yukino.js/storage";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import { EnterWorktreeTool } from "@yukino.js/tools/enter-worktree.js";
+import { ExitWorktreeTool } from "@yukino.js/tools/exit-worktree.js";
+import { FileStateCache } from "@yukino.js/tools/file-state-cache.js";
+import { ReadFileTool } from "@yukino.js/tools/read-file.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import type { WorktreeResult } from "@yukino.js/worktree";
 import {
   createAgentWorktree,
   hasWorktreeChanges,
   removeAgentWorktree,
   resolveGitDir,
   type WorktreeSession,
-} from "@/worktree/index.js";
+} from "@yukino.js/worktree";
 
 const temporaryDirectories: string[] = [];
 

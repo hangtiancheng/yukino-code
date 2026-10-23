@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { ToolUseBlock } from "@/conversation/index.js";
-import { HookEngine } from "@/hooks/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
-import { TaskList } from "@/todo/index.js";
-import { TodoWriteTool } from "@/todo/tools.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool, ToolResult } from "@/tools/types.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { ToolUseBlock } from "@yukino.js/conversation";
+import { HookEngine } from "@yukino.js/hooks";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { AgentTool } from "@yukino.js/subagent/agent-tool.js";
+import { TaskList } from "@yukino.js/todo";
+import { TodoWriteTool } from "@yukino.js/todo/tools.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool, ToolResult } from "@yukino.js/tools/types.js";
 const end: StreamEvent = {
   type: "stream_end",
   stopReason: "end_turn",

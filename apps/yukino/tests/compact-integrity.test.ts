@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { computeKeepStartIndex, forceCompact } from "@/compact/compact.js";
+import {
+  computeKeepStartIndex,
+  forceCompact,
+} from "@yukino.js/compact/compact.js";
 import {
   buildCompactionSummaryMessage,
   buildSummaryPrompt,
-} from "@/compact/prompts.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { ContextTooLongError, NetworkError } from "@/llm/errors.js";
-import type { StreamEvent } from "@/llm/events.js";
+} from "@yukino.js/compact/prompts.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { ContextTooLongError, NetworkError } from "@yukino.js/llm/errors.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
 
 const end: StreamEvent = {
   type: "stream_end",

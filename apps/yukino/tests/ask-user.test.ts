@@ -4,8 +4,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import z from "zod";
 
-import { AskUserQuestionTool, type Question } from "@/tools/ask-user.js";
-import type { ToolContext } from "@/tools/types.js";
+import {
+  AskUserQuestionTool,
+  type Question,
+} from "@yukino.js/tools/ask-user.js";
+import type { ToolContext } from "@yukino.js/tools/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

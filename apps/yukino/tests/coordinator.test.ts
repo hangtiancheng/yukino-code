@@ -4,17 +4,17 @@ import { join } from "node:path";
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { coordinatorReminder } from "@/prompt/coordinator.js";
-import { TaskManager } from "@/subagent/task-manager.js";
+import { coordinatorReminder } from "@yukino.js/prompt/coordinator.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
 import {
   isCoordinatorTool,
   coordinatorToolFilter,
   coordinatorActive,
-} from "@/teams/coordinator.js";
-import { TeamManager } from "@/teams/index.js";
-import { TaskStopTool } from "@/teams/task-stop.js";
-import { SyntheticOutputTool } from "@/tools/synthetic-output.js";
-import { asString } from "@/utils/index.js";
+} from "@yukino.js/teams/coordinator.js";
+import { TeamManager } from "@yukino.js/teams";
+import { TaskStopTool } from "@yukino.js/teams/task-stop.js";
+import { SyntheticOutputTool } from "@yukino.js/tools/synthetic-output.js";
+import { asString } from "@yukino.js/utils";
 
 // The teams directory lives at <home>/.yukino/teams, so the tests redirect the
 // entire home directory to a temp dir to avoid leaving residue in the real

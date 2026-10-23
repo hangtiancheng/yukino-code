@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runUpdate } from "@/update/index.js";
-import { version } from "@/version.js";
+import { runUpdate } from "@yukino.js/update";
+import { version } from "@yukino.js/version";
 
 const install = vi.hoisted(() => ({
   getSelfUpdateCommand: vi.fn(),
   runSelfUpdate: vi.fn(),
 }));
-vi.mock("@/update/install.js", () => install);
-vi.mock("@/version.js", () => ({ version: "0.0.13-dev" }));
+vi.mock("@yukino.js/update/install.js", () => install);
+vi.mock("@yukino.js/version", () => ({ version: "0.0.13-dev" }));
 
 const initialExitCode = process.exitCode;
 beforeEach(() => {

@@ -11,24 +11,27 @@ import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { feedbackLogPath } from "@/feedback/collect.js";
+import { feedbackLogPath } from "@yukino.js/feedback/collect.js";
 import {
   issueFingerprint,
   loadFiledIssues,
   recordFiledIssues,
-} from "@/feedback/dedup.js";
-import type * as feedbackGithub from "@/feedback/github.js";
-import type { IssueResult } from "@/feedback/github.js";
-import { runFeedbackPipeline, type PipelineDeps } from "@/feedback/pipeline.js";
+} from "@yukino.js/feedback/dedup.js";
+import type * as feedbackGithub from "@yukino.js/feedback/github.js";
+import type { IssueResult } from "@yukino.js/feedback/github.js";
+import {
+  runFeedbackPipeline,
+  type PipelineDeps,
+} from "@yukino.js/feedback/pipeline.js";
 import type {
   CollectedFile,
   FeedbackChannel,
   IssueDraft,
-} from "@/feedback/types.js";
-import { fileHistoryDir } from "@/file-history/index.js";
-import { closeLogger, initLogger } from "@/logger/index.js";
-import { saveCompactBoundary, saveMessage } from "@/session/index.js";
-import { sessionPath } from "@/storage/index.js";
+} from "@yukino.js/feedback/types.js";
+import { fileHistoryDir } from "@yukino.js/file-history";
+import { closeLogger, initLogger } from "@yukino.js/logger";
+import { saveCompactBoundary, saveMessage } from "@yukino.js/session";
+import { sessionPath } from "@yukino.js/storage";
 
 const mocks = vi.hoisted(() => ({
   detectChannel: vi.fn<() => Promise<FeedbackChannel>>(),
@@ -58,7 +61,7 @@ const mocks = vi.hoisted(() => ({
   openInBrowser: vi.fn<(url: string) => void>(),
 }));
 
-vi.mock("@/feedback/github.js", async (importOriginal) => {
+vi.mock("@yukino.js/feedback/github.js", async (importOriginal) => {
   const original = await importOriginal<typeof feedbackGithub>();
   return { ...original, ...mocks };
 });

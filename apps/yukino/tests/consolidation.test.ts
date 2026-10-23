@@ -13,10 +13,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, it, expect, vi } from "vitest";
 
-import { ProviderConfigSchema } from "@/config/provider-config.js";
-import { createClient, type LLMClient } from "@/llm/client.js";
-import { MemoryConsolidator } from "@/memory/consolidation.js";
-import { getSessionsDir, projectPath } from "@/storage/index.js";
+import { ProviderConfigSchema } from "@yukino.js/config/provider-config.js";
+import { createClient, type LLMClient } from "@yukino.js/llm/client.js";
+import { MemoryConsolidator } from "@yukino.js/memory/consolidation.js";
+import { getSessionsDir, projectPath } from "@yukino.js/storage";
 
 const tempDirs = new Set<string>();
 

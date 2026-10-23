@@ -8,15 +8,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AgentAdapterRegistry,
   type AgentAdapter,
-} from "@/workflow/agent-adapter.js";
-import { createFileJournalStore } from "@/workflow/journal.js";
-import { createHostHandle, type WorkflowPorts } from "@/workflow/ports.js";
+} from "@yukino.js/workflow/agent-adapter.js";
+import { createFileJournalStore } from "@yukino.js/workflow/journal.js";
+import {
+  createHostHandle,
+  type WorkflowPorts,
+} from "@yukino.js/workflow/ports.js";
 import {
   runWorkflow,
   type RunWorkflowOptions,
-} from "@/workflow/run-workflow.js";
-import { parseScript } from "@/workflow/script.js";
-import type { ProgressEvent } from "@/workflow/types.js";
+} from "@yukino.js/workflow/run-workflow.js";
+import { parseScript } from "@yukino.js/workflow/script.js";
+import type { ProgressEvent } from "@yukino.js/workflow/types.js";
 
 const directories: string[] = [];
 afterEach(() => {

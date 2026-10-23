@@ -3,13 +3,13 @@ import { describe, it, expect } from "vitest";
 import {
   MAIN_AGENT_ONLY_TOOLS,
   SUBAGENT_DISALLOWED_TOOLS,
-} from "@/subagent/constants.js";
+} from "@yukino.js/subagent/constants.js";
 import {
   cloneRegistryForTeammate,
   filterToolsForAgent,
-} from "@/subagent/tool-filter.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool } from "@/tools/types.js";
+} from "@yukino.js/subagent/tool-filter.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool } from "@yukino.js/tools/types.js";
 
 const stub = (name: string): Tool => ({
   name,

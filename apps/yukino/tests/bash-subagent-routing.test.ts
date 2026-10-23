@@ -4,20 +4,20 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import type { ProviderConfig } from "@/config/provider-config.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import type { StreamEvent, UsageInfo } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { formatAgentTaskNotification } from "@/subagent/prompts.js";
-import { spawnSubagent } from "@/subagent/spawn.js";
-import { TaskManager } from "@/subagent/task-manager.js";
-import { BashTool } from "@/tools/bash.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool, ToolContext } from "@/tools/types.js";
-import { contentToText } from "@/utils/index.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import type { StreamEvent, UsageInfo } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { formatAgentTaskNotification } from "@yukino.js/subagent/prompts.js";
+import { spawnSubagent } from "@yukino.js/subagent/spawn.js";
+import { TaskManager } from "@yukino.js/subagent/task-manager.js";
+import { BashTool } from "@yukino.js/tools/bash.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool, ToolContext } from "@yukino.js/tools/types.js";
+import { contentToText } from "@yukino.js/utils";
 
 const USAGE: UsageInfo = {
   inputTokens: 1,

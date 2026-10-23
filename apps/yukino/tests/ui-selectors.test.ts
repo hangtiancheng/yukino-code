@@ -8,27 +8,30 @@ import { act, createElement } from "react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ProviderConfig } from "@/config/provider-config.js";
-import type { SessionInfo } from "@/session/index.js";
-import type { AgentTask } from "@/subagent/task-manager.js";
-import { createProgress, type TeammateUIState } from "@/teams/progress.js";
-import { AskUserQuestionTool } from "@/tools/ask-user.js";
-import { AgentStatus } from "@/ui/agent-status.js";
-import { AgentsDialog } from "@/ui/agents-dialog.js";
-import { AskUserDialog } from "@/ui/ask-user-dialog.js";
-import { ICONS, THEME } from "@/ui/constants.js";
-import { FeedbackDialog } from "@/ui/feedback-dialog.js";
-import { InteractionDock } from "@/ui/interaction-dock.js";
-import { IssueApprovalDialog } from "@/ui/issue-approval.js";
-import { PermissionDialog } from "@/ui/permission-dialog.js";
-import { PlanApprovalDialog } from "@/ui/plan-approval.js";
-import { ProviderSelect } from "@/ui/provider-select.js";
-import { SelectorFrame } from "@/ui/selector-frame.js";
-import { SelectorListRow } from "@/ui/selector-list.js";
-import { updateSelectorQuery } from "@/ui/selector-search.js";
-import { SessionSelector } from "@/ui/session-selector.js";
-import { setThemeMode } from "@/ui/styles.js";
-import { visibleWidth } from "@/ui/terminal-text.js";
+import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
+import type { SessionInfo } from "@yukino.js/session";
+import type { AgentTask } from "@yukino.js/subagent/task-manager.js";
+import {
+  createProgress,
+  type TeammateUIState,
+} from "@yukino.js/teams/progress.js";
+import { AskUserQuestionTool } from "@yukino.js/tools/ask-user.js";
+import { AgentStatus } from "@yukino.js/ui/agent-status.js";
+import { AgentsDialog } from "@yukino.js/ui/agents-dialog.js";
+import { AskUserDialog } from "@yukino.js/ui/ask-user-dialog.js";
+import { ICONS, THEME } from "@yukino.js/ui/constants.js";
+import { FeedbackDialog } from "@yukino.js/ui/feedback-dialog.js";
+import { InteractionDock } from "@yukino.js/ui/interaction-dock.js";
+import { IssueApprovalDialog } from "@yukino.js/ui/issue-approval.js";
+import { PermissionDialog } from "@yukino.js/ui/permission-dialog.js";
+import { PlanApprovalDialog } from "@yukino.js/ui/plan-approval.js";
+import { ProviderSelect } from "@yukino.js/ui/provider-select.js";
+import { SelectorFrame } from "@yukino.js/ui/selector-frame.js";
+import { SelectorListRow } from "@yukino.js/ui/selector-list.js";
+import { updateSelectorQuery } from "@yukino.js/ui/selector-search.js";
+import { SessionSelector } from "@yukino.js/ui/session-selector.js";
+import { setThemeMode } from "@yukino.js/ui/styles.js";
+import { visibleWidth } from "@yukino.js/ui/terminal-text.js";
 
 // Keep Ink's real layout and React hooks; invoke only the captured input
 // callback. usePaste must be mocked too: the real hook enables raw mode,

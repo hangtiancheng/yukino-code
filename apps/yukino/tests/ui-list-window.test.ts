@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getListWindowStart } from "@/ui/list-window.js";
+import { getListWindowStart } from "@yukino.js/ui/list-window.js";
 
 describe("UI v2 list window", () => {
   it("keeps the first page stable while its items are selected", () => {

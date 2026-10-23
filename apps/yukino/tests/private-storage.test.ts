@@ -18,29 +18,29 @@ import { dirname, join, relative } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { FileHistory } from "@/file-history/index.js";
-import * as history from "@/history/index.js";
-import { closeLogger, initLogger } from "@/logger/index.js";
-import { createPlanPath, savePlan } from "@/plan-file/index.js";
+import { FileHistory } from "@yukino.js/file-history";
+import * as history from "@yukino.js/history";
+import { closeLogger, initLogger } from "@yukino.js/logger";
+import { createPlanPath, savePlan } from "@yukino.js/plan-file";
 import { record } from "@/recover.js";
 import {
   getSessionFilePath,
   loadSession,
   saveMessage,
   truncateSessionLines,
-} from "@/session/index.js";
-import { getYukinoDir, projectPath, yukinoPath } from "@/storage/index.js";
+} from "@yukino.js/session";
+import { getYukinoDir, projectPath, yukinoPath } from "@yukino.js/storage";
 import {
   mkdirPrivateSync,
   openPrivateFileSync,
   readPrivateFileSync,
   writePrivateFile,
   writePrivateFileSync,
-} from "@/storage/private.js";
-import { TeamManager } from "@/teams/index.js";
-import { persistLargeResult, spillDir } from "@/tool-result/index.js";
-import { createShellOutputFile } from "@/tools/shell-background.js";
-import { WriteFileTool } from "@/tools/write-file.js";
+} from "@yukino.js/storage/private.js";
+import { TeamManager } from "@yukino.js/teams";
+import { persistLargeResult, spillDir } from "@yukino.js/tool-result";
+import { createShellOutputFile } from "@yukino.js/tools/shell-background.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
 
 let previousUmask: number;
 let directory: string;

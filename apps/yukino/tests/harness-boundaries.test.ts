@@ -4,16 +4,16 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent, type AgentConfig } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { ContextTooLongError } from "@/llm/errors.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { yukinoPath, projectPath } from "@/storage/index.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool } from "@/tools/types.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent, type AgentConfig } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { ContextTooLongError } from "@yukino.js/llm/errors.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { yukinoPath, projectPath } from "@yukino.js/storage";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool } from "@yukino.js/tools/types.js";
 
 const end: StreamEvent = {
   type: "stream_end",

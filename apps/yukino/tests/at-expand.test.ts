@@ -13,9 +13,9 @@ import { afterEach, describe, it, expect } from "vitest";
 import {
   expandAtRefs,
   expandAtRefsWithImages,
-} from "@/conversation/at-expand.js";
-import { collapseImage, expandPastes } from "@/ui/input-paste.js";
-import { isRecord, strArg } from "@/utils/index.js";
+} from "@yukino.js/conversation/at-expand.js";
+import { collapseImage, expandPastes } from "@yukino.js/ui/input-paste.js";
+import { isRecord, strArg } from "@yukino.js/utils";
 
 const TEST_PNG_PATH = join(dirname(fileURLToPath(import.meta.url)), "test.png");
 const tempDirs = new Set<string>();

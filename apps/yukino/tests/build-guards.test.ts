@@ -19,7 +19,8 @@ import {
 } from "../tsup.config.js";
 
 const appRoot = join(import.meta.dirname, "..");
-const srcRoot = join(appRoot, "src");
+const repoRoot = join(appRoot, "..", "..");
+const scanRoots = [join(appRoot, "src"), join(repoRoot, "packages")];
 // Full install-manifest set: optionalDependencies are part of the graph by
 // default (only their install failures are tolerated), so import-site
 // derivation must see them too.
@@ -30,9 +31,9 @@ const dependencyNames = [
 
 /**
  * Recompute the ui-only set from the sources: a dependency is ui-only
- * when every module importing it belongs to the terminal layer (src/main.tsx and
- * src/ui/**). Type-only imports are ignored — they are erased and cannot make a
- * package reachable at runtime.
+ * when every module importing it belongs to the terminal layer
+ * (apps/yukino/src/main.tsx and packages/ui). Type-only imports are ignored —
+ * they are erased and cannot make a package reachable at runtime.
  */
 const deriveUIOnlyDeps = (): string[] => {
   const importSites = new Map<string, Set<string>>();
@@ -43,7 +44,7 @@ const deriveUIOnlyDeps = (): string[] => {
       readFileSync(file, "utf8"),
       ts.ScriptTarget.ESNext,
     );
-    const relativePath = file.slice(appRoot.length + 1).replaceAll("\\", "/");
+    const relativePath = file.slice(repoRoot.length + 1).replaceAll("\\", "/");
     const specifiers: string[] = [];
     const collect = (node: ts.Node): void => {
       if (ts.isImportDeclaration(node)) {
@@ -90,16 +91,16 @@ const deriveUIOnlyDeps = (): string[] => {
     }
   };
 
-  // src/remote/browser is a standalone browser bundle with its own tsup build
-  // (`pnpm build:browser`), served as static assets by the remote server. It is
-  // never part of the CLI/library import graph, so its imports (react,
-  // react-dom, dompurify, marked) must not count as import sites here.
-  const browserPrefix = "src/remote/browser/";
+  // packages/remote-browser is a standalone browser bundle with its own tsup
+  // build (`pnpm build:browser`), served as static assets by the remote
+  // server. It is never part of the CLI/library import graph, so its imports
+  // (react, react-dom, dompurify, marked) must not count as import sites here.
+  const browserPrefix = "packages/remote-browser/";
 
   const walk = (directory: string): void => {
     for (const entry of ts.sys.readDirectory(directory, [".ts", ".tsx"])) {
       const relativeEntry = entry
-        .slice(appRoot.length + 1)
+        .slice(repoRoot.length + 1)
         .replaceAll("\\", "/");
       if (relativeEntry.startsWith(browserPrefix)) {
         continue;
@@ -107,10 +108,12 @@ const deriveUIOnlyDeps = (): string[] => {
       visit(entry);
     }
   };
-  walk(srcRoot);
+  for (const root of scanRoots) {
+    walk(root);
+  }
 
   const isTerminalLayer = (path: string): boolean =>
-    path.startsWith("src/ui/") || path === "src/main.tsx";
+    path.startsWith("packages/ui/src/") || path === "apps/yukino/src/main.tsx";
 
   return dependencyNames
     .filter((dependency) => {
@@ -157,7 +160,7 @@ describe("library build ui-only dependency guard", () => {
     expect(uiOnlyDeps).toContain("react");
     expect(uiOnlyDeps).toContain("marked");
     // react-dom is imported only by the standalone browser bundle
-    // (src/remote/browser), never by the node graph — it is not part of the set.
+    // (packages/remote-browser), never by the node graph — it is not part of the set.
     for (const specifier of [
       "react-dom",
       "react-dom/client",

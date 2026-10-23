@@ -1,0 +1,52 @@
+import { Chalk } from "chalk";
+
+import { isDiffTool } from "@yukino.js/tools/is-diff-tool.js";
+import { THEME } from "./constants.js";
+import { expandTabs, wrapToLines } from "./terminal-text.js";
+import { plainTerminalText } from "@yukino.js/utils";
+
+const colors = new Chalk({ level: 3 });
+
+export function formatToolOutputPreview(
+  toolName: string,
+  text: string,
+  width = 80,
+): string {
+  const normalized = expandTabs(plainTerminalText(text).trimEnd());
+  const styled = isDiffTool(toolName)
+    ? normalized
+        .split("\n")
+        .map((line) =>
+          colors.hex(
+            line.startsWith("+ ")
+              ? THEME.toolDiffAdded
+              : line.startsWith("- ")
+                ? THEME.toolDiffRemoved
+                : THEME.toolDiffContext,
+          )(line),
+        )
+        .join("\n")
+    : normalized;
+  const lines = wrapToLines(styled, width);
+  const lowerName = toolName.toLowerCase();
+  if (lowerName === "askuserquestion") {
+    return lines.join("\n");
+  }
+  const limit = lowerName.includes("grep")
+    ? 15
+    : lowerName.includes("glob") ||
+        lowerName.includes("find") ||
+        lowerName.includes("list")
+      ? 20
+      : lowerName.includes("bash") || lowerName.includes("powershell")
+        ? 5
+        : 10;
+  if (lines.length <= limit) {
+    return lines.join("\n");
+  }
+  const visible =
+    lowerName.includes("bash") || lowerName.includes("powershell")
+      ? lines.slice(-limit)
+      : lines.slice(0, limit);
+  return `${visible.join("\n")}\n… (${String(lines.length - limit)} more lines, Ctrl+O to expand)`;
+}

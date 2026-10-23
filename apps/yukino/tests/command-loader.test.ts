@@ -4,13 +4,13 @@ import { join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
-import { createDefaultRegistry } from "@/commands/commands.js";
+import { createDefaultRegistry } from "@yukino.js/commands/commands.js";
 import {
   loadUserCommands,
   parseCommandArgs,
   renderBody,
-} from "@/commands/loader.js";
-import { yukinoPath } from "@/storage/index.js";
+} from "@yukino.js/commands/loader.js";
+import { yukinoPath } from "@yukino.js/storage";
 
 function cmdDir(): string {
   const cwd = mkdtempSync(join(tmpdir(), "yukino-cmd-"));

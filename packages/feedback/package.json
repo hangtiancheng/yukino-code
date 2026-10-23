@@ -1,0 +1,28 @@
+{
+  "name": "@yukino.js/feedback",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yukino.js/config": "workspace:*",
+    "@yukino.js/conversation": "workspace:*",
+    "@yukino.js/file-history": "workspace:*",
+    "@yukino.js/logger": "workspace:*",
+    "@yukino.js/session": "workspace:*",
+    "@yukino.js/storage": "workspace:*",
+    "@yukino.js/teams": "workspace:*",
+    "@yukino.js/tool-result": "workspace:*",
+    "@yukino.js/utils": "workspace:*",
+    "@yukino.js/version": "workspace:*",
+    "js-yaml": "^4.3.2",
+    "zod": "^4.6.7"
+  }
+}

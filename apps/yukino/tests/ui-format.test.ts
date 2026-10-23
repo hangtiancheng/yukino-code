@@ -8,9 +8,9 @@ import {
   visibleWidth,
   wrapToLines,
   wrapWordsToLines,
-} from "@/ui/terminal-text.js";
-import { formatToolOutputPreview } from "@/ui/tool-preview.js";
-import { plainTerminalText } from "@/utils/index.js";
+} from "@yukino.js/ui/terminal-text.js";
+import { formatToolOutputPreview } from "@yukino.js/ui/tool-preview.js";
+import { plainTerminalText } from "@yukino.js/utils";
 
 describe("UI v2 tool previews", () => {
   it.each([

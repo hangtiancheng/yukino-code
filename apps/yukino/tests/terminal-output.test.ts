@@ -5,7 +5,7 @@ import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 import {
   expectStaticTerminalOutput,
   installTerminalOutput,
-} from "@/ui/terminal-output.js";
+} from "@yukino.js/ui/terminal-output.js";
 
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const originalTty = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");

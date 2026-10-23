@@ -1,22 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent, type AgentConfig } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { HookEngine } from "@/hooks/index.js";
-import type { LLMClient } from "@/llm/client.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent, type AgentConfig } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import { HookEngine } from "@yukino.js/hooks";
+import type { LLMClient } from "@yukino.js/llm/client.js";
 import {
   AuthenticationError,
   LLMError,
   NetworkError,
   RateLimitError,
   ServerError,
-} from "@/llm/errors.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import { WriteFileTool } from "@/tools/write-file.js";
-import { contentToText } from "@/utils/index.js";
+} from "@yukino.js/llm/errors.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import { WriteFileTool } from "@yukino.js/tools/write-file.js";
+import { contentToText } from "@yukino.js/utils";
 
 const end: StreamEvent = {
   type: "stream_end",

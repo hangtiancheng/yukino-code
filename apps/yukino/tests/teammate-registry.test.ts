@@ -4,9 +4,9 @@ import { join } from "node:path";
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { cloneRegistryForTeammate } from "@/subagent/tool-filter.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { Tool } from "@/tools/types.js";
+import { cloneRegistryForTeammate } from "@yukino.js/subagent/tool-filter.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { Tool } from "@yukino.js/tools/types.js";
 
 // The team directory lives at <home>/.yukino/teams. Point HOME to a temp
 // directory to avoid leaving artifacts in the real ~/.yukino/teams.

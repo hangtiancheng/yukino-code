@@ -10,16 +10,16 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { FileHistory } from "@/file-history/index.js";
-import { recordInput, loadInputTexts } from "@/history/index.js";
-import { createPlanPath } from "@/plan-file/index.js";
+import { FileHistory } from "@yukino.js/file-history";
+import { recordInput, loadInputTexts } from "@yukino.js/history";
+import { createPlanPath } from "@yukino.js/plan-file";
 import {
   getSessionFilePath,
   listSessions,
   saveMessage,
-} from "@/session/index.js";
-import { getYukinoDir, projectKey } from "@/storage/index.js";
-import { TaskStore } from "@/todo/store.js";
+} from "@yukino.js/session";
+import { getYukinoDir, projectKey } from "@yukino.js/storage";
+import { TaskStore } from "@yukino.js/todo/store.js";
 
 describe("global storage", () => {
   it("keeps resume lists isolated by project while sharing prompt history", () => {

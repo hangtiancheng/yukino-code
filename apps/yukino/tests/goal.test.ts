@@ -4,16 +4,16 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent } from "@/agent/events.js";
-import { Agent } from "@/agent/index.js";
-import { ConversationManager } from "@/conversation/index.js";
-import { MAX_GOAL_TURNS } from "@/goal/constants.js";
-import { GoalManager, handleGoalCommand } from "@/goal/index.js";
-import { HookEngine } from "@/hooks/index.js";
-import type { LLMClient } from "@/llm/client.js";
-import { ContextTooLongError, RateLimitError } from "@/llm/errors.js";
-import type { StreamEvent } from "@/llm/events.js";
-import { PermissionChecker } from "@/permissions/index.js";
+import type { AgentEvent } from "@yukino.js/agent/events.js";
+import { Agent } from "@yukino.js/agent";
+import { ConversationManager } from "@yukino.js/conversation";
+import { MAX_GOAL_TURNS } from "@yukino.js/goal/constants.js";
+import { GoalManager, handleGoalCommand } from "@yukino.js/goal";
+import { HookEngine } from "@yukino.js/hooks";
+import type { LLMClient } from "@yukino.js/llm/client.js";
+import { ContextTooLongError, RateLimitError } from "@yukino.js/llm/errors.js";
+import type { StreamEvent } from "@yukino.js/llm/events.js";
+import { PermissionChecker } from "@yukino.js/permissions";
 import {
   loadSession,
   rebuildFromSession,
@@ -21,11 +21,11 @@ import {
   sessionLineCount,
   getSessionFilePath,
   truncateSessionLines,
-} from "@/session/index.js";
-import { filterToolsForAgent } from "@/subagent/tool-filter.js";
-import { GoalTool } from "@/tools/goal.js";
-import { ToolRegistry } from "@/tools/registry.js";
-import type { ProviderToolSchema } from "@/tools/types.js";
+} from "@yukino.js/session";
+import { filterToolsForAgent } from "@yukino.js/subagent/tool-filter.js";
+import { GoalTool } from "@yukino.js/tools/goal.js";
+import { ToolRegistry } from "@yukino.js/tools/registry.js";
+import type { ProviderToolSchema } from "@yukino.js/tools/types.js";
 
 let cwd: string;
 beforeEach(() => {
