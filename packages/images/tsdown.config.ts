@@ -1,4 +1,4 @@
-import { definePkgBuild } from "@yukino.js/build-config";
+import { definePkgBuild } from "@yukino.js/pkg-build";
 
 // image-worker.js is a plain-JS worker spawned at runtime via
 // `new URL("./image-worker.js", import.meta.url)` — build it as its own

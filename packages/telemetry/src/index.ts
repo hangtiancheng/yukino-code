@@ -1,6 +1,5 @@
 import { EXPORTER_NONE } from "./constants.js";
 
-// Submodule namespaces for library consumers (Telemetry.<Sub>.*).
 // providers.js is deliberately NOT re-exported here: it statically imports the
 // optionalDependencies (@langfuse/*, @opentelemetry/*), so a static re-export
 // would make the library entry unloadable when those are absent and contradict
@@ -8,7 +7,6 @@ import { EXPORTER_NONE } from "./constants.js";
 export * from "./constants.js";
 export * from "./instrumentation.js";
 export * from "./privacy.js";
-export * from "./providers.js";
 export type TelemetryMode =
   "a2a" | "acp" | "print" | "remote" | "terminal" | "unknown";
 export type TelemetryObservationKind = "agent" | "generation" | "tool";

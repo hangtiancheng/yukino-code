@@ -13,7 +13,7 @@ const remoteBrowserDist = join(
   "..",
   "..",
   "packages",
-  "remote-browser",
+  "browser",
   "dist",
 );
 
@@ -42,7 +42,7 @@ const pkgVersion: string =
 // this set from the actual import sites and fails on drift, so it cannot go
 // stale silently. react is included: the barrel no longer re-exports the ui
 // package, so react is reached exclusively from the terminal layer. react-dom
-// is absent — only the standalone browser bundle (packages/remote-browser,
+// is absent — only the standalone browser bundle (packages/browser,
 // own tsup build) imports it, which never enters the CLI/library graph.
 const uiOnlyDeps = [
   "ink",

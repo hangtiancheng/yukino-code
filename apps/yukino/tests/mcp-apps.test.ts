@@ -7,13 +7,10 @@ import {
   RemoteMcpApps,
   type McpAppHandle,
 } from "@yukino.js/remote/mcp-apps.js";
-import {
-  chatReducer,
-  initialState,
-} from "@yukino.js/remote-browser/hooks/use-chat.js";
-import { McpAppRequests } from "@yukino.js/remote-browser/lib/mcp-app-requests.js";
-import { buildAppCsp } from "@yukino.js/remote-browser/lib/mcp-app-sandbox.js";
-import type { ClientMessage } from "@yukino.js/remote-browser/types.js";
+import { chatReducer, initialState } from "#/hooks/use-chat.js";
+import { McpAppRequests } from "#/lib/mcp-app-requests.js";
+import { buildAppCsp } from "#/lib/mcp-app-sandbox.js";
+import type { ClientMessage } from "#/types.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => vi.restoreAllMocks());

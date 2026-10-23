@@ -161,6 +161,14 @@ describe("remote execution boundaries", () => {
         /http:\/\/127\.0\.0\.1:\d+\/#token=[A-Za-z0-9_-]+/.exec(line)?.[0] ??
           "",
       );
+      const page = await fetch(browserUrl);
+      expect(page.status).toBe(200);
+      expect(page.headers.get("content-type")).toContain("text/html");
+      expect(await page.text()).toContain("/static/index.js");
+      const script = await fetch(new URL("/static/index.js", browserUrl));
+      expect(script.status).toBe(200);
+      expect(script.headers.get("content-type")).toContain("javascript");
+
       const token = new URLSearchParams(browserUrl.hash.slice(1)).get("token");
       expect(token).toBeTruthy();
       const authorized = `ws://${browserUrl.host}/ws?token=${encodeURIComponent(token ?? "")}`;

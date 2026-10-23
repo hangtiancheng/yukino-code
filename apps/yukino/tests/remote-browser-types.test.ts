@@ -1,7 +1,4 @@
-import {
-  isServerMessage,
-  type ServerMessage,
-} from "@yukino.js/remote-browser/types.js";
+import { isServerMessage, type ServerMessage } from "#/types.js";
 import { PRIVATE_BOARD_ID_PREFIX } from "@yukino.js/todo/constants.js";
 import { describe, expect, it } from "vitest";
 

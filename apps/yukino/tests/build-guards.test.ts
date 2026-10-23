@@ -94,11 +94,11 @@ const deriveUIOnlyDeps = (): string[] => {
     }
   };
 
-  // packages/remote-browser is a standalone browser bundle with its own tsup
+  // packages/browser is a standalone browser bundle with its own tsup
   // build (`pnpm build:browser`), served as static assets by the remote
   // server. It is never part of the CLI/library import graph, so its imports
   // (react, react-dom, dompurify, marked) must not count as import sites here.
-  const browserPrefix = "packages/remote-browser/";
+  const browserPrefix = "packages/browser/";
 
   // Excluded from the scan: pnpm node_modules trees hold symlinked
   // dependencies whose shipped .d.ts files would count as import sites, and
@@ -172,7 +172,7 @@ describe("library build ui-only dependency guard", () => {
     expect(uiOnlyDeps).toContain("react");
     expect(uiOnlyDeps).toContain("marked");
     // react-dom is imported only by the standalone browser bundle
-    // (packages/remote-browser), never by the node graph — it is not part of the set.
+    // (packages/browser), never by the node graph — it is not part of the set.
     for (const specifier of [
       "react-dom",
       "react-dom/client",

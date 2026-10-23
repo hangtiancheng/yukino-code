@@ -1,4 +1,4 @@
-import { OfflineMessageQueue } from "@yukino.js/remote-browser/hooks/offline-queue.js";
+import { OfflineMessageQueue } from "#/hooks/offline-queue.js";
 import { describe, expect, it } from "vitest";
 
 describe("offline chat queue", () => {

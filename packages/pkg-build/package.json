@@ -1,5 +1,5 @@
 {
-  "name": "@yukino.js/build-config",
+  "name": "@yukino.js/pkg-build",
   "version": "0.0.17",
   "private": true,
   "type": "module",

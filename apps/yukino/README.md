@@ -879,12 +879,14 @@ Besides the `yukino` CLI, the package ships a library entry for embedding Yukino
 | CLI (`yukino`) | `dist/main.js`, `dist/image-worker.js`                                 | Minified ESM bundles with a separate image worker; Node built-ins, ink's `react-devtools-core` peer, and WASM codec packages stay external. |
 | Library        | `dist/lib/index.js`, `dist/lib/index.d.ts`, `dist/lib/image-worker.js` | The `src/index.ts` barrel and image worker; runtime dependencies resolve from the consumer's `node_modules`.                                |
 
+All workspace packages under `packages/` are private and are never published. The CLI and library bundle them into distribution chunks. They are development dependencies of the CLI; installing the published CLI or library requires no private workspace packages.
+
 Image decoding, compression, and screenshot transforms run in a cancellable worker thread. Jimp handles resizing and encoding; `@jsquash/jpeg` and `@jsquash/webp` decode JPEG and WebP with WASM binaries from their installed packages. Image jobs run one at a time to bound concurrent decode memory.
 
 The library entry is terminal-independent by contract: it must never reach `src/ui/**` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can import it. `pnpm build` enforces that contract:
 
 - **ui-only dependency ban** — the `ban-ui-only-deps` plugin in `tsdown.config.ts` fails the build when a bundle-reachable module imports one of the ui-only packages (`ink`, `react`, `chalk`, `ansi-escapes`, …) or a path inside `src/ui`. The list is declared once in `tsdown.config.ts` and re-derived from the actual import sites by `tests/build-guards.test.ts`, which fails if the two drift apart.
-- **`react` is banned, `react-dom` never appears** — the barrel does not re-export `src/ui/**`, so `react` is reached exclusively from the terminal layer; `react-dom` is imported only by the standalone browser bundle (`packages/remote-browser`, built separately via `pnpm build:browser`), which is not part of the library graph.
+- **`react` is banned, `react-dom` never appears** — the barrel does not re-export `src/ui/**`, so `react` is reached exclusively from the terminal layer; `react-dom` is imported only by the standalone browser bundle (`packages/browser`, built separately via `pnpm build:browser`), which is not part of the library graph.
 - **Ambiguous export scan** — once the bundle is written, the build runs the TypeScript ambiguous-export check (`TS2308`) over the library graph. A name exported by two `export *` sources is dropped by the bundler without any warning; the scan turns that into a build failure instead of a quietly smaller public API.
 
 In a long-lived host process, prefer the composable modules (`Agent`, `ToolRegistry`, …) over the process-level entry points (`print-mode`, `recover`), which own process lifecycle — `recover` installs crash logging to `~/.yukino/crash.log` and calls `process.exit()`, and `print-mode` exits on invalid flags.

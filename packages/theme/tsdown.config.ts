@@ -1,3 +1,3 @@
-import { definePkgBuild } from "@yukino.js/build-config";
+import { definePkgBuild } from "@yukino.js/pkg-build";
 
 export default definePkgBuild();

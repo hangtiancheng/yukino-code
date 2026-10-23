@@ -21,7 +21,7 @@ export default defineConfig({
       },
       {
         find: /^#\/(.*)$/,
-        replacement: resolve(repoRoot, "packages/remote-browser/src/$1"),
+        replacement: resolve(repoRoot, "packages/browser/src/$1"),
       },
     ],
   },
@@ -33,7 +33,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}", "../../packages/*/src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.d.ts", "../../packages/remote-browser/**"],
+      exclude: ["src/**/*.d.ts", "../../packages/browser/**"],
       reporter: ["html", "json-summary", "lcov", "text"],
       reportsDirectory: "coverage",
     },

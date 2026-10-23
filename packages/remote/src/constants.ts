@@ -42,6 +42,7 @@ export const SESSION_LIST_LIMIT = 50;
 export const BROWSER_DIST = [
   join(import.meta.dirname, "browser", "dist"),
   join(import.meta.dirname, "..", "browser", "dist"),
+  join(import.meta.dirname, "..", "..", "browser", "dist"),
 ].find((directory) => existsSync(directory));
 
 export const MIME_TYPES: Record<string, string> = {

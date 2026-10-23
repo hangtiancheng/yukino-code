@@ -1,8 +1,7 @@
 ---
-lockfileVersion: '9.0'
+lockfileVersion: "9.0"
 
 importers:
-
   .:
     configDependencies: {}
     packageManagerDependencies:
@@ -11,149 +10,192 @@ importers:
         version: 12.10.1
 
 packages:
-
-  '@pnpm/exe.android-arm64@12.10.1':
-    resolution: {integrity: sha512-CVTlHPwNvadQCJD9bGSMzWIhFX8QpjtqC2c27dhdnn/9iKzEjZ3qL62o3gHpKbIuo6qn4WxTKRoaokgNdReBig==}
+  "@pnpm/exe.android-arm64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-CVTlHPwNvadQCJD9bGSMzWIhFX8QpjtqC2c27dhdnn/9iKzEjZ3qL62o3gHpKbIuo6qn4WxTKRoaokgNdReBig==,
+      }
     cpu: [arm64]
     os: [android]
 
-  '@pnpm/exe.android-x64@12.10.1':
-    resolution: {integrity: sha512-NFiYLIaodY7da0XIebwcU3JoP7IK/lzF7zgKSSP+9H+QcFnQ1GDfBkuBKCYJzZ+Xu0WH54neIPLBBCaOjaaauA==}
+  "@pnpm/exe.android-x64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-NFiYLIaodY7da0XIebwcU3JoP7IK/lzF7zgKSSP+9H+QcFnQ1GDfBkuBKCYJzZ+Xu0WH54neIPLBBCaOjaaauA==,
+      }
     cpu: [x64]
     os: [android]
 
-  '@pnpm/exe.darwin-arm64@12.10.1':
-    resolution: {integrity: sha512-0O8tdQ8ijlPJudXspLMTcitMkdBEz6uUflazL5uQE0WMs85oQIp0U+5hfEktMFB64QqEhjqlvvujTwbzdr9oMg==}
+  "@pnpm/exe.darwin-arm64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-0O8tdQ8ijlPJudXspLMTcitMkdBEz6uUflazL5uQE0WMs85oQIp0U+5hfEktMFB64QqEhjqlvvujTwbzdr9oMg==,
+      }
     cpu: [arm64]
     os: [darwin]
 
-  '@pnpm/exe.darwin-x64@12.10.1':
-    resolution: {integrity: sha512-ud+1/uZOKEo8P/AsPynOJc/LNwfI0j6WwCElibj71rU9l4nIBnsSn+wWTIPZPkZ4BBSH5+82azSnAARMyJ1lNA==}
+  "@pnpm/exe.darwin-x64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-ud+1/uZOKEo8P/AsPynOJc/LNwfI0j6WwCElibj71rU9l4nIBnsSn+wWTIPZPkZ4BBSH5+82azSnAARMyJ1lNA==,
+      }
     cpu: [x64]
     os: [darwin]
 
-  '@pnpm/exe.freebsd-x64@12.10.1':
-    resolution: {integrity: sha512-mj9PE5rf8uAfQQ2K66HSATMSut+lNiB4eSqFd5+azFVCMnxNSy/32xpZQJT21PhnN3Y4qbK+iKHe5nWAxSuRhw==}
+  "@pnpm/exe.freebsd-x64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-mj9PE5rf8uAfQQ2K66HSATMSut+lNiB4eSqFd5+azFVCMnxNSy/32xpZQJT21PhnN3Y4qbK+iKHe5nWAxSuRhw==,
+      }
     cpu: [x64]
     os: [freebsd]
 
-  '@pnpm/exe.linux-arm64-musl@12.10.1':
-    resolution: {integrity: sha512-xba+00wZJ8Um6rBJJjWl88uJj0tydB8dtomvjlCLvi0uL32vpa9CRP8Vv26FIXvbiZ1bo2RCzYt/eChxJVV52w==}
+  "@pnpm/exe.linux-arm64-musl@12.10.1":
+    resolution:
+      {
+        integrity: sha512-xba+00wZJ8Um6rBJJjWl88uJj0tydB8dtomvjlCLvi0uL32vpa9CRP8Vv26FIXvbiZ1bo2RCzYt/eChxJVV52w==,
+      }
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-arm64@12.10.1':
-    resolution: {integrity: sha512-oBdMp69ScC9UnniG4qZAQVr2fBDSXjm4yk/72vkEVyrlwS23yMxcRQl7Qdo3sgXPAygY6TWnPRKm4rXzjoyW7w==}
+  "@pnpm/exe.linux-arm64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-oBdMp69ScC9UnniG4qZAQVr2fBDSXjm4yk/72vkEVyrlwS23yMxcRQl7Qdo3sgXPAygY6TWnPRKm4rXzjoyW7w==,
+      }
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-ppc64@12.10.1':
-    resolution: {integrity: sha512-Yyb3wu09h3c7mLme270uHFiVaAIUHC411Ru9LIU2BKUIstrGlXa9OqqVWoXaRgYRdFdOFknkwG7GNn6ygwLbnw==}
+  "@pnpm/exe.linux-ppc64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-Yyb3wu09h3c7mLme270uHFiVaAIUHC411Ru9LIU2BKUIstrGlXa9OqqVWoXaRgYRdFdOFknkwG7GNn6ygwLbnw==,
+      }
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-riscv64@12.10.1':
-    resolution: {integrity: sha512-PdkeUFFkybknnGkWP0H22eMpIiS4OZXL5BcQzF4lh+vmrW3IaC2HOkbANKgot/PKO0Kl77pzA/6PKFxgbgfXIQ==}
+  "@pnpm/exe.linux-riscv64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-PdkeUFFkybknnGkWP0H22eMpIiS4OZXL5BcQzF4lh+vmrW3IaC2HOkbANKgot/PKO0Kl77pzA/6PKFxgbgfXIQ==,
+      }
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-s390x@12.10.1':
-    resolution: {integrity: sha512-1okKuHKJwJPAbofDxfhZWAUxEWtee4ZSf7Pah8kcvocaJkf2WxFJ5KVTiNIvDml5GLidDQsgf7Pcf/WHbCak7Q==}
+  "@pnpm/exe.linux-s390x@12.10.1":
+    resolution:
+      {
+        integrity: sha512-1okKuHKJwJPAbofDxfhZWAUxEWtee4ZSf7Pah8kcvocaJkf2WxFJ5KVTiNIvDml5GLidDQsgf7Pcf/WHbCak7Q==,
+      }
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-x64-musl@12.10.1':
-    resolution: {integrity: sha512-e6IqzVNkPa7srFKJKnY23uWJ+qz0LaRWiTUo/sHfFXRRMRzB5uNOr6qWWip/jqhdGwU91n9J7LrEYZ6e0tRczw==}
+  "@pnpm/exe.linux-x64-musl@12.10.1":
+    resolution:
+      {
+        integrity: sha512-e6IqzVNkPa7srFKJKnY23uWJ+qz0LaRWiTUo/sHfFXRRMRzB5uNOr6qWWip/jqhdGwU91n9J7LrEYZ6e0tRczw==,
+      }
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-x64@12.10.1':
-    resolution: {integrity: sha512-ZByV0DRgWzGaDSjT5ddRBASdwz+r/qPMYh7o6RGmPQjtRGNFbSl94xY2DcAM8mqCOZJUUDtAXQ+wpBXcdpKlkg==}
+  "@pnpm/exe.linux-x64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-ZByV0DRgWzGaDSjT5ddRBASdwz+r/qPMYh7o6RGmPQjtRGNFbSl94xY2DcAM8mqCOZJUUDtAXQ+wpBXcdpKlkg==,
+      }
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.win32-arm64@12.10.1':
-    resolution: {integrity: sha512-I7QZHcjioG7orFeCRUFUHByJ1G0zFPnAlaGGyrUvb6MGkv5oeNwNPl7t+Gp+7zHfnMcgLGJ1a+Wfim0IDw3lOw==}
+  "@pnpm/exe.win32-arm64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-I7QZHcjioG7orFeCRUFUHByJ1G0zFPnAlaGGyrUvb6MGkv5oeNwNPl7t+Gp+7zHfnMcgLGJ1a+Wfim0IDw3lOw==,
+      }
     cpu: [arm64]
     os: [win32]
 
-  '@pnpm/exe.win32-x64@12.10.1':
-    resolution: {integrity: sha512-4WJFdp58EKlCj0zLobrXU0vpszSZIr4X/3y/uNbAQqGW0zE+VdruZB0gFc3L2kzsUzVwTYbaCn+XEhnCYSAlTg==}
+  "@pnpm/exe.win32-x64@12.10.1":
+    resolution:
+      {
+        integrity: sha512-4WJFdp58EKlCj0zLobrXU0vpszSZIr4X/3y/uNbAQqGW0zE+VdruZB0gFc3L2kzsUzVwTYbaCn+XEhnCYSAlTg==,
+      }
     cpu: [x64]
     os: [win32]
 
   pnpm@12.10.1:
-    resolution: {integrity: sha512-ukCjfrGjcNYP6oxM8dNkwTvMzvUY6YrSvO6VT1OdONo3RY5YJho/pV4GUjRQ6g//+fSXsTW+QfLBXBZCusrObA==}
-    engines: {node: '>=18.*'}
+    resolution:
+      {
+        integrity: sha512-ukCjfrGjcNYP6oxM8dNkwTvMzvUY6YrSvO6VT1OdONo3RY5YJho/pV4GUjRQ6g//+fSXsTW+QfLBXBZCusrObA==,
+      }
+    engines: { node: ">=18.*" }
     hasBin: true
 
 snapshots:
-
-  '@pnpm/exe.android-arm64@12.10.1':
+  "@pnpm/exe.android-arm64@12.10.1":
     optional: true
 
-  '@pnpm/exe.android-x64@12.10.1':
+  "@pnpm/exe.android-x64@12.10.1":
     optional: true
 
-  '@pnpm/exe.darwin-arm64@12.10.1':
+  "@pnpm/exe.darwin-arm64@12.10.1":
     optional: true
 
-  '@pnpm/exe.darwin-x64@12.10.1':
+  "@pnpm/exe.darwin-x64@12.10.1":
     optional: true
 
-  '@pnpm/exe.freebsd-x64@12.10.1':
+  "@pnpm/exe.freebsd-x64@12.10.1":
     optional: true
 
-  '@pnpm/exe.linux-arm64-musl@12.10.1':
+  "@pnpm/exe.linux-arm64-musl@12.10.1":
     optional: true
 
-  '@pnpm/exe.linux-arm64@12.10.1':
+  "@pnpm/exe.linux-arm64@12.10.1":
     optional: true
 
-  '@pnpm/exe.linux-ppc64@12.10.1':
+  "@pnpm/exe.linux-ppc64@12.10.1":
     optional: true
 
-  '@pnpm/exe.linux-riscv64@12.10.1':
+  "@pnpm/exe.linux-riscv64@12.10.1":
     optional: true
 
-  '@pnpm/exe.linux-s390x@12.10.1':
+  "@pnpm/exe.linux-s390x@12.10.1":
     optional: true
 
-  '@pnpm/exe.linux-x64-musl@12.10.1':
+  "@pnpm/exe.linux-x64-musl@12.10.1":
     optional: true
 
-  '@pnpm/exe.linux-x64@12.10.1':
+  "@pnpm/exe.linux-x64@12.10.1":
     optional: true
 
-  '@pnpm/exe.win32-arm64@12.10.1':
+  "@pnpm/exe.win32-arm64@12.10.1":
     optional: true
 
-  '@pnpm/exe.win32-x64@12.10.1':
+  "@pnpm/exe.win32-x64@12.10.1":
     optional: true
 
   pnpm@12.10.1:
     optionalDependencies:
-      '@pnpm/exe.android-arm64': 12.10.1
-      '@pnpm/exe.android-x64': 12.10.1
-      '@pnpm/exe.darwin-arm64': 12.10.1
-      '@pnpm/exe.darwin-x64': 12.10.1
-      '@pnpm/exe.freebsd-x64': 12.10.1
-      '@pnpm/exe.linux-arm64': 12.10.1
-      '@pnpm/exe.linux-arm64-musl': 12.10.1
-      '@pnpm/exe.linux-ppc64': 12.10.1
-      '@pnpm/exe.linux-riscv64': 12.10.1
-      '@pnpm/exe.linux-s390x': 12.10.1
-      '@pnpm/exe.linux-x64': 12.10.1
-      '@pnpm/exe.linux-x64-musl': 12.10.1
-      '@pnpm/exe.win32-arm64': 12.10.1
-      '@pnpm/exe.win32-x64': 12.10.1
+      "@pnpm/exe.android-arm64": 12.10.1
+      "@pnpm/exe.android-x64": 12.10.1
+      "@pnpm/exe.darwin-arm64": 12.10.1
+      "@pnpm/exe.darwin-x64": 12.10.1
+      "@pnpm/exe.freebsd-x64": 12.10.1
+      "@pnpm/exe.linux-arm64": 12.10.1
+      "@pnpm/exe.linux-arm64-musl": 12.10.1
+      "@pnpm/exe.linux-ppc64": 12.10.1
+      "@pnpm/exe.linux-riscv64": 12.10.1
+      "@pnpm/exe.linux-s390x": 12.10.1
+      "@pnpm/exe.linux-x64": 12.10.1
+      "@pnpm/exe.linux-x64-musl": 12.10.1
+      "@pnpm/exe.win32-arm64": 12.10.1
+      "@pnpm/exe.win32-x64": 12.10.1
 
 ---
 lockfileVersion: '9.0'
@@ -533,135 +575,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.7)
-      '@yukino.js/a2a':
-        specifier: workspace:*
-        version: link:../../packages/a2a
-      '@yukino.js/acp':
-        specifier: workspace:*
-        version: link:../../packages/acp
-      '@yukino.js/agent':
-        specifier: workspace:*
-        version: link:../../packages/agent
-      '@yukino.js/bootstrap':
-        specifier: workspace:*
-        version: link:../../packages/bootstrap
-      '@yukino.js/commands':
-        specifier: workspace:*
-        version: link:../../packages/commands
-      '@yukino.js/compact':
-        specifier: workspace:*
-        version: link:../../packages/compact
-      '@yukino.js/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@yukino.js/conversation':
-        specifier: workspace:*
-        version: link:../../packages/conversation
-      '@yukino.js/feedback':
-        specifier: workspace:*
-        version: link:../../packages/feedback
-      '@yukino.js/file-history':
-        specifier: workspace:*
-        version: link:../../packages/file-history
-      '@yukino.js/goal':
-        specifier: workspace:*
-        version: link:../../packages/goal
-      '@yukino.js/history':
-        specifier: workspace:*
-        version: link:../../packages/history
-      '@yukino.js/hooks':
-        specifier: workspace:*
-        version: link:../../packages/hooks
-      '@yukino.js/images':
-        specifier: workspace:*
-        version: link:../../packages/images
-      '@yukino.js/llm':
-        specifier: workspace:*
-        version: link:../../packages/llm
-      '@yukino.js/logger':
-        specifier: workspace:*
-        version: link:../../packages/logger
-      '@yukino.js/lsp':
-        specifier: workspace:*
-        version: link:../../packages/lsp
-      '@yukino.js/memory':
-        specifier: workspace:*
-        version: link:../../packages/memory
-      '@yukino.js/model-context-protocol':
-        specifier: workspace:*
-        version: link:../../packages/model-context-protocol
-      '@yukino.js/permissions':
-        specifier: workspace:*
-        version: link:../../packages/permissions
-      '@yukino.js/plan-file':
-        specifier: workspace:*
-        version: link:../../packages/plan-file
-      '@yukino.js/prompt':
-        specifier: workspace:*
-        version: link:../../packages/prompt
-      '@yukino.js/remote':
-        specifier: workspace:*
-        version: link:../../packages/remote
-      '@yukino.js/remote-browser':
-        specifier: workspace:*
-        version: link:../../packages/remote-browser
-      '@yukino.js/sandbox':
-        specifier: workspace:*
-        version: link:../../packages/sandbox
-      '@yukino.js/session':
-        specifier: workspace:*
-        version: link:../../packages/session
-      '@yukino.js/skills':
-        specifier: workspace:*
-        version: link:../../packages/skills
-      '@yukino.js/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
-      '@yukino.js/subagent':
-        specifier: workspace:*
-        version: link:../../packages/subagent
-      '@yukino.js/teams':
-        specifier: workspace:*
-        version: link:../../packages/teams
-      '@yukino.js/telemetry':
-        specifier: workspace:*
-        version: link:../../packages/telemetry
-      '@yukino.js/theme':
-        specifier: workspace:*
-        version: link:../../packages/theme
-      '@yukino.js/todo':
-        specifier: workspace:*
-        version: link:../../packages/todo
-      '@yukino.js/tool-result':
-        specifier: workspace:*
-        version: link:../../packages/tool-result
-      '@yukino.js/tools':
-        specifier: workspace:*
-        version: link:../../packages/tools
-      '@yukino.js/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      '@yukino.js/update':
-        specifier: workspace:*
-        version: link:../../packages/update
-      '@yukino.js/utils':
-        specifier: workspace:*
-        version: link:../../packages/utils
-      '@yukino.js/version':
-        specifier: workspace:*
-        version: link:../../packages/version
-      '@yukino.js/vscode':
-        specifier: workspace:*
-        version: link:../../packages/vscode
-      '@yukino.js/websocket-security':
-        specifier: workspace:*
-        version: link:../../packages/websocket-security
-      '@yukino.js/workflow':
-        specifier: workspace:*
-        version: link:../../packages/workflow
-      '@yukino.js/worktree':
-        specifier: workspace:*
-        version: link:../../packages/worktree
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -777,6 +690,135 @@ importers:
       '@xterm/headless':
         specifier: ^6.0.0
         version: 6.0.0
+      '@yukino.js/a2a':
+        specifier: workspace:*
+        version: link:../../packages/a2a
+      '@yukino.js/acp':
+        specifier: workspace:*
+        version: link:../../packages/acp
+      '@yukino.js/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@yukino.js/bootstrap':
+        specifier: workspace:*
+        version: link:../../packages/bootstrap
+      '@yukino.js/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@yukino.js/commands':
+        specifier: workspace:*
+        version: link:../../packages/commands
+      '@yukino.js/compact':
+        specifier: workspace:*
+        version: link:../../packages/compact
+      '@yukino.js/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@yukino.js/conversation':
+        specifier: workspace:*
+        version: link:../../packages/conversation
+      '@yukino.js/feedback':
+        specifier: workspace:*
+        version: link:../../packages/feedback
+      '@yukino.js/file-history':
+        specifier: workspace:*
+        version: link:../../packages/file-history
+      '@yukino.js/goal':
+        specifier: workspace:*
+        version: link:../../packages/goal
+      '@yukino.js/history':
+        specifier: workspace:*
+        version: link:../../packages/history
+      '@yukino.js/hooks':
+        specifier: workspace:*
+        version: link:../../packages/hooks
+      '@yukino.js/images':
+        specifier: workspace:*
+        version: link:../../packages/images
+      '@yukino.js/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@yukino.js/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@yukino.js/lsp':
+        specifier: workspace:*
+        version: link:../../packages/lsp
+      '@yukino.js/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@yukino.js/model-context-protocol':
+        specifier: workspace:*
+        version: link:../../packages/model-context-protocol
+      '@yukino.js/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@yukino.js/plan-file':
+        specifier: workspace:*
+        version: link:../../packages/plan-file
+      '@yukino.js/prompt':
+        specifier: workspace:*
+        version: link:../../packages/prompt
+      '@yukino.js/remote':
+        specifier: workspace:*
+        version: link:../../packages/remote
+      '@yukino.js/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+      '@yukino.js/session':
+        specifier: workspace:*
+        version: link:../../packages/session
+      '@yukino.js/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
+      '@yukino.js/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@yukino.js/subagent':
+        specifier: workspace:*
+        version: link:../../packages/subagent
+      '@yukino.js/teams':
+        specifier: workspace:*
+        version: link:../../packages/teams
+      '@yukino.js/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
+      '@yukino.js/theme':
+        specifier: workspace:*
+        version: link:../../packages/theme
+      '@yukino.js/todo':
+        specifier: workspace:*
+        version: link:../../packages/todo
+      '@yukino.js/tool-result':
+        specifier: workspace:*
+        version: link:../../packages/tool-result
+      '@yukino.js/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+      '@yukino.js/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@yukino.js/update':
+        specifier: workspace:*
+        version: link:../../packages/update
+      '@yukino.js/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+      '@yukino.js/version':
+        specifier: workspace:*
+        version: link:../../packages/version
+      '@yukino.js/vscode':
+        specifier: workspace:*
+        version: link:../../packages/vscode
+      '@yukino.js/websocket-security':
+        specifier: workspace:*
+        version: link:../../packages/websocket-security
+      '@yukino.js/workflow':
+        specifier: workspace:*
+        version: link:../../packages/workflow
+      '@yukino.js/worktree':
+        specifier: workspace:*
+        version: link:../../packages/worktree
       pino-pretty:
         specifier: ^13.2.0
         version: 13.2.0
@@ -908,9 +950,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -957,9 +999,9 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1030,9 +1072,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1070,21 +1112,55 @@ importers:
         specifier: workspace:*
         version: link:../tools
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
 
-  packages/build-config:
+  packages/browser:
+    dependencies:
+      '@modelcontextprotocol/ext-apps':
+        specifier: ^2.0.3
+        version: 2.0.3(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/core@2.3.1)(@modelcontextprotocol/server@2.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.6.7)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.1
+        version: 1.32.1(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.7)
+      '@yukino.js/model-context-protocol':
+        specifier: workspace:*
+        version: link:../model-context-protocol
+      '@yukino.js/theme':
+        specifier: workspace:*
+        version: link:../theme
+      dompurify:
+        specifier: ^3.4.17
+        version: 3.4.17
+      marked:
+        specifier: ^18.1.1
+        version: 18.1.1
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+      shiki:
+        specifier: ^4.5.0
+        version: 4.5.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
-      tsdown:
-        specifier: ^0.23.1
-        version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+      '@tailwindcss/postcss':
+        specifier: ^4.3.3
+        version: 4.3.3
+      postcss:
+        specifier: ^8.5.31
+        version: 8.5.31
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.31)(supports-color@10.2.2)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
 
   packages/commands:
     dependencies:
@@ -1125,9 +1201,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1153,9 +1229,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1184,9 +1260,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1215,9 +1291,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1261,9 +1337,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1283,9 +1359,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1302,9 +1378,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1327,9 +1403,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1346,9 +1422,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1377,9 +1453,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1420,9 +1496,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1439,9 +1515,9 @@ importers:
         specifier: ^10.4.0
         version: 10.4.0
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1458,9 +1534,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1507,9 +1583,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1544,9 +1620,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1578,12 +1654,21 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
+
+  packages/pkg-build:
+    devDependencies:
+      tsdown:
+        specifier: ^0.23.1
+        version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/plan-file:
     dependencies:
@@ -1597,9 +1682,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1622,9 +1707,9 @@ importers:
         specifier: workspace:*
         version: link:../workflow
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1734,55 +1819,12 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
-
-  packages/remote-browser:
-    dependencies:
-      '@modelcontextprotocol/ext-apps':
-        specifier: ^2.0.3
-        version: 2.0.3(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/core@2.3.1)(@modelcontextprotocol/server@2.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.6.7)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.32.1
-        version: 1.32.1(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.7)
-      '@yukino.js/model-context-protocol':
-        specifier: workspace:*
-        version: link:../model-context-protocol
-      '@yukino.js/theme':
-        specifier: workspace:*
-        version: link:../theme
-      dompurify:
-        specifier: ^3.4.17
-        version: 3.4.17
-      marked:
-        specifier: ^18.1.1
-        version: 18.1.1
-      react:
-        specifier: 19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
-      shiki:
-        specifier: ^4.5.0
-        version: 4.5.0
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4.3.3
-        version: 4.3.3
-      postcss:
-        specifier: ^8.5.31
-        version: 8.5.31
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.31)(supports-color@10.2.2)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
 
   packages/sandbox:
     dependencies:
@@ -1790,9 +1832,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1830,9 +1872,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1858,9 +1900,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1871,9 +1913,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1941,9 +1983,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -1981,9 +2023,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2006,9 +2048,9 @@ importers:
         specifier: workspace:*
         version: link:../version
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2080,9 +2122,9 @@ importers:
         specifier: ^4.5.0
         version: 4.5.0
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2105,9 +2147,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2130,9 +2172,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2206,9 +2248,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2357,9 +2399,9 @@ importers:
         specifier: ^10.0.2
         version: 10.0.2
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2373,9 +2415,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2389,9 +2431,9 @@ importers:
         specifier: workspace:*
         version: link:../tools
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2402,9 +2444,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2427,18 +2469,18 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
 
   packages/websocket-security:
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2482,9 +2524,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)
@@ -2507,9 +2549,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@yukino.js/build-config':
+      '@yukino.js/pkg-build':
         specifier: workspace:*
-        version: link:../build-config
+        version: link:../pkg-build
       tsdown:
         specifier: ^0.23.1
         version: 0.23.1(tsx@4.23.15)(typescript@5.9.3)

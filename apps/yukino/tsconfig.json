@@ -14,7 +14,7 @@
     "exactOptionalPropertyTypes": false,
     "paths": {
       "@/*": ["./src/*"],
-      "#/*": ["../../packages/remote-browser/src/*"]
+      "#/*": ["../../packages/browser/src/*"]
     },
     "forceConsistentCasingInFileNames": true,
     "strict": true,

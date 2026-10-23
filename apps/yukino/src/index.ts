@@ -5,7 +5,7 @@
 // at build time by the ban-ui-only-deps rolldown plugin in
 // tsdown.config.ts: reaching one of them fails the build. react is in that set —
 // nothing outside the terminal layer may use it; react-dom is imported only by
-// the standalone browser bundle (packages/remote-browser), outside this graph.
+// the standalone browser bundle (packages/browser), outside this graph.
 
 export * from "@yukino.js/a2a";
 export * from "@yukino.js/acp";

@@ -2,18 +2,16 @@
 //
 // Packages consume this through a tiny `tsdown.config.ts`:
 //
-//   import { definePkgBuild } from "@yukino.js/build-config";
+//   import { definePkgBuild } from "@yukino.js/pkg-build";
 //   export default definePkgBuild();
 //
 // Conventions:
-// - Every file under src/ becomes its own entry so the `"./*"` wildcard
-//   export keeps working against dist/ (deep imports like
-//   `@yukino.js/tools/types.js` map to `dist/types.js` 1:1).
+// - Every file under src/ becomes its own entry, preserving relative
+//   imports and worker locations in local dist/ builds.
 // - ESM-only output (the workspace is `"type": "module"`), Node 20 target.
 // - Runtime dependencies stay external; consumers resolve them from their
-//   own node_modules at publish time.
-// - Declarations are emitted next to the JS so `publishConfig.exports` can
-//   point `types` at dist/ when the package is published.
+//   own node_modules when loading these local builds.
+// - Declarations are emitted next to the JS for local build verification.
 import { readFileSync } from "node:fs";
 
 import type { UserConfig } from "tsdown";
@@ -58,8 +56,7 @@ export const definePkgBuild = (
     clean: true,
     dts: true,
     // tsdown defaults `fixedExtension` to true for platform: "node" which
-    // emits .mjs/.d.mts. The workspace is `"type": "module"`, so emit
-    // .js/.d.ts instead — the `"./*.js"` publish export mapping relies on it.
+    // emits .mjs/.d.mts. Emit .js/.d.ts to match source import specifiers.
     fixedExtension: false,
     define: { ...define, ...overrides.define },
     ...(overrides.entry ? { entry: overrides.entry } : {}),

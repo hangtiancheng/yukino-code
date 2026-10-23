@@ -1,7 +1,4 @@
-import {
-  chatReducer,
-  initialState,
-} from "@yukino.js/remote-browser/hooks/use-chat.js";
+import { chatReducer, initialState } from "#/hooks/use-chat.js";
 import { describe, expect, it } from "vitest";
 
 describe("browser transcript identity", () => {

@@ -22,4 +22,4 @@ Every workspace package under `packages/` centralizes its module-level constants
 - Never add compatibility re-exports. When a symbol moves, update every importer — including `tests/` — to the new path.
 - Barrels: `index.ts` files re-export their siblings flat (`export * from "./constants.js";`, `export * from "./prompts.js";`) in alphabetical order. Namespace re-exports (`export * as X`) are banned — the public API is flat named exports.
 - Cross-package imports use the package specifier (`@yukino.js/<module>/<file>.js`); files inside one package import siblings relatively. The `@/` alias only covers the CLI entry files left in apps/yukino/src (cli.ts, main.tsx, index.ts, print-mode.ts, recover.ts).
-- `packages/theme` is consumed by `packages/remote-browser` (and every other package) through its `@yukino.js/theme/<file>.js` exports; keep its constants browser-safe.
+- `packages/theme` is consumed by `packages/browser` (and every other package) through its `@yukino.js/theme/<file>.js` exports; keep its constants browser-safe.

@@ -1,7 +1,4 @@
-import {
-  renderMarkdownBlock,
-  tokenizeMarkdown,
-} from "@yukino.js/remote-browser/lib/markdown.js";
+import { renderMarkdownBlock, tokenizeMarkdown } from "#/lib/markdown.js";
 import { load } from "cheerio";
 import { describe, expect, it, vi } from "vitest";
 

@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -19,6 +26,76 @@ const moduleSpecifier = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
 // JSDoc examples may quote specifiers that are not real dependencies.
 const stripComments = (text: string): string =>
   text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+describe("private workspace distribution", () => {
+  it("packs without private workspace runtime dependencies", () => {
+    const destination = mkdtempSync(join(tmpdir(), "yukino-pack-"));
+    try {
+      execFileSync(
+        "pnpm",
+        ["pack", "--ignore-scripts", "--pack-destination", destination],
+        {
+          cwd: pkgRoot,
+          stdio: "pipe",
+        },
+      );
+      const tarball = readdirSync(destination).find((file) =>
+        file.endsWith(".tgz"),
+      );
+      expect(tarball).toBeDefined();
+      const manifest = execFileSync(
+        "tar",
+        ["-xOf", join(destination, tarball ?? ""), "package/package.json"],
+        {
+          encoding: "utf-8",
+        },
+      );
+      const packed = z
+        .object({
+          dependencies: z.record(z.string(), z.string()).optional(),
+          optionalDependencies: z.record(z.string(), z.string()).optional(),
+          peerDependencies: z.record(z.string(), z.string()).optional(),
+        })
+        .parse(JSON.parse(manifest));
+      const runtimeDependencies = {
+        ...packed.dependencies,
+        ...packed.optionalDependencies,
+        ...packed.peerDependencies,
+      };
+      expect(
+        Object.keys(runtimeDependencies).filter((name) =>
+          name.startsWith("@yukino.js/"),
+        ),
+      ).toEqual([]);
+      expect(
+        Object.values(runtimeDependencies).filter((value) =>
+          value.startsWith("workspace:"),
+        ),
+      ).toEqual([]);
+    } finally {
+      rmSync(destination, { recursive: true, force: true });
+    }
+  });
+
+  it("bundles workspace imports in CLI and library chunks and declarations", () => {
+    for (const directory of [join(pkgRoot, "dist"), libDir]) {
+      for (const file of readdirSync(directory)) {
+        if (!file.endsWith(".js") && !file.endsWith(".d.ts")) {
+          continue;
+        }
+        const code = stripComments(
+          readFileSync(join(directory, file), "utf-8"),
+        );
+        for (const [, specifier] of code.matchAll(moduleSpecifier)) {
+          expect(
+            specifier.startsWith("@yukino.js/"),
+            `${file}: ${specifier}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+});
 
 describe("cli entry (dist/main.js)", () => {
   it("keeps the shebang for the bin target", () => {
@@ -72,7 +149,7 @@ describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
     }
   });
 
-  it("loads in plain node and exposes the agent API", () => {
+  it("loads without optional telemetry dependencies and exposes the agent API", () => {
     const scriptFile = fileURLToPath(
       new URL("./library-entry-script.js", import.meta.url),
     );

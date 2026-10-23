@@ -42,7 +42,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
-    "@yukino.js/build-config": "workspace:*",
+    "@yukino.js/pkg-build": "workspace:*",
     "tsdown": "^0.23.1"
   }
 }
