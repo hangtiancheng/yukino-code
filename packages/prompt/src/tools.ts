@@ -1,4 +1,4 @@
-import { MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
+import { MCP_TOOL_PREFIX } from "@yukino.js/model-context-protocol/constants.js";
 import { WORKFLOW_RULE } from "@yukino.js/workflow/prompts.js";
 
 import { DEFERRED_GUIDANCE_MARKER, TOOL_GUIDANCE_MARKER } from "./constants.js";

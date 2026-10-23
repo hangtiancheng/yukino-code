@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@yukino.js/mcp": "workspace:*",
+    "@yukino.js/model-context-protocol": "workspace:*",
     "@yukino.js/theme": "workspace:*",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@modelcontextprotocol/sdk": "^1.32.1",

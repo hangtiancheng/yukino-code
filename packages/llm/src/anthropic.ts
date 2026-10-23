@@ -17,8 +17,8 @@ import {
 import type { ConversationManager, Message } from "@yukino.js/conversation";
 import { ensureToolPairing } from "@yukino.js/conversation/pairing.js";
 import { createChildLogger } from "@yukino.js/logger";
-import { NATIVE_TOOL_USE_BETA } from "@yukino.js/mcp/constants.js";
-import { isOfficialAnthropicEndpoint } from "@yukino.js/mcp/strategy.js";
+import { NATIVE_TOOL_USE_BETA } from "@yukino.js/model-context-protocol/constants.js";
+import { isOfficialAnthropicEndpoint } from "@yukino.js/model-context-protocol/strategy.js";
 import { normalizeToolResultContentBlock } from "@yukino.js/tools/types.js";
 import type {
   AnthropicToolSchema,

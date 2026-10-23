@@ -1,5 +1,8 @@
-import { McpAppSchema } from "@yukino.js/mcp/apps.js";
-import type { McpApp, McpAppRequest } from "@yukino.js/mcp/apps.js";
+import { McpAppSchema } from "@yukino.js/model-context-protocol/apps.js";
+import type {
+  McpApp,
+  McpAppRequest,
+} from "@yukino.js/model-context-protocol/apps.js";
 import { z } from "zod";
 
 /**

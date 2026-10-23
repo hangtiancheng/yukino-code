@@ -5,11 +5,11 @@ import {
   decideMode,
   isOfficialAnthropicEndpoint,
   measureSchemaChars,
-} from "@yukino.js/mcp/strategy.js";
+} from "@yukino.js/model-context-protocol/strategy.js";
 import {
   buildMcpToolName,
   mcpToolNamePrefix,
-} from "@yukino.js/mcp/tool-wrapper.js";
+} from "@yukino.js/model-context-protocol/tool-wrapper.js";
 import { extractContent } from "@yukino.js/permissions";
 import {
   McpCallTool,

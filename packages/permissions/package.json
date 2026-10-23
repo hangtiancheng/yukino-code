@@ -8,8 +8,28 @@
     "./*": "./src/*",
     "./package.json": "./package.json"
   },
-  "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./*.js": {
+        "types": "./dist/*.d.ts",
+        "default": "./dist/*.js"
+      },
+      "./*": {
+        "types": "./dist/*.d.ts",
+        "default": "./dist/*.js"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@yukino.js/logger": "workspace:*",
@@ -20,5 +40,14 @@
     "@yukino.js/worktree": "workspace:*",
     "js-yaml": "^4.3.2",
     "zod": "^4.6.7"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prepublishOnly": "pnpm run build"
+  },
+  "devDependencies": {
+    "@yukino.js/build-config": "workspace:*",
+    "tsdown": "^0.23.1"
   }
 }

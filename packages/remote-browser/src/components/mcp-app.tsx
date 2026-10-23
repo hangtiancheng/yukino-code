@@ -8,8 +8,8 @@ import {
   ReadResourceResultSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import type { McpApp } from "@yukino.js/mcp/apps.js";
-import { MCP_APP_MIME_TYPE } from "@yukino.js/mcp/constants.js";
+import type { McpApp } from "@yukino.js/model-context-protocol/apps.js";
+import { MCP_APP_MIME_TYPE } from "@yukino.js/model-context-protocol/constants.js";
 import { useContext, useEffect, useRef, useState } from "react";
 
 import {

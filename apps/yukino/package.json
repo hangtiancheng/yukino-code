@@ -76,11 +76,11 @@
     "access": "public"
   },
   "scripts": {
-    "dev:browser": "cd ../../packages/remote-browser && tsup --watch",
-    "build:browser": "cd ../../packages/remote-browser && rm -rf ./dist && tsup",
+    "dev:browser": "pnpm --filter @yukino.js/remote-browser run dev",
+    "build:browser": "pnpm --filter @yukino.js/remote-browser run build",
     "preview:browser": "pnpm dlx serve ../../packages/remote-browser/dist",
     "dev": "pnpm build:browser && tsx ./src/cli.ts",
-    "build": "pnpm build:browser && rm -rf ./dist && tsup",
+    "build": "pnpm build:browser && rm -rf ./dist && tsdown",
     "lint": "eslint --cache --quiet ./src ./tests ../../packages",
     "lint:fix": "eslint --cache --fix --quiet ./src ./tests ../../packages",
     "test": "vitest run --maxWorkers=8",
@@ -121,7 +121,7 @@
     "@yukino.js/llm": "workspace:*",
     "@yukino.js/logger": "workspace:*",
     "@yukino.js/lsp": "workspace:*",
-    "@yukino.js/mcp": "workspace:*",
+    "@yukino.js/model-context-protocol": "workspace:*",
     "@yukino.js/memory": "workspace:*",
     "@yukino.js/permissions": "workspace:*",
     "@yukino.js/plan-file": "workspace:*",
@@ -214,7 +214,7 @@
     "postcss": "^8.5.31",
     "prettier": "^3.9.10",
     "tailwindcss": "^4.3.3",
-    "tsup": "^8.5.1",
+    "tsdown": "^0.23.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"

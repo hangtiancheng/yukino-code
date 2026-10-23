@@ -19,10 +19,10 @@ import { ConversationManager } from "@yukino.js/conversation";
 import { GoalManager, handleGoalCommand } from "@yukino.js/goal";
 import { recordInput } from "@yukino.js/history";
 import { createClient } from "@yukino.js/llm/client.js";
-import { MCPManager } from "@yukino.js/mcp/manager.js";
-import { decideAndApply } from "@yukino.js/mcp/strategy.js";
-import { MCPToolWrapper } from "@yukino.js/mcp/tool-wrapper.js";
 import { loadInstructions } from "@yukino.js/memory/instructions.js";
+import { MCPManager } from "@yukino.js/model-context-protocol/manager.js";
+import { decideAndApply } from "@yukino.js/model-context-protocol/strategy.js";
+import { MCPToolWrapper } from "@yukino.js/model-context-protocol/tool-wrapper.js";
 import { PermissionChecker } from "@yukino.js/permissions";
 import {
   buildSystemPrompt,

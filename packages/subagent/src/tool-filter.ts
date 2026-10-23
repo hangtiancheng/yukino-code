@@ -1,4 +1,4 @@
-import { MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
+import { MCP_TOOL_PREFIX } from "@yukino.js/model-context-protocol/constants.js";
 import type { PermissionMode } from "@yukino.js/permissions";
 import { LoadSkillTool } from "@yukino.js/skills/load-skill-tool.js";
 import { TaskStopTool } from "@yukino.js/teams/task-stop.js";

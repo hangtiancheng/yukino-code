@@ -15,7 +15,7 @@ import {
 } from "@yukino.js/config/provider-config.js";
 import * as providerLogin from "@yukino.js/config/provider-login.js";
 import * as historyMod from "@yukino.js/history";
-import { MCPClient } from "@yukino.js/mcp/client.js";
+import { MCPClient } from "@yukino.js/model-context-protocol/client.js";
 import {
   createRemoteAgent,
   RemoteServer,

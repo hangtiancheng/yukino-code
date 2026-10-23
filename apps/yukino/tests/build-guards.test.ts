@@ -16,7 +16,7 @@ import {
   findAmbiguousExports,
   uiOnlyDeps,
   uiOnlyPattern,
-} from "../tsup.config.js";
+} from "../tsdown.config.js";
 
 const appRoot = join(import.meta.dirname, "..");
 const repoRoot = join(appRoot, "..", "..");
@@ -100,13 +100,15 @@ const deriveUIOnlyDeps = (): string[] => {
   // (react, react-dom, dompurify, marked) must not count as import sites here.
   const browserPrefix = "packages/remote-browser/";
 
-  // Per-package pnpm node_modules trees hold symlinked dependencies whose
-  // shipped .d.ts files would otherwise count as non-terminal import sites.
+  // Excluded from the scan: pnpm node_modules trees hold symlinked
+  // dependencies whose shipped .d.ts files would count as import sites, and
+  // per-package dist builds (`pnpm build:packages`) emit bundled .d.ts files
+  // that re-state terminal-layer imports — both are artifacts, not sources.
   const walk = (directory: string): void => {
     for (const entry of ts.sys.readDirectory(
       directory,
       [".ts", ".tsx"],
-      ["**/node_modules/**"],
+      ["**/node_modules/**", "**/dist/**"],
     )) {
       const relativeEntry = entry
         .slice(repoRoot.length + 1)

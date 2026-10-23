@@ -8,11 +8,11 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@yukino\.js\/([a-z0-9-]+)\/(.*)$/,
+        find: /^@yukino\.js\/(?!yukino(?:\/|$))([a-z0-9-]+)\/(.*)$/,
         replacement: resolve(repoRoot, "packages/$1/src/$2"),
       },
       {
-        find: /^@yukino\.js\/([a-z0-9-]+)$/,
+        find: /^@yukino\.js\/(?!yukino$)([a-z0-9-]+)$/,
         replacement: resolve(repoRoot, "packages/$1/src/index.ts"),
       },
       {

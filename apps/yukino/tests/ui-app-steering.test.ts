@@ -12,7 +12,7 @@ import type { FeedbackOptions } from "@yukino.js/feedback/types.js";
 import { loadInputTexts as loadPromptHistory } from "@yukino.js/history";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
-import { MCPClient } from "@yukino.js/mcp/client.js";
+import { MCPClient } from "@yukino.js/model-context-protocol/client.js";
 import { PermissionChecker } from "@yukino.js/permissions";
 import * as sessionMod from "@yukino.js/session";
 import { AgentTool } from "@yukino.js/subagent/agent-tool.js";

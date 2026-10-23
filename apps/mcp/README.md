@@ -436,7 +436,7 @@ pnpm --filter @yukino.js/mcp dev         # build UI + run over stdio
 | Command                                  | Description                        |
 | ---------------------------------------- | ---------------------------------- |
 | `pnpm --filter @yukino.js/mcp dev`       | Build UI + run over stdio          |
-| `pnpm --filter @yukino.js/mcp build`     | Bundle (tsup) + build UI           |
+| `pnpm --filter @yukino.js/mcp build`     | Bundle (tsdown) + build UI         |
 | `pnpm --filter @yukino.js/mcp test`      | Build UI + vitest                  |
 | `pnpm --filter @yukino.js/mcp happy:fix` | Typecheck, format, build and tests |
 | `pnpm build` (root)                      | Build every workspace app          |

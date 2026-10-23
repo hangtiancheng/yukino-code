@@ -29,11 +29,14 @@
  * model than a local type error.
  */
 
-import { MCP_NAME_SEP, MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
+import {
+  MCP_NAME_SEP,
+  MCP_TOOL_PREFIX,
+} from "@yukino.js/model-context-protocol/constants.js";
 import {
   buildMcpToolName,
   sanitizeSegment,
-} from "@yukino.js/mcp/tool-wrapper.js";
+} from "@yukino.js/model-context-protocol/tool-wrapper.js";
 import { asRecord, strArg } from "@yukino.js/utils";
 
 import {

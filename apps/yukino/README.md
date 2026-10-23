@@ -331,7 +331,7 @@ mcp_servers:
       - "--mcp"
   - name: yukino-mcp # stdio
     command: pnpm
-    args: ["--filter", "@yukino.js/mcp", "dev"]
+    args: ["-F", "@yukino.js/mcp", "dev"]
     # Environment variables for the child process (stdio only; ignored for url servers).
     # Supports ${VAR}, ${VAR:-default}, $VAR; an unset variable without a default fails the
     # connection.
@@ -883,8 +883,8 @@ Image decoding, compression, and screenshot transforms run in a cancellable work
 
 The library entry is terminal-independent by contract: it must never reach `src/ui/**` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can import it. `pnpm build` enforces that contract:
 
-- **ui-only dependency ban** — the `ban-ui-only-deps` plugin in `tsup.config.ts` fails the build when a bundle-reachable module imports one of the ui-only packages (`ink`, `react`, `chalk`, `ansi-escapes`, …) or a path inside `src/ui`. The list is declared once in `tsup.config.ts` and re-derived from the actual import sites by `tests/build-guards.test.ts`, which fails if the two drift apart.
-- **`react` is banned, `react-dom` never appears** — the barrel does not re-export `src/ui/**`, so `react` is reached exclusively from the terminal layer; `react-dom` is imported only by the standalone browser bundle (`src/remote/browser`, built separately via `pnpm build:browser`), which is not part of the library graph.
+- **ui-only dependency ban** — the `ban-ui-only-deps` plugin in `tsdown.config.ts` fails the build when a bundle-reachable module imports one of the ui-only packages (`ink`, `react`, `chalk`, `ansi-escapes`, …) or a path inside `src/ui`. The list is declared once in `tsdown.config.ts` and re-derived from the actual import sites by `tests/build-guards.test.ts`, which fails if the two drift apart.
+- **`react` is banned, `react-dom` never appears** — the barrel does not re-export `src/ui/**`, so `react` is reached exclusively from the terminal layer; `react-dom` is imported only by the standalone browser bundle (`packages/remote-browser`, built separately via `pnpm build:browser`), which is not part of the library graph.
 - **Ambiguous export scan** — once the bundle is written, the build runs the TypeScript ambiguous-export check (`TS2308`) over the library graph. A name exported by two `export *` sources is dropped by the bundler without any warning; the scan turns that into a build failure instead of a quietly smaller public API.
 
 In a long-lived host process, prefer the composable modules (`Agent`, `ToolRegistry`, …) over the process-level entry points (`print-mode`, `recover`), which own process lifecycle — `recover` installs crash logging to `~/.yukino/crash.log` and calls `process.exit()`, and `print-mode` exits on invalid flags.

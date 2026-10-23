@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { uiOnlyPattern } from "../tsup.config.js";
+import { uiOnlyPattern } from "../tsdown.config.js";
 
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const libDir = join(pkgRoot, "dist", "lib");

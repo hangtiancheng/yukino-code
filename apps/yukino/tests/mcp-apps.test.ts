@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { McpAppToolResult } from "@yukino.js/mcp/apps.js";
-import { MCPClient } from "@yukino.js/mcp/client.js";
-import { MCPManager } from "@yukino.js/mcp/manager.js";
+import type { McpAppToolResult } from "@yukino.js/model-context-protocol/apps.js";
+import { MCPClient } from "@yukino.js/model-context-protocol/client.js";
+import { MCPManager } from "@yukino.js/model-context-protocol/manager.js";
 import { PermissionChecker } from "@yukino.js/permissions";
 import {
   RemoteMcpApps,

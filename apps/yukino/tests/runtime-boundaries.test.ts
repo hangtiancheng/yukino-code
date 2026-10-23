@@ -14,7 +14,7 @@ import { HookEngine } from "@yukino.js/hooks";
 import type { LLMClient } from "@yukino.js/llm/client.js";
 import { ContextTooLongError } from "@yukino.js/llm/errors.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
-import { buildMcpToolName } from "@yukino.js/mcp/tool-wrapper.js";
+import { buildMcpToolName } from "@yukino.js/model-context-protocol/tool-wrapper.js";
 import { PermissionChecker } from "@yukino.js/permissions";
 import {
   loadSession,

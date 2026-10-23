@@ -68,20 +68,20 @@ import { createClient, type LLMClient } from "@yukino.js/llm/client.js";
 import { discoverModels } from "@yukino.js/llm/model-discovery.js";
 import { createChildLogger } from "@yukino.js/logger";
 import type { LspServerConfig } from "@yukino.js/lsp/config.js";
-import {
-  McpAppRequestSchema,
-  McpAppToolResultSchema,
-} from "@yukino.js/mcp/apps.js";
-import {
-  retractMcpInstructions,
-  syncMcpInstructions as announceMcpInstructions,
-} from "@yukino.js/mcp/instructions.js";
-import { MCPManager } from "@yukino.js/mcp/manager.js";
-import { decideAndApply } from "@yukino.js/mcp/strategy.js";
-import { MCPToolWrapper } from "@yukino.js/mcp/tool-wrapper.js";
 import { BackgroundMemoryTasks } from "@yukino.js/memory/background.js";
 import { loadInstructions } from "@yukino.js/memory/instructions.js";
 import { MemoryManager } from "@yukino.js/memory/manager.js";
+import {
+  McpAppRequestSchema,
+  McpAppToolResultSchema,
+} from "@yukino.js/model-context-protocol/apps.js";
+import {
+  retractMcpInstructions,
+  syncMcpInstructions as announceMcpInstructions,
+} from "@yukino.js/model-context-protocol/instructions.js";
+import { MCPManager } from "@yukino.js/model-context-protocol/manager.js";
+import { decideAndApply } from "@yukino.js/model-context-protocol/strategy.js";
+import { MCPToolWrapper } from "@yukino.js/model-context-protocol/tool-wrapper.js";
 import {
   PermissionChecker,
   type Decision,

@@ -1,6 +1,9 @@
-import type { McpAppToolResult, McpAppRequest } from "@yukino.js/mcp/apps.js";
-import type { MCPClient } from "@yukino.js/mcp/client.js";
-import { buildMcpToolName } from "@yukino.js/mcp/tool-wrapper.js";
+import type {
+  McpAppToolResult,
+  McpAppRequest,
+} from "@yukino.js/model-context-protocol/apps.js";
+import type { MCPClient } from "@yukino.js/model-context-protocol/client.js";
+import { buildMcpToolName } from "@yukino.js/model-context-protocol/tool-wrapper.js";
 import { requestToolPermission } from "@yukino.js/permissions/request.js";
 import type { PermissionRequestHandler } from "@yukino.js/tools/types.js";
 import { isRecord } from "@yukino.js/utils";

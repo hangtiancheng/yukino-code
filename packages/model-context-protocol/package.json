@@ -1,0 +1,54 @@
+{
+  "name": "@yukino.js/model-context-protocol",
+  "version": "0.0.17",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./*.js": {
+        "types": "./dist/*.d.ts",
+        "default": "./dist/*.js"
+      },
+      "./*": {
+        "types": "./dist/*.d.ts",
+        "default": "./dist/*.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "dependencies": {
+    "@yukino.js/bootstrap": "workspace:*",
+    "@yukino.js/config": "workspace:*",
+    "@yukino.js/images": "workspace:*",
+    "@yukino.js/logger": "workspace:*",
+    "@yukino.js/tools": "workspace:*",
+    "@yukino.js/utils": "workspace:*",
+    "@yukino.js/version": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prepublishOnly": "pnpm run build"
+  },
+  "devDependencies": {
+    "@yukino.js/build-config": "workspace:*",
+    "tsdown": "^0.23.1"
+  }
+}

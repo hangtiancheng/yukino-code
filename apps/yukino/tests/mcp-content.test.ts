@@ -1,7 +1,7 @@
 import {
   expandMcpServerConfigEnvironment,
   mcpContentToToolOutput,
-} from "@yukino.js/mcp/client.js";
+} from "@yukino.js/model-context-protocol/client.js";
 import { isRecord } from "@yukino.js/utils";
 import { describe, it, expect } from "vitest";
 

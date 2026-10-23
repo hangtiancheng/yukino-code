@@ -1,11 +1,11 @@
 import { ConversationManager } from "@yukino.js/conversation";
-import { MCP_INSTRUCTIONS_MARKER } from "@yukino.js/mcp/constants.js";
+import { MCP_INSTRUCTIONS_MARKER } from "@yukino.js/model-context-protocol/constants.js";
 import {
   syncMcpInstructions,
   type McpInstruction,
   type McpInstructionSource,
   type ReminderHistory,
-} from "@yukino.js/mcp/instructions.js";
+} from "@yukino.js/model-context-protocol/instructions.js";
 import { contentToText } from "@yukino.js/utils";
 import { describe, expect, it } from "vitest";
 

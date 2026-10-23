@@ -1,5 +1,5 @@
 import type { UsageInfo } from "@yukino.js/llm/events.js";
-import type { McpApp } from "@yukino.js/mcp/apps.js";
+import type { McpApp } from "@yukino.js/model-context-protocol/apps.js";
 import type { CompactBoundaryPayload } from "@yukino.js/session";
 import type { ToolResultContentBlock } from "@yukino.js/tools/types.js";
 

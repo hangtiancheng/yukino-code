@@ -22,7 +22,7 @@
   },
   "scripts": {
     "dev": "pnpm build:app && tsx ./src/main.ts",
-    "build": "tsup && vite build",
+    "build": "tsdown && vite build",
     "build:app": "vite build",
     "lint": "eslint --cache --quiet ./src ./tests",
     "lint:fix": "eslint --cache --fix --quiet ./src ./tests",
@@ -70,7 +70,7 @@
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "tailwindcss": "^4.3.3",
-    "tsup": "^8.5.1",
+    "tsdown": "^0.23.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.0",

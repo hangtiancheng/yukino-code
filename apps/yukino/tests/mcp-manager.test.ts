@@ -1,6 +1,6 @@
 import type { MCPServerConfig } from "@yukino.js/config";
-import { MCPClient } from "@yukino.js/mcp/client.js";
-import { MCPManager } from "@yukino.js/mcp/manager.js";
+import { MCPClient } from "@yukino.js/model-context-protocol/client.js";
+import { MCPManager } from "@yukino.js/model-context-protocol/manager.js";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 // Neither `command` nor `url`, so MCPClient.connect rejects before touching the

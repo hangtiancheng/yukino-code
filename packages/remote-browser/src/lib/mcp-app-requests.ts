@@ -1,4 +1,4 @@
-import type { McpAppRequest } from "@yukino.js/mcp/apps.js";
+import type { McpAppRequest } from "@yukino.js/model-context-protocol/apps.js";
 
 import {
   MCP_APP_DISCONNECTED,

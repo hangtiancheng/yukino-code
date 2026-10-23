@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createA2aRuntime } from "@yukino.js/a2a/executor.js";
 import * as config from "@yukino.js/config";
 import type { ProviderConfig } from "@yukino.js/config/provider-config.js";
-import { MCPManager } from "@yukino.js/mcp/manager.js";
+import { MCPManager } from "@yukino.js/model-context-protocol/manager.js";
 import * as remote from "@yukino.js/remote/server.js";
 import { describe, expect, it, vi } from "vitest";
 

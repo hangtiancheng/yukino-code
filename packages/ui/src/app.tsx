@@ -72,16 +72,22 @@ import { createClient } from "@yukino.js/llm/client.js";
 import { discoverModels } from "@yukino.js/llm/model-discovery.js";
 import { createChildLogger } from "@yukino.js/logger";
 import type { LspServerConfig } from "@yukino.js/lsp/config.js";
-import {
-  retractMcpInstructions,
-  syncMcpInstructions as announceMcpInstructions,
-} from "@yukino.js/mcp/instructions.js";
-import { MCPManager, type ConnectResult } from "@yukino.js/mcp/manager.js";
-import { applyMode, decideAndApply } from "@yukino.js/mcp/strategy.js";
-import { MCPToolWrapper } from "@yukino.js/mcp/tool-wrapper.js";
 import { BackgroundMemoryTasks } from "@yukino.js/memory/background.js";
 import { loadInstructions } from "@yukino.js/memory/instructions.js";
 import { MemoryManager, type RecallResult } from "@yukino.js/memory/manager.js";
+import {
+  retractMcpInstructions,
+  syncMcpInstructions as announceMcpInstructions,
+} from "@yukino.js/model-context-protocol/instructions.js";
+import {
+  MCPManager,
+  type ConnectResult,
+} from "@yukino.js/model-context-protocol/manager.js";
+import {
+  applyMode,
+  decideAndApply,
+} from "@yukino.js/model-context-protocol/strategy.js";
+import { MCPToolWrapper } from "@yukino.js/model-context-protocol/tool-wrapper.js";
 import { PermissionChecker, type PermissionMode } from "@yukino.js/permissions";
 import { getOrCreatePlanPath, planExists } from "@yukino.js/plan-file";
 import {

@@ -1,4 +1,4 @@
-import { MCP_TOOL_PREFIX } from "@yukino.js/mcp/constants.js";
+import { MCP_TOOL_PREFIX } from "@yukino.js/model-context-protocol/constants.js";
 import { intArg, strArg } from "@yukino.js/utils";
 
 import { QUERY_REQUIRED_ERROR } from "./constants.js";

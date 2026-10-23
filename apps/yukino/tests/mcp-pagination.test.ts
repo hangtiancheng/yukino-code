@@ -1,5 +1,5 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { MCPClient } from "@yukino.js/mcp/client.js";
+import { MCPClient } from "@yukino.js/model-context-protocol/client.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => vi.restoreAllMocks());

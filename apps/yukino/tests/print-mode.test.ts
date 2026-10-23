@@ -16,8 +16,8 @@ import { GoalManager } from "@yukino.js/goal";
 import * as clients from "@yukino.js/llm/client.js";
 import type { StreamEvent } from "@yukino.js/llm/events.js";
 import { OpenAIClient } from "@yukino.js/llm/openai.js";
-import { MCPManager } from "@yukino.js/mcp/manager.js";
-import * as mcpStrategy from "@yukino.js/mcp/strategy.js";
+import { MCPManager } from "@yukino.js/model-context-protocol/manager.js";
+import * as mcpStrategy from "@yukino.js/model-context-protocol/strategy.js";
 import { createRemoteAgent } from "@yukino.js/remote/server.js";
 import { restoreRemoteSession } from "@yukino.js/remote/session-state.js";
 import {

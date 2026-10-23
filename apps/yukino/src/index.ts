@@ -2,8 +2,8 @@
 // package of the yukino monorepo (`export * from "@yukino.js/agent"`).
 // The CLI entry (bin) is dist/main.js; nothing here may import from
 // @yukino.js/ui or any ui-only dependency (ink, chalk, ...). That is enforced
-// at build time by the ban-ui-only-deps esbuild plugin in
-// tsup.config.ts: reaching one of them fails the build. react is in that set —
+// at build time by the ban-ui-only-deps rolldown plugin in
+// tsdown.config.ts: reaching one of them fails the build. react is in that set —
 // nothing outside the terminal layer may use it; react-dom is imported only by
 // the standalone browser bundle (packages/remote-browser), outside this graph.
 
@@ -24,7 +24,7 @@ export * from "@yukino.js/images";
 export * from "@yukino.js/llm";
 export * from "@yukino.js/logger";
 export * from "@yukino.js/lsp";
-export * from "@yukino.js/mcp";
+export * from "@yukino.js/model-context-protocol";
 export * from "@yukino.js/memory";
 export * from "@yukino.js/permissions";
 export * from "@yukino.js/plan-file";
