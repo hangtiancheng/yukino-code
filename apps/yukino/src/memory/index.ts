@@ -1,5 +1,5 @@
 // Submodule namespaces for library consumers (Memory.<Sub>.*).
-export * as Background from "@/memory/consolidation.js";
+export * as Background from "@/memory/background.js";
 export * as Consolidation from "@/memory/consolidation.js";
 export * as Constants from "@/memory/constants.js";
 export * as Extractor from "@/memory/extractor.js";
