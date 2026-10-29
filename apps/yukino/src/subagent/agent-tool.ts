@@ -47,7 +47,8 @@ import {
   filterToolsForAgent,
 } from "@/subagent/tool-filter.js";
 import { LEADER_NAME } from "@/teams/constants.js";
-import type { TeamManager, RunAgent } from "@/teams/index.js";
+import type { Team, TeamManager, RunAgent } from "@/teams/index.js";
+import { TEAM_NAME_PARAM_DESCRIPTION } from "@/teams/prompts.js";
 import { TeamTodoWriteTool } from "@/teams/task-tools.js";
 import { SendMessageTool } from "@/teams/tools.js";
 import { OPERATION_INTERRUPTED_ERROR } from "@/tools/constants.js";
@@ -228,6 +229,10 @@ export class AgentTool implements Tool {
             description: AGENT_KIND_DESCRIPTION,
             default: DEFAULT_AGENT_KIND,
           },
+          team_name: {
+            type: "string",
+            description: TEAM_NAME_PARAM_DESCRIPTION,
+          },
           prompt: {
             type: "string",
             description: PROMPT_PARAMETER_DESCRIPTION,
@@ -345,6 +350,7 @@ export class AgentTool implements Tool {
         definition,
         modelOverride,
         contextSnapshot,
+        strArg(args, "team_name") || undefined,
       );
     }
 
@@ -480,6 +486,7 @@ ${prompt}`;
     definition: AgentDefinition,
     modelOverride?: string,
     contextSnapshot?: ConversationManager,
+    targetTeamName?: string,
   ): Promise<ToolResult> {
     if (!this.teamManager) {
       return {
@@ -487,12 +494,17 @@ ${prompt}`;
         isError: true,
       };
     }
-    const team =
-      this.teamManager.list()[0] ??
-      this.teamManager.create(undefined, {
-        leaderAgentId: LEADER_NAME,
-        description,
-      });
+    let team: Team;
+    try {
+      team =
+        this.teamManager.resolveTeam(targetTeamName) ??
+        this.teamManager.create(undefined, {
+          leaderAgentId: LEADER_NAME,
+          description,
+        });
+    } catch (error) {
+      return { output: asErrorString(error), isError: true };
+    }
     const teamName = team.name;
     const planModeRequired = definition.name === PLAN_AGENT_NAME;
 
@@ -528,7 +540,7 @@ ${prompt}`;
       );
     }
     teammateRegistry.register(
-      new SendMessageTool(this.teamManager, memberName),
+      new SendMessageTool(this.teamManager, memberName, teamName),
     );
     teammateRegistry.register(
       new TeamTodoWriteTool(this.teamManager, teamName, memberName),

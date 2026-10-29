@@ -20,6 +20,7 @@ import {
   PLAN_APPROVAL_RESPONSE_REQUIRED_ERROR,
   SHUTDOWN_LEADER_ONLY_ERROR,
   SHUTDOWN_RESPONSE_APPROVE_REQUIRED_ERROR,
+  TEAM_SCOPE_ERROR,
 } from "@/teams/constants.js";
 import type { TeamManager, Team } from "@/teams/index.js";
 import {
@@ -33,9 +34,10 @@ import {
   TEAM_CREATE_TOOL_DESCRIPTION,
   TEAM_DELETE_TOOL_DESCRIPTION,
   TEAM_DESCRIPTION_PARAM_DESCRIPTION,
+  TEAM_NAME_PARAM_DESCRIPTION,
 } from "@/teams/prompts.js";
 import { shutdownRequest, shutdownResponse } from "@/teams/protocol.js";
-import { getNameRegistry } from "@/teams/registry.js";
+import { sanitizeTeamName } from "@/teams/team-file.js";
 import type {
   Tool,
   ToolContext,
@@ -67,21 +69,19 @@ export class TeamCreateTool implements Tool {
     };
   }
 
-  async execute(
+  execute(
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
-    await this.mgr.deleteAll();
-
     const description = strArg(args, "description");
     const team = this.mgr.create(undefined, {
       leaderAgentId: LEADER_NAME,
       description,
     });
-    return {
+    return Promise.resolve({
       output: buildTeamCreatedMessage(team.name),
       isError: false,
-    };
+    });
   }
 }
 
@@ -92,19 +92,8 @@ export class SendMessageTool implements Tool {
   constructor(
     private mgr: TeamManager,
     private senderName = LEADER_NAME,
+    private teamName?: string,
   ) {}
-
-  // Infer the sender's team: a teammate can look itself up in the roster; the Leader is
-  // not in the roster, so fall back to the current team (only one is active at a time).
-  private senderTeam(): Team | undefined {
-    const teams = this.mgr.list();
-    for (const t of teams) {
-      if (t.getMember(this.senderName)) {
-        return t;
-      }
-    }
-    return teams[0];
-  }
 
   schema(): ToolSchema {
     return {
@@ -113,6 +102,10 @@ export class SendMessageTool implements Tool {
       input_schema: {
         type: "object",
         properties: {
+          team_name: {
+            type: "string",
+            description: TEAM_NAME_PARAM_DESCRIPTION,
+          },
           to: {
             type: "string",
             description: SEND_MESSAGE_TO_DESCRIPTION,
@@ -153,7 +146,23 @@ export class SendMessageTool implements Tool {
   ): Promise<ToolResult> {
     const to = strArg(args, "to");
     const message = strArg(args, "content");
-    const t = this.senderTeam();
+    const teamName = strArg(args, "team_name") || undefined;
+    let t: Team | undefined;
+    try {
+      if (
+        this.teamName &&
+        teamName &&
+        sanitizeTeamName(teamName) !== sanitizeTeamName(this.teamName)
+      ) {
+        return { output: TEAM_SCOPE_ERROR, isError: true };
+      }
+      t = this.mgr.resolveTeam(
+        this.teamName ?? teamName,
+        this.senderName === LEADER_NAME ? undefined : this.senderName,
+      );
+    } catch (error) {
+      return { output: asErrorString(error), isError: true };
+    }
     if (!t) {
       return { output: NO_ACTIVE_TEAM_FOR_SENDER_ERROR, isError: true };
     }
@@ -264,7 +273,6 @@ export class SendMessageTool implements Tool {
     const recipient =
       t.getMember(to)?.name ??
       t.listMembers().find((member) => member.agentId === to)?.name ??
-      getNameRegistry().resolve(to) ??
       to;
     try {
       await t.sendMessage(this.senderName, recipient, message);
@@ -300,20 +308,27 @@ export class TeamListTool implements Tool {
   }
 
   execute(): Promise<ToolResult> {
-    const team = this.mgr.list()[0];
-    if (!team) {
+    const teams = this.mgr.list();
+    if (!teams.length) {
       return Promise.resolve({
         output: NO_ACTIVE_TEAM_MESSAGE,
         isError: false,
       });
     }
-    const members =
-      team
-        .listMembers()
-        .map((member) => `${member.name}${member.active ? " (active)" : ""}`)
-        .join(", ") || "(no members)";
+    const output = teams
+      .map((team) => {
+        const members =
+          team
+            .listMembers()
+            .map(
+              (member) => `${member.name}${member.active ? " (active)" : ""}`,
+            )
+            .join(", ") || "(no members)";
+        return `${team.name}: ${members}`;
+      })
+      .join("\n");
     return Promise.resolve({
-      output: `${team.name}: ${members}`,
+      output,
       isError: false,
     });
   }
@@ -330,14 +345,27 @@ export class TeamDeleteTool implements Tool {
       description: this.description,
       input_schema: {
         type: "object",
-        properties: {},
+        properties: {
+          team_name: {
+            type: "string",
+            description: TEAM_NAME_PARAM_DESCRIPTION,
+          },
+        },
         required: [],
       },
     };
   }
 
-  async execute(): Promise<ToolResult> {
-    const team = this.mgr.list()[0];
+  async execute(
+    _ctx?: ToolContext,
+    args: Record<string, unknown> = {},
+  ): Promise<ToolResult> {
+    let team: Team | undefined;
+    try {
+      team = this.mgr.resolveTeam(strArg(args, "team_name") || undefined);
+    } catch (error) {
+      return { output: asErrorString(error), isError: true };
+    }
     if (!team) {
       return { output: NO_ACTIVE_TEAM_MESSAGE, isError: false };
     }

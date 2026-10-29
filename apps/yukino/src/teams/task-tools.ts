@@ -4,9 +4,15 @@ import {
   LEADER_TASK_REFRESH_INTERVAL_MS,
   NO_TEAM_TASK_BOARD_ERROR,
   TEAM_BOARD_ID_PREFIX,
+  TEAM_SCOPE_ERROR,
 } from "@/teams/constants.js";
 import type { Team, TeamManager } from "@/teams/index.js";
-import { buildTaskAssignmentPrompt } from "@/teams/prompts.js";
+import {
+  buildTaskAssignmentPrompt,
+  TEAM_NAME_PARAM_DESCRIPTION,
+  TEAM_TODO_WRITE_DESCRIPTION,
+} from "@/teams/prompts.js";
+import { sanitizeTeamName } from "@/teams/team-file.js";
 import { PRIVATE_BOARD_ID_PREFIX } from "@/todo/constants.js";
 import type {
   Task,
@@ -15,6 +21,8 @@ import type {
   TodoWriteInput,
 } from "@/todo/index.js";
 import { TodoWriteTool } from "@/todo/tools.js";
+import type { ToolContext, ToolResult, ToolSchema } from "@/tools/types.js";
+import { asErrorString, strArg } from "@/utils/index.js";
 
 class TeamTaskBoard implements TaskBoard {
   constructor(
@@ -25,9 +33,7 @@ class TeamTaskBoard implements TaskBoard {
   ) {}
 
   private board(): { team: Team } | { fallback: TaskBoard } {
-    const team = this.teamName
-      ? this.manager.get(this.teamName)
-      : this.manager.list()[0];
+    const team = this.manager.resolveTeam(this.teamName);
     if (team) {
       return { team };
     }
@@ -88,12 +94,51 @@ class TeamTaskBoard implements TaskBoard {
 
 export class TeamTodoWriteTool extends TodoWriteTool {
   constructor(
-    manager: TeamManager,
-    teamName?: string,
-    agentName = LEADER_NAME,
-    fallback?: TaskBoard,
+    private manager: TeamManager,
+    private teamName?: string,
+    private agentName = LEADER_NAME,
+    private fallback?: TaskBoard,
   ) {
     super(new TeamTaskBoard(manager, teamName, agentName, fallback));
+    this.description += ` ${TEAM_TODO_WRITE_DESCRIPTION}`;
+  }
+
+  override schema(): ToolSchema {
+    const schema = super.schema();
+    schema.input_schema.properties.team_name = {
+      type: "string",
+      description: TEAM_NAME_PARAM_DESCRIPTION,
+    };
+    return schema;
+  }
+
+  override execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
+    const { team_name: _teamName, ...input } = args;
+    const teamName = strArg(args, "team_name") || undefined;
+    if (!teamName) {
+      return super.execute(ctx, input);
+    }
+    try {
+      if (
+        this.teamName &&
+        sanitizeTeamName(teamName) !== sanitizeTeamName(this.teamName)
+      ) {
+        throw new Error(TEAM_SCOPE_ERROR);
+      }
+      return new TodoWriteTool(
+        new TeamTaskBoard(
+          this.manager,
+          teamName,
+          this.agentName,
+          this.fallback,
+        ),
+      ).execute(ctx, input);
+    } catch (error) {
+      return Promise.resolve({ output: asErrorString(error), isError: true });
+    }
   }
 }
 
@@ -102,8 +147,8 @@ export function subscribeLeaderTasks(
   fallback: TaskList,
   listener: (tasks: Task[], boardId: string) => void,
 ): () => void {
-  let team: Team | undefined;
-  let unsubscribeStore: (() => void) | undefined;
+  let teams: Team[] = [];
+  let unsubscribeStores: (() => void)[] = [];
   let signature = "";
   let generation = 0;
   let disposed = false;
@@ -111,20 +156,44 @@ export function subscribeLeaderTasks(
     if (disposed) {
       return;
     }
-    const nextTeam = manager.list()[0];
-    if (nextTeam !== team) {
-      unsubscribeStore?.();
-      team = nextTeam;
+    const nextTeams = manager.list();
+    if (
+      nextTeams.length !== teams.length ||
+      nextTeams.some((team, index) => team !== teams[index])
+    ) {
+      for (const unsubscribe of unsubscribeStores) {
+        unsubscribe();
+      }
+      teams = nextTeams;
       generation++;
-      unsubscribeStore = team
-        ? manager.getTaskStore(team.name).subscribe(refresh)
-        : undefined;
+      unsubscribeStores = teams.map((team) =>
+        manager.getTaskStore(team.name).subscribe(refresh),
+      );
     }
-    const tasks = team
-      ? manager.getTaskStore(team.name).listTasks()
+    const tasks = teams.length
+      ? teams.flatMap((team) =>
+          manager
+            .getTaskStore(team.name)
+            .listTasks()
+            .map((task) =>
+              teams.length === 1
+                ? task
+                : {
+                    ...task,
+                    id: JSON.stringify([team.name, task.id]),
+                    subject: `[${team.name}] ${task.subject}`,
+                    blocks: task.blocks.map((id) =>
+                      JSON.stringify([team.name, id]),
+                    ),
+                    blockedBy: task.blockedBy.map((id) =>
+                      JSON.stringify([team.name, id]),
+                    ),
+                  },
+            ),
+        )
       : fallback.list();
-    const boardId = team
-      ? `${TEAM_BOARD_ID_PREFIX}${team.name}:${generation}`
+    const boardId = teams.length
+      ? `${TEAM_BOARD_ID_PREFIX}${JSON.stringify(teams.map((team) => team.name))}:${generation}`
       : `${PRIVATE_BOARD_ID_PREFIX}${generation}`;
     const nextSignature = JSON.stringify([boardId, tasks]);
     if (signature !== nextSignature) {
@@ -139,7 +208,9 @@ export function subscribeLeaderTasks(
   return () => {
     disposed = true;
     clearInterval(timer);
-    unsubscribeStore?.();
+    for (const unsubscribe of unsubscribeStores) {
+      unsubscribe();
+    }
     unsubscribePrivate();
     unsubscribeTeams();
   };

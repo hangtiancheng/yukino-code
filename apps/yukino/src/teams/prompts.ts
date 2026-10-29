@@ -3,12 +3,15 @@ import type { Task } from "@/todo/index.js";
 import { escapeXml } from "@/utils/xml.js";
 
 export const TEAM_CREATE_TOOL_DESCRIPTION =
-  "Create an automatically named team for coordinating multiple agents. At most one team exists at a time: creating a team deletes any other team, stopping its members.";
+  "Create an automatically named team for coordinating multiple agents. Existing teams and their members keep running. Use the returned team name to target subsequent operations.";
+
+export const TEAM_NAME_PARAM_DESCRIPTION =
+  "Target team name returned by TeamCreate or TeamList. Required when multiple teams match; omitted when only one team matches. Teammates are restricted to their own team.";
 
 export const TEAM_DESCRIPTION_PARAM_DESCRIPTION = "What this team will work on";
 
 export const SEND_MESSAGE_TOOL_DESCRIPTION =
-  "Communicate within an agent team: send a message to a teammate or to the leader mailbox. One-shot subagents cannot receive messages; create Agent kind=\"teammate\" when communication or follow-up assignments are needed. Use to='leader' for the coordinator and to='*' to broadcast to all teammates. In coordinator mode, only the leader can send plan_approval_response; copy request_id, set approve, and give review feedback in content.";
+  "Communicate within an agent team: send a message to a teammate or to the leader mailbox. Use team_name to select a team when multiple teams exist; teammates always use their own team. One-shot subagents cannot receive messages; create Agent kind=\"teammate\" when communication or follow-up assignments are needed. Use to='leader' for the coordinator and to='*' to broadcast within the selected team. In coordinator mode, only the leader can send plan_approval_response; copy request_id, set approve, and give review feedback in content.";
 
 export const SEND_MESSAGE_TO_DESCRIPTION =
   "Teammate name, 'leader' for the coordinator, or '*' to broadcast";
@@ -22,11 +25,13 @@ export const SEND_MESSAGE_REQUEST_ID_DESCRIPTION =
 export const SEND_MESSAGE_APPROVE_DESCRIPTION =
   "Required for shutdown_response and plan_approval_response: whether the request was accepted.";
 
-export const LIST_TEAM_TOOL_DESCRIPTION =
-  "List the current team and its members.";
+export const LIST_TEAM_TOOL_DESCRIPTION = "List all teams and their members.";
 
 export const TEAM_DELETE_TOOL_DESCRIPTION =
-  "Delete the current team and stop its members.";
+  "Delete the selected team and stop its members. Specify team_name when multiple teams exist. Other teams keep running.";
+
+export const TEAM_TODO_WRITE_DESCRIPTION =
+  "Use team_name to select a team's TODO board when multiple teams exist. Teammates always use their own team's board.";
 
 export const TASK_STOP_TOOL_DESCRIPTION =
   "Stop a running teammate or stop a background tool call early (subagent, Bash, PowerShell). Pass exactly one of teammate or task_id. Cancellation waits for cleanup; terminal background tasks leave the active UI while their results remain available through TaskOutput.";

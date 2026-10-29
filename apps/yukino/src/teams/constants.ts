@@ -42,9 +42,6 @@ export const TEAMMATE_COORDINATION_TOOLS: ReadonlySet<string> = new Set([
 //
 // TeamDelete is retained for teardown: teammates are attached to the Team, and once
 // work is done there must be a way to stop them and clean up the team directory.
-// TeamCreate is not here because the Agent tool's teammate path auto-creates a
-// Team if none exists — the Leader simply dispatches teammates
-// without a separate team-creation step.
 export const COORDINATOR_ALLOWED_TOOLS = new Set([
   "Workflow",
   "Goal",
@@ -52,7 +49,9 @@ export const COORDINATOR_ALLOWED_TOOLS = new Set([
   "SendMessage",
   "TaskStop",
   "SyntheticOutput",
+  "TeamCreate",
   "TeamDelete",
+  "TeamList",
   "TodoWrite",
 ]);
 
@@ -96,6 +95,9 @@ export const EMPTY_TEAMMATE_PLAN_MESSAGE = "(The teammate returned no plan.)";
 export const NO_ACTIVE_TEAM_MESSAGE = "No active team.";
 export const NO_ACTIVE_TEAM_FOR_SENDER_ERROR =
   "No active team found for this sender.";
+export const AMBIGUOUS_TEAM_ERROR =
+  "Multiple teams match. Specify team_name; use TeamList to see available teams.";
+export const TEAM_SCOPE_ERROR = "Teammates can only access their own team.";
 export const PLAN_APPROVAL_LEADER_ONLY_ERROR =
   "Only the leader can approve or reject teammate plans.";
 export const PLAN_APPROVAL_RESPONSE_REQUIRED_ERROR =
@@ -174,8 +176,12 @@ export function buildTeammateUnavailableForAssignmentError(
 export function buildTeamCreatedMessage(teamName: string): string {
   return (
     `Team '${teamName}' created. ` +
-    `Use Agent with kind="teammate" to add teammates.`
+    `Use Agent with kind="teammate" and team_name="${teamName}" to add teammates.`
   );
+}
+
+export function buildTeamNotFoundError(teamName: string): string {
+  return `Team '${teamName}' not found.`;
 }
 
 export function buildTeamDeletedMessage(teamName: string): string {

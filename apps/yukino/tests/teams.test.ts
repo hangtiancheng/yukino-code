@@ -398,7 +398,7 @@ describe("teams orchestration", () => {
     expect(() => team.addMember("reviewer")).toThrow("already exists");
   });
 
-  it("TeamCreate sweeps other teams so at most one exists", async () => {
+  it("TeamCreate preserves existing teams, running members, tasks, and persisted teams", async () => {
     const project = cwd();
     const mgr = new TeamManager(project);
 
@@ -412,20 +412,27 @@ describe("teams orchestration", () => {
     });
 
     new TeamManager(project).create("stale");
+    mgr.getTaskStore(old.name).write({ todos: [{ subject: "existing work" }] });
     expect(listTeamNames(project)).toHaveLength(2);
 
     const result = await new TeamCreateTool(mgr).execute(
       { cwd: project },
       { description: "fresh work" },
     );
-    const fresh = mgr.list()[0];
+    const fresh = mgr.list()[1];
     expect(result.isError).toBe(false);
     expect(fresh?.name).not.toBe(old?.name);
     expect(fresh?.description).toBe("fresh work");
     expect(result.output).toContain(fresh?.name);
-    expect(mgr.list()).toHaveLength(1);
-    expect(listTeamNames(project)).toEqual([fresh?.name]);
-    expect(old?.getMember("w1")?.active).toBe(false);
+    expect(mgr.list()).toHaveLength(2);
+    expect(listTeamNames(project).sort()).toEqual(
+      [old.name, fresh.name, "stale"].sort(),
+    );
+    expect(old.getMember("w1")?.active).toBe(true);
+    expect(mgr.getTaskStore(old.name).listTasks()[0]?.subject).toBe(
+      "existing work",
+    );
+    await mgr.deleteAll();
   });
 
   it("creates and deletes the current team without name arguments", async () => {
@@ -442,7 +449,9 @@ describe("teams orchestration", () => {
       "team_name",
     );
     expect(list.name).toBe("TeamList");
-    expect(remove.schema().input_schema.properties).toEqual({});
+    expect(remove.schema().input_schema.properties).toMatchObject({
+      team_name: { type: "string" },
+    });
     expect(remove.schema().input_schema.required).toEqual([]);
     expect((await list.execute()).output).toBe("No active team.");
     expect((await remove.execute()).isError).toBe(false);

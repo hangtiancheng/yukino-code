@@ -149,6 +149,7 @@ import {
   TeamCreateTool,
   SendMessageTool,
   TeamDeleteTool,
+  TeamListTool,
 } from "@/teams/tools.js";
 import { TaskList } from "@/todo/index.js";
 import { TaskStore } from "@/todo/store.js";
@@ -943,6 +944,7 @@ export async function createRemoteAgent(
   registry.register(new TeamCreateTool(teamManager));
   registry.register(new SendMessageTool(teamManager));
   registry.register(new TeamDeleteTool(teamManager));
+  registry.register(new TeamListTool(teamManager));
   registry.register(new TaskStopTool(teamManager, backgroundTaskManager));
   registry.register(new SyntheticOutputTool());
 

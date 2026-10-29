@@ -364,12 +364,7 @@ describe("delegated prompt contracts", () => {
     expect(JSON.stringify(properties.model)).toContain(
       "Most tasks do not need this field",
     );
-    for (const removed of [
-      "name",
-      "team_name",
-      "isolation",
-      "plan_mode_required",
-    ]) {
+    for (const removed of ["name", "isolation", "plan_mode_required"]) {
       expect(properties).not.toHaveProperty(removed);
     }
     tool.defaultFork = false;

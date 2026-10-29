@@ -100,7 +100,7 @@ describe("coordinator tool set", () => {
     // Decides based on config alone, without waiting for a team to be created
     expect(filter("Bash")).toBe(false);
     expect(filter("ReadFile")).toBe(false);
-    expect(filter("TeamCreate")).toBe(false);
+    expect(filter("TeamCreate")).toBe(true);
     expect(filter("Agent")).toBe(true);
   });
 
@@ -124,9 +124,9 @@ describe("coordinator tool set", () => {
     expect(coordinatorActive(false)).toBe(false);
   });
 
-  // In coordinator mode TeamCreate is not on the whitelist; the Agent tool creates the team itself
-  it("does not need TeamCreate", () => {
-    expect(isCoordinatorTool("TeamCreate")).toBe(false);
+  it("allows creating and listing multiple teams", () => {
+    expect(isCoordinatorTool("TeamCreate")).toBe(true);
+    expect(isCoordinatorTool("TeamList")).toBe(true);
   });
 });
 
@@ -352,10 +352,12 @@ describe("coordinator prompt", () => {
       "TaskStop",
       "SyntheticOutput",
       "TeamDelete",
+      "TeamCreate",
+      "TeamList",
     ]) {
       expect(section).toContain(`**${name}**`);
     }
-    for (const name of ["ReadFile", "Bash", "Grep", "TeamCreate"]) {
+    for (const name of ["ReadFile", "Bash", "Grep"]) {
       expect(section).not.toContain(`**${name}**`);
     }
   });

@@ -16,6 +16,7 @@ import {
   TASK_STOP_TASK_ID_DESCRIPTION,
   TASK_STOP_TEAMMATE_DESCRIPTION,
   TASK_STOP_TOOL_DESCRIPTION,
+  TEAM_NAME_PARAM_DESCRIPTION,
 } from "@/teams/prompts.js";
 import type {
   Tool,
@@ -24,7 +25,7 @@ import type {
   ToolResult,
   ToolSchema,
 } from "@/tools/types.js";
-import { strArg } from "@/utils/index.js";
+import { asErrorString, strArg } from "@/utils/index.js";
 
 /** Abort a running teammate or one-shot background Agent/Bash/PowerShell task. */
 export class TaskStopTool implements Tool {
@@ -74,6 +75,10 @@ export class TaskStopTool implements Tool {
           teammate: {
             type: "string",
             description: TASK_STOP_TEAMMATE_DESCRIPTION,
+          },
+          team_name: {
+            type: "string",
+            description: TEAM_NAME_PARAM_DESCRIPTION,
           },
           task_id: {
             type: "string",
@@ -126,24 +131,27 @@ export class TaskStopTool implements Tool {
       return { output: TEAMMATE_STOP_LEADER_ONLY_ERROR, isError: true };
     }
 
-    // Teammate names may collide across teams; only stop within the team that actually has this member to avoid killing a namesake
-    for (const team of this.teamManager.list()) {
-      const member = team.members.get(name);
-      if (!member) {
-        continue;
-      }
-
-      if (!member.active) {
+    try {
+      const team = this.teamManager.resolveTeam(
+        strArg(args, "team_name") || undefined,
+        name,
+      );
+      const member = team?.getMember(name);
+      if (team && member) {
+        if (!member.active) {
+          return {
+            output: buildTeammateNotRunningMessage(name, team.name),
+            isError: false,
+          };
+        }
+        await team.stopMember(name);
         return {
-          output: buildTeammateNotRunningMessage(name, team.name),
+          output: buildTeammateStoppedMessage(name, team.name),
           isError: false,
         };
       }
-      await team.stopMember(name);
-      return {
-        output: buildTeammateStoppedMessage(name, team.name),
-        isError: false,
-      };
+    } catch (error) {
+      return { output: asErrorString(error), isError: true };
     }
 
     return {

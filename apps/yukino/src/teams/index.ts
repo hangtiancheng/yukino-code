@@ -12,12 +12,14 @@ import {
 } from "@/storage/private.js";
 import type { SubagentProgressEvent } from "@/subagent/spawn.js";
 import {
+  AMBIGUOUS_TEAM_ERROR,
   buildInactiveTeammateError,
   buildInvalidTeammateNameError,
   buildMemberNotFoundInTeamError,
   buildStopActiveTeammateError,
   buildTeammateAlreadyRunningError,
   buildTeammateExistsError,
+  buildTeamNotFoundError,
   EMPTY_TEAMMATE_PLAN_MESSAGE,
   IDLE_POLL_INTERVAL_MS,
   INBOXES_DIR_NAME,
@@ -936,6 +938,23 @@ export class TeamManager {
 
   list(): Team[] {
     return [...this.teams.values()];
+  }
+
+  resolveTeam(name?: string, memberName?: string): Team | undefined {
+    if (name) {
+      const team = this.get(name);
+      if (!team) {
+        throw new Error(buildTeamNotFoundError(name));
+      }
+      return memberName && !team.getMember(memberName) ? undefined : team;
+    }
+    const teams = this.list().filter(
+      (team) => !memberName || team.getMember(memberName),
+    );
+    if (teams.length > 1) {
+      throw new Error(AMBIGUOUS_TEAM_ERROR);
+    }
+    return teams[0];
   }
 
   async stopAll(): Promise<void> {

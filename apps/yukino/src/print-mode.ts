@@ -46,6 +46,7 @@ import {
   TeamCreateTool,
   SendMessageTool,
   TeamDeleteTool,
+  TeamListTool,
 } from "@/teams/tools.js";
 import { TaskList } from "@/todo/index.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
@@ -191,6 +192,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   registry.register(new TeamCreateTool(teamManager));
   registry.register(new SendMessageTool(teamManager));
   registry.register(new TeamDeleteTool(teamManager));
+  registry.register(new TeamListTool(teamManager));
   registry.register(new TaskStopTool(teamManager, backgroundTaskManager));
   registry.register(new SyntheticOutputTool());
 

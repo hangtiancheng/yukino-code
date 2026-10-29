@@ -615,7 +615,7 @@ describe("agent output hook", () => {
     ).toEqual(["Agent", "Agent", "Agent", "TeamDelete"]);
   });
 
-  it("keeps previous teammate spawn history when TeamCreate replaces a team", () => {
+  it("keeps previous teammate spawn history when TeamCreate adds a team", () => {
     const send = startLoop();
     for (const toolId of ["a-1", "a-2"]) {
       send(

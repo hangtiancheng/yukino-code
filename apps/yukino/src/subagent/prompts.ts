@@ -48,14 +48,14 @@ ${roles.join("\n")}
 
 With kind="subagent", foreground calls return results inline; run_in_background=true returns a task ID immediately and delivers the final result through a task notification. A background subagent is a cancellable asynchronous tool call, like background Bash or PowerShell: use TaskStop with task_id to stop it early. Completed, failed, or cancelled tasks leave the active UI; TaskOutput can still inspect their archived results. One-shot subagents cannot receive messages or resume after termination.
 
-For communication, follow-up assignments, or iterative collaboration, use an agent team with kind="teammate". The agent joins the current team, creating one if needed; use the returned teammate name with SendMessage. With kind="teammate" and subagent_type="plan", the teammate starts in plan mode, submits a plan, and continues implementation after approval. Forking seeds the new agent from the parent conversation; it does not restore a previous subagent's private conversation. Do not predict results before receiving them.
+For communication, follow-up assignments, or iterative collaboration, use an agent team with kind="teammate". Pass team_name to select an existing team when multiple teams exist. With no teams, a team is created automatically; with one team, it is reused. TeamCreate adds another team without stopping existing teams. Use the returned team and teammate names with SendMessage. With kind="teammate" and subagent_type="plan", the teammate starts in plan mode, submits a plan, and continues implementation after approval. Forking seeds the new agent from the parent conversation; it does not restore a previous subagent's private conversation. Do not predict results before receiving them.
 Role tool restrictions and max_turns apply equally with fork=true and fork=false. Roles have no default model-turn limit; max_turns supplies an explicit limit. Reaching a limit is unfinished work, not successful task completion.
 
 Launch independent tasks together; avoid concurrent writes to the same files. Review returned evidence and integrate it before reporting completion. Worktree isolation separates edits but does not merge them.`;
 }
 
 export const AGENT_KIND_DESCRIPTION =
-  "Execution kind. Defaults to teammate: a persistent agent in the current team, created automatically if needed. Use an agent team with teammate when communication or follow-up assignments are needed. Use subagent for a one-shot tool result without messaging or resumption.";
+  "Execution kind. Defaults to teammate: a persistent agent in the selected team, created automatically if none exists. Specify team_name when multiple teams exist. Use an agent team with teammate when communication or follow-up assignments are needed. Use subagent for a one-shot tool result without messaging or resumption.";
 export const AGENT_MODEL_DESCRIPTION =
   "Override the model for this agent. Most tasks do not need this field; omit it to use the configured model.";
 export const AGENT_WORKTREE_DESCRIPTION =
