@@ -6,7 +6,6 @@ import {
   buildPlanResponseSentMessage,
   buildTeamCreatedMessage,
   buildTeamDeletedMessage,
-  buildTeamExistsError,
   buildTeammateNotFoundError,
   buildTypedMessageSentMessage,
   buildUnsupportedMessageTypeError,
@@ -82,12 +81,6 @@ export class TeamCreateTool implements Tool {
     const name = strArg(args, "name").trim();
     const description = strArg(args, "description");
     try {
-      if (name && this.mgr.get(name)) {
-        return Promise.resolve({
-          output: buildTeamExistsError(name),
-          isError: true,
-        });
-      }
       const team = this.mgr.create(name || undefined, {
         leaderAgentId: LEADER_NAME,
         description,

@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
 import type { PermissionChecker } from "@/permissions/index.js";
 import { createPlanPath } from "@/plan-file/index.js";
 import { buildTeammatePrompt } from "@/prompt/prompts.js";
+import { PRIVATE_DIR_MODE } from "@/storage/constants.js";
 import {
-  mkdirPrivateSync as mkdirSync,
+  mkdirPrivateSync,
   readPrivateFileSync as readFileSync,
 } from "@/storage/private.js";
 import type { SubagentProgressEvent } from "@/subagent/spawn.js";
@@ -19,6 +20,7 @@ import {
   buildStopActiveTeammateError,
   buildTeammateAlreadyRunningError,
   buildTeammateExistsError,
+  buildTeamExistsError,
   buildTeamNotFoundError,
   EMPTY_TEAMMATE_PLAN_MESSAGE,
   IDLE_POLL_INTERVAL_MS,
@@ -79,6 +81,7 @@ import {
   readTeamFile,
   sanitizeTeamName,
   teamDir,
+  teamsBaseDir,
   writeTeamFile,
   type TeamFile,
   type TeamMemberEntry,
@@ -165,7 +168,7 @@ export class Team {
     // config.json and tasks.json at the team root, keeping the layout clean
     // as membership grows.
     this.mailboxDir = join(teamDir(cwd, name), INBOXES_DIR_NAME);
-    mkdirSync(this.mailboxDir, { recursive: true });
+    mkdirPrivateSync(this.mailboxDir, { recursive: true });
     this.leaderMailbox = new FileMailbox(this.mailboxDir, LEADER_NAME);
   }
 
@@ -861,12 +864,24 @@ export class TeamManager {
     name = `team-${randomUUID()}`,
     opts: { leaderAgentId?: string; description?: string } = {},
   ): Team {
-    const existing = this.get(name);
-    if (existing) {
-      return existing;
+    const key = this.teamKey(name);
+    if (this.teams.has(key)) {
+      throw new Error(buildTeamExistsError(name));
+    }
+    mkdirPrivateSync(teamsBaseDir(this.cwd));
+    try {
+      mkdirSync(this.teamDir(name), { mode: PRIVATE_DIR_MODE });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "EEXIST"
+      ) {
+        throw new Error(buildTeamExistsError(name));
+      }
+      throw error;
     }
 
-    const key = this.teamKey(name);
     const team = new Team(name, this.cwd, this.coordinatorMode);
     team.permissionMode = this.permissionChecker?.mode ?? "default";
     team.leaderAgentId = opts.leaderAgentId ?? "";

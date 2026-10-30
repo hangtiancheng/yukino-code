@@ -1,4 +1,9 @@
-import { mkdtempSync as createTempDir, rmSync } from "node:fs";
+import {
+  mkdtempSync as createTempDir,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,7 +19,11 @@ import {
   recordToolStart,
   recordTurnComplete,
 } from "@/teams/progress.js";
-import { listTeamNames, readTeamFile } from "@/teams/team-file.js";
+import {
+  listTeamNames,
+  readTeamFile,
+  teamConfigPath,
+} from "@/teams/team-file.js";
 import {
   TeamListTool,
   SendMessageTool,
@@ -471,6 +480,60 @@ describe("teams orchestration", () => {
     expect(mgr.list()).toHaveLength(2);
     expect(mgr.list()[1]?.name).toMatch(/^team-[a-f0-9-]+$/);
     await mgr.deleteAll();
+  });
+
+  it("rejects persisted duplicate names without restoring members or releasing their work", async () => {
+    const project = cwd();
+    const original = new TeamManager(project);
+    const team = original.create("Auth Work");
+    const member = team.addMember("worker");
+    member.active = true;
+    team.persist();
+    original.getTaskStore(team.name).write({
+      todos: [
+        { subject: "active work", status: "in_progress", owner: "worker" },
+      ],
+    });
+    const path = teamConfigPath(project, team.name);
+    const config = readFileSync(path, "utf8");
+    const fresh = new TeamManager(project);
+    const result = await new TeamCreateTool(fresh).execute(
+      { cwd: project },
+      { name: "auth-work" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("already exists");
+    expect(readFileSync(path, "utf8")).toBe(config);
+    expect(original.getTaskStore(team.name).get("1")).toMatchObject({
+      owner: "worker",
+      status: "in_progress",
+    });
+    expect(team.leaderMailbox.receiveSync()).toEqual([]);
+    expect(fresh.list()).toEqual([]);
+  });
+
+  it("preserves existing team data when its config cannot be parsed", async () => {
+    const project = cwd();
+    const original = new TeamManager(project);
+    original.create("Auth Work");
+    original
+      .getTaskStore("Auth Work")
+      .write({ todos: [{ subject: "saved work" }] });
+    const path = teamConfigPath(project, "Auth Work");
+    writeFileSync(path, "{broken config", "utf8");
+    const fresh = new TeamManager(project);
+    const result = await new TeamCreateTool(fresh).execute(
+      { cwd: project },
+      { name: "auth-work" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(readFileSync(path, "utf8")).toBe("{broken config");
+    expect(original.getTaskStore("Auth Work").get("1")?.subject).toBe(
+      "saved work",
+    );
+    expect(fresh.list()).toEqual([]);
   });
 
   it("creates and deletes the current team without name arguments", async () => {

@@ -109,7 +109,7 @@ describe("team config persistence", () => {
     const displayTeam = manager.create("Refactor Auth");
 
     expect(manager.get("refactor-auth")).toBe(displayTeam);
-    expect(manager.create("refactor-auth")).toBe(displayTeam);
+    expect(() => manager.create("refactor-auth")).toThrow("already exists");
     expect(manager.list()).toEqual([displayTeam]);
     expect(displayTeam.name).toBe("Refactor Auth");
 

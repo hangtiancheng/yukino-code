@@ -61,10 +61,9 @@ function defined<T>(value: T | undefined): T {
   return value;
 }
 
-function startPlanner() {
+function startPlanner(team = manager.create("squad")) {
   const parent = new PermissionChecker(cwd);
   manager.setPermissionChecker(parent);
-  const team = manager.create("squad");
   const checker = parent.forSubagent(cwd, "plan");
   checker.teammate = true;
   checker.planFilePath = createPlanPath();
@@ -263,7 +262,7 @@ describe("coordinator teammate plan reviews", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(team.getMember("planner")?.active).toBe(false);
 
-    const next = startPlanner();
+    const next = startPlanner(team);
     await vi.waitFor(() => {
       expect(next.team.getMember("planner")?.pendingPlanApproval).toBeDefined();
     });
