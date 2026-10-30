@@ -6,6 +6,7 @@ import {
   buildPlanResponseSentMessage,
   buildTeamCreatedMessage,
   buildTeamDeletedMessage,
+  buildTeamExistsError,
   buildTeammateNotFoundError,
   buildTypedMessageSentMessage,
   buildUnsupportedMessageTypeError,
@@ -31,6 +32,7 @@ import {
   SEND_MESSAGE_REQUEST_ID_DESCRIPTION,
   SEND_MESSAGE_TO_DESCRIPTION,
   SEND_MESSAGE_TOOL_DESCRIPTION,
+  TEAM_CREATE_NAME_PARAM_DESCRIPTION,
   TEAM_CREATE_TOOL_DESCRIPTION,
   TEAM_DELETE_TOOL_DESCRIPTION,
   TEAM_DESCRIPTION_PARAM_DESCRIPTION,
@@ -59,6 +61,10 @@ export class TeamCreateTool implements Tool {
       input_schema: {
         type: "object",
         properties: {
+          name: {
+            type: "string",
+            description: TEAM_CREATE_NAME_PARAM_DESCRIPTION,
+          },
           description: {
             type: "string",
             description: TEAM_DESCRIPTION_PARAM_DESCRIPTION,
@@ -73,15 +79,26 @@ export class TeamCreateTool implements Tool {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
+    const name = strArg(args, "name").trim();
     const description = strArg(args, "description");
-    const team = this.mgr.create(undefined, {
-      leaderAgentId: LEADER_NAME,
-      description,
-    });
-    return Promise.resolve({
-      output: buildTeamCreatedMessage(team.name),
-      isError: false,
-    });
+    try {
+      if (name && this.mgr.get(name)) {
+        return Promise.resolve({
+          output: buildTeamExistsError(name),
+          isError: true,
+        });
+      }
+      const team = this.mgr.create(name || undefined, {
+        leaderAgentId: LEADER_NAME,
+        description,
+      });
+      return Promise.resolve({
+        output: buildTeamCreatedMessage(team.name),
+        isError: false,
+      });
+    } catch (error) {
+      return Promise.resolve({ output: asErrorString(error), isError: true });
+    }
   }
 }
 

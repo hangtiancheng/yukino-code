@@ -180,6 +180,10 @@ export function buildTeamCreatedMessage(teamName: string): string {
   );
 }
 
+export function buildTeamExistsError(teamName: string): string {
+  return `Team '${teamName}' already exists. Choose a different name, or target the existing team with team_name='${teamName}'.`;
+}
+
 export function buildTeamNotFoundError(teamName: string): string {
   return `Team '${teamName}' not found.`;
 }

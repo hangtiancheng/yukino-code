@@ -435,6 +435,44 @@ describe("teams orchestration", () => {
     await mgr.deleteAll();
   });
 
+  it("TeamCreate accepts an explicit name and rejects duplicates", async () => {
+    const project = cwd();
+    const mgr = new TeamManager(project);
+    const create = new TeamCreateTool(mgr);
+
+    const named = await create.execute(
+      { cwd: project },
+      { name: "  Refactor Auth  ", description: "auth work" },
+    );
+    expect(named.isError).toBe(false);
+    expect(named.output).toContain("Refactor Auth");
+    expect(mgr.list()[0]?.name).toBe("Refactor Auth");
+    expect(mgr.list()[0]?.description).toBe("auth work");
+    expect(listTeamNames(project)).toEqual(["refactor-auth"]);
+
+    const duplicate = await create.execute(
+      { cwd: project },
+      { name: "refactor-AUTH" },
+    );
+    expect(duplicate.isError).toBe(true);
+    expect(duplicate.output).toContain("already exists");
+    expect(mgr.list()).toHaveLength(1);
+
+    // A name persisted by an earlier session is a duplicate too.
+    const revived = await new TeamCreateTool(new TeamManager(project)).execute(
+      { cwd: project },
+      { name: "Refactor Auth" },
+    );
+    expect(revived.isError).toBe(true);
+    expect(revived.output).toContain("already exists");
+
+    const blank = await create.execute({ cwd: project }, { name: "   " });
+    expect(blank.isError).toBe(false);
+    expect(mgr.list()).toHaveLength(2);
+    expect(mgr.list()[1]?.name).toMatch(/^team-[a-f0-9-]+$/);
+    await mgr.deleteAll();
+  });
+
   it("creates and deletes the current team without name arguments", async () => {
     const project = cwd();
     const mgr = new TeamManager(project);
@@ -442,7 +480,10 @@ describe("teams orchestration", () => {
     const list = new TeamListTool(mgr);
     const remove = new TeamDeleteTool(mgr);
     expect(create.schema().input_schema).toMatchObject({
-      properties: { description: { type: "string" } },
+      properties: {
+        name: { type: "string" },
+        description: { type: "string" },
+      },
       required: [],
     });
     expect(create.schema().input_schema.properties).not.toHaveProperty(

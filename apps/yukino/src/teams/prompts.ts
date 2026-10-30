@@ -3,7 +3,10 @@ import type { Task } from "@/todo/index.js";
 import { escapeXml } from "@/utils/xml.js";
 
 export const TEAM_CREATE_TOOL_DESCRIPTION =
-  "Create an automatically named team for coordinating multiple agents. Existing teams and their members keep running. Use the returned team name to target subsequent operations.";
+  "Create a team for coordinating multiple agents. Pass name to choose the team name, or omit it to auto-generate one. Existing teams and their members keep running. Use the returned team name to target subsequent operations.";
+
+export const TEAM_CREATE_NAME_PARAM_DESCRIPTION =
+  "Name for the new team; auto-generated when omitted. Must not match an existing team (see TeamList).";
 
 export const TEAM_NAME_PARAM_DESCRIPTION =
   "Target team name returned by TeamCreate or TeamList. Required when multiple teams match; omitted when only one team matches. Teammates are restricted to their own team.";
