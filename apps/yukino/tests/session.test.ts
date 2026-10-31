@@ -320,38 +320,28 @@ describe("session save/load round-trip", () => {
     });
   });
 
-  it("migrates legacy array tool-result content while loading", () => {
+  it("skips records with unsupported array tool-result content", () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-sess-"));
-    const id = "legacy-tool-blocks";
+    const id = "unsupported-tool-blocks";
     const dir = join(getSessionsDir(cwd));
     mkdirSync(dir, { recursive: true });
-    const blocks = [
-      { type: "text", text: "legacy screenshot" },
-      {
-        type: "image",
-        source: { type: "base64", media_type: "image/png", data: "QUJD" },
-      },
-      { type: "tool_reference", tool_name: "mcp__legacy__tool" },
-      { type: "thinking", thinking: "must not enter tool_result content" },
-    ];
     writeFileSync(
       join(dir, `${id}.jsonl`),
       JSON.stringify({
         role: "user",
         content: "",
         timestamp: t0,
-        tool_results: [{ tool_use_id: "legacy-1", content: blocks }],
+        tool_results: [
+          {
+            tool_use_id: "tool-1",
+            content: [{ type: "text", text: "unsupported" }],
+          },
+        ],
       }) + "\n",
       "utf-8",
     );
 
-    const restored = rebuildFromSession(loadSession(cwd, id));
-    expect(restored[0]?.toolResults?.[0]?.content).toBe(
-      "legacy screenshot\n[Image: image/png]\n[Tool reference: mcp__legacy__tool]",
-    );
-    expect(restored[0]?.toolResults?.[0]?.contentBlocks).toEqual(
-      blocks.slice(0, 3),
-    );
+    expect(loadSession(cwd, id)).toEqual([]);
   });
 
   it("labels a session by its first user message", () => {
@@ -524,7 +514,7 @@ describe("rebuildFromSession (compacted-state resume)", () => {
     expect(rebuilt).toHaveLength(3); // summary + 1 kept + 1 post-boundary
   });
 
-  it("full-replays an old session with no boundary (backward compatible)", () => {
+  it("replays an uncompacted session in full", () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-sess-"));
     const id = newSessionId();
 

@@ -97,13 +97,6 @@ async function resolvePublicHttpUrl(
   return { url, addresses };
 }
 
-export async function assertPublicHttpUrl(
-  input: string | URL,
-  lookup: HostLookup = defaultLookup,
-): Promise<URL> {
-  return (await resolvePublicHttpUrl(input, lookup)).url;
-}
-
 function responseHeaders(
   headers: Readonly<Record<string, string | string[] | undefined>>,
 ): Headers {

@@ -344,7 +344,7 @@ describe("atomic task/TODO list", () => {
     async (kind) => {
       const rootList = new TaskList();
       rootList.write({ todos: [{ subject: "parent task", description: "" }] });
-      const root = createToolRegistry("/tmp", rootList);
+      const root = createToolRegistry(rootList);
       const clone = () =>
         kind === "fork"
           ? filterToolsForAgent(root, undefined, undefined, false)
@@ -855,7 +855,7 @@ describe("background task output", () => {
           .isError,
       ).toBe(true);
     }
-    const registry = createToolRegistry("/tmp", new TaskList());
+    const registry = createToolRegistry(new TaskList());
     attachBackgroundTaskManager(registry, parent);
     expect(
       (

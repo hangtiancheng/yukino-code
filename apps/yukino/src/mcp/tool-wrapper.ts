@@ -12,14 +12,6 @@ import { asErrorString } from "@/utils/index.js";
 
 const log = createChildLogger({ module: "mcp" });
 
-/**
- * Replaces illegal characters with underscores so the composed tool name passes API validation.
- *
- * Hyphens are technically allowed by the API but are replaced here too (the pattern keeps only
- * `[a-zA-Z0-9_]`): the Go and Python implementations do the same. The same mcp_servers config
- * must produce the same tool name across all four languages, otherwise the same permissions.yaml
- * would stop matching when the language changes.
- */
 export function sanitizeSegment(s: string): string {
   return s.replace(/[^a-zA-Z0-9_]/g, "_");
 }

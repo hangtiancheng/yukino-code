@@ -14,7 +14,6 @@ export const ActiveToolSchema = z.object({
   toolId: z.string(),
   toolName: z.string(),
 });
-export type ActiveTool = z.infer<typeof ActiveToolSchema>;
 
 export const AgentProgressSchema = z.object({
   toolUseCount: z.number(),
@@ -22,7 +21,7 @@ export const AgentProgressSchema = z.object({
   tokenCount: z.number(),
   activeTools: z.array(ActiveToolSchema),
   lastActivity: ToolActivitySchema.optional(),
-  recentActivities: z.array(ToolActivitySchema), // capped history, max 5 entries
+  recentActivities: z.array(ToolActivitySchema),
 });
 export type AgentProgress = z.infer<typeof AgentProgressSchema>;
 
@@ -129,14 +128,6 @@ function describeToolActivity(
     default:
       return toolName;
   }
-}
-
-// Returns only the most recent activity's description for display.
-export function summarizeActivities(activities: ToolActivity[]): string {
-  if (!activities.length) {
-    return "";
-  }
-  return activities[activities.length - 1].activityDescription;
 }
 
 export function formatTokens(n: number): string {

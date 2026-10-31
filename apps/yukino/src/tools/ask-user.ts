@@ -26,8 +26,6 @@ const QuestionOptionSchema = z.object({
   description: z.string().optional(),
 });
 
-export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
-
 const QuestionSchema = z.strictObject({
   question: z.string(),
   options: z.array(QuestionOptionSchema),

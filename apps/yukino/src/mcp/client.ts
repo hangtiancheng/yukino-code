@@ -1,5 +1,3 @@
-// Note that because some servers are still using SSE, clients may need to support both transports during the migration period.
-
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   SSEClientTransport,

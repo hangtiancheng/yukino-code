@@ -96,10 +96,10 @@ describe("Claude capability contracts", () => {
   });
 
   it("exposes EnterPlanMode only where an interactive approval exit exists", () => {
-    const interactive = createToolRegistry(cwd, new TaskList(), {
+    const interactive = createToolRegistry(new TaskList(), {
       interactionMode: "interactive",
     });
-    const nonInteractive = createToolRegistry(cwd, new TaskList(), {
+    const nonInteractive = createToolRegistry(new TaskList(), {
       interactionMode: "non-interactive",
     });
 

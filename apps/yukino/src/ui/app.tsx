@@ -346,7 +346,7 @@ export function App({
     teamManagerRef.current,
   );
   const [toolRegistry] = useState(() =>
-    createToolRegistry(cwd, taskListRef.current, {
+    createToolRegistry(taskListRef.current, {
       interactionMode: "interactive",
       lspServers,
       teamManager: teamManagerRef.current,

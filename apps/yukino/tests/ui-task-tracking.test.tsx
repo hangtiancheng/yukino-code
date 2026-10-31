@@ -57,7 +57,7 @@ function Progress() {
 function mount(
   interactionMode: "interactive" | "non-interactive" = "interactive",
 ) {
-  registry = createToolRegistry(cwd, list, {
+  registry = createToolRegistry(list, {
     interactionMode,
     teamManager: manager,
   });

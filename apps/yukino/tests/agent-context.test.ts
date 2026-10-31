@@ -180,7 +180,7 @@ describe("independent Agent role and context parameters", () => {
     async (fork) => {
       for (const name of ["general-purpose", "plan", "explore", "review"]) {
         const parent = parentConversation();
-        const registry = createToolRegistry(cwd, new TaskList());
+        const registry = createToolRegistry(new TaskList());
         const client: LLMClient = {
           setSystemPrompt: vi.fn(),
           async *stream(conversation, schemas) {

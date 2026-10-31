@@ -711,7 +711,7 @@ describe("ComputerUseTool", () => {
 
 describe("ComputerUse availability", () => {
   it("registers for main agents and filters from all subagent registry paths", () => {
-    const main = createToolRegistry(process.cwd(), new TaskList());
+    const main = createToolRegistry(new TaskList());
     expect(main.get("ComputerUse")).toBeInstanceOf(ComputerUseTool);
 
     const filtered = filterToolsForAgent(main, ["*"], undefined, false);

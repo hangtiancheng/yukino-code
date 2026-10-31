@@ -46,7 +46,7 @@ function registry(
   interactionMode: "interactive" | "non-interactive" = "interactive",
   list = new TaskList(),
 ) {
-  const result = createToolRegistry(cwd, list, {
+  const result = createToolRegistry(list, {
     interactionMode,
     teamManager: manager,
   });

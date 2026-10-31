@@ -1,6 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { createChildLogger } from "@/logger/index.js";
 import { NUMERIC_LITERAL, TOOL_ARGS_SUMMARY_CHARS } from "@/utils/constants.js";
 
 // Submodule namespaces for library consumers (Utils.<Sub>.*).
@@ -11,8 +10,6 @@ export * as PublicHttp from "@/utils/public-http.js";
 export * as Redact from "@/utils/redact.js";
 export * as Slug from "@/utils/slug.js";
 export * as XML from "@/utils/xml.js";
-
-const log = createChildLogger({ module: "utils" });
 
 /**
  * Strips ANSI escape sequences and non-printable control characters and
@@ -103,39 +100,6 @@ export function isObject(value: unknown) {
   return typeof value === "object" && value !== null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function toTry<T extends (...args: any) => any>(
-  fn: T,
-  ctx?: ThisParameterType<T>,
-) {
-  if (typeof fn !== "function") {
-    return fn;
-  }
-  return function (
-    this: ThisParameterType<T>,
-    ...args: Parameters<T>
-  ): ReturnType<T> | undefined {
-    let ret: ReturnType<T>;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      ret = ctx ? fn.call(ctx, ...args) : fn.call(this, ...args);
-    } catch (err) {
-      log.error({ err }, "utils operation failed");
-      return undefined;
-    }
-    return ret;
-  };
-}
-
-export const safeJSONParse = toTry(JSON.parse, JSON);
-
-export function asError(err: unknown) {
-  if (err instanceof Error) {
-    return err;
-  }
-  return new Error(String(err));
-}
-
 // One contract for both JSON numbers and numeric strings: the value must be a
 // finite, fully-parsed number, then it is truncated toward zero. Partial parses
 // ("12abc"), NaN and Infinity fall back instead of leaking a half-parsed value,
@@ -166,13 +130,6 @@ export function intArg(
 ): number {
   return toFiniteInt(args[key]) ?? fallback;
 }
-export function strList(raw: unknown): string[] {
-  if (Array.isArray(raw)) {
-    return raw.filter((v): v is string => typeof v === "string");
-  }
-  return [];
-}
-
 export function strArg(
   args: Record<string, unknown>,
   key: string,

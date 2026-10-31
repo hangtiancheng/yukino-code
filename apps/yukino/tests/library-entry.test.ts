@@ -98,4 +98,30 @@ describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
       expect(type, name).toBe("function");
     }
   });
+
+  it("loads when optional telemetry dependencies are unavailable", () => {
+    const loader = `
+      export function resolve(specifier, context, nextResolve) {
+        if (["@langfuse/", "@opentelemetry/", "@sentry/"].some(prefix => specifier.startsWith(prefix))) {
+          throw new Error("Optional telemetry dependency unavailable: " + specifier);
+        }
+        return nextResolve(specifier, context);
+      }
+    `;
+    const script = `
+      import { register } from "node:module";
+      register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(loader)}`)}, import.meta.url);
+      await import(${JSON.stringify(pathToFileURL(libEntry).href)});
+    `;
+
+    expect(() =>
+      execFileSync(
+        process.execPath,
+        ["--input-type=module", "--eval", script],
+        {
+          encoding: "utf-8",
+        },
+      ),
+    ).not.toThrow();
+  });
 });

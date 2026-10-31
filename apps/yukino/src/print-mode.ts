@@ -173,7 +173,7 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     cwd,
     cfg.enable_coordinator_mode ?? false,
   );
-  const registry = createToolRegistry(cwd, taskList, {
+  const registry = createToolRegistry(taskList, {
     interactionMode: "non-interactive",
     teamManager,
     lspServers: cfg.lsp_servers,

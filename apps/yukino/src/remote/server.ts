@@ -746,7 +746,7 @@ export async function createRemoteAgent(
 
   const taskList = new TaskList(new TaskStore(sessionId));
   const teamManager = new TeamManager(cwd, enableCoordinatorMode);
-  const registry = createToolRegistry(cwd, taskList, {
+  const registry = createToolRegistry(taskList, {
     enableModelPlanMode: opts.enableModelPlanMode,
     interactionMode: opts.interactionMode ?? "interactive",
     teamManager,

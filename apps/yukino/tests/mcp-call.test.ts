@@ -96,7 +96,7 @@ class FakeMcpTool implements MCPToolLike {
   }
 
   execute(
-    ctx: ToolContext,
+    _ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     this.received = args;
@@ -104,7 +104,6 @@ class FakeMcpTool implements MCPToolLike {
   }
 }
 
-// Coercion contract: these cases must match verbatim across all four languages
 describe("coerceBySchema contract", () => {
   const cases: [string, Record<string, unknown>, Record<string, unknown>][] = [
     ["string ← integer", { issueId: 8891 }, { issueId: "8891" }],
@@ -162,7 +161,6 @@ describe("coerceBySchema contract", () => {
     });
   });
 
-  // String-to-number leniency differs per language; these cases pin down shapes all four languages reject
   test("integer does not truncate floats, nor accept underscores or exponents", () => {
     expect(coerceBySchema({ limit: "5.7" }, inputSchema)).toEqual({
       limit: "5.7",

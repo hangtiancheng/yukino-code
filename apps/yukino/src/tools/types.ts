@@ -173,12 +173,6 @@ export function normalizeToolResultContentBlock(
   return normalizeDocumentBlock(value);
 }
 
-export function isToolResultContentBlock(
-  value: unknown,
-): value is ToolResultContentBlock {
-  return normalizeToolResultContentBlock(value) !== null;
-}
-
 export interface ToolResult {
   output: string;
   mcpApp?: McpApp;

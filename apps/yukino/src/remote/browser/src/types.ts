@@ -3,74 +3,14 @@ import { z } from "zod";
 import { McpAppSchema } from "@/mcp/apps.js";
 import type { McpApp, McpAppRequest } from "@/mcp/apps.js";
 
-/**
- * Strict type definitions for the Yukino Remote web client.
- *
- * These mirror the WebSocket message shapes emitted by the remote server.
- * Field names are kept in lowerCamelCase to match the server's JSON output.
- */
-
-/* ───────────────────────── Server → Client messages ───────────────────────── */
-
-export interface ConnectedPayload {
-  session: string;
-  cwd: string;
-}
-
 export interface SlashCommand {
   name: string;
   description: string;
 }
 
-export interface SystemPayload {
-  message: string;
-}
-
-export interface ReplayUserPayload {
-  content: string;
-}
-
-export interface ReplayAssistantPayload {
-  content: string;
-}
-
-export interface StreamTextPayload {
-  text: string;
-}
-
-export interface StreamEndPayload {
-  text: string;
-}
-
-export interface ThinkingTextPayload {
-  text: string;
-}
-
 /** Args are an opaque JSON object coming from the agent; we only peek at a few
  *  well-known preview fields and otherwise stringify the rest. */
 export type ToolArgs = Record<string, unknown> | null;
-
-export interface ToolUsePayload {
-  toolId: string;
-  toolName: string;
-  args: ToolArgs;
-}
-
-export interface ToolResultPayload {
-  toolId: string;
-  toolName: string;
-  output: string;
-  isError: boolean;
-  elapsed: number;
-  mcpApp?: McpApp;
-}
-
-export interface PermissionRequestPayload {
-  id: string;
-  toolName: string;
-  description: string;
-  rememberPatterns?: string[];
-}
 
 export interface QuestionOption {
   label: string;
@@ -83,51 +23,11 @@ export interface Question {
   multiSelect: boolean;
 }
 
-export interface AskUserPayload {
-  id: string;
-  questions: Question[];
-}
-
-export interface TurnCompletePayload {
-  turn: number;
-}
-
-export interface LoopCompletePayload {
-  stopReason: string;
-  totalTurns: number;
-  elapsed: number;
-}
-
 export interface UsagePayload {
   inputTokens: number;
   outputTokens: number;
   /** Live context-window occupancy (terminal footer parity). */
   contextTokens: number;
-  contextWindow: number;
-}
-
-export interface ErrorPayload {
-  message: string;
-}
-
-export interface CompactPayload {
-  message: string;
-}
-
-export interface RetryPayload {
-  reason: string;
-  waitMs: number;
-}
-
-/** Live snapshot of model / permission mode / thinking level. */
-export interface StatusPayload {
-  model: string;
-  provider: string;
-  permissionMode: string;
-  thinkingLevel: string;
-  thinkingLevels: string[];
-  sandboxEnabled: boolean;
-  sandboxAutoAllow: boolean;
   contextWindow: number;
 }
 
@@ -138,18 +38,10 @@ export interface SessionSummary {
   lastUserMessageTime: string | null;
 }
 
-export interface SessionListPayload {
-  sessions: SessionSummary[];
-}
-
 export interface PlanApprovalPayload {
   id: string;
   planPath: string;
   planContent: string;
-}
-
-export interface SteeringPayload {
-  text: string;
 }
 
 export interface TodoTask {

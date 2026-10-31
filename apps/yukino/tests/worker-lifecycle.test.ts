@@ -564,7 +564,7 @@ describe("task board correctness", () => {
   });
   it("keeps leader schemas stable while routing TodoWrite to the team and child tasks to private lists", async () => {
     const privateList = new TaskList();
-    const registry = createToolRegistry(directory, privateList, {
+    const registry = createToolRegistry(privateList, {
       teamManager: manager,
     });
     const schema = registry.get("TodoWrite")?.schema();

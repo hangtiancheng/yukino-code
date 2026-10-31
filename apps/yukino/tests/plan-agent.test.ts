@@ -43,7 +43,7 @@ function fixture(client: LLMClient) {
   conversation.addUserMessage("Plan a fix for the request cancellation bug.");
   conversation.addAssistantFull("I found the relevant lifecycle code.", [], []);
   const checker = new PermissionChecker(cwd, "acceptEdits");
-  const registry = createToolRegistry(cwd, new TaskList());
+  const registry = createToolRegistry(new TaskList());
   const spawn = vi.fn<ConstructorParameters<typeof AgentTool>[2]>(
     (
       definition,

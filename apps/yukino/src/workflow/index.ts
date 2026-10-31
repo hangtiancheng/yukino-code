@@ -5,7 +5,6 @@ export * as Concurrency from "@/workflow/concurrency.js";
 export * as Constants from "@/workflow/constants.js";
 export * as Context from "@/workflow/context.js";
 export * as Errors from "@/workflow/errors.js";
-export * as Events from "@/workflow/events.js";
 export * as Hooks from "@/workflow/hooks.js";
 export * as Journal from "@/workflow/journal.js";
 export * as NamedWorkflows from "@/workflow/named-workflows.js";

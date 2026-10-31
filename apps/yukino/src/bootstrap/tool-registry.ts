@@ -47,7 +47,6 @@ export function removeMcpTools(registry: ToolRegistry): void {
 }
 
 export function createToolRegistry(
-  cwd: string,
   taskList: TaskList,
   options: {
     enableModelPlanMode?: boolean;

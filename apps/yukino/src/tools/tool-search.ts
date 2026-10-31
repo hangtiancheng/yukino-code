@@ -52,7 +52,7 @@ export class ToolSearchTool implements Tool {
   }
 
   execute(
-    ctx: ToolContext,
+    _ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     const query = strArg(args, "query");

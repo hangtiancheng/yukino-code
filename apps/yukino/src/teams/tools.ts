@@ -75,7 +75,7 @@ export class TeamCreateTool implements Tool {
   }
 
   execute(
-    ctx: ToolContext,
+    _ctx: ToolContext,
     args: Record<string, unknown>,
   ): Promise<ToolResult> {
     const name = strArg(args, "name").trim();

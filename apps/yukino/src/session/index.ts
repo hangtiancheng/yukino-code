@@ -81,7 +81,7 @@ const ContentSchema = z.union([
 /** Persisted form of a tool result, paired with a ToolUseRecord via tool_use_id. */
 const ToolResultRecordSchema = z.object({
   tool_use_id: z.string(),
-  content: ContentSchema,
+  content: z.string(),
   content_blocks: z.array(z.unknown()).optional(),
   is_error: z.boolean().optional(),
 });
@@ -473,14 +473,10 @@ function recordsToCamelResults(
   recs?: ToolResultRecord[],
 ): ToolResultBlock[] | undefined {
   return recs?.map((tr) => {
-    const legacyBlocks = Array.isArray(tr.content)
-      ? validContentBlocks(tr.content)
-      : undefined;
-    const contentBlocks = validContentBlocks(tr.content_blocks) ?? legacyBlocks;
+    const contentBlocks = validContentBlocks(tr.content_blocks);
     return {
       toolUseId: tr.tool_use_id,
-      content:
-        typeof tr.content === "string" ? tr.content : contentToText(tr.content),
+      content: tr.content,
       ...(contentBlocks ? { contentBlocks } : {}),
       isError: tr.is_error ?? false,
     };

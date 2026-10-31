@@ -13,7 +13,6 @@
  * The trade-off is that arguments are generated freely by the model with no schema
  * constraint at the interface level, so the JSON type is occasionally wrong.
  * coerceBySchema fixes values level by level against the target tool's full schema.
- * The fix-up rules must be identical, item by item, across all four languages:
  *
  *   schema declares   model provides             coerced to
  *   string            number (not boolean)       "8891"
@@ -54,9 +53,6 @@ import type {
 import { asRecord, strArg } from "@/utils/index.js";
 
 function coerceScalar(value: unknown, want: string): unknown {
-  // boolean must be excluded first: typeof true !== "number", but in other
-  // languages bool is a subclass of int, so all four languages uniformly treat
-  // booleans as not participating in numeric conversion
   if (
     want === "string" &&
     typeof value === "number" &&
@@ -165,9 +161,7 @@ export function coerceBySchema(value: unknown, schema: unknown): unknown {
 /**
  * The content used for permission rule matching, normalized to server__tool.
  *
- * It carries no mcp__ prefix and is unaffected by per-language wrapper naming
- * differences, so the permissions.yaml syntax is completely identical across all
- * four languages: McpCall(linear__create_issue).
+ * It carries no mcp__ prefix: McpCall(linear__create_issue).
  *
  * Both segments must go through sanitize. The model may pass a short name or a full
  * name; the segments in a full name are already processed by the wrapper, while a

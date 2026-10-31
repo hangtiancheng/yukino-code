@@ -23,8 +23,6 @@ export const StoredTaskStatusSchema = z.enum([
   "cancelled",
 ]);
 
-export type StoredTaskStatus = z.infer<typeof StoredTaskStatusSchema>;
-
 const TaskIdSchema = z.string().regex(/^[1-9]\d*$/u);
 
 export const StoredTaskSchema = z.object({

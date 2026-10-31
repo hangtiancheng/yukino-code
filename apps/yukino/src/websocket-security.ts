@@ -72,9 +72,3 @@ export function rejectWebSocketUpgrade(
       body,
   );
 }
-
-export function addWebSocketToken(url: string, accessToken: string): string {
-  const parsed = new URL(url);
-  parsed.searchParams.set(WEBSOCKET_TOKEN_PARAM, accessToken);
-  return parsed.toString();
-}
