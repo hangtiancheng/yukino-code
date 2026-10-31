@@ -2,6 +2,7 @@
   "compilerOptions": {
     "module": "esnext",
     "moduleResolution": "bundler",
+    "allowJs": true,
     "target": "esnext",
     "lib": ["esnext", "dom", "dom.iterable"],
     "types": ["node"],
@@ -19,5 +20,5 @@
       "@/*": ["../../*"]
     }
   },
-  "include": ["src", "postcss.config.ts", "tsup.config.ts"]
+  "include": ["src", "tsup.config.ts"]
 }

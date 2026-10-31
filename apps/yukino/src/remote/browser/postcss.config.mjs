@@ -1,28 +1,31 @@
+// Plain .mjs on purpose. postcss-load-config loads a .ts config through tsx,
+// and tsx's module.register() hooks collide with the registration
+// @tailwindcss/node performs on Node 20 (which lacks module.registerHooks),
+// failing the build. Native import() of a .mjs config keeps tsx out entirely.
 import { fileURLToPath } from "node:url";
 
 import tailwindcss from "@tailwindcss/postcss";
-import type { Plugin } from "postcss";
 
-import { PALETTES } from "@/theme/constants.js";
+import { PALETTES } from "../../theme/palettes.js";
 
-function asString(value: unknown): string {
+function asString(value) {
   if (typeof value === "string") {
     return value;
   }
   return String(value);
 }
 
-const constantsFile: string = fileURLToPath(
-  new URL("../../theme/constants.ts", import.meta.url),
+const palettesFile = fileURLToPath(
+  new URL("../../theme/palettes.js", import.meta.url),
 );
 
-const palettePlugin: Plugin = {
+const palettePlugin = {
   postcssPlugin: "yukino-palette",
   Once(root, { postcss, result }) {
     result.messages.push({
       type: "dependency",
       plugin: "yukino-palette",
-      file: constantsFile,
+      file: palettesFile,
     });
     root.walkAtRules("yukino-palette", (rule) => {
       rule.replaceWith(
