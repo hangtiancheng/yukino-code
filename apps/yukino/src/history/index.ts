@@ -52,7 +52,7 @@ const InputEntrySchema = z.strictObject({
     .string()
     .regex(/^[A-Za-z0-9_-]+$/u)
     .nullable(),
-  source: z.enum(["cli", "ws", "acp", "print", "sdk"]),
+  source: z.enum(["cli", "ws", "print", "sdk"]),
   text: z.string().min(1),
   commandName: z.string().min(1).nullable(),
 });

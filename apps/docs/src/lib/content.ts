@@ -85,7 +85,7 @@ export interface Stat {
 export const stats: Stat[] = [
   { id: "protocols", value: "3" },
   { id: "tools", value: "33" },
-  { id: "modes", value: "6" },
+  { id: "modes", value: "5" },
   { id: "context", value: "1M" },
 ];
 
@@ -106,7 +106,7 @@ export type FeatureId =
   | "hooks"
   | "ide"
   | "observability"
-  | "acp"
+  | "a2a"
   | "library"
   | "goals";
 
@@ -159,7 +159,7 @@ export const features: Feature[] = [
     accent: "brand",
     decor: "obs",
   },
-  { id: "acp", icon: icons.handshake, accent: "accent" },
+  { id: "a2a", icon: icons.network, accent: "accent" },
   { id: "library", icon: icons.blocks, accent: "neutral" },
   { id: "goals", icon: icons.target, accent: "brand" },
 ];
@@ -175,7 +175,7 @@ export const observabilityList: ObsBadge[] = [
   { id: "sentry", name: "Sentry" },
 ];
 
-export type RunModeId = "tui" | "print" | "remote" | "teammate" | "acp" | "a2a";
+export type RunModeId = "tui" | "print" | "remote" | "teammate" | "a2a";
 
 export interface RunMode {
   id: RunModeId;
@@ -197,7 +197,6 @@ export const runModes: RunMode[] = [
     icon: icons.users,
     command: 'yukino --teammate --team-name audit --task "…"',
   },
-  { id: "acp", icon: icons.plug, command: "yukino --acp" },
   { id: "a2a", icon: icons.network, command: "yukino --a2a" },
 ];
 
@@ -351,7 +350,6 @@ export const faqIds = [
   "skills",
   "memory",
   "telemetry",
-  "acp",
   "a2a",
 ] as const;
 

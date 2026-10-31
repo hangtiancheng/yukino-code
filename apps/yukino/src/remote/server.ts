@@ -4192,7 +4192,7 @@ export class RemoteServer {
   /**
    * Reports the actual bound address. Essential for port 0 (ephemeral)
    * bindings, where the OS-assigned port is only known after listen() succeeds.
-   * Written to stderr to match --a2a / --acp-ws and to keep the stdout-mirrored
+   * Written to stderr to match --a2a and to keep the stdout-mirrored
    * JSONL log stream clean.
    */
   private announceListening(): void {

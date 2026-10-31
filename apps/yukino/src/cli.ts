@@ -16,8 +16,6 @@ Options:
       --output-format <fmt>   Output format for -p: text (default) or stream-json
       --resume [session-id]   Resume a previous session; opens a picker when omitted
       --remote [addr]         Start the remote server (default: 127.0.0.1:18888)
-      --acp                   Serve the Agent Client Protocol over stdio
-      --acp-ws [addr]         Serve ACP over WebSocket (default: 127.0.0.1:18889)
       --a2a [addr]            Start an A2A server (default: 127.0.0.1:18890)
 
 Commands:
@@ -53,8 +51,6 @@ export type CliMode =
   | { kind: "update"; tag?: string }
   | { kind: "print"; prompt: string; outputFormat: OutputFormat }
   | { kind: "remote"; address: string }
-  | { kind: "acp" }
-  | { kind: "acp-ws"; address?: string }
   | { kind: "a2a"; address?: string }
   | { kind: "ui"; resume?: true | string };
 
@@ -64,15 +60,10 @@ export type RuntimeMode = Exclude<
   { kind: "help" | "version" | "update" }
 >;
 
-type ServerMode = Extract<
-  RuntimeMode,
-  { kind: "remote" | "acp" | "acp-ws" | "a2a" }
->;
+type ServerMode = Extract<RuntimeMode, { kind: "remote" | "a2a" }>;
 
 const SERVER_MODE_FLAGS = {
   remote: "--remote",
-  acp: "--acp",
-  "acp-ws": "--acp-ws",
   a2a: "--a2a",
 } as const;
 
@@ -253,21 +244,6 @@ export function parseCliArgs(argv: string[]): CliMode {
         claimServerMode(token);
         const [address, nextIndex] = optionalAddress(index);
         server = { kind: "remote", address: address ?? "18888" };
-        index = nextIndex;
-        continue;
-      }
-      case "--acp": {
-        claimServerMode(token);
-        server = { kind: "acp" };
-        continue;
-      }
-      case "--acp-ws": {
-        claimServerMode(token);
-        const [address, nextIndex] = optionalAddress(index);
-        server =
-          address === undefined
-            ? { kind: "acp-ws" }
-            : { kind: "acp-ws", address };
         index = nextIndex;
         continue;
       }

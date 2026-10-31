@@ -6,7 +6,7 @@ Yukino is a terminal-based AI coding agent. It provides an interactive UI (termi
 
 Yukino runs as a single CLI binary that connects to configurable LLM providers (Anthropic, OpenAI, or any OpenAI-compatible endpoint). It renders a rich terminal interface using React and Ink, giving you streaming responses, tool execution feedback, permission prompts, and slash commands in a single pane.
 
-Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, an ACP (Agent Client Protocol) mode for editor integration, an A2A (Agent2Agent) server mode for agent-to-agent integration, and team coordination where one leader agent manages multiple teammates running in the same process and working in parallel.
+Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, an A2A (Agent2Agent) server mode for agent-to-agent integration, and team coordination where one leader agent manages multiple teammates running in the same process and working in parallel.
 
 ## Features
 
@@ -179,7 +179,7 @@ Yukino stores its configuration and runtime state under `~/.yukino`. The current
 
 `prompts/` contains user slash-command templates, `agents/` contains agent definitions that can override built-in definitions, and `skills/` contains skills installed by `InstallSkill`. Skill discovery also reads standard `~/.agents/skills/` and project `.agents/skills/`, in this order: global standard skills, global Yukino skills, then project standard skills. Later entries override earlier names. Project `AGENTS.md` and `.mcp.json` remain ordinary project resources.
 
-`activity.jsonl` records user input, canonical project directories, and resolved command names across CLI, WebSocket, ACP and print mode. It preserves separate events for identical submissions; input recall merges consecutive duplicate texts and retains the latest 10,000 events. Periodic atomic checkpoints retain cumulative command usage and all registered projects while bounding input history. Writes and checkpoint replacement share a cross-process lock. The old prompt-history and command-usage files are no longer read or written. `memory/` stores user memories shared across projects, while `plans/` stores plan documents; each live session tracks its active plan path. `logs/` contains main-process logs and `crash.log` records process exits and failures.
+`activity.jsonl` records user input, canonical project directories, and resolved command names across CLI, WebSocket and print mode. It preserves separate events for identical submissions; input recall merges consecutive duplicate texts and retains the latest 10,000 events. Periodic atomic checkpoints retain cumulative command usage and all registered projects while bounding input history. Writes and checkpoint replacement share a cross-process lock. The old prompt-history and command-usage files are no longer read or written. `memory/` stores user memories shared across projects, while `plans/` stores plan documents; each live session tracks its active plan path. `logs/` contains main-process logs and `crash.log` records process exits and failures.
 
 ### Project namespaces and resume
 
@@ -217,7 +217,7 @@ Yukino reads a single global YAML configuration file:
 
 - ~/.yukino/config.yaml
 
-Print, remote, ACP, and A2A modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. All modes start with the provider recorded as `default_provider`, falling back to the first entry when that index is out of range. Example config.yaml:
+Print, remote, and A2A modes require at least one configured provider; the interactive UI instead opens the provider login form when none is configured. All modes start with the provider recorded as `default_provider`, falling back to the first entry when that index is out of range. Example config.yaml:
 
 ```yaml
 # Initial permission mode. Enum: default (ask per write/command) | acceptEdits (auto-approve
@@ -268,7 +268,7 @@ enable_fork: true
 
 # MCP tool loading: auto | eager | native | dispatch. Default: auto, decided per session
 # from the provider protocol, endpoint and schema size. Native loading on a non-Anthropic
-# protocol falls back to dispatch. Applies to TUI, print, remote, ACP and A2A modes.
+# protocol falls back to dispatch. Applies to TUI, print, remote and A2A modes.
 mcp_loading: auto
 
 # Terminal theme: auto | dark | light. Default: auto, detected from COLORFGBG or terminal
@@ -432,7 +432,7 @@ Sandboxed worktree agents can stage and commit through their own Git metadata an
 
 Shell rules check every executable segment separated by newlines, `;`, `&&`, `||`, `|`, and `&`, respecting literal quotes and escapes. Remembered shell rules retain the first two words plus `*`; a rule for one segment does not authorize later segments. Substitution, redirection, environment assignments (including Bash `+=`), wrappers and unsupported control syntax cannot use remembered prefixes for automatic approval. With applicable explicit restrictions, uninspectable syntax is conservatively denied or requires approval even in bypass mode. Permission dialogs show the scopes they will remember; tools without a stable scope offer one-time approval only. File rules canonicalize relative, home-relative and symlink paths before matching.
 
-Sandbox configuration applies to TUI, print, Remote/ACP/A2A, and in-process teammates. Enabling it fails closed when the native backend is unavailable. `bypassPermissions` does not disable it. Relative allow/deny write paths resolve against the command's execution directory; home-relative paths use the same resolver as file tools. The policy confines Bash writes and optionally disables all network access; it does not wrap PowerShell, LSP, or MCP executables.
+Sandbox configuration applies to TUI, print, Remote/A2A, and in-process teammates. Enabling it fails closed when the native backend is unavailable. `bypassPermissions` does not disable it. Relative allow/deny write paths resolve against the command's execution directory; home-relative paths use the same resolver as file tools. The policy confines Bash writes and optionally disables all network access; it does not wrap PowerShell, LSP, or MCP executables.
 
 Provider fields:
 
@@ -590,14 +590,14 @@ The tool requests only read-only operations and rejects server-requested workspa
 
 Task tracking and task execution are separate:
 
-- Every host (terminal, print, Remote, ACP and A2A) exposes one `TodoWrite` tool for tracking. Call `TodoWrite({})` to refresh the current board without writing. Without a team it uses the agent's private list; creating or restoring a team routes the leader to the shared board, including coordinator mode. Deleting the team restores the private list. Teammates use the shared board; ordinary subagents and forks keep independent private lists. The tool and schema remain stable across board switches.
+- Every host (terminal, print, Remote and A2A) exposes one `TodoWrite` tool for tracking. Call `TodoWrite({})` to refresh the current board without writing. Without a team it uses the agent's private list; creating or restoring a team routes the leader to the shared board, including coordinator mode. Deleting the team restores the private list. Teammates use the shared board; ordinary subagents and forks keep independent private lists. The tool and schema remain stable across board switches.
 - `TodoWrite({todos: [...]})` applies incremental edits in one atomic transaction. Items without `id` create tasks and require `subject`; status defaults to `pending` and description to an empty string. Items with an existing `id` update only submitted fields. Creation and updates both accept `description`, `status`, `owner`, `priority`, `metadata`, `blocks` and `blockedBy`. Omitted tasks and fields are retained. Empty arrays do nothing. Delete tasks explicitly with `TodoWrite({deleteIds: ["1"]})`; deleting removes their reciprocal dependency links. Tracking never launches work; assigning a shared task notifies its owner after commit.
 - Results contain `boardId`, the complete `todos` snapshot, and a `progress` string using `TODO completed/total`; only completed items contribute to the numerator. An invalid edit rejects the entire batch without partial writes, consuming IDs, or publishing changes. Unknown fields, unknown task IDs and repeated edits to the same ID are rejected.
 - Statuses are `pending`, `in_progress`, `completed`, `blocked`, and `cancelled`. `blocks` and `blockedBy` replace the specified dependency list and maintain reciprocal links; an empty array removes those links. Referenced IDs must exist before the call; forward references, self-dependencies, conflicting link edits and cycles are rejected. Starting blocked work fails atomically. Only completed dependencies unblock work; cancelled dependencies remain unresolved until their links are removed. Shared writes reload and commit under one cross-process lock. Teammates automatically claim tasks when marking them in progress, cannot take another worker's task, and cannot start a second task while one is already in progress. The leader can explicitly reassign work; stop its old worker before reassignment if it is still executing.
-- Interactive/Remote/ACP/A2A private lists persist per session in `~/.yukino/sessions/artifacts/<session-id>/tasks.json`, with a stored next-ID counter so deleting or clearing items never reuses IDs on resume. Shared boards use project-scoped team storage. Corrupt or inconsistent stores fail explicitly, without migration, auto-repair, or stale-state fallback. Storage and tool schemas have changed; old task files are not supported. Print mode's private checklist lasts for that invocation. The terminal's TODO progress follows the same private list or shared board as TodoWrite, including teammate updates, blocked items, and cancelled items. When every item is completed, the progress line hides after five seconds without deleting tasks or resetting IDs. Adding or reopening an unfinished item shows it again and cancels the pending hide. Switching sessions or boards starts a fresh completion countdown.
+- Interactive/Remote/A2A private lists persist per session in `~/.yukino/sessions/artifacts/<session-id>/tasks.json`, with a stored next-ID counter so deleting or clearing items never reuses IDs on resume. Shared boards use project-scoped team storage. Corrupt or inconsistent stores fail explicitly, without migration, auto-repair, or stale-state fallback. Storage and tool schemas have changed; old task files are not supported. Print mode's private checklist lasts for that invocation. The terminal's TODO progress follows the same private list or shared board as TodoWrite, including teammate updates, blocked items, and cancelled items. When every item is completed, the progress line hides after five seconds without deleting tasks or resetting IDs. Adding or reopening an unfinished item shows it again and cancels the pending hide. Switching sessions or boards starts a fresh completion countdown.
 - `Agent` executes delegated work. Background Agent/Bash/PowerShell invocations return runtime task IDs, distinct from TODO IDs. `TaskOutput` inspects one of these IDs or waits once (`wait: true`, `timeout_ms: 0..60000`). It does not consume automatic completion notifications or stop a task on timeout. Prefer notifications over polling. `TaskStop` remains the explicit cancellation mechanism.
 
-The common built-in registry is used by terminal, print, Remote/ACP/A2A, and in-process teammates. Delegation, coordinator, and per-agent tool restrictions still filter that registry.
+The common built-in registry is used by terminal, print, Remote/A2A, and in-process teammates. Delegation, coordinator, and per-agent tool restrictions still filter that registry.
 
 ### Workflows
 
@@ -716,7 +716,7 @@ After a normal model turn ends, an active goal starts another turn. Pending user
 
 The optional token budget counts input, output, cache-read, and cache-creation tokens for the main conversation's model requests during the goal run, including its final response. Delegated agents, memory selection, and compaction summaries are outside this counter. An in-flight request can exceed the budget; once reported, substantive work stops. Yukino makes at most one final model request with no tools to summarize verified progress, unfinished work, and blockers. Its tokens are included in the counter. The request is not retried or continued if it fails or hits its output limit. Pending user input, Plan mode, and interruption take priority; an undelivered summary remains pending across session resume. The goal remains `budget_limited` and requires explicit replacement with a new budget. The 150-turn limit requires `/goal continue` to reset it. Active time excludes idle, paused, and process-restart intervals.
 
-TUI, Remote/ACP/A2A, and print mode share this goal loop. `yukino -p "/goal <objective>"` creates a goal for that invocation's new session. Print mode control queries finish without a model call; invalid commands return a nonzero exit code, and stream JSON retains its final `result` event.
+TUI, Remote/A2A, and print mode share this goal loop. `yukino -p "/goal <objective>"` creates a goal for that invocation's new session. Print mode control queries finish without a model call; invalid commands return a nonzero exit code, and stream JSON retains its final `result` event.
 
 ## Usage
 
@@ -762,17 +762,6 @@ Starts an Express HTTP server and WebSocket bridge. The bundled React frontend i
 The browser UI mirrors the terminal UI's capabilities: streaming replies and thinking, tool cards with live output, permission and ask-user dialogs, plan approval, foreground `/review` subagents, `/resume` session picker, steering messages while a turn runs (with a follow-up queue for messages that cannot steer), prompt history (`↑`/`↓`), `@file` completion, `!`/`!!` user Bash, image attachments (paste, drop, or the attach button — stored like terminal clipboard images and expanded as `@` references), todo progress, the Agents panel (subagents, background tasks, teammates), context-window usage, and dark/light themes. Model (`/model`), provider (`/login`, `/provider`), thinking level (`/thinking`), permission mode (badge click or `Shift+Tab`), rewind (`/rewind`), sandbox (`/sandbox`), worktree (`/worktree`), MCP reload (`/mcp reload`), fork-mode skills, and `/quit` (shuts the server down) all work from the browser; `Ctrl+B` backgrounds running foreground shells and `Esc` cancels the active turn. Background tasks and teammate notifications wake an idle server the same way they do in the terminal.
 
 Remote mode also hosts [MCP Apps](https://modelcontextprotocol.io/extensions/apps/build). Tools that declare `_meta.ui.resourceUri`, including yukino-mcp's `create_app`, display their UI below the tool card in a sandboxed iframe. The host forwards the tool input and full result (including `structuredContent` and UI-only `_meta`), applies the resource's CSP domains, and synchronizes theme and content height. Apps can read resources and call app-visible tools on their originating MCP server; tool calls use Yukino's permissions and pre-tool hooks. Open links and text messages back to the agent are supported. Apps are restored after browser refresh while the remote session remains active; clearing the transcript removes them. Saved-session resume does not restore App views.
-
-### ACP Mode (Editor Integration)
-
-```bash
-yukino --acp                 # Agent Client Protocol over stdio (cannot be combined with other flags)
-yukino --acp-ws              # ACP over WebSocket, listens on 127.0.0.1:18889
-yukino --acp-ws 9000         # ACP over WebSocket at a custom port (host:port also works)
-yukino --acp-ws 0            # OS-assigned ephemeral port; the actual ws:// URL is printed on startup
-```
-
-Implements the Agent Client Protocol (`@agentclientprotocol/sdk`) so ACP-compatible editors can drive Yukino as an external agent. The WebSocket transport only binds loopback addresses.
 
 ### A2A Mode (Agent2Agent Server)
 

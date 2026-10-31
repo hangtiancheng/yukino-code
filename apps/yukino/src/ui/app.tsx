@@ -701,7 +701,7 @@ export function App({
       interruptAll();
       await userBash.stop();
       // Join the fire-and-forget stopAlls and disconnect MCP before the app
-      // unmounts (parity with print-mode/ACP): on Windows the shell kills go
+      // unmounts (parity with print mode): on Windows the shell kills go
       // through async taskkill, and stdio MCP children need an explicit close.
       const cleanupResults = await Promise.allSettled([
         backgroundTaskManagerRef.current.stopAll(),

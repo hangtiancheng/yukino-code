@@ -9,8 +9,7 @@ export * as Constants from "@/telemetry/constants.js";
 export * as Instrumentation from "@/telemetry/instrumentation.js";
 export * as Privacy from "@/telemetry/privacy.js";
 export * as Providers from "@/telemetry/providers.js";
-export type TelemetryMode =
-  "a2a" | "acp" | "print" | "remote" | "terminal" | "unknown";
+export type TelemetryMode = "a2a" | "print" | "remote" | "terminal" | "unknown";
 export type TelemetryObservationKind = "agent" | "generation" | "tool";
 export type TelemetryMetricKind = "counter" | "histogram";
 export type TelemetryAttributes = Record<string, string | number | boolean>;

@@ -45,14 +45,18 @@ describe("CLI argument parsing", () => {
   });
 
   it("treats flag-like prompt text after '-p --' as data", () => {
-    expect(parseCliArgs(["-p", "--", "--acp"])).toEqual({
+    expect(parseCliArgs(["-p", "--", "--remote"])).toEqual({
       kind: "print",
-      prompt: "--acp",
+      prompt: "--remote",
       outputFormat: "text",
     });
     expect(
-      parseCliArgs(["--output-format", "stream-json", "-p", "--", "--acp"]),
-    ).toEqual({ kind: "print", prompt: "--acp", outputFormat: "stream-json" });
+      parseCliArgs(["--output-format", "stream-json", "-p", "--", "--remote"]),
+    ).toEqual({
+      kind: "print",
+      prompt: "--remote",
+      outputFormat: "stream-json",
+    });
   });
 
   it.each<[string[]]>([
@@ -97,12 +101,6 @@ describe("CLI argument parsing", () => {
       kind: "remote",
       address: "0.0.0.0:9000",
     });
-    expect(parseCliArgs(["--acp"])).toEqual({ kind: "acp" });
-    expect(parseCliArgs(["--acp-ws"])).toEqual({ kind: "acp-ws" });
-    expect(parseCliArgs(["--acp-ws", "127.0.0.1:9000"])).toEqual({
-      kind: "acp-ws",
-      address: "127.0.0.1:9000",
-    });
     expect(parseCliArgs(["--a2a"])).toEqual({ kind: "a2a" });
     expect(parseCliArgs(["--a2a", "127.0.0.1:9000"])).toEqual({
       kind: "a2a",
@@ -113,14 +111,10 @@ describe("CLI argument parsing", () => {
   it.each<[string[], string]>([
     [["-p", "task", "--remote"], "--remote cannot be combined with -p."],
     [["--remote", "-p", "task"], "-p cannot be combined with --remote."],
-    [["--acp", "--acp-ws"], "--acp-ws cannot be combined with --acp."],
-    [["--acp-ws", "--acp"], "--acp cannot be combined with --acp-ws."],
-    [["--acp", "--remote"], "--remote cannot be combined with --acp."],
     [["--a2a", "--remote"], "--remote cannot be combined with --a2a."],
     [["--resume", "--remote"], "--remote cannot be combined with --resume."],
     [["-p", "task", "--resume"], "--resume cannot be combined with -p."],
     [["--resume", "-p", "task"], "-p cannot be combined with --resume."],
-    [["--acp", "extra"], 'Unexpected argument "extra".'],
     [["--a2a", "9000", "9001"], 'Unexpected argument "9001".'],
     [["--remote", "--remote"], "Option '--remote' was already specified."],
     [["-p", "a", "-p", "b"], "Option '-p' was already specified."],
@@ -190,8 +184,6 @@ describe("CLI argument parsing", () => {
       "--output-format",
       "--resume",
       "--remote",
-      "--acp",
-      "--acp-ws",
       "--a2a",
       "update [--tag <tag>]",
       "Type /help inside a session",

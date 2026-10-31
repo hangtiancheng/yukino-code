@@ -596,7 +596,7 @@ function toRestored(
 
 // Session directories already swept in this process. Expired-session cleanup
 // piggybacks on the first listSessions call per directory, so every entry
-// mode (UI resume picker, ACP, remote server, memory consolidation) gets a
+// mode (UI resume picker, remote server, memory consolidation) gets a
 // sweep without separate startup wiring. The sweep only touches files whose
 // mtime is older than SESSION_EXPIRY_DAYS; a session actively used by a
 // concurrent process keeps its mtime fresh via appends and is left alone.

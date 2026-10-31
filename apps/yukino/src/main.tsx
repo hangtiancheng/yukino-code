@@ -28,24 +28,6 @@ import { installTerminalOutput } from "@/ui/terminal-output.js";
 import { detectTerminalTheme } from "@/ui/terminal-theme.js";
 import { asErrorString } from "@/utils/index.js";
 
-async function runAcpMode(
-  mode: Extract<RuntimeMode, { kind: "acp" | "acp-ws" }>,
-): Promise<void> {
-  await initializeTelemetry();
-  setTelemetryMode("acp");
-  try {
-    if (mode.kind === "acp") {
-      const { runAcpStdio } = await import("./acp/stdio.js");
-      await runAcpStdio();
-    } else {
-      const { runAcpWebSocket } = await import("./acp/websocket.js");
-      await runAcpWebSocket(mode.address);
-    }
-  } finally {
-    await shutdownTelemetry();
-  }
-}
-
 async function runA2aMode(address?: string): Promise<void> {
   await initializeTelemetry();
   setTelemetryMode("a2a");
@@ -206,11 +188,6 @@ async function run(mode: RuntimeMode): Promise<void> {
   hydrateConfigEnv();
   recover();
   switch (mode.kind) {
-    case "acp":
-    case "acp-ws": {
-      await runAcpMode(mode);
-      return;
-    }
     case "a2a": {
       await runA2aMode(mode.address);
       return;

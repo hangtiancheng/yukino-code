@@ -168,9 +168,9 @@
         "title": "Observability, opt-in",
         "description": "Export traces, metrics and logs over OTLP with OpenTelemetry, stream LLM observations to Langfuse, and report crashes to Sentry. Off by default, configured purely through environment variables — prompts, model output, tool arguments and file paths are never sent, and session IDs are hashed."
       },
-      "acp": {
-        "title": "ACP & A2A protocols",
-        "description": "yukino --acp speaks the Agent Client Protocol over stdio (--acp-ws over WebSocket) so editors like Zed drive sessions natively — while yukino --a2a serves Yukino itself as an Agent2Agent server that other agents can call."
+      "a2a": {
+        "title": "A2A protocol",
+        "description": "yukino --a2a serves Yukino as an Agent2Agent server so other agents and orchestrators can call it directly."
       },
       "library": {
         "title": "Embed it as a library",
@@ -185,8 +185,8 @@
   "modes": {
     "eyebrow": "Run modes",
     "titleA": "One engine,",
-    "titleHighlight": "six ways to run it",
-    "description": "The same agent loop powers every surface: an interactive TUI, a scriptable print mode, a browser session, headless teammates, native editor integration and an Agent2Agent server.",
+    "titleHighlight": "five ways to run it",
+    "description": "The same agent loop powers every surface: an interactive TUI, a scriptable print mode, a browser session, headless teammates and an Agent2Agent server.",
     "defaultChip": "default",
     "items": {
       "tui": {
@@ -204,10 +204,6 @@
       "teammate": {
         "tagline": "Teammate mode",
         "description": "Runs one headless team member per process. A lead agent spawns teammates in-process, or in tmux / iTerm2 panes when those terminals are detected; they coordinate through file mailboxes and a shared task board."
-      },
-      "acp": {
-        "tagline": "ACP mode",
-        "description": "Speaks the Agent Client Protocol over stdio or WebSocket, so editors like Zed can drive sessions, tool calls and permissions natively."
       },
       "a2a": {
         "tagline": "A2A mode",
@@ -452,7 +448,7 @@
       },
       "goal": {
         "question": "What are persistent goals?",
-        "answer": "/goal sets a session-scoped objective that drives auto-continuation: after each turn, Yukino keeps working until the goal is complete or the same blocker repeats three times in a row. Goals support token budgets (--budget), pause and resume, survive compaction and /resume, and follow checkpoint rewind. After the 150-turn limit, /goal continue resets it — and the same loop runs in print, Remote, ACP and A2A modes."
+        "answer": "/goal sets a session-scoped objective that drives auto-continuation: after each turn, Yukino keeps working until the goal is complete or the same blocker repeats three times in a row. Goals support token budgets (--budget), pause and resume, survive compaction and /resume, and follow checkpoint rewind. After the 150-turn limit, /goal continue resets it — and the same loop runs in print, Remote and A2A modes."
       },
       "sandbox": {
         "question": "Do I need to run it in a sandbox?",
@@ -464,11 +460,11 @@
       },
       "headless": {
         "question": "Can it run without a terminal?",
-        "answer": "Yes. Use print mode for scripts and CI (yukino -p \"…\" --output-format stream-json), run remote mode (yukino --remote) for a browser UI — --remote 0 lets the OS pick a free port — or expose Yukino to editors over ACP (--acp) and to other agents over A2A (--a2a)."
+        "answer": "Yes. Use print mode for scripts and CI (yukino -p \"…\" --output-format stream-json), run remote mode (yukino --remote) for a browser UI — --remote 0 lets the OS pick a free port — or expose Yukino to other agents over A2A (--a2a)."
       },
       "ide": {
         "question": "Does Yukino work inside my IDE?",
-        "answer": "Yes — in VS Code it connects to the Claude Code extension and turns editor @-mentions into file references in your prompt, with line ranges included. Any other editor works through the plain terminal, and ACP-compatible editors such as Zed can drive Yukino natively."
+        "answer": "Yes — in VS Code it connects to the Claude Code extension and turns editor @-mentions into file references in your prompt, with line ranges included. Any other editor works through the plain terminal."
       },
       "scrollback": {
         "question": "Why doesn't Yukino take over my terminal?",
@@ -497,10 +493,6 @@
       "telemetry": {
         "question": "Can I send traces to my observability stack?",
         "answer": "Yes, and it's opt-in. Set OTEL_* variables to export traces, metrics and logs over OTLP (gRPC or HTTP), LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY to stream LLM observations to Langfuse, and SENTRY_DSN to report process errors to Sentry. Telemetry is off by default, and traces never carry prompts, model output, tool arguments or results, file paths or API keys — session IDs are hashed."
-      },
-      "acp": {
-        "question": "What is ACP support?",
-        "answer": "Yukino speaks the Agent Client Protocol. Run yukino --acp for stdio or yukino --acp-ws [host:port] for WebSocket, and ACP-compatible editors such as Zed can create, load and resume sessions, stream tool-call updates and answer permission requests natively."
       },
       "a2a": {
         "question": "What is A2A mode?",
