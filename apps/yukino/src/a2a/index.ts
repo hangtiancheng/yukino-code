@@ -6,4 +6,5 @@ export * as Constants from "@/a2a/constants.js";
 export * as Conversion from "@/a2a/conversion.js";
 export * as Executor from "@/a2a/executor.js";
 export * as Prompts from "@/a2a/prompts.js";
+export * as RequestHandler from "@/a2a/request-handler.js";
 export * as Server from "@/a2a/server.js";

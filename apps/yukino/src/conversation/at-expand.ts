@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 import {
@@ -43,10 +43,22 @@ function sliceLines(
   return all.slice(from - 1, to).join("\n");
 }
 
-function collectAtRefs(text: string): string[] {
-  return [...text.matchAll(AT_REF_RE)]
-    .slice(0, MAX_AT_REFS)
-    .map((match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5]);
+function collectAtRefs(text: string, cwd: string): string[] {
+  return [...text.matchAll(AT_REF_RE)].slice(0, MAX_AT_REFS).map((match) => {
+    const ref = match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5];
+    if (match[5] && !existsSync(isAbsolute(ref) ? ref : join(cwd, ref))) {
+      for (const prose of [...ref.matchAll(/\p{Script=Han}+/gu)].reverse()) {
+        const prefix = ref.slice(0, prose.index);
+        if (
+          prefix &&
+          existsSync(isAbsolute(prefix) ? prefix : join(cwd, prefix))
+        ) {
+          return prefix;
+        }
+      }
+    }
+    return ref;
+  });
 }
 
 function appendWithinLimit(
@@ -67,7 +79,7 @@ function appendWithinLimit(
 // the ref carries an #L suffix. Tokens that don't resolve to a small readable
 // file are left untouched.
 export function expandAtRefs(text: string, cwd: string): string {
-  const refs = collectAtRefs(text);
+  const refs = collectAtRefs(text, cwd);
   if (refs.length === 0) {
     return text;
   }
@@ -125,7 +137,7 @@ export async function expandAtRefsWithImages(
   text: string,
   cwd: string,
 ): Promise<string | Record<string, unknown>[]> {
-  const refs = collectAtRefs(text);
+  const refs = collectAtRefs(text, cwd);
   if (refs.length === 0) {
     return text;
   }

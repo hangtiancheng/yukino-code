@@ -79,10 +79,12 @@ describe("A2A runtime cleanup", () => {
         hooks: [],
         mcp_servers: [],
         enable_memory: false,
+        permission_mode: "acceptEdits",
       });
       vi.spyOn(remote, "createRemoteAgent").mockResolvedValue(handle);
       try {
         const runtime = await createA2aRuntime(cwd);
+        expect(handle.permissionMode).toBe("acceptEdits");
         expect(remote.createRemoteAgent).toHaveBeenCalledWith(
           expect.objectContaining({
             interactionMode: "non-interactive",

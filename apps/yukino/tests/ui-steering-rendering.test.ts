@@ -155,7 +155,7 @@ describe("steering message rendering", () => {
       expect(screen).toContain(
         "Steering: 所有的 go mod 都应该遵循 go 项目最佳实践",
       );
-      expect(screen).toContain("TODO 0/1");
+      expect(screen).toContain("DONE 0/1");
       expect(screen).toContain("Working");
       expect(
         screen.match(/所有的 go mod 都应该遵循 go 项目最佳实践/gu),
@@ -177,7 +177,7 @@ describe("steering message rendering", () => {
     expect(screen).toContain("Steering: STEER_4");
     expect(screen).toContain("Follow-up: FOLLOW_UP_2");
     expect(screen).toContain("6 queued messages");
-    expect(screen).toContain("TODO 0/1");
+    expect(screen).toContain("DONE 0/1");
     expect(screen).toContain("Working");
     expect(terminal.terminal.buffer.active.baseY).toBeGreaterThan(0);
   });

@@ -152,7 +152,7 @@ export const PLAN_MODE_EXITED_BODY =
 export const READFILE_OFFSETS_RULE =
   "ReadFile offsets are 0-based; displayed lines are 1-based. Follow readback instructions for truncated output.";
 export const TODO_TOOLS_RULE =
-  "Use the available TODO tools for complex work, not trivial requests. Mark TODO items in_progress before starting, and completed only after validation; use blocked or cancelled honestly. Tracking records work; Agent executes it. Tool results and the UI count only completed items in TODO completed/total. Completed items remain stored until explicitly deleted. Ordinary subagents and forks have independent private lists.";
+  "Use the available TODO tools for complex work, not trivial requests. Mark TODO items in_progress before starting, and completed only after validation; use blocked or cancelled honestly. Tracking records work; Agent executes it. Tool results and the UI count only completed items in DONE completed/total. Completed items remain stored until explicitly deleted. Ordinary subagents and forks have independent private lists.";
 export const GOAL_RULE =
   "Goal manages a user-set persistent objective, separately from TODO items. A set goal is already active. Use Goal to get status or report in_progress/complete/blocked with a reason. in_progress reports progress and resets the blocker audit while keeping the goal active; it cannot resume a paused or stopped goal. Only the user can set, replace, pause, resume, or clear it.";
 export const TODO_WRITE_RULE =

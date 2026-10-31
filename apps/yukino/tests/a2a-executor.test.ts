@@ -126,6 +126,9 @@ function dataPayloads(events: AgentExecutionEvent[]): unknown[] {
     if (event.kind !== "statusUpdate") {
       continue;
     }
+    if (event.data.metadata?.yukino) {
+      payloads.push(event.data.metadata.yukino);
+    }
     for (const part of event.data.status?.message?.parts ?? []) {
       if (part.content?.$case === "data") {
         payloads.push(part.content.value);

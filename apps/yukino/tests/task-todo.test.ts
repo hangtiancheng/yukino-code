@@ -376,7 +376,7 @@ describe("atomic task/TODO list", () => {
         ?.execute({ cwd: "/tmp" }, {});
       expect(JSON.parse(empty?.output ?? "null")).toMatchObject({
         todos: [],
-        progress: "TODO 0/0",
+        progress: "DONE 0/0",
       });
       expect(rootList.list()[0]?.subject).toBe("parent task");
     },
@@ -408,7 +408,7 @@ describe("atomic task/TODO list", () => {
       createElement(TodoProgress, { tasks: list.list() }),
       { columns: 120 },
     );
-    expect(text).toContain("TODO 1/4");
+    expect(text).toContain("DONE 1/4");
     expect(text).toContain("1 cancelled");
     expect(text).toContain("1 blocked");
     expect(text).toContain("Testing");

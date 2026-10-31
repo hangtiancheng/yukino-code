@@ -24,10 +24,10 @@ export const SYSTEM_REMINDER_CLOSE = "</system-reminder>";
 export const SYSTEM_REMINDER_ESCAPE_RE = /<(?=\s*\/?\s*system-reminder\b)/giu;
 
 // An @ref may carry a #L3 or #L3-10 line-range suffix (inserted via the IDE integration).
-export const AT_REF_LINE_RANGE_RE = /^(.+)#L(\d+)(?:-(\d+))?$/;
+export const AT_REF_LINE_RANGE_RE = /^(.+)#L(\d+)(?:-L?(\d+))?$/;
 // Clipboard images and paths containing spaces use quoted mentions.
 export const AT_REF_RE =
-  /(?:^|\s)(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s]+))/g;
+  /(?:^|[\s(（])(?:'@([^']+)'|"@([^"]+)"|@"([^"]+)"|@'([^']+)'|@([^\s#,;，；。！？、()（）<>"'`]+(?:#L\d+(?:-L?\d+)?)?))/gu;
 
 // User-executed Bash ("!" prefix) protocol markers and inline-output budgets.
 export const USER_BASH_PREFIX = "!";

@@ -9,6 +9,6 @@ export function taskProgress(tasks: readonly Task[]): {
   return {
     completed,
     total: tasks.length,
-    label: `TODO ${completed}/${tasks.length}`,
+    label: `DONE ${completed}/${tasks.length}`,
   };
 }

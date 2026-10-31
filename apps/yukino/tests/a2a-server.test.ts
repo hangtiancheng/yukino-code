@@ -9,6 +9,14 @@ const CardSchema = z.object({
   name: z.string(),
   url: z.string().optional(),
   protocolVersion: z.string().optional(),
+  capabilities: z.object({
+    extensions: z.array(
+      z.object({
+        uri: z.string(),
+        params: z.record(z.string(), z.unknown()).optional(),
+      }),
+    ),
+  }),
   supportedInterfaces: z
     .array(
       z.object({
@@ -36,6 +44,22 @@ const TaskResultSchema = z.object({
       })
       .optional(),
   }),
+  history: z
+    .array(
+      z.object({
+        messageId: z.string(),
+        parts: z.array(z.object({ text: z.string().optional() })),
+      }),
+    )
+    .optional(),
+  artifacts: z
+    .array(
+      z.object({
+        artifactId: z.string(),
+        parts: z.array(z.object({ text: z.string().optional() })),
+      }),
+    )
+    .optional(),
 });
 
 const JsonRpcTaskSchema = z.object({
@@ -142,7 +166,9 @@ describe("A2A server", () => {
     expect(server.url).not.toContain(":0/");
     const card = CardSchema.parse(await (await fetch(server.cardUrl)).json());
     for (const iface of card.supportedInterfaces ?? []) {
-      expect(iface.url).toBe(server.url);
+      expect(iface.url).toBe(
+        iface.protocolBinding === "HTTP+JSON" ? `${server.url}v1/` : server.url,
+      );
     }
   });
 
@@ -155,12 +181,33 @@ describe("A2A server", () => {
 
     const card = CardSchema.parse(await (await fetch(server.cardUrl)).json());
     expect(card.name).toBe("yukino");
+    expect(card.capabilities.extensions[0]?.params).toMatchObject({
+      decisions: ["allow", "deny", "allowAlways"],
+      versionHeader: "A2A-Version: 1.0",
+      requestSchema: {
+        type: "object",
+        required: [
+          "yukino",
+          "permissionId",
+          "toolCallId",
+          "toolName",
+          "reason",
+          "args",
+        ],
+      },
+      responseSchema: {
+        type: "object",
+        required: ["yukino", "permissionId", "decision"],
+      },
+    });
     expect(card.supportedInterfaces).toHaveLength(2);
     expect(
       card.supportedInterfaces?.map((iface) => iface.protocolBinding),
     ).toEqual(["JSONRPC", "HTTP+JSON"]);
     for (const iface of card.supportedInterfaces ?? []) {
-      expect(iface.url).toBe(server.url);
+      expect(iface.url).toBe(
+        iface.protocolBinding === "HTTP+JSON" ? `${server.url}v1/` : server.url,
+      );
     }
 
     expect(
@@ -181,19 +228,23 @@ describe("A2A server", () => {
       },
     });
     servers.push(server);
-    const response = z.object({ error: z.object({ code: z.number() }) }).parse(
-      await postJson(
-        server.url,
-        {
-          jsonrpc: "2.0",
-          id: "removed-method",
-          method: "message/send",
-          params: {},
-        },
-        V1,
-      ),
-    );
+    const response = z
+      .object({ error: z.object({ code: z.number(), message: z.string() }) })
+      .parse(
+        await postJson(
+          server.url,
+          {
+            jsonrpc: "2.0",
+            id: "removed-method",
+            method: "message/send",
+            params: {},
+          },
+          V1,
+        ),
+      );
     expect(response.error.code).toBe(-32601);
+    expect(response.error.message).toContain("SendMessage");
+    expect(response.error.message).toContain("message/send");
     expect(runs).toBe(0);
   });
 
@@ -211,6 +262,7 @@ describe("A2A server", () => {
       await postJson(server.url, sendParams("m1", "hello"), V1),
     );
     expect(rpc.result.task.status.state).toBe("TASK_STATE_COMPLETED");
+    expect(rpc.result.task.status.message?.parts).toEqual([{ text: "done" }]);
 
     const restResponse = await fetch(`${server.url}v1/message:send`, {
       method: "POST",
@@ -226,7 +278,266 @@ describe("A2A server", () => {
     expect(restResponse.status).toBe(200);
     const rest = RestTaskSchema.parse(await restResponse.json());
     expect(rest.task.status.state).toBe("TASK_STATE_COMPLETED");
+    expect(rest.task.status.message?.parts[0]?.text).toBe("done");
   });
+
+  it("keeps complete messages and the final answer independently of history", async () => {
+    const server = await startA2aServer({
+      address: "0",
+      runtimeFactory: fakeRuntimeFactory([
+        { type: "thinking_text", text: "private reasoning" },
+        ...Array.from({ length: 20 }, (_, index): AgentEvent => ({
+          type: "stream_text",
+          text: String(index) + " ",
+        })),
+        { type: "turn_complete" },
+        { type: "loop_complete", stopReason: "end_turn" },
+      ]),
+    });
+    servers.push(server);
+    const result = JsonRpcTaskSchema.parse(
+      await postJson(server.url, sendParams("complete", "hello"), V1),
+    ).result.task;
+    const answer = Array.from(
+      { length: 20 },
+      (_, index) => String(index) + " ",
+    ).join("");
+    expect(result.status.message?.parts[0]?.text).toBe(answer);
+    expect(result.history).toHaveLength(2);
+    expect(result.history?.at(-1)?.parts).toEqual([{ text: answer }]);
+    expect(result.artifacts?.[0]?.parts).toEqual([{ text: answer }]);
+    expect(result.artifacts?.[0]?.artifactId).toBe(
+      result.history?.at(-1)?.messageId,
+    );
+
+    const get = async (historyLength?: number) => {
+      const body = await postJson(
+        server.url,
+        {
+          jsonrpc: "2.0",
+          id: "get",
+          method: "GetTask",
+          params: { id: result.id, historyLength },
+        },
+        V1,
+      );
+      return z.object({ result: TaskResultSchema }).parse(body).result;
+    };
+    const without = await get(0);
+    expect(without.history ?? []).toEqual([]);
+    expect(without.status.message?.parts[0]?.text).toBe(answer);
+    expect((await get(1)).history).toHaveLength(1);
+    expect((await get()).history).toHaveLength(2);
+    const send = sendParams("no-history", "hello");
+    const noHistory = JsonRpcTaskSchema.parse(
+      await postJson(
+        server.url,
+        {
+          ...send,
+          params: { ...send.params, configuration: { historyLength: 0 } },
+        },
+        V1,
+      ),
+    ).result.task;
+    expect(noHistory.history ?? []).toEqual([]);
+    expect(noHistory.status.message?.parts[0]?.text).toBe(answer);
+  });
+
+  it("resumes permission round-trips with history disabled and keeps the final reply", async () => {
+    const server = await startA2aServer({
+      address: "0",
+      runtimeFactory: (cwd) =>
+        Promise.resolve({
+          sessionId: "permissions-12345678",
+          cwd,
+          async *run(_text, callbacks) {
+            yield { type: "stream_text", text: "Checking files." };
+            await callbacks.onPermissionRequest(
+              "Bash",
+              { command: "node --test" },
+              { effect: "ask", reason: "Approve tests" },
+              "tool-1",
+              undefined,
+              { agentName: "main", cwd },
+            );
+            yield { type: "turn_complete" };
+            yield { type: "stream_text", text: "All " };
+            yield { type: "stream_text", text: "fixed." };
+            yield { type: "turn_complete" };
+            yield { type: "loop_complete", stopReason: "end_turn" };
+          },
+          abort: () => undefined,
+          dispose: () => Promise.resolve(),
+        }),
+    });
+    servers.push(server);
+    const initial = sendParams("permission", "fix it");
+    const task = JsonRpcTaskSchema.parse(
+      await postJson(
+        server.url,
+        {
+          ...initial,
+          params: { ...initial.params, configuration: { historyLength: 0 } },
+        },
+        V1,
+      ),
+    ).result.task;
+    expect(task.status.state).toBe("TASK_STATE_INPUT_REQUIRED");
+    const request = z
+      .object({
+        permissionId: z.string(),
+        reason: z.string(),
+        source: z.object({ agentName: z.string(), cwd: z.string() }),
+      })
+      .parse(task.status.message?.parts[0]?.data);
+    expect(request.reason).toBe("Approve tests");
+    expect(request.source.agentName).toBe("main");
+    const result = JsonRpcTaskSchema.parse(
+      await postJson(
+        server.url,
+        {
+          jsonrpc: "2.0",
+          id: "approval",
+          method: "SendMessage",
+          params: {
+            configuration: { historyLength: 0 },
+            message: {
+              messageId: "approval",
+              taskId: task.id,
+              contextId: task.contextId,
+              role: "user",
+              parts: [
+                {
+                  data: {
+                    yukino: "permission-response",
+                    permissionId: request.permissionId,
+                    decision: "allow",
+                  },
+                },
+              ],
+            },
+          },
+        },
+        V1,
+      ),
+    ).result.task;
+    expect(result.status.state).toBe("TASK_STATE_COMPLETED");
+    expect(result.history ?? []).toEqual([]);
+    expect(result.status.message?.parts[0]?.text).toBe("All fixed.");
+    expect(result.artifacts?.at(-1)?.parts).toEqual([{ text: "All fixed." }]);
+  });
+
+  it.each([undefined, "0.3"])(
+    "reports an actionable version error for %s on both transports",
+    async (version) => {
+      const server = await startA2aServer({
+        address: "0",
+        runtimeFactory: fakeRuntimeFactory(),
+      });
+      servers.push(server);
+      const headers: Record<string, string> = version
+        ? { "a2a-version": version }
+        : {};
+      const rpc = z
+        .object({ error: z.object({ code: z.number(), message: z.string() }) })
+        .parse(
+          await postJson(server.url, sendParams("version", "hello"), headers),
+        );
+      expect(rpc.error.code).toBe(-32009);
+      expect(rpc.error.message).toContain("A2A-Version: 1.0");
+      expect(rpc.error.message).toContain(version ? "Unsupported" : "Missing");
+      const response = await fetch(`${server.url}v1/tasks`, { headers });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: {
+          message: rpc.error.message,
+          details: [{ reason: "VERSION_NOT_SUPPORTED" }],
+        },
+      });
+    },
+  );
+
+  it("bounds default history in send, get and list responses", async () => {
+    const events: AgentEvent[] = Array.from(
+      { length: 12 },
+      (_, i): AgentEvent[] => [
+        { type: "stream_text", text: `answer ${String(i)}` },
+        { type: "turn_complete" },
+      ],
+    ).flat();
+    const server = await startA2aServer({
+      address: "0",
+      runtimeFactory: fakeRuntimeFactory(events),
+    });
+    servers.push(server);
+    const task = JsonRpcTaskSchema.parse(
+      await postJson(server.url, sendParams("bounded", "hello"), V1),
+    ).result.task;
+    expect(task.history).toHaveLength(10);
+    const get = async (historyLength?: number) =>
+      z.object({ result: TaskResultSchema }).parse(
+        await postJson(
+          server.url,
+          {
+            jsonrpc: "2.0",
+            id: "get",
+            method: "GetTask",
+            params: { id: task.id, historyLength },
+          },
+          V1,
+        ),
+      ).result;
+    expect((await get()).history).toHaveLength(10);
+    expect((await get(100)).history).toHaveLength(13);
+    const list = z
+      .object({ result: z.object({ tasks: z.array(TaskResultSchema) }) })
+      .parse(
+        await postJson(
+          server.url,
+          {
+            jsonrpc: "2.0",
+            id: "list",
+            method: "ListTasks",
+            params: {},
+          },
+          V1,
+        ),
+      );
+    expect(list.result.tasks[0]?.history).toHaveLength(10);
+    const rest = z
+      .object({ tasks: z.array(TaskResultSchema) })
+      .parse(
+        await (
+          await fetch(`${server.url}v1/tasks?historyLength=0`, { headers: V1 })
+        ).json(),
+      );
+    expect(rest.tasks).toHaveLength(1);
+    expect(rest.tasks[0]?.history ?? []).toEqual([]);
+    expect(rest.tasks[0]?.status.message?.parts).toEqual([
+      { text: "answer 11" },
+    ]);
+  });
+
+  it.each(["/", "/v1/message:send"])(
+    "returns structured oversized-body errors on %s",
+    async (path) => {
+      const server = await startA2aServer({
+        address: "0",
+        runtimeFactory: fakeRuntimeFactory(),
+      });
+      servers.push(server);
+      const response = await fetch(new URL(path, server.url), {
+        method: "POST",
+        headers: { ...V1, "content-type": "application/json" },
+        body: JSON.stringify({ value: "x".repeat(110_000) }),
+      });
+      expect(response.status).toBe(413);
+      const error = z
+        .object({ error: z.object({ message: z.string() }) })
+        .parse(await response.json());
+      expect(error.error.message).toContain("byte limit");
+    },
+  );
 
   it("streams status updates over SSE", async () => {
     const server = await startA2aServer({
@@ -268,6 +579,8 @@ describe("A2A server", () => {
       "TASK_STATE_WORKING",
       "TASK_STATE_COMPLETED",
     ]);
+    expect(sse).toContain('"artifactUpdate"');
+    expect(sse).toContain('"lastChunk":true');
   });
 
   it("rejects a new message while the context is busy", async () => {

@@ -1,8 +1,17 @@
 import type { AgentCard, AgentInterface } from "@a2a-js/sdk";
+import { z } from "zod";
 
-import { A2A_PROTOCOL_VERSION } from "@/a2a/constants.js";
+import {
+  A2A_PROTOCOL_VERSION,
+  PERMISSION_EXTENSION_URI,
+} from "@/a2a/constants.js";
+import {
+  PermissionRequestDataSchema,
+  PermissionResponseDataSchema,
+} from "@/a2a/conversion.js";
 import {
   DESCRIPTION,
+  PERMISSION_EXTENSION_DESCRIPTION,
   SKILL_DESCRIPTION,
   SKILL_EXAMPLES,
 } from "@/a2a/prompts.js";
@@ -11,7 +20,7 @@ import { version } from "@/version.js";
 /**
  * Builds the agent card for the given base URL. Both the JSON-RPC endpoint
  * (POST /) and the HTTP+JSON/REST endpoints (/v1/...) are served from the
- * same origin, so both interfaces share the URL.
+ * same origin. The REST interface includes its /v1/ route prefix.
  */
 export function buildAgentCard(url: string): AgentCard {
   const interfaces: AgentInterface[] = [
@@ -22,7 +31,7 @@ export function buildAgentCard(url: string): AgentCard {
       tenant: "",
     },
     {
-      url,
+      url: new URL("v1/", url).href,
       protocolBinding: "HTTP+JSON",
       protocolVersion: A2A_PROTOCOL_VERSION,
       tenant: "",
@@ -37,7 +46,19 @@ export function buildAgentCard(url: string): AgentCard {
     capabilities: {
       streaming: true,
       pushNotifications: false,
-      extensions: [],
+      extensions: [
+        {
+          uri: PERMISSION_EXTENSION_URI,
+          description: PERMISSION_EXTENSION_DESCRIPTION,
+          required: false,
+          params: {
+            decisions: ["allow", "deny", "allowAlways"],
+            versionHeader: "A2A-Version: 1.0",
+            requestSchema: z.toJSONSchema(PermissionRequestDataSchema),
+            responseSchema: z.toJSONSchema(PermissionResponseDataSchema),
+          },
+        },
+      ],
     },
     securitySchemes: {},
     securityRequirements: [],

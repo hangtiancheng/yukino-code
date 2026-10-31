@@ -206,8 +206,8 @@ describe("host tracking interfaces", () => {
         ),
       ).toBe(false);
     }
-    expect(requests[1]).toContain("TODO 0/1");
-    expect(requests[2]).toContain("TODO 1/1");
+    expect(requests[1]).toContain("DONE 0/1");
+    expect(requests[2]).toContain("DONE 1/1");
     expect(process.exitCode).toBe(0);
   });
 

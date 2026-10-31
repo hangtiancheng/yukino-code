@@ -94,17 +94,17 @@ describe("tool and UI TODO synchronization", () => {
       await execute("TodoWrite", {
         todos: [{ subject: "work", description: "" }],
       }),
-    ).toContain("TODO 0/1");
-    expect(frame).toContain("TODO 0/1");
+    ).toContain("DONE 0/1");
+    expect(frame).toContain("DONE 0/1");
     expect(
       await execute("TodoWrite", { todos: [{ id: "1", status: "completed" }] }),
-    ).toContain("TODO 1/1");
-    expect(frame).toContain("TODO 1/1");
+    ).toContain("DONE 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(5000);
     expect(frame).toBe("");
     expect(list.list()).toHaveLength(1);
     await execute("TodoWrite", { todos: [{ id: "1", status: "in_progress" }] });
-    expect(frame).toContain("TODO 0/1");
+    expect(frame).toContain("DONE 0/1");
     await execute("TodoWrite", { deleteIds: ["1"] });
     expect(frame).toBe("");
   });
@@ -117,15 +117,15 @@ describe("tool and UI TODO synchronization", () => {
         { subject: "blocked", status: "blocked" },
       ],
     });
-    expect(JSON.parse(result)).toMatchObject({ progress: "TODO 1/3" });
-    expect(frame).toContain("TODO 1/3");
+    expect(JSON.parse(result)).toMatchObject({ progress: "DONE 1/3" });
+    expect(frame).toContain("DONE 1/3");
     advance(6000);
-    expect(frame).toContain("TODO 1/3");
+    expect(frame).toContain("DONE 1/3");
     await execute("TodoWrite", {
       todos: [{ id: "1", subject: "done", status: "completed" }],
       deleteIds: ["2", "3"],
     });
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(5000);
     expect(frame).toBe("");
     expect(list.list()[0]?.status).toBe("completed");
@@ -147,9 +147,9 @@ describe("tool and UI TODO synchronization", () => {
     await execute("TodoWrite", {
       todos: [{ subject: "shared", description: "" }],
     });
-    expect(frame).toContain("TODO 0/1");
+    expect(frame).toContain("DONE 0/1");
     await execute("TodoWrite", { todos: [{ id: "1", status: "completed" }] });
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(5000);
     expect(frame).toBe("");
     const external = new SharedTaskStore(
@@ -157,20 +157,20 @@ describe("tool and UI TODO synchronization", () => {
     );
     external.write({ todos: [{ subject: "teammate work" }] });
     advance(500);
-    expect(frame).toContain("TODO 1/2");
+    expect(frame).toContain("DONE 1/2");
     act(() => {
       manager
         .getTaskStore("squad")
         .write({ todos: [{ id: "2", ...{ status: "completed" } }] });
     });
-    expect(frame).toContain("TODO 2/2");
+    expect(frame).toContain("DONE 2/2");
     await act(async () => {
       await manager.delete("squad");
     });
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     expect(list.list()[0]?.subject).toBe("private");
     advance(4999);
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(1);
     expect(frame).toBe("");
     act(() => {
@@ -180,6 +180,6 @@ describe("tool and UI TODO synchronization", () => {
       todos: [{ subject: "new shared", description: "" }],
     });
     await execute("TodoWrite", { todos: [{ id: "1", status: "completed" }] });
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
   });
 });

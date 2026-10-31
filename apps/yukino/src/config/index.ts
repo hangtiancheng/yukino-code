@@ -138,7 +138,9 @@ const EnvBlockSchema = z
 const AppConfigSchema = z.looseObject({
   default_provider: z.number().default(0),
   providers: z.array(ProviderConfigSchema),
-  permission_mode: z.string().optional(),
+  permission_mode: z
+    .enum(["default", "acceptEdits", "plan", "bypassPermissions"])
+    .optional(),
   mcp_loading: z.enum(MCP_LOADING_MODES).default("auto"),
   theme: z.enum(THEME_MODES).default("auto"),
   mcp_servers: z.array(MCPServerConfigSchema).default([]),

@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import { createChildLogger } from "@/logger/index.js";
-import { isPrivateStatePath, writePrivateFile } from "@/storage/private.js";
+import { writeFileAtomically } from "@/tools/atomic-write.js";
 import {
   CONTENT_REQUIRED_ERROR,
   FILE_PATH_REQUIRED_ERROR,
@@ -123,9 +123,7 @@ export class WriteFileTool implements Tool {
           }
         }
         ctx.fileHistory?.trackEdit(filePath);
-        await (isPrivateStatePath(filePath)
-          ? writePrivateFile(filePath, content)
-          : writeFile(filePath, content, "utf-8"));
+        await writeFileAtomically(filePath, content, ctx.abortSignal);
         ctx.fileStateCache?.update(filePath);
         const lineCount =
           content.length === 0
@@ -140,7 +138,9 @@ export class WriteFileTool implements Tool {
       } catch (err) {
         log.error({ err }, "tool operation failed");
         return {
-          output: `Error writing file: ${asErrorString(err)}`,
+          output: ctx.abortSignal?.aborted
+            ? OPERATION_INTERRUPTED_ERROR
+            : `Error writing file: ${asErrorString(err)}`,
           isError: true,
         };
       }

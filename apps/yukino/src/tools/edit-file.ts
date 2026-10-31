@@ -1,11 +1,11 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 import { createChildLogger } from "@/logger/index.js";
 import {
   isPrivateStatePath,
-  writePrivateFile,
   protectPrivateFileSync,
 } from "@/storage/private.js";
+import { writeFileAtomically } from "@/tools/atomic-write.js";
 import {
   FILE_PATH_REQUIRED_ERROR,
   OPERATION_INTERRUPTED_ERROR,
@@ -278,9 +278,7 @@ export class EditFileTool implements Tool {
 
       try {
         ctx.fileHistory?.trackEdit(filePath);
-        await (isPrivateStatePath(filePath)
-          ? writePrivateFile(filePath, applied.content)
-          : writeFile(filePath, applied.content, "utf-8"));
+        await writeFileAtomically(filePath, applied.content, ctx.abortSignal);
         ctx.fileStateCache?.update(filePath);
         // Include the concrete diff rather than just saying "updated": both the model and UI need to know which lines changed
         const {
@@ -294,7 +292,9 @@ export class EditFileTool implements Tool {
       } catch (err) {
         log.error({ err }, "tool operation failed");
         return {
-          output: `Error writing file: ${asErrorString(err)}`,
+          output: ctx.abortSignal?.aborted
+            ? OPERATION_INTERRUPTED_ERROR
+            : `Error writing file: ${asErrorString(err)}`,
           isError: true,
         };
       }

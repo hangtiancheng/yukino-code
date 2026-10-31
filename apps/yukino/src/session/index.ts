@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
-import z, { parse, safeParse } from "zod";
+import z, { parse } from "zod";
 
 import { buildCompactionSummaryMessage } from "@/compact/prompts.js";
 import type {
@@ -370,6 +370,31 @@ export function loadSessionForResume(
   return readTranscript(getSessionFilePath(cwd, sessionId), true);
 }
 
+function parseTranscriptRecords(filePath: string): SessionMessage[] {
+  const messages: SessionMessage[] = [];
+  let invalidRecords = 0;
+  let firstError: unknown;
+  for (const line of readFileSync(filePath, "utf-8").split("\n")) {
+    if (!line.trim()) {
+      continue;
+    }
+    try {
+      const raw: unknown = JSON.parse(line);
+      messages.push(parse(SessionMessageSchema, raw));
+    } catch (err) {
+      invalidRecords++;
+      firstError ??= err;
+    }
+  }
+  if (invalidRecords > 0) {
+    log.error(
+      { err: firstError, filePath, invalidRecords },
+      "Invalid session records skipped",
+    );
+  }
+  return messages;
+}
+
 function readTranscript(filePath: string, renew: boolean): SessionMessage[] {
   if (!existsSync(dirname(filePath))) {
     return [];
@@ -381,33 +406,14 @@ function readTranscript(filePath: string, renew: boolean): SessionMessage[] {
     }
 
     const out: SessionMessage[] = [];
-    for (const line of readFileSync(filePath, "utf-8").split("\n")) {
-      if (!line.trim()) {
-        continue;
-      }
-      try {
-        const message: unknown = JSON.parse(line);
-        const { success, data, error } = safeParse(
-          SessionMessageSchema,
-          message,
-        );
-        // Boundary records carry their text payload in `content`, so keep them
-        // (they pass the non-empty content check). Skip malformed or
-        // empty-content ordinary messages rather than crashing the load.
-        if (success) {
-          const isEmpty =
-            data.content.length === 0 &&
-            !(data.tool_uses?.length ?? 0) &&
-            !(data.tool_results?.length ?? 0) &&
-            !(data.thinking_blocks?.length ?? 0);
-          if (!isEmpty) {
-            out.push(data);
-          }
-        } else {
-          log.error({ err: error }, "session operation failed");
-        }
-      } catch (err) {
-        log.error({ err }, "session operation failed");
+    for (const data of parseTranscriptRecords(filePath)) {
+      const isEmpty =
+        data.content.length === 0 &&
+        !(data.tool_uses?.length ?? 0) &&
+        !(data.tool_results?.length ?? 0) &&
+        !(data.thinking_blocks?.length ?? 0);
+      if (!isEmpty) {
+        out.push(data);
       }
     }
     if (renew && out.length > 0) {
@@ -630,18 +636,7 @@ export function listSessions(cwd: string): SessionInfo[] {
         let messageCount = 0;
         let lastUserTimestamp: number | null = null;
 
-        for (const line of readFileSync(filePath, "utf-8").split("\n")) {
-          if (!line.trim()) {
-            continue;
-          }
-          let message: SessionMessage;
-          try {
-            const raw: unknown = JSON.parse(line);
-            message = parse(SessionMessageSchema, raw);
-          } catch (err) {
-            log.error({ err }, "session operation failed");
-            continue;
-          }
+        for (const message of parseTranscriptRecords(filePath)) {
           if (message.type === GOAL_RECORD) {
             continue;
           }

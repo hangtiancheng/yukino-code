@@ -3,7 +3,6 @@ import type { Server } from "node:http";
 
 import {
   DefaultExecutionEventBusManager,
-  DefaultRequestHandler,
   InMemoryTaskStore,
 } from "@a2a-js/sdk/server";
 import {
@@ -13,12 +12,21 @@ import {
   UserBuilder,
 } from "@a2a-js/sdk/server/express";
 import express from "express";
+import type { ErrorRequestHandler, Request, Response } from "express";
 
 import { buildAgentCard } from "@/a2a/card.js";
 import {
   A2A_DEFAULT_PORT,
   AGENT_CARD_PATH,
   DEFAULT_ADDRESS,
+  A2A_METHODS,
+  A2A_PROTOCOL_VERSION,
+  MALFORMED_JSON_ERROR,
+  MISSING_VERSION_ERROR,
+  REQUEST_BODY_LIMIT,
+  REQUEST_TOO_LARGE_ERROR,
+  unknownMethodError,
+  unsupportedVersionError,
   LOOPBACK_REQUIRED_ERROR,
   SERVER_NOT_BOUND_ERROR,
 } from "@/a2a/constants.js";
@@ -27,8 +35,10 @@ import {
   YukinoA2aExecutor,
   type A2aRuntimeFactory,
 } from "@/a2a/executor.js";
+import { YukinoA2aRequestHandler } from "@/a2a/request-handler.js";
 import { parseRemoteAddress } from "@/remote/address.js";
 import { LOOPBACK_HOSTS } from "@/remote/constants.js";
+import { isRecord } from "@/utils/index.js";
 
 export interface A2aServerHandle {
   /** Base URL of the running server, e.g. `http://127.0.0.1:18890/`. */
@@ -84,7 +94,7 @@ export async function startA2aServer(
     options.runtimeFactory ?? createA2aRuntime,
     options.cwd ?? process.cwd(),
   );
-  const requestHandler = new DefaultRequestHandler(
+  const requestHandler = new YukinoA2aRequestHandler(
     card,
     new InMemoryTaskStore(),
     executor,
@@ -99,12 +109,82 @@ export async function startA2aServer(
     }),
   );
   app.use(
+    express.json({
+      limit: REQUEST_BODY_LIMIT,
+      type: ["application/json", "application/a2a+json"],
+      strict: false,
+    }),
+  );
+  const parseErrorHandler: ErrorRequestHandler = (
+    error: unknown,
+    req,
+    res,
+    next,
+  ) => {
+    if (
+      !isRecord(error) ||
+      (error.type !== "entity.too.large" &&
+        error.type !== "entity.parse.failed")
+    ) {
+      next(error);
+      return;
+    }
+    const tooLarge = error.type === "entity.too.large";
+    sendProtocolError(
+      req,
+      res,
+      tooLarge ? 413 : 400,
+      -32700,
+      tooLarge ? REQUEST_TOO_LARGE_ERROR : MALFORMED_JSON_ERROR,
+      tooLarge ? "CONTENT_TOO_LARGE" : "INVALID_ARGUMENT",
+    );
+  };
+  app.use(parseErrorHandler);
+  app.use((req, res, next) => {
+    if (req.path !== "/" && !req.path.startsWith("/v1/")) {
+      next();
+      return;
+    }
+    const version = req.header("A2A-Version");
+    if (version !== A2A_PROTOCOL_VERSION) {
+      sendProtocolError(
+        req,
+        res,
+        req.path === "/" ? 200 : 400,
+        -32009,
+        version ? unsupportedVersionError(version) : MISSING_VERSION_ERROR,
+        "VERSION_NOT_SUPPORTED",
+      );
+      return;
+    }
+    const body: unknown = req.body;
+    if (
+      req.path === "/" &&
+      isRecord(body) &&
+      body.jsonrpc === "2.0" &&
+      typeof body.method === "string" &&
+      !A2A_METHODS.has(body.method)
+    ) {
+      sendProtocolError(
+        req,
+        res,
+        200,
+        -32601,
+        unknownMethodError(body.method),
+        "METHOD_NOT_FOUND",
+      );
+      return;
+    }
+    next();
+  });
+  app.use(
     jsonRpcHandler({
       requestHandler,
       userBuilder: UserBuilder.noAuthentication,
     }),
   );
   app.use(
+    "/v1",
     restHandler({
       requestHandler,
       userBuilder: UserBuilder.noAuthentication,
@@ -126,6 +206,43 @@ export async function startA2aServer(
       await executor.dispose();
     },
   };
+}
+
+function sendProtocolError(
+  req: Request,
+  res: Response,
+  httpStatus: number,
+  code: number,
+  message: string,
+  reason: string,
+): void {
+  const details = [
+    {
+      "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+      reason,
+      domain: "a2a-protocol.org",
+    },
+  ];
+  const body: unknown = req.body;
+  if (req.path === "/") {
+    res.status(httpStatus).json({
+      jsonrpc: "2.0",
+      id: isRecord(body) ? (body.id ?? null) : null,
+      error: { code, message, data: details },
+    });
+  } else {
+    res.status(httpStatus).json({
+      error: {
+        code: httpStatus,
+        message,
+        status:
+          reason === "VERSION_NOT_SUPPORTED"
+            ? "FAILED_PRECONDITION"
+            : "INVALID_ARGUMENT",
+        details,
+      },
+    });
+  }
 }
 
 function listen(server: Server, port: number, host: string): Promise<void> {

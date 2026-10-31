@@ -34,6 +34,33 @@ afterEach(() => {
 });
 
 describe("@file mention expansion", () => {
+  it.each([
+    "read @notes.md#L2-3; then continue",
+    "read @notes.md#L2-L3，继续",
+    "read @notes.md#L2-3继续",
+    "read @notes.md；继续",
+    "read @notes.md继续",
+    "read (@notes.md)",
+  ])("expands prose-adjacent mentions: %s", async (text) => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-at-prose-"));
+    writeFileSync(join(cwd, "notes.md"), "one\ntwo\nthree\nfour");
+    for (const expand of [expandAtRefs, expandAtRefsWithImages]) {
+      const out = await expand(text, cwd);
+      expect(out).toContain('path="notes.md"');
+      expect(out).toContain(text.includes("#L") ? "two\nthree" : "one\ntwo");
+      if (text.includes("#L")) {
+        expect(out).not.toContain("\nfour");
+      }
+    }
+  });
+
+  it("preserves Unicode filenames, including quoted punctuation", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-at-unicode-"));
+    writeFileSync(join(cwd, "笔记.md"), "unicode file");
+    writeFileSync(join(cwd, "notes; v2.md"), "quoted file");
+    expect(expandAtRefs("read @笔记.md，继续", cwd)).toContain("unicode file");
+    expect(expandAtRefs('read @"notes; v2.md"', cwd)).toContain("quoted file");
+  });
   it("inline a referenced file's contents", () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-at-"));
     writeFileSync(join(cwd, "notes.md"), "hello from notes");

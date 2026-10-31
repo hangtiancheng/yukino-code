@@ -19,6 +19,8 @@ import { ToolRegistry } from "@/tools/registry.js";
 import {
   WINDOWS_PWSH_ACTION_SNIPPET,
   WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+  WINDOWS_PWSH_SNIPPET,
+  WINDOWS_CSHARP_SNIPPET,
 } from "@/tools/snippets.js";
 import type { ToolContext } from "@/tools/types.js";
 import { asRecord } from "@/utils/index.js";
@@ -31,6 +33,23 @@ afterEach(() => {
 });
 
 describe("ComputerUseTool", () => {
+  it("compiles with explicit desktop references and a correctly sized Win32 input union", () => {
+    expect(WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET).toContain(
+      "-ReferencedAssemblies System.Drawing, System.Windows.Forms",
+    );
+    expect(WINDOWS_CSHARP_SNIPPET).toContain(
+      "[FieldOffset(0)] public MOUSEINPUT mouse;",
+    );
+    for (const snippet of [
+      WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET,
+      WINDOWS_PWSH_ACTION_SNIPPET,
+      WINDOWS_PWSH_SNIPPET,
+    ]) {
+      expect(snippet).toContain(
+        "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding",
+      );
+    }
+  });
   it("exposes Anthropic actions and OpenAI aliases through one custom schema", () => {
     const tool = new ComputerUseTool({
       platform: "linux",

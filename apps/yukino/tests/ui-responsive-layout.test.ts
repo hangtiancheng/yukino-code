@@ -126,7 +126,7 @@ function mount(dock: ReactNode, activity: ReactNode = null) {
       createElement(TerminalLayout, {
         transcript: null,
         activity,
-        status: createElement(Text, {}, "TODO 1/3 · Updating UI"),
+        status: createElement(Text, {}, "DONE 1/3 · Updating UI"),
         dock,
         footer: createElement(Footer, footerProps),
       }),

@@ -121,6 +121,7 @@ export async function createA2aRuntime(
     memoryEnabled: memoryEnabled(config),
     ...(sessionId ? { sessionId } : {}),
   });
+  runtime.permissionMode = config.permission_mode ?? "default";
   if (sessionId) {
     // Recreation after idle eviction: replay the persisted transcript.
     // createRemoteAgent already injected long-term memory/instructions at the
@@ -168,6 +169,9 @@ interface ActiveRun {
   canceled: boolean;
   finished: boolean;
   stopReason: string | null;
+  text: string;
+  messageId: string;
+  lastAnswer?: Message;
   permissions: Map<string, PendingPermission>;
 }
 
@@ -611,6 +615,8 @@ export class YukinoA2aExecutor implements AgentExecutor {
       canceled: false,
       finished: false,
       stopReason: null,
+      text: "",
+      messageId: randomUUID(),
       permissions: new Map(),
     };
     session.run = run;
@@ -691,13 +697,9 @@ export class YukinoA2aExecutor implements AgentExecutor {
       permissionId,
       toolCallId,
       toolName,
-      reason: [
-        source ? `${source.agentName} · ${source.cwd}` : "",
-        decision.reason,
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      reason: decision.reason,
       args,
+      ...(source ? { source } : {}),
     };
     return new Promise<PermissionDecision>((resolve) => {
       const complete = (decision: PermissionDecision) => {
@@ -754,15 +756,80 @@ export class YukinoA2aExecutor implements AgentExecutor {
     contextId: string,
     event: AgentEvent,
   ): void {
+    if (event.type === "turn_complete") {
+      this.flushAnswer(run, taskId, contextId);
+      return;
+    }
     const message = agentEventToMessage(event, taskId, contextId);
     if (!message) {
       return;
     }
+    if (event.type === "stream_text") {
+      if (!event.text) {
+        return;
+      }
+      const append = run.text.length > 0;
+      run.text += event.text;
+      run.bus.publish(
+        A2aEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: {
+            artifactId: run.messageId,
+            name: "",
+            description: "",
+            parts: [textPart(event.text)],
+            metadata: undefined,
+            extensions: [],
+          },
+          append,
+          lastChunk: false,
+          metadata: undefined,
+        }),
+      );
+      return;
+    }
+    const update = statusUpdate(
+      taskId,
+      contextId,
+      TaskState.TASK_STATE_WORKING,
+    );
+    const payload: unknown = message.parts[0]?.content?.value;
+    update.metadata = { [YUKINO_DATA_KEY]: payload };
+    run.bus.publish(A2aEvent.statusUpdate(update));
+  }
+
+  private flushAnswer(run: ActiveRun, taskId: string, contextId: string): void {
+    if (!run.text) {
+      return;
+    }
+    const message = agentMessage(taskId, contextId, [textPart(run.text)]);
+    message.messageId = run.messageId;
+    run.lastAnswer = message;
+    run.bus.publish(
+      A2aEvent.artifactUpdate({
+        taskId,
+        contextId,
+        artifact: {
+          artifactId: run.messageId,
+          name: "",
+          description: "",
+          parts: [textPart(run.text)],
+          metadata: undefined,
+          extensions: [],
+        },
+        append: false,
+        lastChunk: true,
+        metadata: undefined,
+      }),
+    );
     run.bus.publish(
       A2aEvent.statusUpdate(
         statusUpdate(taskId, contextId, TaskState.TASK_STATE_WORKING, message),
       ),
     );
+    run.text = "";
+    run.messageId = randomUUID();
   }
 
   private finishRun(
@@ -781,10 +848,11 @@ export class YukinoA2aExecutor implements AgentExecutor {
     }
     run.permissions.clear();
 
+    this.flushAnswer(run, taskId, contextId);
     const state = this.finalState(run, failure);
     const message = failure
       ? agentMessage(taskId, contextId, [textPart(failure)])
-      : undefined;
+      : run.lastAnswer;
     run.bus.publish(
       A2aEvent.statusUpdate(statusUpdate(taskId, contextId, state, message)),
     );

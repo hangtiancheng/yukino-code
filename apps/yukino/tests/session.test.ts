@@ -13,9 +13,16 @@ import { join } from "node:path";
 
 import { afterEach, describe, it, expect } from "vitest";
 
+import {
+  initLogger,
+  flushLogger,
+  closeLogger,
+  getLogFilePath,
+} from "@/logger/index.js";
 import { COMPACT_BOUNDARY } from "@/session/constants.js";
 import {
   saveMessage,
+  getSessionFilePath,
   loadSession,
   loadSessionForResume,
   listSessions,
@@ -50,6 +57,46 @@ afterEach(() => {
 });
 
 describe("session save/load round-trip", () => {
+  it("aggregates malformed records once per transcript read and listing", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-sess-corrupt-"));
+    const id = newSessionId();
+    saveMessage(cwd, id, { role: "user", content: "valid", timestamp: t0 });
+    const path = getSessionFilePath(cwd, id);
+    const invalid = JSON.stringify({
+      role: "assistant",
+      content: "bad",
+      timestamp: t0,
+      thinking_blocks: [{ type: "invalid" }],
+    });
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8") + (invalid + "\n").repeat(80),
+    );
+    initLogger({
+      sessionId: "corrupt-session",
+      mode: "terminal",
+      skipCleanup: true,
+    });
+    const logPath = getLogFilePath();
+    try {
+      expect(loadSession(cwd, id)).toHaveLength(1);
+      expect(listSessions(cwd)).toHaveLength(1);
+      flushLogger();
+      if (!logPath) {
+        throw new Error("Logger path missing");
+      }
+      const entries: unknown[] = readFileSync(logPath, "utf8")
+        .trim()
+        .split("\n")
+        .map((line): unknown => JSON.parse(line));
+      expect(entries).toHaveLength(2);
+      for (const entry of entries) {
+        expect(entry).toMatchObject({ invalidRecords: 80, filePath: path });
+      }
+    } finally {
+      closeLogger();
+    }
+  });
   it("round-trips thinking and redacted_thinking blocks verbatim", () => {
     const restored = rebuildFromSession([
       { role: "user", content: "task", timestamp: t0 },

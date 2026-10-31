@@ -178,6 +178,7 @@ default:
 
 export const WINDOWS_PWSH_SNIPPET = `
 $ErrorActionPreference = 'Stop';
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding;
 Add-Type -AssemblyName System.Drawing;
 Add-Type -AssemblyName System.Windows.Forms;
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds;
@@ -200,7 +201,21 @@ public static class YukinoComputer
   [StructLayout(LayoutKind.Sequential)]
   private struct INPUT { public uint type; public InputUnion value; }
   [StructLayout(LayoutKind.Explicit)]
-  private struct InputUnion { [FieldOffset(0)] public KEYBDINPUT keyboard; }
+  private struct InputUnion
+  {
+    [FieldOffset(0)] public MOUSEINPUT mouse;
+    [FieldOffset(0)] public KEYBDINPUT keyboard;
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  private struct MOUSEINPUT
+  {
+    public int x;
+    public int y;
+    public uint data;
+    public uint flags;
+    public uint time;
+    public UIntPtr extraInfo;
+  }
   [StructLayout(LayoutKind.Sequential)]
   private struct KEYBDINPUT
   {
@@ -254,15 +269,17 @@ public static class YukinoComputer
 
 export const WINDOWS_PWSH_COMPILE_CSHARP_SNIPPET = `
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -TypeDefinition @'
 ${WINDOWS_CSHARP_SNIPPET}
-'@ -OutputAssembly $env:YUKINO_COMPUTER_ASSEMBLY
+'@ -ReferencedAssemblies System.Drawing, System.Windows.Forms -OutputAssembly $env:YUKINO_COMPUTER_ASSEMBLY
 `;
 
 export const WINDOWS_PWSH_ACTION_SNIPPET = `
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -Path $env:YUKINO_COMPUTER_ASSEMBLY

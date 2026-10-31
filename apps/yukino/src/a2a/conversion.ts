@@ -30,6 +30,7 @@ export const PermissionRequestDataSchema = z.object({
   toolName: z.string(),
   reason: z.string(),
   args: z.record(z.string(), z.unknown()),
+  source: z.object({ agentName: z.string(), cwd: z.string() }).optional(),
 });
 
 export type PermissionRequestData = z.infer<typeof PermissionRequestDataSchema>;

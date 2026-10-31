@@ -143,7 +143,7 @@ describe("unified TODO tracking", () => {
       });
       expect(created.isError).toBe(false);
       expect(snapshot(created.output)).toMatchObject({
-        progress: "TODO 0/1",
+        progress: "DONE 0/1",
         todos: [
           { id: "1", status: "blocked", priority: "high", owner: "leader" },
         ],
@@ -165,7 +165,7 @@ describe("unified TODO tracking", () => {
       expect(updated.isError).toBe(false);
       const expected = { keep: 1, added: [null, 2], nested: { after: true } };
       expect(snapshot(updated.output)).toMatchObject({
-        progress: "TODO 1/2",
+        progress: "DONE 1/2",
         todos: [
           {
             id: "1",

@@ -1,5 +1,6 @@
 // Submodule namespaces for library consumers (Tools.<Sub>.*).
 export * as AskUser from "@/tools/ask-user.js";
+export * as AtomicWrite from "@/tools/atomic-write.js";
 export * as Bash from "@/tools/bash.js";
 export * as ComputerUse from "@/tools/computer-use.js";
 export * as Constants from "@/tools/constants.js";

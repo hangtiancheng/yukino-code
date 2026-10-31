@@ -60,13 +60,13 @@ describe("TODO progress completion", () => {
     list.write({ todos: [{ id: first.id, ...{ status: "completed" } }] });
     show(list.list());
     advance(10000);
-    expect(frame).toContain("TODO 1/2");
+    expect(frame).toContain("DONE 1/2");
     list.write({ todos: [{ id: second.id, ...{ status: "completed" } }] });
     const completedTasks = list.list();
     show(completedTasks);
-    expect(frame).toContain("TODO 2/2");
+    expect(frame).toContain("DONE 2/2");
     advance(4999);
-    expect(frame).toContain("TODO 2/2");
+    expect(frame).toContain("DONE 2/2");
     advance(1);
     expect(frame).toBe("");
     expect(list.list()).toEqual(completedTasks);
@@ -75,7 +75,7 @@ describe("TODO progress completion", () => {
       .slice(-1)[0];
     expect(next.id).toBe("3");
     show(list.list());
-    expect(frame).toContain("TODO 2/3");
+    expect(frame).toContain("DONE 2/3");
   });
   it("does not restart the countdown or reveal hidden progress on equivalent rerenders", () => {
     const list = new TaskList();
@@ -89,7 +89,7 @@ describe("TODO progress completion", () => {
     advance(4000);
     show(list.list().reverse());
     advance(999);
-    expect(frame).toContain("TODO 2/2");
+    expect(frame).toContain("DONE 2/2");
     advance(1);
     expect(frame).toBe("");
     show(list.list());
@@ -106,18 +106,18 @@ describe("TODO progress completion", () => {
     list.write({ todos: [{ id: task.id, ...{ status: "in_progress" } }] });
     show(list.list());
     advance(2000);
-    expect(frame).toContain("TODO 0/1");
+    expect(frame).toContain("DONE 0/1");
     list.write({ todos: [{ id: task.id, ...{ status: "completed" } }] });
     show(list.list());
     advance(4999);
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(1);
     expect(frame).toBe("");
     list.write({ todos: [{ id: task.id, ...{ status: "pending" } }] });
     show(list.list());
-    expect(frame).toContain("TODO 0/1");
+    expect(frame).toContain("DONE 0/1");
     advance(10000);
-    expect(frame).toContain("TODO 0/1");
+    expect(frame).toContain("DONE 0/1");
   });
   it("starts a fresh countdown for a replacement list of completed tasks", () => {
     const list = new TaskList();
@@ -130,9 +130,9 @@ describe("TODO progress completion", () => {
       todos: [{ subject: "new", status: "completed" }],
     });
     show(list.list());
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(4999);
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(1);
     expect(frame).toBe("");
   });
@@ -143,11 +143,11 @@ describe("TODO progress completion", () => {
     advance(4000);
     show(list.list(), "second-session");
     advance(1000);
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(4000);
     expect(frame).toBe("");
     show(list.list(), "third-session");
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     advance(5000);
     expect(frame).toBe("");
   });
@@ -163,7 +163,7 @@ describe("TODO progress completion", () => {
       });
       show(list.list());
       advance(10000);
-      expect(frame).toContain("TODO 1/2");
+      expect(frame).toContain("DONE 1/2");
       expect(frame).toContain(status);
     },
   );
@@ -176,7 +176,7 @@ describe("TODO progress completion", () => {
     expect(frame).toBe("");
     show(list.list());
     advance(4999);
-    expect(frame).toContain("TODO 1/1");
+    expect(frame).toContain("DONE 1/1");
     act(() => {
       instance?.unmount();
     });

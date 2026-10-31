@@ -76,3 +76,31 @@ export const DEFAULT_ADDRESS = `127.0.0.1:${String(A2A_DEFAULT_PORT)}`;
 export const AGENT_CARD_PATH = "/.well-known/agent-card.json";
 export const A2A_PROTOCOL_VERSION = "1.0";
 export const A2A_CONTEXTS_DIR_NAME = "a2a-contexts";
+
+export const DEFAULT_HISTORY_LENGTH = 10;
+export const REQUEST_BODY_LIMIT = 100 * 1024;
+export const PERMISSION_EXTENSION_URI =
+  "https://github.com/hangtiancheng/yukino-code/blob/main/apps/yukino/README.md#yukino-a2a-permissions-v1";
+export const A2A_METHODS = new Set([
+  "SendMessage",
+  "SendStreamingMessage",
+  "GetTask",
+  "ListTasks",
+  "CancelTask",
+  "SubscribeToTask",
+  "CreateTaskPushNotificationConfig",
+  "GetTaskPushNotificationConfig",
+  "ListTaskPushNotificationConfigs",
+  "DeleteTaskPushNotificationConfig",
+  "GetExtendedAgentCard",
+]);
+export const MISSING_VERSION_ERROR =
+  "Missing A2A-Version header; send A2A-Version: 1.0.";
+export const REQUEST_TOO_LARGE_ERROR = `Request body exceeds the ${String(REQUEST_BODY_LIMIT)} byte limit.`;
+export const MALFORMED_JSON_ERROR = "Request body must contain valid JSON.";
+export function unsupportedVersionError(version: string): string {
+  return `Unsupported A2A-Version ${JSON.stringify(version)}; this server requires A2A-Version: 1.0.`;
+}
+export function unknownMethodError(method: string): string {
+  return `Unknown method ${JSON.stringify(method)}. Supported methods: ${[...A2A_METHODS].join(", ")}.`;
+}
