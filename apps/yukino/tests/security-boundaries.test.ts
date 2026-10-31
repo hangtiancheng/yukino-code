@@ -14,12 +14,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadProjectMcpServers } from "@/config/index.js";
-import { collectAttachments } from "@/feedback/collect.js";
-import { redactText } from "@/feedback/redact.js";
 import { MCPClient } from "@/mcp/client.js";
 import { MCPManager } from "@/mcp/manager.js";
 import { loadInstructions } from "@/memory/instructions.js";
-import { saveMessage } from "@/session/index.js";
 import { yukinoPath } from "@/storage/index.js";
 import { TeamManager } from "@/teams/index.js";
 import { shutdownRequest } from "@/teams/protocol.js";
@@ -120,7 +117,7 @@ it("reads instructions literally without expanding includes of any origin", () =
   expect(result).not.toContain("synthetic-inside-secret");
 });
 
-describe("shared env and Bearer redaction", () => {
+describe("telemetry Bearer redaction", () => {
   it.each(["x", "short-token==", "abc.DEF_ghi~jkl+mn/op=="])(
     "redacts Bearer %s before generic header matching",
     (secret) => {
@@ -130,7 +127,6 @@ describe("shared env and Bearer redaction", () => {
         `curl -H 'Authorization: bEaReR ${secret}'`,
         JSON.stringify({ message: `Authorization: Bearer ${secret}` }),
       ]) {
-        expect(redactText(text)).not.toContain(secret);
         const payload = { nested: [{ text }], cyclic: {} };
         payload.cyclic = payload;
         scrubTelemetryPayload(payload);
@@ -139,26 +135,10 @@ describe("shared env and Bearer redaction", () => {
     },
   );
 
-  it("scrubs collected attachments and nested telemetry using the same environment secrets", async () => {
-    const directory = cwd();
+  it("scrubs nested telemetry using environment secrets", () => {
     const secret = "synthetic-environment-credential+/=";
     vi.stubEnv("YUKINO_SECURITY_API_KEY", secret);
     const raw = `failure: ${secret}; encoded: ${encodeURIComponent(secret)}; Authorization: Bearer short-secret`;
-    saveMessage(directory, "security-feedback", {
-      role: "user",
-      content: raw,
-      timestamp: 1,
-    });
-    const files = await collectAttachments({
-      cwd: directory,
-      sessionId: "security-feedback",
-      attachments: ["session"],
-    });
-    expect(files.files.length).toBeGreaterThan(0);
-    const output = JSON.stringify(files);
-    expect(output).not.toContain(secret);
-    expect(output).not.toContain(encodeURIComponent(secret));
-    expect(output).not.toContain("short-secret");
     const payload = { message: raw, nested: [raw], keep: "ordinary text" };
     scrubTelemetryPayload(payload);
     expect(JSON.stringify(payload)).not.toContain(secret);

@@ -2,10 +2,8 @@ import { useRef, type ComponentProps } from "react";
 
 import { AgentsDialog } from "@/ui/agents-dialog.js";
 import { AskUserDialog } from "@/ui/ask-user-dialog.js";
-import { FeedbackDialog } from "@/ui/feedback-dialog.js";
 import type { InputDraft } from "@/ui/input-draft.js";
 import { InputBox } from "@/ui/input.js";
-import { IssueApprovalDialog } from "@/ui/issue-approval.js";
 import { ModelSelect } from "@/ui/model-select.js";
 import { PermissionDialog } from "@/ui/permission-dialog.js";
 import { PlanApprovalDialog } from "@/ui/plan-approval.js";
@@ -26,8 +24,6 @@ interface Props {
   resume?: ComponentProps<typeof SessionSelector>;
   permission?: ComponentProps<typeof PermissionDialog>;
   askUser?: ComponentProps<typeof AskUserDialog> & { requestId: number };
-  feedback?: ComponentProps<typeof FeedbackDialog>;
-  issueApproval?: ComponentProps<typeof IssueApprovalDialog>;
   agents?: ComponentProps<typeof AgentsDialog>;
   workflows?: ComponentProps<typeof WorkflowsDialog>;
   composer: ComponentProps<typeof InputBox>;
@@ -43,8 +39,6 @@ export function InteractionDock({
   resume,
   permission,
   askUser,
-  feedback,
-  issueApproval,
   agents,
   workflows,
   composer,
@@ -73,12 +67,6 @@ export function InteractionDock({
   }
   if (askUser) {
     return <AskUserDialog key={askUser.requestId} {...askUser} />;
-  }
-  if (feedback) {
-    return <FeedbackDialog {...feedback} />;
-  }
-  if (issueApproval) {
-    return <IssueApprovalDialog {...issueApproval} />;
   }
   if (agents) {
     return <AgentsDialog {...agents} />;

@@ -27,7 +27,6 @@ import {
   DEFAULT_THINKING_LEVEL,
 } from "@/config/constants.js";
 import type {
-  AppConfig,
   McpLoading,
   MCPServerConfig,
   HookConfig,
@@ -53,15 +52,6 @@ import {
   type UserBashResult,
 } from "@/conversation/index.js";
 import { executeUserBash } from "@/conversation/user-bash.js";
-import {
-  runFeedbackPipeline,
-  type PipelineResult,
-} from "@/feedback/pipeline.js";
-import type {
-  FeedbackOptions,
-  IssueConfirmation,
-  IssueDraft,
-} from "@/feedback/types.js";
 import { FileHistory } from "@/file-history/index.js";
 import type { Snapshot } from "@/file-history/index.js";
 import { GoalManager, handleGoalCommand } from "@/goal/index.js";
@@ -98,7 +88,6 @@ import { buildSkillSection } from "@/skills/prompts.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import {
   BUILTIN_AGENTS,
-  GENERAL_PURPOSE_AGENT_TYPE,
   PLAN_AGENT_NAME,
   SUBAGENT_INTERRUPTED_MARKER,
 } from "@/subagent/constants.js";
@@ -144,7 +133,6 @@ import {
   createInterruptHandlers,
   isForegroundBusy,
 } from "@/ui/interrupt-scope.js";
-import type { IssueApprovalChoice } from "@/ui/issue-approval.js";
 import type { ModelPickerState } from "@/ui/model-select.js";
 import { PendingQueue } from "@/ui/pending-queue.js";
 import {
@@ -152,10 +140,6 @@ import {
   type PermissionRequest,
 } from "@/ui/permission-request.js";
 import type { PlanChoice } from "@/ui/plan-approval.js";
-import {
-  buildFeedbackIssueRejectionReminder,
-  buildFeedbackRejectionPrompt,
-} from "@/ui/prompts.js";
 import { ProviderLogin } from "@/ui/provider-login.js";
 import { ProviderSelect } from "@/ui/provider-select.js";
 import type { RewindAction } from "@/ui/rewind-dialog.js";
@@ -193,7 +177,6 @@ const log = createChildLogger({ module: "terminal" });
 type AppState = "providerSelect" | "chat";
 
 interface Props {
-  config?: AppConfig;
   providers: ProviderConfig[];
   permissionMode?: string;
   mcpServers: MCPServerConfig[];
@@ -211,7 +194,6 @@ interface Props {
 }
 
 export function App({
-  config: initialConfig,
   providers: initialProviders,
   permissionMode,
   mcpServers,
@@ -578,15 +560,6 @@ export function App({
   >([]);
   const [rewindDialogActive, setRewindDialogActive] = useState(false);
   const [rewindSnapshots, setRewindSnapshots] = useState<Snapshot[]>([]);
-  const [feedbackActive, setFeedbackActive] = useState(false);
-  const [feedbackDescription, setFeedbackDescription] = useState("");
-  const [feedbackProgress, setFeedbackProgress] = useState<string | null>(null);
-  const [issueApprovalRequest, setIssueApprovalRequest] = useState<
-    IssueDraft[] | null
-  >(null);
-  const issueApprovalResolveRef = useRef<
-    ((confirmation: IssueConfirmation) => void) | null
-  >(null);
   const [transcriptRevision, setTranscriptRevision] = useState(0);
   // Steering messages queued into the in-flight agent, mirrored for display.
   // Entries are removed when the agent reports them delivered.
@@ -672,8 +645,6 @@ export function App({
         permissionResolveRef,
         setPermissionRequest,
         settleAskQueue,
-        issueApprovalResolveRef,
-        setIssueApprovalRequest,
         setPlanApprovalActive,
         permissionQueue: permissionQueueRef,
         backgroundTasks: backgroundTaskManagerRef.current,
@@ -768,8 +739,6 @@ export function App({
     modelDialogActive ||
     thinkingDialogActive ||
     planApprovalActive ||
-    feedbackActive ||
-    issueApprovalRequest !== null ||
     rewindDialogActive ||
     resumeDialogActive ||
     permissionRequest !== null ||
@@ -1832,10 +1801,6 @@ export function App({
               });
           }
           break;
-        case "feedback":
-          setFeedbackDescription(parsed.args);
-          setFeedbackActive(true);
-          break;
         case "resume": {
           const arg = parsed.args.trim();
           if (!arg) {
@@ -2823,8 +2788,6 @@ export function App({
     modelDialogActive ||
     thinkingDialogActive ||
     planApprovalActive ||
-    feedbackActive ||
-    issueApprovalRequest !== null ||
     rewindDialogActive ||
     resumeDialogActive ||
     permissionRequest !== null ||
@@ -2917,154 +2880,6 @@ export function App({
     initialResumeHandledRef.current = true;
     void handleSlashCommand(resume === true ? "/resume" : `/resume ${resume}`);
   }, [appState, resume]);
-
-  const handleFeedbackSubmit = (options: FeedbackOptions): void => {
-    setFeedbackActive(false);
-    const client = clientRef.current;
-    if (!client) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "system", content: CLIENT_NOT_READY },
-      ]);
-      return;
-    }
-
-    dismissNotice();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    setIsStreaming(true);
-    prepareSubagentTurn();
-    const provider = selectedProviderRef.current;
-    const sessionId = sessionIdRef.current;
-
-    let rejection: PipelineResult["rejection"] | undefined;
-    void runFeedbackPipeline(options, {
-      cwd,
-      sessionId,
-      runAgent: async (prompt) => {
-        const agent = registryRef.current.get("Agent");
-        if (!(agent instanceof AgentTool)) {
-          throw new Error("The built-in feedback agent is unavailable.");
-        }
-        const result = await agent.runBuiltin(
-          GENERAL_PURPOSE_AGENT_TYPE,
-          {
-            cwd,
-            permissionChecker: checkerRef.current ?? undefined,
-            abortSignal: controller.signal,
-            onPermissionRequest: requestPermission,
-          },
-          prompt,
-        );
-        controller.signal.throwIfAborted();
-        if (
-          result.isError ||
-          result.output.includes(SUBAGENT_INTERRUPTED_MARKER)
-        ) {
-          throw new Error(result.output);
-        }
-        return result.output;
-      },
-      messages: conversationRef.current.getMessages(),
-      runtime: {
-        config: {
-          ...initialConfig,
-          providers,
-          active_provider: {
-            ...provider,
-            context_window: contextWindowRef.current,
-            max_output_tokens: maxOutputRef.current,
-            thinking: client.getThinkingLevel?.() ?? provider.thinking,
-          },
-          permission_mode: permModeRef.current,
-          mcp_servers: mcpServersRef.current,
-          lsp_servers: lspServers,
-          hooks,
-          sandbox: {
-            ...sandboxYaml,
-            enabled: sandboxEnabledRef.current,
-            auto_allow: sandboxAutoAllowRef.current,
-          },
-          enable_coordinator_mode: enableCoordinatorMode,
-          enable_fork: !forkDisabled,
-          enable_memory: memoryEnabled,
-        },
-        provider: {
-          name: provider.name,
-          model: provider.model,
-          protocol: provider.protocol,
-          baseUrl: provider.base_url,
-          contextWindow: contextWindowRef.current,
-          maxOutputTokens: maxOutputRef.current,
-          thinkingLevel: client.getThinkingLevel?.() ?? provider.thinking,
-        },
-        permissionMode: permModeRef.current,
-        sandbox: {
-          enabled: sandboxEnabledRef.current,
-          autoAllow: sandboxAutoAllowRef.current,
-        },
-        mcpServers: mcpManagerRef.current?.connectedServers(),
-        toolCount: registryRef.current.listTools().length,
-        sessionId,
-      },
-      contextWindow: contextWindowRef.current,
-      abortSignal: controller.signal,
-      onProgress: setFeedbackProgress,
-      confirmIssues: (issues) =>
-        new Promise<IssueConfirmation>((resolve) => {
-          setMessages((prev) => [
-            ...prev,
-            ...issues.map((issue, index) => ({
-              role: "system" as const,
-              content: `Issue ${String(index + 1)}/${String(issues.length)}: ${issue.title}\n\n${issue.body}`,
-            })),
-          ]);
-          issueApprovalResolveRef.current = resolve;
-          setIssueApprovalRequest(issues);
-        }),
-    })
-      .then((result) => {
-        rejection = result.rejection;
-        setMessages((prev) => [
-          ...prev,
-          { role: "system", content: result.report },
-        ]);
-      })
-      .catch((err: unknown) => {
-        const message = controller.signal.aborted
-          ? "Feedback cancelled."
-          : `Feedback failed: ${asErrorString(err)}`;
-        setMessages((prev) => [...prev, { role: "system", content: message }]);
-      })
-      .finally(() => {
-        setFeedbackProgress(null);
-        if (abortControllerRef.current === controller) {
-          abortControllerRef.current = null;
-        }
-        setIsStreaming(false);
-        // Mirror the plan-approval feedback path: the rejection reason goes
-        // to the agent as a user turn, with the rejected titles as context.
-        const reason = rejection?.reason;
-        if (reason) {
-          conversationRef.current.addSystemReminder(
-            buildFeedbackIssueRejectionReminder(
-              (rejection?.issues ?? []).map((issue) => issue.title),
-            ),
-          );
-          handleSubmit(buildFeedbackRejectionPrompt(reason));
-        }
-      });
-  };
-
-  const handleIssueApproval = (
-    choice: IssueApprovalChoice,
-    reason?: string,
-  ): void => {
-    setIssueApprovalRequest(null);
-    const resolve = issueApprovalResolveRef.current;
-    issueApprovalResolveRef.current = null;
-    resolve?.({ approved: choice === "approve", reason });
-  };
 
   const handleLogin = async (input: ProviderConfig): Promise<void> => {
     const environment = detectEnvironment(cwd);
@@ -3168,13 +2983,6 @@ export function App({
             isAsking={askRequest !== null}
             expanded={toolsExpanded}
           />
-          {feedbackProgress && !issueApprovalRequest ? (
-            <Box paddingLeft={1}>
-              <Text color={THEME.muted} wrap="truncate-end">
-                {feedbackProgress}
-              </Text>
-            </Box>
-          ) : null}
           {userBash.tool && (
             <ToolBlock tool={userBash.tool} expanded={toolsExpanded} />
           )}
@@ -3279,27 +3087,6 @@ export function App({
                   onCancel: () => {
                     setRewindDialogActive(false);
                   },
-                }
-              : undefined
-          }
-          feedback={
-            feedbackActive
-              ? {
-                  cwd,
-                  sessionId: sessionIdRef.current,
-                  description: feedbackDescription,
-                  onSubmit: handleFeedbackSubmit,
-                  onCancel: () => {
-                    setFeedbackActive(false);
-                  },
-                }
-              : undefined
-          }
-          issueApproval={
-            issueApprovalRequest
-              ? {
-                  issues: issueApprovalRequest,
-                  onSelect: handleIssueApproval,
                 }
               : undefined
           }

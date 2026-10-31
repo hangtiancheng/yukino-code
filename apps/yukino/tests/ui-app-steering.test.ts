@@ -9,16 +9,12 @@ import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 import * as config from "@/config/index.js";
 import type { MCPServerConfig } from "@/config/index.js";
 import type { ConversationManager } from "@/conversation/index.js";
-import { runFeedbackPipeline } from "@/feedback/pipeline.js";
-import type { PipelineDeps, PipelineResult } from "@/feedback/pipeline.js";
-import type { FeedbackOptions } from "@/feedback/types.js";
 import { loadInputTexts as loadPromptHistory } from "@/history/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import type { StreamEvent } from "@/llm/events.js";
 import { MCPClient } from "@/mcp/client.js";
 import { PermissionChecker } from "@/permissions/index.js";
 import * as sessionMod from "@/session/index.js";
-import { AgentTool } from "@/subagent/agent-tool.js";
 import { FileStateCache } from "@/tools/file-state-cache.js";
 import { App } from "@/ui/app.js";
 import { installTerminalOutput } from "@/ui/terminal-output.js";
@@ -26,17 +22,10 @@ import { checkForUpdate } from "@/update/version-check.js";
 import { contentToText } from "@/utils/index.js";
 import { connectToIde } from "@/vscode/ide-client.js";
 
-const { createClientMock, feedbackMock } = vi.hoisted(() => ({
+const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn<() => Promise<LLMClient>>(),
-  feedbackMock:
-    vi.fn<
-      (options: FeedbackOptions, deps: PipelineDeps) => Promise<PipelineResult>
-    >(),
 }));
 vi.mock("@/llm/client.js", () => ({ createClient: createClientMock }));
-vi.mock("@/feedback/pipeline.js", () => ({
-  runFeedbackPipeline: feedbackMock,
-}));
 vi.mock("@/update/version-check.js", () => ({ checkForUpdate: vi.fn() }));
 vi.mock("@/vscode/ide-client.js", () => ({ connectToIde: vi.fn() }));
 
@@ -432,171 +421,6 @@ describe("App steering delivery", () => {
     await submit("EXPLICIT_NEXT_REQUEST");
     await waitForRequests(2);
     expect(client.requests[1]?.users).toContain("EXPLICIT_NEXT_REQUEST");
-    await finishRequest(1);
-  });
-});
-
-describe("App feedback approval", () => {
-  const issues = [
-    {
-      title: "[tool] Retry storm",
-      body: "## What happened\nCONCRETE_TOOL_FAILURE\n\n## Evidence\nTOOL_EVIDENCE_END",
-    },
-    { title: "[ui] Lost input", body: "## What happened\nCONCRETE_UI_FAILURE" },
-  ];
-  const filed = vi.fn();
-
-  beforeEach(() => {
-    feedbackMock.mockReset();
-    filed.mockReset();
-    feedbackMock.mockImplementation(async (_options, deps) => {
-      const confirmation = await deps.confirmIssues(issues);
-      deps.abortSignal.throwIfAborted();
-      if (confirmation.approved) {
-        filed(issues);
-        return { report: "Feedback issues filed." };
-      }
-      return {
-        report: "Feedback rejected.",
-        rejection: { issues, reason: confirmation.reason },
-      };
-    });
-  });
-
-  async function openFeedback(forkDisabled = false) {
-    await start([], forkDisabled);
-    await finishRequest(0);
-    await submit("/feedback observed failures");
-    await press(" ");
-    await press("\r");
-    await vi.waitFor(() => {
-      expect(runFeedbackPipeline).toHaveBeenCalledTimes(1);
-    });
-    await flush();
-    expect(filed).not.toHaveBeenCalled();
-  }
-
-  it.each(["complete", "cancel", "fail"])(
-    "runs feedback analysis in a synchronous general-purpose child with inherited context (%s)",
-    async (outcome) => {
-      const runBuiltin = vi.spyOn(AgentTool.prototype, "runBuiltin");
-      feedbackMock.mockImplementation(async (_options, deps) => {
-        const report = await deps.runAgent(
-          "Investigate the reported Yukino failure using inherited context.",
-        );
-        const confirmation = await deps.confirmIssues(issues);
-        deps.abortSignal.throwIfAborted();
-        if (confirmation.approved) {
-          filed(issues);
-        }
-        return { report };
-      });
-      await openFeedback(true);
-      await waitForRequests(2);
-      const parent = client.requests[0].conversation;
-      const child = client.requests[1];
-      expect(child.conversation).not.toBe(parent);
-      expect(child.users).toContain("INITIAL_REQUEST");
-      expect(
-        child.messages.some((message) =>
-          contentToText(message.content).includes('role "general-purpose"'),
-        ),
-      ).toBe(true);
-      expect(child.users.join("\n")).toContain("reported Yukino failure");
-      expect(runBuiltin).toHaveBeenCalledWith(
-        "general-purpose",
-        expect.objectContaining({
-          abortSignal: feedbackMock.mock.calls[0][1].abortSignal,
-        }),
-        expect.any(String),
-      );
-      expect(terminal.bufferLines().join("\n")).not.toContain(
-        "TOOL_EVIDENCE_END",
-      );
-      expect(filed).not.toHaveBeenCalled();
-      if (outcome === "cancel") {
-        await press("\x03");
-        expect(child.signal?.aborted).toBe(true);
-      } else if (outcome === "fail") {
-        await act(async () => {
-          child.fail(new Error("Feedback worker failed"));
-          await new Promise<void>((resolve) => setImmediate(resolve));
-        });
-      } else {
-        await finishRequest(1);
-        await vi.waitFor(() => {
-          expect(terminal.bufferLines().join("\n")).toContain(
-            "TOOL_EVIDENCE_END",
-          );
-        });
-        expect(filed).not.toHaveBeenCalled();
-        await press("\r");
-        await vi.waitFor(() => {
-          expect(filed).toHaveBeenCalledWith(issues);
-        });
-      }
-      if (outcome !== "complete") {
-        await vi.waitFor(() => {
-          expect(terminal.bufferLines().join("\n")).toContain(
-            outcome === "cancel" ? "Feedback cancelled." : "Feedback failed:",
-          );
-        });
-        expect(filed).not.toHaveBeenCalled();
-      }
-      await submit("Continue after feedback");
-      await waitForRequests(3);
-      expect(client.requests[2].conversation).toBe(parent);
-      expect(
-        parent
-          .getMessages()
-          .some((message) =>
-            contentToText(message.content).includes('role "general-purpose"'),
-          ),
-      ).toBe(false);
-      await finishRequest(2);
-    },
-  );
-
-  it.each([8, 24])(
-    "shows all drafts and requires approval at %i rows",
-    async (rows) => {
-      terminal.resize(120, rows);
-      await openFeedback();
-      expect(feedbackMock.mock.calls[0][0].attachments).toEqual(["log", "env"]);
-      expect(terminal.bufferLines().join("\n")).toContain("TOOL_EVIDENCE_END");
-      expect(terminal.bufferLines().join("\n")).toContain(
-        "CONCRETE_UI_FAILURE",
-      );
-      await press("\r");
-      await vi.waitFor(() => {
-        expect(filed).toHaveBeenCalledWith(issues);
-      });
-    },
-  );
-
-  it("sends a slash-prefixed rejection reason to the model as feedback", async () => {
-    await openFeedback();
-    await press("\x1b[B");
-    await press("\r");
-    await submit("/quit is the text of my rejection reason");
-    await waitForRequests(2);
-    expect(filed).not.toHaveBeenCalled();
-    expect(client.requests[1]?.users.at(-1)).toBe(
-      "Feedback on the rejected /feedback issues:\n\n/quit is the text of my rejection reason",
-    );
-    expect(JSON.stringify(client.requests[1]?.messages)).toContain(
-      "feedback_issue_rejection",
-    );
-    await finishRequest(1);
-  });
-
-  it("cancels a pending approval without filing or leaving input blocked", async () => {
-    await openFeedback();
-    await press("\x03");
-    expect(feedbackMock.mock.calls[0][1].abortSignal.aborted).toBe(true);
-    expect(filed).not.toHaveBeenCalled();
-    await submit("Continue after feedback cancellation");
-    await waitForRequests(2);
     await finishRequest(1);
   });
 });

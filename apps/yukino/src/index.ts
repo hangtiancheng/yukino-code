@@ -16,7 +16,6 @@ export * as Commands from "@/commands/index.js";
 export * as Compact from "@/compact/index.js";
 export * as Config from "@/config/index.js";
 export * as Conversation from "@/conversation/index.js";
-export * as Feedback from "@/feedback/index.js";
 export * as FileHistory from "@/file-history/index.js";
 export * as Goal from "@/goal/index.js";
 export * as History from "@/history/index.js";

@@ -144,7 +144,6 @@ async function runUiMode(
       process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
     }
     const appProps = {
-      config: cfg,
       providers: cfg.providers,
       permissionMode: cfg.permission_mode,
       mcpServers: cfg.mcp_servers,

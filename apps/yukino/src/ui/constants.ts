@@ -1,6 +1,5 @@
 import { CUSTOM_COMMAND_TAG } from "@/commands/constants.js";
 import type { ThinkingLevel } from "@/config/provider-config.js";
-import type { AttachmentKind } from "@/feedback/types.js";
 import type { NonPlanPermissionMode } from "@/permissions/index.js";
 import { DARK_THEME, type ThemePalette } from "@/theme/constants.js";
 import type { ModelPickerState } from "@/ui/model-select.js";
@@ -159,35 +158,3 @@ export const THINKING_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   xhigh: "Extra-deep reasoning",
   max: "Most thorough reasoning",
 };
-
-export const FEEDBACK_ITEMS: {
-  kind: AttachmentKind;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    kind: "session",
-    label: "Session history",
-    hint: "full conversation JSONL",
-  },
-  {
-    kind: "log",
-    label: "Warnings and errors",
-    hint: "yukino diagnostic log",
-  },
-  {
-    kind: "env",
-    label: "Environment info",
-    hint: "runtime, provider, terminal and config",
-  },
-  {
-    kind: "tools",
-    label: "Detailed tool output",
-    hint: "tool trace and full saved output; optional",
-  },
-  {
-    kind: "file-history",
-    label: "File history",
-    hint: "source snapshots and backups; optional",
-  },
-];

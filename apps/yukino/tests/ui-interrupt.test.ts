@@ -119,9 +119,7 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     const controller = new AbortController();
     const permissionResolve = vi.fn();
     const settleAskQueue = vi.fn();
-    const issueApprovalResolve = vi.fn();
     const setPermissionRequest = vi.fn();
-    const setIssueApprovalRequest = vi.fn();
     const setPlanApprovalActive = vi.fn();
     const stopBackgroundTasks = vi.fn().mockResolvedValue(undefined);
     const stopTeams = vi.fn().mockResolvedValue(undefined);
@@ -131,8 +129,6 @@ describe("createInterruptHandlers (interrupt scope)", () => {
       setPermissionRequest,
       permissionQueue: { current: [] },
       settleAskQueue,
-      issueApprovalResolveRef: { current: issueApprovalResolve },
-      setIssueApprovalRequest,
       setPlanApprovalActive,
       backgroundTasks: { stopAll: stopBackgroundTasks },
       teams: { stopAll: stopTeams },
@@ -141,9 +137,7 @@ describe("createInterruptHandlers (interrupt scope)", () => {
       controller,
       permissionResolve,
       settleAskQueue,
-      issueApprovalResolve,
       setPermissionRequest,
-      setIssueApprovalRequest,
       setPlanApprovalActive,
       stopBackgroundTasks,
       stopTeams,
@@ -161,10 +155,6 @@ describe("createInterruptHandlers (interrupt scope)", () => {
     expect(h.setPermissionRequest).toHaveBeenCalledWith(null);
     // Every queued/in-flight ask is settled, not just the visible dialog.
     expect(h.settleAskQueue).toHaveBeenCalledTimes(1);
-    // A pending /feedback issue-approval panel is rejected, never filed.
-    expect(h.issueApprovalResolve).toHaveBeenCalledWith({ approved: false });
-    expect(h.deps.issueApprovalResolveRef.current).toBeNull();
-    expect(h.setIssueApprovalRequest).toHaveBeenCalledWith(null);
     // A pending plan-approval dialog is dismissed too.
     expect(h.setPlanApprovalActive).toHaveBeenCalledWith(false);
     // The core regression: a single Ctrl+C must never stop background tasks,
