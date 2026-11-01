@@ -58,7 +58,7 @@ export function SelectorFrame({
   const frameWidth = Math.max(1, width ?? columns);
   const padding = frameWidth > 2 ? 1 : 0;
   const contentWidth = frameWidth - padding * 2;
-  const rule = "─".repeat(frameWidth);
+  const rule = "─".repeat(Math.max(0, frameWidth - 2));
   const singleLine = (text: string) =>
     truncateToWidth(plainTerminalLine(text), contentWidth);
 
@@ -71,12 +71,12 @@ export function SelectorFrame({
     >
       {chrome.borders && (
         <Text color={THEME.border} wrap="truncate-end">
-          {rule}
+          {frameWidth >= 2 ? `╭${rule}╮` : "─"}
         </Text>
       )}
       <Box flexDirection="column" paddingX={padding}>
         {chrome.title && (
-          <Text bold color={THEME.accent} wrap="truncate-end">
+          <Text bold color={THEME.text} wrap="truncate-end">
             {singleLine(title)}
           </Text>
         )}
@@ -100,7 +100,7 @@ export function SelectorFrame({
       </Box>
       {chrome.borders && (
         <Text color={THEME.border} wrap="truncate-end">
-          {rule}
+          {frameWidth >= 2 ? `╰${rule}╯` : "─"}
         </Text>
       )}
     </Box>

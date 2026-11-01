@@ -20,6 +20,28 @@ afterEach(() => {
 });
 
 describe("terminal theme detection", () => {
+  it.each([
+    {
+      flavor: "Mocha",
+      palette: DARK_THEME,
+      colors:
+        "#f5e0dc #f2cdcd #f5c2e7 #cba6f7 #f38ba8 #eba0ac #fab387 #f9e2af #a6e3a1 #94e2d5 #89dceb #74c7ec #89b4fa #b4befe #cdd6f4 #bac2de #a6adc8 #9399b2 #7f849c #6c7086 #585b70 #45475a #313244 #1e1e2e #181825 #11111b",
+    },
+    {
+      flavor: "Latte",
+      palette: LIGHT_THEME,
+      colors:
+        "#dc8a78 #dd7878 #ea76cb #8839ef #d20f39 #e64553 #fe640b #df8e1d #40a02b #179299 #04a5e5 #209fb5 #1e66f5 #7287fd #4c4f69 #5c5f77 #6c6f85 #7c7f93 #8c8fa1 #9ca0b0 #acb0be #bcc0cc #ccd0da #eff1f5 #e6e9ef #dce0e8",
+    },
+  ])(
+    "uses only exact official Catppuccin $flavor colors",
+    ({ palette, colors }) => {
+      const official = new Set(colors.split(" "));
+      for (const color of Object.values<string>({ ...palette })) {
+        expect(official.has(color), color).toBe(true);
+      }
+    },
+  );
   it.each(["dark", "light"] satisfies ("dark" | "light")[])(
     "maps every thinking level to its existing %s token, independently of lifecycle status",
     (mode) => {

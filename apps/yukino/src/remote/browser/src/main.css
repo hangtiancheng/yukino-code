@@ -33,16 +33,60 @@
   --font-mono:
     "Yukino", "Maple Mono", "SFMono-Regular", Menlo, "Cascadia Code",
     "Sarasa Gothic SC", monospace;
-  --font-sans: var(--font-mono);
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica,
+    Arial, sans-serif;
   --breakpoint-xs: 26rem;
   --animate-blink: blink 1s step-end infinite;
-  --animate-modal-in: modal-in 120ms ease-out;
+  --animate-modal-in: modal-in 160ms ease-out;
+  --shadow-xl: 0 12px 32px
+    color-mix(in srgb, var(--yukino-code-bg) 60%, transparent);
+  --shadow-2xl: 0 24px 64px
+    color-mix(in srgb, var(--yukino-code-bg) 70%, transparent);
 }
 
 @layer components {
+  .yukino-app {
+    line-height: 1.6;
+  }
+  .transcript,
+  [role="dialog"] {
+    overflow-wrap: anywhere;
+  }
+  .modal-backdrop {
+    background: color-mix(in srgb, var(--yukino-code-bg) 80%, transparent);
+    backdrop-filter: blur(6px);
+  }
+  .composer-field {
+    box-shadow: 0 3px 12px
+      color-mix(in srgb, var(--yukino-code-bg) 30%, transparent);
+  }
+  .composer-field:focus-within {
+    outline: 2px solid var(--yukino-border-accent);
+    outline-offset: 3px;
+  }
+  .status-bar button {
+    border-radius: 6px;
+    padding: 3px 6px;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+  .status-bar button:hover {
+    background: var(--yukino-selected-bg);
+  }
+  .tool-card > button {
+    min-height: 32px;
+  }
+  .completion-menu {
+    z-index: 20;
+  }
+  .completion-menu [role="option"] {
+    border-radius: 8px;
+  }
   .markdown {
     overflow-wrap: anywhere;
-    line-height: 1.65;
+    line-height: 1.8;
     p {
       margin-block: 0.65em;
     }
@@ -67,29 +111,31 @@
     h5,
     h6 {
       color: var(--yukino-md-heading);
-      font-size: inherit;
+      font-size: 1em;
+      font-weight: 600;
+      line-height: 1.4;
       margin-block: 1.25em 0.5em;
     }
     h1 {
+      font-size: 1.4em;
       font-weight: 700;
-      text-decoration: underline;
-      text-underline-offset: 4px;
     }
-    h2,
+    h2 {
+      font-size: 1.2em;
+    }
     h3 {
-      font-weight: 700;
+      font-size: 1.05em;
     }
-    h3,
     h4,
     h5,
     h6 {
-      font-style: italic;
+      color: var(--yukino-muted);
     }
     strong {
       font-weight: 700;
     }
     blockquote {
-      border-left: 1px solid var(--yukino-md-quote-border);
+      border-left: 3px solid var(--yukino-md-quote-border);
       color: var(--yukino-md-quote);
       padding-left: 1em;
       margin-block: 0.75em;
@@ -116,16 +162,26 @@
       white-space: pre;
     }
     code {
-      font-family: inherit;
+      font-family: var(--font-mono);
       color: var(--yukino-md-code);
     }
+    :not(pre) > code {
+      border: 1px solid var(--yukino-border-muted);
+      border-radius: 5px;
+      background: var(--yukino-code-bg);
+      padding: 0.1em 0.35em;
+      font-size: 0.88em;
+    }
     pre {
-      border-block: 1px solid var(--yukino-md-code-block-border);
-      padding: 0.75em 1em;
+      border: 1px solid var(--yukino-border-muted);
+      border-radius: 10px;
+      padding: 1em 1.25em;
       margin-block: 1em;
       overflow-x: auto;
       overflow-wrap: normal;
       background: var(--yukino-code-bg);
+      font-size: 0.88em;
+      line-height: 1.7;
     }
     pre code {
       color: var(--yukino-md-code-block);
@@ -147,6 +203,7 @@
     }
     th {
       color: var(--yukino-md-heading);
+      background: var(--yukino-surface);
       font-weight: 700;
     }
     hr {
@@ -186,7 +243,7 @@
   }
   [aria-selected="true"]::before,
   [data-selected="true"]::before {
-    content: "→";
+    content: "›";
     color: var(--yukino-accent);
   }
   .transcript-entry {
@@ -219,6 +276,7 @@ body {
   margin: 0;
   background: var(--yukino-background);
   -webkit-text-size-adjust: 100%;
+  color: var(--yukino-text);
 }
 * {
   scrollbar-width: thin;
@@ -236,6 +294,9 @@ body {
 }
 button {
   -webkit-tap-highlight-color: transparent;
+}
+button:disabled {
+  cursor: default;
 }
 @media (max-width: 640px) {
   input,

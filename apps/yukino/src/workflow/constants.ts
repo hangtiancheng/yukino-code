@@ -29,3 +29,5 @@ export const WORKFLOW_PANEL_EMPTY =
 export const WORKFLOW_PANEL_HINT =
   "Tab run · ↑↓ agent · x stop agent · K stop run · r resume · Esc close";
 export const WORKFLOW_RUNNING_ERROR = "This workflow run is already running";
+
+export const WORKFLOW_PANEL_COMPACT_HINT = "Tab · ↑↓ · x/K · r · Esc close";

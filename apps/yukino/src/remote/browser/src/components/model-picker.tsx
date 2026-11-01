@@ -51,7 +51,7 @@ export function ModelPicker({ state, onSelect, onClose }: ModelPickerProps) {
         <button
           type="button"
           onClick={onClose}
-          className="cursor-pointer rounded-none border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-bg"
+          className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected/40"
         >
           Cancel
         </button>

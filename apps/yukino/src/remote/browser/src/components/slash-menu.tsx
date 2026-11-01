@@ -24,7 +24,7 @@ export function SlashMenu({
       ref={listRef}
       role="listbox"
       aria-label="Slash commands"
-      className="absolute inset-x-4 bottom-full mb-2 max-h-72 overflow-y-auto border-y border-rule bg-bg py-1  sm:inset-x-6"
+      className="completion-menu absolute inset-x-0 bottom-full mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl"
     >
       {commands.map((cmd, i) => (
         <button

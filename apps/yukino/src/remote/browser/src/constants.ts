@@ -87,23 +87,23 @@ export const STATUS_META: Record<
 > = {
   running: {
     label: "running…",
-    pill: "text-muted",
+    pill: "bg-accent/10 text-accent",
     panel: "bg-tool",
   },
   ok: {
     label: "✓",
-    pill: "text-green",
+    pill: "bg-green/10 text-green",
     panel: "bg-tool-ok",
   },
   err: {
     label: "✗",
-    pill: "text-red",
+    pill: "bg-red/10 text-red",
     panel: "bg-tool-error",
   },
 };
 
 export const STATUS_PILL: Record<string, string> = {
-  running: "bg-yellow/15 text-yellow",
+  running: "bg-accent/15 text-accent",
   completed: "bg-green/15 text-green",
   failed: "bg-red/15 text-red",
   stopped: "bg-red/15 text-red",

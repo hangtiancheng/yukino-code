@@ -171,9 +171,14 @@ export function SelectorListRow({
       : "";
 
   return (
-    <Box flexDirection="column" paddingX={padding} width="100%">
+    <Box
+      backgroundColor={focused ? THEME.selectedBg : undefined}
+      flexDirection="column"
+      paddingX={padding}
+      width="100%"
+    >
       <Text wrap="truncate-end">
-        <Text color={focused ? THEME.accent : THEME.text}>
+        <Text bold={focused} color={focused ? THEME.accent : THEME.text}>
           {pointer}
           {truncateToWidth(singleLineLabel, labelWidth)}
         </Text>

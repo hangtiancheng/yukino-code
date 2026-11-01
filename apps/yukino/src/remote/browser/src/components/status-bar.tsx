@@ -42,8 +42,8 @@ export function StatusBar(props: StatusBarProps) {
         ? "text-yellow"
         : "text-red";
   return (
-    <footer className="shrink-0 px-3 pb-2 text-xs text-muted sm:px-5">
-      <div className="flex min-w-0 items-baseline gap-3">
+    <footer className="status-bar mx-auto w-full max-w-[68rem] shrink-0 px-3 pt-2 pb-3 font-mono text-[11px] text-muted sm:px-8 sm:pb-4">
+      <div className="flex min-w-0 items-center gap-3">
         <span className="min-w-0 flex-1 truncate" title={props.cwd}>
           {props.cwd || "Yukino"}
           {props.session && (
@@ -65,7 +65,7 @@ export function StatusBar(props: StatusBarProps) {
           {props.theme}
         </button>
       </div>
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 tabular-nums">
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums">
         {usage && (
           <span>
             ↑{formatTokens(usage.inputTokens)} ↓

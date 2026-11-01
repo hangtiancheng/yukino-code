@@ -528,7 +528,7 @@ describe("shared live and committed tool cards", () => {
           { columns: 80 },
         ),
       );
-      expect(output).toContain(`EnterPlanMode  ${status}`);
+      expect(output).toMatch(new RegExp(`EnterPlanMode  [●✓✗–] ${status}`));
       expect(output).toContain("plan subagent | 3 turns");
       if (status === "running") {
         expect(output).toContain("ReadFile");
@@ -583,10 +583,10 @@ describe("shared live and committed tool cards", () => {
         { columns: 40 },
       ),
     );
-    expect(output).toContain("Agent first-task  completed");
+    expect(output).toContain("Agent first-task  ✓ completed");
     expect(output).toContain("explorer subagent | 6 turns");
     expect(output).not.toContain("6 turns | completed");
-    expect(output).toContain("Agent second-task  running");
+    expect(output).toContain("Agent second-task  ● running");
     expect(output).toContain("explorer subagent | 3 turns | ReadFile");
     expect(output).not.toContain("• explorer subagent");
     expect(output.split("\n").every((line) => visibleWidth(line) <= 80)).toBe(
@@ -642,7 +642,7 @@ describe("shared live and committed tool cards", () => {
       );
       const output = stripVTControlCharacters(rendered);
       expect(rendered).toContain(colors.bgHex(background)(" ").split(" ")[0]);
-      expect(output).toContain(`Agent reviewer  ${cardStatus}`);
+      expect(output).toMatch(new RegExp(`Agent reviewer  [●✓] ${cardStatus}`));
       expect(output).toContain(
         memberStatus === "running"
           ? "@reviewer | Grep | 2 turns | 1.3k tokens"

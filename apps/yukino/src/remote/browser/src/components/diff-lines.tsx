@@ -1,14 +1,17 @@
 export function DiffLines({ text }: { text: string }) {
   return (
-    <div className="overflow-x-auto whitespace-pre" aria-label="File changes">
+    <div
+      className="overflow-x-auto font-mono whitespace-pre"
+      aria-label="File changes"
+    >
       {text.split("\n").map((line, index) => (
         <div
           key={index}
           className={
             line.startsWith("+ ")
-              ? "text-green"
+              ? "bg-green/5 text-green"
               : line.startsWith("- ")
-                ? "text-red"
+                ? "bg-red/5 text-red"
                 : "text-muted"
           }
         >

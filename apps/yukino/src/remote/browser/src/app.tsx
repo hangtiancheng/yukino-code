@@ -254,7 +254,7 @@ export function App() {
   );
 
   return (
-    <div className="flex h-dvh w-full flex-col bg-bg font-mono text-sm text-base antialiased">
+    <div className="yukino-app flex h-dvh w-full flex-col bg-bg font-sans text-sm text-base antialiased">
       <McpAppContext.Provider
         value={{ request: requestApp, sendMessage: handleSend, theme }}
       >

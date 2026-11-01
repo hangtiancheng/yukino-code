@@ -11,7 +11,9 @@ import { VirtualTerminal } from "./helpers/virtual-terminal.js";
 import type { LLMClient } from "@/llm/client.js";
 import { TaskManager } from "@/subagent/task-manager.js";
 import { ToolRegistry } from "@/tools/registry.js";
+import { visibleWidth } from "@/ui/terminal-text.js";
 import { WorkflowsDialog } from "@/ui/workflows-dialog.js";
+import type { WorkflowRun } from "@/workflow/progress.js";
 import { WorkflowService } from "@/workflow/service.js";
 
 let terminal: VirtualTerminal;
@@ -146,3 +148,71 @@ it("fits a narrow terminal and exposes an empty state", async () => {
   expect(terminal.bufferLines().join("\n")).toContain("Workflows");
   expect(terminal.bufferLines().join("\n")).toContain("No workflow runs");
 });
+
+it.each([
+  [38, 12],
+  [80, 16],
+  [120, 24],
+])(
+  "keeps the selected run and agent visible within %i columns and %i rows",
+  async (columns, rows) => {
+    terminal.resize(columns, rows);
+    vi.spyOn(service, "loadPersistedRuns").mockResolvedValue(undefined);
+    for (let index = 0; index < 8; index++) {
+      const run: WorkflowRun = {
+        runId: `run-${index}`,
+        taskId: `task-${index}`,
+        workflowName: `Review-${index}`,
+        scriptPath: "",
+        status: "running",
+        startedAt: index,
+        updatedAt: index,
+        phases: [{ title: "Inspect", status: "running" }],
+        agents: Array.from({ length: 20 }, (_, agent) => ({
+          id: agent,
+          label: `Reader-${agent}`,
+          status: "running",
+          tokenCount: 1200,
+          toolCount: 3,
+        })),
+        logs: ["Reading changes"],
+      };
+      service.store.set(run);
+    }
+    await act(async () => {
+      instance = render(
+        <WorkflowsDialog
+          service={service}
+          context={() => ({ cwd })}
+          onClose={() => undefined}
+        />,
+        {
+          stdin: terminal.stdin,
+          stdout: terminal.stdout,
+          stderr: terminal.stdout,
+          patchConsole: false,
+          exitOnCtrlC: false,
+        },
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    await flush();
+    for (let index = 0; index < 19; index++) {
+      await press("\u001b[B");
+    }
+    let screen = terminal.bufferLines().join("\n");
+    expect(screen).toContain("Reader-19");
+    expect(screen).toContain("Reading changes");
+    for (let index = 0; index < 7; index++) {
+      await press("\t");
+    }
+    screen = terminal.bufferLines().join("\n");
+    expect(screen).toContain("Review-0");
+    expect(screen).toContain("Reader-0");
+    expect(screen).toMatch(/Esc(?:ape)?/);
+    expect(terminal.terminal.buffer.active.baseY).toBe(0);
+    expect(
+      terminal.bufferLines().every((line) => visibleWidth(line) <= columns),
+    ).toBe(true);
+  },
+);

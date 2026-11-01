@@ -67,7 +67,7 @@ export function PlanApprovalDialog({
               placeholder="Tell Yukino what to change..."
               aria-label="Feedback"
               rows={3}
-              className="w-full resize-none rounded-none border border-border bg-bg px-3 py-2 text-sm text-bright outline-none placeholder:text-dim focus:border-accent"
+              className="w-full resize-none rounded-lg border border-border bg-bg px-3 py-2 text-sm text-bright outline-none placeholder:text-dim focus:border-accent"
             />
           </div>
         )}
@@ -77,7 +77,7 @@ export function PlanApprovalDialog({
             onClick={() => {
               onChoose("manual");
             }}
-            className="w-full cursor-pointer rounded-none sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast  transition-colors hover:bg-accent-dim"
+            className="w-full cursor-pointer rounded-lg sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast  transition-colors hover:bg-accent-dim"
           >
             Yes, manually approve edits
           </button>
@@ -86,7 +86,7 @@ export function PlanApprovalDialog({
             onClick={() => {
               onChoose("yolo");
             }}
-            className="w-full cursor-pointer rounded-none sm:w-auto border border-yellow/40 px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-yellow transition-colors hover:bg-yellow/8"
+            className="w-full cursor-pointer rounded-lg sm:w-auto border border-yellow/40 px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-yellow transition-colors hover:bg-yellow/8"
           >
             Yes, enter YOLO mode (auto-approve all)
           </button>
@@ -101,7 +101,7 @@ export function PlanApprovalDialog({
                 setFeedbackOpen(true);
               }
             }}
-            className="w-full cursor-pointer rounded-none sm:w-auto border border-border px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-base transition-colors hover:bg-bg"
+            className="w-full cursor-pointer rounded-lg sm:w-auto border border-border px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-base transition-colors hover:bg-selected/40"
           >
             {feedbackOpen ? "Send feedback" : "Tell Yukino what to change"}
           </button>

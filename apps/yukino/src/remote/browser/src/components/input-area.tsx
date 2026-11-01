@@ -415,8 +415,8 @@ export function InputArea({
   const bashExcluded = trimmed.startsWith("!!");
 
   return (
-    <footer className="shrink-0 border-t border-border bg-bg">
-      <div className="relative w-full pt-3 pb-1">
+    <footer className="composer shrink-0 bg-bg px-3 sm:px-8">
+      <div className="relative mx-auto w-full max-w-5xl pt-3 pb-1">
         {slashOpen && (
           <SlashMenu
             commands={filtered}
@@ -430,7 +430,7 @@ export function InputArea({
             ref={atListRef}
             role="listbox"
             aria-label="File completions"
-            className="absolute inset-x-4 bottom-full mb-1 max-h-64 overflow-y-auto border-y border-rule bg-bg py-1 sm:inset-x-6"
+            className="completion-menu absolute inset-x-0 bottom-full mb-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl"
           >
             {atMatches.map((match, i) => (
               <button
@@ -507,7 +507,7 @@ export function InputArea({
             onClick={() => {
               fileInputRef.current?.click();
             }}
-            className="mb-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
+            className="mb-1.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
           >
             <svg
               width="15"
@@ -541,7 +541,7 @@ export function InputArea({
                 ? "var(--yukino-bash-mode)"
                 : `var(--yukino-thinking-${thinkingLevel.toLowerCase() || "off"})`,
             }}
-            className="min-w-0 flex-1 border-y bg-bg transition-colors"
+            className="composer-field min-w-0 flex-1 rounded-xl border bg-surface transition-colors"
           >
             {uploads.length > 0 && (
               <div
@@ -611,7 +611,7 @@ export function InputArea({
               aria-label="Message input"
             />
             {bashMode && (
-              <span className="mx-3 mb-2 inline-block rounded-none border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
+              <span className="mx-3 mb-2 inline-block rounded-lg border border-yellow/40 bg-yellow/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-yellow">
                 {bashExcluded ? "Bash · excluded" : "Bash"}
               </span>
             )}
@@ -621,7 +621,7 @@ export function InputArea({
               type="button"
               onClick={onCancel}
               title="Cancel the running turn (Esc)"
-              className="mb-1.5 flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-none border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
+              className="mb-1.5 flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
             >
               <svg
                 width="10"
@@ -639,7 +639,7 @@ export function InputArea({
               type="button"
               onClick={send}
               disabled={value.trim().length === 0}
-              className="mb-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
+              className="mb-1.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
               aria-label="Send message"
             >
               <svg
@@ -660,7 +660,7 @@ export function InputArea({
             </button>
           )}
         </div>
-        <p className="mt-1 hidden px-3 text-xs text-dim sm:block sm:px-5">
+        <p className="mt-2 hidden px-1 text-[11px] text-dim sm:block">
           Enter send · Shift+Enter newline · ↑ history · @ files · ! bash ·
           paste/drop images · Esc cancel
         </p>

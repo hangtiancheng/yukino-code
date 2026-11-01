@@ -46,7 +46,7 @@ export function MessageList({
         tabIndex={0}
         className="h-full overflow-y-auto overscroll-contain focus-visible:-outline-offset-2"
       >
-        <div className="w-full py-1">
+        <div className="transcript mx-auto w-full max-w-5xl px-3 py-5 sm:px-8 sm:py-8">
           <Welcome {...welcome} empty={items.length === 0} />
           {items.map((item) => (
             <MessageRow

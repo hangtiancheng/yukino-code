@@ -70,7 +70,17 @@ export function ToolCard({
         ),
       )
     : plainTerminalLine(`${toolName}${argsSummary ? ` ${argsSummary}` : ""}`);
-  const statusLabel = resolvedStatus ?? "";
+  const statusColor =
+    resolvedStatus === "running"
+      ? THEME.accent
+      : resolvedStatus === "failed"
+        ? THEME.error
+        : resolvedStatus === "stopped"
+          ? THEME.warning
+          : THEME.success;
+  const statusLabel = resolvedStatus
+    ? `${resolvedStatus === "running" ? "●" : resolvedStatus === "failed" ? "✗" : resolvedStatus === "stopped" ? "–" : "✓"} ${resolvedStatus}`
+    : "";
   const timing =
     elapsed !== undefined && elapsed > 0 ? `${elapsed.toFixed(1)}s` : "";
   const metadata = [statusLabel, timing].filter(Boolean).join(" · ");
@@ -96,13 +106,7 @@ export function ToolCard({
           .join("\n")
       : preview;
   const metadataDetail = (
-    <Text
-      color={
-        resolvedStatus === "failed" || resolvedStatus === "stopped"
-          ? THEME.error
-          : THEME.dim
-      }
-    >
+    <Text color={statusColor}>
       {wrapToLines(metadata, contentWidth).join("\n")}
     </Text>
   );

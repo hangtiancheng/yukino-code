@@ -443,7 +443,7 @@ describe("App plan approval", () => {
       await vi.waitFor(async () => {
         await flush();
         const output = terminal.bufferLines().join("\n");
-        expect(output).toContain(`Agent /${role} 42  running`);
+        expect(output).toContain(`Agent /${role} 42  ● running`);
         expect(output).toContain(`${role} subagent | 0 turns`);
       });
 
@@ -473,8 +473,10 @@ describe("App plan approval", () => {
       await vi.waitFor(async () => {
         await flush();
         const output = terminal.bufferLines().join("\n");
-        expect(output).toContain(`Agent /${role} 42  ${status}`);
-        expect(output).not.toContain(`Agent /${role} 42  running`);
+        expect(output).toMatch(
+          new RegExp(`Agent /${role} 42  [✓✗–] ${status}`),
+        );
+        expect(output).not.toContain(`Agent /${role} 42  ● running`);
         expect(output).toContain(
           `${role} subagent | ${outcome === "complete" ? "1" : "0"} turns`,
         );
@@ -542,10 +544,10 @@ describe("App plan approval", () => {
     await vi.waitFor(async () => {
       await flush();
       const output = terminal.bufferLines().join("\n");
-      expect(output).toContain("EnterPlanMode  completed");
+      expect(output).toContain("EnterPlanMode  ✓ completed");
       expect(output).toContain("plan subagent | 1 turns");
       expect(output).toContain("Plan complete");
-      expect(output).not.toContain("EnterPlanMode  running");
+      expect(output).not.toContain("EnterPlanMode  ● running");
     });
     expect(client.requests).toHaveLength(2);
     await press("\x1b[B");

@@ -769,7 +769,7 @@ describe("session selector", () => {
 
 describe("selector layout", () => {
   it.each(["dark", "light"] satisfies ("dark" | "light")[])(
-    "uses PI border rules and accent titles/focus in %s mode without relying on color",
+    "uses rounded frames and highlighted focus in %s mode without relying on color",
     (mode) => {
       setThemeMode(mode);
       for (const columns of [1, 20, 32, 48, 80, 120]) {
@@ -802,11 +802,13 @@ describe("selector layout", () => {
             expect(output).toBe(plain);
           } else {
             expect(output).toContain(
-              colors.hex(THEME.border)("─".repeat(columns)),
+              colors.hex(THEME.border)(
+                columns >= 2 ? `╭${"─".repeat(columns - 2)}╮` : "─",
+              ),
             );
             if (columns >= 20) {
               expect(output).toContain(
-                colors.hex(THEME.accent)("Select provider"),
+                colors.hex(THEME.text)("Select provider"),
               );
             }
           }
@@ -955,7 +957,7 @@ describe("selector layout", () => {
     for (const line of output.split("\n")) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(20);
     }
-    expect(output).toContain("─".repeat(20));
+    expect(output).toContain(`╭${"─".repeat(18)}╮`);
   });
 });
 

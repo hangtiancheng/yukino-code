@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { STORAGE_KEY } from "#/constants.js";
+import { DARK_THEME, LIGHT_THEME } from "@/theme/constants.js";
 
 export type Theme = "dark" | "light";
 
@@ -36,6 +37,12 @@ export function useTheme(): { theme: Theme; toggleTheme: () => void } {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute(
+        "content",
+        (theme === "dark" ? DARK_THEME : LIGHT_THEME).background,
+      );
   }, [theme]);
 
   const toggleTheme = useCallback(() => {

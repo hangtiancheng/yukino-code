@@ -16,7 +16,7 @@ export function ThinkingBlock({
   const [open, setOpen] = useState(false);
   return (
     <details
-      className="my-4 text-thinking italic"
+      className="my-3 border-l-2 border-border pl-3 text-xs leading-relaxed text-thinking"
       onToggle={(event) => {
         setOpen(event.currentTarget.open);
       }}

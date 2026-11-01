@@ -50,7 +50,8 @@ export const Transcript = memo(function Transcript({
             paddingX={padding}
           >
             <Text>
-              <Text bold color={THEME.accent}>
+              <Text color={THEME.accent}>✳ </Text>
+              <Text bold color={THEME.text}>
                 Yukino
               </Text>
               <Text color={THEME.dim}> v{version}</Text>
