@@ -61,7 +61,6 @@ import type { LLMClient } from "@/llm/client.js";
 import { createClient } from "@/llm/client.js";
 import { discoverModels } from "@/llm/model-discovery.js";
 import { createChildLogger } from "@/logger/index.js";
-import type { LspServerConfig } from "@/lsp/config.js";
 import {
   retractMcpInstructions,
   syncMcpInstructions as announceMcpInstructions,
@@ -181,7 +180,6 @@ interface Props {
   permissionMode?: string;
   mcpServers: MCPServerConfig[];
   mcpLoading?: McpLoading;
-  lspServers?: LspServerConfig[];
   hooks: HookConfig[];
   sandboxConfig?: SandboxYamlConfig;
   enableCoordinatorMode?: boolean;
@@ -198,7 +196,6 @@ export function App({
   permissionMode,
   mcpServers,
   mcpLoading = "auto",
-  lspServers,
   hooks,
   sandboxConfig: sandboxYaml,
   enableCoordinatorMode,
@@ -348,7 +345,6 @@ export function App({
   const [toolRegistry] = useState(() =>
     createToolRegistry(taskListRef.current, {
       interactionMode: "interactive",
-      lspServers,
       teamManager: teamManagerRef.current,
     }),
   );

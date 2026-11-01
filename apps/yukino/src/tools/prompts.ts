@@ -189,9 +189,6 @@ export const GOAL_STATUS_DESCRIPTION =
 export const GOAL_REASON_DESCRIPTION =
   "Required for update. Describe progress, evidence of completion, or the specific blocker.";
 
-export const LSP_DESCRIPTION =
-  "Query a configured language server for definitions, references, hover, symbols, implementations, type definitions, call hierarchy, or diagnostics. file_path resolves against the current working directory; line and character are 1-based UTF-16 positions. Returned ranges use the LSP standard (0-based UTF-16) and file URIs. This tool cannot edit files or run arbitrary commands. Servers must be explicitly configured in lsp_servers; no automatic installation.";
-
 export const MCP_CALL_DESCRIPTION =
   "Invoke a tool on a connected MCP server. Call ToolSearch first to load the " +
   "tool's schema, then pass its arguments here exactly as that schema requires, " +

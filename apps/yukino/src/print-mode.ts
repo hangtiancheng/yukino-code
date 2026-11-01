@@ -176,7 +176,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
   const registry = createToolRegistry(taskList, {
     interactionMode: "non-interactive",
     teamManager,
-    lspServers: cfg.lsp_servers,
   });
   await configureBashSandbox(registry, cwd, cfg.sandbox, checker);
 

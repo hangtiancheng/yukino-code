@@ -68,7 +68,6 @@ import { sniffMediaType } from "@/images/index.js";
 import { createClient, type LLMClient } from "@/llm/client.js";
 import { discoverModels } from "@/llm/model-discovery.js";
 import { createChildLogger } from "@/logger/index.js";
-import type { LspServerConfig } from "@/lsp/config.js";
 import { McpAppRequestSchema, McpAppToolResultSchema } from "@/mcp/apps.js";
 import {
   retractMcpInstructions,
@@ -704,7 +703,6 @@ export interface CreateRemoteAgentOptions {
   hooks?: HookConfig[];
   mcpServers?: MCPServerConfig[];
   mcpLoading?: McpLoading;
-  lspServers?: LspServerConfig[];
   enableCoordinatorMode: boolean;
   forkDisabled: boolean;
   /** Auto memory switch from config.yaml (`enable_memory:`); defaults to true. */
@@ -750,7 +748,6 @@ export async function createRemoteAgent(
     enableModelPlanMode: opts.enableModelPlanMode,
     interactionMode: opts.interactionMode ?? "interactive",
     teamManager,
-    lspServers: opts.lspServers,
   });
   await configureBashSandbox(registry, cwd, opts.sandboxConfig);
 
@@ -1143,7 +1140,6 @@ interface RemoteServerOptions {
   defaultProvider?: number;
   mcpServers?: MCPServerConfig[];
   mcpLoading?: McpLoading;
-  lspServers?: LspServerConfig[];
   hookConfigs?: HookConfig[];
   addr: string;
   enableCoordinatorMode: boolean;
@@ -1687,7 +1683,6 @@ export class RemoteServer {
           hooks: this.opts.hookConfigs,
           mcpServers: this.opts.mcpServers,
           mcpLoading: this.opts.mcpLoading,
-          lspServers: this.opts.lspServers,
           sandboxConfig: this.opts.sandboxConfig,
           askUser: this.createAskUserCallback(),
           enableModelPlanMode: true,
@@ -4148,7 +4143,6 @@ export class RemoteServer {
         hooks: this.opts.hookConfigs,
         mcpServers: this.opts.mcpServers,
         mcpLoading: this.opts.mcpLoading,
-        lspServers: this.opts.lspServers,
         sandboxConfig: this.opts.sandboxConfig,
         askUser: this.createAskUserCallback(),
         enableCoordinatorMode: this.opts.enableCoordinatorMode,

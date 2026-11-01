@@ -14,14 +14,14 @@ Beyond interactive use, Yukino supports a non-interactive print mode for scripti
 
 - Multi-provider LLM support with Anthropic (Anthropic Messages), OpenAI (OpenAI Responses), and OpenAI-compatible (OpenAI Chat Completions) protocols
 - Interactive terminal UI with streaming text, thinking indicators, and tool execution display
-- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, LSP, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, Goal, the TodoWrite tracking tool, plus Workflow, Agent, LoadSkill, InstallSkill, AskUserQuestion, SyntheticOutput, TeamCreate, SendMessage, TeamDelete, TaskOutput, and TaskStop
+- Built-in tool set: ReadFile, WriteFile, EditFile, Bash, PowerShell, Glob, Grep, WebFetch, ComputerUse, ToolSearch, McpCall, EnterWorktree, ExitWorktree, ExitPlanMode, Goal, the TodoWrite tracking tool, plus Workflow, Agent, LoadSkill, InstallSkill, AskUserQuestion, SyntheticOutput, TeamCreate, SendMessage, TeamDelete, TaskOutput, and TaskStop
 - MCP (Model Context Protocol) server integration for extending the tool set with external services
 - Permission system with four modes: default, acceptEdits, plan (read-only), and bypassPermissions
 - Sandbox support for isolated command execution (bwrap on Linux, seatbelt on macOS)
 - Human-in-the-loop approval dialogs for file writes and shell commands, driven by permission mode and allow/deny rules
 - Tool completion events stream as calls finish; conversation history and session logs retain the original call order
 - Asynchronous text reads and batched file edits with overlap validation and preserved line endings
-- Home-relative tool paths (`~` and `~/...`) resolve consistently in file tools, search, LSP, and permission checks
+- Home-relative tool paths (`~` and `~/...`) resolve consistently in file tools, search, and permission checks
 - Grep and Glob bound their result bodies to 50 KiB and honor cancellation; Grep shortens long matching lines at UTF-8 boundaries and explains how to read the full text
 - Image reads detect the actual format, including files without an image extension
 - Transient provider failures use bounded, interruptible retries before visible output; incomplete responses cannot execute pending tools
@@ -120,7 +120,7 @@ Yukino stores its configuration and runtime state under `~/.yukino`. The current
 
 ```yaml
 ~/.yukino/                                 # Per-user storage root for global configuration, reusable definitions, project/session state and diagnostics.
-├── config.yaml                            # Provider endpoints, credentials and models; default provider, permission mode, hooks, MCP/LSP and runtime settings.
+├── config.yaml                            # Provider endpoints, credentials and models; default provider, permission mode, hooks, MCP and runtime settings.
 ├── AGENTS.md                              # Global Markdown instructions and coding/workflow rules supplied to sessions in every project.
 ├── permissions.yaml                       # User-wide Tool(pattern) permission rules and their effects, evaluated alongside project-specific rules.
 ├── activity.jsonl                         # Input events with IDs, timestamps, cwd, session, source, text and command names; project registry and usage checkpoints.
@@ -432,7 +432,7 @@ Sandboxed worktree agents can stage and commit through their own Git metadata an
 
 Shell rules check every executable segment separated by newlines, `;`, `&&`, `||`, `|`, and `&`, respecting literal quotes and escapes. Remembered shell rules retain the first two words plus `*`; a rule for one segment does not authorize later segments. Substitution, redirection, environment assignments (including Bash `+=`), wrappers and unsupported control syntax cannot use remembered prefixes for automatic approval. With applicable explicit restrictions, uninspectable syntax is conservatively denied or requires approval even in bypass mode. Permission dialogs show the scopes they will remember; tools without a stable scope offer one-time approval only. File rules canonicalize relative, home-relative and symlink paths before matching.
 
-Sandbox configuration applies to TUI, print, Remote/A2A, and in-process teammates. Enabling it fails closed when the native backend is unavailable. `bypassPermissions` does not disable it. Relative allow/deny write paths resolve against the command's execution directory; home-relative paths use the same resolver as file tools. The policy confines Bash writes and optionally disables all network access; it does not wrap PowerShell, LSP, or MCP executables.
+Sandbox configuration applies to TUI, print, Remote/A2A, and in-process teammates. Enabling it fails closed when the native backend is unavailable. `bypassPermissions` does not disable it. Relative allow/deny write paths resolve against the command's execution directory; home-relative paths use the same resolver as file tools. The policy confines Bash writes and optionally disables all network access; it does not wrap PowerShell or MCP executables.
 
 Provider fields:
 
@@ -564,28 +564,6 @@ Each entry takes `command`/`args`/`env` (stdio) or `url`/`headers` with `type` o
 
 After editing `.mcp.json` or `config.yaml`, use `/mcp reload` in the UI to re-read both sources. The reload is a full reset: every current connection is dropped, then the freshly read list is connected from scratch.
 
-### Language servers (LSP)
-
-Configure installed stdio language servers in `~/.yukino/config.yaml`. Servers start lazily on the first matching query; Yukino does not install or download them. The first configured server matching the file extension is selected, with one server per working directory and configuration name.
-
-```yaml
-lsp_servers:
-  - name: typescript
-    command: typescript-language-server
-    args: ["--stdio"]
-    languages:
-      .ts: typescript
-      .tsx: typescriptreact
-      .js: javascript
-      .jsx: javascriptreact
-    timeout_ms: 15000
-    # Optional: env, initialization_options, settings
-```
-
-`LSP` supports definition, references, hover, document/workspace symbols, implementation, type definition, call hierarchy preparation and incoming/outgoing calls, and diagnostics. Input positions are 1-based UTF-16; returned ranges follow the [LSP specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/) (0-based UTF-16). File content is synchronized before queries. A push-diagnostics response with `pending: true` means no current report arrived within the bounded wait, not that the file has no errors. Servers without versioned diagnostic notifications cannot guarantee detection of delayed stale reports.
-
-The tool requests only read-only operations and rejects server-requested workspace edits and commands. Configured executables are trusted local programs, like stdio MCP servers: they run with the user's OS privileges, outside the Bash OS sandbox. Configure only servers you trust. Queries honor Yukino's read-tool permission rules and the agent's effective permission mode. Servers are shut down at host exit, with forced process-tree cleanup if necessary.
-
 ### Tasks, TODOs, and background work
 
 Task tracking and task execution are separate:
@@ -642,7 +620,7 @@ Agent defaults to `kind: "teammate"`, joins the selected team or creates one aut
 
 The same combinations work for other built-in and user-defined roles. Role tool restrictions, permissions, models, and `max_turns` apply in either context mode. `run_in_background` separately controls one-shot scheduling. For persistent teammates, `fork` seeds the initial conversation once; later assignments reuse the teammate's own history. Forking copies the conversation without sharing subsequent changes, and closes pending parent tool calls only in the copied transcript.
 
-Ordinary subagents run once. On completion, failure, or interruption, the host waits for their owned background commands to stop and releases their scoped tool registry. Parent-owned LSP/MCP tools are borrowed, not shut down by a child. Background task records and subagent transcripts persist under `~/.yukino/sessions/artifacts/`; `TaskOutput` includes the transcript path and timestamps. Finished results remain queryable from disk after the in-memory retention limit, and delivered notifications are recorded in the leader's session. Resuming restores terminal outcomes and reports abandoned running tasks as interrupted failures. Iteration-limit and model failures preserve partial text alongside the error and transcript. Cancellation callbacks are discarded when runners settle. A fork cannot create or replace teams, or stop parent-owned work.
+Ordinary subagents run once. On completion, failure, or interruption, the host waits for their owned background commands to stop and releases their scoped tool registry. Parent-owned MCP tools are borrowed, not shut down by a child. Background task records and subagent transcripts persist under `~/.yukino/sessions/artifacts/`; `TaskOutput` includes the transcript path and timestamps. Finished results remain queryable from disk after the in-memory retention limit, and delivered notifications are recorded in the leader's session. Resuming restores terminal outcomes and reports abandoned running tasks as interrupted failures. Iteration-limit and model failures preserve partial text alongside the error and transcript. Cancellation callbacks are discarded when runners settle. A fork cannot create or replace teams, or stop parent-owned work.
 
 An explicit `run_in_background: false` overrides a predefined agent's `background: true`; when omitted, the definition supplies the default, independently of `fork`. Role files accept a UTF-8 BOM before frontmatter. Delegated agents cannot manage the main session's persistent goal.
 

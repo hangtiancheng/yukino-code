@@ -19,7 +19,6 @@ export * as Glob from "@/tools/glob.js";
 export * as Goal from "@/tools/goal.js";
 export * as Grep from "@/tools/grep.js";
 export * as IsDiffTool from "@/tools/is-diff-tool.js";
-export * as LSP from "@/tools/lsp.js";
 export * as McpCall from "@/tools/mcp-call.js";
 export * as PowerShell from "@/tools/powershell.js";
 export * as Prompts from "@/tools/prompts.js";

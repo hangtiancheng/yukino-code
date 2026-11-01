@@ -105,7 +105,6 @@ export const CONTENT_FIELDS: Record<string, string> = {
   PowerShell: "command",
   ComputerUse: "action",
   ReadFile: "file_path",
-  LSP: "file_path",
   WebFetch: "url",
   TaskOutput: "task_id",
   WriteFile: "file_path",
@@ -115,7 +114,7 @@ export const CONTENT_FIELDS: Record<string, string> = {
   InstallSkill: "source",
 };
 
-export const FILE_TOOLS = new Set(["ReadFile", "WriteFile", "EditFile", "LSP"]);
+export const FILE_TOOLS = new Set(["ReadFile", "WriteFile", "EditFile"]);
 
 export const PLAN_COORDINATION_TOOLS = new Set([
   "AskUserQuestion",

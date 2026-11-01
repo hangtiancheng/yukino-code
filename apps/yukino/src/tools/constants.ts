@@ -122,27 +122,6 @@ export const COMPUTER_USE_ACTION_REQUIRED_ERROR =
 export const COMPUTER_USE_LOCKED_ERROR =
   "Error: the computer is being controlled by another Yukino call. Retry after it finishes.";
 
-// Bound how much opened-document text a session retains. Without eviction the
-// documents Map (and the language server's own copy) grows for every file ever
-// queried over a long session.
-export const MAX_CACHED_DOCUMENTS = 40;
-export const MAX_CACHED_DOCUMENT_BYTES = 8 * 1024 * 1024;
-export const MAX_CACHED_DIAGNOSTIC_BYTES = 2 * 1024 * 1024;
-
-export const LSP_OPERATIONS = [
-  "definition",
-  "references",
-  "hover",
-  "documentSymbol",
-  "workspaceSymbol",
-  "implementation",
-  "typeDefinition",
-  "prepareCallHierarchy",
-  "incomingCalls",
-  "outgoingCalls",
-  "diagnostics",
-] as const;
-
 export const CONTEXT_LINES = 3;
 // Prevent excessively large diffs from overwhelming UI rendering and context window usage
 export const MAX_DIFF_LINES = 200;
@@ -303,13 +282,3 @@ export const GOAL_INVALID_STATUS_ERROR =
   "Goal update accepts only 'in_progress', 'complete', or 'blocked'. A goal is active as soon as the user sets it. Only the user can pause or resume a goal.";
 export const GOAL_INVALID_ARGS_ERROR =
   "Goal expects action 'get' or 'update'. Updating requires status 'in_progress', 'complete', or 'blocked' and a non-empty reason; no other fields are accepted.";
-export const LSP_DISPOSED_ERROR = "LSP tool is disposed";
-export const LSP_INTERRUPTED_ERROR = "LSP operation interrupted";
-export const LSP_SERVER_EXITED_ERROR =
-  "LSP server exited; retry to start a fresh server";
-export const LSP_DOCUMENT_TOO_LARGE_ERROR =
-  "LSP requires a regular file no larger than 8MB";
-export const LSP_POSITION_OUT_OF_RANGE_ERROR =
-  "LSP position is outside the document";
-export const LSP_FILE_TOO_LARGE_ERROR =
-  "LSP requires a regular file no larger than 10MB";

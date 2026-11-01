@@ -218,7 +218,6 @@ export const tools: ToolItem[] = [
   { name: "Glob", icon: icons.folderTree, group: "Search" },
   { name: "Grep", icon: icons.search, group: "Search" },
   { name: "WebFetch", icon: icons.globe, group: "Search" },
-  { name: "LSP", icon: icons.braces, group: "Search" },
   { name: "ToolSearch", icon: icons.search, group: "Search" },
   { name: "Agent", icon: icons.bot, group: "Orchestrate" },
   { name: "Goal", icon: icons.target, group: "Orchestrate" },

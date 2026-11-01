@@ -66,7 +66,6 @@ const SCENES: Scene[] = [
     steps: [
       { kind: "thinking" },
       { kind: "tool", name: "Grep", arg: '"rateLimit" · include *.ts' },
-      { kind: "tool", name: "LSP", arg: "references · RateLimiter" },
       { kind: "tool", name: "ReadFile", arg: "src/middleware/rate-limit.ts" },
       { kind: "answer" },
     ],
@@ -124,7 +123,6 @@ const TOOL_ICONS: Record<string, string> = {
   ReadFile: icons.fileCode,
   EditFile: icons.pencilRuler,
   Bash: icons.terminal,
-  LSP: icons.braces,
   EnterWorktree: icons.gitBranch,
   Agent: icons.bot,
   Goal: icons.target,

@@ -1,5 +1,4 @@
 import type { Command, CommandRegistry } from "@/commands/commands.js";
-import type { LspServerConfig } from "@/lsp/config.js";
 import { MCP_TOOL_PREFIX } from "@/mcp/constants.js";
 import type { SkillCatalog } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
@@ -18,7 +17,6 @@ import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
 import { GlobTool } from "@/tools/glob.js";
 import { GoalTool } from "@/tools/goal.js";
 import { GrepTool } from "@/tools/grep.js";
-import { LspTool } from "@/tools/lsp.js";
 import { McpCallTool } from "@/tools/mcp-call.js";
 import { PowerShellTool } from "@/tools/powershell.js";
 import { ReadFileTool } from "@/tools/read-file.js";
@@ -51,7 +49,6 @@ export function createToolRegistry(
   options: {
     enableModelPlanMode?: boolean;
     interactionMode?: "interactive" | "non-interactive";
-    lspServers?: readonly LspServerConfig[];
     teamManager?: TeamManager;
   } = {},
 ): ToolRegistry {
@@ -68,7 +65,6 @@ export function createToolRegistry(
       : new TodoWriteTool(taskList),
   );
   registry.register(new TaskOutputTool());
-  registry.register(new LspTool(options.lspServers ?? []));
   registry.register(new BashTool());
   registry.register(new PowerShellTool());
   registry.register(new ComputerUseTool());

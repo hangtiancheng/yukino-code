@@ -23,7 +23,6 @@ export * as Hooks from "@/hooks/index.js";
 export * as Images from "@/images/index.js";
 export * as LLM from "@/llm/index.js";
 export * as Logger from "@/logger/index.js";
-export * as LSP from "@/lsp/index.js";
 export * as MCP from "@/mcp/index.js";
 export * as Memory from "@/memory/index.js";
 export * as Permissions from "@/permissions/index.js";

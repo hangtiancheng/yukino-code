@@ -381,10 +381,10 @@ describe("atomic task/TODO list", () => {
       expect(rootList.list()[0]?.subject).toBe("parent task");
     },
   );
-  it("keeps bookkeeping and semantic navigation available in plan without enabling edits", () => {
+  it("keeps bookkeeping and web access available in plan without enabling edits", () => {
     const checker = new PermissionChecker("/tmp", "plan");
     checker.mode = "plan";
-    for (const name of ["TodoWrite", "TaskOutput", "LSP", "WebFetch"]) {
+    for (const name of ["TodoWrite", "TaskOutput", "WebFetch"]) {
       expect(
         checker.check(name, "read", { file_path: "/tmp/example.ts" }).effect,
       ).toBe("allow");

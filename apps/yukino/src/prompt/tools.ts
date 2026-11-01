@@ -11,7 +11,6 @@ import {
   DEFERRED_MCP_DISPATCH_RULE,
   DEFERRED_TOOLS_INTRO,
   GOAL_RULE,
-  LSP_RULE,
   MCP_DISPATCH_RULE,
   READFILE_OFFSETS_RULE,
   TASK_OUTPUT_RULE,
@@ -67,9 +66,6 @@ export function buildToolGuidance(
   }
   if (has("TaskStop")) {
     rules.push(BACKGROUND_TASK_STOP_RULE);
-  }
-  if (has("LSP")) {
-    rules.push(LSP_RULE);
   }
   if (has("WebFetch")) {
     rules.push(WEB_FETCH_RULE);

@@ -24,7 +24,6 @@ import {
   type ProviderConfig,
 } from "@/config/provider-config.js";
 import { createChildLogger } from "@/logger/index.js";
-import { LspServerConfigSchema } from "@/lsp/config.js";
 import { readPrivateFileSync } from "@/storage/private.js";
 import { asRecord } from "@/utils/index.js";
 
@@ -144,14 +143,6 @@ const AppConfigSchema = z.looseObject({
   mcp_loading: z.enum(MCP_LOADING_MODES).default("auto"),
   theme: z.enum(THEME_MODES).default("auto"),
   mcp_servers: z.array(MCPServerConfigSchema).default([]),
-  lsp_servers: z
-    .array(LspServerConfigSchema)
-    .refine(
-      (servers) =>
-        new Set(servers.map((server) => server.name)).size === servers.length,
-      "LSP server names must be unique",
-    )
-    .optional(),
   hooks: z.array(HookConfigSchema).default([]),
   sandbox: SandboxYamlConfigSchema.optional(),
   enable_coordinator_mode: z.boolean().optional(),

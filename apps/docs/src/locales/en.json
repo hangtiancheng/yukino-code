@@ -114,7 +114,7 @@
       },
       "toolbelt": {
         "title": "A real toolbelt",
-        "description": "Read, write and edit files, run Bash or PowerShell, glob and grep the tree, fetch pages as Markdown, query language servers via LSP, drive the desktop with ComputerUse and call MCP tools."
+        "description": "Read, write and edit files, run Bash or PowerShell, glob and grep the tree, fetch pages as Markdown, drive the desktop with ComputerUse and call MCP tools."
       },
       "safety": {
         "title": "Safety you can tune",
