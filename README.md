@@ -119,11 +119,6 @@ enable_memory: false
 # (team/task management) so all actual work is delegated to teammates.
 enable_coordinator_mode: false
 
-# Whether an Agent call without subagent_type forks the current conversation (child inherits
-# the full history). Default: true; only an explicit false disables it — disabled calls spawn
-# a fresh general-purpose subagent instead.
-enable_fork: true
-
 # MCP tool loading: auto | eager | native | dispatch. Default: auto, selected from the
 # provider protocol, endpoint and schema size. Native falls back to dispatch for non-Anthropic
 # protocols.

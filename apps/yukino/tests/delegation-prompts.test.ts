@@ -367,11 +367,6 @@ describe("delegated prompt contracts", () => {
     for (const removed of ["name", "isolation", "plan_mode_required"]) {
       expect(properties).not.toHaveProperty(removed);
     }
-    tool.defaultFork = false;
-    expect(tool.schema().input_schema.properties.fork).toHaveProperty(
-      "default",
-      false,
-    );
     expect(tool.schema().input_schema.properties.subagent_type).toHaveProperty(
       "default",
       "general-purpose",

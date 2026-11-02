@@ -164,7 +164,7 @@ describe("provider login", () => {
     const path = globalConfigPath();
     writeFileSync(
       path,
-      "permission_mode: plan\nenable_fork: false\nsandbox:\n  enabled: true\ncustom_setting: keep\n",
+      "permission_mode: plan\nsandbox:\n  enabled: true\ncustom_setting: keep\n",
     );
     const first = saveProvider(input, []);
     expect(first.replaced).toBe(false);
@@ -187,7 +187,6 @@ describe("provider login", () => {
     ]);
     const reloaded = loadConfig(path);
     expect(reloaded.providers).toEqual(third.providers);
-    expect(reloaded.enable_fork).toBe(false);
     expect(reloaded.sandbox?.enabled).toBe(true);
     expect(readFileSync(path, "utf-8")).toContain("custom_setting: keep");
     if (process.platform !== "win32") {

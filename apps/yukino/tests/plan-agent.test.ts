@@ -74,7 +74,6 @@ function fixture(client: LLMClient) {
       ),
   );
   const agentTool = new AgentTool(cwd, registry, spawn, conversation);
-  agentTool.defaultFork = false;
   registry.register(agentTool);
   return { cwd, conversation, checker, registry, spawn };
 }
@@ -107,7 +106,6 @@ describe("foreground planning", () => {
       spawn,
       context.conversation,
     );
-    agent.defaultFork = false;
     const controller = new AbortController();
     const pending = agent.runBuiltin(
       "general-purpose",
@@ -182,7 +180,6 @@ describe("foreground planning", () => {
         context.spawn,
         context.conversation,
       );
-      replacement.defaultFork = false;
       context.registry.register(replacement);
       const controller = new AbortController();
       let settled = false;

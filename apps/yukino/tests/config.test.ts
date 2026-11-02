@@ -13,7 +13,6 @@ import {
   loadProjectMcpServers,
   withProjectMcpServers,
   resolveAPIKey,
-  forkEnabled,
   hydrateConfigEnv,
   memoryEnabled,
   type AppConfig,
@@ -298,33 +297,9 @@ describe("config", () => {
     });
   });
 
-  // enable_fork is on by default, and an explicit false in the config must
-  // actually turn it off. Storing it as a required boolean would make "unset"
-  // indistinguishable from "set to false", so the latter could never be disabled.
-  describe("enable_fork", () => {
-    const bare = (): AppConfig => ({
-      default_provider: 0,
-      mcp_loading: "auto",
-      theme: "auto",
-      providers: [],
-      mcp_servers: [],
-      hooks: [],
-    });
-
-    it("defaults to enabled when unset", () => {
-      expect(forkEnabled(bare())).toBe(true);
-    });
-
-    it("disables for real when set to false", () => {
-      expect(forkEnabled({ ...bare(), enable_fork: false })).toBe(false);
-      expect(forkEnabled({ ...bare(), enable_fork: true })).toBe(true);
-    });
-  });
-
   // memory is on by default, and an explicit false in the config must turn the
   // whole auto-memory pipeline off (index injection, recall, extraction,
-  // consolidation). Same shape as enable_fork: "unset" stays distinguishable
-  // from "explicitly false".
+  // consolidation). "Unset" stays distinguishable from "explicitly false".
   describe("memory", () => {
     const bare = (): AppConfig => ({
       default_provider: 0,

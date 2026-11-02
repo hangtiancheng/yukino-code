@@ -176,7 +176,7 @@ async function submit(text: string) {
   await press("\r");
 }
 
-async function start(mcpServers: MCPServerConfig[] = [], forkDisabled = false) {
+async function start(mcpServers: MCPServerConfig[] = []) {
   await act(async () => {
     instance = render(
       createElement(App, {
@@ -191,7 +191,6 @@ async function start(mcpServers: MCPServerConfig[] = [], forkDisabled = false) {
         mcpServers,
         hooks: [],
         memoryEnabled: false,
-        forkDisabled,
       }),
       {
         stdout: terminal.stdout,

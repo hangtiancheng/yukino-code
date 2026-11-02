@@ -101,7 +101,6 @@ export class AgentTool implements Tool {
 
   private teamManager?: TeamManager;
   private cwd: string;
-  defaultFork = true;
   /**
    * Optional: factory that produces a per-teammate RunAgent. Receives a
    * teammate-scoped tool registry (with shared task-board tools injected)
@@ -212,10 +211,7 @@ export class AgentTool implements Tool {
     const agentTypes = this.definitions.map((d) => d.name);
     return {
       name: this.name,
-      description: buildAgentToolDescription(
-        this.definitions,
-        this.defaultFork,
-      ),
+      description: buildAgentToolDescription(this.definitions),
       input_schema: {
         type: "object",
         properties: {
@@ -246,7 +242,7 @@ export class AgentTool implements Tool {
           fork: {
             type: "boolean",
             description: FORK_PARAMETER_DESCRIPTION,
-            default: this.defaultFork,
+            default: true,
           },
           model: {
             type: "string",
@@ -301,7 +297,7 @@ export class AgentTool implements Tool {
     if (!forkArg.success) {
       return { output: AGENT_FORK_INVALID_ERROR, isError: true };
     }
-    const fork = forkArg.data ?? this.defaultFork;
+    const fork = forkArg.data ?? true;
     let definition = this.definitions.find(
       (entry) => entry.name === subagentType,
     );

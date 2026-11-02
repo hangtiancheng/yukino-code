@@ -141,7 +141,6 @@ describe("remote execution boundaries", () => {
       providers: [],
       addr: "127.0.0.1:0",
       enableCoordinatorMode: false,
-      forkDisabled: true,
       agentFactory: () => Promise.reject(new Error("no provider")),
     });
     const runPromise = server.run();
@@ -200,7 +199,6 @@ describe("remote execution boundaries", () => {
       providers: [],
       addr: "127.0.0.1:0",
       enableCoordinatorMode: false,
-      forkDisabled: true,
       sandboxConfig,
       agentFactory,
     });
@@ -241,7 +239,6 @@ describe("remote execution boundaries", () => {
       providers: [],
       addr: ":18888",
       enableCoordinatorMode: false,
-      forkDisabled: true,
       agentFactory,
     });
 
@@ -276,7 +273,6 @@ describe("remote execution boundaries", () => {
       defaultProvider: 1,
       addr: ":18888",
       enableCoordinatorMode: false,
-      forkDisabled: true,
       agentFactory,
     });
 
@@ -297,7 +293,6 @@ describe("remote execution boundaries", () => {
       providers: [],
       addr: ":18888",
       enableCoordinatorMode: true,
-      forkDisabled: true,
     });
     Reflect.set(server, "agentHandle", {
       client: { protocol: "openai-compat" },
@@ -361,7 +356,6 @@ describe("remote execution boundaries", () => {
         },
         cwd,
         enableCoordinatorMode: false,
-        forkDisabled: false,
         memoryEnabled: false,
       });
       handle.permissionMode = "acceptEdits";
@@ -411,7 +405,6 @@ describe("remote execution boundaries", () => {
         provider,
         cwd,
         enableCoordinatorMode: false,
-        forkDisabled: false,
         memoryEnabled: false,
       });
       const loadSkill = handle.registry.get("LoadSkill");
@@ -511,7 +504,6 @@ describe("remote execution boundaries", () => {
       providers: [],
       addr: ":18888",
       enableCoordinatorMode: false,
-      forkDisabled: true,
     });
     const permission = deferred<"allow" | "deny" | "allowAlways">();
     const question = deferred<Record<string, string>>();

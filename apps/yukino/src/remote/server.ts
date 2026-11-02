@@ -322,7 +322,6 @@ export interface RemoteAgentHandle {
   teamManager: TeamManager;
   backgroundTaskManager: TaskManager;
   enableCoordinatorMode: boolean;
-  forkDisabled: boolean;
   memoryManager: MemoryManager;
   /** Auto memory switch from config.yaml (`enable_memory:`); gates injection, extraction, and consolidation. */
   memoryEnabled: boolean;
@@ -404,7 +403,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
   teamManager: TeamManager;
   backgroundTaskManager: TaskManager;
   enableCoordinatorMode: boolean;
-  forkDisabled: boolean;
   memoryManager: MemoryManager;
   memoryEnabled: boolean;
   contextWindow: number;
@@ -476,7 +474,6 @@ class AgentHandleImpl implements RemoteAgentHandle {
     this.teamManager = agentHandleImpl.teamManager;
     this.backgroundTaskManager = agentHandleImpl.backgroundTaskManager;
     this.enableCoordinatorMode = agentHandleImpl.enableCoordinatorMode;
-    this.forkDisabled = agentHandleImpl.forkDisabled;
     this.memoryManager = agentHandleImpl.memoryManager;
     this.memoryEnabled = agentHandleImpl.memoryEnabled;
     this.contextWindow = agentHandleImpl.contextWindow;
@@ -704,7 +701,6 @@ export interface CreateRemoteAgentOptions {
   mcpServers?: MCPServerConfig[];
   mcpLoading?: McpLoading;
   enableCoordinatorMode: boolean;
-  forkDisabled: boolean;
   /** Auto memory switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   askUser?: Asker;
@@ -726,7 +722,6 @@ export async function createRemoteAgent(
     hooks: hookConfigs,
     mcpServers: mcpConfigs,
     enableCoordinatorMode,
-    forkDisabled,
     memoryEnabled = true,
     askUser,
     sessionId = newSessionId(),
@@ -991,7 +986,6 @@ export async function createRemoteAgent(
     conv,
     backgroundTaskManager,
   );
-  agentTool.defaultFork = !(forkDisabled ?? false);
   // Wire the team manager into AgentTool so the teammate path takes
   // effect (teammates receive shared team task-board tools).
   agentTool.setTeamManager(teamManager, teamRunAgentFactory);
@@ -1070,7 +1064,6 @@ export async function createRemoteAgent(
     recoveryState: new RecoveryState(),
     teamManager,
     backgroundTaskManager,
-    forkDisabled,
     enableCoordinatorMode,
     memoryManager,
     memoryEnabled,
@@ -1143,7 +1136,6 @@ interface RemoteServerOptions {
   hookConfigs?: HookConfig[];
   addr: string;
   enableCoordinatorMode: boolean;
-  forkDisabled: boolean;
   /** Auto memory switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   /** Agent constructor used for eager and lazy initialization. */
@@ -1687,7 +1679,6 @@ export class RemoteServer {
           askUser: this.createAskUserCallback(),
           enableModelPlanMode: true,
           enableCoordinatorMode: this.opts.enableCoordinatorMode,
-          forkDisabled: this.opts.forkDisabled,
           memoryEnabled: this.opts.memoryEnabled !== false,
           onSubagentEvent: (event) => {
             this.handleSubagentEvent(event);
@@ -4146,7 +4137,6 @@ export class RemoteServer {
         sandboxConfig: this.opts.sandboxConfig,
         askUser: this.createAskUserCallback(),
         enableCoordinatorMode: this.opts.enableCoordinatorMode,
-        forkDisabled: this.opts.forkDisabled,
         memoryEnabled: this.opts.memoryEnabled !== false,
         onSubagentEvent: (event) => {
           this.handleSubagentEvent(event);

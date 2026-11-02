@@ -31,17 +31,16 @@ export const INHERITED_TOOL_RESULT =
 export const SUBAGENT_TYPE_DESCRIPTION =
   'Agent role. Defaults to general-purpose, independently of fork. With kind="teammate", plan starts a planning phase and continues implementation after approval; with kind="subagent", plan remains read-only.';
 export const FORK_PARAMETER_DESCRIPTION =
-  "Copy the parent conversation when true; start a fresh conversation when false. This does not restore a previous subagent's private conversation. Independent of subagent_type. Defaults to the session's enable_fork setting (true when unset).";
+  "Copy the parent conversation when true; start a fresh conversation when false. This does not restore a previous subagent's private conversation. Independent of subagent_type. Defaults to true.";
 
 export function buildAgentToolDescription(
   definitions: AgentDefinition[],
-  defaultFork: boolean,
 ): string {
   const roles = definitions.map(
     (definition) =>
       `- ${definition.name}: ${definition.description}${definition.name === "plan" ? ' With kind="teammate", this role plans first and continues implementation after approval instead of remaining permanently read-only.' : ""}`,
   );
-  return `Delegate a bounded task to an agent. kind selects persistent teammates (default teammate) or one-shot subagents (subagent). Team and teammate names are generated automatically. subagent_type selects the role (default general-purpose); fork independently selects whether to inherit a snapshot of the parent conversation (default ${String(defaultFork)}). Any role can use either context mode. With fork=false, include the goal, relevant files, constraints, whether edits are allowed, and the expected result.
+  return `Delegate a bounded task to an agent. kind selects persistent teammates (default teammate) or one-shot subagents (subagent). Team and teammate names are generated automatically. subagent_type selects the role (default general-purpose); fork independently selects whether to inherit a snapshot of the parent conversation (default true). Any role can use either context mode. With fork=false, include the goal, relevant files, constraints, whether edits are allowed, and the expected result.
 
 Available roles (pass a role as subagent_type, not as a tool name):
 ${roles.join("\n")}

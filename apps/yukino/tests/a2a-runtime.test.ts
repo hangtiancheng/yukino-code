@@ -36,7 +36,6 @@ describe("A2A runtime cleanup", () => {
         provider,
         cwd,
         enableCoordinatorMode: false,
-        forkDisabled: true,
         memoryEnabled: false,
       });
       const abort = vi

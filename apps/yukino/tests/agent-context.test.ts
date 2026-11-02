@@ -41,20 +41,17 @@ function parentConversation(): ConversationManager {
 describe("independent Agent role and context parameters", () => {
   const combinations = [undefined, "general-purpose", "plan"].flatMap((role) =>
     [undefined, false, true].flatMap((fork) =>
-      [false, true].flatMap((defaultFork) =>
-        [false, true].map((background) => ({
-          role,
-          fork,
-          defaultFork,
-          background,
-        })),
-      ),
+      [false, true].map((background) => ({
+        role,
+        fork,
+        background,
+      })),
     ),
   );
 
   it.each(combinations)(
-    "selects role=$role and fork=$fork independently (default=$defaultFork, background=$background)",
-    async ({ role, fork, defaultFork, background }) => {
+    "selects role=$role and fork=$fork independently (background=$background)",
+    async ({ role, fork, background }) => {
       const conversation = parentConversation();
       const before = structuredClone(conversation.getMessages());
       const tasks = new TaskManager();
@@ -68,7 +65,6 @@ describe("independent Agent role and context parameters", () => {
         conversation,
         tasks,
       );
-      tool.defaultFork = defaultFork;
       const result = await tool.execute(
         { cwd },
         {
@@ -90,7 +86,7 @@ describe("independent Agent role and context parameters", () => {
       expect(definition.name).toBe(role ?? "general-purpose");
       expect(actualBackground).toBe(background);
       expect(context?.subagentSessionId).toBeTruthy();
-      if (fork ?? defaultFork) {
+      if (fork ?? true) {
         expect(snapshot).not.toBe(conversation);
         expect(snapshot?.getMessages()).toEqual(before);
         snapshot?.addUserMessage("CHILD_ONLY");

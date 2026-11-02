@@ -91,7 +91,6 @@ providers:
 default_provider: 0
 enable_memory: false
 enable_coordinator_mode: false
-enable_fork: true
 mcp_servers:
   - name: codegraph
     command: codegraph

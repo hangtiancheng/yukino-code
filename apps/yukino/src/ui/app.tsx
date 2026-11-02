@@ -183,7 +183,6 @@ interface Props {
   hooks: HookConfig[];
   sandboxConfig?: SandboxYamlConfig;
   enableCoordinatorMode?: boolean;
-  forkDisabled?: boolean;
   /** Auto memory pipeline switch from config.yaml (`enable_memory:`); defaults to true. */
   memoryEnabled?: boolean;
   resume?: true | string;
@@ -199,7 +198,6 @@ export function App({
   hooks,
   sandboxConfig: sandboxYaml,
   enableCoordinatorMode,
-  forkDisabled,
   memoryEnabled = true,
   resume,
   onExitSummary,
@@ -1155,7 +1153,6 @@ export function App({
           conversationRef.current,
           backgroundTaskManagerRef.current,
         );
-        agentTool.defaultFork = !(forkDisabled ?? false);
         // Wire the team manager into AgentTool to enable the teammate path (teammates receive shared task-board tools)
         agentTool.setTeamManager(teamManagerRef.current, teamRunAgentFactory);
         registryRef.current.register(agentTool);
@@ -1182,15 +1179,7 @@ export function App({
         setError(`Failed to initialize agent: ${asErrorString(err)}`);
       }
     },
-    [
-      cwd,
-      mcpServers,
-      connectMcpServers,
-      memoryEnabled,
-      hooks,
-      forkDisabled,
-      trackSubagent,
-    ],
+    [cwd, mcpServers, connectMcpServers, memoryEnabled, hooks, trackSubagent],
   );
 
   useEffect(() => {

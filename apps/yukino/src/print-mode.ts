@@ -5,11 +5,7 @@ import { Agent } from "@/agent/index.js";
 import { configureBashSandbox } from "@/bootstrap/sandbox.js";
 import { createToolRegistry } from "@/bootstrap/tool-registry.js";
 import { parse as parseCommand } from "@/commands/commands.js";
-import {
-  forkEnabled,
-  loadConfig,
-  withProjectMcpServers,
-} from "@/config/index.js";
+import { loadConfig, withProjectMcpServers } from "@/config/index.js";
 import {
   getContextWindow,
   getMaxOutputTokens,
@@ -232,7 +228,6 @@ export async function runPrintMode(args: PrintArgs): Promise<void> {
     conv,
     backgroundTaskManager,
   );
-  agentTool.defaultFork = forkEnabled(cfg);
   agentTool.setTeamManager(
     teamManager,
     (teamRegistry, teamChecker, memberCwd = cwd, options) => {

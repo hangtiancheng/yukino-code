@@ -44,7 +44,6 @@ import {
 } from "@/a2a/conversion.js";
 import type { AgentEvent } from "@/agent/events.js";
 import {
-  forkEnabled,
   loadConfig,
   memoryEnabled,
   withProjectMcpServers,
@@ -116,7 +115,6 @@ export async function createA2aRuntime(
     mcpLoading: config.mcp_loading,
     sandboxConfig: config.sandbox,
     enableCoordinatorMode: config.enable_coordinator_mode ?? false,
-    forkDisabled: !forkEnabled(config),
     memoryEnabled: memoryEnabled(config),
     ...(sessionId ? { sessionId } : {}),
   });

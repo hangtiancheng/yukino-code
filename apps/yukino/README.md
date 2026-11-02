@@ -262,10 +262,6 @@ enable_memory: false
 # (team/task management) so all actual work is delegated to teammates.
 enable_coordinator_mode: false
 
-# Default value of the Agent tool's fork parameter, independent of subagent_type.
-# Default: true. Each call can explicitly set fork: true or fork: false to override it.
-enable_fork: true
-
 # MCP tool loading: auto | eager | native | dispatch. Default: auto, decided per session
 # from the provider protocol, endpoint and schema size. Native loading on a non-Anthropic
 # protocol falls back to dispatch. Applies to TUI, print, remote and A2A modes.
@@ -609,7 +605,7 @@ Source snapshots, JSON arguments, journals, and run state live under `~/.yukino/
 
 Agent defaults to `kind: "teammate"`, joins the selected team or creates one automatically when none exists, and generates the teammate name from its description. Multiple teams can coexist; pass `team_name` when multiple teams exist. Use `kind: "subagent"` for one-shot runs and `worktree: true` for Git worktree isolation; agent definitions also accept a boolean `worktree` default, which a call can override. The optional `model` field is unnecessary for most tasks. `TeamCreate` adds a team, named via its optional `name` parameter or auto-generated when omitted, and keeps existing teams running. `TeamList` lists all teams. Use `team_name` with Agent, SendMessage, TodoWrite, TaskStop, and TeamDelete to select the target team; when only one team matches, it can be omitted. Teammates always send messages and edit tasks within their own team. The progress display combines tasks from all teams.
 
-`Agent` selects its role and context independently: `subagent_type` defaults to `"general-purpose"`, while `fork` defaults to `true` (or the configured `enable_fork` value). An explicit `fork` value overrides the configuration for every role.
+`Agent` selects its role and context independently: `subagent_type` defaults to `"general-purpose"`, while `fork` defaults to `true` for every role.
 
 | Parameters                           | Role            | Initial context                 |
 | ------------------------------------ | --------------- | ------------------------------- |

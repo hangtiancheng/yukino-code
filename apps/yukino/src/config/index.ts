@@ -147,17 +147,12 @@ const AppConfigSchema = z.looseObject({
   sandbox: SandboxYamlConfigSchema.optional(),
   enable_coordinator_mode: z.boolean().optional(),
   /**
-   * Default for the Agent tool's independent fork parameter. Defaults to true;
-   * an explicit fork argument overrides this setting for any agent role.
-   */
-  enable_fork: z.boolean().optional(),
-  /**
    * Whether auto memory is enabled: gates index injection, recall, and
    * background extraction in the hosts that run them (interactive UI and
    * remote), and consolidation, which currently runs only in remote mode.
    * Defaults to enabled; `enable_memory: false` turns the whole automatic
    * memory pipeline off. Left optional so "not set" and "explicitly false"
-   * stay distinguishable, mirroring enable_fork.
+   * stay distinguishable.
    */
   enable_memory: z.boolean().optional(),
   /**
@@ -166,11 +161,6 @@ const AppConfigSchema = z.looseObject({
    */
   env: EnvBlockSchema.optional(),
 });
-
-/** Default context inheritance for Agent calls. Defaults to true when unset. */
-export function forkEnabled(cfg: AppConfig): boolean {
-  return cfg.enable_fork !== false;
-}
 
 /** Whether auto memory is enabled. Defaults to enabled when not specified in config. */
 export function memoryEnabled(cfg: AppConfig): boolean {

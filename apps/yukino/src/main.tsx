@@ -3,7 +3,6 @@ import { render } from "ink";
 import type { InteractionSummary } from "@/bootstrap/interaction-summary.js";
 import type { RuntimeMode } from "@/cli.js";
 import {
-  forkEnabled,
   hydrateConfigEnv,
   loadConfig,
   memoryEnabled,
@@ -85,7 +84,6 @@ async function runRemoteMode(
     sandboxConfig: cfg.sandbox,
     addr: mode.address,
     enableCoordinatorMode: cfg.enable_coordinator_mode ?? false,
-    forkDisabled: !forkEnabled(cfg),
     memoryEnabled: memoryEnabled(cfg),
   });
   // Graceful shutdown on Ctrl+C/SIGTERM: stop the server (closes WS/HTTP,
@@ -150,7 +148,6 @@ async function runUiMode(
       hooks: cfg.hooks,
       sandboxConfig: cfg.sandbox,
       enableCoordinatorMode: cfg.enable_coordinator_mode,
-      forkDisabled: !forkEnabled(cfg),
       memoryEnabled: memoryEnabled(cfg),
       defaultProvider: cfg.default_provider,
     };

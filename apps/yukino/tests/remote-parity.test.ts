@@ -99,7 +99,6 @@ async function setup(cwd: string): Promise<{
     providers: [provider],
     addr: ":18888",
     enableCoordinatorMode: false,
-    forkDisabled: true,
     memoryEnabled: false,
   });
   const broadcasts = captureBroadcasts(server);
@@ -107,7 +106,6 @@ async function setup(cwd: string): Promise<{
     provider,
     cwd,
     enableCoordinatorMode: false,
-    forkDisabled: true,
     memoryEnabled: false,
   });
   Reflect.set(server, "agentHandle", handle);
@@ -137,7 +135,6 @@ describe("remote terminal-UI parity", () => {
       mcpServers,
       mcpLoading: "dispatch",
       enableCoordinatorMode: false,
-      forkDisabled: true,
       memoryEnabled: false,
       agentFactory: factory,
     });
@@ -854,7 +851,6 @@ describe("remote terminal-UI parity", () => {
       addr: "127.0.0.1:0",
       agentFactory,
       enableCoordinatorMode: false,
-      forkDisabled: true,
       memoryEnabled: false,
     });
     const broadcasts = captureBroadcasts(server);
@@ -1140,14 +1136,12 @@ describe("remote terminal-UI parity", () => {
       providers: [provider],
       addr: ":18888",
       enableCoordinatorMode: false,
-      forkDisabled: true,
       memoryEnabled: false,
     });
     const handle = await createRemoteAgent({
       provider,
       cwd,
       enableCoordinatorMode: false,
-      forkDisabled: true,
       memoryEnabled: false,
     });
     Reflect.set(server, "agentHandle", handle);
@@ -1184,7 +1178,6 @@ describe("remote terminal-UI parity", () => {
       providers: [provider],
       addr: "127.0.0.1:0",
       enableCoordinatorMode: false,
-      forkDisabled: true,
       memoryEnabled: false,
     });
     const runPromise = server.run();

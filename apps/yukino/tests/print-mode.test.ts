@@ -219,7 +219,6 @@ describe("host tracking interfaces", () => {
         cwd,
         interactionMode,
         enableCoordinatorMode: false,
-        forkDisabled: false,
         memoryEnabled: false,
       });
       try {
@@ -327,7 +326,6 @@ describe("durable background outcomes across hosts", () => {
         provider: cfg.providers[0],
         cwd,
         enableCoordinatorMode: false,
-        forkDisabled: false,
         memoryEnabled: false,
       });
       try {
@@ -438,7 +436,6 @@ describe("goal host commands", () => {
       provider: cfg.providers[0],
       cwd,
       enableCoordinatorMode: false,
-      forkDisabled: false,
       memoryEnabled: false,
       sessionId: "remote-goal",
     });
@@ -549,20 +546,16 @@ describe("print mode delegation", () => {
     expect(process.exitCode).toBe(0);
   });
 
-  it.each([true, false])(
-    "honors enable_fork=%s and forwards child execution context",
-    async (fork) => {
-      cfg.enable_fork = fork;
-      const spawn = vi
-        .spyOn(subagents, "spawnSubagent")
-        .mockResolvedValue("worker evidence");
-      turns = [delegate({}), [end]];
-      await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
-      expect(spawn).toHaveBeenCalledOnce();
-      expect(Boolean(spawn.mock.calls[0]?.[10]?.contextSnapshot)).toBe(fork);
-      expect(spawn.mock.calls[0]?.[9]?.mode).toBe("bypassPermissions");
-    },
-  );
+  it("forks by default and forwards child execution context", async () => {
+    const spawn = vi
+      .spyOn(subagents, "spawnSubagent")
+      .mockResolvedValue("worker evidence");
+    turns = [delegate({}), [end]];
+    await runPrintMode({ prompt: "Parent task", outputFormat: "text" });
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(spawn.mock.calls[0]?.[10]?.contextSnapshot).toBeDefined();
+    expect(spawn.mock.calls[0]?.[9]?.mode).toBe("bypassPermissions");
+  });
 
   it("passes background, model, cancellation, permissions and isolated cwd to spawn", async () => {
     const isolated = join(cwd, "isolated");
