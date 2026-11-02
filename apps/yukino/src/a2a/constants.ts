@@ -57,8 +57,6 @@ export function buildUnknownPermissionIdReason(permissionId: string): string {
 export const TRANSCRIPT_UNAVAILABLE_ERROR =
   "A2A context transcript is no longer available. Start a new context.";
 
-export const NO_PROVIDER_ERROR = "No provider configured.";
-
 export const SESSION_CAPACITY_ERROR =
   "A2A session capacity reached; retry when an active context finishes.";
 

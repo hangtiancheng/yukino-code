@@ -114,7 +114,6 @@ export function ModelSelect({
   if (forcedTextEntry) {
     return (
       <SelectorFrame
-        compact
         hint="Enter set model · Esc cancel"
         subtitle={`${STATUS_MESSAGES[state.status === "error" ? "error" : "empty"]} — type a model id`}
         title="Select model"
@@ -143,7 +142,6 @@ export function ModelSelect({
   if (!ready) {
     return (
       <SelectorFrame
-        compact
         hint="Esc cancel"
         subtitle={`Current model: ${currentModel}`}
         title="Select model"

@@ -117,7 +117,6 @@ export function ToolCard({
       flexDirection="column"
       marginTop={1}
       paddingX={padding}
-      paddingY={1}
       width={width}
     >
       <Text wrap={shell ? "wrap" : "truncate-end"}>

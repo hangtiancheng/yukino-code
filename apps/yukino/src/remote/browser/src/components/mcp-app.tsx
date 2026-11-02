@@ -230,7 +230,7 @@ export function McpAppView({ appId, app }: { appId: string; app: McpApp }) {
   return (
     <section
       aria-label={app.toolName}
-      className="mb-4 overflow-hidden rounded-xl border border-border bg-surface"
+      className="mb-2 overflow-hidden rounded-lg border border-border bg-surface"
     >
       {loading && (
         <p role="status" className="p-3 text-xs text-dim">

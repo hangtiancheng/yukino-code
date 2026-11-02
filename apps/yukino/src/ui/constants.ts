@@ -11,17 +11,8 @@ export const AGENTS_DIALOG_SUBTITLE = "teammates and running background tasks";
 export const AGENTS_DIALOG_EMPTY = "No teammates or running background tasks";
 
 export const ICONS = {
-  active: "◉",
   arrow: "→" satisfies "→" | "←",
-  branch: "├─",
-  collapsed: "⊞",
-  expanded: "⊟",
-  inactive: "○",
-  lastBranch: "└─",
-  prompt: ">",
   success: "✓",
-  error: "✗",
-  tree: "│",
 } as const;
 
 export const COMMAND_TAGS = ["[skill]", CUSTOM_COMMAND_TAG];

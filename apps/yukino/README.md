@@ -67,7 +67,7 @@ Command templates support quoted positional arguments (`$1`, `$2`, ...), `$@`, d
 ### Hooks
 
 - Event-driven hook engine supporting: session_start, session_end, turn_start, turn_end, pre_send, post_receive, pre_tool_use, post_tool_use, shutdown
-- Hook actions: shell commands, HTTP requests, and prompt injection (`agent` actions are reserved for a future runner and currently fail configuration validation)
+- Hook actions: shell commands, HTTP requests, and prompt injection (`agent` actions fail application configuration validation)
 - Conditional execution, one-shot (`once`) hooks, `reject` (blocks a tool call on pre_tool_use), `on_error` handling (ignore, fail, reject), and fire-and-forget `async` execution (`reject` and `async` are mutually exclusive)
 
 ### Remote Mode
@@ -255,7 +255,7 @@ providers:
 default_provider: 0
 
 # Automatic memory master switch. Default: true. false turns off the whole pipeline:
-# index injection, recall, and background extraction (consolidation runs in remote mode only).
+# index injection, recall, background extraction, and consolidation.
 enable_memory: false
 
 # Coordinator mode. Default: false. true narrows the leader's toolset to pure orchestration
@@ -353,7 +353,7 @@ mcp_servers:
 # (seatbelt on macOS, bubblewrap on Linux; unavailable elsewhere).
 sandbox:
   enabled: false # Master switch
-  # With the sandbox active, non-dangerous Bash commands skip human confirmation (explicit
+  # With the sandbox active, Bash commands skip human confirmation (explicit
   # deny/ask rules still apply; Bash tool only). Default: false.
   auto_allow: false
   network_enabled: true # Whether sandboxed commands may access the network
@@ -831,11 +831,11 @@ Run `/plan` to plan the current task, or `/plan <task>` to specify a planning re
 
 Press ↓ on the last visual row of the input to view all teammates and background subagents, including while the foreground agent is streaming. Completion menus and prompt-history navigation take precedence. Enter opens an agent's details, Escape returns or closes the list, and the unsent draft and cursor are preserved. Teammate spawn cards scroll with the transcript like background subagent cards; current progress is available in the Agents list.
 
-Use the mouse wheel or trackpad to scroll conversation history in the terminal's native scrollback. Drag to select text and use the terminal's copy/paste shortcuts. Up/Down navigates completion menus, visual input rows, and prompt history; Down after restoring the draft opens the Agents list. Home/End and Ctrl+A/E move to the start/end of the input line. PageUp/PageDown behavior follows the terminal's own scrollback bindings.
+Terminal and browser UI share Catppuccin Mocha (dark) and Latte (light) palettes. Teal accents identify focus and progress, mauve headings separate sections, and green, yellow, and red distinguish success, warnings, and errors. Messages, tool cards, Markdown, and dialogs use compact spacing.
 
-**Design tradeoff:** Yukino uses the terminal's primary screen, with fullscreen/alternate-screen rendering and mouse capture removed. Completed messages are appended to native scrollback, preserving normal selection, copying, pasting, and wheel/trackpad history scrolling without translating scrolling into prompt-history navigation. Yukino gives up its own conversation viewport, scrollbar, click-to-latest indicator, and conversation-navigation key bindings. Scrolling and whether new output follows the bottom are controlled by the terminal; the input and footer scroll out of view while reading older history. The live area remains responsive and shows the tail of running output; the complete assistant response is printed when it finishes. Ctrl+O reprints the current transcript with expanded/collapsed details, and resume/rewind prints the restored transcript; earlier printed lines remain terminal history. Scrollback retention, selection behavior, copy/paste shortcuts, and selection stability during live redraws depend on the terminal.
+The terminal uses native scrollback. Scroll with the mouse wheel or trackpad, drag to select, and use the terminal's copy/paste shortcuts. The input and footer scroll out of view while reading history; new-output following and scrollback retention depend on the terminal. Up/Down navigates completion menus, visual input rows, and prompt history. Home/End and Ctrl+A/E move within the input line; PageUp/PageDown use the terminal's bindings.
 
-Terminal resizing redraws the live area without clearing or replaying completed messages, preserving the terminal's native reading position and scrollback anchors. Historical output keeps its printed line breaks and uses the terminal's own reflow; previously printed cards are not rebuilt or stretched to fill a wider terminal. Streaming and completed Markdown tables use grids with wrapped cells, falling back to wrapped raw Markdown when the columns cannot fit their widest characters. Printed table grids follow native history reflow when the terminal narrows. Background padding does not add extra wrapped rows when the terminal narrows. The input, status, live text, running tool cards, and newly completed messages use the current width. Resize redraws are coalesced. Apple Terminal's reflowed live rows and cleared gaps are tracked so repeated width and height changes restore the input and footer without leaving old status lines behind.
+Completed messages stay in scrollback when the terminal resizes; live text, tools, input, and status use the current dimensions. Markdown tables wrap cells and fall back to raw Markdown when a grid cannot fit. Ctrl+O rebuilds the transcript with expanded or collapsed details; clear, resume, and rewind also rebuild it, clearing the prior screen and scrollback.
 
 Pastes longer than 10 lines or 1,000 characters collapse to `[paste #1 +124 lines]` or `[paste #1 1234 chars]`. Clipboard images appear as `[Image #1]`. Arrow keys move across each placeholder as a unit, and Backspace/Delete remove it as a unit. Placeholders survive dialog switches; submitting restores the full text and image attachments.
 

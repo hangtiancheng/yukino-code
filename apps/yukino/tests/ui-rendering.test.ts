@@ -173,7 +173,7 @@ describe("skill transcript presentation", () => {
   });
 });
 
-describe("pi Markdown presentation", () => {
+describe("terminal Markdown presentation", () => {
   it.each(["ts", "unknown-language"])(
     "uses two-column tabs in streamed and committed %s code",
     (language) => {

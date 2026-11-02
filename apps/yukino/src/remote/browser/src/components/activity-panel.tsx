@@ -16,14 +16,13 @@ interface ActivityPanelProps {
 function Pill({ status }: { status: string }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${STATUS_PILL[status] ?? "bg-accent/15 text-accent"}`}
+      className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold ${STATUS_PILL[status] ?? "bg-selected/40 text-muted"}`}
     >
       {status}
     </span>
   );
 }
 
-/** Agents panel: subagents, background tasks and teammates (TUI Agents list parity). */
 export function ActivityPanel({
   subagents,
   backgroundTasks,
@@ -41,7 +40,7 @@ export function ActivityPanel({
         subtitle="Live activity across subagents, background tasks and teammates."
         title="Agents"
       />
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-2 sm:px-5">
         {empty && (
           <p className="text-sm text-dim">
             No subagents, background tasks or teammates right now.
@@ -49,10 +48,10 @@ export function ActivityPanel({
         )}
         {subagents.length > 0 && (
           <section>
-            <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-dim uppercase">
+            <h3 className="mb-1.5 text-xs font-semibold text-accent">
               Subagents
             </h3>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {subagents.map((agent) => (
                 <div
                   key={agent.toolCallId}
@@ -83,10 +82,10 @@ export function ActivityPanel({
         )}
         {backgroundTasks.length > 0 && (
           <section>
-            <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-dim uppercase">
+            <h3 className="mb-1.5 text-xs font-semibold text-accent">
               Background tasks
             </h3>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {backgroundTasks.map((task) => (
                 <div
                   key={task.id}
@@ -106,10 +105,10 @@ export function ActivityPanel({
         )}
         {teammates.length > 0 && (
           <section>
-            <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-dim uppercase">
+            <h3 className="mb-1.5 text-xs font-semibold text-accent">
               Teammates
             </h3>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {teammates.map((mate) => (
                 <div
                   key={`${mate.teamName}_${mate.name}`}
@@ -139,7 +138,7 @@ export function ActivityPanel({
           </section>
         )}
       </div>
-      <div className="flex items-center justify-end border-t border-border px-4 py-3 sm:px-5">
+      <div className="flex items-center justify-end border-t border-border px-4 py-2 sm:px-5">
         <button
           type="button"
           onClick={onClose}

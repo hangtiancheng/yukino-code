@@ -31,7 +31,6 @@ export interface ChatMessage {
   content: string;
   /** Render a system message's content as markdown (e.g. the /help table). */
   markdown?: boolean;
-  // turn_summary fields
   thinkingDuration?: number;
   toolSummary?: ToolSummaryItem[];
 }
@@ -123,7 +122,6 @@ function MessageBlock(props: MessageBlockProps) {
               flexDirection="column"
               marginTop={1}
               paddingX={padding}
-              paddingY={1}
               width={width}
             >
               <Text color={THEME.customMessageText}>
@@ -152,7 +150,6 @@ function MessageBlock(props: MessageBlockProps) {
               backgroundColor={THEME.userMessageBg}
               marginTop={1}
               paddingX={padding}
-              paddingY={1}
               width={width}
             >
               <Text color={THEME.userMessageText}>
@@ -196,7 +193,6 @@ function MessageBlock(props: MessageBlockProps) {
             flexDirection="column"
             marginTop={1}
             paddingX={padding}
-            paddingY={1}
             width={width}
           >
             <Text bold color={THEME.customMessageLabel}>

@@ -45,7 +45,7 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
 
   if (item.answered) {
     return (
-      <div className="my-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-dim ">
+      <div className="my-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-dim">
         <span className="mr-1.5 text-green">✓</span> Answered
       </div>
     );
@@ -54,7 +54,7 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
   return (
     <section
       aria-label="Question from the agent"
-      className="my-3 rounded-xl border border-accent/30 bg-surface p-4 "
+      className="my-2 rounded-lg border border-accent/30 bg-surface p-3"
     >
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-bright">
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/10 text-xs text-accent">
@@ -80,7 +80,7 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
         <button
           type="button"
           onClick={handleSubmit}
-          className="cursor-pointer rounded-lg bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast  transition-colors hover:bg-accent-dim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-dim"
+          className="cursor-pointer rounded-lg bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast transition-colors hover:bg-accent/85"
         >
           Submit
         </button>

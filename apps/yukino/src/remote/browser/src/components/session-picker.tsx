@@ -54,7 +54,7 @@ export function SessionPicker({
         onSelect={onPick}
         onClose={onClose}
       />
-      <div className="flex items-center justify-between border-t border-border px-4 sm:px-5 py-3">
+      <div className="flex items-center justify-between border-t border-border px-4 py-2 sm:px-5">
         <p className="text-[11px] text-dim">
           Or type <span className="font-mono text-dim">/resume &lt;id&gt;</span>
         </p>

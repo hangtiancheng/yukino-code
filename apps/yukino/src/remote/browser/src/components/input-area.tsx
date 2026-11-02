@@ -415,8 +415,8 @@ export function InputArea({
   const bashExcluded = trimmed.startsWith("!!");
 
   return (
-    <footer className="composer shrink-0 bg-bg px-3 sm:px-8">
-      <div className="relative mx-auto w-full max-w-5xl pt-3 pb-1">
+    <footer className="composer shrink-0 border-t border-border bg-bg">
+      <div className="relative mx-auto w-full max-w-5xl px-3 pt-2 pb-1 sm:px-6">
         {slashOpen && (
           <SlashMenu
             commands={filtered}
@@ -430,7 +430,7 @@ export function InputArea({
             ref={atListRef}
             role="listbox"
             aria-label="File completions"
-            className="completion-menu absolute inset-x-0 bottom-full mb-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl"
+            className="completion-menu absolute inset-x-3 bottom-full mb-2 max-h-64 overflow-y-auto rounded-lg border border-border bg-surface p-1.5 shadow-xl sm:inset-x-6"
           >
             {atMatches.map((match, i) => (
               <button
@@ -446,7 +446,7 @@ export function InputArea({
                 onMouseEnter={() => {
                   setAtCursor(i);
                 }}
-                className={`flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-1.5 text-left transition-colors ${i === atCursor ? "bg-accent/8" : ""}`}
+                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${i === atCursor ? "bg-accent/8" : ""}`}
               >
                 <span className="truncate font-mono text-xs text-base">
                   {match}
@@ -486,7 +486,7 @@ export function InputArea({
             {blockedHint}
           </p>
         )}
-        <div className="flex items-end gap-2 px-3 sm:px-5">
+        <div className="flex items-end gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -507,7 +507,7 @@ export function InputArea({
             onClick={() => {
               fileInputRef.current?.click();
             }}
-            className="mb-1.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
+            className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-tool hover:text-bright"
           >
             <svg
               width="15"
@@ -541,11 +541,11 @@ export function InputArea({
                 ? "var(--yukino-bash-mode)"
                 : `var(--yukino-thinking-${thinkingLevel.toLowerCase() || "off"})`,
             }}
-            className="composer-field min-w-0 flex-1 rounded-xl border bg-surface transition-colors"
+            className="composer-field min-w-0 flex-1 rounded-lg border bg-surface transition-colors"
           >
             {uploads.length > 0 && (
               <div
-                className="flex flex-wrap gap-1.5 px-3 pt-3"
+                className="flex flex-wrap gap-1.5 px-3 pt-2"
                 aria-label="Uploading images"
               >
                 {uploads.map((upload) => (
@@ -607,7 +607,7 @@ export function InputArea({
               placeholder={
                 streaming ? "Steer the current task…" : "Message Yukino…"
               }
-              className="block max-h-50 w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim"
+              className="block max-h-50 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-bright outline-none placeholder:text-dim"
               aria-label="Message input"
             />
             {bashMode && (
@@ -621,7 +621,7 @@ export function InputArea({
               type="button"
               onClick={onCancel}
               title="Cancel the running turn (Esc)"
-              className="mb-1.5 flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
+              className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-red/40 bg-red/10 px-2.5 font-mono text-xs font-semibold text-red transition-colors hover:bg-red/15"
             >
               <svg
                 width="10"
@@ -639,7 +639,7 @@ export function InputArea({
               type="button"
               onClick={send}
               disabled={value.trim().length === 0}
-              className="mb-1.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
+              className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
               aria-label="Send message"
             >
               <svg
@@ -660,7 +660,7 @@ export function InputArea({
             </button>
           )}
         </div>
-        <p className="mt-2 hidden px-1 text-[11px] text-dim sm:block">
+        <p className="mt-1.5 hidden px-1 text-[11px] text-dim sm:block">
           Enter send · Shift+Enter newline · ↑ history · @ files · ! bash ·
           paste/drop images · Esc cancel
         </p>

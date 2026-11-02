@@ -10,7 +10,7 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
   return (
     <section
       aria-label={`Permission required for ${item.toolName}`}
-      className="my-3 rounded-xl border border-yellow/35 bg-surface p-4 "
+      className="my-2 rounded-lg border border-yellow/35 bg-surface p-3"
     >
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-yellow">
         <svg

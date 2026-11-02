@@ -14,7 +14,7 @@ export function AssistantMessage({
   const showOpenThinking = streaming && isOpenThinking(content);
   const visibleBody = showOpenThinking ? "" : thinking ? body : content;
   return (
-    <div className="my-6 px-1 sm:px-2">
+    <div className="my-3 px-1">
       {thinking && <ThinkingBlock text={thinking} label="Thought" />}
       {showOpenThinking && (
         <ThinkingBlock

@@ -4,22 +4,19 @@ interface CollapsibleProps {
   header: ReactNode;
   children: ReactNode;
   preview?: ReactNode;
-  /** Initial open state (uncontrolled); the component manages its own state afterwards. */
-  defaultOpen?: boolean;
-  className?: string;
+  className: string;
 }
 
 export function Collapsible({
   header,
   children,
   preview,
-  defaultOpen = false,
-  className = "bg-tool",
+  className,
 }: CollapsibleProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
   return (
     <div
-      className={`tool-card my-3 overflow-hidden rounded-xl border border-border py-2 ${className}`}
+      className={`tool-card my-2 overflow-hidden rounded-lg border ${className}`}
     >
       <button
         type="button"
@@ -27,7 +24,7 @@ export function Collapsible({
           setOpen((v) => !v);
         }}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-center gap-2 px-4 py-1.5 text-left transition-colors select-none hover:bg-selected/30 sm:px-5"
+        className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors select-none hover:bg-selected/30"
       >
         <svg
           width="10"
@@ -48,7 +45,7 @@ export function Collapsible({
         {header}
       </button>
       {(open || preview) && (
-        <div className="overflow-x-auto px-4 py-2 font-mono text-xs leading-6 whitespace-pre-wrap text-tool-output sm:px-5">
+        <div className="overflow-x-auto border-t border-border/60 px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap text-tool-output">
           {open ? children : preview}
         </div>
       )}

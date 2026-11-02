@@ -62,9 +62,7 @@ export interface ThemePalette {
   accentContrast: string;
 }
 
-// The values live in palettes.js (plain JS) so the browser PostCSS config can
-// import them without a TypeScript loader. This annotation is what keeps that
-// data honest: a missing or renamed key fails `pnpm typecheck`.
+// Validate the JavaScript palette shared with the browser's PostCSS config.
 export const PALETTES: {
   dark: ThemePalette;
   light: ThemePalette;

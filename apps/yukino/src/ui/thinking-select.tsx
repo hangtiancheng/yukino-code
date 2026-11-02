@@ -52,7 +52,7 @@ export function ThinkingSelect({
     0,
     Math.min(
       levels.length,
-      availableRows - selectorChrome(availableRows, true, true).height,
+      availableRows - selectorChrome(availableRows, true).height,
     ),
   );
   const start = getListWindowStart(levels.length, cursor, count);
@@ -89,7 +89,6 @@ export function ThinkingSelect({
       overflow="hidden"
     >
       <SelectorFrame
-        compact
         title="Thinking level"
         subtitle={
           selected ? THINKING_DESCRIPTIONS[selected] : "No levels available"

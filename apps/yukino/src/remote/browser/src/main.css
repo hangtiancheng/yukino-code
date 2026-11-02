@@ -15,14 +15,10 @@
   --color-muted: var(--yukino-muted);
   --color-bright: var(--yukino-bright);
   --color-accent: var(--yukino-accent);
-  --color-accent-dim: var(--yukino-accent);
   --color-accent-contrast: var(--yukino-accent-contrast);
   --color-user-bg: var(--yukino-user-message-bg);
   --color-user-text: var(--yukino-user-message-text);
-  --color-custom: var(--yukino-custom-message-bg);
-  --color-custom-label: var(--yukino-custom-message-label);
   --color-selected: var(--yukino-selected-bg);
-  --color-selected-text: var(--yukino-text);
   --color-thinking: var(--yukino-thinking-text);
   --color-green: var(--yukino-success);
   --color-red: var(--yukino-error);
@@ -47,7 +43,7 @@
 
 @layer components {
   .yukino-app {
-    line-height: 1.6;
+    line-height: 1.55;
   }
   .transcript,
   [role="dialog"] {
@@ -62,12 +58,12 @@
       color-mix(in srgb, var(--yukino-code-bg) 30%, transparent);
   }
   .composer-field:focus-within {
-    outline: 2px solid var(--yukino-border-accent);
-    outline-offset: 3px;
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--yukino-border-accent) 25%, transparent);
   }
   .status-bar button {
-    border-radius: 6px;
-    padding: 3px 6px;
+    border-radius: 4px;
+    padding: 1px 4px;
     transition:
       background-color 120ms ease,
       color 120ms ease;
@@ -82,13 +78,13 @@
     z-index: 20;
   }
   .completion-menu [role="option"] {
-    border-radius: 8px;
+    border-radius: 6px;
   }
   .markdown {
     overflow-wrap: anywhere;
-    line-height: 1.8;
+    line-height: 1.65;
     p {
-      margin-block: 0.65em;
+      margin-block: 0.45em;
     }
     > .markdown-block {
       display: contents;
@@ -114,14 +110,14 @@
       font-size: 1em;
       font-weight: 600;
       line-height: 1.4;
-      margin-block: 1.25em 0.5em;
+      margin-block: 0.9em 0.35em;
     }
     h1 {
-      font-size: 1.4em;
+      font-size: 1.3em;
       font-weight: 700;
     }
     h2 {
-      font-size: 1.2em;
+      font-size: 1.15em;
     }
     h3 {
       font-size: 1.05em;
@@ -135,15 +131,15 @@
       font-weight: 700;
     }
     blockquote {
-      border-left: 3px solid var(--yukino-md-quote-border);
+      border-left: 2px solid var(--yukino-md-quote-border);
       color: var(--yukino-md-quote);
-      padding-left: 1em;
-      margin-block: 0.75em;
+      padding-left: 0.75em;
+      margin-block: 0.5em;
     }
     ul,
     ol {
-      padding-left: 2em;
-      margin-block: 0.75em;
+      padding-left: 1.5em;
+      margin-block: 0.5em;
     }
     ul {
       list-style: disc;
@@ -152,6 +148,11 @@
       list-style: decimal;
     }
     li {
+      margin-block: 0.15em;
+    }
+    li > p,
+    li > ul,
+    li > ol {
       margin-block: 0.25em;
     }
     li::marker {
@@ -174,14 +175,14 @@
     }
     pre {
       border: 1px solid var(--yukino-border-muted);
-      border-radius: 10px;
-      padding: 1em 1.25em;
-      margin-block: 1em;
+      border-radius: 8px;
+      padding: 0.75em 1em;
+      margin-block: 0.65em;
       overflow-x: auto;
       overflow-wrap: normal;
       background: var(--yukino-code-bg);
       font-size: 0.88em;
-      line-height: 1.7;
+      line-height: 1.6;
     }
     pre code {
       color: var(--yukino-md-code-block);
@@ -192,13 +193,13 @@
       max-width: 100%;
       overflow-x: auto;
       border-collapse: collapse;
-      margin-block: 1em;
+      margin-block: 0.65em;
       font-variant-numeric: tabular-nums;
     }
     th,
     td {
       border-bottom: 1px solid var(--yukino-border-muted);
-      padding: 0.4em 1em;
+      padding: 0.35em 0.75em;
       text-align: left;
     }
     th {
@@ -209,7 +210,7 @@
     hr {
       border: 0;
       border-top: 1px solid var(--yukino-md-hr);
-      margin-block: 1.25em;
+      margin-block: 0.85em;
     }
     img {
       max-width: 100%;

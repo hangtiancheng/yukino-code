@@ -8,7 +8,6 @@ import z, { parse } from "zod";
 import { createChildLogger } from "@/logger/index.js";
 import {
   CONTENT_FIELDS,
-  DANGEROUS_PATTERNS,
   FILE_TOOLS,
   ISOLATED_WORKTREE_CLAIM_ERROR,
   MAX_ACTION_ARG_VALUE_CHARS,
@@ -64,12 +63,6 @@ interface Rule {
   tool: string;
   pattern: string;
   effect: RuleEffect;
-}
-
-// Dangerous command patterns: each carries a match reason for HITL (Human-in-the-Loop) display
-export interface DangerousPattern {
-  re: RegExp;
-  reason: string;
 }
 
 function escapeRuleLiteral(content: string): string {
@@ -379,16 +372,6 @@ export class RuleEngine {
   }
 }
 
-// Detect dangerous commands and return the matched reason (empty string means safe)
-function detectDangerous(command: string): string {
-  for (const p of DANGEROUS_PATTERNS) {
-    if (p.re.test(command)) {
-      return p.reason;
-    }
-  }
-  return "";
-}
-
 export function isSafeCommand(command: string): boolean {
   const trimmed = command.trim();
   // Reject anything with shell metacharacters: a "safe" prefix like `cat` must
@@ -689,15 +672,6 @@ export class PermissionChecker {
       return { effect: "allow", reason: "Safe read-only command" };
     }
 
-    // Layer 3: dangerous command block — reason records the specific matched pattern
-    const dangerReason = category === "command" ? detectDangerous(content) : "";
-    if (dangerReason) {
-      return {
-        effect: "deny",
-        reason: `Dangerous command blocked: ${dangerReason}`,
-      };
-    }
-
     if ((toolName === "Bash" || toolName === "PowerShell") && !content.trim()) {
       return {
         effect: "ask",
@@ -717,7 +691,7 @@ export class PermissionChecker {
       };
     }
 
-    // Layer 3.5: Sandbox auto-allow — OS sandbox already isolates writes; non-dangerous commands can skip human confirmation.
+    // Sandbox auto-allow follows explicit deny/ask rules and shell syntax checks.
     // Only Bash is wrapped by the configured OS sandbox; other command tools
     // (e.g. PowerShell) never inherit this auto-allow.
     if (this.sandboxEnabled && this.sandboxAutoAllow && toolName === "Bash") {

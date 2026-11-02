@@ -34,7 +34,7 @@ export function PlanApprovalDialog({
         title="Plan complete"
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
         <p
           className="mb-3 truncate font-mono text-[11px] text-dim"
           title={request.planPath}
@@ -48,7 +48,7 @@ export function PlanApprovalDialog({
         )}
       </div>
 
-      <div className="border-t border-border px-4 sm:px-5 py-4">
+      <div className="border-t border-border px-4 py-3 sm:px-5">
         {feedbackOpen && (
           <div className="mb-3">
             <textarea
@@ -77,7 +77,7 @@ export function PlanApprovalDialog({
             onClick={() => {
               onChoose("manual");
             }}
-            className="w-full cursor-pointer rounded-lg sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast  transition-colors hover:bg-accent-dim"
+            className="w-full cursor-pointer rounded-lg sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast transition-colors hover:bg-accent/85"
           >
             Yes, manually approve edits
           </button>

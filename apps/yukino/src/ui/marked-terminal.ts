@@ -132,7 +132,7 @@ class Renderer {
   private readonly transform: StyleFn;
 
   private parser: Parser | undefined;
-  markedOptions: MarkedOptions | undefined;
+  private markedOptions: MarkedOptions | undefined;
 
   constructor(options?: Partial<TerminalRendererOptions>) {
     this.config = { ...buildDefaultOptions(), ...options };
@@ -156,27 +156,13 @@ class Renderer {
     return this.parser;
   }
 
-  private getMarkedOptions(this: {
-    options?: MarkedOptions | undefined;
-    markedOptions?: MarkedOptions | undefined;
-  }): MarkedOptions {
+  private getMarkedOptions(): MarkedOptions {
     if (this.markedOptions !== undefined) {
       return this.markedOptions;
-    }
-    // When the renderer is passed directly to marked() (not via the
-    // markedTerminal() extension), marked sets `renderer.options` and
-    // `renderer.parser` dynamically instead of calling setContext().
-    const fallback = this.options;
-    if (fallback !== undefined) {
-      return fallback;
     }
     throw new Error(
       "TerminalRenderer: options not set. Call setContext() before rendering.",
     );
-  }
-
-  space(_token: Tokens.Space): "" {
-    return "";
   }
 
   text(token: Tokens.Text | Tokens.Escape): string {

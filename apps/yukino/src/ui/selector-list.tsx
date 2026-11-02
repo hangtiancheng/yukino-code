@@ -33,7 +33,6 @@ interface SelectorListProps {
   searchActive?: boolean;
 }
 
-// Presentation only: each dialog keeps ownership of its input and selection semantics.
 export function SelectorList({
   children,
   cursor,
@@ -60,11 +59,9 @@ export function SelectorList({
   const width = Math.max(1, metrics.hasMeasured ? metrics.width : columns);
   const contentWidth = width - (width > 2 ? 2 : 0);
   const availableRows = useAvailableRows(reservedRows, top);
-  // Two rules, title, hint, search, and (when space permits) one blank line.
-  const compact = availableRows < 6 + itemHeight;
   const listRows = Math.max(
     0,
-    availableRows - selectorChrome(availableRows, false, compact).height - 1,
+    availableRows - selectorChrome(availableRows, false).height - 1,
   );
   const visibleCount = Math.min(10, Math.floor(listRows / itemHeight));
   const windowStart = getListWindowStart(itemCount, cursor, visibleCount);
@@ -89,7 +86,6 @@ export function SelectorList({
       width="100%"
     >
       <SelectorFrame
-        compact={compact}
         hint={hint}
         title={title}
         width={width}

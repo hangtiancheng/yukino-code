@@ -104,12 +104,8 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
         });
     }
   });
-  const contentRows = Math.max(
-    0,
-    rows - selectorChrome(rows, true, false).height,
-  );
+  const contentRows = Math.max(0, rows - selectorChrome(rows, true).height);
   const wide = columns >= 65;
-  const roomy = contentRows >= 10;
   const notices =
     Number(!!run?.error) +
     Number(!!error) +
@@ -118,7 +114,7 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
   const agentRowHeight = !wide && contentRows - 3 - notices >= 2 ? 2 : 1;
   const visibleCount = Math.max(
     1,
-    Math.floor((contentRows - 3 - Number(roomy) - notices) / agentRowHeight),
+    Math.floor((contentRows - 3 - notices) / agentRowHeight),
   );
   const start = getListWindowStart(
     run?.agents.length ?? 0,
@@ -190,7 +186,7 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
                 {` · ${run.phases.filter((phase) => phase.status === "done").length}/${run.phases.length} phases · ${run.agents.length} agents`}
               </Text>
             </Text>
-            <Box flexDirection="row" marginTop={roomy ? 1 : 0}>
+            <Box flexDirection="row">
               {wide && (
                 <Box
                   width="30%"
@@ -198,7 +194,11 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
                   flexDirection="column"
                   paddingRight={2}
                 >
-                  <Text bold color={THEME.text} wrap="truncate-end">
+                  <Text
+                    bold
+                    color={THEME.customMessageLabel}
+                    wrap="truncate-end"
+                  >
                     Phases
                   </Text>
                   {run.phases.length === 0 && (
@@ -225,7 +225,7 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
                 </Box>
               )}
               <Box flexGrow={1} minWidth={0} flexDirection="column">
-                <Text bold color={THEME.text} wrap="truncate-end">
+                <Text bold color={THEME.customMessageLabel} wrap="truncate-end">
                   Agents{" "}
                   <Text color={THEME.dim}>
                     {run.agents.length

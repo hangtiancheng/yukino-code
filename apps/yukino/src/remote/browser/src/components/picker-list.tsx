@@ -58,7 +58,7 @@ export function PickerList({ items, onSelect, onClose }: PickerListProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown}>
-      <div className="picker-search mx-4 my-3 flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 sm:mx-5">
+      <div className="picker-search mx-4 my-3 flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 sm:mx-5">
         <label className="text-muted" htmlFor={`${id}-search`}>
           Search:
         </label>
@@ -108,7 +108,7 @@ export function PickerList({ items, onSelect, onClose }: PickerListProps) {
             onMouseEnter={() => {
               setCursor(index);
             }}
-            className="flex w-full cursor-pointer items-baseline gap-2 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-selected/40"
+            className="flex w-full cursor-pointer items-baseline gap-2 rounded-md px-3 py-2 text-left transition-colors hover:bg-selected/40"
           >
             <span className="min-w-0 flex-1">
               <span className="block truncate">
@@ -130,7 +130,7 @@ export function PickerList({ items, onSelect, onClose }: PickerListProps) {
           <p className="px-3 py-2 text-muted">No matching entries</p>
         )}
       </div>
-      <p className="border-t border-border bg-surface px-4 py-3 text-xs text-dim sm:px-5">
+      <p className="border-t border-border bg-surface px-4 py-2 text-xs text-dim sm:px-5">
         ↑↓ navigate · Enter select · Esc cancel
       </p>
     </div>

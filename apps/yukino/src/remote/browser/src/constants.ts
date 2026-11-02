@@ -55,7 +55,7 @@ export const RESPONSE_OPTIONS: {
   {
     value: "allow",
     label: "Allow",
-    className: "bg-accent text-accent-contrast  hover:bg-accent-dim",
+    className: "bg-accent text-accent-contrast hover:bg-accent/85",
   },
   {
     value: "allowAlways",
@@ -88,17 +88,17 @@ export const STATUS_META: Record<
   running: {
     label: "running…",
     pill: "bg-accent/10 text-accent",
-    panel: "bg-tool",
+    panel: "border-accent/30 bg-tool",
   },
   ok: {
     label: "✓",
     pill: "bg-green/10 text-green",
-    panel: "bg-tool-ok",
+    panel: "border-border bg-tool-ok",
   },
   err: {
     label: "✗",
     pill: "bg-red/10 text-red",
-    panel: "bg-tool-error",
+    panel: "border-red/30 bg-tool-error",
   },
 };
 
@@ -106,9 +106,9 @@ export const STATUS_PILL: Record<string, string> = {
   running: "bg-accent/15 text-accent",
   completed: "bg-green/15 text-green",
   failed: "bg-red/15 text-red",
-  stopped: "bg-red/15 text-red",
-  cancelled: "bg-red/15 text-red",
-  idle: "bg-accent/15 text-accent",
+  stopped: "bg-yellow/15 text-yellow",
+  cancelled: "bg-yellow/15 text-yellow",
+  idle: "bg-selected/40 text-muted",
 };
 
 export const MAX_TEXTAREA_HEIGHT = 200;

@@ -73,7 +73,7 @@ export function ProviderDialog({
             }}
             onClose={onClose}
           />
-          <div className="flex items-center justify-between border-t border-border px-4 py-3 sm:px-5">
+          <div className="flex items-center justify-between border-t border-border px-4 py-2 sm:px-5">
             <button
               type="button"
               onClick={() => {
@@ -95,7 +95,7 @@ export function ProviderDialog({
       ) : (
         <>
           <form
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5"
             onSubmit={(e) => {
               e.preventDefault();
               submitForm();
@@ -168,7 +168,7 @@ export function ProviderDialog({
             {error && <p className="text-xs text-red">{error}</p>}
             <button type="submit" className="hidden" aria-hidden="true" />
           </form>
-          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3 sm:px-5">
+          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2 sm:px-5">
             <button
               type="button"
               onClick={() => {

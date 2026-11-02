@@ -13,12 +13,12 @@ export function Welcome(info: WelcomeInfo & { empty?: boolean }) {
   const connecting = info.connection !== "connected" || !info.session;
   return (
     <div
-      className={`welcome border-b border-border px-1 pb-5 sm:px-2 ${info.empty ? "pt-6 sm:pt-12" : ""}`}
+      className={`welcome border-b border-border px-1 pb-3 ${info.empty ? "pt-3 sm:pt-6" : ""}`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <span
           aria-hidden="true"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-xl text-accent"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-lg text-accent"
         >
           ✳
         </span>
@@ -31,16 +31,16 @@ export function Welcome(info: WelcomeInfo & { empty?: boolean }) {
           </span>
         </p>
       </div>
-      <p className="mt-4 font-mono text-[11px] text-muted">
+      <p className="mt-2.5 font-mono text-[11px] text-muted">
         Esc interrupt · /commands · ↑ history
       </p>
-      <p className="mt-2 break-all font-mono text-xs text-dim">
+      <p className="mt-1 break-all font-mono text-xs text-dim">
         {connecting
           ? "Connecting to the agent…"
           : `${info.model} · ${info.cwd}`}
       </p>
       {!connecting && info.empty && (
-        <p className="mt-6 mb-2 text-sm leading-relaxed text-muted">
+        <p className="mt-4 mb-1 text-sm leading-relaxed text-muted">
           Describe a task, or type <span className="text-accent">/help</span> to
           get started.
         </p>

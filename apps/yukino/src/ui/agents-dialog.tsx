@@ -152,7 +152,7 @@ export function AgentsDialog({
 
   const visibleCount = Math.max(
     1,
-    Math.min(10, rows - selectorChrome(rows, true, false).height),
+    Math.min(10, rows - selectorChrome(rows, true).height),
   );
   const start = getListWindowStart(agents.length, cursor, visibleCount);
   return (

@@ -112,7 +112,7 @@ providers:
 default_provider: 0
 
 # Automatic memory master switch. Default: true. false turns off the whole pipeline:
-# index injection, recall, and background extraction (consolidation runs in remote mode only).
+# index injection, recall, background extraction, and consolidation.
 enable_memory: false
 
 # Coordinator mode. Default: false. true narrows the leader's toolset to pure orchestration
@@ -163,7 +163,7 @@ mcp_servers:
 # (seatbelt on macOS, bubblewrap on Linux; unavailable elsewhere).
 sandbox:
   enabled: false # Master switch
-  # With the sandbox active, non-dangerous Bash commands skip human confirmation (explicit
+  # With the sandbox active, Bash commands skip human confirmation (explicit
   # deny/ask rules still apply; Bash tool only). Default: false.
   auto_allow: false
   network_enabled: true # Whether sandboxed commands may access the network

@@ -21,7 +21,6 @@ import {
   MAX_TRACKED_SESSIONS,
   MESSAGE_CONTENT_REQUIRED,
   NO_ACTIVE_RUN,
-  NO_PROVIDER_ERROR,
   PERMISSION_REQUEST_KIND,
   SESSION_CAPACITY_ERROR,
   SESSION_CLOSED_DURING_INIT,
@@ -103,9 +102,6 @@ export async function createA2aRuntime(
     config.providers,
     config.default_provider,
   );
-  if (!provider) {
-    throw new Error(NO_PROVIDER_ERROR);
-  }
   const runtime = await createRemoteAgent({
     interactionMode: "non-interactive",
     provider,

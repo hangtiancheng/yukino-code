@@ -32,7 +32,6 @@ function fitHint(hint: string, width: number): string {
 
 interface SelectorFrameProps {
   children: ReactNode;
-  compact?: boolean;
   hint: string;
   subtitle?: string;
   title: string;
@@ -43,7 +42,6 @@ interface SelectorFrameProps {
 
 export function SelectorFrame({
   children,
-  compact = false,
   hint,
   subtitle,
   title,
@@ -54,7 +52,7 @@ export function SelectorFrame({
   const { columns } = useTerminalDimensions();
   const availableRows = useAvailableRows();
   const rows = Math.max(0, requestedRows ?? availableRows);
-  const chrome = selectorChrome(rows, !!subtitle, compact);
+  const chrome = selectorChrome(rows, !!subtitle);
   const frameWidth = Math.max(1, width ?? columns);
   const padding = frameWidth > 2 ? 1 : 0;
   const contentWidth = frameWidth - padding * 2;
@@ -76,7 +74,7 @@ export function SelectorFrame({
       )}
       <Box flexDirection="column" paddingX={padding}>
         {chrome.title && (
-          <Text bold color={THEME.text} wrap="truncate-end">
+          <Text bold color={THEME.accent} wrap="truncate-end">
             {singleLine(title)}
           </Text>
         )}
@@ -85,7 +83,7 @@ export function SelectorFrame({
             {singleLine(subtitle)}
           </Text>
         ) : null}
-        <Box flexDirection="column" marginTop={chrome.gap ? 1 : 0}>
+        <Box flexDirection="column">
           <AvailableRows value={Math.max(0, rows - chrome.height)}>
             <ContentViewport rows={rows - chrome.height} focusRef={focusRef}>
               {children}

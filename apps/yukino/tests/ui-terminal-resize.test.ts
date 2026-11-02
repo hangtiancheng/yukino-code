@@ -805,7 +805,7 @@ describe("terminal resize output", () => {
     }
   });
 
-  it("keeps short card padding from turning into wrapped background stripes", async () => {
+  it("keeps compact cards from turning into wrapped background stripes", async () => {
     act(() => {
       instance = render(
         createElement(Scene, {
@@ -847,7 +847,16 @@ describe("terminal resize output", () => {
         ["TOOL_CARD", THEME.toolSuccessBg],
       ]) {
         const row = lines.findIndex((line) => line.includes(marker));
-        for (let index = row - 1; index <= row + 1; index++) {
+        expect(row).toBeGreaterThanOrEqual(0);
+        const cardRows = marker === "USER_CARD" ? [row] : [row - 1, row];
+        const coloredRows = lines.flatMap((_, index) =>
+          terminal.buffer.active.getLine(index)?.getCell(0)?.getBgColor() ===
+          Number.parseInt(color.slice(1), 16)
+            ? [index]
+            : [],
+        );
+        expect(coloredRows).toEqual(cardRows);
+        for (const index of cardRows) {
           for (let column = 0; column < backgroundWidth; column++) {
             expect(
               terminal.buffer.active

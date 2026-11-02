@@ -1,4 +1,3 @@
-import type { DangerousPattern } from "@/permissions/index.js";
 import { TEAMMATE_COORDINATION_TOOLS } from "@/teams/constants.js";
 
 export const PERMISSIONS_RULES_FILENAME = "permissions.yaml";
@@ -13,11 +12,6 @@ export const RULES_PARSE_ERROR = "Cannot parse permission rules";
 
 export const ISOLATED_WORKTREE_CLAIM_ERROR =
   "Cannot claim an existing worktree for an isolated agent";
-
-// Intentionally empty: no command patterns are currently classified as
-// dangerous, so detectDangerous() never matches and the Layer-3 deny stays
-// inert until patterns are added.
-export const DANGEROUS_PATTERNS: DangerousPattern[] = [];
 
 export const SAFE_PREFIXES: (string | RegExp)[] = [
   "echo", // Output only, no dangerous flags
@@ -38,9 +32,6 @@ export const SAFE_PREFIXES: (string | RegExp)[] = [
 
   // File content viewing (relative paths handled separately)
   "cat",
-  "head",
-  "tail",
-  "wc",
   "stat",
   "strings",
   "hexdump",
@@ -99,7 +90,7 @@ export const SAFE_PREFIXES: (string | RegExp)[] = [
   "pr", // Paginate files for printing
 ];
 
-// Per-tool argument field treated as the "content" for safe/dangerous checks and rule matching
+// Per-tool argument field used for command checks and permission rule matching.
 export const CONTENT_FIELDS: Record<string, string> = {
   Bash: "command",
   PowerShell: "command",

@@ -5,7 +5,11 @@ import type { TokenizerExtension } from "marked";
 import { SCP_STYLE_REMOTE, THEME } from "@/ui/constants.js";
 import { markedTerminal } from "@/ui/marked-terminal.js";
 import { isLanguageSupported } from "@/ui/syntax-highlight.js";
-import { visibleWidth, wrapToLines } from "@/ui/terminal-text.js";
+import {
+  visibleWidth,
+  wrapToLines,
+  wrapWordsToLines,
+} from "@/ui/terminal-text.js";
 import { plainTerminalText } from "@/utils/index.js";
 
 chalk.level = 3;
@@ -37,7 +41,7 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
         .trimEnd()
         .split("\n")
         .flatMap((line) =>
-          wrapToLines(line.trimStart(), Math.max(1, width - 2)).map(
+          wrapWordsToLines(line.trimStart(), Math.max(1, width - 2)).map(
             (wrapped) =>
               `${chalk.hex(THEME.mdQuoteBorder)("│")} ${chalk.italic.hex(THEME.mdQuote)(wrapped)}`,
           ),
@@ -77,7 +81,7 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
               : token.depth === 3
                 ? color.bold.italic
                 : color.italic;
-        return `${heading(this.parser.parseInline(token.tokens))}\n\n`;
+        return `${heading(this.parser.parseInline(token.tokens))}\n`;
       },
       code(token) {
         if (streaming) {
@@ -128,7 +132,7 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
               const prefix = item.task ? `[${item.checked ? "x" : " "}] ` : "";
               const body = prefix + this.parser.parse(item.tokens).trimEnd();
               const indent = visibleWidth(marker) + 1;
-              return wrapToLines(body, Math.max(1, width - indent))
+              return wrapWordsToLines(body, Math.max(1, width - indent))
                 .map(
                   (line, lineIndex) =>
                     (lineIndex === 0

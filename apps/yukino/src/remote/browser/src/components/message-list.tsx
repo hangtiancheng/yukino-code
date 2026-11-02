@@ -46,7 +46,7 @@ export function MessageList({
         tabIndex={0}
         className="h-full overflow-y-auto overscroll-contain focus-visible:-outline-offset-2"
       >
-        <div className="transcript mx-auto w-full max-w-5xl px-3 py-5 sm:px-8 sm:py-8">
+        <div className="transcript mx-auto w-full max-w-5xl px-3 py-3 sm:px-6 sm:py-4">
           <Welcome {...welcome} empty={items.length === 0} />
           {items.map((item) => (
             <MessageRow
@@ -118,7 +118,7 @@ const MessageRow = memo(function MessageRow({
         return <ErrorMessage key={item.id} content={item.content} />;
       case "thinking":
         return (
-          <div className="px-3 sm:px-5">
+          <div className="px-1">
             <ThinkingBlock
               key={item.id}
               text={item.content}

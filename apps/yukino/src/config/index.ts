@@ -147,9 +147,8 @@ const AppConfigSchema = z.looseObject({
   sandbox: SandboxYamlConfigSchema.optional(),
   enable_coordinator_mode: z.boolean().optional(),
   /**
-   * Whether auto memory is enabled: gates index injection, recall, and
-   * background extraction in the hosts that run them (interactive UI and
-   * remote), and consolidation, which currently runs only in remote mode.
+   * Whether auto memory is enabled: gates index injection, recall, background
+   * extraction, and consolidation in interactive and remote agent hosts.
    * Defaults to enabled; `enable_memory: false` turns the whole automatic
    * memory pipeline off. Left optional so "not set" and "explicitly false"
    * stay distinguishable.
@@ -270,12 +269,6 @@ function validateProviders(config: AppConfig): void {
     if (missing.length > 0) {
       throw new ConfigError(
         `Provider #${String(i + 1)}: missing fields: ${missing.join(", ")}`,
-      );
-    }
-
-    if (!VALID_PROTOCOLS.has(p.protocol)) {
-      throw new ConfigError(
-        `Provider #${String(i + 1)}: invalid protocol '${p.protocol}', MUST be one of: ${Array.from(VALID_PROTOCOLS).join(", ")}`,
       );
     }
 

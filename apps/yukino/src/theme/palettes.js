@@ -1,14 +1,9 @@
-// Palette data live in plain JavaScript (not TypeScript) on purpose: the
-// browser PostCSS config imports them at build time, and loading a .ts config
-// makes postcss-load-config register tsx's ESM loader hooks, which on Node 20
-// (no module.registerHooks) break @tailwindcss/node's own module.register()
-// call and fail the build. Keep this file dependency-free ESM, and keep it in
-// sync with the ThemePalette interface in constants.ts.
+// Plain ESM avoids conflicting tsx/Tailwind loader hooks in PostCSS on Node 20.
 // Catppuccin Mocha (dark) and Latte (light): https://catppuccin.com/palette/
 export const PALETTES = {
   dark: {
     accent: "#94e2d5",
-    border: "#585b70",
+    border: "#45475a",
     borderAccent: "#94e2d5",
     borderMuted: "#313244",
     success: "#a6e3a1",
@@ -29,7 +24,7 @@ export const PALETTES = {
     toolErrorBg: "#181825",
     toolTitle: "#cdd6f4",
     toolOutput: "#bac2de",
-    mdHeading: "#cdd6f4",
+    mdHeading: "#cba6f7",
     mdLink: "#89b4fa",
     mdLinkUrl: "#a6adc8",
     mdCode: "#94e2d5",
@@ -67,7 +62,7 @@ export const PALETTES = {
   },
   light: {
     accent: "#179299",
-    border: "#acb0be",
+    border: "#bcc0cc",
     borderAccent: "#179299",
     borderMuted: "#ccd0da",
     success: "#40a02b",
@@ -88,7 +83,7 @@ export const PALETTES = {
     toolErrorBg: "#e6e9ef",
     toolTitle: "#4c4f69",
     toolOutput: "#5c5f77",
-    mdHeading: "#4c4f69",
+    mdHeading: "#8839ef",
     mdLink: "#1e66f5",
     mdLinkUrl: "#6c6f85",
     mdCode: "#179299",

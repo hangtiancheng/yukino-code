@@ -1,16 +1,50 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
 import { createA2aRuntime } from "@/a2a/executor.js";
+import { NO_PROVIDERS_ERROR } from "@/config/constants.js";
 import * as config from "@/config/index.js";
-import type { ProviderConfig } from "@/config/provider-config.js";
+import {
+  globalConfigPath,
+  type ProviderConfig,
+} from "@/config/provider-config.js";
 import { MCPManager } from "@/mcp/manager.js";
 import * as remote from "@/remote/server.js";
 
 describe("A2A runtime cleanup", () => {
+  it.each([
+    {
+      name: "empty provider list",
+      configuration: "providers: []\n",
+      error: NO_PROVIDERS_ERROR,
+    },
+    {
+      name: "invalid protocol",
+      configuration:
+        "providers:\n  - name: test\n    protocol: invalid\n    base_url: https://test.invalid\n    model: test\n",
+      error: "Invalid configuration",
+    },
+  ])(
+    "rejects $name before starting the runtime",
+    async ({ configuration, error }) => {
+      const cwd = mkdtempSync(join(tmpdir(), "yukino-a2a-config-"));
+      const path = globalConfigPath();
+      const create = vi.spyOn(remote, "createRemoteAgent");
+      try {
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, configuration);
+        await expect(createA2aRuntime(cwd)).rejects.toThrow(error);
+        expect(create).not.toHaveBeenCalled();
+      } finally {
+        create.mockRestore();
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("reports an expired transcript instead of starting an empty continuation", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "yukino-a2a-expired-"));
     try {

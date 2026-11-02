@@ -40,10 +40,16 @@ export function TodoProgress({ tasks }: { tasks: readonly Task[] }) {
   return (
     <Box paddingLeft={1}>
       <Text color={THEME.dim} wrap="truncate-end">
-        {label}
-        {cancelled ? ` · ${String(cancelled)} cancelled` : ""}
-        {blocked ? ` · ${String(blocked)} blocked` : ""}
-        {current ? ` · ${plainTerminalLine(current.subject)}` : ""}
+        <Text color={completed === tasks.length ? THEME.success : THEME.accent}>
+          {label}
+        </Text>
+        <Text color={THEME.warning}>
+          {cancelled ? ` · ${String(cancelled)} cancelled` : ""}
+          {blocked ? ` · ${String(blocked)} blocked` : ""}
+        </Text>
+        <Text color={THEME.muted}>
+          {current ? ` · ${plainTerminalLine(current.subject)}` : ""}
+        </Text>
         {active.length > 1 ? ` (+${String(active.length - 1)} active)` : ""}
       </Text>
     </Box>

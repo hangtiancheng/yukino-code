@@ -75,10 +75,7 @@ export class HookEngine {
   private hooks: HookConfig[];
   private firedOnce = new Set<string>();
   private notifications: string[] = [];
-  // Executor for agent-type hooks, injected externally. Executing one without a
-  // registered runner throws a clear error. No host registers one today (only
-  // tests do), and validate() rejects agent-type configs, so this path is
-  // unreachable outside tests.
+  // Programmatic callers can inject a runner; application config rejects agent hooks.
   agentRunner?: (prompt: string, ctx: HookContext) => Promise<string>;
 
   constructor(hooks: HookConfig[]) {
