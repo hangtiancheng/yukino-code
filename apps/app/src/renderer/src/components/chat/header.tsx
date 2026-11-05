@@ -1,169 +1,112 @@
-// Top bar: sidebar toggle, workspace folder, new session, and theme menu.
-// Sits under the frameless title bar. When the sidebar is collapsed the
-// header takes over the left edge, so it must clear the macOS traffic lights.
-
 import { Button } from "@renderer/components/ui/button";
+import type { InitState } from "@shared/ipc-types";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@renderer/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@renderer/components/ui/tooltip";
-import { cn } from "cn";
-import {
+  BoxesIcon,
+  ChevronDownIcon,
+  Code2Icon,
+  FolderOpenIcon,
   MoonIcon,
-  MonitorIcon,
   PanelLeftIcon,
-  PlusIcon,
-  SettingsIcon,
+  Settings2Icon,
   SunIcon,
 } from "lucide-react";
 
-function folderName(cwd: string): string {
-  const parts = cwd.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? cwd;
-}
-
 export function Header({
-  cwd,
+  init,
   sidebarOpen,
+  editorOpen,
+  dark,
+  streaming,
   onToggleSidebar,
-  onNewSession,
+  onToggleEditor,
   onChooseFolder,
-  themeMode,
   onThemeMode,
   onOpenSettings,
+  onOpenRuntime,
 }: {
-  cwd: string | null;
+  init: InitState | null;
   sidebarOpen: boolean;
+  editorOpen: boolean;
+  dark: boolean;
+  streaming: boolean;
   onToggleSidebar: () => void;
-  onNewSession: () => void;
+  onToggleEditor: () => void;
   onChooseFolder: () => void;
-  themeMode: "system" | "light" | "dark";
   onThemeMode: (mode: "system" | "light" | "dark") => void;
   onOpenSettings: () => void;
+  onOpenRuntime: () => void;
 }): React.JSX.Element {
+  const cwd = init?.ok ? init.cwd : null;
   return (
     <header
-      className={cn(
-        "titlebar-drag border-border flex h-12 shrink-0 items-center gap-1 border-b px-4",
-        // Traffic lights float over whichever element owns the left edge.
-        sidebarOpen ? "pl-3" : "pl-21",
-      )}
+      className={`workspace-header titlebar-drag ${sidebarOpen ? "" : "traffic-clear"}`}
     >
-      {/* Only the header opens the sidebar; closing is the sidebar's own button. */}
       {!sidebarOpen ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="titlebar-no-drag"
-                onClick={onToggleSidebar}
-              />
-            }
-          >
-            <PanelLeftIcon />
-            <span className="sr-only">Show sessions</span>
-          </TooltipTrigger>
-          <TooltipContent>Show sessions</TooltipContent>
-        </Tooltip>
-      ) : null}
-
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onChooseFolder}
-              className="titlebar-no-drag max-w-55"
-            />
-          }
+        <Button
+          className="titlebar-no-drag"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="显示会话"
+          title="显示会话 · ⌘ B"
+          onClick={onToggleSidebar}
         >
-          <span className="bg-accent text-accent-foreground truncate rounded-md px-2 py-0.5 font-medium">
-            {cwd ? folderName(cwd) : "Open folder"}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Choose project folder</TooltipContent>
-      </Tooltip>
+          <PanelLeftIcon />
+        </Button>
+      ) : null}
+      <button
+        className="project-selector titlebar-no-drag"
+        title={cwd ?? "选择项目"}
+        disabled={streaming}
+        onClick={onChooseFolder}
+      >
+        <FolderOpenIcon />
+        <span>
+          {cwd ? cwd.split(/[\\/]/u).filter(Boolean).pop() : "打开项目"}
+        </span>
+        <ChevronDownIcon className="size-3" />
+      </button>
 
       <div className="titlebar-no-drag ml-auto flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" onClick={onNewSession} />
-            }
-          >
-            <PlusIcon />
-            <span className="sr-only">New session</span>
-          </TooltipTrigger>
-          <TooltipContent>New session</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" onClick={onOpenSettings} />
-            }
-          >
-            <SettingsIcon />
-            <span className="sr-only">Settings</span>
-          </TooltipTrigger>
-          <TooltipContent>Settings</TooltipContent>
-        </Tooltip>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" />}
-          >
-            {themeMode === "light" ? (
-              <SunIcon />
-            ) : themeMode === "dark" ? (
-              <MoonIcon />
-            ) : (
-              <MonitorIcon />
-            )}
-            <span className="sr-only">Theme</span>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Appearance</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => {
-                  onThemeMode("system");
-                }}
-                className="gap-2"
-              >
-                <MonitorIcon /> System
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  onThemeMode("light");
-                }}
-                className="gap-2"
-              >
-                <SunIcon /> Light
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  onThemeMode("dark");
-                }}
-                className="gap-2"
-              >
-                <MoonIcon /> Dark
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onOpenRuntime}
+          aria-label="Agent 工作台"
+          title="任务与能力"
+        >
+          <BoxesIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => {
+            onThemeMode(dark ? "light" : "dark");
+          }}
+          aria-label={dark ? "切换浅色主题" : "切换深色主题"}
+          title="切换主题"
+        >
+          {dark ? <SunIcon /> : <MoonIcon />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onOpenSettings}
+          aria-label="设置"
+          title="设置 · ⌘ ,"
+        >
+          <Settings2Icon />
+        </Button>
+        <span className="header-divider mx-1" />
+        <Button
+          variant={editorOpen ? "secondary" : "ghost"}
+          size="sm"
+          onClick={onToggleEditor}
+          aria-pressed={editorOpen}
+          title="切换代码工作区 · ⌘ J"
+        >
+          <Code2Icon />
+          <span className="hidden sm:inline">代码</span>
+        </Button>
       </div>
     </header>
   );

@@ -87,7 +87,7 @@ export function AskCard({
             </Badge>
           ) : (
             <Badge variant="outline" className="text-[10px] uppercase">
-              waiting
+              等待回答
             </Badge>
           )}
         </div>
@@ -103,7 +103,7 @@ export function AskCard({
                 </p>
                 {question.multiSelect ? (
                   <span className="text-muted-foreground text-xs">
-                    Select all that apply
+                    可选择多项
                   </span>
                 ) : null}
               </div>
@@ -142,7 +142,7 @@ export function AskCard({
                   variant="outline"
                   className="w-full justify-start"
                 >
-                  <span className="text-sm font-medium">Other…</span>
+                  <span className="text-sm font-medium">自定义回答…</span>
                 </ToggleGroupItem>
               </ToggleGroup>
 
@@ -154,7 +154,7 @@ export function AskCard({
                   <Input
                     id={`${item.id}-other`}
                     autoFocus
-                    placeholder="Type a custom answer"
+                    placeholder="输入你的回答"
                     value={draft.otherText}
                     disabled={item.answered}
                     onChange={(event) => {
@@ -176,7 +176,7 @@ export function AskCard({
               onRespond(item.payload.id, answers);
             }}
           >
-            Submit
+            提交回答
           </Button>
         ) : null}
       </CardContent>

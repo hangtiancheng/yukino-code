@@ -10,6 +10,8 @@ import type {
   UsagePayload,
   InitState,
   SessionSummary,
+  McpApp,
+  ToolContentBlock,
 } from "@shared/ipc-types";
 
 let idCounter = 0;
@@ -34,6 +36,8 @@ export type ChatItem =
       toolName: string;
       args: Record<string, unknown>;
       output: string | null;
+      mcpApp?: McpApp;
+      contentBlocks?: ToolContentBlock[];
       isError: boolean;
       elapsed: number | null;
       running: boolean;
@@ -118,6 +122,11 @@ function mapLast(
 
 function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
   switch (event.type) {
+    case "plan_approval":
+    case "workspace_changed":
+    case "open_settings":
+    case "open_runtime":
+      return state;
     case "init_state":
       return {
         ...state,
@@ -137,7 +146,19 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
       };
 
     case "run_state":
-      return { ...state, streaming: event.data.streaming };
+      return {
+        ...state,
+        streaming: event.data.streaming,
+        items: event.data.streaming
+          ? state.items
+          : state.items.map((item) =>
+              item.kind === "tool"
+                ? { ...item, running: false }
+                : item.kind === "assistant"
+                  ? { ...item, streaming: false }
+                  : item,
+            ),
+      };
 
     case "stream_text": {
       const last = state.items[state.items.length - 1];
@@ -217,6 +238,8 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
             ? {
                 ...item,
                 output: event.data.output,
+                mcpApp: event.data.mcpApp,
+                contentBlocks: event.data.contentBlocks,
                 isError: event.data.isError,
                 elapsed: event.data.elapsed,
                 running: false,
@@ -441,7 +464,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "set_active_session":
       return { ...state, activeSessionId: action.sessionId };
     case "clear_items":
-      return { ...state, items: [], usage: null };
+      return { ...state, items: [], usage: null, activeSubagents: 0 };
     case "load_history":
       return { ...state, items: historyToItems(action.messages), usage: null };
     case "set_theme":

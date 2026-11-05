@@ -1,6 +1,23 @@
+import type { MCP, Tools } from "@yukino.js/yukino";
+
+import type {
+  FileEntry,
+  FileSnapshot,
+  WorkspaceSnapshot,
+  RuntimeSnapshot,
+} from "./workspace-types";
 // Shared, IPC-serializable contract between the main process (yukino bridge)
 // and the renderer. Everything crossing the contextBridge must be plain JSON —
 // no Error objects, no class instances, no functions.
+
+export type McpApp = MCP.Apps.McpApp;
+export type ToolContentBlock = Tools.ToolResultContentBlock;
+export type McpAppOperation =
+  | { method: "read_resource"; params: { uri: string } }
+  | {
+      method: "call_tool";
+      params: { name: string; arguments?: Record<string, unknown> };
+    };
 
 export type PermissionResponse = "allow" | "deny" | "allowAlways";
 
@@ -111,6 +128,13 @@ export type SubagentActivity = {
  * `yukino:event` channel.
  */
 export type BridgeEvent =
+  | { type: "workspace_changed"; data: { cwd: string; path: string | null } }
+  | {
+      type: "plan_approval";
+      data: { id: string; content: string; path: string } | null;
+    }
+  | { type: "open_settings" }
+  | { type: "open_runtime" }
   | { type: "init_state"; data: InitState }
   | { type: "run_state"; data: { streaming: boolean } }
   | { type: "stream_text"; data: { text: string } }
@@ -125,6 +149,8 @@ export type BridgeEvent =
         toolId: string;
         toolName: string;
         output: string;
+        mcpApp?: McpApp;
+        contentBlocks?: ToolContentBlock[];
         isError: boolean;
         elapsed: number;
       };
@@ -167,6 +193,14 @@ export interface CommandSummary {
 }
 
 /** A provider entry as shown in the settings picker. */
+export interface ProviderInput {
+  name: string;
+  protocol: "anthropic" | "openai" | "openai-compat";
+  base_url: string;
+  api_key: string;
+  model: string;
+}
+
 export interface ProviderSummary {
   name: string;
   protocol: string;
@@ -192,6 +226,30 @@ export interface ModelListResult {
 
 /** The API surface exposed to the renderer as `window.api`. */
 export interface YukinoApi {
+  workspaceList(path?: string): Promise<FileEntry[]>;
+  workspaceRead(path: string): Promise<FileSnapshot>;
+  workspaceSave(
+    path: string,
+    content: string,
+    revision: string,
+  ): Promise<FileSnapshot>;
+  workspaceSnapshot(): Promise<WorkspaceSnapshot>;
+  getRuntime(): Promise<RuntimeSnapshot>;
+  setPermissionMode(
+    mode: "default" | "acceptEdits" | "plan" | "bypassPermissions",
+  ): Promise<void>;
+  rewind(
+    id: string,
+    mode: "code_only" | "conversation_only" | "code_and_conversation",
+  ): Promise<void>;
+  respondPlan(
+    id: string,
+    choice: "approve" | "feedback",
+    feedback?: string,
+  ): Promise<void>;
+  requestMcpApp(appId: string, operation: McpAppOperation): Promise<unknown>;
+  openConfig(): Promise<void>;
+  selectAttachments(): Promise<string[]>;
   init(): Promise<InitState>;
   send(text: string): Promise<void>;
   abort(): Promise<void>;
@@ -208,6 +266,7 @@ export interface YukinoApi {
   /** Runs a slash command; results stream back as BridgeEvents. */
   runCommand(input: string): Promise<void>;
   /** Settings snapshot: providers, current provider/model, thinking levels. */
+  saveProvider(input: ProviderInput): Promise<void>;
   getSettings(): Promise<SettingsSnapshot>;
   listModels(): Promise<ModelListResult>;
   setProvider(index: number): Promise<void>;

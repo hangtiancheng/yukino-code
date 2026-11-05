@@ -13,7 +13,15 @@ import {
 import { folderName } from "@renderer/lib/utils";
 import type { SessionSummary } from "@shared/ipc-types";
 import { cn } from "cn";
-import { FolderIcon, PanelLeftIcon } from "lucide-react";
+import {
+  FolderIcon,
+  PanelLeftIcon,
+  SnowflakeIcon,
+  PlusIcon,
+  SearchIcon,
+  MessageSquareIcon,
+} from "lucide-react";
+import { useState } from "react";
 
 function relativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
@@ -43,6 +51,8 @@ export function Sidebar({
   currentProjectKey,
   onResumeSession,
   onClose,
+  onNewSession,
+  disabled,
 }: {
   open: boolean;
   sessions: SessionSummary[];
@@ -51,7 +61,15 @@ export function Sidebar({
   currentProjectKey: string | null;
   onResumeSession: (sessionId: string, cwd?: string) => void;
   onClose: () => void;
+  onNewSession: () => void;
+  disabled: boolean;
 }): React.JSX.Element {
+  const [search, setSearch] = useState("");
+  const visible = sessions.filter((session) =>
+    `${session.firstMessage} ${session.cwd}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
   return (
     <aside
       className={cn(
@@ -59,6 +77,7 @@ export function Sidebar({
         open ? "w-64 opacity-100" : "w-0 border-r-0 opacity-0",
       )}
       aria-hidden={!open}
+      inert={!open}
     >
       {/* Drag strip clearing the traffic lights; close button on the right. */}
       <div className="titlebar-drag flex h-12 shrink-0 items-center justify-end pr-2 pl-21">
@@ -75,15 +94,44 @@ export function Sidebar({
             }
           >
             <PanelLeftIcon />
-            <span className="sr-only">Hide sessions</span>
+            <span className="sr-only">收起会话</span>
           </TooltipTrigger>
-          <TooltipContent>Hide sessions</TooltipContent>
+          <TooltipContent>收起会话</TooltipContent>
         </Tooltip>
       </div>
 
+      <div className="sidebar-brand">
+        <span>
+          <SnowflakeIcon />
+        </span>
+        <strong>Yukino</strong>
+      </div>
+      <div className="px-3 pb-4">
+        <Button
+          className="new-session-button w-full justify-start"
+          variant="outline"
+          disabled={disabled}
+          onClick={onNewSession}
+        >
+          <PlusIcon />
+          新建会话
+          <span className="text-muted-foreground ml-auto text-[10px]">⌘ N</span>
+        </Button>
+        <div className="session-search">
+          <SearchIcon />
+          <input
+            aria-label="搜索会话"
+            placeholder="搜索会话"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
+          />
+        </div>
+      </div>
       <div className="flex h-8 shrink-0 items-center justify-between px-4">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-          Sessions
+        <span className="text-muted-foreground text-xs font-medium">
+          最近会话
         </span>
         {sessions.length > 0 ? (
           <span className="text-muted-foreground text-xs tabular-nums">
@@ -95,11 +143,11 @@ export function Sidebar({
       <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto px-2 pb-3">
         {sessions.length === 0 ? (
           <p className="text-muted-foreground px-2 py-8 text-center text-xs">
-            No sessions yet
+            暂无会话
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5">
-            {sessions.map((session) => {
+            {visible.map((session) => {
               const active = session.id === activeSessionId;
               const foreign =
                 currentProjectKey !== null &&
@@ -108,7 +156,7 @@ export function Sidebar({
                 <li key={`${session.projectKey}/${session.id}`}>
                   <button
                     type="button"
-                    disabled={!open}
+                    disabled={!open || disabled}
                     onClick={() => {
                       onResumeSession(session.id, session.cwd);
                     }}
@@ -124,7 +172,8 @@ export function Sidebar({
                         active && "text-accent-foreground",
                       )}
                     >
-                      {session.firstMessage || session.id}
+                      <MessageSquareIcon className="text-muted-foreground mr-1.5 inline size-3" />
+                      {session.firstMessage || "新会话"}
                     </span>
                     <span className="text-muted-foreground flex w-full items-center gap-1 text-[11px]">
                       {foreign ? (

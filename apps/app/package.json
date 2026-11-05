@@ -1,7 +1,7 @@
 {
   "name": "@yukino.js/app",
   "version": "0.0.1",
-  "description": "TODO",
+  "description": "Yukino desktop agent workspace with live code editing",
   "main": "./out/main/index.js",
   "author": "github.com/hangtiancheng",
   "homepage": "https://hangtiancheng.github.io/yukino-code",
@@ -12,7 +12,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
-    "happy": "pnpm typecheck && pnpm format && pnpm lint:fix && pnpm build",
+    "happy": "pnpm typecheck && pnpm lint && pnpm build && pnpm test",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "pnpm typecheck && electron-vite build",
@@ -20,12 +20,18 @@
     "build:unpack": "pnpm build && electron-builder --dir",
     "build:win": "pnpm build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "happy:fix": "pnpm typecheck && pnpm format && pnpm lint:fix && pnpm build && pnpm test",
+    "test": "tsx --test tests/*.test.mjs",
+    "test:ui": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@modelcontextprotocol/ext-apps": "^2.0.4",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@monaco-editor/react": "^4.7.0",
     "@streamdown/code": "2.0.0",
     "@tanstack/react-virtual": "3.14.21",
     "@yukino.js/yukino": "workspace:*",
@@ -33,6 +39,8 @@
     "cn": "^0.5.0",
     "electron-updater": "^6.8.9",
     "lucide-react": "^1.61.0",
+    "monaco-editor": "0.57.0",
+    "react-resizable-panels": "^4.18.1",
     "shadcn": "^4.22.1",
     "sonner": "^2.0.8",
     "streamdown": "2.7.1",
@@ -40,6 +48,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -59,6 +68,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.0",
     "vite": "^8.3.5"

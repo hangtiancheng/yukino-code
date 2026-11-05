@@ -6,10 +6,12 @@
 // into push events over IPC, and adapts the permission/ask callbacks into
 // pending-promise exchanges with the renderer.
 
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import type {
   AskRequestPayload,
@@ -18,8 +20,10 @@ import type {
   HistoryMessage,
   InitState,
   ModelListResult,
+  McpAppOperation,
   PermissionRequestPayload,
   PermissionResponse,
+  ProviderInput,
   ResumeResult,
   SessionSummary,
   SettingsSnapshot,
@@ -39,8 +43,25 @@ import {
   Session,
   Storage,
   Teams,
+  Workflow,
+  Bootstrap,
+  Tools as YukinoTools,
+  Goal,
+  Conversation,
+  PlanFile,
 } from "@yukino.js/yukino";
-import { BrowserWindow, dialog, ipcMain, nativeTheme, app } from "electron";
+import {
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  app,
+  shell,
+} from "electron";
+
+import type { RuntimeSnapshot } from "../shared/workspace-types";
+
+import { Workspace } from "./workspace";
 
 type RemoteAgentHandle = Remote.Server.RemoteAgentHandle;
 type CreateRemoteAgentOptions = Remote.Server.CreateRemoteAgentOptions;
@@ -55,18 +76,6 @@ type SkillForkHost = Skills.SkillForkHost;
 type ToolProtocol = "anthropic" | "openai" | "openai-compat";
 
 const DEFAULT_THINKING = Config.Constants.DEFAULT_THINKING_LEVEL;
-
-/** Commands that only make sense in the terminal/WS UIs. */
-const UNSUPPORTED_COMMANDS = new Set([
-  "worktree",
-  "rewind",
-  "sandbox",
-  "feedback",
-  "quit",
-]);
-
-/** Max characters of a tool result forwarded to the renderer. */
-const OUTPUT_PREVIEW_CHARS = 8000;
 
 export const EVENT_CHANNEL = "yukino:event";
 export const THEME_CHANNEL = "yukino:theme";
@@ -88,6 +97,40 @@ function contentToText(content: string | Record<string, unknown>[]): string {
     .map((block) => (typeof block.text === "string" ? block.text : ""))
     .filter(Boolean)
     .join("\n");
+}
+
+function projectHistory(messages: Conversation.Message[]): HistoryMessage[] {
+  return messages.map((message) => ({
+    role: message.role,
+    content: contentToText(message.content),
+    timestamp: 0,
+    ...(message.toolUses?.length
+      ? {
+          toolUses: message.toolUses.map((use) => ({
+            toolUseId: use.toolUseId,
+            toolName: use.toolName,
+            arguments: use.arguments,
+          })),
+        }
+      : {}),
+    ...(message.toolResults?.length
+      ? {
+          toolResults: message.toolResults.map((result) => ({
+            toolUseId: result.toolUseId,
+            content: result.content,
+            isError: result.isError,
+          })),
+        }
+      : {}),
+    ...(message.thinkingBlocks?.length
+      ? {
+          thinking: message.thinkingBlocks
+            .map((block) => (block.type === "thinking" ? block.thinking : ""))
+            .filter(Boolean)
+            .join("\n"),
+        }
+      : {}),
+  }));
 }
 
 /** Persisted UI state (last folder, theme choice). */
@@ -130,8 +173,13 @@ class StateStore {
 
 export class YukinoBridge {
   private handle: RemoteAgentHandle | null = null;
+  private workspace: Workspace | null = null;
+  private mcpApps = new Remote.McpApps.RemoteMcpApps();
   private initPromise: Promise<RemoteAgentHandle | null> | null = null;
   private streaming = false;
+  private pendingPlan: { id: string; content: string; path: string } | null =
+    null;
+  private planReady = false;
   private cwd: string;
   private readonly state = new StateStore();
   /** All configured providers (merged with project MCP); drives settings. */
@@ -189,7 +237,42 @@ export class YukinoBridge {
 
   /** Loads config + initializes the agent stack for the current cwd. */
   async init(): Promise<InitState> {
+    if (this.handle) {
+      const state = this.buildInitState(this.handle);
+      emit({ type: "init_state", data: state });
+      emit({
+        type: "history",
+        data: {
+          sessionId: this.handle.sessionId,
+          messages: projectHistory(this.handle.conv.getMessages()),
+        },
+      });
+      emit({ type: "run_state", data: { streaming: this.streaming } });
+      if (this.pendingPlan) {
+        emit({ type: "plan_approval", data: this.pendingPlan });
+      }
+      return state;
+    }
+    if (this.initPromise) {
+      const pending = await this.initPromise;
+      return pending
+        ? this.buildInitState(pending)
+        : this.initError("Agent 初始化失败");
+    }
     try {
+      if (!this.workspace) {
+        this.workspace = new Workspace(
+          this.cwd,
+          (path) => {
+            emit({ type: "workspace_changed", data: { cwd: this.cwd, path } });
+          },
+          (path) => {
+            this.handle?.fileHistory.trackEdit(path);
+            this.handle?.fileStateCache.delete(path);
+          },
+        );
+        this.workspace.start();
+      }
       const configPath = Config.ProviderConfig.globalConfigPath();
       let config: Config.AppConfig;
       try {
@@ -282,6 +365,8 @@ export class YukinoBridge {
     try {
       const options: CreateRemoteAgentOptions = {
         provider,
+        interactionMode: "interactive",
+        enableModelPlanMode: true,
         cwd: this.cwd,
         enableCoordinatorMode: config.enable_coordinator_mode ?? false,
         memoryEnabled: Config.memoryEnabled(config),
@@ -349,16 +434,15 @@ export class YukinoBridge {
             resolve({});
           }
         };
-        signal?.addEventListener("abort", cancel, { once: true });
-        if (signal?.aborted) {
-          cancel();
-          return;
-        }
         this.pendingAsks.set(id, (answers) => {
           signal?.removeEventListener("abort", cancel);
           emit({ type: "ask_resolved", data: { id } });
           resolve(answers);
         });
+        signal?.addEventListener("abort", cancel, { once: true });
+        if (signal?.aborted) {
+          cancel();
+        }
       });
     };
   }
@@ -396,26 +480,29 @@ export class YukinoBridge {
             resolve("deny");
           }
         };
-        signal?.addEventListener("abort", cancel, { once: true });
-        if (signal?.aborted) {
-          cancel();
-          return;
-        }
         this.pendingPermissions.set(id, (response) => {
           signal?.removeEventListener("abort", cancel);
           emit({ type: "permission_resolved", data: { id, response } });
           resolve(response);
         });
+        signal?.addEventListener("abort", cancel, { once: true });
+        if (signal?.aborted) {
+          cancel();
+        }
       });
     };
   }
 
   respondPermission(id: string, response: PermissionResponse): void {
-    this.pendingPermissions.get(id)?.(response);
+    const resolve = this.pendingPermissions.get(id);
+    this.pendingPermissions.delete(id);
+    resolve?.(response);
   }
 
   respondAsk(id: string, answers: Record<string, string>): void {
-    this.pendingAsks.get(id)?.(answers);
+    const resolve = this.pendingAsks.get(id);
+    this.pendingAsks.delete(id);
+    resolve?.(answers);
   }
 
   // ---------- run loop ----------
@@ -451,8 +538,10 @@ export class YukinoBridge {
     // /goal is handled inside handle.run, so plain text takes the run loop.
     const parsed = Commands.Commands.parse(trimmed);
     if (parsed) {
-      await this.runCommandInternal(handle, parsed.name, parsed.args);
-      return;
+      if (parsed.name !== "goal") {
+        await this.runCommandInternal(handle, parsed.name, parsed.args);
+        return;
+      }
     }
 
     await this.runLoop(handle, trimmed);
@@ -464,9 +553,22 @@ export class YukinoBridge {
   ): Promise<void> {
     this.setStreaming(true);
     try {
-      for await (const event of handle.run(text, {
+      const expanded = await Conversation.AtExpand.expandAtRefsWithImages(
+        text,
+        handle.cwd,
+      );
+      for await (const event of handle.run(expanded, {
         onPermissionRequest: this.createPermissionCallback(),
       })) {
+        if (event.type === "tool_use") {
+          const path = event.args.file_path ?? event.args.path;
+          if (
+            typeof path === "string" &&
+            ["Edit", "Write", "NotebookEdit"].includes(event.toolName)
+          ) {
+            await this.workspace?.capture(path);
+          }
+        }
         this.emitAgentEvent(event);
       }
     } catch (error) {
@@ -474,14 +576,33 @@ export class YukinoBridge {
       emit({ type: "error", data: { message } });
     } finally {
       this.setStreaming(false);
-      const next = this.followUps.shift();
-      if (next) {
-        void this.runLoop(handle, next);
+      this.broadcastUpdatedState(handle);
+      if (this.planReady && handle.permissionMode === "plan") {
+        this.planReady = false;
+        const content = PlanFile.loadPlan(handle) ?? "";
+        this.pendingPlan = {
+          id: randomUUID(),
+          content,
+          path: handle.planFilePath ?? "",
+        };
+        emit({ type: "plan_approval", data: this.pendingPlan });
+      } else {
+        this.followUps.push(
+          ...handle.takeSteeringLeftovers().map((message) => message.text),
+        );
+        const next = this.followUps.shift();
+        if (next) {
+          void this.runLoop(handle, next);
+        }
       }
     }
   }
 
   abort(): void {
+    this.followUps.length = 0;
+    this.pendingPlan = null;
+    this.planReady = false;
+    emit({ type: "plan_approval", data: null });
     this.commandController?.abort();
     this.handle?.abort();
   }
@@ -505,15 +626,30 @@ export class YukinoBridge {
         });
         break;
       case "tool_result":
+        if (event.mcpApp && this.handle) {
+          this.mcpApps.register(
+            {
+              toolId: event.toolId,
+              toolName: event.toolName,
+              output: event.output,
+              isError: event.isError,
+              elapsed: event.elapsed,
+              mcpApp: event.mcpApp,
+            },
+            this.handle,
+          );
+        }
+        if (event.toolName === "ExitPlanMode" && !event.isError) {
+          this.planReady = true;
+        }
         emit({
           type: "tool_result",
           data: {
             toolId: event.toolId,
             toolName: event.toolName,
-            output:
-              event.output.length > OUTPUT_PREVIEW_CHARS
-                ? `${event.output.slice(0, OUTPUT_PREVIEW_CHARS)}\n… (truncated)`
-                : event.output,
+            output: event.output,
+            mcpApp: event.mcpApp,
+            contentBlocks: event.contentBlocks,
             isError: event.isError,
             elapsed: event.elapsed,
           },
@@ -567,7 +703,16 @@ export class YukinoBridge {
     if (!handle) {
       return { sessionId: "" };
     }
+    this.assertIdle();
+    await handle.backgroundTaskManager.stopAll();
+    await handle.teamManager.stopAll();
+    this.resetSessionUi();
     await handle.clearConversation();
+    this.lastUsage = { inputTokens: 0, outputTokens: 0 };
+    emit({
+      type: "history",
+      data: { sessionId: handle.sessionId, messages: [] },
+    });
     emit({
       type: "session_changed",
       data: { sessionId: handle.sessionId, cwd: this.cwd },
@@ -598,6 +743,7 @@ export class YukinoBridge {
     // Compare canonical project keys, not raw strings — the app's persisted
     // cwd may be an unresolved alias (symlink, /var vs /private/var) of the
     // canonical path the activity registry recorded.
+    this.assertIdle();
     let switchedCwd = false;
     if (cwd && Storage.projectKey(cwd) !== Storage.projectKey(this.cwd)) {
       await this.reinit(cwd);
@@ -607,43 +753,16 @@ export class YukinoBridge {
     if (!handle) {
       return { sessionId, messages: [], cwd: this.cwd, switchedCwd };
     }
+    await handle.backgroundTaskManager.stopAll();
+    await handle.teamManager.stopAll();
+    this.resetSessionUi();
     const saved = Session.loadSession(handle.cwd, sessionId);
     const replay = Remote.SessionState.restoreRemoteSession(
       handle,
       sessionId,
       saved,
     );
-    const messages: HistoryMessage[] = replay.map((message) => ({
-      role: message.role,
-      content: contentToText(message.content),
-      timestamp: 0,
-      ...(message.toolUses?.length
-        ? {
-            toolUses: message.toolUses.map((use) => ({
-              toolUseId: use.toolUseId,
-              toolName: use.toolName,
-              arguments: use.arguments,
-            })),
-          }
-        : {}),
-      ...(message.toolResults?.length
-        ? {
-            toolResults: message.toolResults.map((result) => ({
-              toolUseId: result.toolUseId,
-              content: result.content,
-              isError: result.isError,
-            })),
-          }
-        : {}),
-      ...(message.thinkingBlocks?.length
-        ? {
-            thinking: message.thinkingBlocks
-              .map((block) => (block.type === "thinking" ? block.thinking : ""))
-              .filter(Boolean)
-              .join("\n"),
-          }
-        : {}),
-    }));
+    const messages = projectHistory(replay);
     emit({
       type: "session_changed",
       data: { sessionId: handle.sessionId, cwd: this.cwd },
@@ -657,8 +776,9 @@ export class YukinoBridge {
   }
 
   async selectFolder(): Promise<{ cwd: string | null }> {
+    this.assertIdle();
     const result = await dialog.showOpenDialog({
-      title: "Choose a project folder",
+      title: "选择项目文件夹",
       defaultPath: this.cwd,
       properties: ["openDirectory", "createDirectory"],
     });
@@ -678,7 +798,11 @@ export class YukinoBridge {
       await this.handle.dispose();
       this.handle = null;
     }
+    this.resetSessionUi();
+    this.workspace?.dispose();
+    this.workspace = null;
     this.cwd = cwd;
+    this.lastUsage = { inputTokens: 0, outputTokens: 0 };
     this.state.write({ cwd });
     this.followUps.length = 0;
     await this.init();
@@ -689,22 +813,35 @@ export class YukinoBridge {
   /** Slash commands surfaced in the composer panel. */
   async listCommands(): Promise<CommandSummary[]> {
     const handle = await this.ensureHandle();
-    const registry = handle?.cmdRegistry;
-    if (!registry) {
+    if (!handle) {
       return [];
     }
-    return registry
+    const commands: CommandSummary[] = handle.cmdRegistry
       .listCommands()
-      .filter((cmd) => !UNSUPPORTED_COMMANDS.has(cmd.name))
-      .map((cmd) => ({
-        name: cmd.name,
-        description: cmd.description,
-        type: cmd.type,
+      .filter((command) => !command.isSkill)
+      .map((command) => ({
+        name: command.name,
+        description: command.description,
+        type: command.type,
       }));
+    for (const skill of handle.skillCatalog?.list() ?? []) {
+      if (!commands.some((command) => command.name === skill.name)) {
+        commands.push({
+          name: skill.name,
+          description: skill.description,
+          type:
+            handle.skillCatalog?.get(skill.name)?.meta.mode === "fork"
+              ? "skill_fork"
+              : "prompt",
+        });
+      }
+    }
+    return commands.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** Executes a slash command; results stream back as BridgeEvents. */
   async runCommand(input: string): Promise<void> {
+    this.assertIdle();
     const handle = await this.ensureHandle();
     if (!handle) {
       return;
@@ -721,14 +858,21 @@ export class YukinoBridge {
     name: string,
     args: string,
   ): Promise<void> {
-    if (UNSUPPORTED_COMMANDS.has(name)) {
-      emit({
-        type: "system",
-        data: { message: `/${name} is only supported in the terminal.` },
-      });
+    const cmd = handle.cmdRegistry.find(name);
+    const skill = handle.skillCatalog?.get(name);
+    if (skill && (!cmd || cmd.isSkill)) {
+      if (skill.meta.mode === "fork") {
+        await this.runSkillFork(handle, name, args);
+      } else {
+        const prompt = Skills.Executor.runInline(skill, args, {
+          activateSkill: (skillName, body) => {
+            handle.activeSkills.set(skillName, body);
+          },
+        });
+        await this.runLoop(handle, prompt);
+      }
       return;
     }
-    const cmd = handle.cmdRegistry.find(name);
     if (!cmd) {
       emit({
         type: "error",
@@ -741,7 +885,7 @@ export class YukinoBridge {
 
     switch (cmd.type) {
       case "local":
-        this.runLocalCommand(handle, cmd, args);
+        await this.runLocalCommand(handle, cmd, args);
         return;
       case "local_ui":
         await this.runLocalUiCommand(handle, name, args);
@@ -790,11 +934,11 @@ export class YukinoBridge {
     };
   }
 
-  private runLocalCommand(
+  private async runLocalCommand(
     handle: RemoteAgentHandle,
     cmd: Command,
     args: string,
-  ): void {
+  ): Promise<void> {
     // Placeholder-token handlers are intercepted by name (server parity).
     if (cmd.name === "memory") {
       emit({
@@ -811,6 +955,9 @@ export class YukinoBridge {
       return;
     }
     if (cmd.name === "mcp") {
+      if (args.trim() === "reload") {
+        await this.reloadMcp(handle);
+      }
       emit({ type: "system", data: { message: this.buildMcpStatus(handle) } });
       return;
     }
@@ -834,6 +981,9 @@ export class YukinoBridge {
     args: string,
   ): Promise<void> {
     switch (name) {
+      case "quit":
+        app.quit();
+        return;
       case "clear": {
         // Stop teammates AND background tasks before rotating the session
         // (server parity) so nothing keeps running into the new session.
@@ -852,6 +1002,10 @@ export class YukinoBridge {
             });
           }
         }
+        if (stopResults.some((result) => result.status === "rejected")) {
+          return;
+        }
+        this.resetSessionUi();
         await handle.clearConversation();
         handle.toolFilter = null;
         emit({
@@ -872,13 +1026,7 @@ export class YukinoBridge {
 
       case "login":
       case "provider":
-        emit({
-          type: "system",
-          data: {
-            message:
-              "Provider settings live in the Settings dialog (gear icon).",
-          },
-        });
+        emit({ type: "open_settings" });
         return;
 
       case "model":
@@ -886,19 +1034,68 @@ export class YukinoBridge {
           await this.setModelInternal(handle, args.trim());
           return;
         }
-        emit({
-          type: "system",
-          data: {
-            message: "Model settings live in the Settings dialog (gear icon).",
-          },
-        });
+        emit({ type: "open_settings" });
         return;
 
       case "resume":
         await this.runResume(handle, args.trim());
         return;
 
+      case "workflows": {
+        const service = Workflow.Wiring.getWorkflowService(handle.registry);
+        const message = service
+          ? await service.command(args, {
+              cwd: handle.cwd,
+              permissionChecker: handle.checker,
+              onPermissionRequest: this.createPermissionCallback(),
+            })
+          : "Workflow 服务未初始化";
+        emit({ type: "system", data: { message } });
+        return;
+      }
+      case "rewind":
+        emit({ type: "open_runtime" });
+        return;
+      case "sandbox": {
+        this.assertIdle();
+        const mode = args.trim();
+        if (["auto", "manual", "off"].includes(mode)) {
+          const bash = handle.registry.getInstanceOf(
+            "Bash",
+            YukinoTools.Bash.BashTool,
+          );
+          if (bash?.sandbox) {
+            await bash.sandbox.dispose?.();
+            bash.sandbox = null;
+          }
+          await Bootstrap.Sandbox.configureBashSandbox(
+            handle.registry,
+            handle.cwd,
+            { enabled: mode !== "off", auto_allow: mode === "auto" },
+            handle.checker,
+          );
+        }
+        emit({
+          type: "system",
+          data: {
+            message: `Sandbox: ${handle.checker.sandboxEnabled ? "on" : "off"}\n/sandbox auto | manual | off`,
+          },
+        });
+        return;
+      }
+      case "worktree": {
+        const { stdout } = await promisify(execFile)(
+          "git",
+          ["worktree", "list"],
+          { cwd: handle.cwd },
+        );
+        emit({ type: "system", data: { message: stdout } });
+        return;
+      }
       case "skills": {
+        if (args.trim() === "reload") {
+          handle.skillCatalog?.reload();
+        }
         const skills = handle.skillCatalog?.list() ?? [];
         if (skills.length === 0) {
           emit({ type: "system", data: { message: "No skills found." } });
@@ -1201,7 +1398,7 @@ export class YukinoBridge {
   // ---------- settings ----------
 
   async getSettings(): Promise<SettingsSnapshot> {
-    const handle = await this.ensureHandle();
+    const handle = this.handle;
     if (!handle) {
       return {
         providers: [],
@@ -1424,6 +1621,7 @@ export class YukinoBridge {
   }
 
   async setThinkingLevel(level: string): Promise<void> {
+    this.assertIdle();
     const handle = await this.ensureHandle();
     if (!handle?.client.setThinkingLevel) {
       emit({
@@ -1467,9 +1665,268 @@ export class YukinoBridge {
     emit({ type: "init_state", data: this.buildInitState(handle) });
   }
 
+  private async reloadMcp(handle: RemoteAgentHandle): Promise<void> {
+    const servers = Config.withProjectMcpServers(
+      Config.loadConfig(),
+      handle.cwd,
+    ).mcp_servers;
+    Bootstrap.ToolRegistry.removeMcpTools(handle.registry);
+    MCP.Instructions.retractMcpInstructions(handle.conv, handle.mcpAnnounced);
+    if (!servers.length) {
+      await handle.mcpManager?.disconnectAll();
+      handle.mcpManager = null;
+      return;
+    }
+    const manager = handle.mcpManager ?? new MCP.Manager.MCPManager(true);
+    handle.mcpManager = manager;
+    const result = await manager.reconnectAll(servers);
+    for (const { serverName, tool } of result.tools) {
+      const client = manager.getClient(serverName);
+      if (client) {
+        handle.registry.register(
+          new MCP.ToolWrapper.MCPToolWrapper(client, serverName, tool),
+        );
+      }
+    }
+    MCP.Strategy.decideAndApply(
+      handle.registry,
+      handle.provider.base_url,
+      handle.provider.protocol,
+      handle.contextWindow,
+    );
+    for (const error of result.errors) {
+      emit({
+        type: "error",
+        data: { message: `${error.serverName}: ${error.error}` },
+      });
+    }
+  }
+
+  private resetSessionUi(): void {
+    this.mcpApps.clear();
+    this.pendingPlan = null;
+    this.planReady = false;
+    emit({ type: "plan_approval", data: null });
+  }
+
+  private assertIdle(): void {
+    if (this.streaming) {
+      throw new Error("请先停止当前任务，再切换项目、会话或设置");
+    }
+  }
+
+  async getRuntime(): Promise<RuntimeSnapshot> {
+    const handle = this.handle;
+    if (!handle) {
+      throw new Error("Agent 尚未初始化，请检查服务商配置");
+    }
+    return {
+      tools: handle.registry.listTools().map((tool) => tool.name),
+      skills: (handle.skillCatalog?.list() ?? []).map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+      })),
+      memories: handle.memoryEnabled
+        ? handle.memoryManager.getMemories().map((memory) => ({
+            name: memory.name,
+            description: memory.description,
+          }))
+        : [],
+      mcpServers: handle.mcpManager?.connectedServers() ?? [],
+      tasks: handle.taskList.list().map((task) => ({
+        id: task.id,
+        subject: task.subject,
+        status: task.status,
+      })),
+      backgroundTasks: handle.backgroundTaskManager
+        .list()
+        .map((task) => ({ id: task.id, name: task.name, status: task.status })),
+      teammates: handle.teamManager
+        .getAllTeammateStates()
+        .map((member) => ({ name: member.name, status: member.status })),
+      checkpoints: handle.fileHistory.getSnapshots().map((snapshot) => ({
+        id: snapshot.id,
+        text: snapshot.userText,
+        timestamp: snapshot.timestamp,
+        files: Object.keys(snapshot.backups).length,
+      })),
+      permissionMode: handle.permissionMode,
+    };
+  }
+
+  async rewind(
+    id: string,
+    mode: "code_only" | "conversation_only" | "code_and_conversation",
+  ): Promise<void> {
+    this.assertIdle();
+    if (
+      !["code_only", "conversation_only", "code_and_conversation"].includes(
+        mode,
+      )
+    ) {
+      throw new Error("无效的恢复方式");
+    }
+    const handle = await this.ensureHandle();
+    if (!handle) {
+      throw new Error("Agent 尚未初始化");
+    }
+    const snapshots = handle.fileHistory.getSnapshots();
+    const index = snapshots.findIndex((snapshot) => snapshot.id === id);
+    const snapshot = snapshots[index];
+    if (!snapshot) {
+      throw new Error("此检查点已失效，请刷新列表");
+    }
+    if (mode !== "conversation_only") {
+      handle.fileHistory.rewind(index);
+    }
+    if (mode !== "code_only") {
+      await handle.stopMemoryTasks();
+      if (snapshot.sessionLineCount !== undefined) {
+        Session.truncateSessionLines(
+          Session.getSessionFilePath(handle.cwd, handle.sessionId),
+          snapshot.sessionLineCount,
+        );
+        handle.conv.reset();
+        handle.conv.appendMessages(
+          Session.rebuildFromSession(
+            Session.loadSession(handle.cwd, handle.sessionId),
+          ),
+        );
+      } else {
+        handle.conv.truncateTo(snapshot.messageIndex);
+      }
+      handle.goalManager = new Goal.GoalManager(handle.cwd, handle.sessionId);
+      const result = await this.resumeSession(handle.sessionId);
+      emit({ type: "history", data: result });
+    }
+    emit({ type: "workspace_changed", data: { cwd: this.cwd, path: null } });
+    emit({ type: "system", data: { message: "已恢复到所选检查点" } });
+  }
+
   // ---------- ipc ----------
 
   registerIpc(): void {
+    const workspace = (): Workspace => {
+      if (!this.workspace) {
+        throw new Error("请先打开项目");
+      }
+      return this.workspace;
+    };
+    ipcMain.handle("workspace:list", (_event, path?: string) =>
+      workspace().list(path),
+    );
+    ipcMain.handle("workspace:read", (_event, path: string) =>
+      workspace().read(path),
+    );
+    ipcMain.handle(
+      "workspace:save",
+      (_event, path: string, content: string, revision: string) =>
+        workspace().save(path, content, revision),
+    );
+    ipcMain.handle("workspace:snapshot", () => workspace().snapshot());
+    ipcMain.handle("yukino:runtime", () => this.getRuntime());
+    ipcMain.handle(
+      "yukino:mcp-app",
+      async (_event, appId: string, operation: McpAppOperation) => {
+        const handle = await this.ensureHandle();
+        if (!handle) {
+          throw new Error("Agent 尚未初始化");
+        }
+        const request = MCP.Apps.McpAppRequestSchema.parse({
+          ...operation,
+          appId,
+          requestId: randomUUID(),
+        });
+        return this.mcpApps.request(
+          request,
+          handle,
+          this.createPermissionCallback(),
+          AbortSignal.timeout(10 * 60 * 1000),
+        );
+      },
+    );
+    ipcMain.handle(
+      "yukino:respond-plan",
+      async (
+        _event,
+        id: string,
+        choice: "approve" | "feedback",
+        feedback?: string,
+      ) => {
+        this.assertIdle();
+        const plan = this.pendingPlan;
+        const handle = this.handle;
+        if (plan?.id !== id || !handle) {
+          throw new Error("计划请求已失效");
+        }
+        this.pendingPlan = null;
+        emit({ type: "plan_approval", data: null });
+        if (choice === "feedback") {
+          if (feedback?.trim()) {
+            await this.runLoop(handle, feedback.trim());
+          }
+          return;
+        }
+        if (choice !== "approve") {
+          throw new Error("无效的计划操作");
+        }
+        handle.checker.exitPlanMode("default");
+        handle.conv.addSystemReminder(
+          Prompt.PlanMode.buildPlanModeExitReminder(
+            plan.path,
+            Boolean(plan.content),
+          ),
+        );
+        this.broadcastUpdatedState(handle);
+        await this.runLoop(
+          handle,
+          Prompt.Prompts.buildPlanExecutionPrompt(plan.content),
+        );
+      },
+    );
+    ipcMain.handle(
+      "yukino:rewind",
+      (
+        _event,
+        id: string,
+        mode: "code_only" | "conversation_only" | "code_and_conversation",
+      ) => this.rewind(id, mode),
+    );
+    ipcMain.handle(
+      "yukino:permission-mode",
+      async (
+        _event,
+        mode: "default" | "acceptEdits" | "plan" | "bypassPermissions",
+      ) => {
+        this.assertIdle();
+        if (
+          !["default", "acceptEdits", "plan", "bypassPermissions"].includes(
+            mode,
+          )
+        ) {
+          throw new Error("无效的授权模式");
+        }
+        const handle = await this.ensureHandle();
+        if (handle) {
+          handle.permissionMode = mode;
+          this.broadcastUpdatedState(handle);
+        }
+      },
+    );
+    ipcMain.handle("yukino:open-config", async () => {
+      const error = await shell.openPath(
+        Config.ProviderConfig.globalConfigPath(),
+      );
+      if (error) {
+        throw new Error(error);
+      }
+    });
+    ipcMain.handle("yukino:attachments", async () => {
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile", "multiSelections"],
+      });
+      return result.canceled ? [] : result.filePaths;
+    });
     ipcMain.handle("yukino:init", () => this.init());
     ipcMain.handle("yukino:send", (_event, text: string) => this.send(text));
     ipcMain.handle("yukino:abort", () => {
@@ -1499,6 +1956,29 @@ export class YukinoBridge {
     ipcMain.handle("yukino:run-command", (_event, input: string) =>
       this.runCommand(input),
     );
+    ipcMain.handle(
+      "yukino:save-provider",
+      async (_event, input: ProviderInput) => {
+        this.assertIdle();
+        const config = Config.loadConfig(undefined, {
+          allowEmptyProviders: true,
+        });
+        const saved = Config.ProviderLogin.saveProvider(
+          input,
+          config.providers,
+        );
+        this.providers = saved.providers;
+        const index = saved.providers.findIndex(
+          (provider) => provider.base_url === saved.provider.base_url,
+        );
+        Config.ProviderLogin.persistDefaultProvider(index);
+        if (this.handle) {
+          await this.setProvider(index);
+        } else {
+          await this.init();
+        }
+      },
+    );
     ipcMain.handle("yukino:get-settings", () => this.getSettings());
     ipcMain.handle("yukino:list-models", () => this.listModels());
     ipcMain.handle("yukino:set-provider", (_event, index: number) =>
@@ -1523,6 +2003,16 @@ export class YukinoBridge {
   }
 
   async dispose(): Promise<void> {
+    this.abort();
+    this.resetSessionUi();
+    this.workspace?.dispose();
+    this.workspace = null;
+    for (const id of this.pendingPermissions.keys()) {
+      this.respondPermission(id, "deny");
+    }
+    for (const id of this.pendingAsks.keys()) {
+      this.respondAsk(id, {});
+    }
     await this.handle?.dispose();
     this.handle = null;
   }

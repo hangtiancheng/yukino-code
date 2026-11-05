@@ -4,11 +4,19 @@ import type {
   CommandSummary,
   InitState,
   ModelListResult,
+  McpAppOperation,
   PermissionResponse,
+  ProviderInput,
   ResumeResult,
   SessionSummary,
   SettingsSnapshot,
 } from "@shared/ipc-types";
+import type {
+  FileEntry,
+  FileSnapshot,
+  WorkspaceSnapshot,
+  RuntimeSnapshot,
+} from "@shared/workspace-types";
 import { contextBridge, ipcRenderer } from "electron";
 
 /**
@@ -17,6 +25,42 @@ import { contextBridge, ipcRenderer } from "electron";
  * renderer never touches Node or Electron internals directly.
  */
 const api = {
+  saveProvider: (input: ProviderInput): Promise<void> =>
+    ipcRenderer.invoke("yukino:save-provider", input),
+  requestMcpApp: (
+    appId: string,
+    operation: McpAppOperation,
+  ): Promise<unknown> => ipcRenderer.invoke("yukino:mcp-app", appId, operation),
+  respondPlan: (
+    id: string,
+    choice: "approve" | "feedback",
+    feedback?: string,
+  ): Promise<void> =>
+    ipcRenderer.invoke("yukino:respond-plan", id, choice, feedback),
+  workspaceList: (path?: string): Promise<FileEntry[]> =>
+    ipcRenderer.invoke("workspace:list", path),
+  workspaceRead: (path: string): Promise<FileSnapshot> =>
+    ipcRenderer.invoke("workspace:read", path),
+  workspaceSave: (
+    path: string,
+    content: string,
+    revision: string,
+  ): Promise<FileSnapshot> =>
+    ipcRenderer.invoke("workspace:save", path, content, revision),
+  workspaceSnapshot: (): Promise<WorkspaceSnapshot> =>
+    ipcRenderer.invoke("workspace:snapshot"),
+  getRuntime: (): Promise<RuntimeSnapshot> =>
+    ipcRenderer.invoke("yukino:runtime"),
+  setPermissionMode: (
+    mode: "default" | "acceptEdits" | "plan" | "bypassPermissions",
+  ): Promise<void> => ipcRenderer.invoke("yukino:permission-mode", mode),
+  rewind: (
+    id: string,
+    mode: "code_only" | "conversation_only" | "code_and_conversation",
+  ): Promise<void> => ipcRenderer.invoke("yukino:rewind", id, mode),
+  openConfig: (): Promise<void> => ipcRenderer.invoke("yukino:open-config"),
+  selectAttachments: (): Promise<string[]> =>
+    ipcRenderer.invoke("yukino:attachments"),
   init: (): Promise<InitState> => ipcRenderer.invoke("yukino:init"),
   send: (text: string): Promise<void> =>
     ipcRenderer.invoke("yukino:send", text),

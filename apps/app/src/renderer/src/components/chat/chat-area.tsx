@@ -22,12 +22,6 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 /** Distance from the bottom (px) that still counts as "following". */
 const STICK_THRESHOLD = 32;
 
-/** Trailing space so the last rows clear the floating composer overlay. */
-const COMPOSER_CLEARANCE = 168;
-
-/** Gap between the scroll-to-latest button and the top of the composer overlay. */
-const SCROLL_BUTTON_GAP = 8;
-
 /** Vertical rhythm per row; consecutive tool calls stay visually tight. */
 function rowSpacing(item: ChatItem, prev: ChatItem | null): string {
   if (item.kind === "tool") {
@@ -47,9 +41,7 @@ function StreamingIndicator({
   return (
     <div className="text-muted-foreground flex items-center gap-2 px-5 py-2 text-xs">
       <Spinner />
-      {subagents > 0
-        ? `${subagents} subagent${subagents > 1 ? "s" : ""} working…`
-        : "Working…"}
+      {subagents > 0 ? `${subagents} 个 Agent 运行中` : "执行中…"}
     </div>
   );
 }
@@ -58,16 +50,12 @@ export function ChatArea({
   items,
   streaming,
   activeSubagents,
-  overlayHeight = 0,
   onRespondPermission,
   onRespondAsk,
 }: {
   items: ChatItem[];
   streaming: boolean;
   activeSubagents: number;
-  /** Measured height of the floating composer overlay (px). The
-   *  scroll-to-latest button is lifted above it so it is never covered. */
-  overlayHeight?: number;
   onRespondPermission: (id: string, response: PermissionResponse) => void;
   onRespondAsk: (id: string, answers: Record<string, string>) => void;
 }): React.JSX.Element {
@@ -78,7 +66,7 @@ export function ChatArea({
   // The streaming indicator rides along as a trailing virtual row — but only
   // when the last row isn't already rendering its own loading visual
   // (a streaming assistant row shows Thinking/pending, a running tool row
-  // shows its own spinner). Otherwise "Working…" would spin alongside them.
+  // shows its own spinner). Otherwise "执行中…" would spin alongside them.
   const lastItem = items[items.length - 1];
   const lastRowBusy =
     (lastItem?.kind === "assistant" && lastItem.streaming) ||
@@ -142,10 +130,9 @@ export function ChatArea({
         aria-label="Messages"
         className="min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain"
       >
-        {/* Trailing space clears the floating composer overlay. */}
         <div
           className="relative w-full"
-          style={{ height: virtualizer.getTotalSize() + COMPOSER_CLEARANCE }}
+          style={{ height: virtualizer.getTotalSize() + 32 }}
         >
           {virtualizer.getVirtualItems().map((vrow) => {
             const isIndicator = showIndicator && vrow.index === items.length;
@@ -195,9 +182,7 @@ export function ChatArea({
               size="icon-sm"
               onClick={scrollToBottom}
               tabIndex={atBottom ? -1 : 0}
-              // Lift the button above the floating composer overlay so it is
-              // never painted behind it (the overlay is later in DOM order).
-              style={{ bottom: overlayHeight + SCROLL_BUTTON_GAP }}
+              style={{ bottom: 12 }}
               className={cn(
                 "border-border bg-background absolute inset-x-1/2 -translate-x-1/2 rounded-full transition-[opacity,scale] duration-200",
                 atBottom

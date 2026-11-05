@@ -57,7 +57,7 @@ function AssistantRow({
                     {thinkingActive ? <Spinner /> : <InfoIcon />}
                   </TraceIcon>
                   <span data-slot="trace-title" className="text-xs">
-                    Thinking
+                    思考过程
                   </span>
                 </TraceLine>
               </TraceCollapsibleTrigger>

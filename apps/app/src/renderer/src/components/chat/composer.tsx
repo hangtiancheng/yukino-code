@@ -7,8 +7,16 @@ import { Button } from "@renderer/components/ui/button";
 import { Textarea } from "@renderer/components/ui/textarea";
 import type { CommandSummary } from "@shared/ipc-types";
 import { cn } from "cn";
-import { ArrowUpIcon, CornerDownLeftIcon, SquareIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  CornerDownLeftIcon,
+  SquareIcon,
+  PaperclipIcon,
+  XIcon,
+  CommandIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 function filterCommands(
   commands: CommandSummary[],
@@ -39,16 +47,19 @@ export function Composer({
   const [commands, setCommands] = useState<CommandSummary[]>([]);
   const [query, setQuery] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState(0);
-  const commandsLoaded = useRef(false);
+  const panelOpen = query !== null;
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [hasText, setHasText] = useState(false);
 
-  // Lazy-load the command list the first time the panel would open.
   useEffect(() => {
-    if (query === null || commandsLoaded.current) {
+    if (!panelOpen) {
       return;
     }
-    commandsLoaded.current = true;
-    void window.api.listCommands().then(setCommands);
-  }, [query]);
+    void window.api
+      .listCommands()
+      .then(setCommands)
+      .catch((error: unknown) => toast.error(String(error)));
+  }, [panelOpen]);
 
   const matches = useMemo(
     () => (query === null ? [] : filterCommands(commands, query)),
@@ -82,7 +93,12 @@ export function Composer({
     if (!textarea) {
       return;
     }
-    const text = textarea.value.trim();
+    const text = [
+      textarea.value.trim(),
+      ...attachments.map((path) => `@"${path}"`),
+    ]
+      .filter(Boolean)
+      .join("\n");
     if (!text) {
       return;
     }
@@ -90,135 +106,206 @@ export function Composer({
     textarea.value = "";
     textarea.style.height = "auto";
     setQuery(null);
-  }, [onSend]);
+    setAttachments([]);
+    setHasText(false);
+  }, [onSend, attachments]);
 
   return (
-    <div className="relative flex items-end gap-2">
-      {query !== null && matches.length > 0 ? (
-        <div
-          role="listbox"
-          aria-label="Slash commands"
-          className="border-border bg-popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border py-1 shadow-lg"
-        >
-          {matches.map((command, index) => (
-            <button
-              key={command.name}
-              type="button"
-              role="option"
-              aria-selected={index === highlighted}
-              className={cn(
-                "flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm",
-                index === highlighted ? "bg-accent" : "hover:bg-accent/50",
-              )}
-              onMouseEnter={() => {
-                setHighlighted(index);
-              }}
-              // preventDefault keeps textarea focus; click inserts the command.
-              onMouseDown={(event) => {
-                event.preventDefault();
-              }}
-              onClick={() => {
-                insertCommand(command);
-              }}
-            >
-              <span className="shrink-0 font-mono text-xs font-medium">
-                /{command.name}
+    <div className="composer-shell relative">
+      {attachments.length ? (
+        <div className="flex flex-wrap gap-1 px-3 pt-3">
+          {attachments.map((path) => (
+            <span className="attachment-chip" key={path}>
+              <PaperclipIcon className="size-3" />
+              <span className="max-w-40 truncate" title={path}>
+                {path.split(/[\\/]/u).pop()}
               </span>
-              <span className="text-muted-foreground line-clamp-1 text-xs">
-                {command.description}
-              </span>
-              {index === highlighted ? (
-                <CornerDownLeftIcon className="text-muted-foreground ml-auto size-3 shrink-0 self-center" />
-              ) : null}
-            </button>
+              <button
+                aria-label={`移除 ${path}`}
+                onClick={() => {
+                  setAttachments((current) =>
+                    current.filter((item) => item !== path),
+                  );
+                }}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </span>
           ))}
         </div>
       ) : null}
+      <div className="flex items-end gap-2 px-3 pt-3">
+        {query !== null && matches.length > 0 ? (
+          <div
+            role="listbox"
+            aria-label="Slash commands"
+            className="border-border bg-popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border py-1 shadow-lg"
+          >
+            {matches.map((command, index) => (
+              <button
+                key={command.name}
+                type="button"
+                role="option"
+                aria-selected={index === highlighted}
+                className={cn(
+                  "flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm",
+                  index === highlighted ? "bg-accent" : "hover:bg-accent/50",
+                )}
+                onMouseEnter={() => {
+                  setHighlighted(index);
+                }}
+                // preventDefault keeps textarea focus; click inserts the command.
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                onClick={() => {
+                  insertCommand(command);
+                }}
+              >
+                <span className="shrink-0 font-mono text-xs font-medium">
+                  /{command.name}
+                </span>
+                <span className="text-muted-foreground line-clamp-1 text-xs">
+                  {command.description}
+                </span>
+                {index === highlighted ? (
+                  <CornerDownLeftIcon className="text-muted-foreground ml-auto size-3 shrink-0 self-center" />
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
-      <Textarea
-        ref={ref}
-        rows={1}
-        autoFocus
-        placeholder={disabled ? "Starting up…" : "Message Yukino…"}
-        disabled={disabled}
-        className="max-h-64 min-h-10 flex-1 resize-none overflow-y-auto py-2.5"
-        onChange={(event) => {
-          const textarea = event.currentTarget;
-          textarea.style.height = "auto";
-          textarea.style.height = `${Math.min(textarea.scrollHeight, 256)}px`;
-          syncPanel();
-        }}
-        onKeyDown={(event) => {
-          if (query !== null && matches.length > 0) {
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              setHighlighted((value) => (value + 1) % matches.length);
+        <Textarea
+          ref={ref}
+          rows={1}
+          autoFocus
+          placeholder={
+            disabled ? "未连接" : streaming ? "补充要求…" : "输入任务…"
+          }
+          disabled={disabled}
+          className="max-h-52 min-h-14 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
+          onChange={(event) => {
+            const textarea = event.currentTarget;
+            textarea.style.height = "auto";
+            textarea.style.height = `${Math.min(textarea.scrollHeight, 256)}px`;
+            setHasText(Boolean(textarea.value.trim()));
+            syncPanel();
+          }}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) {
               return;
             }
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              setHighlighted(
-                (value) => (value - 1 + matches.length) % matches.length,
-              );
-              return;
-            }
-            if (event.key === "Tab") {
-              event.preventDefault();
-              const command = matches[highlighted];
-              if (command) {
-                insertCommand(command);
+            if (query !== null && matches.length > 0) {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setHighlighted((value) => (value + 1) % matches.length);
+                return;
               }
-              return;
-            }
-            if (event.key === "Escape") {
-              event.preventDefault();
-              setQuery(null);
-              return;
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setHighlighted(
+                  (value) => (value - 1 + matches.length) % matches.length,
+                );
+                return;
+              }
+              if (event.key === "Tab") {
+                event.preventDefault();
+                const command = matches[highlighted];
+                if (command) {
+                  insertCommand(command);
+                }
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setQuery(null);
+                return;
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                const command = matches[highlighted];
+                // An exact match runs immediately; otherwise the highlighted
+                // entry is inserted so arguments can be added before sending.
+                if (command?.name === query) {
+                  const textarea = ref.current;
+                  if (textarea) {
+                    textarea.value = `/${command.name}`;
+                  }
+                  submit();
+                } else if (command) {
+                  insertCommand(command);
+                }
+                return;
+              }
             }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              const command = matches[highlighted];
-              // An exact match runs immediately; otherwise the highlighted
-              // entry is inserted so arguments can be added before sending.
-              if (command?.name === query) {
-                const textarea = ref.current;
-                if (textarea) {
-                  textarea.value = `/${command.name}`;
-                }
-                submit();
-              } else if (command) {
-                insertCommand(command);
-              }
-              return;
+              submit();
             }
-          }
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            submit();
-          }
-        }}
-      />
-      {streaming ? (
+          }}
+        />
+      </div>
+      <div className="composer-toolbar">
         <Button
-          size="icon"
-          variant="secondary"
-          onClick={onAbort}
-          className="size-10 shrink-0"
-        >
-          <SquareIcon data-icon="inline-start" className="fill-current" />
-          <span className="sr-only">Stop</span>
-        </Button>
-      ) : (
-        <Button
-          size="icon"
-          onClick={submit}
+          variant="ghost"
+          size="icon-sm"
           disabled={disabled}
-          className="size-10 shrink-0"
+          title="添加文件或图片"
+          aria-label="添加文件或图片"
+          onClick={() => {
+            void window.api
+              .selectAttachments()
+              .then((paths) => {
+                setAttachments((current) => [
+                  ...new Set([...current, ...paths]),
+                ]);
+              })
+              .catch((error: unknown) => toast.error(String(error)));
+          }}
         >
-          <ArrowUpIcon data-icon="inline-start" />
-          <span className="sr-only">Send</span>
+          <PaperclipIcon />
         </Button>
-      )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={disabled}
+          title="命令"
+          aria-label="打开命令"
+          onClick={() => {
+            if (ref.current) {
+              ref.current.value = "/";
+              ref.current.focus();
+              syncPanel();
+            }
+          }}
+        >
+          <CommandIcon />
+        </Button>
+        <span className="text-muted-foreground mr-auto hidden text-[11px] sm:inline">
+          ↵ 发送 / ⇧↵ 换行
+        </span>
+        {streaming ? (
+          <Button
+            size="icon-sm"
+            variant="secondary"
+            onClick={onAbort}
+            title="停止任务"
+            aria-label="停止任务"
+          >
+            <SquareIcon className="size-3 fill-current" />
+          </Button>
+        ) : null}
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={disabled || (!hasText && !attachments.length)}
+          className="send-button"
+        >
+          {streaming ? "补充" : "发送"}
+          <ArrowUpIcon className="size-3.5" />
+        </Button>
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { join } from "path";
 
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { YukinoBridge } from "@main/yukino-bridge";
-import { app, shell, BrowserWindow } from "electron";
+import { app, dialog, shell, BrowserWindow } from "electron";
 
 import icon from "../../resources/icon.png?asset";
 
@@ -12,15 +12,15 @@ const bridge = new YukinoBridge();
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1040,
-    height: 760,
-    minWidth: 760,
+    width: 1480,
+    height: 920,
+    minWidth: 880,
     minHeight: 540,
     show: false,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : undefined,
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#f7f9fc",
     ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
@@ -32,8 +32,24 @@ function createWindow(): void {
     mainWindow.show();
   });
 
+  mainWindow.webContents.on("will-prevent-unload", (event) => {
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: "warning",
+      buttons: ["返回保存", "放弃并关闭"],
+      defaultId: 0,
+      cancelId: 0,
+      message: "有尚未保存的文件",
+      detail: "关闭窗口将丢失编辑器中的草稿。",
+    });
+    if (choice === 1) {
+      event.preventDefault();
+    }
+  });
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    void shell.openExternal(details.url);
+    if (/^https?:\/\//u.test(details.url)) {
+      void shell.openExternal(details.url);
+    }
     return { action: "deny" };
   });
 
@@ -84,6 +100,14 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
-  void bridge.dispose();
+let shuttingDown = false;
+app.on("will-quit", (event) => {
+  if (shuttingDown) {
+    return;
+  }
+  event.preventDefault();
+  void bridge.dispose().finally(() => {
+    shuttingDown = true;
+    app.quit();
+  });
 });

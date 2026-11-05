@@ -26,7 +26,12 @@ export interface UseChat {
   themeMode: "system" | "light" | "dark";
   setThemeMode: (mode: "system" | "light" | "dark") => void;
   isDark: boolean;
+  retry: () => void;
 }
+
+const reportError = (error: unknown): void => {
+  toast.error(error instanceof Error ? error.message : String(error));
+};
 
 export function useChat(): UseChat {
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
@@ -37,9 +42,12 @@ export function useChat(): UseChat {
   const initStarted = useRef(false);
 
   const refreshSessions = useCallback(() => {
-    void window.api.listSessions().then((sessions: SessionSummary[]) => {
-      dispatch({ type: "set_sessions", sessions });
-    });
+    void window.api
+      .listSessions()
+      .then((sessions: SessionSummary[]) => {
+        dispatch({ type: "set_sessions", sessions });
+      })
+      .catch(reportError);
   }, []);
 
   const applyEvent = useCallback(
@@ -78,11 +86,27 @@ export function useChat(): UseChat {
       return;
     }
     initStarted.current = true;
-    void window.api.getTheme().then((theme) => {
-      setThemeModeState(theme.mode);
-      setIsDark(theme.dark);
-    });
-    void window.api.init();
+    void window.api
+      .getTheme()
+      .then((theme) => {
+        setThemeModeState(theme.mode);
+        setIsDark(theme.dark);
+      })
+      .catch(reportError);
+    void window.api
+      .init()
+      .then((data) => {
+        dispatch({ type: "init_state", data });
+      })
+      .catch((error: unknown) => {
+        dispatch({
+          type: "init_state",
+          data: {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+      });
   }, []);
 
   // Reflect the .dark class for the shadcn custom dark variant.
@@ -96,45 +120,52 @@ export function useChat(): UseChat {
       return;
     }
     dispatch({ type: "append_user", text: trimmed });
-    void window.api.send(trimmed);
+    void window.api.send(trimmed).catch(reportError);
   }, []);
 
   const abort = useCallback(() => {
-    void window.api.abort();
+    void window.api.abort().catch(reportError);
   }, []);
 
   const startNewSession = useCallback(() => {
-    dispatch({ type: "clear_items" });
-    void window.api.newSession();
+    void window.api.newSession().catch(reportError);
   }, []);
 
   const resumeSession = useCallback((sessionId: string, cwd?: string) => {
-    dispatch({ type: "clear_items" });
-    void window.api.resumeSession(sessionId, cwd).then((result) => {
-      dispatch({ type: "load_history", messages: result.messages });
-      if (result.switchedCwd) {
-        toast.success("Switched working directory");
-      }
-    });
+    void window.api
+      .resumeSession(sessionId, cwd)
+      .then((result) => {
+        dispatch({ type: "load_history", messages: result.messages });
+        if (result.switchedCwd) {
+          toast.success("Switched working directory");
+        }
+      })
+      .catch(reportError);
   }, []);
 
   const chooseFolder = useCallback(() => {
     // The bridge re-initializes the agent for the chosen folder and emits a
     // fresh `init_state` event through the stream.
-    dispatch({ type: "clear_items" });
-    void window.api.selectFolder();
+    void window.api
+      .selectFolder()
+      .then((result) => {
+        if (result.cwd) {
+          dispatch({ type: "clear_items" });
+        }
+      })
+      .catch(reportError);
   }, []);
 
   const respondPermission = useCallback(
     (id: string, response: PermissionResponse) => {
-      void window.api.respondPermission(id, response);
+      void window.api.respondPermission(id, response).catch(reportError);
     },
     [],
   );
 
   const respondAsk = useCallback(
     (id: string, answers: Record<string, string>) => {
-      void window.api.respondAsk(id, answers);
+      void window.api.respondAsk(id, answers).catch(reportError);
     },
     [],
   );
@@ -176,5 +207,13 @@ export function useChat(): UseChat {
     themeMode,
     setThemeMode,
     isDark,
+    retry: () => {
+      void window.api
+        .init()
+        .then((data) => {
+          dispatch({ type: "init_state", data });
+        })
+        .catch(reportError);
+    },
   };
 }

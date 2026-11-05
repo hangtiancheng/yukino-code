@@ -1,186 +1,453 @@
-// App shell: collapsible session sidebar, header, virtualized chat surface,
-// and a composer floating at the bottom. The chat scroll viewport extends to
-// the window's bottom and right edges so the scrollbar sits at the very edge
-// of the app, not inside the content column. All agent state lives in the
-// useChat hook; this file is presentation only.
-
 import { ChatArea } from "@renderer/components/chat/chat-area";
 import { Composer } from "@renderer/components/chat/composer";
 import { EmptyState } from "@renderer/components/chat/empty-state";
 import { Header } from "@renderer/components/chat/header";
+import { PlanDialog } from "@renderer/components/chat/plan-dialog";
+import { RuntimeDialog } from "@renderer/components/chat/runtime-dialog";
 import { SettingsDialog } from "@renderer/components/chat/settings-dialog";
 import { Sidebar } from "@renderer/components/chat/sidebar";
+import { Button } from "@renderer/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@renderer/components/ui/dialog";
 import { Spinner } from "@renderer/components/ui/spinner";
 import { Toaster } from "@renderer/components/ui/toaster";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
+import { EditorPanel } from "@renderer/components/workspace/editor-panel";
 import { useChat } from "@renderer/hooks/use-chat";
-import type { InitState } from "@shared/ipc-types";
-import { AlertTriangleIcon } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { McpAppContext } from "@renderer/lib/mcp/context";
+import {
+  AlertTriangleIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  CircleDotIcon,
+  FolderOpenIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Group,
+  Panel,
+  Separator,
+  type GroupImperativeHandle,
+} from "react-resizable-panels";
+import { toast } from "sonner";
 
 function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) {
-    return `${(tokens / 1_000_000).toFixed(1)}M`;
-  }
-  if (tokens >= 1_000) {
-    return `${(tokens / 1_000).toFixed(1)}k`;
-  }
-  return String(tokens);
+  return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
 }
-
-function InitFailure({
-  init,
-}: {
-  init: InitState & { ok: false };
-}): React.JSX.Element {
-  return (
-    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <div className="border-border bg-card flex max-w-md flex-col items-center gap-3 rounded-lg border p-6 text-center">
-        <span className="bg-destructive/10 text-destructive flex size-10 items-center justify-center rounded-full">
-          <AlertTriangleIcon className="size-5" />
-        </span>
-        <h2 className="text-sm font-medium">Yukino could not start</h2>
-        <p className="text-muted-foreground text-xs leading-relaxed whitespace-pre-wrap">
-          {init.error}
-        </p>
-        {init.configPath ? (
-          <code className="bg-muted rounded-md px-2 py-1 font-mono text-xs">
-            {init.configPath}
-          </code>
-        ) : null}
-      </div>
-    </div>
-  );
-}
+const report = (error: unknown): void => {
+  toast.error(error instanceof Error ? error.message : String(error));
+};
 
 function App(): React.JSX.Element {
   const chat = useChat();
   const { state } = chat;
   const init = state.init;
+  const cwd = init?.ok ? init.cwd : null;
   const failed = init !== null && !init.ok;
   const booting = state.initializing && init === null;
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => window.innerWidth > 1150,
+  );
+  const [editorOpen, setEditorOpen] = useState(true);
+  const [editorExpanded, setEditorExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [runtimeOpen, setRuntimeOpen] = useState(false);
+  const [draftProject, setDraftProject] = useState<string | null>(null);
+  const dirty = draftProject !== null && draftProject === cwd;
+  const setDirty = useCallback(
+    (value: boolean) => {
+      setDraftProject(value ? cwd : null);
+    },
+    [cwd],
+  );
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const group = useRef<GroupImperativeHandle>(null);
+  const splitSize = useRef(48);
   const hasItems = state.items.length > 0;
-
-  // The floating composer overlay has a dynamic height (auto-growing
-  // textarea, conditional usage row). Measure it so ChatArea can park the
-  // scroll-to-latest button just above it instead of behind it.
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const [overlayHeight, setOverlayHeight] = useState(0);
-  useLayoutEffect(() => {
-    const element = overlayRef.current;
-    if (!element) {
-      return;
+  const pending = state.items.filter((item) =>
+    item.kind === "permission"
+      ? item.response === null
+      : item.kind === "ask" && !item.answered,
+  ).length;
+  const guard = (action: () => void): void => {
+    if (dirty) {
+      setPendingAction(() => action);
+    } else {
+      action();
     }
-    const observer = new ResizeObserver(() => {
-      setOverlayHeight(element.offsetHeight);
+  };
+  const chooseFolder = (): void => {
+    guard(chat.chooseFolder);
+  };
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (cwd) {
+        group.current?.setLayout({
+          conversation: editorOpen
+            ? editorExpanded
+              ? 0
+              : 100 - splitSize.current
+            : 100,
+          editor: editorOpen ? (editorExpanded ? 100 : splitSize.current) : 0,
+        });
+      }
     });
-    observer.observe(element);
-    setOverlayHeight(element.offsetHeight);
     return () => {
-      observer.disconnect();
+      cancelAnimationFrame(frame);
     };
-  }, [hasItems]);
+  }, [cwd, editorOpen, editorExpanded]);
+
+  useEffect(
+    () =>
+      window.api.onEvent((event) => {
+        if (event.type === "open_settings") {
+          setSettingsOpen(true);
+        }
+        if (event.type === "open_runtime") {
+          setRuntimeOpen(true);
+        }
+      }),
+    [],
+  );
+  useEffect(() => {
+    const handle = (event: KeyboardEvent): void => {
+      if (!event.metaKey && !event.ctrlKey) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "b") {
+        event.preventDefault();
+        setSidebarOpen((value) => !value);
+      }
+      if (key === "j") {
+        event.preventDefault();
+        setEditorOpen((value) => !value);
+      }
+      if (key === ",") {
+        event.preventDefault();
+        setSettingsOpen(true);
+      }
+      if (key === "n" && !state.streaming) {
+        event.preventDefault();
+        chat.startNewSession();
+      }
+    };
+    window.addEventListener("keydown", handle);
+    return () => {
+      window.removeEventListener("keydown", handle);
+    };
+  }, [chat.startNewSession, state.streaming]);
+  useEffect(() => {
+    const prevent = (event: BeforeUnloadEvent): void => {
+      if (dirty) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", prevent);
+    return () => {
+      window.removeEventListener("beforeunload", prevent);
+    };
+  }, [dirty]);
+
+  const mcpHost = useMemo<NonNullable<React.ContextType<typeof McpAppContext>>>(
+    () => ({
+      request: (appId, operation) => window.api.requestMcpApp(appId, operation),
+      sendMessage: (text) => {
+        chat.send(text);
+        return true;
+      },
+      theme: chat.isDark ? "dark" : "light",
+    }),
+    [chat.send, chat.isDark],
+  );
 
   return (
     <TooltipProvider>
-      <div className="bg-background flex h-full min-w-0">
-        <Sidebar
-          open={sidebarOpen}
-          sessions={state.sessions}
-          activeSessionId={state.activeSessionId}
-          currentProjectKey={state.init?.ok ? state.init.projectKey : null}
-          onResumeSession={chat.resumeSession}
-          onClose={() => {
-            setSidebarOpen(false);
-          }}
-        />
-
-        <div className="flex h-full min-w-0 flex-1 flex-col">
-          <Header
-            cwd={init?.ok ? init.cwd : null}
-            sidebarOpen={sidebarOpen}
-            onToggleSidebar={() => {
-              setSidebarOpen((open) => !open);
+      <McpAppContext.Provider value={mcpHost}>
+        <div className="app-shell">
+          <Sidebar
+            open={sidebarOpen}
+            sessions={state.sessions}
+            activeSessionId={state.activeSessionId}
+            currentProjectKey={init?.ok ? init.projectKey : null}
+            onResumeSession={(id, path) => {
+              guard(() => {
+                chat.resumeSession(id, path);
+              });
+            }}
+            onClose={() => {
+              setSidebarOpen(false);
             }}
             onNewSession={chat.startNewSession}
-            onChooseFolder={chat.chooseFolder}
-            themeMode={chat.themeMode}
-            onThemeMode={chat.setThemeMode}
-            onOpenSettings={() => {
-              setSettingsOpen(true);
-            }}
+            disabled={state.streaming}
           />
-
-          {failed ? (
-            <InitFailure init={init} />
-          ) : booting ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center">
-              <span className="text-muted-foreground flex items-center gap-2 text-sm">
-                <Spinner /> Starting agent…
+          <div className="flex h-full min-w-0 flex-1 flex-col">
+            <Header
+              init={init}
+              sidebarOpen={sidebarOpen}
+              editorOpen={editorOpen}
+              dark={chat.isDark}
+              streaming={state.streaming}
+              onToggleSidebar={() => {
+                setSidebarOpen((value) => !value);
+              }}
+              onToggleEditor={() => {
+                setEditorOpen((value) => !value);
+              }}
+              onChooseFolder={chooseFolder}
+              onThemeMode={chat.setThemeMode}
+              onOpenSettings={() => {
+                setSettingsOpen(true);
+              }}
+              onOpenRuntime={() => {
+                setRuntimeOpen(true);
+              }}
+            />
+            <Group
+              groupRef={group}
+              className="workspace-layout"
+              orientation="horizontal"
+              onLayoutChanged={(layout, meta) => {
+                if (
+                  meta.isUserInteraction &&
+                  editorOpen &&
+                  !editorExpanded &&
+                  layout.editor > 0
+                ) {
+                  splitSize.current = layout.editor;
+                }
+              }}
+            >
+              <Panel
+                id="conversation"
+                defaultSize="52%"
+                minSize={editorOpen && editorExpanded ? "0%" : "30%"}
+                maxSize={editorOpen && editorExpanded ? "0%" : "100%"}
+                className={`conversation ${editorOpen && editorExpanded ? "conversation-hidden" : ""}`}
+                role="main"
+              >
+                <div className="conversation-heading">
+                  <span
+                    className={
+                      state.streaming ? "status-dot working" : "status-dot"
+                    }
+                  />
+                  <span>
+                    {state.streaming
+                      ? pending
+                        ? "等待你的回应"
+                        : "正在处理任务"
+                      : "就绪"}
+                  </span>
+                  <button
+                    className="text-button ml-auto"
+                    onClick={() => {
+                      setRuntimeOpen(true);
+                    }}
+                  >
+                    {state.activeSubagents
+                      ? `${state.activeSubagents} 个 Agent 协作中`
+                      : "任务"}
+                    <ArrowRightIcon className="size-3" />
+                  </button>
+                </div>
+                {failed ? (
+                  <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+                    <div className="setup-panel">
+                      <AlertTriangleIcon className="text-warning size-7" />
+                      <h2>连接失败</h2>
+                      <p>{init.error}</p>
+                      {init.configPath ? <code>{init.configPath}</code> : null}
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => {
+                            setSettingsOpen(true);
+                          }}
+                        >
+                          添加服务商
+                        </Button>
+                        <Button variant="outline" onClick={chat.retry}>
+                          重新连接
+                        </Button>
+                      </div>
+                      <button
+                        className="text-button text-muted-foreground"
+                        onClick={chooseFolder}
+                      >
+                        <FolderOpenIcon className="size-3.5" />
+                        选择其他项目
+                      </button>
+                    </div>
+                  </div>
+                ) : booting ? (
+                  <div className="panel-empty flex-1">
+                    <Spinner />
+                    正在连接 Agent…
+                  </div>
+                ) : hasItems ? (
+                  <ChatArea
+                    items={state.items}
+                    streaming={state.streaming}
+                    activeSubagents={state.activeSubagents}
+                    onRespondPermission={chat.respondPermission}
+                    onRespondAsk={chat.respondAsk}
+                  />
+                ) : (
+                  <div className="welcome-container">
+                    <EmptyState onPrompt={chat.send} />
+                  </div>
+                )}
+                {!failed && !booting ? (
+                  <footer className="composer-container">
+                    <Composer
+                      streaming={state.streaming}
+                      disabled={!init?.ok}
+                      onSend={chat.send}
+                      onAbort={chat.abort}
+                    />
+                    <div className="composer-meta">
+                      <button
+                        onClick={() => {
+                          setSettingsOpen(true);
+                        }}
+                        className="truncate"
+                        title="模型与推理设置"
+                      >
+                        {init?.ok ? init.model : "未连接"}
+                        <span className="text-muted-foreground ml-2">
+                          {init?.ok ? init.thinkingLevel : ""}
+                        </span>
+                      </button>
+                      {state.usage ? (
+                        <span className="ml-auto shrink-0 tabular-nums">
+                          {formatTokens(state.usage.inputTokens)} 输入 /{" "}
+                          {formatTokens(state.usage.outputTokens)} 输出
+                        </span>
+                      ) : null}
+                    </div>
+                  </footer>
+                ) : null}
+              </Panel>
+              {cwd ? (
+                <>
+                  <Separator
+                    aria-label="调整代码工作区宽度"
+                    className={`workspace-resizer ${!editorOpen || editorExpanded ? "hidden" : ""}`}
+                  />
+                  <Panel
+                    id="editor"
+                    defaultSize="48%"
+                    minSize={editorOpen ? "30%" : "0%"}
+                    maxSize={editorOpen ? "100%" : "0%"}
+                    className={`workspace-editor ${editorOpen ? "" : "editor-hidden"} ${editorExpanded ? "editor-expanded" : ""}`}
+                    inert={!editorOpen}
+                  >
+                    <EditorPanel
+                      key={cwd}
+                      cwd={cwd}
+                      dark={chat.isDark}
+                      expanded={editorExpanded}
+                      onExpand={() => {
+                        setEditorExpanded((value) => !value);
+                      }}
+                      onClose={() => {
+                        setEditorOpen(false);
+                      }}
+                      onDirtyChange={setDirty}
+                    />
+                  </Panel>
+                </>
+              ) : null}
+            </Group>
+            <div className="app-status">
+              <span className="flex items-center gap-1.5">
+                {state.streaming ? (
+                  <CircleDotIcon className="text-primary size-3" />
+                ) : (
+                  <CheckIcon className="text-success size-3" />
+                )}
+                {state.streaming ? "运行中" : "Yukino"}
+              </span>
+              <span className="status-path" title={cwd ?? ""}>
+                {cwd ?? "请选择项目文件夹"}
+              </span>
+              <span className="ml-auto flex items-center gap-1">
+                <ShieldCheckIcon className="size-3" />
+                <select
+                  aria-label="Agent 权限模式"
+                  disabled={state.streaming || !init?.ok}
+                  value={init?.ok ? init.permissionMode : "default"}
+                  onChange={(event) => {
+                    void window.api
+                      .setPermissionMode(
+                        event.target.value as
+                          | "default"
+                          | "acceptEdits"
+                          | "plan"
+                          | "bypassPermissions",
+                      )
+                      .catch(report);
+                  }}
+                >
+                  <option value="default">逐项授权</option>
+                  <option value="acceptEdits">自动接受文件编辑</option>
+                  <option value="plan">只读规划</option>
+                  <option value="bypassPermissions">自动允许所有工具</option>
+                </select>
               </span>
             </div>
-          ) : hasItems ? (
-            // Scroll viewport fills the column down to the window edge; the
-            // composer floats above its bottom. Must stay a flex column so
-            // ChatArea's flex-1 scroll viewport gets a bounded height.
-            <div className="relative flex min-h-0 flex-1 flex-col">
-              <ChatArea
-                items={state.items}
-                streaming={state.streaming}
-                activeSubagents={state.activeSubagents}
-                overlayHeight={overlayHeight}
-                onRespondPermission={chat.respondPermission}
-                onRespondAsk={chat.respondAsk}
-              />
-              <div
-                ref={overlayRef}
-                className="from-background via-background/95 pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-linear-to-t pt-6 pb-4"
-              >
-                <div className="pointer-events-auto mx-auto w-full max-w-4xl px-4">
-                  <Composer
-                    streaming={state.streaming}
-                    disabled={booting || failed || !init}
-                    onSend={chat.send}
-                    onAbort={chat.abort}
-                  />
-                  {state.usage ? (
-                    <div className="text-muted-foreground mt-2 flex justify-end px-1 text-[11px]">
-                      <span className="shrink-0 tabular-nums">
-                        {formatTokens(state.usage.inputTokens)} in ·{" "}
-                        {formatTokens(state.usage.outputTokens)} out
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : (
-            // Empty conversation: centered hero + static composer.
-            <>
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-                <EmptyState />
-              </div>
-              <footer className="shrink-0 px-4 pt-3 pb-4">
-                <div className="mx-auto w-full max-w-4xl">
-                  <Composer
-                    streaming={state.streaming}
-                    disabled={booting || failed || !init}
-                    onSend={chat.send}
-                    onAbort={chat.abort}
-                  />
-                </div>
-              </footer>
-            </>
-          )}
+          </div>
         </div>
-      </div>
-
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <Toaster />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <RuntimeDialog
+          open={runtimeOpen}
+          onOpenChange={setRuntimeOpen}
+          streaming={state.streaming || dirty}
+        />
+        <Dialog
+          open={pendingAction !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingAction(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogTitle>有尚未保存的文件</DialogTitle>
+            <DialogDescription>
+              切换项目可能丢失编辑器中的草稿。请先保存，或选择继续切换。
+            </DialogDescription>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPendingAction(null);
+                }}
+              >
+                返回保存
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  pendingAction?.();
+                  setPendingAction(null);
+                }}
+              >
+                继续切换
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <PlanDialog />
+        <Toaster />
+      </McpAppContext.Provider>
     </TooltipProvider>
   );
 }
-
 export default App;

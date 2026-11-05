@@ -25,9 +25,9 @@ function formatArgs(args: Record<string, unknown>): string {
 }
 
 const responseLabel: Record<PermissionResponse, string> = {
-  allow: "Allowed",
-  allowAlways: "Always allowed",
-  deny: "Denied",
+  allow: "已允许",
+  allowAlways: "已记住授权",
+  deny: "已拒绝",
 };
 
 export function PermissionCard({
@@ -57,7 +57,7 @@ export function PermissionCard({
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">{payload.toolName}</span>
               <Badge variant="secondary" className="text-[10px] uppercase">
-                permission
+                等待授权
               </Badge>
               {payload.source ? (
                 <Badge
@@ -89,7 +89,7 @@ export function PermissionCard({
               showArgs && "rotate-180",
             )}
           />
-          {showArgs ? "Hide" : "Show"} arguments
+          {showArgs ? "收起" : "查看"}参数
         </button>
 
         {showArgs ? (
@@ -133,7 +133,7 @@ export function PermissionCard({
                 onRespond(payload.id, "allow");
               }}
             >
-              Allow
+              允许一次
             </Button>
             <Button
               size="sm"
@@ -142,7 +142,7 @@ export function PermissionCard({
                 onRespond(payload.id, "allowAlways");
               }}
             >
-              Always allow
+              记住授权
             </Button>
             <Button
               size="sm"
@@ -152,7 +152,7 @@ export function PermissionCard({
                 onRespond(payload.id, "deny");
               }}
             >
-              Deny
+              拒绝
             </Button>
           </div>
         )}

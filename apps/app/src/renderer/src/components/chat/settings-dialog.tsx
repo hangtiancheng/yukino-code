@@ -3,6 +3,7 @@
 // main process (which rebuilds the LLM client, persists to config.yaml, and
 // re-emits init_state so the header badge follows).
 
+import { ProviderForm } from "@renderer/components/chat/provider-form";
 import { Button } from "@renderer/components/ui/button";
 import {
   Dialog,
@@ -22,6 +23,7 @@ import type { ModelListResult, SettingsSnapshot } from "@shared/ipc-types";
 import { cn } from "cn";
 import { CheckIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 function Section({
   title,
@@ -51,6 +53,7 @@ export function SettingsDialog({
   const [models, setModels] = useState<ModelListResult | null>(null);
   const [modelDraft, setModelDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [addingProvider, setAddingProvider] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -59,14 +62,17 @@ export function SettingsDialog({
     let cancelled = false;
     // Reset happens inside the async continuation so the effect body stays
     // free of synchronous setState (avoids cascading renders).
-    void window.api.getSettings().then((snapshot) => {
-      if (cancelled) {
-        return;
-      }
-      setModels(null);
-      setSettings(snapshot);
-      setModelDraft(snapshot.model);
-    });
+    void window.api
+      .getSettings()
+      .then((snapshot) => {
+        if (cancelled) {
+          return;
+        }
+        setModels(null);
+        setSettings(snapshot);
+        setModelDraft(snapshot.model);
+      })
+      .catch((error: unknown) => toast.error(String(error)));
     return () => {
       cancelled = true;
     };
@@ -82,6 +88,7 @@ export function SettingsDialog({
         setModelDraft(snapshot.model);
         setModels(null);
       })
+      .catch((error: unknown) => toast.error(String(error)))
       .finally(() => {
         setBusy(false);
       });
@@ -100,6 +107,7 @@ export function SettingsDialog({
         setSettings(snapshot);
         setModelDraft(snapshot.model);
       })
+      .catch((error: unknown) => toast.error(String(error)))
       .finally(() => {
         setBusy(false);
       });
@@ -114,6 +122,7 @@ export function SettingsDialog({
       .setThinkingLevel(level)
       .then(() => window.api.getSettings())
       .then(setSettings)
+      .catch((error: unknown) => toast.error(String(error)))
       .finally(() => {
         setBusy(false);
       });
@@ -128,7 +137,7 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[80vh] flex-col overflow-hidden sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
+          <DialogTitle>设置</DialogTitle>
         </DialogHeader>
 
         {/* Scroll region lives on this inner div, not on the popup, so the
@@ -138,11 +147,35 @@ export function SettingsDialog({
         <div className="min-h-0 flex-1 scrollbar-none overflow-y-auto">
           {!settings ? (
             <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
-              <Spinner /> Loading settings…
+              <Spinner /> 加载中
             </div>
           ) : (
             <div className="flex flex-col gap-5">
-              <Section title="Provider">
+              <Section title="服务商">
+                {addingProvider || settings.providers.length === 0 ? (
+                  <ProviderForm
+                    onCancel={() => {
+                      setAddingProvider(false);
+                    }}
+                    onSaved={() => {
+                      setAddingProvider(false);
+                      void window.api
+                        .getSettings()
+                        .then(setSettings)
+                        .catch((error: unknown) => toast.error(String(error)));
+                    }}
+                  />
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAddingProvider(true);
+                    }}
+                  >
+                    添加服务商
+                  </Button>
+                )}
                 <div className="flex flex-col gap-1.5">
                   {settings.providers.map((provider, index) => {
                     const active = index === settings.currentProvider;
@@ -178,124 +211,145 @@ export function SettingsDialog({
                 </div>
               </Section>
 
-              <Separator />
+              {settings.providers.length > 0 && !addingProvider ? (
+                <>
+                  <Separator />
 
-              <Section title="Model">
-                <div className="flex gap-2">
-                  <Input
-                    value={modelDraft}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setModelDraft(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        applyModel(modelDraft);
-                      }
-                    }}
-                    placeholder={settings.model}
-                    className="flex-1 font-mono text-xs"
-                  />
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={
-                      busy ||
-                      !modelDraft.trim() ||
-                      modelDraft.trim() === settings.model
-                    }
-                    onClick={() => {
-                      applyModel(modelDraft);
-                    }}
-                  >
-                    Apply
-                  </Button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={discoverModels}
-                    disabled={models?.status === "loading"}
-                    className="text-muted-foreground gap-1.5 text-xs"
-                  >
-                    {models?.status === "loading" ? (
-                      <Spinner />
-                    ) : (
-                      <RefreshCwIcon className="size-3" />
-                    )}
-                    Discover models
-                  </Button>
-                </div>
-                {models && models.status !== "loading" ? (
-                  models.status === "ready" ? (
-                    <div className="border-border max-h-44 overflow-y-auto rounded-lg border">
-                      {models.models.map((model) => {
-                        const active = model.id === settings.model;
-                        return (
-                          <button
-                            key={model.id}
-                            type="button"
-                            disabled={busy || active}
-                            onClick={() => {
-                              applyModel(model.id);
-                            }}
-                            className={cn(
-                              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
-                              active ? "bg-accent" : "hover:bg-accent/50",
-                            )}
-                          >
-                            <span className="truncate font-mono">
-                              {model.id}
-                            </span>
-                            {model.name && model.name !== model.id ? (
-                              <span className="text-muted-foreground truncate text-[11px]">
-                                {model.name}
-                              </span>
-                            ) : null}
-                            {active ? (
-                              <CheckIcon className="ml-auto size-3.5 shrink-0" />
-                            ) : null}
-                          </button>
-                        );
-                      })}
+                  <Section title="模型">
+                    <div className="flex gap-2">
+                      <Input
+                        value={modelDraft}
+                        disabled={busy}
+                        onChange={(event) => {
+                          setModelDraft(event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            applyModel(modelDraft);
+                          }
+                        }}
+                        placeholder={settings.model}
+                        className="flex-1 font-mono text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={
+                          busy ||
+                          !modelDraft.trim() ||
+                          modelDraft.trim() === settings.model
+                        }
+                        onClick={() => {
+                          applyModel(modelDraft);
+                        }}
+                      >
+                        应用
+                      </Button>
                     </div>
-                  ) : (
-                    <p className="text-muted-foreground text-xs">
-                      {models.status === "empty"
-                        ? "No models returned."
-                        : "Model discovery failed."}
-                    </p>
-                  )
-                ) : null}
-              </Section>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={discoverModels}
+                        disabled={models?.status === "loading"}
+                        className="text-muted-foreground gap-1.5 text-xs"
+                      >
+                        {models?.status === "loading" ? (
+                          <Spinner />
+                        ) : (
+                          <RefreshCwIcon className="size-3" />
+                        )}
+                        获取模型列表
+                      </Button>
+                    </div>
+                    {models && models.status !== "loading" ? (
+                      models.status === "ready" ? (
+                        <div className="border-border max-h-44 overflow-y-auto rounded-lg border">
+                          {models.models.map((model) => {
+                            const active = model.id === settings.model;
+                            return (
+                              <button
+                                key={model.id}
+                                type="button"
+                                disabled={busy || active}
+                                onClick={() => {
+                                  applyModel(model.id);
+                                }}
+                                className={cn(
+                                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
+                                  active ? "bg-accent" : "hover:bg-accent/50",
+                                )}
+                              >
+                                <span className="truncate font-mono">
+                                  {model.id}
+                                </span>
+                                {model.name && model.name !== model.id ? (
+                                  <span className="text-muted-foreground truncate text-[11px]">
+                                    {model.name}
+                                  </span>
+                                ) : null}
+                                {active ? (
+                                  <CheckIcon className="ml-auto size-3.5 shrink-0" />
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-xs">
+                          {models.status === "empty"
+                            ? "服务商未返回模型列表，可直接输入模型名称。"
+                            : "获取失败，请检查服务商连接，或手动输入模型名称。"}
+                        </p>
+                      )
+                    ) : null}
+                  </Section>
 
-              <Separator />
+                  <Separator />
 
-              <Section title="Thinking level">
-                <ToggleGroup
-                  variant="outline"
-                  size="sm"
-                  multiple={false}
-                  value={[settings.thinkingLevel]}
-                  onValueChange={(values) => {
-                    // Single-select: clicking the pressed item clears the array.
-                    const level = values[values.length - 1];
-                    if (level) {
-                      applyThinking(level);
-                    }
-                  }}
-                  className="flex-wrap"
-                >
-                  {settings.thinkingLevels.map((level) => (
-                    <ToggleGroupItem key={level} value={level} disabled={busy}>
-                      {level}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </Section>
+                  <Section title="推理深度">
+                    <ToggleGroup
+                      variant="outline"
+                      size="sm"
+                      multiple={false}
+                      value={[settings.thinkingLevel]}
+                      onValueChange={(values) => {
+                        // Single-select: clicking the pressed item clears the array.
+                        const level = values[values.length - 1];
+                        if (level) {
+                          applyThinking(level);
+                        }
+                      }}
+                      className="flex-wrap"
+                    >
+                      {settings.thinkingLevels.map((level) => (
+                        <ToggleGroupItem
+                          key={level}
+                          value={level}
+                          disabled={busy}
+                        >
+                          {level}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  </Section>
+                </>
+              ) : null}
             </div>
           )}
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void window.api.openConfig().catch((error: unknown) => {
+                toast.error(String(error));
+              });
+            }}
+          >
+            打开配置
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

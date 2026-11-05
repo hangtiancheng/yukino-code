@@ -1,6 +1,7 @@
 // Renders a single tool invocation as a collapsible Trace row: an inline
 // status line plus, when expanded, the arguments and output.
 
+import { McpAppView } from "@renderer/components/chat/mcp-app";
 import { Badge } from "@renderer/components/ui/badge";
 import { Spinner } from "@renderer/components/ui/spinner";
 import {
@@ -65,73 +66,88 @@ export function ToolCard({ item }: { item: ToolItem }): React.JSX.Element {
   const status = item.running ? "running" : item.isError ? "error" : undefined;
 
   return (
-    <TraceCollapsible>
-      <TraceCollapsibleTrigger className="w-full max-w-full">
-        <TraceLine status={status} className="w-full">
-          <TraceIcon>
-            {item.running ? (
-              <Spinner />
-            ) : item.isError ? (
-              <XIcon className="text-destructive" />
-            ) : (
-              <CheckIcon />
-            )}
-          </TraceIcon>
-          <span data-slot="trace-title" className="min-w-0 flex-1 truncate">
-            {item.toolName}
-            {summary ? (
-              <span className="text-muted-foreground/80"> · {summary}</span>
+    <div>
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger className="w-full max-w-full">
+          <TraceLine status={status} className="w-full">
+            <TraceIcon>
+              {item.running ? (
+                <Spinner />
+              ) : item.isError ? (
+                <XIcon className="text-destructive" />
+              ) : (
+                <CheckIcon />
+              )}
+            </TraceIcon>
+            <span data-slot="trace-title" className="min-w-0 flex-1 truncate">
+              {item.toolName}
+              {summary ? (
+                <span className="text-muted-foreground/80"> · {summary}</span>
+              ) : null}
+            </span>
+            {typeof item.elapsed === "number" && item.elapsed > 0 ? (
+              <span className="shrink-0 text-xs tabular-nums">
+                {(item.elapsed / 1000).toFixed(1)}s
+              </span>
             ) : null}
-          </span>
-          {typeof item.elapsed === "number" && item.elapsed > 0 ? (
-            <span className="shrink-0 text-xs tabular-nums">
-              {(item.elapsed / 1000).toFixed(1)}s
-            </span>
-          ) : null}
-        </TraceLine>
-      </TraceCollapsibleTrigger>
+          </TraceLine>
+        </TraceCollapsibleTrigger>
 
-      <TraceCollapsibleContent className="font-mono text-xs leading-relaxed">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="text-muted-foreground flex items-center gap-1.5 font-sans text-[11px] font-medium tracking-wide uppercase">
-              <FileTextIcon className="size-3" /> Arguments
-            </span>
-            <pre className="bg-muted/60 max-h-52 overflow-auto rounded-md p-3 wrap-break-word whitespace-pre-wrap">
-              {formatJson(item.args)}
-            </pre>
-          </div>
-          {item.output !== null ? (
+        <TraceCollapsibleContent className="font-mono text-xs leading-relaxed">
+          <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground flex items-center gap-1.5 font-sans text-[11px] font-medium tracking-wide uppercase">
-                {item.isError ? (
-                  <XIcon className="text-destructive size-3" />
-                ) : (
-                  <CircleDotIcon className="size-3" />
-                )}
-                Output
-                {item.isError ? (
-                  <Badge variant="destructive" className="ml-auto">
-                    error
-                  </Badge>
-                ) : null}
+                <FileTextIcon className="size-3" /> Arguments
               </span>
-              <pre
-                className={cn(
-                  "bg-muted/60 max-h-64 overflow-auto rounded-md p-3 wrap-break-word whitespace-pre-wrap",
-                  item.isError && "text-destructive",
-                )}
-              >
-                {item.output}
+              <pre className="bg-muted/60 max-h-52 overflow-auto rounded-md p-3 wrap-break-word whitespace-pre-wrap">
+                {formatJson(item.args)}
               </pre>
             </div>
-          ) : (
-            <div className="text-muted-foreground flex items-center gap-2">
-              <WrenchIcon className="size-3.5" /> Running…
-            </div>
-          )}
-        </div>
-      </TraceCollapsibleContent>
-    </TraceCollapsible>
+            {item.output !== null ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground flex items-center gap-1.5 font-sans text-[11px] font-medium tracking-wide uppercase">
+                  {item.isError ? (
+                    <XIcon className="text-destructive size-3" />
+                  ) : (
+                    <CircleDotIcon className="size-3" />
+                  )}
+                  Output
+                  {item.isError ? (
+                    <Badge variant="destructive" className="ml-auto">
+                      error
+                    </Badge>
+                  ) : null}
+                </span>
+                <pre
+                  className={cn(
+                    "bg-muted/60 max-h-64 overflow-auto rounded-md p-3 wrap-break-word whitespace-pre-wrap",
+                    item.isError && "text-destructive",
+                  )}
+                >
+                  {item.output}
+                </pre>
+              </div>
+            ) : (
+              <div className="text-muted-foreground flex items-center gap-2">
+                <WrenchIcon className="size-3.5" /> Running…
+              </div>
+            )}
+          </div>
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+      {item.contentBlocks?.map((block, index) =>
+        block.type === "image" && block.source.type === "base64" ? (
+          <img
+            key={index}
+            src={`data:${block.source.media_type};base64,${block.source.data}`}
+            alt={`${item.toolName} 返回的图片`}
+            className="my-3 max-h-96 max-w-full rounded-lg border object-contain"
+          />
+        ) : null,
+      )}
+      {item.mcpApp ? (
+        <McpAppView appId={item.toolId} app={item.mcpApp} />
+      ) : null}
+    </div>
   );
 }
