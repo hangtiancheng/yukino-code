@@ -386,6 +386,7 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
         activeSessionId: event.data.sessionId,
         items: historyToItems(event.data.messages),
         usage: null,
+        activeSubagents: 0,
       };
   }
 }
@@ -466,7 +467,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "clear_items":
       return { ...state, items: [], usage: null, activeSubagents: 0 };
     case "load_history":
-      return { ...state, items: historyToItems(action.messages), usage: null };
+      return {
+        ...state,
+        items: historyToItems(action.messages),
+        usage: null,
+        activeSubagents: 0,
+      };
     case "set_theme":
       return { ...state, themeMode: action.mode };
     case "set_theme_dark":

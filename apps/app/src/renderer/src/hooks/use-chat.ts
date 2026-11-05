@@ -68,13 +68,42 @@ export function useChat(): UseChat {
 
   // Subscribe to the bridge event stream and native theme changes.
   useEffect(() => {
-    const offEvent = window.api.onEvent(applyEvent);
+    let frame: number | undefined;
+    let pending: BridgeEvent[] = [];
+    const flush = (): void => {
+      if (frame !== undefined) {
+        cancelAnimationFrame(frame);
+        frame = undefined;
+      }
+      const events = pending;
+      pending = [];
+      for (const event of events) {
+        applyEvent(event);
+      }
+    };
+    const offEvent = window.api.onEvent((event) => {
+      if (event.type === "stream_text" || event.type === "thinking_text") {
+        const last = pending.at(-1);
+        if (last?.type === event.type) {
+          last.data.text += event.data.text;
+        } else {
+          pending.push({ ...event, data: { ...event.data } });
+        }
+        frame ??= requestAnimationFrame(flush);
+      } else {
+        flush();
+        applyEvent(event);
+      }
+    });
     const offTheme = window.api.onTheme((theme) => {
       setIsDark(theme === "dark");
     });
     return () => {
       offEvent();
       offTheme();
+      if (frame !== undefined) {
+        cancelAnimationFrame(frame);
+      }
     };
   }, [applyEvent]);
 
@@ -137,7 +166,7 @@ export function useChat(): UseChat {
       .then((result) => {
         dispatch({ type: "load_history", messages: result.messages });
         if (result.switchedCwd) {
-          toast.success("Switched working directory");
+          toast.success("已切换项目");
         }
       })
       .catch(reportError);

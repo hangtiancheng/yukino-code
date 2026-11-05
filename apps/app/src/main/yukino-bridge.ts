@@ -59,8 +59,13 @@ import {
   shell,
 } from "electron";
 
-import type { RuntimeSnapshot } from "../shared/workspace-types";
+import type {
+  RuntimeAction,
+  RuntimeSnapshot,
+  SubagentSnapshot,
+} from "../shared/workspace-types";
 
+import { applyRuntimeAction } from "./agent-runtime";
 import { Workspace } from "./workspace";
 
 type RemoteAgentHandle = Remote.Server.RemoteAgentHandle;
@@ -177,6 +182,7 @@ export class YukinoBridge {
   private mcpApps = new Remote.McpApps.RemoteMcpApps();
   private initPromise: Promise<RemoteAgentHandle | null> | null = null;
   private streaming = false;
+  private interrupted = false;
   private pendingPlan: { id: string; content: string; path: string } | null =
     null;
   private planReady = false;
@@ -189,6 +195,8 @@ export class YukinoBridge {
   /** Abort controller for command runs (subagents, compaction) outside handle.run. */
   private commandController: AbortController | null = null;
   private modelListController: AbortController | null = null;
+  private mcpLoading: Config.McpLoading = "auto";
+  private hasHooks = false;
 
   private readonly pendingPermissions = new Map<
     string,
@@ -200,6 +208,7 @@ export class YukinoBridge {
   >();
   /** Messages sent while a run is busy but steering was unavailable. */
   private readonly followUps: string[] = [];
+  private readonly subagents = new Map<string, SubagentSnapshot>();
 
   constructor() {
     this.cwd = this.state.read().cwd || homedir();
@@ -370,9 +379,10 @@ export class YukinoBridge {
         cwd: this.cwd,
         enableCoordinatorMode: config.enable_coordinator_mode ?? false,
         memoryEnabled: Config.memoryEnabled(config),
+        mcpLoading: config.mcp_loading,
         askUser: this.createAsker(),
         onSubagentEvent: (event) => {
-          emit({ type: "subagent", data: event });
+          this.reportSubagent(event);
         },
       };
       if (config.hooks) {
@@ -384,7 +394,14 @@ export class YukinoBridge {
       if (config.sandbox) {
         options.sandboxConfig = config.sandbox;
       }
-      return await Remote.Server.createRemoteAgent(options);
+      const handle = await Remote.Server.createRemoteAgent(options);
+      handle.permissionMode = config.permission_mode ?? "default";
+      this.mcpLoading = config.mcp_loading;
+      this.hasHooks = config.hooks.length > 0;
+      await Workflow.Wiring.getWorkflowService(
+        handle.registry,
+      )?.loadPersistedRuns();
+      return handle;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit({
@@ -393,6 +410,30 @@ export class YukinoBridge {
       });
       return null;
     }
+  }
+
+  private reportSubagent(event: Remote.Server.RemoteSubagentEvent): void {
+    const previous = this.subagents.get(event.toolCallId);
+    const snapshot: SubagentSnapshot = previous ?? {
+      id: event.toolCallId,
+      role: event.role,
+      background: event.background,
+      status: "running",
+      tools: 0,
+      turns: 0,
+      activity: "",
+    };
+    if (event.type === "finished") {
+      snapshot.status = event.status;
+      snapshot.activity = "";
+    } else if (event.type === "tool_use") {
+      snapshot.tools++;
+      snapshot.activity = event.toolName;
+    } else if (event.type === "turn_complete") {
+      snapshot.turns++;
+    }
+    this.subagents.set(event.toolCallId, snapshot);
+    emit({ type: "subagent", data: event });
   }
 
   private async ensureHandle(): Promise<RemoteAgentHandle | null> {
@@ -511,6 +552,9 @@ export class YukinoBridge {
     if (this.streaming === value) {
       return;
     }
+    if (value) {
+      this.interrupted = false;
+    }
     this.streaming = value;
     emit({ type: "run_state", data: { streaming: value } });
   }
@@ -575,30 +619,38 @@ export class YukinoBridge {
       const message = error instanceof Error ? error.message : String(error);
       emit({ type: "error", data: { message } });
     } finally {
-      this.setStreaming(false);
-      this.broadcastUpdatedState(handle);
-      if (this.planReady && handle.permissionMode === "plan") {
-        this.planReady = false;
-        const content = PlanFile.loadPlan(handle) ?? "";
-        this.pendingPlan = {
-          id: randomUUID(),
-          content,
-          path: handle.planFilePath ?? "",
-        };
-        emit({ type: "plan_approval", data: this.pendingPlan });
-      } else {
-        this.followUps.push(
-          ...handle.takeSteeringLeftovers().map((message) => message.text),
-        );
-        const next = this.followUps.shift();
-        if (next) {
-          void this.runLoop(handle, next);
-        }
+      this.completeRun(handle);
+    }
+  }
+
+  private completeRun(handle: RemoteAgentHandle): void {
+    this.setStreaming(false);
+    this.broadcastUpdatedState(handle);
+    const leftovers = handle.takeSteeringLeftovers();
+    if (this.interrupted) {
+      this.planReady = false;
+    } else {
+      this.followUps.push(...leftovers.map((message) => message.text));
+    }
+    if (this.planReady && handle.permissionMode === "plan") {
+      this.planReady = false;
+      const content = PlanFile.loadPlan(handle) ?? "";
+      this.pendingPlan = {
+        id: randomUUID(),
+        content,
+        path: handle.planFilePath ?? "",
+      };
+      emit({ type: "plan_approval", data: this.pendingPlan });
+    } else {
+      const next = this.followUps.shift();
+      if (next) {
+        void this.runLoop(handle, next);
       }
     }
   }
 
   abort(): void {
+    this.interrupted = true;
     this.followUps.length = 0;
     this.pendingPlan = null;
     this.planReady = false;
@@ -820,6 +872,7 @@ export class YukinoBridge {
       .listCommands()
       .filter((command) => !command.isSkill)
       .map((command) => ({
+        isSkill: false,
         name: command.name,
         description: command.description,
         type: command.type,
@@ -827,6 +880,7 @@ export class YukinoBridge {
     for (const skill of handle.skillCatalog?.list() ?? []) {
       if (!commands.some((command) => command.name === skill.name)) {
         commands.push({
+          isSkill: true,
           name: skill.name,
           description: skill.description,
           type:
@@ -848,6 +902,10 @@ export class YukinoBridge {
     }
     const parsed = Commands.Commands.parse(input);
     if (!parsed) {
+      return;
+    }
+    if (parsed.name === "goal") {
+      await this.runLoop(handle, input);
       return;
     }
     await this.runCommandInternal(handle, parsed.name, parsed.args);
@@ -1136,7 +1194,7 @@ export class YukinoBridge {
       const controller = new AbortController();
       this.commandController = controller;
       try {
-        await Commands.Subagent.runSubagentCommand(
+        const result = await Commands.Subagent.runSubagentCommand(
           cmd.agent,
           prompt,
           displayText,
@@ -1153,12 +1211,19 @@ export class YukinoBridge {
             },
           },
         );
+        if (
+          cmd.agent === "plan" &&
+          !result.isError &&
+          !controller.signal.aborted
+        ) {
+          this.planReady = true;
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         emit({ type: "error", data: { message } });
       } finally {
         this.commandController = null;
-        this.setStreaming(false);
+        this.completeRun(handle);
       }
       return;
     }
@@ -1185,6 +1250,12 @@ export class YukinoBridge {
     this.setStreaming(true);
     const controller = new AbortController();
     this.commandController = controller;
+    const activity = {
+      toolCallId: `skill-${randomUUID()}`,
+      role: name,
+      background: false,
+    };
+    this.reportSubagent({ ...activity, type: "started" });
     emit({
       type: "system",
       data: { message: `Running skill "${name}" in fork mode…` },
@@ -1217,7 +1288,15 @@ export class YukinoBridge {
             handle.provider,
             handle.cwd,
             undefined,
-            undefined,
+            (event) => {
+              if (
+                event.type === "tool_use" ||
+                event.type === "tool_result" ||
+                event.type === "turn_complete"
+              ) {
+                this.reportSubagent({ ...activity, ...event });
+              }
+            },
             undefined,
             context?.permissionChecker?.forCwd(handle.cwd) ??
               handle.checker.forCwd(handle.cwd),
@@ -1234,10 +1313,20 @@ export class YukinoBridge {
         forkHost,
         controller.signal,
       );
+      this.reportSubagent({
+        ...activity,
+        type: "finished",
+        status: controller.signal.aborted ? "stopped" : "completed",
+      });
       emit({ type: "stream_text", data: { text: result } });
       emit({ type: "turn_complete" });
       emit({ type: "loop_complete", data: { stopReason: "end_turn" } });
     } catch (error) {
+      this.reportSubagent({
+        ...activity,
+        type: "finished",
+        status: controller.signal.aborted ? "stopped" : "failed",
+      });
       const message = error instanceof Error ? error.message : String(error);
       emit({
         type: "error",
@@ -1245,7 +1334,7 @@ export class YukinoBridge {
       });
     } finally {
       this.commandController = null;
-      this.setStreaming(false);
+      this.completeRun(handle);
     }
   }
 
@@ -1298,7 +1387,7 @@ export class YukinoBridge {
       emit({ type: "error", data: { message } });
     } finally {
       this.commandController = null;
-      this.setStreaming(false);
+      this.completeRun(handle);
     }
   }
 
@@ -1522,6 +1611,7 @@ export class YukinoBridge {
           updated.base_url,
           updated.protocol,
           handle.contextWindow,
+          this.mcpLoading,
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1546,7 +1636,7 @@ export class YukinoBridge {
         },
       });
     } finally {
-      this.setStreaming(false);
+      this.completeRun(handle);
     }
   }
 
@@ -1592,6 +1682,7 @@ export class YukinoBridge {
           provider.base_url,
           provider.protocol,
           handle.contextWindow,
+          this.mcpLoading,
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1616,7 +1707,7 @@ export class YukinoBridge {
         },
       });
     } finally {
-      this.setStreaming(false);
+      this.completeRun(handle);
     }
   }
 
@@ -1666,10 +1757,12 @@ export class YukinoBridge {
   }
 
   private async reloadMcp(handle: RemoteAgentHandle): Promise<void> {
-    const servers = Config.withProjectMcpServers(
+    const config = Config.withProjectMcpServers(
       Config.loadConfig(),
       handle.cwd,
-    ).mcp_servers;
+    );
+    const servers = config.mcp_servers;
+    this.mcpLoading = config.mcp_loading;
     Bootstrap.ToolRegistry.removeMcpTools(handle.registry);
     MCP.Instructions.retractMcpInstructions(handle.conv, handle.mcpAnnounced);
     if (!servers.length) {
@@ -1693,6 +1786,7 @@ export class YukinoBridge {
       handle.provider.base_url,
       handle.provider.protocol,
       handle.contextWindow,
+      this.mcpLoading,
     );
     for (const error of result.errors) {
       emit({
@@ -1703,6 +1797,7 @@ export class YukinoBridge {
   }
 
   private resetSessionUi(): void {
+    this.subagents.clear();
     this.mcpApps.clear();
     this.pendingPlan = null;
     this.planReady = false;
@@ -1722,6 +1817,11 @@ export class YukinoBridge {
     }
     return {
       tools: handle.registry.listTools().map((tool) => tool.name),
+      toolDescriptions: Object.fromEntries(
+        handle.registry
+          .listTools()
+          .map((tool) => [tool.name, tool.description]),
+      ),
       skills: (handle.skillCatalog?.list() ?? []).map((skill) => ({
         name: skill.name,
         description: skill.description,
@@ -1730,20 +1830,38 @@ export class YukinoBridge {
         ? handle.memoryManager.getMemories().map((memory) => ({
             name: memory.name,
             description: memory.description,
+            type: memory.type,
+            content: memory.content,
           }))
         : [],
       mcpServers: handle.mcpManager?.connectedServers() ?? [],
-      tasks: handle.taskList.list().map((task) => ({
+      tasks: handle.taskList.list(),
+      backgroundTasks: handle.backgroundTaskManager.list().map((task) => ({
         id: task.id,
-        subject: task.subject,
+        name: task.name,
         status: task.status,
+        kind: task.kind ?? "agent",
+        startedAt: task.startedAt,
+        output: task.output.slice(-100_000),
       })),
-      backgroundTasks: handle.backgroundTaskManager
-        .list()
-        .map((task) => ({ id: task.id, name: task.name, status: task.status })),
-      teammates: handle.teamManager
-        .getAllTeammateStates()
-        .map((member) => ({ name: member.name, status: member.status })),
+      teammates: handle.teamManager.getAllTeammateStates(),
+      subagents: [...this.subagents.values()],
+      workflows:
+        Workflow.Wiring.getWorkflowService(
+          handle.registry,
+        )?.store.getSnapshot() ?? [],
+      namedWorkflows: await Workflow.NamedWorkflows.listNamedWorkflows(
+        join(handle.cwd, Workflow.Constants.WORKFLOW_DIR_NAME),
+      ),
+      goal: handle.goalManager?.get() ?? null,
+      sandbox: {
+        enabled: handle.checker.sandboxEnabled,
+        autoAllow: handle.checker.sandboxAutoAllow,
+      },
+      coordinator: handle.enableCoordinatorMode,
+      hooks: this.hasHooks,
+      memoryEnabled: handle.memoryEnabled,
+      activeSkills: [...handle.activeSkills.keys()],
       checkpoints: handle.fileHistory.getSnapshots().map((snapshot) => ({
         id: snapshot.id,
         text: snapshot.userText,
@@ -1752,6 +1870,20 @@ export class YukinoBridge {
       })),
       permissionMode: handle.permissionMode,
     };
+  }
+
+  async runtimeAction(action: RuntimeAction): Promise<void> {
+    const handle = this.handle;
+    if (!handle) {
+      throw new Error("Agent 尚未初始化");
+    }
+    await applyRuntimeAction(handle, action, {
+      assertIdle: () => {
+        this.assertIdle();
+      },
+      reloadMcp: () => this.reloadMcp(handle),
+      setSandbox: (mode) => this.runLocalUiCommand(handle, "sandbox", mode),
+    });
   }
 
   async rewind(
@@ -1825,6 +1957,9 @@ export class YukinoBridge {
     );
     ipcMain.handle("workspace:snapshot", () => workspace().snapshot());
     ipcMain.handle("yukino:runtime", () => this.getRuntime());
+    ipcMain.handle("yukino:runtime-action", (_event, action: RuntimeAction) =>
+      this.runtimeAction(action),
+    );
     ipcMain.handle(
       "yukino:mcp-app",
       async (_event, appId: string, operation: McpAppOperation) => {

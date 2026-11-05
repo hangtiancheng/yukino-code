@@ -141,5 +141,11 @@ test("serializes saves so only one editor can use a disk revision", async () =>
       results.filter((result) => result.status === "fulfilled").length,
       1,
     );
-    assert.equal(await readFile(join(root, "same.ts"), "utf8"), "first\n");
+    const winner = results.find((result) => result.status === "fulfilled");
+    const loser = results.find((result) => result.status === "rejected");
+    assert.equal(
+      await readFile(join(root, "same.ts"), "utf8"),
+      winner.value.content,
+    );
+    assert.match(loser.reason.message, /文件已被 Agent 或其他程序修改/);
   }));

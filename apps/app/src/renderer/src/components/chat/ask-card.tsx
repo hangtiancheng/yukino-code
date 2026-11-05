@@ -80,10 +80,10 @@ export function AskCard({
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <CircleHelpIcon className="size-4" />
           </span>
-          <span className="text-sm font-medium">Question</span>
+          <span className="text-sm font-medium">提问</span>
           {item.answered ? (
             <Badge variant="secondary" className="text-[10px] uppercase">
-              answered
+              已回答
             </Badge>
           ) : (
             <Badge variant="outline" className="text-[10px] uppercase">
@@ -149,7 +149,7 @@ export function AskCard({
               {draft.selected.includes(OTHER) ? (
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`${item.id}-other`} className="sr-only">
-                    Other answer
+                    自定义回答
                   </Label>
                   <Input
                     id={`${item.id}-other`}

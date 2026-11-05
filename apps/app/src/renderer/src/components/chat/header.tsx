@@ -9,6 +9,8 @@ import {
   PanelLeftIcon,
   Settings2Icon,
   SunIcon,
+  SearchIcon,
+  ChevronRightIcon,
 } from "lucide-react";
 
 export function Header({
@@ -23,6 +25,8 @@ export function Header({
   onThemeMode,
   onOpenSettings,
   onOpenRuntime,
+  onOpenCommands,
+  sessionTitle,
 }: {
   init: InitState | null;
   sidebarOpen: boolean;
@@ -35,6 +39,8 @@ export function Header({
   onThemeMode: (mode: "system" | "light" | "dark") => void;
   onOpenSettings: () => void;
   onOpenRuntime: () => void;
+  onOpenCommands: () => void;
+  sessionTitle: string;
 }): React.JSX.Element {
   const cwd = init?.ok ? init.cwd : null;
   return (
@@ -65,8 +71,19 @@ export function Header({
         </span>
         <ChevronDownIcon className="size-3" />
       </button>
+      <ChevronRightIcon className="header-breadcrumb-icon" />
+      <span className="header-session-title">{sessionTitle}</span>
 
       <div className="titlebar-no-drag ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onOpenCommands}
+          aria-label="命令中心"
+          title="命令中心 · ⌘ / Ctrl K"
+        >
+          <SearchIcon />
+        </Button>
         <Button
           variant="ghost"
           size="icon-sm"

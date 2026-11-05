@@ -14,6 +14,9 @@ import {
   PaperclipIcon,
   XIcon,
   CommandIcon,
+  ChevronDownIcon,
+  CpuIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -37,11 +40,25 @@ export function Composer({
   disabled,
   onSend,
   onAbort,
+  draft,
+  model,
+  permissionMode,
+  onOpenSettings,
+  onPermissionMode,
+  onOpenCommands,
 }: {
   streaming: boolean;
   disabled: boolean;
   onSend: (text: string) => void;
   onAbort: () => void;
+  draft: { text: string; id: number } | null;
+  model: string;
+  permissionMode: string;
+  onOpenSettings: () => void;
+  onOpenCommands: () => void;
+  onPermissionMode: (
+    mode: "default" | "acceptEdits" | "plan" | "bypassPermissions",
+  ) => void;
 }): React.JSX.Element {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [commands, setCommands] = useState<CommandSummary[]>([]);
@@ -50,6 +67,24 @@ export function Composer({
   const panelOpen = query !== null;
   const [attachments, setAttachments] = useState<string[]>([]);
   const [hasText, setHasText] = useState(false);
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      if (ref.current) {
+        ref.current.value = draft.text;
+        ref.current.focus();
+        ref.current.selectionStart = ref.current.value.length;
+        ref.current.selectionEnd = ref.current.value.length;
+        setHasText(Boolean(draft.text.trim()));
+      }
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [draft]);
 
   useEffect(() => {
     if (!panelOpen) {
@@ -85,10 +120,14 @@ export function Composer({
     }
     textarea.value = `/${command.name} `;
     textarea.focus();
+    setHasText(true);
     setQuery(null);
   }, []);
 
   const submit = useCallback(() => {
+    if (disabled) {
+      return;
+    }
     const textarea = ref.current;
     if (!textarea) {
       return;
@@ -108,7 +147,7 @@ export function Composer({
     setQuery(null);
     setAttachments([]);
     setHasText(false);
-  }, [onSend, attachments]);
+  }, [onSend, attachments, disabled]);
 
   return (
     <div className="composer-shell relative">
@@ -138,7 +177,7 @@ export function Composer({
         {query !== null && matches.length > 0 ? (
           <div
             role="listbox"
-            aria-label="Slash commands"
+            aria-label="命令"
             className="border-border bg-popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border py-1 shadow-lg"
           >
             {matches.map((command, index) => (
@@ -180,8 +219,13 @@ export function Composer({
           ref={ref}
           rows={1}
           autoFocus
+          aria-label="任务输入"
           placeholder={
-            disabled ? "未连接" : streaming ? "补充要求…" : "输入任务…"
+            disabled
+              ? "未连接"
+              : streaming
+                ? "补充要求，Agent 会在下一轮接收…"
+                : "描述任务，或输入 / 选择技能…"
           }
           disabled={disabled}
           className="max-h-52 min-h-14 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
@@ -272,19 +316,22 @@ export function Composer({
           disabled={disabled}
           title="命令"
           aria-label="打开命令"
-          onClick={() => {
-            if (ref.current) {
-              ref.current.value = "/";
-              ref.current.focus();
-              syncPanel();
-            }
-          }}
+          onClick={onOpenCommands}
         >
           <CommandIcon />
         </Button>
-        <span className="text-muted-foreground mr-auto hidden text-[11px] sm:inline">
-          ↵ 发送 / ⇧↵ 换行
-        </span>
+        <span className="composer-toolbar-divider" />
+        <button
+          className="composer-model"
+          onClick={onOpenSettings}
+          disabled={streaming}
+          title={model}
+        >
+          <CpuIcon />
+          <span>{model}</span>
+          <ChevronDownIcon />
+        </button>
+        <span className="mr-auto" />
         {streaming ? (
           <Button
             size="icon-sm"
@@ -305,6 +352,28 @@ export function Composer({
           {streaming ? "补充" : "发送"}
           <ArrowUpIcon className="size-3.5" />
         </Button>
+      </div>
+      <div className="composer-options">
+        <label>
+          <ShieldCheckIcon />
+          <select
+            aria-label="Agent 权限模式"
+            disabled={streaming || disabled}
+            value={permissionMode}
+            onChange={(event) => {
+              onPermissionMode(
+                event.target.value as
+                  "default" | "acceptEdits" | "plan" | "bypassPermissions",
+              );
+            }}
+          >
+            <option value="default">逐项授权</option>
+            <option value="acceptEdits">自动接受编辑</option>
+            <option value="plan">只读规划</option>
+            <option value="bypassPermissions">允许所有工具</option>
+          </select>
+        </label>
+        <span>⇧ ↵ 换行</span>
       </div>
     </div>
   );

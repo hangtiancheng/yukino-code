@@ -57,7 +57,7 @@ export function PermissionCard({
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">{payload.toolName}</span>
               <Badge variant="secondary" className="text-[10px] uppercase">
-                等待授权
+                {item.response ? responseLabel[item.response] : "等待授权"}
               </Badge>
               {payload.source ? (
                 <Badge

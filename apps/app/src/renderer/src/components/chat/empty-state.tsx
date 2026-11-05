@@ -4,6 +4,7 @@ import {
   GitPullRequestIcon,
   ScanSearchIcon,
   SnowflakeIcon,
+  BugIcon,
 } from "lucide-react";
 
 export function EmptyState({
@@ -16,6 +17,7 @@ export function EmptyState({
       <div className="welcome-mark">
         <SnowflakeIcon strokeWidth={1.4} />
       </div>
+      <h1>今天，想构建什么？</h1>
       <div className="suggestion-grid">
         {[
           {
@@ -35,6 +37,11 @@ export function EmptyState({
             title: "审查变更",
             prompt:
               "/review 检查当前项目的未提交变更，重点关注错误、边界条件和可靠性",
+          },
+          {
+            icon: BugIcon,
+            title: "排查问题",
+            prompt: "请先了解当前项目的运行方式和测试，再询问我遇到的问题。",
           },
         ].map((item) => (
           <button

@@ -187,6 +187,7 @@ export interface ResumeResult {
 
 /** A slash command surfaced in the composer's command panel. */
 export interface CommandSummary {
+  isSkill: boolean;
   name: string;
   description: string;
   type: "local" | "local_ui" | "prompt" | "skill_fork";
@@ -226,6 +227,9 @@ export interface ModelListResult {
 
 /** The API surface exposed to the renderer as `window.api`. */
 export interface YukinoApi {
+  runtimeAction(
+    action: import("./workspace-types").RuntimeAction,
+  ): Promise<void>;
   workspaceList(path?: string): Promise<FileEntry[]>;
   workspaceRead(path: string): Promise<FileSnapshot>;
   workspaceSave(

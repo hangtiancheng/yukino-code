@@ -81,3 +81,20 @@ test("session replay pairs tool results without showing tool carriers as user pr
   );
   assert.equal(state.items[1].output, "file body");
 });
+
+test("resuming a session clears activity indicators from the previous session", () => {
+  const state = reduce([
+    {
+      type: "subagent",
+      data: {
+        type: "started",
+        toolCallId: "agent",
+        role: "reviewer",
+        background: true,
+      },
+    },
+    { type: "history", data: { sessionId: "restored", messages: [] } },
+  ]);
+  assert.equal(state.activeSubagents, 0);
+  assert.equal(state.activeSessionId, "restored");
+});

@@ -20,7 +20,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : undefined,
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: "#f7f9fc",
+    backgroundColor: "#faf9fc",
     ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
@@ -107,7 +107,9 @@ app.on("will-quit", (event) => {
   }
   event.preventDefault();
   void bridge.dispose().finally(() => {
-    shuttingDown = true;
-    app.quit();
+    setImmediate(() => {
+      shuttingDown = true;
+      app.quit();
+    });
   });
 });

@@ -76,6 +76,7 @@ export function ChatArea({
 
   const virtualizer = useVirtualizer({
     count: rowCount,
+    getItemKey: (index) => items[index]?.id ?? "streaming-indicator",
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 120,
     overscan: 6,
@@ -127,7 +128,7 @@ export function ChatArea({
         ref={scrollRef}
         onScroll={handleScroll}
         role="log"
-        aria-label="Messages"
+        aria-label="对话消息"
         className="min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain"
       >
         <div
@@ -193,9 +194,9 @@ export function ChatArea({
           }
         >
           <ArrowDownIcon />
-          <span className="sr-only">Scroll to latest</span>
+          <span className="sr-only">回到最新消息</span>
         </TooltipTrigger>
-        <TooltipContent>Scroll to latest</TooltipContent>
+        <TooltipContent>回到最新消息</TooltipContent>
       </Tooltip>
     </div>
   );

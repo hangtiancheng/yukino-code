@@ -22,10 +22,13 @@ await writeFile(
 );
 let desktop;
 try {
-  desktop = await _electron.launch({ args: [launcher], timeout: 30000 });
+  desktop = await _electron.launch({
+    args: [...(process.getuid?.() === 0 ? ["--no-sandbox"] : []), launcher],
+    timeout: 30000,
+  });
   const page = await desktop.firstWindow();
   await page.waitForFunction(() => Boolean(window.api), { timeout: 15000 });
-  await page.evaluate(() => window.api.init());
+  const agent = await page.evaluate(() => window.api.init());
   const initial = await page.evaluate(() =>
     window.api.workspaceRead("hello.ts"),
   );
@@ -61,14 +64,38 @@ try {
     saved,
   );
   assert.equal(stale, true);
+  if (agent.ok) {
+    await page
+      .locator(".monaco-editor")
+      .first()
+      .waitFor({ state: "visible", timeout: 15000 });
+  }
   await page.screenshot({
     path: "test-results/electron-desktop.png",
     animations: "disabled",
   });
-  console.log(
-    "Electron smoke passed: actual preload IPC, file reads/writes, traversal rejection and save conflict.",
-  );
 } finally {
-  await desktop?.close();
-  await rm(fixture, { recursive: true, force: true });
+  try {
+    if (desktop) {
+      const child = desktop.process();
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+      }, 10000);
+      try {
+        await desktop.close();
+        assert.equal(
+          child.exitCode,
+          0,
+          "Electron must exit gracefully after cleanup",
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 }
+console.log(
+  "Electron smoke passed: preload IPC, file reads/writes, traversal rejection, save conflict and graceful shutdown.",
+);

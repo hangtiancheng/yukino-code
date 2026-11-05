@@ -7,6 +7,7 @@ import { Markdown } from "@renderer/components/chat/markdown";
 import { PermissionCard } from "@renderer/components/chat/permission-card";
 import { ToolCard } from "@renderer/components/chat/tool-card";
 import { Bubble, BubbleContent } from "@renderer/components/ui/bubble";
+import { Button } from "@renderer/components/ui/button";
 import {
   Marker,
   MarkerIcon,
@@ -28,7 +29,14 @@ import {
 } from "@renderer/components/ui/trace";
 import type { ChatItem } from "@renderer/lib/chat-state";
 import type { PermissionResponse } from "@shared/ipc-types";
-import { AlertTriangleIcon, BotIcon, InfoIcon, UserIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  BotIcon,
+  CopyIcon,
+  InfoIcon,
+  UserIcon,
+} from "lucide-react";
+import { toast } from "sonner";
 
 function AssistantRow({
   text,
@@ -78,6 +86,27 @@ function AssistantRow({
           <span className="text-muted-foreground flex items-center gap-2 text-sm">
             <Spinner />
           </span>
+        ) : null}
+        {text && !streaming ? (
+          <Button
+            className="message-copy"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="复制回复"
+            title="复制回复"
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(text)
+                .then(() => {
+                  toast.success("已复制");
+                })
+                .catch((cause: unknown) => {
+                  toast.error(String(cause));
+                });
+            }}
+          >
+            <CopyIcon />
+          </Button>
         ) : null}
       </MessageContent>
     </Message>

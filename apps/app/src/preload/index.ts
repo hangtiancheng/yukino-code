@@ -16,6 +16,7 @@ import type {
   FileSnapshot,
   WorkspaceSnapshot,
   RuntimeSnapshot,
+  RuntimeAction,
 } from "@shared/workspace-types";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -25,6 +26,8 @@ import { contextBridge, ipcRenderer } from "electron";
  * renderer never touches Node or Electron internals directly.
  */
 const api = {
+  runtimeAction: (action: RuntimeAction): Promise<void> =>
+    ipcRenderer.invoke("yukino:runtime-action", action),
   saveProvider: (input: ProviderInput): Promise<void> =>
     ipcRenderer.invoke("yukino:save-provider", input),
   requestMcpApp: (

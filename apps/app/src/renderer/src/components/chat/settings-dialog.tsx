@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@renderer/components/ui/dialog";
 import { Input } from "@renderer/components/ui/input";
 import { Label } from "@renderer/components/ui/label";
@@ -45,15 +46,18 @@ function Section({
 export function SettingsDialog({
   open,
   onOpenChange,
+  streaming,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  streaming: boolean;
 }): React.JSX.Element | null {
   const [settings, setSettings] = useState<SettingsSnapshot | null>(null);
   const [models, setModels] = useState<ModelListResult | null>(null);
   const [modelDraft, setModelDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [addingProvider, setAddingProvider] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) {
@@ -69,10 +73,15 @@ export function SettingsDialog({
           return;
         }
         setModels(null);
+        setError("");
         setSettings(snapshot);
         setModelDraft(snapshot.model);
       })
-      .catch((error: unknown) => toast.error(String(error)));
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -130,7 +139,13 @@ export function SettingsDialog({
 
   const discoverModels = useCallback(() => {
     setModels({ status: "loading", models: [], current: modelDraft });
-    void window.api.listModels().then(setModels);
+    void window.api
+      .listModels()
+      .then(setModels)
+      .catch((cause: unknown) => {
+        setModels({ status: "error", models: [], current: modelDraft });
+        toast.error(String(cause));
+      });
   }, [modelDraft]);
 
   return (
@@ -138,6 +153,9 @@ export function SettingsDialog({
       <DialogContent className="flex max-h-[80vh] flex-col overflow-hidden sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>设置</DialogTitle>
+          <DialogDescription className="sr-only">
+            服务商、模型与推理深度
+          </DialogDescription>
         </DialogHeader>
 
         {/* Scroll region lives on this inner div, not on the popup, so the
@@ -145,12 +163,24 @@ export function SettingsDialog({
             scrolls. scrollbar-none hides the scrollbar (scrolling still
             works via wheel/trackpad). */}
         <div className="min-h-0 flex-1 scrollbar-none overflow-y-auto">
-          {!settings ? (
+          {error ? (
+            <p role="alert" className="text-destructive py-6 text-sm">
+              {error}
+            </p>
+          ) : !settings ? (
             <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
               <Spinner /> 加载中
             </div>
           ) : (
-            <div className="flex flex-col gap-5">
+            <fieldset
+              disabled={streaming}
+              className="flex flex-col gap-5 disabled:opacity-60"
+            >
+              {streaming ? (
+                <p className="text-muted-foreground text-xs">
+                  任务结束后可修改连接设置
+                </p>
+              ) : null}
               <Section title="服务商">
                 {addingProvider || settings.providers.length === 0 ? (
                   <ProviderForm
@@ -335,7 +365,7 @@ export function SettingsDialog({
                   </Section>
                 </>
               ) : null}
-            </div>
+            </fieldset>
           )}
         </div>
         <div className="flex items-center justify-between gap-2 border-t pt-3">

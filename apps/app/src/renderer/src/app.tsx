@@ -1,9 +1,11 @@
 import { ChatArea } from "@renderer/components/chat/chat-area";
+import { CommandPalette } from "@renderer/components/chat/command-palette";
 import { Composer } from "@renderer/components/chat/composer";
 import { EmptyState } from "@renderer/components/chat/empty-state";
 import { Header } from "@renderer/components/chat/header";
 import { PlanDialog } from "@renderer/components/chat/plan-dialog";
 import { RuntimeDialog } from "@renderer/components/chat/runtime-dialog";
+import { RuntimeStatus } from "@renderer/components/chat/runtime-status";
 import { SettingsDialog } from "@renderer/components/chat/settings-dialog";
 import { Sidebar } from "@renderer/components/chat/sidebar";
 import { Button } from "@renderer/components/ui/button";
@@ -18,6 +20,7 @@ import { Toaster } from "@renderer/components/ui/toaster";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import { EditorPanel } from "@renderer/components/workspace/editor-panel";
 import { useChat } from "@renderer/hooks/use-chat";
+import { useRuntime } from "@renderer/hooks/use-runtime";
 import { McpAppContext } from "@renderer/lib/mcp/context";
 import {
   AlertTriangleIcon,
@@ -25,7 +28,10 @@ import {
   CheckIcon,
   CircleDotIcon,
   FolderOpenIcon,
-  ShieldCheckIcon,
+  CpuIcon,
+  GitBranchIcon,
+  TargetIcon,
+  ListChecksIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -57,6 +63,25 @@ function App(): React.JSX.Element {
   const [editorExpanded, setEditorExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [composerDraft, setComposerDraft] = useState<{
+    text: string;
+    id: number;
+    sessionId: string | null;
+  } | null>(null);
+  const draft = (text: string): void => {
+    setComposerDraft((current) => ({
+      text,
+      id: (current?.id ?? 0) + 1,
+      sessionId: state.activeSessionId,
+    }));
+  };
+  const runtime = useRuntime(
+    init?.ok ? state.activeSessionId : null,
+    state.streaming,
+  );
+  const sessionTitle =
+    state.items.find((item) => item.kind === "user")?.text ?? "新会话";
   const [draftProject, setDraftProject] = useState<string | null>(null);
   const dirty = draftProject !== null && draftProject === cwd;
   const setDirty = useCallback(
@@ -121,6 +146,13 @@ function App(): React.JSX.Element {
         return;
       }
       const key = event.key.toLowerCase();
+      if (event.isComposing) {
+        return;
+      }
+      if (key === "k") {
+        event.preventDefault();
+        setCommandsOpen((value) => !value);
+      }
       if (key === "b") {
         event.preventDefault();
         setSidebarOpen((value) => !value);
@@ -176,6 +208,17 @@ function App(): React.JSX.Element {
             sessions={state.sessions}
             activeSessionId={state.activeSessionId}
             currentProjectKey={init?.ok ? init.projectKey : null}
+            cwd={cwd}
+            onOpenCommands={() => {
+              setCommandsOpen(true);
+            }}
+            onOpenRuntime={() => {
+              setRuntimeOpen(true);
+            }}
+            onOpenSettings={() => {
+              setSettingsOpen(true);
+            }}
+            onChooseFolder={chooseFolder}
             onResumeSession={(id, path) => {
               guard(() => {
                 chat.resumeSession(id, path);
@@ -185,8 +228,17 @@ function App(): React.JSX.Element {
               setSidebarOpen(false);
             }}
             onNewSession={chat.startNewSession}
-            disabled={state.streaming}
+            disabled={state.streaming || booting}
           />
+          {sidebarOpen ? (
+            <button
+              className="sidebar-scrim"
+              aria-label="关闭会话导航"
+              onClick={() => {
+                setSidebarOpen(false);
+              }}
+            />
+          ) : null}
           <div className="flex h-full min-w-0 flex-1 flex-col">
             <Header
               init={init}
@@ -208,6 +260,10 @@ function App(): React.JSX.Element {
               onOpenRuntime={() => {
                 setRuntimeOpen(true);
               }}
+              onOpenCommands={() => {
+                setCommandsOpen(true);
+              }}
+              sessionTitle={sessionTitle}
             />
             <Group
               groupRef={group}
@@ -257,6 +313,36 @@ function App(): React.JSX.Element {
                     <ArrowRightIcon className="size-3" />
                   </button>
                 </div>
+                {runtime.data?.goal || runtime.data?.tasks.length ? (
+                  <button
+                    className="task-ribbon"
+                    onClick={() => {
+                      setRuntimeOpen(true);
+                    }}
+                  >
+                    {runtime.data.goal ? <TargetIcon /> : <ListChecksIcon />}
+                    <span>
+                      {runtime.data.goal?.objective ??
+                        runtime.data.tasks.find(
+                          (task) => task.status === "in_progress",
+                        )?.subject ??
+                        "任务清单"}
+                    </span>
+                    {runtime.data.tasks.length ? (
+                      <small>
+                        {
+                          runtime.data.tasks.filter(
+                            (task) => task.status === "completed",
+                          ).length
+                        }
+                        /{runtime.data.tasks.length}
+                      </small>
+                    ) : runtime.data.goal ? (
+                      <RuntimeStatus status={runtime.data.goal.status} />
+                    ) : null}
+                    <ArrowRightIcon />
+                  </button>
+                ) : null}
                 {failed ? (
                   <div className="flex min-h-0 flex-1 items-center justify-center p-6">
                     <div className="setup-panel">
@@ -300,30 +386,43 @@ function App(): React.JSX.Element {
                   />
                 ) : (
                   <div className="welcome-container">
-                    <EmptyState onPrompt={chat.send} />
+                    <EmptyState onPrompt={draft} />
                   </div>
                 )}
                 {!failed && !booting ? (
                   <footer className="composer-container">
                     <Composer
+                      key={state.activeSessionId}
                       streaming={state.streaming}
                       disabled={!init?.ok}
                       onSend={chat.send}
                       onAbort={chat.abort}
+                      draft={
+                        composerDraft?.sessionId === state.activeSessionId
+                          ? composerDraft
+                          : null
+                      }
+                      model={init?.ok ? init.model : "未连接"}
+                      permissionMode={
+                        init?.ok ? init.permissionMode : "default"
+                      }
+                      onOpenSettings={() => {
+                        setSettingsOpen(true);
+                      }}
+                      onOpenCommands={() => {
+                        setCommandsOpen(true);
+                      }}
+                      onPermissionMode={(mode) => {
+                        void window.api.setPermissionMode(mode).catch(report);
+                      }}
                     />
                     <div className="composer-meta">
-                      <button
-                        onClick={() => {
-                          setSettingsOpen(true);
-                        }}
-                        className="truncate"
-                        title="模型与推理设置"
-                      >
-                        {init?.ok ? init.model : "未连接"}
-                        <span className="text-muted-foreground ml-2">
-                          {init?.ok ? init.thinkingLevel : ""}
+                      {init?.ok ? (
+                        <span className="flex items-center gap-1.5">
+                          <CpuIcon className="size-3" />
+                          {init.providerName} · {init.thinkingLevel}
                         </span>
-                      </button>
+                      ) : null}
                       {state.usage ? (
                         <span className="ml-auto shrink-0 tabular-nums">
                           {formatTokens(state.usage.inputTokens)} 输入 /{" "}
@@ -377,38 +476,69 @@ function App(): React.JSX.Element {
               <span className="status-path" title={cwd ?? ""}>
                 {cwd ?? "请选择项目文件夹"}
               </span>
-              <span className="ml-auto flex items-center gap-1">
-                <ShieldCheckIcon className="size-3" />
-                <select
-                  aria-label="Agent 权限模式"
-                  disabled={state.streaming || !init?.ok}
-                  value={init?.ok ? init.permissionMode : "default"}
-                  onChange={(event) => {
-                    void window.api
-                      .setPermissionMode(
-                        event.target.value as
-                          | "default"
-                          | "acceptEdits"
-                          | "plan"
-                          | "bypassPermissions",
-                      )
-                      .catch(report);
-                  }}
-                >
-                  <option value="default">逐项授权</option>
-                  <option value="acceptEdits">自动接受文件编辑</option>
-                  <option value="plan">只读规划</option>
-                  <option value="bypassPermissions">自动允许所有工具</option>
-                </select>
+              <span className="ml-auto flex items-center gap-1.5">
+                <GitBranchIcon className="size-3" />
+                {runtime.data
+                  ? `${runtime.data.tools.length} 工具 · ${runtime.data.mcpServers.length} MCP`
+                  : ""}
               </span>
+              {state.usage && init?.ok ? (
+                <span
+                  className="context-meter"
+                  title={`${state.usage.inputTokens.toLocaleString()} / ${init.contextWindow.toLocaleString()} tokens`}
+                >
+                  <progress
+                    aria-label="上下文使用率"
+                    max={init.contextWindow}
+                    value={state.usage.inputTokens}
+                  />
+                  <span>
+                    {Math.round(
+                      (state.usage.inputTokens / init.contextWindow) * 100,
+                    )}
+                    %
+                  </span>
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          streaming={state.streaming}
+        />
         <RuntimeDialog
+          key={state.activeSessionId}
           open={runtimeOpen}
           onOpenChange={setRuntimeOpen}
-          streaming={state.streaming || dirty}
+          streaming={state.streaming}
+          dirty={dirty}
+          data={runtime.data}
+          error={runtime.error}
+          refreshing={runtime.isFetching}
+          onRefresh={() => {
+            void runtime.refetch();
+          }}
+          onPrompt={chat.send}
+        />
+        <CommandPalette
+          open={commandsOpen}
+          onOpenChange={setCommandsOpen}
+          disabled={state.streaming || !init?.ok}
+          onCommand={chat.send}
+          onDraft={draft}
+          onNewSession={chat.startNewSession}
+          onChooseFolder={chooseFolder}
+          onOpenSettings={() => {
+            setSettingsOpen(true);
+          }}
+          onOpenRuntime={() => {
+            setRuntimeOpen(true);
+          }}
+          onToggleEditor={() => {
+            setEditorOpen((value) => !value);
+          }}
         />
         <Dialog
           open={pendingAction !== null}
