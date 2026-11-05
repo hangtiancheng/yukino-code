@@ -105,6 +105,7 @@ it("shows history and phases, resumes a finished run, and closes without stoppin
         stderr: terminal.stdout,
         patchConsole: false,
         exitOnCtrlC: false,
+        interactive: true,
       },
     );
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -140,6 +141,7 @@ it("fits a narrow terminal and exposes an empty state", async () => {
         stdout: terminal.stdout,
         stderr: terminal.stdout,
         patchConsole: false,
+        interactive: true,
       },
     );
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -192,6 +194,7 @@ it.each([
           stderr: terminal.stdout,
           patchConsole: false,
           exitOnCtrlC: false,
+          interactive: true,
         },
       );
       await new Promise<void>((resolve) => setImmediate(resolve));

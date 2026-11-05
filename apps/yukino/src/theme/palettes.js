@@ -99,7 +99,9 @@ function readable(color, background, text) {
 
 /** @param {typeof CATPPUCCIN.dark} colors */
 function buildPalette(colors) {
-  const surface = (color) => mix(colors.mantle, color, 0.18);
+  const surfaceBase = mix(colors.base, "#ffffff", 0.08);
+  const surface = (color) => mix(surfaceBase, color, 0.08);
+  const selectedBg = mix(colors.base, colors.teal, 0.16);
   const surfaces = [
     colors.teal,
     colors.green,
@@ -108,6 +110,7 @@ function buildPalette(colors) {
     colors.blue,
     colors.mauve,
   ].map(surface);
+  surfaces.push(selectedBg);
   const foreground = (color) =>
     surfaces.reduce(
       (value, background) => readable(value, background, colors.text),
@@ -139,7 +142,7 @@ function buildPalette(colors) {
     warningBg: surface(colors.yellow),
     error,
     errorBg: surface(colors.red),
-    selectedBg: mix(colors.base, colors.teal, 0.16),
+    selectedBg,
     userMessageBg: surface(colors.blue),
     userMessageText: colors.text,
     customMessageBg: surface(colors.mauve),
