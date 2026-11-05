@@ -230,7 +230,7 @@ export function McpAppView({ appId, app }: { appId: string; app: McpApp }) {
   return (
     <section
       aria-label={app.toolName}
-      className="mb-2 overflow-hidden rounded-lg border border-border bg-surface"
+      className="mb-4 overflow-hidden rounded-xl border border-border bg-surface"
     >
       {loading && (
         <p role="status" className="p-3 text-xs text-dim">
@@ -240,7 +240,7 @@ export function McpAppView({ appId, app }: { appId: string; app: McpApp }) {
       {error && (
         <div
           role="alert"
-          className="flex items-center gap-3 p-3 text-xs text-red"
+          className="flex items-center gap-3 p-3 text-xs text-error"
         >
           <span>{error}</span>
           <button

@@ -81,7 +81,7 @@ function createMarkdown(width: number, kind: MarkdownKind, streaming = false) {
               : token.depth === 3
                 ? color.bold.italic
                 : color.italic;
-        return `${heading(this.parser.parseInline(token.tokens))}\n`;
+        return `${heading(this.parser.parseInline(token.tokens))}\n\n`;
       },
       code(token) {
         if (streaming) {

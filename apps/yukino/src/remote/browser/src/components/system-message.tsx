@@ -9,13 +9,13 @@ export function SystemMessage({ content, markdown }: SystemMessageProps) {
   if (markdown) {
     return (
       <Markdown
-        className="my-2 border-l-2 border-border pl-3 text-muted"
+        className="my-4 rounded-xl border border-custom-label/25 bg-custom px-4 py-3 text-custom-text sm:px-5"
         text={content}
       />
     );
   }
   return (
-    <div className="my-2 border-l-2 border-border pl-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted">
+    <div className="my-4 rounded-xl border border-custom-label/25 bg-custom px-4 py-3 whitespace-pre-wrap text-custom-text sm:px-5">
       {content}
     </div>
   );

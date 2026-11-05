@@ -2,7 +2,7 @@ import { Markdown } from "#/components/markdown.js";
 
 export function UserMessage({ content }: { content: string }) {
   return (
-    <div className="user-message my-3 rounded-lg border border-border bg-user-bg px-3 py-2.5 text-user-text">
+    <div className="user-message my-5 rounded-xl border border-border bg-user-bg px-4 py-3.5 text-user-text sm:px-5">
       <Markdown text={content} user />
     </div>
   );

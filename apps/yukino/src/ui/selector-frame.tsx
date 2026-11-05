@@ -74,7 +74,7 @@ export function SelectorFrame({
       )}
       <Box flexDirection="column" paddingX={padding}>
         {chrome.title && (
-          <Text bold color={THEME.accent} wrap="truncate-end">
+          <Text bold color={THEME.customMessageLabel} wrap="truncate-end">
             {singleLine(title)}
           </Text>
         )}
@@ -83,7 +83,7 @@ export function SelectorFrame({
             {singleLine(subtitle)}
           </Text>
         ) : null}
-        <Box flexDirection="column">
+        <Box flexDirection="column" marginTop={chrome.gap ? 1 : 0}>
           <AvailableRows value={Math.max(0, rows - chrome.height)}>
             <ContentViewport rows={rows - chrome.height} focusRef={focusRef}>
               {children}

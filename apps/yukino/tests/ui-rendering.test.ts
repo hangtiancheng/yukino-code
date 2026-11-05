@@ -492,6 +492,43 @@ describe("terminal Markdown presentation", () => {
 });
 
 describe("shared live and committed tool cards", () => {
+  it.each(["dark", "light"] as const)(
+    "renders distinct backgrounds as a tool changes state in %s mode",
+    (mode) => {
+      setThemeMode(mode);
+      chalk.level = 3;
+      const backgrounds = [
+        THEME.toolPendingBg,
+        THEME.toolSuccessBg,
+        THEME.toolErrorBg,
+        THEME.toolStoppedBg,
+      ];
+      const states = ["running", "completed", "failed", "stopped"] as const;
+      const rendered = states.map((status) =>
+        renderToString(
+          createElement(ToolBlock, {
+            tool: {
+              toolId: "state-change",
+              toolName: "ReadFile",
+              args: {},
+              status,
+            },
+          }),
+          { columns: 40 },
+        ),
+      );
+      expect(new Set(backgrounds).size).toBe(states.length);
+      for (const [index, output] of rendered.entries()) {
+        expect(output).toContain(
+          colors.bgHex(backgrounds[index])(" ").split(" ")[0],
+        );
+        expect(stripVTControlCharacters(output)).toContain(states[index]);
+        for (const other of backgrounds.filter((_, i) => i !== index)) {
+          expect(output).not.toContain(colors.bgHex(other)(" ").split(" ")[0]);
+        }
+      }
+    },
+  );
   it.each(["running", "completed", "failed", "stopped"] as const)(
     "shows EnterPlanMode subagent progress with its %s status",
     (status) => {

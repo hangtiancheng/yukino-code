@@ -122,6 +122,7 @@ function MessageBlock(props: MessageBlockProps) {
               flexDirection="column"
               marginTop={1}
               paddingX={padding}
+              paddingY={1}
               width={width}
             >
               <Text color={THEME.customMessageText}>
@@ -150,6 +151,7 @@ function MessageBlock(props: MessageBlockProps) {
               backgroundColor={THEME.userMessageBg}
               marginTop={1}
               paddingX={padding}
+              paddingY={1}
               width={width}
             >
               <Text color={THEME.userMessageText}>
@@ -193,6 +195,7 @@ function MessageBlock(props: MessageBlockProps) {
             flexDirection="column"
             marginTop={1}
             paddingX={padding}
+            paddingY={1}
             width={width}
           >
             <Text bold color={THEME.customMessageLabel}>

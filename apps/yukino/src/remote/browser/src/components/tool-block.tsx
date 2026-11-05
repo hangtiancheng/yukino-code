@@ -47,7 +47,7 @@ export function ToolBlock({ item }: ToolBlockProps) {
         }
         header={
           <>
-            <span className="max-w-[45%] shrink-0 truncate font-mono text-xs font-semibold text-bright">
+            <span className="max-w-[45%] shrink-0 truncate font-semibold text-bright">
               {shell
                 ? item.toolName.toLowerCase() === "bash"
                   ? "$"
@@ -55,12 +55,12 @@ export function ToolBlock({ item }: ToolBlockProps) {
                 : item.toolName}
             </span>
             {preview && (
-              <span className="min-w-0 max-w-105 truncate font-mono text-xs text-muted">
+              <span className="ml-0.5 min-w-0 max-w-105 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-tool-output">
                 {preview}
               </span>
             )}
             <span
-              className={`ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[11px] tabular-nums ${meta.pill}`}
+              className={`ml-auto shrink-0 rounded-md px-2 py-0.5 font-mono text-[11px] tabular-nums ${meta.pill}`}
             >
               {statusText}
             </span>

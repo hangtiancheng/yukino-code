@@ -245,7 +245,7 @@ describe("steering message rendering", () => {
             ?.getCell(0)
             ?.getBgColor() === color,
       );
-      expect(coloredRows).toHaveLength(4);
+      expect(coloredRows).toHaveLength(8);
     },
   );
 });

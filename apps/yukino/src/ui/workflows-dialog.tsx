@@ -106,6 +106,7 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
   });
   const contentRows = Math.max(0, rows - selectorChrome(rows, true).height);
   const wide = columns >= 65;
+  const roomy = contentRows >= 10;
   const notices =
     Number(!!run?.error) +
     Number(!!error) +
@@ -114,7 +115,7 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
   const agentRowHeight = !wide && contentRows - 3 - notices >= 2 ? 2 : 1;
   const visibleCount = Math.max(
     1,
-    Math.floor((contentRows - 3 - notices) / agentRowHeight),
+    Math.floor((contentRows - 3 - Number(roomy) - notices) / agentRowHeight),
   );
   const start = getListWindowStart(
     run?.agents.length ?? 0,
@@ -186,7 +187,7 @@ export function WorkflowsDialog({ service, context, onClose }: Props) {
                 {` · ${run.phases.filter((phase) => phase.status === "done").length}/${run.phases.length} phases · ${run.agents.length} agents`}
               </Text>
             </Text>
-            <Box flexDirection="row">
+            <Box flexDirection="row" marginTop={roomy ? 1 : 0}>
               {wide && (
                 <Box
                   width="30%"

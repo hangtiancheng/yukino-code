@@ -42,19 +42,19 @@ export function TodoProgress({ todos }: TodoProgressProps) {
   const percent = Math.round((completed / tasks.length) * 100);
 
   return (
-    <div className="mx-auto w-full max-w-5xl shrink-0 px-3 pt-2 pb-1 sm:px-6">
-      <div className="flex w-full items-center gap-2">
-        <div className="h-1 w-12 sm:w-20 shrink-0 overflow-hidden rounded-full bg-border">
+    <div className="mx-auto w-full max-w-5xl shrink-0 px-4 pt-3 pb-1.5 sm:px-8">
+      <div className="flex w-full items-center gap-3">
+        <div className="h-1 w-24 shrink-0 overflow-hidden rounded-full bg-border">
           <div
-            className={`h-full rounded-full transition-[width] ${allDone ? "bg-green" : "bg-accent"}`}
+            className={`h-full rounded-full transition-[width] ${allDone ? "bg-success" : "bg-accent"}`}
             style={{ width: `${String(percent)}%` }}
           />
         </div>
         <p className="min-w-0 flex-1 truncate font-mono text-[11px] text-dim">
-          <span className={allDone ? "text-green" : "text-accent"}>
+          <span className={allDone ? "text-success" : "text-accent"}>
             {`${String(completed)}/${String(tasks.length)} tasks`}
           </span>
-          <span className="text-yellow">
+          <span className="text-warning">
             {cancelled ? ` · ${String(cancelled)} cancelled` : ""}
             {blocked ? ` · ${String(blocked)} blocked` : ""}
           </span>

@@ -683,7 +683,7 @@ describe("session selector", () => {
       }),
     );
     expect(frame).toContain(`${ICONS.arrow} Conversation-12 ${ICONS.success}`);
-    expect(frame.match(/Conversation-\d+/g)).toHaveLength(8);
+    expect(frame.match(/Conversation-\d+/g)).toHaveLength(7);
     expect(frame).toContain("session-12 · 12 messages");
     expect(frame).toContain("12/15");
     send("", { downArrow: true });
@@ -807,7 +807,7 @@ describe("selector layout", () => {
             );
             if (columns >= 20) {
               expect(output).toContain(
-                colors.hex(THEME.accent)("Select provider"),
+                colors.hex(THEME.customMessageLabel)("Select provider"),
               );
             }
           }
@@ -881,7 +881,7 @@ describe("selector layout", () => {
           `${ICONS.arrow} Conversation-15 ${ICONS.success}`,
         );
         expect(frame.match(/Conversation-\d+/g)).toHaveLength(
-          Math.min(10, Math.max(1, Math.floor((rows - 10) / 2))),
+          Math.min(10, Math.max(1, Math.floor((rows - 11) / 2))),
         );
       }
     },
@@ -910,7 +910,7 @@ describe("selector layout", () => {
         createElement(Text, null, "Footer path\nFooter tokens"),
       ),
     );
-    expect(frame.match(/Conversation-\d+/g)).toHaveLength(3);
+    expect(frame.match(/Conversation-\d+/g)).toHaveLength(2);
     expect(frame).toContain("Footer tokens");
   });
 
@@ -952,7 +952,7 @@ describe("selector layout", () => {
       }),
       20,
     );
-    expect(output.split("\n")).toHaveLength(6);
+    expect(output.split("\n")).toHaveLength(7);
     for (const line of output.split("\n")) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(20);
     }

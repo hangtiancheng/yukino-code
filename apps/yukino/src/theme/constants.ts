@@ -4,12 +4,17 @@ export type ThemeMode = "dark" | "light";
 
 export interface ThemePalette {
   accent: string;
+  accentHover: string;
+  accentBg: string;
   border: string;
   borderAccent: string;
   borderMuted: string;
   success: string;
+  successBg: string;
   error: string;
+  errorBg: string;
   warning: string;
+  warningBg: string;
   muted: string;
   dim: string;
   text: string;
@@ -23,6 +28,7 @@ export interface ThemePalette {
   toolPendingBg: string;
   toolSuccessBg: string;
   toolErrorBg: string;
+  toolStoppedBg: string;
   toolTitle: string;
   toolOutput: string;
   mdHeading: string;

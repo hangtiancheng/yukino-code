@@ -45,8 +45,8 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
 
   if (item.answered) {
     return (
-      <div className="my-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-dim">
-        <span className="mr-1.5 text-green">✓</span> Answered
+      <div className="my-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-dim ">
+        <span className="mr-1.5 text-success">✓</span> Answered
       </div>
     );
   }
@@ -54,10 +54,10 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
   return (
     <section
       aria-label="Question from the agent"
-      className="my-2 rounded-lg border border-accent/30 bg-surface p-3"
+      className="my-3 rounded-xl border border-accent/30 bg-accent-bg p-4 "
     >
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-bright">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/10 text-xs text-accent">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-bg text-xs text-accent">
           ?
         </span>
         Question
@@ -80,7 +80,7 @@ export function AskUserDialog({ item, onAnswer }: AskUserDialogProps) {
         <button
           type="button"
           onClick={handleSubmit}
-          className="cursor-pointer rounded-lg bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast transition-colors hover:bg-accent/85"
+          className="cursor-pointer rounded-lg bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-contrast transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           Submit
         </button>
@@ -142,7 +142,7 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
             className={`my-1 flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors ${
               checked
                 ? "border-accent/40 bg-accent/6"
-                : "border-transparent hover:border-border hover:bg-selected/40"
+                : "border-transparent hover:border-border hover:bg-selected"
             }`}
           >
             <input
@@ -168,7 +168,7 @@ function QuestionRow({ question, name, draft, onChange }: QuestionRowProps) {
         className={`my-1 flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors ${
           draft.useOther
             ? "border-accent/40 bg-accent/6"
-            : "border-transparent hover:border-border hover:bg-selected/40"
+            : "border-transparent hover:border-border hover:bg-selected"
         }`}
       >
         <input

@@ -55,17 +55,17 @@ export const RESPONSE_OPTIONS: {
   {
     value: "allow",
     label: "Allow",
-    className: "bg-accent text-accent-contrast hover:bg-accent/85",
+    className: "bg-accent text-accent-contrast hover:bg-accent-hover",
   },
   {
     value: "allowAlways",
     label: "Remember Scopes for All Project Agents",
-    className: "border border-accent/40 text-accent hover:bg-accent/8",
+    className: "border border-accent/40 text-accent hover:bg-accent-bg",
   },
   {
     value: "deny",
     label: "Deny",
-    className: "border border-red/30 text-red hover:bg-red/6",
+    className: "border border-error/30 text-error hover:bg-error-bg",
   },
 ];
 
@@ -87,28 +87,28 @@ export const STATUS_META: Record<
 > = {
   running: {
     label: "running…",
-    pill: "bg-accent/10 text-accent",
-    panel: "border-accent/30 bg-tool",
+    pill: "bg-accent-bg text-accent",
+    panel: "border-accent/30 bg-tool-pending",
   },
   ok: {
     label: "✓",
-    pill: "bg-green/10 text-green",
-    panel: "border-border bg-tool-ok",
+    pill: "bg-success-bg text-success",
+    panel: "border-success/30 bg-tool-success",
   },
   err: {
     label: "✗",
-    pill: "bg-red/10 text-red",
-    panel: "border-red/30 bg-tool-error",
+    pill: "bg-error-bg text-error",
+    panel: "border-error/30 bg-tool-error",
   },
 };
 
 export const STATUS_PILL: Record<string, string> = {
-  running: "bg-accent/15 text-accent",
-  completed: "bg-green/15 text-green",
-  failed: "bg-red/15 text-red",
-  stopped: "bg-yellow/15 text-yellow",
-  cancelled: "bg-yellow/15 text-yellow",
-  idle: "bg-selected/40 text-muted",
+  running: "bg-accent-bg text-accent",
+  completed: "bg-success-bg text-success",
+  failed: "bg-error-bg text-error",
+  stopped: "bg-warning-bg text-warning",
+  cancelled: "bg-warning-bg text-warning",
+  idle: "bg-surface text-muted",
 };
 
 export const MAX_TEXTAREA_HEIGHT = 200;

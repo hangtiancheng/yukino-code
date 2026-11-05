@@ -59,9 +59,11 @@ export function ToolCard({
   const backgroundColor =
     resolvedStatus === "running"
       ? THEME.toolPendingBg
-      : resolvedStatus === "failed" || resolvedStatus === "stopped"
+      : resolvedStatus === "failed"
         ? THEME.toolErrorBg
-        : THEME.toolSuccessBg;
+        : resolvedStatus === "stopped"
+          ? THEME.toolStoppedBg
+          : THEME.toolSuccessBg;
   const shell = /^(bash|powershell)$/iu.test(toolName);
   const title = shell
     ? expandTabs(
@@ -117,6 +119,7 @@ export function ToolCard({
       flexDirection="column"
       marginTop={1}
       paddingX={padding}
+      paddingY={1}
       width={width}
     >
       <Text wrap={shell ? "wrap" : "truncate-end"}>

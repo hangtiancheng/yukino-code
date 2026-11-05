@@ -10,9 +10,9 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
   return (
     <section
       aria-label={`Permission required for ${item.toolName}`}
-      className="my-2 rounded-lg border border-yellow/35 bg-surface p-3"
+      className="my-3 rounded-xl border border-warning/35 bg-warning-bg p-4 "
     >
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-yellow">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-warning">
         <svg
           width="13"
           height="13"
@@ -50,7 +50,7 @@ export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
       ))}
       {item.responded ? (
         <div className="text-xs text-dim">
-          <span className="mr-1 text-green">✓</span>
+          <span className="mr-1 text-success">✓</span>
           {RESPONSE_LABEL[item.response ?? ""] ?? item.response}
         </div>
       ) : (

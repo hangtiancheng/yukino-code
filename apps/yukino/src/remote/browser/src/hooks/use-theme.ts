@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { STORAGE_KEY } from "#/constants.js";
-import { DARK_THEME, LIGHT_THEME } from "@/theme/constants.js";
+import { DARK_THEME, LIGHT_THEME, type ThemeMode } from "@/theme/constants.js";
 
-export type Theme = "dark" | "light";
-
-function systemTheme(): Theme {
+function systemTheme(): ThemeMode {
   if (
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-color-scheme: light)").matches
@@ -15,7 +13,7 @@ function systemTheme(): Theme {
   return "dark";
 }
 
-function initialTheme(): Theme {
+function initialTheme(): ThemeMode {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "dark" || stored === "light") {
@@ -32,8 +30,8 @@ function initialTheme(): Theme {
  * index.html applies the same value before first paint; this hook keeps it in
  * sync afterwards and persists explicit user choices.
  */
-export function useTheme(): { theme: Theme; toggleTheme: () => void } {
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+export function useTheme(): { theme: ThemeMode; toggleTheme: () => void } {
+  const [theme, setTheme] = useState<ThemeMode>(initialTheme);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -47,7 +45,7 @@ export function useTheme(): { theme: Theme; toggleTheme: () => void } {
 
   const toggleTheme = useCallback(() => {
     setTheme((current) => {
-      const next: Theme = current === "dark" ? "light" : "dark";
+      const next: ThemeMode = current === "dark" ? "light" : "dark";
       try {
         localStorage.setItem(STORAGE_KEY, next);
       } catch {

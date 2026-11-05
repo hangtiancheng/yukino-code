@@ -9,10 +9,10 @@ export function DiffLines({ text }: { text: string }) {
           key={index}
           className={
             line.startsWith("+ ")
-              ? "bg-green/5 text-green"
+              ? "bg-success-bg text-diff-added"
               : line.startsWith("- ")
-                ? "bg-red/5 text-red"
-                : "text-muted"
+                ? "bg-error-bg text-diff-removed"
+                : "text-diff-context"
           }
         >
           {line || " "}

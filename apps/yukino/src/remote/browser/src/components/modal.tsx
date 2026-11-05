@@ -88,7 +88,7 @@ export function Modal({
         aria-label={label}
         aria-modal="true"
         tabIndex={-1}
-        className={`animate-modal-in max-h-[85dvh] w-full ${maxWidth} flex flex-col overflow-hidden rounded-xl border border-rule bg-bg shadow-2xl outline-none`}
+        className={`animate-modal-in max-h-[85dvh] w-full ${maxWidth} flex flex-col overflow-hidden rounded-2xl border border-rule bg-bg shadow-2xl outline-none`}
       >
         {children}
       </div>
@@ -103,12 +103,12 @@ interface ModalHeaderProps {
 
 export function ModalHeader({ title, subtitle }: ModalHeaderProps) {
   return (
-    <div className="border-b border-border bg-surface px-4 py-3 sm:px-5">
-      <h2 className="text-base font-semibold tracking-tight text-bright">
+    <div className="border-b border-border bg-surface px-5 py-5 sm:px-6">
+      <h2 className="text-base font-semibold tracking-tight text-custom-label">
         {title}
       </h2>
       {subtitle && (
-        <p className="mt-1 text-xs leading-relaxed text-muted">{subtitle}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted">{subtitle}</p>
       )}
     </div>
   );

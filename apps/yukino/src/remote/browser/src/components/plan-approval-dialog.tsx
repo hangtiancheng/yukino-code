@@ -34,7 +34,7 @@ export function PlanApprovalDialog({
         title="Plan complete"
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-5 py-4">
         <p
           className="mb-3 truncate font-mono text-[11px] text-dim"
           title={request.planPath}
@@ -48,7 +48,7 @@ export function PlanApprovalDialog({
         )}
       </div>
 
-      <div className="border-t border-border px-4 py-3 sm:px-5">
+      <div className="border-t border-border px-4 sm:px-5 py-4">
         {feedbackOpen && (
           <div className="mb-3">
             <textarea
@@ -77,7 +77,7 @@ export function PlanApprovalDialog({
             onClick={() => {
               onChoose("manual");
             }}
-            className="w-full cursor-pointer rounded-lg sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast transition-colors hover:bg-accent/85"
+            className="w-full cursor-pointer rounded-lg sm:w-auto bg-accent px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-accent-contrast transition-colors hover:bg-accent-hover"
           >
             Yes, manually approve edits
           </button>
@@ -86,7 +86,7 @@ export function PlanApprovalDialog({
             onClick={() => {
               onChoose("yolo");
             }}
-            className="w-full cursor-pointer rounded-lg sm:w-auto border border-yellow/40 px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-yellow transition-colors hover:bg-yellow/8"
+            className="w-full cursor-pointer rounded-lg sm:w-auto border border-warning/40 px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-warning transition-colors hover:bg-warning-bg"
           >
             Yes, enter YOLO mode (auto-approve all)
           </button>
@@ -101,7 +101,7 @@ export function PlanApprovalDialog({
                 setFeedbackOpen(true);
               }
             }}
-            className="w-full cursor-pointer rounded-lg sm:w-auto border border-border px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-base transition-colors hover:bg-selected/40"
+            className="w-full cursor-pointer rounded-lg sm:w-auto border border-border px-4 py-2 text-[13px] sm:py-1.5 font-semibold text-base transition-colors hover:bg-selected"
           >
             {feedbackOpen ? "Send feedback" : "Tell Yukino what to change"}
           </button>

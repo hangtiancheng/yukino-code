@@ -16,7 +16,7 @@ export function ThinkingBlock({
   const [open, setOpen] = useState(false);
   return (
     <details
-      className="my-2 border-l-2 border-border pl-2.5 text-xs leading-relaxed text-thinking"
+      className="my-3 border-l-2 border-border pl-3 text-xs leading-relaxed text-thinking"
       onToggle={(event) => {
         setOpen(event.currentTarget.open);
       }}
@@ -27,7 +27,7 @@ export function ThinkingBlock({
           <span className="animate-blink ml-1 text-accent not-italic">▎</span>
         )}
       </summary>
-      {open && <Markdown className="mt-1.5" text={text || "(empty)"} />}
+      {open && <Markdown className="mt-2" text={text || "(empty)"} />}
     </details>
   );
 }

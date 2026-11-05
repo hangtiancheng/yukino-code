@@ -54,14 +54,14 @@ export function SessionPicker({
         onSelect={onPick}
         onClose={onClose}
       />
-      <div className="flex items-center justify-between border-t border-border px-4 py-2 sm:px-5">
+      <div className="flex items-center justify-between border-t border-border px-4 sm:px-5 py-3">
         <p className="text-[11px] text-dim">
           Or type <span className="font-mono text-dim">/resume &lt;id&gt;</span>
         </p>
         <button
           type="button"
           onClick={onClose}
-          className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected/40"
+          className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected"
         >
           Cancel
         </button>

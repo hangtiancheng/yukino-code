@@ -24,7 +24,7 @@ export function SlashMenu({
       ref={listRef}
       role="listbox"
       aria-label="Slash commands"
-      className="completion-menu absolute inset-x-3 bottom-full mb-2 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface p-1.5 shadow-xl sm:inset-x-6"
+      className="completion-menu absolute inset-x-0 bottom-full mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl"
     >
       {commands.map((cmd, i) => (
         <button
@@ -40,8 +40,8 @@ export function SlashMenu({
           onMouseEnter={() => {
             onHover(i);
           }}
-          className={`flex w-full cursor-pointer items-baseline gap-2 px-3 py-1.5 text-left transition-colors ${
-            i === cursor ? "bg-accent/8" : ""
+          className={`flex w-full cursor-pointer items-baseline gap-2.5 px-3.5 py-2 text-left transition-colors ${
+            i === cursor ? "bg-accent-bg" : ""
           }`}
         >
           <span className="font-mono text-[13px] font-semibold whitespace-nowrap text-bright">

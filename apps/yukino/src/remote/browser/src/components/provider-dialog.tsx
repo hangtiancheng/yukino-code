@@ -73,20 +73,20 @@ export function ProviderDialog({
             }}
             onClose={onClose}
           />
-          <div className="flex items-center justify-between border-t border-border px-4 py-2 sm:px-5">
+          <div className="flex items-center justify-between border-t border-border px-4 py-3 sm:px-5">
             <button
               type="button"
               onClick={() => {
                 setAdding(true);
               }}
-              className="cursor-pointer rounded-lg border border-accent/40 px-3.5 py-1.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/10"
+              className="cursor-pointer rounded-lg border border-accent/40 px-3.5 py-1.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent-bg"
             >
               Add provider…
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected/40"
+              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected"
             >
               Cancel
             </button>
@@ -95,7 +95,7 @@ export function ProviderDialog({
       ) : (
         <>
           <form
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5"
             onSubmit={(e) => {
               e.preventDefault();
               submitForm();
@@ -165,17 +165,17 @@ export function ProviderDialog({
                 placeholder="model id"
               />
             </label>
-            {error && <p className="text-xs text-red">{error}</p>}
+            {error && <p className="text-xs text-error">{error}</p>}
             <button type="submit" className="hidden" aria-hidden="true" />
           </form>
-          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2 sm:px-5">
+          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3 sm:px-5">
             <button
               type="button"
               onClick={() => {
                 setAdding(false);
                 setError("");
               }}
-              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected/40"
+              className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected"
             >
               Back
             </button>

@@ -805,7 +805,7 @@ describe("terminal resize output", () => {
     }
   });
 
-  it("keeps compact cards from turning into wrapped background stripes", async () => {
+  it("keeps padded cards from turning into wrapped background stripes", async () => {
     act(() => {
       instance = render(
         createElement(Scene, {
@@ -848,7 +848,10 @@ describe("terminal resize output", () => {
       ]) {
         const row = lines.findIndex((line) => line.includes(marker));
         expect(row).toBeGreaterThanOrEqual(0);
-        const cardRows = marker === "USER_CARD" ? [row] : [row - 1, row];
+        const cardRows =
+          marker === "USER_CARD"
+            ? [row - 1, row, row + 1]
+            : [row - 2, row - 1, row, row + 1];
         const coloredRows = lines.flatMap((_, index) =>
           terminal.buffer.active.getLine(index)?.getCell(0)?.getBgColor() ===
           Number.parseInt(color.slice(1), 16)
