@@ -181,7 +181,7 @@ export function useChat(): UseChat {
         const result = await window.api.resumeSession(sessionId, cwd);
         dispatch({ type: "load_history", messages: result.messages });
         if (result.switchedCwd) {
-          toast.success("已切换项目");
+          toast.success("Project switched");
         }
       });
     },

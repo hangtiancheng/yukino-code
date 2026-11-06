@@ -35,11 +35,11 @@ function createWindow(): void {
   mainWindow.webContents.on("will-prevent-unload", (event) => {
     const choice = dialog.showMessageBoxSync(mainWindow, {
       type: "warning",
-      buttons: ["返回保存", "放弃并关闭"],
+      buttons: ["Return to Save", "Discard and Close"],
       defaultId: 0,
       cancelId: 0,
-      message: "有尚未保存的文件",
-      detail: "关闭窗口将丢失编辑器中的草稿。",
+      message: "Unsaved files",
+      detail: "Closing the window will discard drafts in the editor.",
     });
     if (choice === 1) {
       event.preventDefault();

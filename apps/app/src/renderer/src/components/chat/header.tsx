@@ -39,15 +39,15 @@ export function Header({
   const cwd = init?.ok ? init.cwd : null;
   return (
     <header
-      className={`border-border bg-background flex h-[55px] shrink-0 items-center gap-3 border-b px-5 [-webkit-app-region:drag] ${sidebarOpen ? "" : "mac:pl-[84px]"}`}
+      className={`border-border bg-background flex h-13.75 shrink-0 items-center gap-3 border-b px-5 [-webkit-app-region:drag] ${sidebarOpen ? "" : "mac:pl-21"}`}
     >
       {!sidebarOpen ? (
         <Button
           className="[-webkit-app-region:no-drag]"
           size="icon-sm"
           variant="ghost"
-          aria-label="显示会话"
-          title="显示会话 · ⌘ B"
+          aria-label="Show sessions"
+          title="Show sessions · ⌘ B"
           onClick={onToggleSidebar}
         >
           <PanelLeftIcon />
@@ -55,13 +55,13 @@ export function Header({
       ) : null}
       <button
         className="flex max-w-[30%] items-center gap-2 text-xs font-[550] [-webkit-app-region:no-drag]"
-        title={cwd ?? "选择项目"}
+        title={cwd ?? "Choose project"}
         disabled={streaming}
         onClick={onChooseFolder}
       >
-        <FolderOpenIcon className="text-muted-foreground size-[15px] shrink-0" />
+        <FolderOpenIcon className="text-muted-foreground size-3.75 shrink-0" />
         <span className="truncate">
-          {cwd ? cwd.split(/[\\/]/u).filter(Boolean).pop() : "打开项目"}
+          {cwd ? cwd.split(/[\\/]/u).filter(Boolean).pop() : "Open project"}
         </span>
         <ChevronDownIcon className="size-3" />
       </button>
@@ -75,8 +75,8 @@ export function Header({
           variant="ghost"
           size="icon-sm"
           onClick={onOpenCommands}
-          aria-label="命令中心"
-          title="命令中心 · ⌘ / Ctrl K"
+          aria-label="Command center"
+          title="Command center · ⌘ / Ctrl K"
         >
           <SearchIcon />
         </Button>
@@ -85,8 +85,8 @@ export function Header({
           size="icon-sm"
           onClick={onOpenRuntime}
           disabled={!init?.ok}
-          aria-label="Agent 工作台"
-          title="任务与能力"
+          aria-label="Agent workbench"
+          title="Tasks and capabilities"
         >
           <BoxesIcon />
         </Button>
@@ -94,8 +94,8 @@ export function Header({
           variant="ghost"
           size="icon-sm"
           onClick={onOpenSettings}
-          aria-label="设置"
-          title="设置 · ⌘ ,"
+          aria-label="Settings"
+          title="Settings · ⌘ ,"
         >
           <Settings2Icon />
         </Button>
@@ -106,10 +106,10 @@ export function Header({
           onClick={onToggleEditor}
           disabled={!init?.ok}
           aria-pressed={editorOpen}
-          title="切换代码工作区 · ⌘ J"
+          title="Toggle code workspace · ⌘ J"
         >
           <Code2Icon />
-          <span className="hidden sm:inline">代码</span>
+          <span className="hidden sm:inline">Code</span>
         </Button>
       </div>
     </header>

@@ -80,14 +80,14 @@ export function AskCard({
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <CircleHelpIcon className="size-4" />
           </span>
-          <span className="text-sm font-medium">提问</span>
+          <span className="text-sm font-medium">Question</span>
           {item.answered ? (
             <Badge variant="secondary" className="text-[10px] uppercase">
-              已回答
+              Answered
             </Badge>
           ) : (
             <Badge variant="outline" className="text-[10px] uppercase">
-              等待回答
+              Waiting for answer
             </Badge>
           )}
         </div>
@@ -103,7 +103,7 @@ export function AskCard({
                 </p>
                 {question.multiSelect ? (
                   <span className="text-muted-foreground text-xs">
-                    可选择多项
+                    Select one or more
                   </span>
                 ) : null}
               </div>
@@ -142,7 +142,7 @@ export function AskCard({
                   variant="outline"
                   className="w-full justify-start"
                 >
-                  <span className="text-sm font-medium">自定义回答…</span>
+                  <span className="text-sm font-medium">Custom answer…</span>
                 </ToggleGroupItem>
               </ToggleGroup>
 
@@ -152,12 +152,12 @@ export function AskCard({
                     htmlFor={`${item.id}-${questionIndex}-other`}
                     className="sr-only"
                   >
-                    自定义回答
+                    Custom answer
                   </Label>
                   <Input
                     id={`${item.id}-${questionIndex}-other`}
                     autoFocus
-                    placeholder="输入你的回答"
+                    placeholder="Enter your answer"
                     value={draft.otherText}
                     disabled={item.answered}
                     onChange={(event) => {
@@ -179,7 +179,7 @@ export function AskCard({
               onRespond(item.payload.id, answers);
             }}
           >
-            提交回答
+            Submit answer
           </Button>
         ) : null}
       </CardContent>

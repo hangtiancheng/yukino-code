@@ -335,7 +335,7 @@ export function EditorPanel({
             : item,
         ),
       );
-      toast.success("文件已保存");
+      toast.success("File saved");
     } catch (cause) {
       toast.error(errorText(cause));
     } finally {
@@ -356,17 +356,17 @@ export function EditorPanel({
   return (
     <section
       className="bg-card flex h-full min-w-0 flex-col [&_::-webkit-scrollbar]:h-1.5 [&_::-webkit-scrollbar]:w-1.5 [&_::-webkit-scrollbar-thumb]:rounded-[6px] [&_::-webkit-scrollbar-thumb]:border [&_::-webkit-scrollbar-thumb]:border-transparent"
-      aria-label="文件"
+      aria-label="Files"
     >
       <div className="border-border flex h-11 shrink-0 items-center gap-[7px] border-b pr-2.5 pl-3.5">
         <FilesIcon className="text-accent-foreground size-4" />
-        <strong className="text-[11px] font-[550]">文件</strong>
+        <strong className="text-[11px] font-[550]">Files</strong>
         <div className="ml-auto flex gap-0.5">
           <Button
             variant="ghost"
             size="icon-sm"
-            title="刷新文件"
-            aria-label="刷新文件"
+            title="Refresh files"
+            aria-label="Refresh files"
             onClick={() => {
               void refresh();
             }}
@@ -376,8 +376,8 @@ export function EditorPanel({
           <Button
             variant="ghost"
             size="icon-sm"
-            title={expanded ? "恢复分栏" : "展开编辑器"}
-            aria-label={expanded ? "恢复分栏" : "展开编辑器"}
+            title={expanded ? "Restore split" : "Expand editor"}
+            aria-label={expanded ? "Restore split" : "Expand editor"}
             onClick={onExpand}
           >
             {expanded ? <Minimize2Icon /> : <Maximize2Icon />}
@@ -385,8 +385,8 @@ export function EditorPanel({
           <Button
             variant="ghost"
             size="icon-sm"
-            title="关闭工作区（保留草稿）"
-            aria-label="关闭工作区"
+            title="Close workspace (keep drafts)"
+            aria-label="Close workspace"
             onClick={onClose}
           >
             <XIcon />
@@ -396,7 +396,7 @@ export function EditorPanel({
       <div className="flex min-h-0 flex-1">
         <nav
           className="border-border flex w-40 min-w-[120px] shrink-0 flex-col border-r bg-[color-mix(in_srgb,var(--sidebar)_45%,var(--card))] max-[1200px]:w-[125px] max-[1000px]:w-[110px] max-[1000px]:min-w-[100px]"
-          aria-label="项目文件"
+          aria-label="Project files"
         >
           <div className="border-border flex h-9 items-stretch gap-2.5 border-b px-2 text-[11px]">
             <button
@@ -409,7 +409,7 @@ export function EditorPanel({
                 setView("changes");
               }}
             >
-              变更{" "}
+              Changes{" "}
               <span className="text-muted-foreground ml-0.5 text-[9px]">
                 {snapshot?.changes.length ?? 0}
               </span>
@@ -424,7 +424,7 @@ export function EditorPanel({
                 setView("files");
               }}
             >
-              文件
+              Files
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-auto py-2">
@@ -459,7 +459,7 @@ export function EditorPanel({
               ))
             ) : (
               <p className="text-muted-foreground px-3 py-6 text-xs leading-6">
-                暂无变更
+                No changes
               </p>
             )}
           </div>
@@ -473,14 +473,14 @@ export function EditorPanel({
             aria-pressed={follow}
           >
             <RadioIcon className="size-3.5" />
-            {follow ? "跟随 Agent" : "已暂停跟随"}
+            {follow ? "Follow agent" : "Following paused"}
           </button>
         </nav>
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div
             className="border-border bg-muted flex h-9 min-h-9 overflow-x-auto border-b"
             role="tablist"
-            aria-label="已打开文件"
+            aria-label="Open files"
           >
             {tabs.map((item) => (
               <div
@@ -508,7 +508,7 @@ export function EditorPanel({
                 </button>
                 <button
                   className="hover:bg-accent mr-[3px] rounded p-[5px]"
-                  aria-label={`关闭 ${item.file.path}`}
+                  aria-label={`Close ${item.file.path}`}
                   onClick={() => {
                     if (item.value !== item.file.content) {
                       setClosing(item.file.path);
@@ -538,7 +538,7 @@ export function EditorPanel({
                 aria-pressed={diff}
               >
                 <FileDiffIcon className="size-3.5" />
-                变更对比
+                Compare changes
               </button>
               <Button
                 variant="ghost"
@@ -554,7 +554,7 @@ export function EditorPanel({
                 }}
               >
                 <SaveIcon />
-                {saving ? "保存中" : "保存"}
+                {saving ? "Saving" : "Save"}
               </Button>
             </div>
           ) : null}
@@ -563,7 +563,7 @@ export function EditorPanel({
               role="alert"
               className="text-warning bg-[color-mix(in_srgb,var(--warning)_9%,var(--card))] px-3 py-2.5 text-[11px] leading-[1.8] [&_button]:ml-2 [&_button]:underline"
             >
-              文件已变更，草稿已保留。
+              The file changed and your draft was preserved.
               <button
                 onClick={() => {
                   void window.api
@@ -585,7 +585,7 @@ export function EditorPanel({
                     .catch((cause: unknown) => toast.error(errorText(cause)));
                 }}
               >
-                对比磁盘
+                Compare with disk
               </button>
               <button
                 onClick={() => {
@@ -603,7 +603,7 @@ export function EditorPanel({
                     .catch((cause: unknown) => toast.error(errorText(cause)));
                 }}
               >
-                放弃草稿
+                Discard draft
               </button>
             </div>
           ) : null}
@@ -618,7 +618,7 @@ export function EditorPanel({
                 fallback={
                   <div className="flex h-full flex-col items-center justify-center gap-3 p-5 text-center text-xs">
                     <Spinner />
-                    正在加载编辑器…
+                    Loading editor…
                   </div>
                 }
               >
@@ -652,7 +652,7 @@ export function EditorPanel({
                     setView("files");
                   }}
                 >
-                  打开文件 <ChevronRightIcon className="size-3.5" />
+                  Open a file <ChevronRightIcon className="size-3.5" />
                 </button>
               </div>
             )}
@@ -663,10 +663,10 @@ export function EditorPanel({
             ) : null}
           </div>
           <div className="border-border text-muted-foreground flex border-t px-3 py-1.5 text-[10px]">
-            <span>{snapshot?.branch ?? "本地项目"}</span>
+            <span>{snapshot?.branch ?? "Local project"}</span>
             <span className="ml-auto">
               {tab
-                ? `${tab.value.split("\n").length} 行 · UTF-8`
+                ? `${tab.value.split("\n").length} lines · UTF-8`
                 : "Monaco Editor"}
             </span>
           </div>
@@ -681,9 +681,10 @@ export function EditorPanel({
         }}
       >
         <DialogContent>
-          <DialogTitle>关闭未保存的文件？</DialogTitle>
+          <DialogTitle>Close unsaved file?</DialogTitle>
           <DialogDescription>
-            草稿尚未写入磁盘，关闭后将丢失这些修改。
+            The draft has not been written to disk. Closing will discard these
+            changes.
           </DialogDescription>
           <div className="flex justify-end gap-2">
             <Button
@@ -692,7 +693,7 @@ export function EditorPanel({
                 setClosing(null);
               }}
             >
-              保留草稿
+              Keep draft
             </Button>
             <Button
               variant="destructive"
@@ -702,7 +703,7 @@ export function EditorPanel({
                 }
               }}
             >
-              放弃并关闭
+              Discard and close
             </Button>
           </div>
         </DialogContent>

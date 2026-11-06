@@ -140,7 +140,7 @@ export function ToolCard({ item }: { item: ToolItem }): React.JSX.Element {
           <img
             key={index}
             src={`data:${block.source.media_type};base64,${block.source.data}`}
-            alt={`${item.toolName} 返回的图片`}
+            alt={`${item.toolName} image result`}
             className="my-3 max-h-96 max-w-full rounded-lg border object-contain"
           />
         ) : null,

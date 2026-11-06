@@ -153,7 +153,7 @@ export function Composer({
         <div className="flex flex-wrap gap-1 px-3 pt-3">
           {attachments.map((path) => (
             <span
-              className="bg-secondary text-secondary-foreground inline-flex items-center gap-[5px] rounded-[6px] px-[7px] py-1 text-[11px]"
+              className="bg-secondary text-secondary-foreground inline-flex items-center gap-1.25 rounded-[6px] px-1.75 py-1 text-[11px]"
               key={path}
             >
               <PaperclipIcon className="size-3" />
@@ -161,7 +161,7 @@ export function Composer({
                 {path.split(/[\\/]/u).pop()}
               </span>
               <button
-                aria-label={`移除 ${path}`}
+                aria-label={`Remove ${path}`}
                 onClick={() => {
                   setAttachments((current) =>
                     current.filter((item) => item !== path),
@@ -178,7 +178,7 @@ export function Composer({
         {query !== null && matches.length > 0 ? (
           <div
             role="listbox"
-            aria-label="命令"
+            aria-label="Commands"
             className="border-border bg-popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border py-1 shadow-lg"
           >
             {matches.map((command, index) => (
@@ -220,16 +220,16 @@ export function Composer({
           ref={ref}
           rows={1}
           autoFocus
-          aria-label="任务输入"
+          aria-label="Task input"
           placeholder={
             disabled
-              ? "未连接"
+              ? "Not connected"
               : streaming
-                ? "补充要求，Agent 会在下一轮接收…"
-                : "描述任务，或输入 / 选择技能…"
+                ? "Add a follow-up requirement. The agent will receive it in the next turn…"
+                : "Describe a task, or type / to choose a skill…"
           }
           disabled={disabled}
-          className="max-h-52 min-h-[74px] flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 text-xs leading-[1.8] shadow-none focus-visible:ring-0 md:text-xs dark:bg-transparent"
+          className="max-h-52 min-h-18.5 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 text-xs leading-[1.8] shadow-none focus-visible:ring-0 md:text-xs dark:bg-transparent"
           onChange={(event) => {
             const textarea = event.currentTarget;
             textarea.style.height = "auto";
@@ -296,8 +296,8 @@ export function Composer({
           variant="ghost"
           size="icon-sm"
           disabled={disabled}
-          title="添加文件或图片"
-          aria-label="添加文件或图片"
+          title="Add files or images"
+          aria-label="Add files or images"
           onClick={() => {
             void window.api
               .selectAttachments()
@@ -313,7 +313,7 @@ export function Composer({
         </Button>
         <span className="bg-border mx-1.25 h-3.5 w-px" />
         <button
-          className="text-muted-foreground hover:text-accent-foreground flex max-w-[48%] min-w-0 items-center gap-1.5 rounded-[5px] px-[3px] py-[5px] text-[10px] max-[1050px]:max-w-[38%]"
+          className="text-muted-foreground hover:text-accent-foreground flex max-w-[48%] min-w-0 items-center gap-1.5 rounded-[5px] px-0.75 py-1.25 text-[10px] max-[1050px]:max-w-[38%]"
           onClick={onOpenSettings}
           disabled={streaming}
           title={model}
@@ -328,8 +328,8 @@ export function Composer({
             size="icon-sm"
             variant="secondary"
             onClick={onAbort}
-            title="停止任务"
-            aria-label="停止任务"
+            title="Stop task"
+            aria-label="Stop task"
           >
             <SquareIcon className="size-3 fill-current" />
           </Button>
@@ -338,15 +338,15 @@ export function Composer({
           size="sm"
           onClick={submit}
           disabled={disabled || (!hasText && !attachments.length)}
-          className="h-[29px] rounded-[8px] text-[11px]"
+          className="h-7.25 rounded-[8px] text-[11px]"
         >
-          {streaming ? "补充" : "发送"}
+          {streaming ? "Follow up" : "Send"}
           <ArrowUpIcon className="size-3.5" />
         </Button>
       </div>
-      <div className="border-border bg-background text-muted-foreground flex items-center justify-between rounded-b-[14px] border-t px-[13px] py-2 text-[9px]">
+      <div className="border-border bg-background text-muted-foreground flex items-center justify-between rounded-b-[14px] border-t px-3.25 py-2 text-[9px]">
         <ChoiceSelect
-          label="Agent 权限模式"
+          label="Agent permission mode"
           value={
             permissionMode as
               "default" | "acceptEdits" | "plan" | "bypassPermissions"
@@ -355,15 +355,15 @@ export function Composer({
           onValueChange={onPermissionMode}
           compact
           icon={<ShieldCheckIcon />}
-          className="text-foreground hover:bg-accent dark:hover:bg-accent h-[26px] max-w-[190px] border-transparent px-[5px] text-[11px]"
+          className="text-foreground hover:bg-accent dark:hover:bg-accent h-6.5 max-w-47.5 border-transparent px-1.25 text-[11px]"
           options={[
-            { value: "default", label: "逐项授权" },
-            { value: "acceptEdits", label: "自动接受编辑" },
-            { value: "plan", label: "只读规划" },
-            { value: "bypassPermissions", label: "允许所有工具" },
+            { value: "default", label: "Ask for each action" },
+            { value: "acceptEdits", label: "Auto-accept edits" },
+            { value: "plan", label: "Read-only planning" },
+            { value: "bypassPermissions", label: "Allow all tools" },
           ]}
         />
-        <span>⇧ ↵ 换行</span>
+        <span>⇧ ↵ for newline</span>
       </div>
     </div>
   );

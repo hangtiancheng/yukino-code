@@ -18,7 +18,7 @@ export function RuntimeWorkflows({
       <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
         <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
           <WorkflowIcon />
-          工作流
+          Workflows
         </h3>
         {data.namedWorkflows.length ? (
           <div className="[&_button]:border-border [&_button:hover]:bg-secondary [&_svg]:text-accent-foreground grid grid-cols-2 gap-2.5 [&_button]:flex [&_button]:items-center [&_button]:gap-[9px] [&_button]:rounded-[9px] [&_button]:border [&_button]:p-3.5 [&_button]:text-left [&_strong]:flex-1 [&_strong]:overflow-hidden [&_strong]:text-[11px] [&_strong]:font-medium [&_strong]:text-ellipsis [&_svg]:size-[15px] [&_svg]:shrink-0 [&_svg:last-child]:w-3">
@@ -38,7 +38,7 @@ export function RuntimeWorkflows({
           </div>
         ) : (
           <p className="text-muted-foreground py-2 text-[11px]">
-            暂无项目工作流
+            No project workflows
           </p>
         )}
         <Button
@@ -49,7 +49,7 @@ export function RuntimeWorkflows({
             onPrompt("/workflows");
           }}
         >
-          管理工作流
+          Manage workflows
         </Button>
       </section>
       {data.workflows.map((run) => (
@@ -92,7 +92,7 @@ export function RuntimeWorkflows({
               <span>{agent.label ?? `Agent ${agent.id}`}</span>
               <span className="text-muted-foreground ml-auto text-xs">
                 {agent.tokenCount.toLocaleString()} tokens · {agent.toolCount}{" "}
-                次调用
+                calls
               </span>
               <RuntimeStatus status={agent.status} />
             </div>
@@ -105,7 +105,7 @@ export function RuntimeWorkflows({
           {run.logs.length ? (
             <details>
               <summary className="text-muted-foreground text-xs">
-                运行日志
+                Run logs
               </summary>
               <pre className="border-border bg-background mt-2.5 max-h-[260px] overflow-auto rounded-[7px] border p-3 font-mono text-[10px] leading-[1.7] wrap-anywhere whitespace-pre-wrap">
                 {run.logs.join("\n")}
@@ -122,7 +122,7 @@ export function RuntimeWorkflows({
               }}
             >
               <PlayIcon />
-              恢复运行
+              Resume run
             </Button>
           ) : null}
         </section>

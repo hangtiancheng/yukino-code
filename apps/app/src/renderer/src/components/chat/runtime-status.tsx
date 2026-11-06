@@ -8,22 +8,22 @@ import {
 } from "lucide-react";
 
 const labels: Record<string, string> = {
-  pending: "待处理",
-  in_progress: "进行中",
-  running: "运行中",
-  active: "进行中",
-  completed: "已完成",
-  complete: "已完成",
-  done: "已完成",
-  failed: "失败",
-  blocked: "受阻",
-  idle: "空闲",
-  stopped: "已停止",
-  cancelled: "已取消",
-  killed: "已停止",
-  paused: "已暂停",
-  budget_limited: "预算已用尽",
-  max_turns: "达到轮次上限",
+  pending: "Pending",
+  in_progress: "In progress",
+  running: "Running",
+  active: "Active",
+  completed: "Completed",
+  complete: "Completed",
+  done: "Done",
+  failed: "Failed",
+  blocked: "Blocked",
+  idle: "Idle",
+  stopped: "Stopped",
+  cancelled: "Cancelled",
+  killed: "Stopped",
+  paused: "Paused",
+  budget_limited: "Budget exhausted",
+  max_turns: "Turn limit reached",
 };
 
 export function RuntimeStatus({

@@ -80,7 +80,7 @@ function App(): React.JSX.Element {
     state.streaming,
   );
   const sessionTitle =
-    state.items.find((item) => item.kind === "user")?.text ?? "新会话";
+    state.items.find((item) => item.kind === "user")?.text ?? "New session";
   const [draftProject, setDraftProject] = useState<string | null>(null);
   const dirty = draftProject !== null && draftProject === cwd;
   const setDirty = useCallback(
@@ -220,8 +220,8 @@ function App(): React.JSX.Element {
           />
           {sidebarOpen ? (
             <button
-              className="hidden max-[1000px]:fixed max-[1000px]:inset-0 max-[1000px]:z-[35] max-[1000px]:block max-[1000px]:bg-[#100c242b] max-[1000px]:backdrop-blur-[2px]"
-              aria-label="关闭会话导航"
+              className="hidden max-[1000px]:fixed max-[1000px]:inset-0 max-[1000px]:z-35 max-[1000px]:block max-[1000px]:bg-[#100c242b] max-[1000px]:backdrop-blur-[2px]"
+              aria-label="Close session navigation"
               onClick={() => {
                 setSidebarOpen(false);
               }}
@@ -274,7 +274,7 @@ function App(): React.JSX.Element {
                 className={`bg-card flex min-h-0 min-w-[320px] flex-1 flex-col overflow-hidden ${editorOpen && editorExpanded ? "hidden" : ""}`}
                 role="main"
               >
-                <div className="text-muted-foreground flex h-[46px] shrink-0 items-center gap-[7px] px-[25px] text-[10px]">
+                <div className="text-muted-foreground flex h-11.5 shrink-0 items-center gap-1.75 px-6.25 text-[10px]">
                   <span
                     className={
                       state.streaming
@@ -285,18 +285,18 @@ function App(): React.JSX.Element {
                   <span>
                     {state.streaming
                       ? pending
-                        ? "等待你的回应"
-                        : "正在处理任务"
+                        ? "Waiting for your response"
+                        : "Working on the task"
                       : state.initializing
-                        ? "正在打开…"
+                        ? "Opening…"
                         : failed
-                          ? "未连接"
-                          : "就绪"}
+                          ? "Not connected"
+                          : "Ready"}
                   </span>
                 </div>
                 {runtime.data?.goal || runtime.data?.tasks.length ? (
                   <button
-                    className="border-border bg-background mx-[22px] mb-2.5 flex items-center gap-[9px] rounded-[9px] border px-3 py-2.5 text-left text-[11px]"
+                    className="border-border bg-background mx-5.5 mb-2.5 flex items-center gap-2.25 rounded-[9px] border px-3 py-2.5 text-left text-[11px]"
                     onClick={() => {
                       setRuntimeOpen(true);
                     }}
@@ -311,7 +311,7 @@ function App(): React.JSX.Element {
                         runtime.data.tasks.find(
                           (task) => task.status === "in_progress",
                         )?.subject ??
-                        "任务清单"}
+                        "Task list"}
                     </span>
                     {runtime.data.tasks.length ? (
                       <small className="text-muted-foreground shrink-0 text-[10px] tabular-nums">
@@ -330,14 +330,14 @@ function App(): React.JSX.Element {
                 ) : null}
                 {failed ? (
                   <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-                    <div className="border-border bg-card flex w-[min(100%,390px)] min-w-0 flex-col items-start gap-4 rounded-[14px] border p-[26px]">
+                    <div className="border-border bg-card flex w-[min(100%,390px)] min-w-0 flex-col items-start gap-4 rounded-[14px] border p-6.5">
                       <AlertTriangleIcon className="text-warning size-7" />
                       <h2 className="text-[22px] font-semibold">
                         {init.kind === "project"
-                          ? "项目无法打开"
+                          ? "Unable to open project"
                           : init.kind === "config"
-                            ? "配置服务商"
-                            : "连接失败"}
+                            ? "Configure a provider"
+                            : "Connection failed"}
                       </h2>
                       <p className="text-muted-foreground max-w-full text-xs leading-[1.8] wrap-anywhere">
                         {init.error}
@@ -351,7 +351,7 @@ function App(): React.JSX.Element {
                         {init.kind === "project" ? (
                           <Button onClick={chooseFolder}>
                             <FolderOpenIcon />
-                            选择项目
+                            Choose project
                           </Button>
                         ) : (
                           <Button
@@ -359,7 +359,9 @@ function App(): React.JSX.Element {
                               setSettingsOpen(true);
                             }}
                           >
-                            {init.kind === "config" ? "添加服务商" : "检查设置"}
+                            {init.kind === "config"
+                              ? "Add provider"
+                              : "Check settings"}
                           </Button>
                         )}
                         <Button
@@ -367,7 +369,7 @@ function App(): React.JSX.Element {
                           onClick={chat.retry}
                           disabled={state.initializing}
                         >
-                          {state.initializing ? <Spinner /> : null}重新连接
+                          {state.initializing ? <Spinner /> : null}Reconnect
                         </Button>
                       </div>
                     </div>
@@ -375,7 +377,7 @@ function App(): React.JSX.Element {
                 ) : booting ? (
                   <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-5 text-center text-xs">
                     <Spinner />
-                    正在连接 Agent…
+                    Connecting to the agent…
                   </div>
                 ) : hasItems ? (
                   <ChatArea
@@ -394,7 +396,7 @@ function App(): React.JSX.Element {
                   </div>
                 )}
                 {!failed && !booting ? (
-                  <footer className="mx-auto w-full max-w-[850px] shrink-0 px-[22px] pt-3.5 pb-[13px] max-[1200px]:px-4">
+                  <footer className="mx-auto w-full max-w-212.5 shrink-0 px-5.5 pt-3.5 pb-3.25 max-[1200px]:px-4">
                     <Composer
                       key={state.activeSessionId}
                       streaming={state.streaming}
@@ -406,7 +408,7 @@ function App(): React.JSX.Element {
                           ? composerDraft
                           : null
                       }
-                      model={init?.ok ? init.model : "未连接"}
+                      model={init?.ok ? init.model : "Not connected"}
                       permissionMode={
                         init?.ok ? init.permissionMode : "default"
                       }
@@ -417,7 +419,7 @@ function App(): React.JSX.Element {
                         void window.api.setPermissionMode(mode).catch(report);
                       }}
                     />
-                    <div className="text-muted-foreground flex items-center gap-2 px-[3px] pt-[9px] text-[9px]">
+                    <div className="text-muted-foreground flex items-center gap-2 px-0.75 pt-2.25 text-[9px]">
                       {init?.ok ? (
                         <span className="flex items-center gap-1.5">
                           <CpuIcon className="size-3" />
@@ -426,8 +428,8 @@ function App(): React.JSX.Element {
                       ) : null}
                       {state.usage ? (
                         <span className="ml-auto shrink-0 tabular-nums max-[1000px]:max-w-[45%] max-[1000px]:truncate">
-                          {formatTokens(state.usage.inputTokens)} 输入 /{" "}
-                          {formatTokens(state.usage.outputTokens)} 输出
+                          {formatTokens(state.usage.inputTokens)} input /{" "}
+                          {formatTokens(state.usage.outputTokens)} output
                         </span>
                       ) : null}
                     </div>
@@ -437,7 +439,7 @@ function App(): React.JSX.Element {
               {cwd ? (
                 <>
                   <Separator
-                    aria-label="调整代码工作区宽度"
+                    aria-label="Resize code workspace"
                     className={`bg-border hover:bg-accent-foreground focus:bg-accent-foreground z-5 -mx-0.5 w-1.25 shrink-0 cursor-col-resize touch-none border-x-2 border-x-transparent bg-clip-content ${!editorOpen || editorExpanded ? "hidden" : ""}`}
                   />
                   <Panel
@@ -465,14 +467,14 @@ function App(): React.JSX.Element {
                 </>
               ) : null}
             </Group>
-            <div className="border-border bg-card text-muted-foreground flex h-7 shrink-0 items-center gap-3.5 border-t px-[15px] text-[10px]">
+            <div className="border-border bg-card text-muted-foreground flex h-7 shrink-0 items-center gap-3.5 border-t px-3.75 text-[10px]">
               <span className="max-w-[50%] truncate" title={cwd ?? ""}>
-                {cwd ?? "请选择项目文件夹"}
+                {cwd ?? "Choose a project folder"}
               </span>
               <span className="ml-auto flex items-center gap-1.5">
                 <BoxesIcon className="size-3" />
                 {runtime.data
-                  ? `${runtime.data.tools.length} 工具 · ${runtime.data.mcpServers.length} MCP`
+                  ? `${runtime.data.tools.length} tools · ${runtime.data.mcpServers.length} MCP`
                   : ""}
               </span>
               {state.usage && init?.ok ? (
@@ -481,8 +483,8 @@ function App(): React.JSX.Element {
                   title={`${state.usage.inputTokens.toLocaleString()} / ${init.contextWindow.toLocaleString()} tokens`}
                 >
                   <progress
-                    className="bg-muted [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary h-[3px] w-[42px] appearance-none overflow-hidden rounded-[3px] border-0"
-                    aria-label="上下文使用率"
+                    className="bg-muted [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary h-0.75 w-10.5 appearance-none overflow-hidden rounded-[3px] border-0"
+                    aria-label="Context usage"
                     max={init.contextWindow}
                     value={state.usage.inputTokens}
                   />
@@ -546,9 +548,10 @@ function App(): React.JSX.Element {
           }}
         >
           <DialogContent>
-            <DialogTitle>有尚未保存的文件</DialogTitle>
+            <DialogTitle>Unsaved files</DialogTitle>
             <DialogDescription>
-              切换项目可能丢失编辑器中的草稿。请先保存，或选择继续切换。
+              Switching projects may discard drafts in the editor. Save first,
+              or continue switching.
             </DialogDescription>
             <div className="flex justify-end gap-2">
               <Button
@@ -557,7 +560,7 @@ function App(): React.JSX.Element {
                   setPendingAction(null);
                 }}
               >
-                返回保存
+                Return to save
               </Button>
               <Button
                 variant="destructive"
@@ -566,7 +569,7 @@ function App(): React.JSX.Element {
                   setPendingAction(null);
                 }}
               >
-                继续切换
+                Switch anyway
               </Button>
             </div>
           </DialogContent>

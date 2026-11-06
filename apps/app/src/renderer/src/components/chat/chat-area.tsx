@@ -41,7 +41,7 @@ function StreamingIndicator({
   return (
     <div className="text-muted-foreground flex items-center gap-2 px-5 py-2 text-xs">
       <Spinner />
-      {subagents > 0 ? `${subagents} 个 Agent 运行中` : "执行中…"}
+      {subagents > 0 ? `${subagents} agents running` : "Running…"}
     </div>
   );
 }
@@ -66,7 +66,8 @@ export function ChatArea({
   // The streaming indicator rides along as a trailing virtual row — but only
   // when the last row isn't already rendering its own loading visual
   // (a streaming assistant row shows Thinking/pending, a running tool row
-  // shows its own spinner). Otherwise "执行中…" would spin alongside them.
+  // shows its own spinner). Otherwise the "Running…" indicator would spin
+  // alongside them.
   const lastItem = items[items.length - 1];
   const lastRowBusy =
     (lastItem?.kind === "assistant" && lastItem.streaming) ||
@@ -128,7 +129,7 @@ export function ChatArea({
         ref={scrollRef}
         onScroll={handleScroll}
         role="log"
-        aria-label="对话消息"
+        aria-label="Conversation messages"
         className="min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain"
       >
         <div
@@ -194,9 +195,9 @@ export function ChatArea({
           }
         >
           <ArrowDownIcon />
-          <span className="sr-only">回到最新消息</span>
+          <span className="sr-only">Jump to latest</span>
         </TooltipTrigger>
-        <TooltipContent>回到最新消息</TooltipContent>
+        <TooltipContent>Jump to latest</TooltipContent>
       </Tooltip>
     </div>
   );

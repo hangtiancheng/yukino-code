@@ -1,31 +1,31 @@
 # Yukino Desktop
 
-基于 `@yukino.js/yukino` 的 Electron 工作区。
+An Electron workspace built on `@yukino.js/yukino`.
 
 ```sh
-pnpm install --registry https://registry.npmmirror.com
+pnpm install
 pnpm dev
 ```
 
-顶部集中提供项目选择、命令中心、Agent 工作台、设置与代码工作区；会话侧栏仅管理会话。首次启动在设置中添加服务商。`~/.yukino/config.yaml` 支持 MCP、Hooks、记忆和沙箱配置。
+The header provides project selection, the command center, the Agent workbench, settings, and the code workspace; the session sidebar manages sessions only. Add a provider in settings on first launch. `~/.yukino/config.yaml` supports MCP, hooks, memory, and sandbox configuration.
 
-- 会话：`!` / `!!` 原生 Shell、后台完成自动唤醒、跨项目历史、恢复、流式输出、推理过程、授权、提问、任务中追加要求、停止。
-- 工作台：目标与 Token 预算、任务依赖、Agent 与团队进度、后台输出与停止、工作流阶段与恢复、工具搜索、Skills、MCP、记忆、沙箱、检查点恢复。
-- 交互：命令中心、附件、回复复制、浅鼠尾草绿明暗主题、窄窗口导航。
-- 编辑器：Monaco、文件树、Git 变更、实时刷新、差异对比、草稿、冲突检查、原子保存。
-- 快捷键：`⌘/Ctrl K` 命令中心、`⌘/Ctrl B` 会话侧栏、`⌘/Ctrl J` 编辑器、`⌘/Ctrl N` 新会话、`⌘/Ctrl ,` 设置、`⌘/Ctrl S` 保存。
+- Sessions: native shell via `!` / `!!`, automatic wake-up when background work finishes, cross-project history, session restore, streaming output, reasoning traces, permissions, questions, follow-up requirements during a run, and stop.
+- Workbench: goals and token budgets, task dependencies, agent and team progress, background output and cancellation, workflow phases and resume, tool search, skills, MCP, memory, sandbox, and checkpoint restore.
+- Interaction: command center, attachments, reply copying, a light sage-green theme in light and dark modes, and navigation for narrow windows.
+- Editor: Monaco, file tree, Git changes, live refresh, diff comparison, drafts, conflict detection, and atomic saves.
+- Shortcuts: `⌘/Ctrl K` command center, `⌘/Ctrl B` session sidebar, `⌘/Ctrl J` editor, `⌘/Ctrl N` new session, `⌘/Ctrl ,` settings, `⌘/Ctrl S` save.
 
-编辑器关闭时保留草稿；切换项目、关闭文件或退出时处理未保存内容。文本文件上限 2 MB，不编辑二进制文件或项目外文件。变更对比以本次编辑前内容或 Git HEAD 为基线。
+Drafts survive editor closure; unsaved content is handled before switching projects, closing files, or quitting. Text files are limited to 2 MB, and binary files or files outside the project are never edited. Change comparisons use the content before the current edit or Git HEAD as the baseline.
 
-复用 Base UI、cmdk、TanStack Query / Virtual、Monaco、Streamdown、React Resizable Panels、Lucide 与 Sonner。Agent 执行、授权、团队、工作流和会话持久化使用 Yukino 原生能力。
+The app builds on Base UI, cmdk, TanStack Query / Virtual, Monaco, Streamdown, React Resizable Panels, Lucide, and Sonner. Agent execution, permissions, teams, workflows, and session persistence use Yukino's native capabilities.
 
 ```sh
 pnpm happy:fix
 pnpm test:ui
 pnpm build
-node tests/electron-smoke.mjs
+pnpm exec tsx tests/electron-smoke.ts
 ```
 
-失效项目在启动前进行路径与权限校验；恢复历史前验证目标目录，保留当前会话。初始化错误显示简短恢复指引，路径与技术信息可展开查看。权限、协议、沙箱、恢复范围与主题统一使用 shadcn / Base UI Select，工作台使用可键盘导航的 Tabs，命令中心使用 shadcn Command / cmdk。
+Unavailable projects are validated for path and permissions before startup; the target directory is verified before restoring history, preserving the current session. Initialization errors show concise recovery guidance, with paths and technical details available on demand. Permissions, protocols, sandbox mode, restore scope, and theme all use shadcn / Base UI Select; the workbench uses keyboard-navigable Tabs, and the command center uses shadcn Command / cmdk.
 
-界面测试使用模拟 Agent；Electron 测试使用临时项目和独立应用数据目录，不发送模型请求。macOS 默认使用本机 Chrome，其他平台可运行 `pnpm exec playwright install chromium` 或通过 `CHROME_PATH` 指定浏览器。
+UI tests use a mock Agent; Electron tests use temporary projects and an isolated application data directory without sending model requests. macOS uses the locally installed Chrome by default; other platforms can run `pnpm exec playwright install chromium` or specify a browser through `CHROME_PATH`.

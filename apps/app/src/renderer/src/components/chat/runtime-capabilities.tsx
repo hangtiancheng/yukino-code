@@ -46,8 +46,8 @@ export function RuntimeCapabilities({
               onChange={(event) => {
                 setSearch(event.target.value);
               }}
-              aria-label="搜索能力"
-              placeholder="搜索工具与技能…"
+              aria-label="Search capabilities"
+              placeholder="Search tools and skills…"
             />
           </div>
           <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
@@ -62,7 +62,7 @@ export function RuntimeCapabilities({
                 size="icon-sm"
                 variant="ghost"
                 disabled={disabled || busy}
-                aria-label="重新加载技能"
+                aria-label="Reload skills"
                 onClick={() => {
                   onAction({ type: "reload_skills" });
                 }}
@@ -89,7 +89,7 @@ export function RuntimeCapabilities({
                       {data.activeSkills.includes(skill.name) ? (
                         <span className="text-success ml-auto inline-flex items-center gap-[3px] text-[9px] [&_svg]:size-[11px]">
                           <CheckIcon />
-                          已激活
+                          Active
                         </span>
                       ) : null}
                     </strong>
@@ -99,13 +99,15 @@ export function RuntimeCapabilities({
                   </button>
                 ))
             ) : (
-              <p className="text-muted-foreground py-2 text-[11px]">暂无技能</p>
+              <p className="text-muted-foreground py-2 text-[11px]">
+                No skills
+              </p>
             )}
           </section>
           <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
             <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
               <WrenchIcon />
-              工具
+              Tools
               <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
                 {data.tools.length}
               </span>
@@ -140,7 +142,7 @@ export function RuntimeCapabilities({
                 variant="ghost"
                 size="icon-sm"
                 className="ml-auto"
-                aria-label="重新连接 MCP"
+                aria-label="Reconnect MCP"
                 disabled={disabled || busy}
                 onClick={() => {
                   onAction({ type: "reload_mcp" });
@@ -157,21 +159,23 @@ export function RuntimeCapabilities({
                 >
                   <span className="bg-success inline-block size-1.5 shrink-0 rounded-full" />
                   <strong>{name}</strong>
-                  <span className="text-success ml-auto text-xs">已连接</span>
+                  <span className="text-success ml-auto text-xs">
+                    Connected
+                  </span>
                 </div>
               ))
             ) : (
               <p className="text-muted-foreground py-2 text-[11px]">
-                未连接 MCP
+                No MCP servers connected
               </p>
             )}
           </section>
           <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
             <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
               <DatabaseIcon />
-              记忆
+              Memory
               <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
-                {data.memoryEnabled ? data.memories.length : "已关闭"}
+                {data.memoryEnabled ? data.memories.length : "Off"}
               </span>
             </h3>
             {data.memories.length ? (
@@ -191,19 +195,21 @@ export function RuntimeCapabilities({
                 </details>
               ))
             ) : (
-              <p className="text-muted-foreground py-2 text-[11px]">暂无记忆</p>
+              <p className="text-muted-foreground py-2 text-[11px]">
+                No memories
+              </p>
             )}
           </section>
           <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
             <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
               <ShieldCheckIcon />
-              运行环境
+              Runtime environment
             </h3>
             <div className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium">
               <ShieldCheckIcon className="text-muted-foreground size-4" />
-              <span>沙箱</span>
+              <span>Sandbox</span>
               <ChoiceSelect
-                label="沙箱模式"
+                label="Sandbox mode"
                 className="ml-auto"
                 disabled={disabled || busy}
                 value={
@@ -217,24 +223,24 @@ export function RuntimeCapabilities({
                   onAction({ type: "sandbox", mode });
                 }}
                 options={[
-                  { value: "off", label: "关闭" },
-                  { value: "manual", label: "手动授权" },
-                  { value: "auto", label: "沙箱内自动授权" },
+                  { value: "off", label: "Off" },
+                  { value: "manual", label: "Ask manually" },
+                  { value: "auto", label: "Auto-allow in sandbox" },
                 ]}
               />
             </div>
             <div className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium">
               <BrainCircuitIcon className="text-muted-foreground size-4" />
-              <span>协调模式</span>
+              <span>Coordinator mode</span>
               <span className="text-muted-foreground ml-auto text-xs">
-                {data.coordinator ? "已启用" : "已关闭"}
+                {data.coordinator ? "Enabled" : "Disabled"}
               </span>
             </div>
             <div className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium">
               <FileCogIcon className="text-muted-foreground size-4" />
               <span>Hooks</span>
               <span className="text-muted-foreground ml-auto text-xs">
-                {data.hooks ? "已加载" : "未配置"}
+                {data.hooks ? "Loaded" : "Not configured"}
               </span>
             </div>
           </section>
@@ -248,7 +254,7 @@ export function RuntimeCapabilities({
               }}
             >
               <BrainCircuitIcon />
-              压缩上下文
+              Compact context
             </Button>
           </div>
         </>

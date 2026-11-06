@@ -37,7 +37,7 @@ export function RuntimeTasks({
       <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
         <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
           <TargetIcon />
-          持续目标
+          Persistent goal
           {goal ? (
             <RuntimeStatus className="ml-auto" status={goal.status} />
           ) : null}
@@ -49,10 +49,10 @@ export function RuntimeTasks({
             </p>
             <div className="[&>span]:text-muted-foreground [&>span>strong]:text-foreground flex items-center gap-[26px] py-[7px] [&>span]:flex [&>span]:flex-col [&>span]:gap-[3px] [&>span]:text-[9px] [&>span>strong]:text-[19px] [&>span>strong]:font-[550] [&>span>strong]:tracking-[-0.5px] [&>span>strong]:tabular-nums">
               <span>
-                <strong>{goal.turnsExecuted}</strong>轮次
+                <strong>{goal.turnsExecuted}</strong>turns
               </span>
               <span>
-                <strong>{Math.round(goal.activeMs / 60000)}</strong>分钟
+                <strong>{Math.round(goal.activeMs / 60000)}</strong>minutes
               </span>
               <span>
                 <strong>{goal.tokensUsed.toLocaleString()}</strong>
@@ -64,7 +64,7 @@ export function RuntimeTasks({
             {goal.tokenBudget !== null ? (
               <progress
                 className="bg-muted [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary h-1 w-full appearance-none overflow-hidden rounded-[3px] border-0 [&::-moz-progress-bar]:rounded-[3px] [&::-webkit-progress-bar]:rounded-[3px] [&::-webkit-progress-value]:rounded-[3px] [&::-webkit-progress-value]:transition-[width] [&::-webkit-progress-value]:duration-[250ms]"
-                aria-label="目标预算用量"
+                aria-label="Goal budget usage"
                 max={goal.tokenBudget}
                 value={Math.min(goal.tokensUsed, goal.tokenBudget)}
               />
@@ -83,7 +83,7 @@ export function RuntimeTasks({
                   }}
                 >
                   <PauseIcon />
-                  暂停目标
+                  Pause goal
                 </Button>
               ) : ["paused", "blocked", "max_turns"].includes(goal.status) ? (
                 <Button
@@ -98,13 +98,13 @@ export function RuntimeTasks({
                   }}
                 >
                   <PlayIcon />
-                  继续目标
+                  Resume goal
                 </Button>
               ) : null}
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="清除目标"
+                aria-label="Clear goal"
                 disabled={streaming || busy}
                 onClick={() => {
                   onAction({ type: "clear_goal" });
@@ -128,8 +128,8 @@ export function RuntimeTasks({
           >
             <Input
               className="text-[11px] md:text-[11px]"
-              aria-label="目标"
-              placeholder="设置一个持续推进的目标…"
+              aria-label="Goal"
+              placeholder="Set a goal to keep working toward…"
               value={objective}
               onChange={(event) => {
                 setObjective(event.target.value);
@@ -141,8 +141,8 @@ export function RuntimeTasks({
             <div className="flex gap-2">
               <Input
                 className="max-w-48 text-[11px] md:text-[11px]"
-                aria-label="Token 预算"
-                placeholder="Token 预算（可选）"
+                aria-label="Token budget"
+                placeholder="Token budget (optional)"
                 type="number"
                 min={1}
                 max={Number.MAX_SAFE_INTEGER}
@@ -159,7 +159,7 @@ export function RuntimeTasks({
                 disabled={streaming || !objective.trim()}
               >
                 <PlayIcon />
-                开始
+                Start
               </Button>
             </div>
           </form>
@@ -168,7 +168,7 @@ export function RuntimeTasks({
       <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
         <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
           <ListChecksIcon />
-          任务清单
+          Task list
           <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
             {completed} / {data.tasks.length}
           </span>
@@ -177,7 +177,7 @@ export function RuntimeTasks({
           <>
             <progress
               className="bg-muted [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary h-1 w-full appearance-none overflow-hidden rounded-[3px] border-0 [&::-moz-progress-bar]:rounded-[3px] [&::-webkit-progress-bar]:rounded-[3px] [&::-webkit-progress-value]:rounded-[3px] [&::-webkit-progress-value]:transition-[width] [&::-webkit-progress-value]:duration-[250ms]"
-              aria-label="任务完成进度"
+              aria-label="Task completion"
               max={data.tasks.length}
               value={completed}
             />
@@ -198,14 +198,18 @@ export function RuntimeTasks({
                 </summary>
                 <div className="text-muted-foreground px-0 pb-[13px] pl-7 text-[11px] leading-[1.8] wrap-anywhere whitespace-pre-wrap [&_p]:mt-[7px]">
                   {task.description || task.subject}
-                  {task.owner ? <p>负责人 · {task.owner}</p> : null}
+                  {task.owner ? <p>Owner · {task.owner}</p> : null}
                   {task.blockedBy.length ? (
-                    <p>前置任务 · {task.blockedBy.join(", ")}</p>
+                    <p>Blocked by · {task.blockedBy.join(", ")}</p>
                   ) : null}
                   {task.priority ? (
                     <p>
-                      优先级 ·{" "}
-                      {{ high: "高", medium: "中", low: "低" }[task.priority]}
+                      Priority ·{" "}
+                      {
+                        { high: "High", medium: "Medium", low: "Low" }[
+                          task.priority
+                        ]
+                      }
                     </p>
                   ) : null}
                 </div>
@@ -215,7 +219,7 @@ export function RuntimeTasks({
         ) : (
           <div className="border-border text-muted-foreground flex flex-col items-center justify-center gap-3 rounded-[10px] border border-dashed p-9 text-[11px] [&>svg]:size-[27px] [&>svg]:opacity-45">
             <ListChecksIcon />
-            <span>暂无任务</span>
+            <span>No tasks yet</span>
           </div>
         )}
       </section>

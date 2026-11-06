@@ -13,10 +13,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { Workspace } from "../src/main/workspace.ts";
+import type { FileSnapshot } from "../src/shared/workspace-types.ts";
 
-async function fixture(run) {
+async function fixture(
+  run: (workspace: Workspace, root: string) => Promise<void>,
+): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "yukino-workspace-"));
-  const workspace = new Workspace(root, () => {});
+  const workspace = new Workspace(root, () => undefined);
   try {
     await run(workspace, root);
   } finally {
@@ -25,7 +28,7 @@ async function fixture(run) {
   }
 }
 
-test("reads and saves text without overwriting concurrent disk changes", async () =>
+void test("reads and saves text without overwriting concurrent disk changes", async () =>
   fixture(async (workspace, root) => {
     await writeFile(join(root, "hello.ts"), "const hello = 1;\n");
     const initial = await workspace.read("hello.ts");
@@ -33,7 +36,7 @@ test("reads and saves text without overwriting concurrent disk changes", async (
     await writeFile(join(root, "hello.ts"), "agent changed this\n");
     await assert.rejects(
       workspace.save("hello.ts", "stale user draft", initial.revision),
-      /已被 Agent/,
+      /modified by the agent/,
     );
     assert.equal(
       await readFile(join(root, "hello.ts"), "utf8"),
@@ -41,14 +44,20 @@ test("reads and saves text without overwriting concurrent disk changes", async (
     );
   }));
 
-test("blocks traversal and symlinks escaping the workspace", async () =>
+void test("blocks traversal and symlinks escaping the workspace", async () =>
   fixture(async (workspace, root) => {
     const outside = await mkdtemp(join(tmpdir(), "yukino-outside-"));
     try {
       await writeFile(join(outside, "secret.txt"), "secret");
       await symlink(outside, join(root, "escape"));
-      await assert.rejects(workspace.read("../outside"), /当前项目/);
-      await assert.rejects(workspace.read("escape/secret.txt"), /当前项目/);
+      await assert.rejects(
+        workspace.read("../outside"),
+        /inside the current project/,
+      );
+      await assert.rejects(
+        workspace.read("escape/secret.txt"),
+        /inside the current project/,
+      );
       assert.equal(
         (await workspace.list()).some((entry) => entry.name === "escape"),
         false,
@@ -58,7 +67,7 @@ test("blocks traversal and symlinks escaping the workspace", async () =>
     }
   }));
 
-test("hides generated directories and rejects binary and oversized files", async () =>
+void test("hides generated directories and rejects binary and oversized files", async () =>
   fixture(async (workspace, root) => {
     await mkdir(join(root, "node_modules"));
     await writeFile(join(root, "binary"), Buffer.from([1, 0, 2]));
@@ -67,23 +76,26 @@ test("hides generated directories and rejects binary and oversized files", async
       (await workspace.list()).some((entry) => entry.name === "node_modules"),
       false,
     );
-    await assert.rejects(workspace.read("binary"), /二进制/);
+    await assert.rejects(workspace.read("binary"), /binary/);
     await assert.rejects(workspace.read("large"), /2 MB/);
   }));
 
-test("keeps pre-edit baseline and emits watcher updates for Agent writes", async () =>
+void test("keeps pre-edit baseline and emits watcher updates for Agent writes", async () =>
   fixture(async (workspace, root) => {
     await writeFile(join(root, "source.ts"), "before\n");
     await workspace.capture("source.ts");
-    const update = new Promise((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error("watcher timed out")),
-        4000,
-      );
+    const update = new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error("watcher timed out"));
+      }, 4000);
       const watcher = new Workspace(root, (path) => {
         clearTimeout(timer);
         watcher.dispose();
-        resolve(path);
+        if (path) {
+          resolve(path);
+        } else {
+          reject(new Error("watcher reported no path"));
+        }
       });
       watcher.start();
     });
@@ -94,9 +106,9 @@ test("keeps pre-edit baseline and emits watcher updates for Agent writes", async
     assert.equal(next.content, "after\n");
   }));
 
-test("uses paths relative to a nested project and supports deleted file diffs", async () =>
+void test("uses paths relative to a nested project and supports deleted file diffs", async () =>
   fixture(async (_workspace, root) => {
-    const git = (...args) =>
+    const git = (...args: string[]) =>
       execFileSync("git", args, { cwd: root, stdio: "pipe" });
     git("init");
     git("config", "user.email", "test@example.com");
@@ -106,7 +118,7 @@ test("uses paths relative to a nested project and supports deleted file diffs", 
     git("add", ".");
     git("commit", "-m", "fixture");
     await writeFile(join(root, "nested", "file with spaces.ts"), "changed\n");
-    const nested = new Workspace(join(root, "nested"), () => {});
+    const nested = new Workspace(join(root, "nested"), () => undefined);
     try {
       assert.deepEqual((await nested.snapshot()).changes, [
         { path: "file with spaces.ts", status: "M" },
@@ -122,14 +134,14 @@ test("uses paths relative to a nested project and supports deleted file diffs", 
       assert.equal(deleted.content, "");
       await assert.rejects(
         nested.save(deleted.path, "draft", deleted.revision),
-        /已删除/,
+        /deleted/,
       );
     } finally {
       nested.dispose();
     }
   }));
 
-test("serializes saves so only one editor can use a disk revision", async () =>
+void test("serializes saves so only one editor can use a disk revision", async () =>
   fixture(async (workspace, root) => {
     await writeFile(join(root, "same.ts"), "initial\n");
     const initial = await workspace.read("same.ts");
@@ -141,11 +153,22 @@ test("serializes saves so only one editor can use a disk revision", async () =>
       results.filter((result) => result.status === "fulfilled").length,
       1,
     );
-    const winner = results.find((result) => result.status === "fulfilled");
-    const loser = results.find((result) => result.status === "rejected");
+    const winner = results.find(
+      (result): result is PromiseFulfilledResult<FileSnapshot> =>
+        result.status === "fulfilled",
+    );
+    assert.ok(winner);
     assert.equal(
       await readFile(join(root, "same.ts"), "utf8"),
       winner.value.content,
     );
-    assert.match(loser.reason.message, /文件已被 Agent 或其他程序修改/);
+    const loser = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    assert.ok(loser);
+    assert.ok(loser.reason instanceof Error);
+    assert.match(
+      loser.reason.message,
+      /modified by the agent or another program/,
+    );
   }));

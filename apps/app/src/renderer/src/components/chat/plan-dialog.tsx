@@ -47,8 +47,10 @@ export function PlanDialog(): React.JSX.Element {
         className="flex max-h-[85vh] flex-col sm:max-w-2xl"
         showCloseButton={false}
       >
-        <DialogTitle>执行计划</DialogTitle>
-        <DialogDescription>执行时仍需工具授权。</DialogDescription>
+        <DialogTitle>Execute plan</DialogTitle>
+        <DialogDescription>
+          Tool permissions are still required during execution.
+        </DialogDescription>
         <div className="min-h-0 overflow-auto rounded-lg border p-4">
           {plan ? <Markdown text={plan.content} /> : null}
         </div>
@@ -57,8 +59,8 @@ export function PlanDialog(): React.JSX.Element {
           onChange={(event) => {
             setFeedback(event.target.value);
           }}
-          placeholder="修改意见"
-          aria-label="计划修改意见"
+          placeholder="Feedback"
+          aria-label="Plan feedback"
         />
         <div className="flex justify-end gap-2">
           <Button
@@ -70,7 +72,7 @@ export function PlanDialog(): React.JSX.Element {
                 .catch((error: unknown) => toast.error(String(error)));
             }}
           >
-            暂不执行
+            Cancel execution
           </Button>
           <Button
             variant="outline"
@@ -79,7 +81,7 @@ export function PlanDialog(): React.JSX.Element {
               respond("feedback");
             }}
           >
-            修改计划
+            Revise plan
           </Button>
           <Button
             disabled={busy}
@@ -87,7 +89,7 @@ export function PlanDialog(): React.JSX.Element {
               respond("approve");
             }}
           >
-            批准并执行
+            Approve and run
           </Button>
         </div>
       </DialogContent>

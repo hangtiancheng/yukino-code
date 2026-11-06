@@ -27,7 +27,7 @@ export default defineConfig(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx,mts}"],
     extends: [
       eslint.configs.recommended,
       tseslint.configs.strictTypeChecked,

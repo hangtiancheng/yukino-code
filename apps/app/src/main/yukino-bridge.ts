@@ -301,14 +301,17 @@ export class YukinoBridge {
       try {
         config = Config.loadConfig(undefined, { allowEmptyProviders: true });
       } catch (error) {
-        return this.initError("服务商配置无法读取，请检查配置文件。", {
-          kind: "config",
-          configPath,
-          details: error instanceof Error ? error.message : String(error),
-        });
+        return this.initError(
+          "Could not read the provider configuration. Check the config file.",
+          {
+            kind: "config",
+            configPath,
+            details: error instanceof Error ? error.message : String(error),
+          },
+        );
       }
       if (config.providers.length === 0) {
-        return this.initError("添加服务商后即可开始使用 Agent。", {
+        return this.initError("Add a provider to start using the agent.", {
           kind: "config",
           configPath,
         });
@@ -335,7 +338,7 @@ export class YukinoBridge {
       return this.initError(
         error instanceof ProjectError
           ? error.message
-          : "Agent 初始化失败，请检查配置后重试。",
+          : "Agent initialization failed. Check the configuration and try again.",
         {
           kind: error instanceof ProjectError ? "project" : "runtime",
           details:
@@ -683,14 +686,14 @@ export class YukinoBridge {
     excludeFromContext: boolean,
   ): Promise<void> {
     if (!command) {
-      throw new Error("请在 ! 后输入命令");
+      throw new Error("Enter a command after !");
     }
     const bash = handle.registry.getInstanceOf(
       "Bash",
       YukinoTools.Bash.BashTool,
     );
     if (!bash) {
-      throw new Error("Bash 工具不可用");
+      throw new Error("The Bash tool is unavailable");
     }
     const controller = new AbortController();
     this.commandController = controller;
@@ -990,7 +993,7 @@ export class YukinoBridge {
   async selectFolder(): Promise<{ cwd: string | null }> {
     this.assertIdle();
     const result = await dialog.showOpenDialog({
-      title: "选择项目文件夹",
+      title: "Select Project Folder",
       defaultPath: this.cwd,
       properties: ["openDirectory", "createDirectory"],
     });
@@ -1274,7 +1277,7 @@ export class YukinoBridge {
               permissionChecker: handle.checker,
               onPermissionRequest: this.createPermissionCallback(),
             })
-          : "Workflow 服务未初始化";
+          : "Workflow service is not initialized";
         emit({ type: "system", data: { message } });
         return;
       }
@@ -1728,7 +1731,7 @@ export class YukinoBridge {
     this.assertIdle();
     const trimmed = model.trim();
     if (!trimmed) {
-      throw new Error("请输入模型名称");
+      throw new Error("Enter a model name");
     }
     if (this.initPromise) {
       await this.initPromise;
@@ -1791,7 +1794,9 @@ export class YukinoBridge {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`无法切换模型：${message}`, { cause: error });
+        throw new Error(`Could not switch models: ${message}`, {
+          cause: error,
+        });
       }
       // A save failure must not undo the runtime switch.
       let saved = true;
@@ -1804,7 +1809,10 @@ export class YukinoBridge {
       if (!saved) {
         emit({
           type: "error",
-          data: { message: "设置已生效，但无法保存到配置文件。" },
+          data: {
+            message:
+              "Settings are active but could not be saved to the config file.",
+          },
         });
       }
     } finally {
@@ -1822,7 +1830,7 @@ export class YukinoBridge {
     this.providers = config.providers;
     const provider = this.providers[index];
     if (!provider) {
-      throw new Error("服务商不存在，请刷新设置");
+      throw new Error("The provider no longer exists. Refresh settings.");
     }
     const handle = this.handle;
     if (!handle) {
@@ -1856,7 +1864,9 @@ export class YukinoBridge {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`无法切换服务商：${message}`, { cause: error });
+        throw new Error(`Could not switch providers: ${message}`, {
+          cause: error,
+        });
       }
       // A save failure must not undo the runtime switch.
       let saved = true;
@@ -1869,7 +1879,10 @@ export class YukinoBridge {
       if (!saved) {
         emit({
           type: "error",
-          data: { message: "设置已生效，但无法保存到配置文件。" },
+          data: {
+            message:
+              "Settings are active but could not be saved to the config file.",
+          },
         });
       }
     } finally {
@@ -1895,7 +1908,9 @@ export class YukinoBridge {
         handle.client.getThinkingLevel?.() ?? (level as ThinkingLevel);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`无法设置推理深度：${message}`, { cause: error });
+      throw new Error(`Could not set the thinking level: ${message}`, {
+        cause: error,
+      });
     }
     const effective = this.currentThinkingLevel(handle);
     try {
@@ -1964,14 +1979,18 @@ export class YukinoBridge {
 
   private assertIdle(): void {
     if (this.streaming) {
-      throw new Error("请先停止当前任务，再切换项目、会话或设置");
+      throw new Error(
+        "Stop the current task before switching projects, sessions, or settings",
+      );
     }
   }
 
   async getRuntime(): Promise<RuntimeSnapshot> {
     const handle = this.handle;
     if (!handle) {
-      throw new Error("Agent 尚未初始化，请检查服务商配置");
+      throw new Error(
+        "The agent is not initialized. Check the provider configuration.",
+      );
     }
     return {
       tools: handle.registry.listTools().map((tool) => tool.name),
@@ -2033,7 +2052,7 @@ export class YukinoBridge {
   async runtimeAction(action: RuntimeAction): Promise<void> {
     const handle = this.handle;
     if (!handle) {
-      throw new Error("Agent 尚未初始化");
+      throw new Error("The agent is not initialized");
     }
     await applyRuntimeAction(handle, action, {
       assertIdle: () => {
@@ -2054,17 +2073,17 @@ export class YukinoBridge {
         mode,
       )
     ) {
-      throw new Error("无效的恢复方式");
+      throw new Error("Invalid restore scope");
     }
     const handle = await this.ensureHandle();
     if (!handle) {
-      throw new Error("Agent 尚未初始化");
+      throw new Error("The agent is not initialized");
     }
     const snapshots = handle.fileHistory.getSnapshots();
     const index = snapshots.findIndex((snapshot) => snapshot.id === id);
     const snapshot = snapshots[index];
     if (!snapshot) {
-      throw new Error("此检查点已失效，请刷新列表");
+      throw new Error("This checkpoint is no longer valid. Refresh the list.");
     }
     if (mode !== "conversation_only") {
       handle.fileHistory.rewind(index);
@@ -2090,7 +2109,10 @@ export class YukinoBridge {
       emit({ type: "history", data: result });
     }
     emit({ type: "workspace_changed", data: { cwd: this.cwd, path: null } });
-    emit({ type: "system", data: { message: "已恢复到所选检查点" } });
+    emit({
+      type: "system",
+      data: { message: "Restored the selected checkpoint" },
+    });
   }
 
   // ---------- ipc ----------
@@ -2098,7 +2120,7 @@ export class YukinoBridge {
   registerIpc(): void {
     const workspace = (): Workspace => {
       if (!this.workspace) {
-        throw new Error("请先打开项目");
+        throw new Error("Open a project first");
       }
       return this.workspace;
     };
@@ -2123,7 +2145,7 @@ export class YukinoBridge {
       async (_event, appId: string, operation: McpAppOperation) => {
         const handle = await this.ensureHandle();
         if (!handle) {
-          throw new Error("Agent 尚未初始化");
+          throw new Error("The agent is not initialized");
         }
         const request = MCP.Apps.McpAppRequestSchema.parse({
           ...operation,
@@ -2150,7 +2172,7 @@ export class YukinoBridge {
         const plan = this.pendingPlan;
         const handle = this.handle;
         if (plan?.id !== id || !handle) {
-          throw new Error("计划请求已失效");
+          throw new Error("The plan request has expired");
         }
         this.pendingPlan = null;
         emit({ type: "plan_approval", data: null });
@@ -2161,7 +2183,7 @@ export class YukinoBridge {
           return;
         }
         if (choice !== "approve") {
-          throw new Error("无效的计划操作");
+          throw new Error("Invalid plan action");
         }
         handle.checker.exitPlanMode("default");
         handle.conv.addSystemReminder(
@@ -2197,7 +2219,7 @@ export class YukinoBridge {
             mode,
           )
         ) {
-          throw new Error("无效的授权模式");
+          throw new Error("Invalid permission mode");
         }
         const handle = await this.ensureHandle();
         if (handle) {

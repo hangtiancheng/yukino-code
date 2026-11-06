@@ -11,7 +11,8 @@
     "lint:fix": "eslint --cache . --fix --quiet",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
+    "typecheck:test": "tsc --noEmit -p tests/tsconfig.json",
+    "typecheck": "pnpm typecheck:node && pnpm typecheck:web && pnpm typecheck:test",
     "happy": "pnpm typecheck && pnpm lint && pnpm build && pnpm test",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
@@ -22,7 +23,7 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
     "happy:fix": "pnpm typecheck && pnpm format && pnpm lint:fix && pnpm build && pnpm test",
-    "test": "tsx --test tests/*.test.mjs",
+    "test": "tsx --test tests/*.test.ts",
     "test:ui": "playwright test"
   },
   "dependencies": {

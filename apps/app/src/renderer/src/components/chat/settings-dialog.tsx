@@ -169,22 +169,22 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[80vh] flex-col overflow-hidden sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>设置</DialogTitle>
+          <DialogTitle>Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            服务商、模型与推理深度
+            Providers, models, and thinking level
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
-          <Section title="外观">
+          <Section title="Appearance">
             <ChoiceSelect
-              label="主题"
+              label="Theme"
               value={themeMode}
               onValueChange={onThemeMode}
               options={[
-                { value: "system", label: "跟随系统" },
-                { value: "light", label: "浅色" },
-                { value: "dark", label: "深色" },
+                { value: "system", label: "System" },
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
               ]}
               className="w-full"
             />
@@ -196,7 +196,7 @@ export function SettingsDialog({
             </p>
           ) : !settings ? (
             <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
-              <Spinner /> 加载中
+              <Spinner /> Loading
             </div>
           ) : (
             <fieldset
@@ -205,10 +205,10 @@ export function SettingsDialog({
             >
               {streaming ? (
                 <p className="text-muted-foreground text-xs">
-                  任务结束后可修改连接设置
+                  Connection settings can be changed after the task ends
                 </p>
               ) : null}
-              <Section title="服务商">
+              <Section title="Providers">
                 {addingProvider || settings.providers.length === 0 ? (
                   <ProviderForm
                     onCancel={() => {
@@ -230,7 +230,7 @@ export function SettingsDialog({
                       setAddingProvider(true);
                     }}
                   >
-                    添加服务商
+                    Add provider
                   </Button>
                 )}
                 <div className="flex flex-col gap-1.5">
@@ -272,7 +272,7 @@ export function SettingsDialog({
                 <>
                   <Separator />
 
-                  <Section title="模型">
+                  <Section title="Model">
                     <div className="flex gap-2">
                       <Input
                         value={modelDraft}
@@ -300,7 +300,7 @@ export function SettingsDialog({
                           applyModel(modelDraft);
                         }}
                       >
-                        应用
+                        Apply
                       </Button>
                     </div>
                     <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export function SettingsDialog({
                         ) : (
                           <RefreshCwIcon className="size-3" />
                         )}
-                        获取模型列表
+                        Fetch model list
                       </Button>
                     </div>
                     {models && models.status !== "loading" ? (
@@ -357,8 +357,8 @@ export function SettingsDialog({
                       ) : (
                         <p className="text-muted-foreground text-xs">
                           {models.status === "empty"
-                            ? "服务商未返回模型列表，可直接输入模型名称。"
-                            : "获取失败，请检查服务商连接，或手动输入模型名称。"}
+                            ? "The provider returned no model list. Enter a model name directly."
+                            : "Failed to fetch. Check the provider connection or enter a model name manually."}
                         </p>
                       )
                     ) : null}
@@ -366,7 +366,7 @@ export function SettingsDialog({
 
                   <Separator />
 
-                  <Section title="推理深度">
+                  <Section title="Thinking level">
                     <ToggleGroup
                       variant="outline"
                       size="sm"
@@ -407,7 +407,7 @@ export function SettingsDialog({
               });
             }}
           >
-            打开配置
+            Open config
           </Button>
         </div>
       </DialogContent>

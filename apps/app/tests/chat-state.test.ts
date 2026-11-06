@@ -4,15 +4,33 @@ import { test } from "node:test";
 import {
   chatReducer,
   initialChatState,
+  type ChatItem,
+  type ChatState,
 } from "../src/renderer/src/lib/chat-state.ts";
+import type { BridgeEvent, ToolContentBlock } from "../src/shared/ipc-types.ts";
 
-const reduce = (events) =>
+type ToolItem = Extract<ChatItem, { kind: "tool" }>;
+type UserItem = Extract<ChatItem, { kind: "user" }>;
+
+const reduce = (events: BridgeEvent[]): ChatState =>
   events.reduce(
     (state, event) => chatReducer(state, { type: "event", event }),
     initialChatState,
   );
 
-test("stopping a run settles every pending tool and streaming row", () => {
+function toolItem(state: ChatState, index: number): ToolItem {
+  const item = state.items[index];
+  assert.ok(item?.kind === "tool");
+  return item;
+}
+
+function userItem(state: ChatState, index: number): UserItem {
+  const item = state.items[index];
+  assert.ok(item?.kind === "user");
+  return item;
+}
+
+void test("stopping a run settles every pending tool and streaming row", () => {
   const state = reduce([
     { type: "run_state", data: { streaming: true } },
     { type: "thinking_text", data: { text: "checking" } },
@@ -21,12 +39,20 @@ test("stopping a run settles every pending tool and streaming row", () => {
     { type: "run_state", data: { streaming: false } },
   ]);
   assert.equal(state.streaming, false);
-  assert.ok(state.items.every((item) => !item.running && !item.streaming));
+  assert.ok(
+    state.items.every((item) =>
+      item.kind === "tool"
+        ? !item.running
+        : item.kind === "assistant"
+          ? !item.streaming
+          : true,
+    ),
+  );
 });
 
-test("preserves full tool output and structured image results", () => {
-  const output = "a".repeat(12000);
-  const image = {
+void test("preserves full tool output and structured image results", () => {
+  const output = "a".repeat(12_000);
+  const image: ToolContentBlock = {
     type: "image",
     source: { type: "base64", data: "AA==", media_type: "image/png" },
   };
@@ -44,11 +70,12 @@ test("preserves full tool output and structured image results", () => {
       },
     },
   ]);
-  assert.equal(state.items[0].output, output);
-  assert.deepEqual(state.items[0].contentBlocks, [image]);
+  const item = toolItem(state, 0);
+  assert.equal(item.output, output);
+  assert.deepEqual(item.contentBlocks, [image]);
 });
 
-test("session replay pairs tool results without showing tool carriers as user prompts", () => {
+void test("session replay pairs tool results without showing tool carriers as user prompts", () => {
   const state = chatReducer(initialChatState, {
     type: "load_history",
     messages: [
@@ -79,10 +106,10 @@ test("session replay pairs tool results without showing tool carriers as user pr
     state.items.map((item) => item.kind),
     ["user", "tool"],
   );
-  assert.equal(state.items[1].output, "file body");
+  assert.equal(toolItem(state, 1).output, "file body");
 });
 
-test("resuming a session clears activity indicators from the previous session", () => {
+void test("resuming a session clears activity indicators from the previous session", () => {
   const state = reduce([
     {
       type: "subagent",
@@ -99,17 +126,17 @@ test("resuming a session clears activity indicators from the previous session", 
   assert.equal(state.activeSessionId, "restored");
 });
 
-test("initialization failures stay in the recovery screen instead of accumulating chat errors", () => {
-  const failure = {
+void test("initialization failures stay in the recovery screen instead of accumulating chat errors", () => {
+  const failure: BridgeEvent = {
     type: "init_state",
-    data: { ok: false, kind: "project", error: "项目已不存在" },
+    data: { ok: false, kind: "project", error: "The project no longer exists" },
   };
   const state = reduce([failure, failure, failure]);
   assert.equal(state.items.length, 0);
   assert.equal(state.initializing, false);
 });
 
-test("live shell output is replaced by the complete final result and keeps elapsed seconds", () => {
+void test("live shell output is replaced by the complete final result and keeps elapsed seconds", () => {
   const state = reduce([
     {
       type: "tool_use",
@@ -128,13 +155,14 @@ test("live shell output is replaced by the complete final result and keeps elaps
       },
     },
   ]);
-  assert.equal(state.items[0].output, "complete");
-  assert.equal(state.items[0].elapsed, 1.2);
-  assert.equal(state.items[0].running, false);
+  const item = toolItem(state, 0);
+  assert.equal(item.output, "complete");
+  assert.equal(item.elapsed, 1.2);
+  assert.equal(item.running, false);
 });
 
-test("session replay restores excluded shell commands and structured tool content", () => {
-  const image = {
+void test("session replay restores excluded shell commands and structured tool content", () => {
+  const image: ToolContentBlock = {
     type: "image",
     source: { type: "base64", data: "AA==", media_type: "image/png" },
   };
@@ -175,7 +203,7 @@ test("session replay restores excluded shell commands and structured tool conten
       },
     ],
   });
-  assert.equal(state.items[0].text, "!!pwd");
-  assert.equal(state.items[1].output, "/project");
-  assert.deepEqual(state.items[2].contentBlocks, [image]);
+  assert.equal(userItem(state, 0).text, "!!pwd");
+  assert.equal(toolItem(state, 1).output, "/project");
+  assert.deepEqual(toolItem(state, 2).contentBlocks, [image]);
 });

@@ -15,7 +15,10 @@ export async function resolveProject(path: string): Promise<string> {
   try {
     const canonical = await realpath(path);
     if (!(await stat(canonical)).isDirectory()) {
-      throw new ProjectError("此路径不是文件夹，请重新选择项目。", path);
+      throw new ProjectError(
+        "This path is not a folder. Select a project folder.",
+        path,
+      );
     }
     await access(canonical, constants.R_OK | constants.X_OK);
     return canonical;
@@ -26,10 +29,10 @@ export async function resolveProject(path: string): Promise<string> {
     const code = (error as NodeJS.ErrnoException).code;
     throw new ProjectError(
       code === "ENOENT" || code === "ENOTDIR"
-        ? "项目文件夹已移动或删除，请重新选择项目。"
+        ? "The project folder was moved or deleted. Select it again."
         : code === "EACCES" || code === "EPERM"
-          ? "无法访问项目文件夹，请检查访问权限或选择其他项目。"
-          : "无法打开项目文件夹，请重新选择项目。",
+          ? "Cannot access the project folder. Check its permissions or choose another project."
+          : "Cannot open the project folder. Select it again.",
       path,
       { cause: error },
     );

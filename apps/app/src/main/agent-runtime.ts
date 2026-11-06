@@ -16,20 +16,20 @@ export async function applyRuntimeAction(
   switch (action.type) {
     case "stop_task":
       if (!handle.backgroundTaskManager.stop(action.id)) {
-        throw new Error("任务已结束或不存在");
+        throw new Error("The task has finished or does not exist");
       }
       return;
     case "stop_teammate": {
       const team = handle.teamManager.get(action.team);
       if (!team) {
-        throw new Error("团队不存在");
+        throw new Error("The team does not exist");
       }
       await team.stopMember(action.name);
       return;
     }
     case "pause_goal":
       if (handle.goalManager?.get()?.status !== "active") {
-        throw new Error("没有正在进行的目标");
+        throw new Error("There is no active goal");
       }
       handle.goalManager.transition("paused");
       return;
@@ -48,11 +48,11 @@ export async function applyRuntimeAction(
     case "sandbox":
       controls.assertIdle();
       if (!["auto", "manual", "off"].includes(action.mode)) {
-        throw new Error("无效的沙箱模式");
+        throw new Error("Invalid sandbox mode");
       }
       await controls.setSandbox(action.mode);
       return;
     default:
-      throw new Error("无效的工作台操作");
+      throw new Error("Invalid workbench action");
   }
 }

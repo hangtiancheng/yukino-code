@@ -18,15 +18,15 @@ function sessionTime(session: SessionSummary): number {
 function relativeTime(timestamp: number): string {
   const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
   if (minutes < 1) {
-    return "刚刚";
+    return "Just now";
   }
   if (minutes < 60) {
-    return `${minutes} 分钟前`;
+    return `${minutes}m ago`;
   }
   if (minutes < 1440) {
-    return `${Math.floor(minutes / 60)} 小时前`;
+    return `${Math.floor(minutes / 60)}h ago`;
   }
-  return `${Math.floor(minutes / 1440)} 天前`;
+  return `${Math.floor(minutes / 1440)}d ago`;
 }
 
 export function Sidebar({
@@ -58,11 +58,11 @@ export function Sidebar({
   const today = new Date().setHours(0, 0, 0, 0);
   const groups = [
     {
-      label: "今天",
+      label: "Today",
       items: visible.filter((session) => sessionTime(session) >= today),
     },
     {
-      label: "昨天",
+      label: "Yesterday",
       items: visible.filter(
         (session) =>
           sessionTime(session) < today &&
@@ -70,7 +70,7 @@ export function Sidebar({
       ),
     },
     {
-      label: "更早",
+      label: "Earlier",
       items: visible.filter(
         (session) => sessionTime(session) < today - 86400000,
       ),
@@ -84,7 +84,7 @@ export function Sidebar({
           ? "border-border w-[244px] border-r opacity-100 max-[1000px]:absolute max-[1000px]:z-40 max-[1000px]:shadow-[10px_0_40px_#132a4820]"
           : "w-0 border-r-0 opacity-0",
       )}
-      aria-label="会话导航"
+      aria-label="Session navigation"
       aria-hidden={!open}
       inert={!open}
     >
@@ -94,8 +94,8 @@ export function Sidebar({
           size="icon-sm"
           className="[-webkit-app-region:no-drag]"
           onClick={onClose}
-          aria-label="收起会话"
-          title="收起会话 · ⌘ / Ctrl B"
+          aria-label="Collapse sessions"
+          title="Collapse sessions · ⌘ / Ctrl B"
         >
           <PanelLeftIcon />
         </Button>
@@ -115,22 +115,22 @@ export function Sidebar({
           onClick={onNewSession}
         >
           <PlusIcon />
-          新建会话
+          New session
           <kbd className="ml-auto text-[9px] font-normal opacity-60">
             ⌘ / Ctrl N
           </kbd>
         </Button>
       </div>
       <div className="text-muted-foreground flex justify-between px-6 text-[11px]">
-        <span>会话</span>
+        <span>Sessions</span>
         <span className="text-[10px] tabular-nums">{sessions.length}</span>
       </div>
       <div className="text-muted-foreground mx-5 mt-[11px] mb-[3px] flex items-center gap-[7px]">
         <SearchIcon className="size-[13px] shrink-0" />
         <Input
           className="placeholder:text-muted-foreground h-[27px] min-w-0 rounded-[5px] border-0 bg-transparent p-1 text-[11px] shadow-none focus-visible:shadow-[0_0_0_2px_var(--ring)] focus-visible:ring-0 focus-visible:outline-none md:text-[11px] dark:bg-transparent"
-          aria-label="搜索会话"
-          placeholder="搜索会话…"
+          aria-label="Search sessions"
+          placeholder="Search sessions…"
           value={search}
           onChange={(event) => {
             setSearch(event.target.value);
@@ -140,7 +140,7 @@ export function Sidebar({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         {!visible.length ? (
           <p className="text-muted-foreground py-8 text-center text-[11px]">
-            {search ? "没有匹配的会话" : "暂无会话"}
+            {search ? "No matching sessions" : "No sessions yet"}
           </p>
         ) : (
           groups.map((group) =>
@@ -181,7 +181,7 @@ export function Sidebar({
                           />
                           <span className="min-w-0 flex-1">
                             <strong className="block truncate text-xs font-medium">
-                              {session.firstMessage || "新会话"}
+                              {session.firstMessage || "New session"}
                             </strong>
                             <small className="text-muted-foreground block truncate pt-[5px] text-[10px]">
                               {foreign ? `${folderName(session.cwd)} · ` : ""}

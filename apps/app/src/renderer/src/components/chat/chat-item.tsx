@@ -65,7 +65,7 @@ function AssistantRow({
                     {thinkingActive ? <Spinner /> : <InfoIcon />}
                   </TraceIcon>
                   <span data-slot="trace-title" className="text-xs">
-                    思考过程
+                    Thinking
                   </span>
                 </TraceLine>
               </TraceCollapsibleTrigger>
@@ -92,13 +92,13 @@ function AssistantRow({
             className="text-muted-foreground hover:text-accent-foreground focus-visible:text-accent-foreground self-start opacity-55 hover:opacity-100 focus-visible:opacity-100"
             size="icon-sm"
             variant="ghost"
-            aria-label="复制回复"
-            title="复制回复"
+            aria-label="Copy reply"
+            title="Copy reply"
             onClick={() => {
               void navigator.clipboard
                 .writeText(text)
                 .then(() => {
-                  toast.success("已复制");
+                  toast.success("Copied");
                 })
                 .catch((cause: unknown) => {
                   toast.error(String(cause));

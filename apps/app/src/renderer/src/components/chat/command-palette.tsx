@@ -79,54 +79,54 @@ export function CommandPalette({
         className="flex max-h-[calc(100dvh-64px)] w-[min(600px,calc(100vw-32px))] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_100px_#17241b26] sm:max-w-xl"
         showCloseButton={false}
       >
-        <DialogTitle className="sr-only">命令中心</DialogTitle>
+        <DialogTitle className="sr-only">Command center</DialogTitle>
         <DialogDescription className="sr-only">
-          搜索操作、命令和技能
+          Search actions, commands, and skills
         </DialogDescription>
         <Command
-          label="命令中心"
+          label="Command center"
           loop
           className="[&_[cmdk-item][data-selected=true]]:bg-accent [&_[cmdk-item][data-selected=true]]:text-accent-foreground [&_[cmdk-item]_kbd]:text-muted-foreground **:data-[slot=command-input-wrapper]:border-border h-auto max-h-[calc(100dvh-64px)] min-h-0 min-w-0 p-1.5 **:data-[slot=command-input-wrapper]:shrink-0 **:data-[slot=command-input-wrapper]:border-b **:data-[slot=command-input-wrapper]:px-2 **:data-[slot=command-input-wrapper]:pt-2 **:data-[slot=command-input-wrapper]:pb-3 **:data-[slot=input-group]:h-10! **:data-[slot=input-group]:min-h-10 **:data-[slot=input-group]:flex-nowrap [&_[cmdk-item]_kbd]:ml-auto [&_[cmdk-item]_kbd]:text-[10px] [&_[cmdk-item]>svg]:shrink-0 **:[[cmdk-input]]:block **:[[cmdk-input]]:h-full **:[[cmdk-input]]:w-full **:[[cmdk-input]]:min-w-0 **:[[cmdk-input]]:flex-1 **:[[cmdk-input]]:bg-transparent **:[[cmdk-input]]:pr-3 **:[[cmdk-input]]:text-sm **:[[cmdk-input]]:outline-none **:[[cmdk-item]]:min-h-10 **:[[cmdk-item]]:px-3 **:[[cmdk-item]]:py-2.5"
         >
           <CommandInput
-            placeholder="搜索操作、命令、技能…"
+            placeholder="Search actions, commands, and skills…"
             autoFocus
-            aria-label="搜索操作、命令、技能"
+            aria-label="Search actions, commands, and skills"
           />
           <CommandList className="max-h-[min(440px,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain py-1.5">
             <CommandEmpty>
-              {commands.isPending ? "正在加载…" : "没有匹配的操作"}
+              {commands.isPending ? "Loading…" : "No matching actions"}
             </CommandEmpty>
-            <CommandGroup heading="工作区">
+            <CommandGroup heading="Workspace">
               {[
                 {
-                  name: "新建会话",
+                  name: "New session",
                   icon: PlusIcon,
                   action: onNewSession,
                   shortcut: "N",
                   blocked: disabled,
                 },
                 {
-                  name: "打开项目",
+                  name: "Open project",
                   icon: FolderOpenIcon,
                   action: onChooseFolder,
                   blocked: busy,
                 },
                 {
-                  name: "Agent 工作台",
+                  name: "Agent workbench",
                   icon: BoxesIcon,
                   action: onOpenRuntime,
                   blocked: !connected,
                 },
                 {
-                  name: "切换代码工作区",
+                  name: "Toggle code workspace",
                   icon: Code2Icon,
                   action: onToggleEditor,
                   blocked: !connected,
                   shortcut: "J",
                 },
                 {
-                  name: "设置",
+                  name: "Settings",
                   icon: Settings2Icon,
                   action: onOpenSettings,
                   shortcut: ",",
@@ -155,7 +155,7 @@ export function CommandPalette({
                 {commands.error.message}
               </p>
             ) : null}
-            {(["命令", "Skills"] as const).map((group) => (
+            {(["Commands", "Skills"] as const).map((group) => (
               <CommandGroup heading={group} key={group}>
                 {(commands.data ?? [])
                   .filter((item) =>
@@ -171,7 +171,7 @@ export function CommandPalette({
                       }}
                     >
                       <TerminalIcon />
-                      <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.75">
                         <span className="truncate">/{command.name}</span>
                         <small className="text-muted-foreground block truncate text-[10px]">
                           {command.description}
@@ -183,10 +183,10 @@ export function CommandPalette({
               </CommandGroup>
             ))}
           </CommandList>
-          <div className="border-border bg-background text-muted-foreground flex shrink-0 gap-4 border-t px-5 py-[11px] text-[10px]">
-            <span>↑ ↓ 选择</span>
-            <span>↵ 打开</span>
-            <span className="ml-auto">esc 关闭</span>
+          <div className="border-border bg-background text-muted-foreground flex shrink-0 gap-4 border-t px-5 py-2.75 text-[10px]">
+            <span>↑ ↓ to select</span>
+            <span>↵ to open</span>
+            <span className="ml-auto">esc to close</span>
           </div>
         </Command>
       </DialogContent>

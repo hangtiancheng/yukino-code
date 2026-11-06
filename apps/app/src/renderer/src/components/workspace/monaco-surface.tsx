@@ -172,7 +172,7 @@ export default function MonacoSurface({
   const bindSave = (editor: monaco.editor.IStandaloneCodeEditor): void => {
     editor.addAction({
       id: "yukino.save",
-      label: "保存文件",
+      label: "Save file",
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
       run: () => {
         callbacks.current.onSave();
@@ -183,7 +183,7 @@ export default function MonacoSurface({
   return (
     <div
       className="h-full min-h-0 w-full [&_.monaco-scrollable-element>.scrollbar>.slider]:rounded-[6px]"
-      aria-label={`代码编辑器 ${path}`}
+      aria-label={`Code editor ${path}`}
     >
       {diff ? (
         <DiffEditor

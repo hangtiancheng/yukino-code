@@ -2,10 +2,10 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: "ui.spec.mjs",
+  testMatch: "ui.spec.ts",
   fullyParallel: false,
   workers: 1,
-  timeout: 45000,
+  timeout: 45_000,
   use: {
     baseURL: "http://127.0.0.1:5179",
     viewport: { width: 1480, height: 920 },
@@ -21,7 +21,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "pnpm exec vite --config tests/vite.config.mjs",
+    command: "pnpm exec vite --config tests/vite.config.mts",
     port: 5179,
     reuseExistingServer: false,
   },

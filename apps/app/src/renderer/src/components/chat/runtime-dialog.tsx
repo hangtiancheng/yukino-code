@@ -33,12 +33,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 const pages = [
-  { id: "tasks", label: "目标与任务", icon: ListChecksIcon },
-  { id: "agents", label: "Agent 与协作", icon: BotIcon },
-  { id: "workflows", label: "工作流", icon: WorkflowIcon },
-  { id: "capabilities", label: "工具与技能", icon: SparklesIcon },
-  { id: "context", label: "上下文与环境", icon: LayersIcon },
-  { id: "history", label: "检查点", icon: HistoryIcon },
+  { id: "tasks", label: "Goals and tasks", icon: ListChecksIcon },
+  { id: "agents", label: "Agents and collaboration", icon: BotIcon },
+  { id: "workflows", label: "Workflows", icon: WorkflowIcon },
+  { id: "capabilities", label: "Tools and skills", icon: SparklesIcon },
+  { id: "context", label: "Context and environment", icon: LayersIcon },
+  { id: "history", label: "Checkpoints", icon: HistoryIcon },
 ] as const;
 
 export function RuntimeDialog({
@@ -78,7 +78,7 @@ export function RuntimeDialog({
     onSuccess: () => {
       setConfirm(null);
       onRefresh();
-      toast.success("检查点已恢复");
+      toast.success("Checkpoint restored");
     },
     onError: (cause) => toast.error(cause.message),
   });
@@ -93,23 +93,24 @@ export function RuntimeDialog({
           <span className="bg-secondary text-accent-foreground grid size-[31px] place-items-center rounded-[9px]">
             <BoxesIcon className="size-[18px]" />
           </span>
-          <DialogTitle>Agent 工作台</DialogTitle>
+          <DialogTitle>Agent workbench</DialogTitle>
           <span className="text-muted-foreground ml-0.5 flex items-center gap-[5px] text-[10px]">
             <span className="bg-success inline-block size-[5px] shrink-0 rounded-full" />
-            实时
+            Live
           </span>
           <Button
             variant="ghost"
             size="icon-sm"
             className="mr-8 ml-auto"
-            aria-label="刷新能力"
+            aria-label="Refresh capabilities"
             onClick={onRefresh}
           >
             <RefreshCwIcon className={refreshing ? "animate-spin" : ""} />
           </Button>
         </div>
         <DialogDescription className="sr-only">
-          目标、任务、Agent、工作流、工具、技能、MCP、记忆与检查点
+          Goals, tasks, agents, workflows, tools, skills, MCP, memory, and
+          checkpoints
         </DialogDescription>
         <Tabs
           value={page}
@@ -121,7 +122,7 @@ export function RuntimeDialog({
         >
           <div className="border-border bg-background max-[700px]:border-border flex w-[176px] shrink-0 flex-col gap-[5px] border-r px-3 py-[17px] max-[700px]:w-full max-[700px]:flex-row max-[700px]:overflow-x-auto max-[700px]:border-r-0 max-[700px]:border-b max-[700px]:p-2">
             <TabsList
-              aria-label="Agent 能力"
+              aria-label="Agent capabilities"
               className="flex h-auto w-full flex-col items-stretch gap-[5px] bg-transparent p-0 max-[700px]:w-max max-[700px]:flex-row"
             >
               {pages.map((item) => (
@@ -137,9 +138,10 @@ export function RuntimeDialog({
             </TabsList>
             {data ? (
               <div className="text-muted-foreground mt-auto flex flex-col gap-[5px] px-2.5 pt-4 pb-[3px] text-[10px] max-[700px]:hidden">
-                <span>{data.tools.length} 个工具</span>
+                <span>{data.tools.length} tools</span>
                 <span>
-                  {data.skills.length} 项技能 · {data.mcpServers.length} 个 MCP
+                  {data.skills.length} skills · {data.mcpServers.length} MCP
+                  servers
                 </span>
               </div>
             ) : null}
@@ -155,7 +157,7 @@ export function RuntimeDialog({
               >
                 <p>{error.message}</p>
                 <Button size="sm" variant="outline" onClick={onRefresh}>
-                  重试
+                  Retry
                 </Button>
               </div>
             ) : null}
@@ -204,14 +206,14 @@ export function RuntimeDialog({
                   <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
                     <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
                       <HistoryIcon />
-                      检查点
+                      Checkpoints
                       <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
                         {data.checkpoints.length}
                       </span>
                     </h3>
                     {dirty ? (
                       <p className="text-warning mb-3 text-xs">
-                        保存草稿后可恢复检查点
+                        Save your drafts to restore checkpoints
                       </p>
                     ) : null}
                     {data.checkpoints.length ? (
@@ -223,11 +225,11 @@ export function RuntimeDialog({
                           <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium">
-                              {checkpoint.text || "会话检查点"}
+                              {checkpoint.text || "Session checkpoint"}
                             </p>
                             <span className="text-muted-foreground text-xs">
                               {new Date(checkpoint.timestamp).toLocaleString()}{" "}
-                              · {checkpoint.files} 个文件
+                              · {checkpoint.files} files
                             </span>
                           </div>
                           <Button
@@ -238,32 +240,35 @@ export function RuntimeDialog({
                               setConfirm(checkpoint.id);
                             }}
                           >
-                            恢复
+                            Restore
                           </Button>
                         </div>
                       ))
                     ) : (
                       <div className="border-border text-muted-foreground flex flex-col items-center justify-center gap-3 rounded-[10px] border border-dashed p-9 text-[11px] [&>svg]:size-[27px] [&>svg]:opacity-45">
                         <HistoryIcon />
-                        <span>暂无检查点</span>
+                        <span>No checkpoints yet</span>
                       </div>
                     )}
                     {confirm ? (
                       <div className="flex flex-col gap-3 rounded-[9px] border border-[color-mix(in_srgb,var(--warning)_35%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_5%,var(--card))] p-[15px]">
                         <strong className="text-warning text-[11px] font-medium">
-                          恢复会覆盖后续修改
+                          Restoring overwrites later changes
                         </strong>
                         <ChoiceSelect
-                          label="恢复范围"
+                          label="Restore scope"
                           value={mode}
                           disabled={rewind.isPending}
                           onValueChange={setMode}
                           options={[
-                            { value: "code_only", label: "仅恢复文件" },
-                            { value: "conversation_only", label: "仅恢复对话" },
+                            { value: "code_only", label: "Files only" },
+                            {
+                              value: "conversation_only",
+                              label: "Conversation only",
+                            },
                             {
                               value: "code_and_conversation",
-                              label: "恢复文件与对话",
+                              label: "Files and conversation",
                             },
                           ]}
                         />
@@ -276,7 +281,7 @@ export function RuntimeDialog({
                               setConfirm(null);
                             }}
                           >
-                            取消
+                            Cancel
                           </Button>
                           <Button
                             size="sm"
@@ -286,7 +291,8 @@ export function RuntimeDialog({
                               rewind.mutate(confirm);
                             }}
                           >
-                            {rewind.isPending ? <Spinner /> : null}确认恢复
+                            {rewind.isPending ? <Spinner /> : null}Confirm
+                            restore
                           </Button>
                         </div>
                       </div>

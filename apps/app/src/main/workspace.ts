@@ -74,7 +74,7 @@ export class Workspace {
 
   private async safePath(path: string): Promise<string> {
     if (typeof path !== "string" || path.includes("\0")) {
-      throw new Error("无效的文件路径");
+      throw new Error("Invalid file path");
     }
     const root = await realpath(this.cwd);
     const requested = resolve(root, path);
@@ -84,7 +84,7 @@ export class Workspace {
       lexical.startsWith(`..${sep}`) ||
       isAbsolute(lexical)
     ) {
-      throw new Error("只能访问当前项目内的文件");
+      throw new Error("Files must be inside the current project");
     }
     let target: string;
     try {
@@ -104,7 +104,7 @@ export class Workspace {
     }
     const rel = relative(root, target);
     if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
-      throw new Error("只能访问当前项目内的文件");
+      throw new Error("Files must be inside the current project");
     }
     return target;
   }
@@ -166,14 +166,14 @@ export class Workspace {
       throw error;
     });
     if (info && !info.isFile()) {
-      throw new Error("请选择一个文件");
+      throw new Error("Select a file");
     }
     if (info && info.size > maxBytes) {
-      throw new Error("文件超过 2 MB，请使用外部编辑器打开");
+      throw new Error("The file exceeds 2 MB. Open it in an external editor.");
     }
     const bytes = deleted ? Buffer.from("") : await readFile(target);
     if (bytes.includes(0)) {
-      throw new Error("此文件是二进制文件，无法作为文本编辑");
+      throw new Error("This file is binary and cannot be edited as text");
     }
     const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     const key = relative(this.cwd, target).replaceAll("\\", "/");
@@ -193,7 +193,7 @@ export class Workspace {
         baseline = stdout;
       } catch {
         if (deleted) {
-          throw new Error("文件已不存在");
+          throw new Error("The file no longer exists");
         }
         baseline = content;
       }
@@ -216,17 +216,19 @@ export class Workspace {
     expectedRevision: string,
   ): Promise<FileSnapshot> {
     if (typeof content !== "string" || Buffer.byteLength(content) > maxBytes) {
-      throw new Error("文件内容超过 2 MB");
+      throw new Error("File contents exceed 2 MB");
     }
     const target = await this.safePath(path);
     return Tools.FileMutationQueue.withFileMutationQueue(target, async () => {
       const current = await this.read(path);
       if (current.deleted) {
-        throw new Error("文件已删除，请从文件树中选择其他文件");
+        throw new Error(
+          "The file was deleted. Choose another file from the file tree.",
+        );
       }
       if (current.revision !== expectedRevision) {
         throw new Error(
-          "文件已被 Agent 或其他程序修改，请先查看磁盘版本再保存",
+          "The file was modified by the agent or another program. Review the disk version before saving.",
         );
       }
       if (!this.baselines.has(current.path)) {

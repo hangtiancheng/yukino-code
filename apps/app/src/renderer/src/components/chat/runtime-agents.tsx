@@ -16,7 +16,8 @@ export function RuntimeAgents({
     <div className="flex flex-col gap-[22px]">
       <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
         <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
-          <BotIcon />子 Agent
+          <BotIcon />
+          Subagents
           <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
             {data.subagents.length}
           </span>
@@ -33,8 +34,8 @@ export function RuntimeAgents({
               <div className="min-w-0 flex-1">
                 <strong>{agent.role}</strong>
                 <p>
-                  {agent.background ? "后台" : "前台"} · {agent.turns} 轮次 ·{" "}
-                  {agent.tools} 次工具调用
+                  {agent.background ? "Background" : "Foreground"} ·{" "}
+                  {agent.turns} turns · {agent.tools} tool calls
                   {agent.activity ? ` · ${agent.activity}` : ""}
                 </p>
               </div>
@@ -42,13 +43,13 @@ export function RuntimeAgents({
             </div>
           ))
         ) : (
-          <p className="text-muted-foreground py-2 text-[11px]">暂无子 Agent</p>
+          <p className="text-muted-foreground py-2 text-[11px]">No subagents</p>
         )}
       </section>
       <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
         <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
           <UsersIcon />
-          团队
+          Team
           <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
             {data.teammates.length}
           </span>
@@ -68,8 +69,8 @@ export function RuntimeAgents({
                   <small>{member.teamName}</small>
                 </strong>
                 <p>
-                  {member.progress.turnCount} 轮次 ·{" "}
-                  {member.progress.toolUseCount} 次工具调用 ·{" "}
+                  {member.progress.turnCount} turns ·{" "}
+                  {member.progress.toolUseCount} tool calls ·{" "}
                   {member.progress.tokenCount.toLocaleString()} tokens
                 </p>
                 {member.progress.lastActivity ? (
@@ -80,7 +81,7 @@ export function RuntimeAgents({
                 {member.lastMessage ? (
                   <details>
                     <summary className="text-accent-foreground text-xs">
-                      最近消息
+                      Latest message
                     </summary>
                     <pre className="border-border bg-background mt-2.5 max-h-[260px] overflow-auto rounded-[7px] border p-3 font-mono text-[10px] leading-[1.7] wrap-anywhere whitespace-pre-wrap">
                       {member.lastMessage}
@@ -93,7 +94,7 @@ export function RuntimeAgents({
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={`停止 ${member.name}`}
+                  aria-label={`Stop ${member.name}`}
                   disabled={busy}
                   onClick={() => {
                     onAction({
@@ -109,13 +110,15 @@ export function RuntimeAgents({
             </div>
           ))
         ) : (
-          <p className="text-muted-foreground py-2 text-[11px]">暂无团队成员</p>
+          <p className="text-muted-foreground py-2 text-[11px]">
+            No team members
+          </p>
         )}
       </section>
       <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
         <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
           <TerminalIcon />
-          后台任务
+          Background tasks
           <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
             {data.backgroundTasks.length}
           </span>
@@ -135,7 +138,7 @@ export function RuntimeAgents({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`停止 ${task.name}`}
+                    aria-label={`Stop ${task.name}`}
                     disabled={busy}
                     onClick={() => {
                       onAction({ type: "stop_task", id: task.id });
@@ -149,15 +152,17 @@ export function RuntimeAgents({
                 {task.kind} · {new Date(task.startedAt).toLocaleTimeString()}
               </p>
               <details>
-                <summary>查看输出</summary>
+                <summary>View output</summary>
                 <pre className="border-border bg-background mt-2.5 max-h-[260px] overflow-auto rounded-[7px] border p-3 font-mono text-[10px] leading-[1.7] wrap-anywhere whitespace-pre-wrap">
-                  {task.output || "暂无输出"}
+                  {task.output || "No output"}
                 </pre>
               </details>
             </div>
           ))
         ) : (
-          <p className="text-muted-foreground py-2 text-[11px]">暂无后台任务</p>
+          <p className="text-muted-foreground py-2 text-[11px]">
+            No background tasks
+          </p>
         )}
       </section>
     </div>

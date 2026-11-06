@@ -41,10 +41,10 @@ export function ProviderForm({
     >
       {(
         [
-          { key: "name", label: "名称", type: "text" },
-          { key: "base_url", label: "API 地址", type: "url" },
+          { key: "name", label: "Name", type: "text" },
+          { key: "base_url", label: "API URL", type: "url" },
           { key: "api_key", label: "API Key", type: "password" },
-          { key: "model", label: "模型", type: "text" },
+          { key: "model", label: "Model", type: "text" },
         ] as const
       ).map((field) => (
         <div className="space-y-1.5" key={field.key}>
@@ -67,10 +67,10 @@ export function ProviderForm({
         </div>
       ))}
       <div className="space-y-1.5">
-        <Label htmlFor={`${id}-protocol`}>协议</Label>
+        <Label htmlFor={`${id}-protocol`}>Protocol</Label>
         <ChoiceSelect
           id={`${id}-protocol`}
-          label="协议"
+          label="Protocol"
           className="w-full"
           disabled={busy}
           value={input.protocol}
@@ -91,10 +91,10 @@ export function ProviderForm({
           onClick={onCancel}
           disabled={busy}
         >
-          取消
+          Cancel
         </Button>
         <Button type="submit" disabled={busy}>
-          {busy ? "连接中" : "保存并连接"}
+          {busy ? "Connecting" : "Save and connect"}
         </Button>
       </div>
     </form>
