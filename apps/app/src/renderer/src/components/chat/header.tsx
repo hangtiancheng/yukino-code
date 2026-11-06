@@ -39,11 +39,11 @@ export function Header({
   const cwd = init?.ok ? init.cwd : null;
   return (
     <header
-      className={`workspace-header titlebar-drag ${sidebarOpen ? "" : "traffic-clear"}`}
+      className={`border-border bg-background flex h-[55px] shrink-0 items-center gap-3 border-b px-5 [-webkit-app-region:drag] ${sidebarOpen ? "" : "mac:pl-[84px]"}`}
     >
       {!sidebarOpen ? (
         <Button
-          className="titlebar-no-drag"
+          className="[-webkit-app-region:no-drag]"
           size="icon-sm"
           variant="ghost"
           aria-label="显示会话"
@@ -54,21 +54,23 @@ export function Header({
         </Button>
       ) : null}
       <button
-        className="project-selector titlebar-no-drag"
+        className="flex max-w-[30%] items-center gap-2 text-xs font-[550] [-webkit-app-region:no-drag]"
         title={cwd ?? "选择项目"}
         disabled={streaming}
         onClick={onChooseFolder}
       >
-        <FolderOpenIcon />
-        <span>
+        <FolderOpenIcon className="text-muted-foreground size-[15px] shrink-0" />
+        <span className="truncate">
           {cwd ? cwd.split(/[\\/]/u).filter(Boolean).pop() : "打开项目"}
         </span>
         <ChevronDownIcon className="size-3" />
       </button>
-      <ChevronRightIcon className="header-breadcrumb-icon" />
-      <span className="header-session-title">{sessionTitle}</span>
+      <ChevronRightIcon className="text-input size-3 shrink-0" />
+      <span className="text-muted-foreground max-w-[28%] truncate text-[11px]">
+        {sessionTitle}
+      </span>
 
-      <div className="titlebar-no-drag ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-1 [-webkit-app-region:no-drag]">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -97,7 +99,7 @@ export function Header({
         >
           <Settings2Icon />
         </Button>
-        <span className="header-divider mx-1" />
+        <span className="bg-border mx-1 h-4 w-px shrink-0" />
         <Button
           variant={editorOpen ? "secondary" : "ghost"}
           size="sm"

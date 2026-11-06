@@ -201,7 +201,7 @@ function App(): React.JSX.Element {
   return (
     <TooltipProvider>
       <McpAppContext.Provider value={mcpHost}>
-        <div className="app-shell">
+        <div className="bg-background flex h-full min-w-0">
           <Sidebar
             open={sidebarOpen}
             sessions={state.sessions}
@@ -220,7 +220,7 @@ function App(): React.JSX.Element {
           />
           {sidebarOpen ? (
             <button
-              className="sidebar-scrim"
+              className="hidden max-[1000px]:fixed max-[1000px]:inset-0 max-[1000px]:z-[35] max-[1000px]:block max-[1000px]:bg-[#100c242b] max-[1000px]:backdrop-blur-[2px]"
               aria-label="关闭会话导航"
               onClick={() => {
                 setSidebarOpen(false);
@@ -253,7 +253,7 @@ function App(): React.JSX.Element {
             />
             <Group
               groupRef={group}
-              className="workspace-layout"
+              className="relative flex min-h-0 flex-1 overflow-hidden"
               orientation="horizontal"
               onLayoutChanged={(layout, meta) => {
                 if (
@@ -271,13 +271,15 @@ function App(): React.JSX.Element {
                 defaultSize="52%"
                 minSize={editorOpen && editorExpanded ? "0%" : "30%"}
                 maxSize={editorOpen && editorExpanded ? "0%" : "100%"}
-                className={`conversation ${editorOpen && editorExpanded ? "conversation-hidden" : ""}`}
+                className={`bg-card flex min-h-0 min-w-[320px] flex-1 flex-col overflow-hidden ${editorOpen && editorExpanded ? "hidden" : ""}`}
                 role="main"
               >
-                <div className="conversation-heading">
+                <div className="text-muted-foreground flex h-[46px] shrink-0 items-center gap-[7px] px-[25px] text-[10px]">
                   <span
                     className={
-                      state.streaming ? "status-dot working" : "status-dot"
+                      state.streaming
+                        ? "animate-status-pulse bg-primary inline-block size-1.5 shrink-0 rounded-full shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_12%,transparent)]"
+                        : "bg-success inline-block size-1.5 shrink-0 rounded-full"
                     }
                   />
                   <span>
@@ -294,13 +296,17 @@ function App(): React.JSX.Element {
                 </div>
                 {runtime.data?.goal || runtime.data?.tasks.length ? (
                   <button
-                    className="task-ribbon"
+                    className="border-border bg-background mx-[22px] mb-2.5 flex items-center gap-[9px] rounded-[9px] border px-3 py-2.5 text-left text-[11px]"
                     onClick={() => {
                       setRuntimeOpen(true);
                     }}
                   >
-                    {runtime.data.goal ? <TargetIcon /> : <ListChecksIcon />}
-                    <span>
+                    {runtime.data.goal ? (
+                      <TargetIcon className="text-accent-foreground size-3.5 shrink-0" />
+                    ) : (
+                      <ListChecksIcon className="text-accent-foreground size-3.5 shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">
                       {runtime.data.goal?.objective ??
                         runtime.data.tasks.find(
                           (task) => task.status === "in_progress",
@@ -308,7 +314,7 @@ function App(): React.JSX.Element {
                         "任务清单"}
                     </span>
                     {runtime.data.tasks.length ? (
-                      <small>
+                      <small className="text-muted-foreground shrink-0 text-[10px] tabular-nums">
                         {
                           runtime.data.tasks.filter(
                             (task) => task.status === "completed",
@@ -319,21 +325,23 @@ function App(): React.JSX.Element {
                     ) : runtime.data.goal ? (
                       <RuntimeStatus status={runtime.data.goal.status} />
                     ) : null}
-                    <ArrowRightIcon />
+                    <ArrowRightIcon className="text-accent-foreground size-3.5 shrink-0" />
                   </button>
                 ) : null}
                 {failed ? (
                   <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-                    <div className="setup-panel">
+                    <div className="border-border bg-card flex w-[min(100%,390px)] min-w-0 flex-col items-start gap-4 rounded-[14px] border p-[26px]">
                       <AlertTriangleIcon className="text-warning size-7" />
-                      <h2>
+                      <h2 className="text-[22px] font-semibold">
                         {init.kind === "project"
                           ? "项目无法打开"
                           : init.kind === "config"
                             ? "配置服务商"
                             : "连接失败"}
                       </h2>
-                      <p>{init.error}</p>
+                      <p className="text-muted-foreground max-w-full text-xs leading-[1.8] wrap-anywhere">
+                        {init.error}
+                      </p>
                       {init.details || init.configPath ? (
                         <ErrorDetails>
                           {init.details ?? init.configPath!}
@@ -365,7 +373,7 @@ function App(): React.JSX.Element {
                     </div>
                   </div>
                 ) : booting ? (
-                  <div className="panel-empty flex-1">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-5 text-center text-xs">
                     <Spinner />
                     正在连接 Agent…
                   </div>
@@ -378,12 +386,15 @@ function App(): React.JSX.Element {
                     onRespondAsk={chat.respondAsk}
                   />
                 ) : (
-                  <div className="conversation-placeholder" aria-hidden="true">
-                    <SnowflakeIcon strokeWidth={1.2} />
+                  <div
+                    className="text-input grid min-h-0 flex-1 place-items-center"
+                    aria-hidden="true"
+                  >
+                    <SnowflakeIcon className="size-14" strokeWidth={1.2} />
                   </div>
                 )}
                 {!failed && !booting ? (
-                  <footer className="composer-container">
+                  <footer className="mx-auto w-full max-w-[850px] shrink-0 px-[22px] pt-3.5 pb-[13px] max-[1200px]:px-4">
                     <Composer
                       key={state.activeSessionId}
                       streaming={state.streaming}
@@ -406,7 +417,7 @@ function App(): React.JSX.Element {
                         void window.api.setPermissionMode(mode).catch(report);
                       }}
                     />
-                    <div className="composer-meta">
+                    <div className="text-muted-foreground flex items-center gap-2 px-[3px] pt-[9px] text-[9px]">
                       {init?.ok ? (
                         <span className="flex items-center gap-1.5">
                           <CpuIcon className="size-3" />
@@ -414,7 +425,7 @@ function App(): React.JSX.Element {
                         </span>
                       ) : null}
                       {state.usage ? (
-                        <span className="ml-auto shrink-0 tabular-nums">
+                        <span className="ml-auto shrink-0 tabular-nums max-[1000px]:max-w-[45%] max-[1000px]:truncate">
                           {formatTokens(state.usage.inputTokens)} 输入 /{" "}
                           {formatTokens(state.usage.outputTokens)} 输出
                         </span>
@@ -427,14 +438,14 @@ function App(): React.JSX.Element {
                 <>
                   <Separator
                     aria-label="调整代码工作区宽度"
-                    className={`workspace-resizer ${!editorOpen || editorExpanded ? "hidden" : ""}`}
+                    className={`bg-border hover:bg-accent-foreground focus:bg-accent-foreground z-5 -mx-0.5 w-1.25 shrink-0 cursor-col-resize touch-none border-x-2 border-x-transparent bg-clip-content ${!editorOpen || editorExpanded ? "hidden" : ""}`}
                   />
                   <Panel
                     id="editor"
                     defaultSize="48%"
                     minSize={editorOpen ? "30%" : "0%"}
                     maxSize={editorOpen ? "100%" : "0%"}
-                    className={`workspace-editor ${editorOpen ? "" : "editor-hidden"} ${editorExpanded ? "editor-expanded" : ""}`}
+                    className={`bg-card min-w-82.5 shrink-0 overflow-hidden ${editorOpen ? "" : "hidden"} ${editorExpanded ? "flex-1" : "max-[1000px]:min-w-[320px]"}`}
                     inert={!editorOpen}
                   >
                     <EditorPanel
@@ -454,8 +465,8 @@ function App(): React.JSX.Element {
                 </>
               ) : null}
             </Group>
-            <div className="app-status">
-              <span className="status-path" title={cwd ?? ""}>
+            <div className="border-border bg-card text-muted-foreground flex h-7 shrink-0 items-center gap-3.5 border-t px-[15px] text-[10px]">
+              <span className="max-w-[50%] truncate" title={cwd ?? ""}>
                 {cwd ?? "请选择项目文件夹"}
               </span>
               <span className="ml-auto flex items-center gap-1.5">
@@ -466,10 +477,11 @@ function App(): React.JSX.Element {
               </span>
               {state.usage && init?.ok ? (
                 <span
-                  className="context-meter"
+                  className="flex items-center gap-1.5 tabular-nums"
                   title={`${state.usage.inputTokens.toLocaleString()} / ${init.contextWindow.toLocaleString()} tokens`}
                 >
                   <progress
+                    className="bg-muted [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary h-[3px] w-[42px] appearance-none overflow-hidden rounded-[3px] border-0"
                     aria-label="上下文使用率"
                     max={init.contextWindow}
                     value={state.usage.inputTokens}

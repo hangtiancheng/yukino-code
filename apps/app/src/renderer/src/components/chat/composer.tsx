@@ -148,11 +148,14 @@ export function Composer({
   }, [onSend, attachments, disabled]);
 
   return (
-    <div className="composer-shell relative">
+    <div className="border-input bg-card focus-within:border-ring relative rounded-[15px] border shadow-[0_4px_16px_#26173f06] transition-[border-color,box-shadow] focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_6%,transparent),0_5px_20px_#26173f05]">
       {attachments.length ? (
         <div className="flex flex-wrap gap-1 px-3 pt-3">
           {attachments.map((path) => (
-            <span className="attachment-chip" key={path}>
+            <span
+              className="bg-secondary text-secondary-foreground inline-flex items-center gap-[5px] rounded-[6px] px-[7px] py-1 text-[11px]"
+              key={path}
+            >
               <PaperclipIcon className="size-3" />
               <span className="max-w-40 truncate" title={path}>
                 {path.split(/[\\/]/u).pop()}
@@ -226,7 +229,7 @@ export function Composer({
                 : "描述任务，或输入 / 选择技能…"
           }
           disabled={disabled}
-          className="max-h-52 min-h-14 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
+          className="max-h-52 min-h-[74px] flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 text-xs leading-[1.8] shadow-none focus-visible:ring-0 md:text-xs dark:bg-transparent"
           onChange={(event) => {
             const textarea = event.currentTarget;
             textarea.style.height = "auto";
@@ -288,7 +291,7 @@ export function Composer({
           }}
         />
       </div>
-      <div className="composer-toolbar">
+      <div className="flex items-center gap-0.75 px-2.5 pt-1.25 pb-2.5">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -308,16 +311,16 @@ export function Composer({
         >
           <PaperclipIcon />
         </Button>
-        <span className="composer-toolbar-divider" />
+        <span className="bg-border mx-1.25 h-3.5 w-px" />
         <button
-          className="composer-model"
+          className="text-muted-foreground hover:text-accent-foreground flex max-w-[48%] min-w-0 items-center gap-1.5 rounded-[5px] px-[3px] py-[5px] text-[10px] max-[1050px]:max-w-[38%]"
           onClick={onOpenSettings}
           disabled={streaming}
           title={model}
         >
-          <CpuIcon />
-          <span>{model}</span>
-          <ChevronDownIcon />
+          <CpuIcon className="size-3.25 shrink-0" />
+          <span className="truncate">{model}</span>
+          <ChevronDownIcon className="h-3.25 w-2.5 shrink-0" />
         </button>
         <span className="mr-auto" />
         {streaming ? (
@@ -335,13 +338,13 @@ export function Composer({
           size="sm"
           onClick={submit}
           disabled={disabled || (!hasText && !attachments.length)}
-          className="send-button"
+          className="h-[29px] rounded-[8px] text-[11px]"
         >
           {streaming ? "补充" : "发送"}
           <ArrowUpIcon className="size-3.5" />
         </Button>
       </div>
-      <div className="composer-options">
+      <div className="border-border bg-background text-muted-foreground flex items-center justify-between rounded-b-[14px] border-t px-[13px] py-2 text-[9px]">
         <ChoiceSelect
           label="Agent 权限模式"
           value={
@@ -352,7 +355,7 @@ export function Composer({
           onValueChange={onPermissionMode}
           compact
           icon={<ShieldCheckIcon />}
-          className="permission-select"
+          className="text-foreground hover:bg-accent dark:hover:bg-accent h-[26px] max-w-[190px] border-transparent px-[5px] text-[11px]"
           options={[
             { value: "default", label: "逐项授权" },
             { value: "acceptEdits", label: "自动接受编辑" },

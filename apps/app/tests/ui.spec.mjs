@@ -190,27 +190,27 @@ test("workspace layout, commands, Chinese input and collapsed drafts", async ({
   await page.getByRole("button", { name: "hello.ts M" }).click();
   await expect(page.locator(".monaco-editor").first()).toBeVisible();
   await page.waitForTimeout(800);
+  const editorRegion = page.getByRole("region", { name: "文件", exact: true });
   await page.getByRole("button", { name: "代码", exact: true }).first().click();
-  await expect(page.locator(".workspace-editor")).toBeHidden();
+  await expect(editorRegion).toBeHidden();
   await page.getByRole("button", { name: "代码", exact: true }).first().click();
   await expect(page.locator(".monaco-editor").first()).toBeVisible();
   const separator = page.getByRole("separator", { name: "调整代码工作区宽度" });
   await separator.focus();
   await separator.press("ArrowLeft");
-  const beforeExpand = await page
-    .locator(".workspace-editor")
-    .evaluate((element) => element.getBoundingClientRect().width);
+  const beforeExpand = await editorRegion.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
   await page.getByRole("button", { name: "展开编辑器", exact: true }).click();
-  await expect(page.locator(".conversation")).toBeHidden();
+  await expect(page.getByRole("main")).toBeHidden();
   await page.getByRole("button", { name: "恢复分栏", exact: true }).click();
-  await expect(page.locator(".conversation")).toBeVisible();
+  await expect(page.getByRole("main")).toBeVisible();
   await expect
     .poll(async () =>
       Math.abs(
-        (await page
-          .locator(".workspace-editor")
-          .evaluate((element) => element.getBoundingClientRect().width)) -
-          beforeExpand,
+        (await editorRegion.evaluate(
+          (element) => element.getBoundingClientRect().width,
+        )) - beforeExpand,
       ),
     )
     .toBeLessThan(12);
@@ -259,7 +259,7 @@ test("live Agent changes preserve dirty drafts and require conflict review", asy
   await code.press("ControlOrMeta+End");
   await code.press("Enter");
   await code.pressSequentially("// user draft");
-  await expect(page.locator(".dirty-dot")).toBeVisible();
+  await expect(page.getByRole("tab").first().locator("span")).toBeVisible();
   await page.evaluate(() =>
     window.__changeFile("export const greeting = 'Second Agent update';\n"),
   );
@@ -493,8 +493,8 @@ test("capabilities search, memory inspection and environment controls round-trip
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("tab", { name: "工具与技能", exact: true }).click();
   await dialog.getByLabel("搜索能力").fill("读取");
-  await expect(dialog.locator(".tool-grid summary")).toHaveCount(1);
-  await dialog.locator(".tool-grid summary").click();
+  await expect(dialog.locator("summary")).toHaveCount(1);
+  await dialog.locator("summary").click();
   await expect(dialog.getByText("读取项目文件", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "重新加载技能" }).click();
   await expect
@@ -567,12 +567,12 @@ test("empty conversations have no templates and attachments preserve intent", as
   await page
     .getByRole("button", { name: "添加文件或图片", exact: true })
     .click();
-  await expect(page.locator(".attachment-chip")).toContainText("image.png");
+  await expect(page.getByText("image.png", { exact: true })).toBeVisible();
   await input.press("Enter");
   await expect
     .poll(() => page.evaluate(() => window.__sent))
     .toBe('读取图片\n@"/project/image.png"');
-  await expect(page.locator(".attachment-chip")).toHaveCount(0);
+  await expect(page.getByText("image.png", { exact: true })).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -837,13 +837,16 @@ test("missing projects have concise recovery, bounded details and a working retr
   await expect(
     page.getByRole("button", { name: "选择项目", exact: true }),
   ).toBeEnabled();
-  await expect(page.locator(".setup-panel pre")).toBeHidden();
+  const recovery = page
+    .getByRole("heading", { name: "项目无法打开" })
+    .locator("..");
+  await expect(recovery.locator("pre")).toBeHidden();
   await page.getByRole("button", { name: "查看详情", exact: true }).click();
-  await expect(page.locator(".setup-panel pre")).toBeVisible();
+  await expect(recovery.locator("pre")).toBeVisible();
   expect(
-    await page
-      .locator(".setup-panel")
-      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    await recovery.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
   ).toBe(true);
   await page.screenshot({
     path: "test-results/project-recovery.png",

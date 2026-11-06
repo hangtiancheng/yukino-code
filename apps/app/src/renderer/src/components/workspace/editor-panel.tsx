@@ -82,7 +82,7 @@ function Tree({
         <div key={entry.path}>
           <button
             type="button"
-            className={`file-row ${active === entry.path ? "selected" : ""}`}
+            className={`flex min-h-7 w-full items-center gap-[5px] px-2.5 py-1 text-left text-[11px] [&>svg]:size-[13px] [&>svg]:shrink-0 ${active === entry.path ? "bg-accent text-accent-foreground hover:bg-accent" : "hover:bg-muted"}`}
             style={{ paddingLeft: 12 + depth * 14 }}
             title={entry.path}
             onClick={() => {
@@ -354,10 +354,13 @@ export function EditorPanel({
   };
 
   return (
-    <section className="editor-panel h-full" aria-label="文件">
-      <div className="panel-toolbar">
-        <FilesIcon className="text-primary size-4" />
-        <strong>文件</strong>
+    <section
+      className="bg-card flex h-full min-w-0 flex-col [&_::-webkit-scrollbar]:h-1.5 [&_::-webkit-scrollbar]:w-1.5 [&_::-webkit-scrollbar-thumb]:rounded-[6px] [&_::-webkit-scrollbar-thumb]:border [&_::-webkit-scrollbar-thumb]:border-transparent"
+      aria-label="文件"
+    >
+      <div className="border-border flex h-11 shrink-0 items-center gap-[7px] border-b pr-2.5 pl-3.5">
+        <FilesIcon className="text-accent-foreground size-4" />
+        <strong className="text-[11px] font-[550]">文件</strong>
         <div className="ml-auto flex gap-0.5">
           <Button
             variant="ghost"
@@ -390,19 +393,33 @@ export function EditorPanel({
           </Button>
         </div>
       </div>
-      <div className="editor-body">
-        <nav className="file-explorer" aria-label="项目文件">
-          <div className="explorer-tabs">
+      <div className="flex min-h-0 flex-1">
+        <nav
+          className="border-border flex w-40 min-w-[120px] shrink-0 flex-col border-r bg-[color-mix(in_srgb,var(--sidebar)_45%,var(--card))] max-[1200px]:w-[125px] max-[1000px]:w-[110px] max-[1000px]:min-w-[100px]"
+          aria-label="项目文件"
+        >
+          <div className="border-border flex h-9 items-stretch gap-2.5 border-b px-2 text-[11px]">
             <button
-              className={view === "changes" ? "active" : ""}
+              className={`border-b-2 ${
+                view === "changes"
+                  ? "border-b-accent-foreground text-foreground"
+                  : "text-muted-foreground border-b-transparent"
+              }`}
               onClick={() => {
                 setView("changes");
               }}
             >
-              变更 <span>{snapshot?.changes.length ?? 0}</span>
+              变更{" "}
+              <span className="text-muted-foreground ml-0.5 text-[9px]">
+                {snapshot?.changes.length ?? 0}
+              </span>
             </button>
             <button
-              className={view === "files" ? "active" : ""}
+              className={`border-b-2 ${
+                view === "files"
+                  ? "border-b-accent-foreground text-foreground"
+                  : "text-muted-foreground border-b-transparent"
+              }`}
               onClick={() => {
                 setView("files");
               }}
@@ -424,7 +441,7 @@ export function EditorPanel({
               snapshot.changes.map((change) => (
                 <button
                   key={change.path}
-                  className={`file-row ${active === change.path ? "selected" : ""}`}
+                  className={`flex min-h-7 w-full items-center gap-[5px] px-2.5 py-1 text-left text-[11px] [&>svg]:size-[13px] [&>svg]:shrink-0 ${active === change.path ? "bg-accent text-accent-foreground hover:bg-accent" : "hover:bg-muted"}`}
                   title={change.path}
                   onClick={() => {
                     setFollow(false);
@@ -447,7 +464,9 @@ export function EditorPanel({
             )}
           </div>
           <button
-            className={`follow-button ${follow ? "active" : ""}`}
+            className={`border-border flex h-[31px] shrink-0 items-center gap-[5px] border-t px-2.5 text-[10px] ${
+              follow ? "text-accent-foreground" : "text-muted-foreground"
+            }`}
             onClick={() => {
               setFollow((current) => !current);
             }}
@@ -458,13 +477,22 @@ export function EditorPanel({
           </button>
         </nav>
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="editor-tabs" role="tablist" aria-label="已打开文件">
+          <div
+            className="border-border bg-muted flex h-9 min-h-9 overflow-x-auto border-b"
+            role="tablist"
+            aria-label="已打开文件"
+          >
             {tabs.map((item) => (
               <div
-                className={`editor-tab ${active === item.file.path ? "active" : ""}`}
+                className={`border-border flex items-center border-t-2 border-r ${
+                  active === item.file.path
+                    ? "border-t-accent-foreground bg-card text-foreground"
+                    : "text-muted-foreground border-t-transparent"
+                }`}
                 key={item.file.path}
               >
                 <button
+                  className="flex h-full max-w-[180px] items-center gap-1.5 px-[7px] pl-[11px] text-[11px] whitespace-nowrap"
                   role="tab"
                   aria-selected={active === item.file.path}
                   onClick={() => {
@@ -475,10 +503,11 @@ export function EditorPanel({
                   <FileCode2Icon className="size-3.5" />
                   {item.file.path.split("/").pop()}
                   {item.value !== item.file.content ? (
-                    <span className="dirty-dot" />
+                    <span className="bg-primary size-1.5 rounded-full" />
                   ) : null}
                 </button>
                 <button
+                  className="hover:bg-accent mr-[3px] rounded p-[5px]"
                   aria-label={`关闭 ${item.file.path}`}
                   onClick={() => {
                     if (item.value !== item.file.content) {
@@ -502,7 +531,7 @@ export function EditorPanel({
                 {tab.file.path}
               </span>
               <button
-                className={`text-button ${diff ? "text-primary" : ""}`}
+                className={`hover:text-accent-foreground inline-flex items-center justify-center gap-[5px] p-1 px-0.5 text-[11px] ${diff ? "text-accent-foreground" : ""}`}
                 onClick={() => {
                   setDiff((value) => !value);
                 }}
@@ -530,7 +559,10 @@ export function EditorPanel({
             </div>
           ) : null}
           {tab?.conflict ? (
-            <div role="alert" className="conflict-banner">
+            <div
+              role="alert"
+              className="text-warning bg-[color-mix(in_srgb,var(--warning)_9%,var(--card))] px-3 py-2.5 text-[11px] leading-[1.8] [&_button]:ml-2 [&_button]:underline"
+            >
               文件已变更，草稿已保留。
               <button
                 onClick={() => {
@@ -584,7 +616,7 @@ export function EditorPanel({
             {tab ? (
               <Suspense
                 fallback={
-                  <div className="panel-empty">
+                  <div className="flex h-full flex-col items-center justify-center gap-3 p-5 text-center text-xs">
                     <Spinner />
                     正在加载编辑器…
                   </div>
@@ -610,12 +642,12 @@ export function EditorPanel({
                 />
               </Suspense>
             ) : (
-              <div className="panel-empty">
-                <div className="editor-empty-icon">
+              <div className="[&_p]:text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-5 text-center text-xs [&_p]:text-[11px] [&_p]:leading-[1.9] [&>strong]:text-sm [&>strong]:font-[550]">
+                <div className="border-border bg-muted text-accent-foreground mb-1.5 grid h-[58px] w-[49px] rotate-[-5deg] place-items-center rounded-[10px] border [&_svg]:size-6">
                   <FileCode2Icon />
                 </div>
                 <button
-                  className="text-button text-primary"
+                  className="text-accent-foreground hover:text-accent-foreground inline-flex items-center justify-center gap-[5px] p-1 px-0.5 text-[11px]"
                   onClick={() => {
                     setView("files");
                   }}
@@ -630,7 +662,7 @@ export function EditorPanel({
               </div>
             ) : null}
           </div>
-          <div className="editor-status">
+          <div className="border-border text-muted-foreground flex border-t px-3 py-1.5 text-[10px]">
             <span>{snapshot?.branch ?? "本地项目"}</span>
             <span className="ml-auto">
               {tab

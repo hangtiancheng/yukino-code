@@ -248,7 +248,7 @@ export function McpAppView({ appId, app }: { appId: string; app: McpApp }) {
           <span>{error}</span>
           <button
             type="button"
-            className="text-primary ml-auto cursor-pointer underline"
+            className="text-accent-foreground ml-auto cursor-pointer underline"
             onClick={() => {
               setAttempt((value) => value + 1);
             }}

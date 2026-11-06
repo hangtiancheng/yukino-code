@@ -76,20 +76,24 @@ export function CommandPalette({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="command-dialog p-0 sm:max-w-xl"
+        className="flex max-h-[calc(100dvh-64px)] w-[min(600px,calc(100vw-32px))] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_100px_#17241b26] sm:max-w-xl"
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">命令中心</DialogTitle>
         <DialogDescription className="sr-only">
           搜索操作、命令和技能
         </DialogDescription>
-        <Command label="命令中心" loop className="command-root">
+        <Command
+          label="命令中心"
+          loop
+          className="[&_[cmdk-item][data-selected=true]]:bg-accent [&_[cmdk-item][data-selected=true]]:text-accent-foreground [&_[cmdk-item]_kbd]:text-muted-foreground **:data-[slot=command-input-wrapper]:border-border h-auto max-h-[calc(100dvh-64px)] min-h-0 min-w-0 p-1.5 **:data-[slot=command-input-wrapper]:shrink-0 **:data-[slot=command-input-wrapper]:border-b **:data-[slot=command-input-wrapper]:px-2 **:data-[slot=command-input-wrapper]:pt-2 **:data-[slot=command-input-wrapper]:pb-3 **:data-[slot=input-group]:h-10! **:data-[slot=input-group]:min-h-10 **:data-[slot=input-group]:flex-nowrap [&_[cmdk-item]_kbd]:ml-auto [&_[cmdk-item]_kbd]:text-[10px] [&_[cmdk-item]>svg]:shrink-0 **:[[cmdk-input]]:block **:[[cmdk-input]]:h-full **:[[cmdk-input]]:w-full **:[[cmdk-input]]:min-w-0 **:[[cmdk-input]]:flex-1 **:[[cmdk-input]]:bg-transparent **:[[cmdk-input]]:pr-3 **:[[cmdk-input]]:text-sm **:[[cmdk-input]]:outline-none **:[[cmdk-item]]:min-h-10 **:[[cmdk-item]]:px-3 **:[[cmdk-item]]:py-2.5"
+        >
           <CommandInput
             placeholder="搜索操作、命令、技能…"
             autoFocus
             aria-label="搜索操作、命令、技能"
           />
-          <CommandList className="command-results">
+          <CommandList className="max-h-[min(440px,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain py-1.5">
             <CommandEmpty>
               {commands.isPending ? "正在加载…" : "没有匹配的操作"}
             </CommandEmpty>
@@ -167,9 +171,11 @@ export function CommandPalette({
                       }}
                     >
                       <TerminalIcon />
-                      <span className="command-name flex-1">
+                      <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
                         <span className="truncate">/{command.name}</span>
-                        <small>{command.description}</small>
+                        <small className="text-muted-foreground block truncate text-[10px]">
+                          {command.description}
+                        </small>
                       </span>
                       <ArrowUpRightIcon className="ml-auto" />
                     </CommandItem>
@@ -177,7 +183,7 @@ export function CommandPalette({
               </CommandGroup>
             ))}
           </CommandList>
-          <div className="command-footer">
+          <div className="border-border bg-background text-muted-foreground flex shrink-0 gap-4 border-t px-5 py-[11px] text-[10px]">
             <span>↑ ↓ 选择</span>
             <span>↵ 打开</span>
             <span className="ml-auto">esc 关闭</span>

@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
   CheckIcon,
   CircleIcon,
@@ -27,8 +28,10 @@ const labels: Record<string, string> = {
 
 export function RuntimeStatus({
   status,
+  className,
 }: {
   status: string;
+  className?: string;
 }): React.JSX.Element {
   const active = ["active", "running", "in_progress"].includes(status);
   const done = ["completed", "complete", "done"].includes(status);
@@ -44,7 +47,15 @@ export function RuntimeStatus({
           : CircleIcon;
   return (
     <span
-      className={`runtime-status ${active ? "is-active" : done ? "is-done" : failed ? "is-failed" : ""}`}
+      className={cn(
+        "bg-muted text-muted-foreground inline-flex shrink-0 items-center gap-1 rounded-[5px] px-1.5 py-[3px] text-[9px] font-normal whitespace-nowrap [&>svg]:size-2.5",
+        active && "bg-secondary text-accent-foreground",
+        done &&
+          "text-success bg-[color-mix(in_srgb,var(--success)_10%,transparent)]",
+        failed &&
+          "text-destructive bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)]",
+        className,
+      )}
     >
       <Icon className={active ? "animate-spin" : ""} />
       {labels[status] ?? status}

@@ -89,7 +89,7 @@ function AssistantRow({
         ) : null}
         {text && !streaming ? (
           <Button
-            className="message-copy"
+            className="text-muted-foreground hover:text-accent-foreground focus-visible:text-accent-foreground self-start opacity-55 hover:opacity-100 focus-visible:opacity-100"
             size="icon-sm"
             variant="ghost"
             aria-label="复制回复"

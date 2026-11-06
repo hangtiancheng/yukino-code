@@ -260,7 +260,7 @@ export function SettingsDialog({
                           </span>
                         </span>
                         {active ? (
-                          <CheckIcon className="text-primary ml-auto size-4 shrink-0" />
+                          <CheckIcon className="text-accent-foreground ml-auto size-4 shrink-0" />
                         ) : null}
                       </button>
                     );

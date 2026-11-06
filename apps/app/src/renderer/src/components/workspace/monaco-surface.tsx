@@ -181,7 +181,10 @@ export default function MonacoSurface({
   };
   const theme = dark ? "yukino-dark" : "yukino-light";
   return (
-    <div className="h-full min-h-0 w-full" aria-label={`代码编辑器 ${path}`}>
+    <div
+      className="h-full min-h-0 w-full [&_.monaco-scrollable-element>.scrollbar>.slider]:rounded-[6px]"
+      aria-label={`代码编辑器 ${path}`}
+    >
       {diff ? (
         <DiffEditor
           key={path}

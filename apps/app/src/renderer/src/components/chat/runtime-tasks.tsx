@@ -2,6 +2,7 @@ import { RuntimeStatus } from "@renderer/components/chat/runtime-status";
 import { Button } from "@renderer/components/ui/button";
 import { Input } from "@renderer/components/ui/input";
 import type { RuntimeAction, RuntimeSnapshot } from "@shared/workspace-types";
+import { cn } from "cn";
 import {
   CheckIcon,
   ListChecksIcon,
@@ -32,16 +33,21 @@ export function RuntimeTasks({
     (task) => task.status === "completed",
   ).length;
   return (
-    <div className="runtime-stack">
-      <section className="runtime-section">
-        <h3 className="runtime-heading">
+    <div className="flex flex-col gap-[22px]">
+      <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
+        <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
           <TargetIcon />
-          持续目标{goal ? <RuntimeStatus status={goal.status} /> : null}
+          持续目标
+          {goal ? (
+            <RuntimeStatus className="ml-auto" status={goal.status} />
+          ) : null}
         </h3>
         {goal ? (
           <>
-            <p className="goal-objective">{goal.objective}</p>
-            <div className="goal-metrics">
+            <p className="text-sm leading-[1.8] font-medium wrap-anywhere">
+              {goal.objective}
+            </p>
+            <div className="[&>span]:text-muted-foreground [&>span>strong]:text-foreground flex items-center gap-[26px] py-[7px] [&>span]:flex [&>span]:flex-col [&>span]:gap-[3px] [&>span]:text-[9px] [&>span>strong]:text-[19px] [&>span>strong]:font-[550] [&>span>strong]:tracking-[-0.5px] [&>span>strong]:tabular-nums">
               <span>
                 <strong>{goal.turnsExecuted}</strong>轮次
               </span>
@@ -57,7 +63,7 @@ export function RuntimeTasks({
             </div>
             {goal.tokenBudget !== null ? (
               <progress
-                className="runtime-progress"
+                className="bg-muted [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary h-1 w-full appearance-none overflow-hidden rounded-[3px] border-0 [&::-moz-progress-bar]:rounded-[3px] [&::-webkit-progress-bar]:rounded-[3px] [&::-webkit-progress-value]:rounded-[3px] [&::-webkit-progress-value]:transition-[width] [&::-webkit-progress-value]:duration-[250ms]"
                 aria-label="目标预算用量"
                 max={goal.tokenBudget}
                 value={Math.min(goal.tokensUsed, goal.tokenBudget)}
@@ -110,7 +116,7 @@ export function RuntimeTasks({
           </>
         ) : (
           <form
-            className="goal-form"
+            className="flex flex-col gap-2.5"
             onSubmit={(event) => {
               event.preventDefault();
               if (objective.trim()) {
@@ -121,6 +127,7 @@ export function RuntimeTasks({
             }}
           >
             <Input
+              className="text-[11px] md:text-[11px]"
               aria-label="目标"
               placeholder="设置一个持续推进的目标…"
               value={objective}
@@ -133,7 +140,7 @@ export function RuntimeTasks({
             />
             <div className="flex gap-2">
               <Input
-                className="max-w-48"
+                className="max-w-48 text-[11px] md:text-[11px]"
                 aria-label="Token 预算"
                 placeholder="Token 预算（可选）"
                 type="number"
@@ -158,34 +165,38 @@ export function RuntimeTasks({
           </form>
         )}
       </section>
-      <section className="runtime-section">
-        <h3 className="runtime-heading">
+      <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
+        <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
           <ListChecksIcon />
           任务清单
-          <span className="runtime-count">
+          <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
             {completed} / {data.tasks.length}
           </span>
         </h3>
         {data.tasks.length ? (
           <>
             <progress
-              className="runtime-progress"
+              className="bg-muted [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary h-1 w-full appearance-none overflow-hidden rounded-[3px] border-0 [&::-moz-progress-bar]:rounded-[3px] [&::-webkit-progress-bar]:rounded-[3px] [&::-webkit-progress-value]:rounded-[3px] [&::-webkit-progress-value]:transition-[width] [&::-webkit-progress-value]:duration-[250ms]"
               aria-label="任务完成进度"
               max={data.tasks.length}
               value={completed}
             />
             {data.tasks.map((task) => (
-              <details className="task-detail" key={task.id}>
-                <summary>
+              <details className="border-border border-b" key={task.id}>
+                <summary className="flex cursor-pointer list-none items-center gap-[9px] py-2.5 text-[11px]">
                   <span
-                    className={`task-check ${task.status === "completed" ? "checked" : ""}`}
+                    className={cn(
+                      "border-input text-muted-foreground grid size-[19px] shrink-0 place-items-center rounded-[6px] border text-[8px] [&>svg]:size-[11px]",
+                      task.status === "completed" &&
+                        "text-success border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[color-mix(in_srgb,var(--success)_7%,transparent)]",
+                    )}
                   >
                     {task.status === "completed" ? <CheckIcon /> : task.id}
                   </span>
                   <span className="min-w-0 flex-1">{task.subject}</span>
                   <RuntimeStatus status={task.status} />
                 </summary>
-                <div className="task-description">
+                <div className="text-muted-foreground px-0 pb-[13px] pl-7 text-[11px] leading-[1.8] wrap-anywhere whitespace-pre-wrap [&_p]:mt-[7px]">
                   {task.description || task.subject}
                   {task.owner ? <p>负责人 · {task.owner}</p> : null}
                   {task.blockedBy.length ? (
@@ -202,7 +213,7 @@ export function RuntimeTasks({
             ))}
           </>
         ) : (
-          <div className="runtime-empty-state">
+          <div className="border-border text-muted-foreground flex flex-col items-center justify-center gap-3 rounded-[10px] border border-dashed p-9 text-[11px] [&>svg]:size-[27px] [&>svg]:opacity-45">
             <ListChecksIcon />
             <span>暂无任务</span>
           </div>

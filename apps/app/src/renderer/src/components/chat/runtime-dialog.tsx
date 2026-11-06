@@ -88,14 +88,14 @@ export function RuntimeDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="runtime-dialog p-0 sm:max-w-4xl">
-        <div className="runtime-titlebar">
-          <span className="runtime-logo">
-            <BoxesIcon />
+      <DialogContent className="flex h-[min(700px,85vh)] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_100px_#100a2820] max-[700px]:h-[90vh] sm:max-w-4xl">
+        <div className="border-border flex min-h-[65px] items-center gap-[11px] border-b px-5">
+          <span className="bg-secondary text-accent-foreground grid size-[31px] place-items-center rounded-[9px]">
+            <BoxesIcon className="size-[18px]" />
           </span>
           <DialogTitle>Agent 工作台</DialogTitle>
-          <span className="runtime-live">
-            <span className="status-dot" />
+          <span className="text-muted-foreground ml-0.5 flex items-center gap-[5px] text-[10px]">
+            <span className="bg-success inline-block size-[5px] shrink-0 rounded-full" />
             实时
           </span>
           <Button
@@ -117,15 +117,18 @@ export function RuntimeDialog({
             setPage(value as typeof page);
           }}
           orientation="vertical"
-          className="runtime-layout"
+          className="flex min-h-0 flex-1 flex-row gap-0 max-[700px]:flex-col"
         >
-          <div className="runtime-nav">
-            <TabsList aria-label="Agent 能力" className="runtime-tabs">
+          <div className="border-border bg-background max-[700px]:border-border flex w-[176px] shrink-0 flex-col gap-[5px] border-r px-3 py-[17px] max-[700px]:w-full max-[700px]:flex-row max-[700px]:overflow-x-auto max-[700px]:border-r-0 max-[700px]:border-b max-[700px]:p-2">
+            <TabsList
+              aria-label="Agent 能力"
+              className="flex h-auto w-full flex-col items-stretch gap-[5px] bg-transparent p-0 max-[700px]:w-max max-[700px]:flex-row"
+            >
               {pages.map((item) => (
                 <TabsTrigger
                   key={item.id}
                   value={item.id}
-                  className="runtime-tab"
+                  className="text-muted-foreground data-active:bg-accent data-active:text-accent-foreground h-10 flex-none justify-start gap-[9px] p-2.5 text-left text-xs after:hidden data-active:shadow-none! max-[700px]:p-2 max-[700px]:text-[10px]"
                 >
                   <item.icon />
                   {item.label}
@@ -133,7 +136,7 @@ export function RuntimeDialog({
               ))}
             </TabsList>
             {data ? (
-              <div className="runtime-nav-meta">
+              <div className="text-muted-foreground mt-auto flex flex-col gap-[5px] px-2.5 pt-4 pb-[3px] text-[10px] max-[700px]:hidden">
                 <span>{data.tools.length} 个工具</span>
                 <span>
                   {data.skills.length} 项技能 · {data.mcpServers.length} 个 MCP
@@ -141,9 +144,15 @@ export function RuntimeDialog({
               </div>
             ) : null}
           </div>
-          <TabsContent value={page} className="runtime-content">
+          <TabsContent
+            value={page}
+            className="bg-card min-w-0 flex-1 overflow-y-auto p-6 max-[700px]:p-[18px]"
+          >
             {error ? (
-              <div role="alert" className="runtime-error">
+              <div
+                role="alert"
+                className="text-destructive mb-[15px] flex items-center gap-2.5 rounded-[7px] bg-[color-mix(in_srgb,var(--destructive)_8%,var(--card))] p-3 text-[11px] [&>p]:flex-1"
+              >
                 <p>{error.message}</p>
                 <Button size="sm" variant="outline" onClick={onRefresh}>
                   重试
@@ -152,7 +161,7 @@ export function RuntimeDialog({
             ) : null}
             {!data ? (
               !error ? (
-                <div className="panel-empty">
+                <div className="flex h-full flex-col items-center justify-center gap-3 p-5 text-center text-xs">
                   <Spinner />
                 </div>
               ) : null
@@ -192,11 +201,11 @@ export function RuntimeDialog({
                   />
                 ) : null}
                 {page === "history" ? (
-                  <section className="runtime-section">
-                    <h3 className="runtime-heading">
+                  <section className="[&+&]:border-border flex min-w-0 flex-col gap-3 [&+&]:border-t [&+&]:pt-[22px]">
+                    <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
                       <HistoryIcon />
                       检查点
-                      <span className="runtime-count">
+                      <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-1.5 py-0.5 text-[9px] font-normal tabular-nums">
                         {data.checkpoints.length}
                       </span>
                     </h3>
@@ -207,7 +216,10 @@ export function RuntimeDialog({
                     ) : null}
                     {data.checkpoints.length ? (
                       [...data.checkpoints].reverse().map((checkpoint) => (
-                        <div className="checkpoint-row" key={checkpoint.id}>
+                        <div
+                          className="border-border flex items-center gap-2.5 border-b py-[13px] text-xs"
+                          key={checkpoint.id}
+                        >
                           <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium">
@@ -231,14 +243,16 @@ export function RuntimeDialog({
                         </div>
                       ))
                     ) : (
-                      <div className="runtime-empty-state">
+                      <div className="border-border text-muted-foreground flex flex-col items-center justify-center gap-3 rounded-[10px] border border-dashed p-9 text-[11px] [&>svg]:size-[27px] [&>svg]:opacity-45">
                         <HistoryIcon />
                         <span>暂无检查点</span>
                       </div>
                     )}
                     {confirm ? (
-                      <div className="rewind-confirm">
-                        <strong>恢复会覆盖后续修改</strong>
+                      <div className="flex flex-col gap-3 rounded-[9px] border border-[color-mix(in_srgb,var(--warning)_35%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_5%,var(--card))] p-[15px]">
+                        <strong className="text-warning text-[11px] font-medium">
+                          恢复会覆盖后续修改
+                        </strong>
                         <ChoiceSelect
                           label="恢复范围"
                           value={mode}

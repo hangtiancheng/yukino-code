@@ -78,16 +78,21 @@ export function Sidebar({
   ];
   return (
     <aside
-      className={cn("session-sidebar", open && "is-open")}
+      className={cn(
+        "bg-sidebar relative flex h-full shrink-0 flex-col overflow-hidden transition-[width,opacity] duration-200",
+        open
+          ? "border-border w-[244px] border-r opacity-100 max-[1000px]:absolute max-[1000px]:z-40 max-[1000px]:shadow-[10px_0_40px_#132a4820]"
+          : "w-0 border-r-0 opacity-0",
+      )}
       aria-label="会话导航"
       aria-hidden={!open}
       inert={!open}
     >
-      <div className="sidebar-titlebar titlebar-drag">
+      <div className="flex min-h-12 items-center justify-end px-3 [-webkit-app-region:drag]">
         <Button
           variant="ghost"
           size="icon-sm"
-          className="titlebar-no-drag"
+          className="[-webkit-app-region:no-drag]"
           onClick={onClose}
           aria-label="收起会话"
           title="收起会话 · ⌘ / Ctrl B"
@@ -95,31 +100,35 @@ export function Sidebar({
           <PanelLeftIcon />
         </Button>
       </div>
-      <div className="sidebar-brand">
-        <span>
-          <SnowflakeIcon strokeWidth={1.6} />
+      <div className="flex items-center gap-2.5 px-[22px] pt-4 pb-7 whitespace-nowrap">
+        <span className="bg-primary text-primary-foreground grid size-8 place-items-center rounded-[11px] shadow-[0_3px_9px_color-mix(in_srgb,var(--primary)_20%,transparent)]">
+          <SnowflakeIcon className="size-[23px]" strokeWidth={1.6} />
         </span>
-        <strong>
-          yukino<span>.</span>
+        <strong className="text-[25px] font-[650] tracking-[-1.2px]">
+          yukino<span className="text-accent-foreground">.</span>
         </strong>
       </div>
-      <div className="sidebar-actions">
+      <div className="flex flex-col gap-[5px] px-3.5 pb-[22px]">
         <Button
-          className="new-session-button"
+          className="mb-[7px] h-[39px] w-full justify-start rounded-[9px] shadow-[0_2px_5px_#22193c0a]"
           disabled={disabled}
           onClick={onNewSession}
         >
           <PlusIcon />
-          新建会话<kbd>⌘ / Ctrl N</kbd>
+          新建会话
+          <kbd className="ml-auto text-[9px] font-normal opacity-60">
+            ⌘ / Ctrl N
+          </kbd>
         </Button>
       </div>
-      <div className="sidebar-history-heading">
+      <div className="text-muted-foreground flex justify-between px-6 text-[11px]">
         <span>会话</span>
-        <span>{sessions.length}</span>
+        <span className="text-[10px] tabular-nums">{sessions.length}</span>
       </div>
-      <div className="session-search">
-        <SearchIcon />
+      <div className="text-muted-foreground mx-5 mt-[11px] mb-[3px] flex items-center gap-[7px]">
+        <SearchIcon className="size-[13px] shrink-0" />
         <Input
+          className="placeholder:text-muted-foreground h-[27px] min-w-0 rounded-[5px] border-0 bg-transparent p-1 text-[11px] shadow-none focus-visible:shadow-[0_0_0_2px_var(--ring)] focus-visible:ring-0 focus-visible:outline-none md:text-[11px] dark:bg-transparent"
           aria-label="搜索会话"
           placeholder="搜索会话…"
           value={search}
@@ -128,16 +137,18 @@ export function Sidebar({
           }}
         />
       </div>
-      <div className="session-list">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         {!visible.length ? (
-          <p className="session-empty">
+          <p className="text-muted-foreground py-8 text-center text-[11px]">
             {search ? "没有匹配的会话" : "暂无会话"}
           </p>
         ) : (
           groups.map((group) =>
             group.items.length ? (
               <div key={group.label}>
-                <h3 className="session-group-heading">{group.label}</h3>
+                <h3 className="text-muted-foreground px-[11px] pt-[13px] pb-[7px] text-[10px]">
+                  {group.label}
+                </h3>
                 <ul>
                   {group.items.map((session) => {
                     const active = session.id === activeSessionId;
@@ -148,7 +159,11 @@ export function Sidebar({
                       <li key={`${session.projectKey}/${session.id}`}>
                         <button
                           type="button"
-                          className={cn("session-item", active && "active")}
+                          className={cn(
+                            "hover:bg-accent/60 my-0.5 flex w-full items-start gap-[9px] rounded-[8px] px-[11px] py-2.5 text-left transition-colors",
+                            active &&
+                              "bg-accent text-accent-foreground hover:bg-accent",
+                          )}
                           aria-current={active ? "page" : undefined}
                           disabled={disabled}
                           onClick={() => {
@@ -156,16 +171,25 @@ export function Sidebar({
                           }}
                           title={session.cwd}
                         >
-                          <MessageSquareIcon />
+                          <MessageSquareIcon
+                            className={cn(
+                              "mt-0.5 size-3.5 shrink-0",
+                              active
+                                ? "text-accent-foreground"
+                                : "text-muted-foreground",
+                            )}
+                          />
                           <span className="min-w-0 flex-1">
-                            <strong>{session.firstMessage || "新会话"}</strong>
-                            <small>
+                            <strong className="block truncate text-xs font-medium">
+                              {session.firstMessage || "新会话"}
+                            </strong>
+                            <small className="text-muted-foreground block truncate pt-[5px] text-[10px]">
                               {foreign ? `${folderName(session.cwd)} · ` : ""}
                               {relativeTime(sessionTime(session))}
                             </small>
                           </span>
                           {active ? (
-                            <span className="session-active-dot" />
+                            <span className="bg-primary mt-1.5 size-[5px] shrink-0 rounded-full" />
                           ) : null}
                         </button>
                       </li>
