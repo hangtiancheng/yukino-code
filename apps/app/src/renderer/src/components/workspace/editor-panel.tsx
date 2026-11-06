@@ -170,7 +170,7 @@ export function EditorPanel({
     tabsRef.current = tabs;
   }, [tabs]);
   const [active, setActive] = useState<string | null>(null);
-  const [diff, setDiff] = useState(true);
+  const [diff, setDiff] = useState(false);
   const [follow, setFollow] = useState(true);
   const [view, setView] = useState<"files" | "changes">("changes");
   const [loading, setLoading] = useState(false);
@@ -509,7 +509,7 @@ export function EditorPanel({
                 aria-pressed={diff}
               >
                 <FileDiffIcon className="size-3.5" />
-                {diff ? "变更对比" : "代码"}
+                变更对比
               </button>
               <Button
                 variant="ghost"
@@ -548,6 +548,7 @@ export function EditorPanel({
                             : item,
                         ),
                       );
+                      setDiff(true);
                     })
                     .catch((cause: unknown) => toast.error(errorText(cause)));
                 }}

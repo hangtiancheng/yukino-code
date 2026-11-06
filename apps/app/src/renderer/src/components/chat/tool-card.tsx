@@ -87,7 +87,7 @@ export function ToolCard({ item }: { item: ToolItem }): React.JSX.Element {
             </span>
             {typeof item.elapsed === "number" && item.elapsed > 0 ? (
               <span className="shrink-0 text-xs tabular-nums">
-                {(item.elapsed / 1000).toFixed(1)}s
+                {item.elapsed.toFixed(1)}s
               </span>
             ) : null}
           </TraceLine>

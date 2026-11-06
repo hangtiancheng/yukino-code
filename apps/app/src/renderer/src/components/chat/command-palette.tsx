@@ -1,4 +1,12 @@
 import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@renderer/components/ui/command";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -6,14 +14,12 @@ import {
 } from "@renderer/components/ui/dialog";
 import type { CommandSummary } from "@shared/ipc-types";
 import { useQuery } from "@tanstack/react-query";
-import { Command } from "cmdk";
 import {
   ArrowUpRightIcon,
   BoxesIcon,
   Code2Icon,
   FolderOpenIcon,
   PlusIcon,
-  SearchIcon,
   Settings2Icon,
   TerminalIcon,
 } from "lucide-react";
@@ -21,7 +27,8 @@ import {
 export function CommandPalette({
   open,
   onOpenChange,
-  disabled,
+  busy,
+  connected,
   onCommand,
   onDraft,
   onNewSession,
@@ -32,7 +39,8 @@ export function CommandPalette({
 }: {
   open: boolean;
   onOpenChange: (value: boolean) => void;
-  disabled: boolean;
+  busy: boolean;
+  connected: boolean;
   onCommand: (value: string) => void;
   onDraft: (value: string) => void;
   onNewSession: () => void;
@@ -41,10 +49,11 @@ export function CommandPalette({
   onOpenRuntime: () => void;
   onToggleEditor: () => void;
 }): React.JSX.Element {
+  const disabled = busy || !connected;
   const commands = useQuery({
     queryKey: ["commands"],
     queryFn: () => window.api.listCommands(),
-    enabled: open,
+    enabled: open && connected,
     staleTime: 0,
   });
   const select = (action: () => void): void => {
@@ -74,17 +83,17 @@ export function CommandPalette({
         <DialogDescription className="sr-only">
           搜索操作、命令和技能
         </DialogDescription>
-        <Command label="命令中心" loop>
-          <div className="command-search">
-            <SearchIcon />
-            <Command.Input placeholder="搜索操作、命令、技能…" autoFocus />
-            <kbd>ESC</kbd>
-          </div>
-          <Command.List>
-            <Command.Empty>
+        <Command label="命令中心" loop className="command-root">
+          <CommandInput
+            placeholder="搜索操作、命令、技能…"
+            autoFocus
+            aria-label="搜索操作、命令、技能"
+          />
+          <CommandList className="command-results">
+            <CommandEmpty>
               {commands.isPending ? "正在加载…" : "没有匹配的操作"}
-            </Command.Empty>
-            <Command.Group heading="工作区">
+            </CommandEmpty>
+            <CommandGroup heading="工作区">
               {[
                 {
                   name: "新建会话",
@@ -97,17 +106,19 @@ export function CommandPalette({
                   name: "打开项目",
                   icon: FolderOpenIcon,
                   action: onChooseFolder,
-                  blocked: disabled,
+                  blocked: busy,
                 },
                 {
                   name: "Agent 工作台",
                   icon: BoxesIcon,
                   action: onOpenRuntime,
+                  blocked: !connected,
                 },
                 {
                   name: "切换代码工作区",
                   icon: Code2Icon,
                   action: onToggleEditor,
+                  blocked: !connected,
                   shortcut: "J",
                 },
                 {
@@ -117,36 +128,37 @@ export function CommandPalette({
                   shortcut: ",",
                 },
               ].map((item) => (
-                <Command.Item
+                <CommandItem
                   key={item.name}
+                  value={item.name}
                   onSelect={() => {
                     select(item.action);
                   }}
                   disabled={item.blocked}
                 >
                   <item.icon />
-                  <span>{item.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
                   {item.shortcut ? (
                     <kbd>⌘ / Ctrl {item.shortcut}</kbd>
                   ) : (
                     <ArrowUpRightIcon className="ml-auto" />
                   )}
-                </Command.Item>
+                </CommandItem>
               ))}
-            </Command.Group>
+            </CommandGroup>
             {commands.error ? (
               <p role="alert" className="text-destructive px-4 py-2 text-xs">
                 {commands.error.message}
               </p>
             ) : null}
             {(["命令", "Skills"] as const).map((group) => (
-              <Command.Group heading={group} key={group}>
+              <CommandGroup heading={group} key={group}>
                 {(commands.data ?? [])
                   .filter((item) =>
                     group === "Skills" ? item.isSkill : !item.isSkill,
                   )
                   .map((command) => (
-                    <Command.Item
+                    <CommandItem
                       key={command.name}
                       value={`/${command.name} ${command.description}`}
                       disabled={disabled}
@@ -155,19 +167,20 @@ export function CommandPalette({
                       }}
                     >
                       <TerminalIcon />
-                      <span className="command-name">
-                        /{command.name}
+                      <span className="command-name flex-1">
+                        <span className="truncate">/{command.name}</span>
                         <small>{command.description}</small>
                       </span>
                       <ArrowUpRightIcon className="ml-auto" />
-                    </Command.Item>
+                    </CommandItem>
                   ))}
-              </Command.Group>
+              </CommandGroup>
             ))}
-          </Command.List>
+          </CommandList>
           <div className="command-footer">
             <span>↑ ↓ 选择</span>
             <span>↵ 打开</span>
+            <span className="ml-auto">esc 关闭</span>
           </div>
         </Command>
       </DialogContent>

@@ -74,6 +74,48 @@ try {
     path: "test-results/electron-desktop.png",
     animations: "disabled",
   });
+  await desktop.close();
+  desktop = null;
+  const missing = join(
+    fixture,
+    "TestExecutorContextMappingPersistence-deleted",
+  );
+  await writeFile(
+    join(userData, "state.json"),
+    JSON.stringify({ cwd: missing, theme: "light" }),
+  );
+  desktop = await _electron.launch({
+    args: [...(process.getuid?.() === 0 ? ["--no-sandbox"] : []), launcher],
+    timeout: 30000,
+  });
+  const recovery = await desktop.firstWindow();
+  await recovery.waitForFunction(() => Boolean(window.api));
+  const failures = await recovery.evaluate(() =>
+    Promise.all([window.api.init(), window.api.init()]),
+  );
+  for (const failure of failures) {
+    assert.equal(failure.ok, false);
+    assert.equal(failure.kind, "project");
+    assert.doesNotMatch(failure.error, /ENOENT|lstat/);
+    assert.equal(failure.details, missing);
+  }
+  await recovery.getByRole("heading", { name: "项目无法打开" }).waitFor();
+  await recovery.screenshot({
+    path: "test-results/electron-project-recovery.png",
+    animations: "disabled",
+  });
+  await desktop.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [path],
+    });
+  }, project);
+  const selected = await recovery.evaluate(() => window.api.selectFolder());
+  assert.equal(selected.cwd, project);
+  const recovered = await recovery.evaluate(() =>
+    window.api.workspaceRead("hello.ts"),
+  );
+  assert.equal(recovered.content, "export const value = 3;\n");
 } finally {
   try {
     if (desktop) {
@@ -97,5 +139,5 @@ try {
   }
 }
 console.log(
-  "Electron smoke passed: preload IPC, file reads/writes, traversal rejection, save conflict and graceful shutdown.",
+  "Electron smoke passed: preload IPC, file reads/writes, traversal rejection, save conflict, missing-project recovery and graceful shutdown.",
 );

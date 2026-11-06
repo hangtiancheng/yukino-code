@@ -7,11 +7,11 @@ pnpm install --registry https://registry.npmmirror.com
 pnpm dev
 ```
 
-首次启动在设置中添加服务商。`~/.yukino/config.yaml` 支持 MCP、Hooks、记忆和沙箱配置。
+顶部集中提供项目选择、命令中心、Agent 工作台、设置与代码工作区；会话侧栏仅管理会话。首次启动在设置中添加服务商。`~/.yukino/config.yaml` 支持 MCP、Hooks、记忆和沙箱配置。
 
-- 会话：跨项目历史、恢复、流式输出、推理过程、授权、提问、任务中追加要求、停止。
+- 会话：`!` / `!!` 原生 Shell、后台完成自动唤醒、跨项目历史、恢复、流式输出、推理过程、授权、提问、任务中追加要求、停止。
 - 工作台：目标与 Token 预算、任务依赖、Agent 与团队进度、后台输出与停止、工作流阶段与恢复、工具搜索、Skills、MCP、记忆、沙箱、检查点恢复。
-- 交互：命令中心、可编辑的任务建议、附件、回复复制、明暗主题、窄窗口导航。
+- 交互：命令中心、附件、回复复制、浅鼠尾草绿明暗主题、窄窗口导航。
 - 编辑器：Monaco、文件树、Git 变更、实时刷新、差异对比、草稿、冲突检查、原子保存。
 - 快捷键：`⌘/Ctrl K` 命令中心、`⌘/Ctrl B` 会话侧栏、`⌘/Ctrl J` 编辑器、`⌘/Ctrl N` 新会话、`⌘/Ctrl ,` 设置、`⌘/Ctrl S` 保存。
 
@@ -25,5 +25,7 @@ pnpm test:ui
 pnpm build
 node tests/electron-smoke.mjs
 ```
+
+失效项目在启动前进行路径与权限校验；恢复历史前验证目标目录，保留当前会话。初始化错误显示简短恢复指引，路径与技术信息可展开查看。权限、协议、沙箱、恢复范围与主题统一使用 shadcn / Base UI Select，工作台使用可键盘导航的 Tabs，命令中心使用 shadcn Command / cmdk。
 
 界面测试使用模拟 Agent；Electron 测试使用临时项目和独立应用数据目录，不发送模型请求。macOS 默认使用本机 Chrome，其他平台可运行 `pnpm exec playwright install chromium` 或通过 `CHROME_PATH` 指定浏览器。

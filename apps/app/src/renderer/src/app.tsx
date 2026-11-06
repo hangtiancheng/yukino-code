@@ -1,7 +1,6 @@
 import { ChatArea } from "@renderer/components/chat/chat-area";
 import { CommandPalette } from "@renderer/components/chat/command-palette";
 import { Composer } from "@renderer/components/chat/composer";
-import { EmptyState } from "@renderer/components/chat/empty-state";
 import { Header } from "@renderer/components/chat/header";
 import { PlanDialog } from "@renderer/components/chat/plan-dialog";
 import { RuntimeDialog } from "@renderer/components/chat/runtime-dialog";
@@ -15,6 +14,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@renderer/components/ui/dialog";
+import { ErrorDetails } from "@renderer/components/ui/error-details";
 import { Spinner } from "@renderer/components/ui/spinner";
 import { Toaster } from "@renderer/components/ui/toaster";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
@@ -25,11 +25,10 @@ import { McpAppContext } from "@renderer/lib/mcp/context";
 import {
   AlertTriangleIcon,
   ArrowRightIcon,
-  CheckIcon,
-  CircleDotIcon,
   FolderOpenIcon,
   CpuIcon,
-  GitBranchIcon,
+  BoxesIcon,
+  SnowflakeIcon,
   TargetIcon,
   ListChecksIcon,
 } from "lucide-react";
@@ -59,7 +58,7 @@ function App(): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth > 1150,
   );
-  const [editorOpen, setEditorOpen] = useState(true);
+  const [editorOpen, setEditorOpen] = useState(() => window.innerWidth >= 1200);
   const [editorExpanded, setEditorExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
@@ -165,7 +164,7 @@ function App(): React.JSX.Element {
         event.preventDefault();
         setSettingsOpen(true);
       }
-      if (key === "n" && !state.streaming) {
+      if (key === "n" && !state.streaming && !state.initializing) {
         event.preventDefault();
         chat.startNewSession();
       }
@@ -174,7 +173,7 @@ function App(): React.JSX.Element {
     return () => {
       window.removeEventListener("keydown", handle);
     };
-  }, [chat.startNewSession, state.streaming]);
+  }, [chat.startNewSession, state.streaming, state.initializing]);
   useEffect(() => {
     const prevent = (event: BeforeUnloadEvent): void => {
       if (dirty) {
@@ -208,17 +207,6 @@ function App(): React.JSX.Element {
             sessions={state.sessions}
             activeSessionId={state.activeSessionId}
             currentProjectKey={init?.ok ? init.projectKey : null}
-            cwd={cwd}
-            onOpenCommands={() => {
-              setCommandsOpen(true);
-            }}
-            onOpenRuntime={() => {
-              setRuntimeOpen(true);
-            }}
-            onOpenSettings={() => {
-              setSettingsOpen(true);
-            }}
-            onChooseFolder={chooseFolder}
             onResumeSession={(id, path) => {
               guard(() => {
                 chat.resumeSession(id, path);
@@ -228,7 +216,7 @@ function App(): React.JSX.Element {
               setSidebarOpen(false);
             }}
             onNewSession={chat.startNewSession}
-            disabled={state.streaming || booting}
+            disabled={state.streaming || state.initializing}
           />
           {sidebarOpen ? (
             <button
@@ -244,8 +232,7 @@ function App(): React.JSX.Element {
               init={init}
               sidebarOpen={sidebarOpen}
               editorOpen={editorOpen}
-              dark={chat.isDark}
-              streaming={state.streaming}
+              streaming={state.streaming || state.initializing}
               onToggleSidebar={() => {
                 setSidebarOpen((value) => !value);
               }}
@@ -253,7 +240,6 @@ function App(): React.JSX.Element {
                 setEditorOpen((value) => !value);
               }}
               onChooseFolder={chooseFolder}
-              onThemeMode={chat.setThemeMode}
               onOpenSettings={() => {
                 setSettingsOpen(true);
               }}
@@ -299,19 +285,12 @@ function App(): React.JSX.Element {
                       ? pending
                         ? "等待你的回应"
                         : "正在处理任务"
-                      : "就绪"}
+                      : state.initializing
+                        ? "正在打开…"
+                        : failed
+                          ? "未连接"
+                          : "就绪"}
                   </span>
-                  <button
-                    className="text-button ml-auto"
-                    onClick={() => {
-                      setRuntimeOpen(true);
-                    }}
-                  >
-                    {state.activeSubagents
-                      ? `${state.activeSubagents} 个 Agent 协作中`
-                      : "任务"}
-                    <ArrowRightIcon className="size-3" />
-                  </button>
                 </div>
                 {runtime.data?.goal || runtime.data?.tasks.length ? (
                   <button
@@ -347,28 +326,42 @@ function App(): React.JSX.Element {
                   <div className="flex min-h-0 flex-1 items-center justify-center p-6">
                     <div className="setup-panel">
                       <AlertTriangleIcon className="text-warning size-7" />
-                      <h2>连接失败</h2>
+                      <h2>
+                        {init.kind === "project"
+                          ? "项目无法打开"
+                          : init.kind === "config"
+                            ? "配置服务商"
+                            : "连接失败"}
+                      </h2>
                       <p>{init.error}</p>
-                      {init.configPath ? <code>{init.configPath}</code> : null}
-                      <div className="flex gap-2">
+                      {init.details || init.configPath ? (
+                        <ErrorDetails>
+                          {init.details ?? init.configPath!}
+                        </ErrorDetails>
+                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        {init.kind === "project" ? (
+                          <Button onClick={chooseFolder}>
+                            <FolderOpenIcon />
+                            选择项目
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => {
+                              setSettingsOpen(true);
+                            }}
+                          >
+                            {init.kind === "config" ? "添加服务商" : "检查设置"}
+                          </Button>
+                        )}
                         <Button
-                          onClick={() => {
-                            setSettingsOpen(true);
-                          }}
+                          variant="outline"
+                          onClick={chat.retry}
+                          disabled={state.initializing}
                         >
-                          添加服务商
-                        </Button>
-                        <Button variant="outline" onClick={chat.retry}>
-                          重新连接
+                          {state.initializing ? <Spinner /> : null}重新连接
                         </Button>
                       </div>
-                      <button
-                        className="text-button text-muted-foreground"
-                        onClick={chooseFolder}
-                      >
-                        <FolderOpenIcon className="size-3.5" />
-                        选择其他项目
-                      </button>
                     </div>
                   </div>
                 ) : booting ? (
@@ -385,8 +378,8 @@ function App(): React.JSX.Element {
                     onRespondAsk={chat.respondAsk}
                   />
                 ) : (
-                  <div className="welcome-container">
-                    <EmptyState onPrompt={draft} />
+                  <div className="conversation-placeholder" aria-hidden="true">
+                    <SnowflakeIcon strokeWidth={1.2} />
                   </div>
                 )}
                 {!failed && !booting ? (
@@ -394,7 +387,7 @@ function App(): React.JSX.Element {
                     <Composer
                       key={state.activeSessionId}
                       streaming={state.streaming}
-                      disabled={!init?.ok}
+                      disabled={!init?.ok || state.initializing}
                       onSend={chat.send}
                       onAbort={chat.abort}
                       draft={
@@ -408,9 +401,6 @@ function App(): React.JSX.Element {
                       }
                       onOpenSettings={() => {
                         setSettingsOpen(true);
-                      }}
-                      onOpenCommands={() => {
-                        setCommandsOpen(true);
                       }}
                       onPermissionMode={(mode) => {
                         void window.api.setPermissionMode(mode).catch(report);
@@ -465,19 +455,11 @@ function App(): React.JSX.Element {
               ) : null}
             </Group>
             <div className="app-status">
-              <span className="flex items-center gap-1.5">
-                {state.streaming ? (
-                  <CircleDotIcon className="text-primary size-3" />
-                ) : (
-                  <CheckIcon className="text-success size-3" />
-                )}
-                {state.streaming ? "运行中" : "Yukino"}
-              </span>
               <span className="status-path" title={cwd ?? ""}>
                 {cwd ?? "请选择项目文件夹"}
               </span>
               <span className="ml-auto flex items-center gap-1.5">
-                <GitBranchIcon className="size-3" />
+                <BoxesIcon className="size-3" />
                 {runtime.data
                   ? `${runtime.data.tools.length} 工具 · ${runtime.data.mcpServers.length} MCP`
                   : ""}
@@ -507,6 +489,8 @@ function App(): React.JSX.Element {
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
           streaming={state.streaming}
+          themeMode={chat.themeMode}
+          onThemeMode={chat.setThemeMode}
         />
         <RuntimeDialog
           key={state.activeSessionId}
@@ -525,7 +509,8 @@ function App(): React.JSX.Element {
         <CommandPalette
           open={commandsOpen}
           onOpenChange={setCommandsOpen}
-          disabled={state.streaming || !init?.ok}
+          busy={state.streaming || state.initializing}
+          connected={Boolean(init?.ok)}
           onCommand={chat.send}
           onDraft={draft}
           onNewSession={chat.startNewSession}

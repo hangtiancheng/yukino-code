@@ -48,6 +48,8 @@ import {
   Tools as YukinoTools,
   Goal,
   Conversation,
+  History,
+  Utils,
   PlanFile,
 } from "@yukino.js/yukino";
 import {
@@ -66,6 +68,7 @@ import type {
 } from "../shared/workspace-types";
 
 import { applyRuntimeAction } from "./agent-runtime";
+import { ProjectError, resolveProject } from "./project";
 import { Workspace } from "./workspace";
 
 type RemoteAgentHandle = Remote.Server.RemoteAgentHandle;
@@ -109,6 +112,7 @@ function projectHistory(messages: Conversation.Message[]): HistoryMessage[] {
     role: message.role,
     content: contentToText(message.content),
     timestamp: 0,
+    ...(message.userBash ? { userBash: message.userBash } : {}),
     ...(message.toolUses?.length
       ? {
           toolUses: message.toolUses.map((use) => ({
@@ -123,6 +127,7 @@ function projectHistory(messages: Conversation.Message[]): HistoryMessage[] {
           toolResults: message.toolResults.map((result) => ({
             toolUseId: result.toolUseId,
             content: result.content,
+            contentBlocks: result.contentBlocks,
             isError: result.isError,
           })),
         }
@@ -180,8 +185,10 @@ export class YukinoBridge {
   private handle: RemoteAgentHandle | null = null;
   private workspace: Workspace | null = null;
   private mcpApps = new Remote.McpApps.RemoteMcpApps();
-  private initPromise: Promise<RemoteAgentHandle | null> | null = null;
+  private initPromise: Promise<InitState> | null = null;
   private streaming = false;
+  private wakeupTimer: ReturnType<typeof setInterval> | null = null;
+  private disposing = false;
   private interrupted = false;
   private pendingPlan: { id: string; content: string; path: string } | null =
     null;
@@ -263,12 +270,19 @@ export class YukinoBridge {
       return state;
     }
     if (this.initPromise) {
-      const pending = await this.initPromise;
-      return pending
-        ? this.buildInitState(pending)
-        : this.initError("Agent 初始化失败");
+      return this.initPromise;
     }
+    this.initPromise = this.initialize();
     try {
+      return await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  private async initialize(): Promise<InitState> {
+    try {
+      this.cwd = await resolveProject(this.cwd);
       if (!this.workspace) {
         this.workspace = new Workspace(
           this.cwd,
@@ -285,20 +299,19 @@ export class YukinoBridge {
       const configPath = Config.ProviderConfig.globalConfigPath();
       let config: Config.AppConfig;
       try {
-        config = Config.loadConfig();
+        config = Config.loadConfig(undefined, { allowEmptyProviders: true });
       } catch (error) {
-        return this.initError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load the yukino config.",
+        return this.initError("服务商配置无法读取，请检查配置文件。", {
+          kind: "config",
           configPath,
-        );
+          details: error instanceof Error ? error.message : String(error),
+        });
       }
       if (config.providers.length === 0) {
-        return this.initError(
-          "No providers configured. Add one to your config file.",
+        return this.initError("添加服务商后即可开始使用 Agent。", {
+          kind: "config",
           configPath,
-        );
+        });
       }
 
       const merged = Config.withProjectMcpServers(config, this.cwd);
@@ -308,22 +321,30 @@ export class YukinoBridge {
         merged.default_provider,
       );
 
-      this.initPromise = this.createHandle(provider, merged).then((handle) => {
-        this.handle = handle;
-        this.initPromise = null;
-        return handle;
-      });
-      const handle = await this.initPromise;
-      if (!handle) {
-        return this.initError("Agent initialization failed.", configPath);
-      }
+      const handle = await this.createHandle(provider, merged);
+      this.handle = handle;
+      this.startNotificationWakeup();
+      this.state.write({ cwd: this.cwd });
 
       const okState = this.buildInitState(handle);
       emit({ type: "init_state", data: okState });
       return okState;
     } catch (error) {
+      this.workspace?.dispose();
+      this.workspace = null;
       return this.initError(
-        error instanceof Error ? error.message : String(error),
+        error instanceof ProjectError
+          ? error.message
+          : "Agent 初始化失败，请检查配置后重试。",
+        {
+          kind: error instanceof ProjectError ? "project" : "runtime",
+          details:
+            error instanceof ProjectError
+              ? error.path
+              : error instanceof Error
+                ? error.message
+                : String(error),
+        },
       );
     }
   }
@@ -357,12 +378,15 @@ export class YukinoBridge {
     ];
   }
 
-  private initError(message: string, configPath?: string): InitState {
-    const failure: InitState = {
-      ok: false,
-      error: message,
-      ...(configPath ? { configPath } : {}),
-    };
+  private initError(
+    message: string,
+    context: {
+      kind?: "project" | "config" | "runtime";
+      details?: string;
+      configPath?: string;
+    } = {},
+  ): InitState {
+    const failure: InitState = { ok: false, error: message, ...context };
     emit({ type: "init_state", data: failure });
     return failure;
   }
@@ -370,45 +394,41 @@ export class YukinoBridge {
   private async createHandle(
     provider: ProviderConfig,
     config: Config.AppConfig,
-  ): Promise<RemoteAgentHandle | null> {
+  ): Promise<RemoteAgentHandle> {
+    const options: CreateRemoteAgentOptions = {
+      provider,
+      interactionMode: "interactive",
+      enableModelPlanMode: true,
+      cwd: this.cwd,
+      enableCoordinatorMode: config.enable_coordinator_mode ?? false,
+      memoryEnabled: Config.memoryEnabled(config),
+      mcpLoading: config.mcp_loading,
+      askUser: this.createAsker(),
+      onSubagentEvent: (event) => {
+        this.reportSubagent(event);
+      },
+    };
+    if (config.hooks) {
+      options.hooks = config.hooks;
+    }
+    if (config.mcp_servers) {
+      options.mcpServers = config.mcp_servers;
+    }
+    if (config.sandbox) {
+      options.sandboxConfig = config.sandbox;
+    }
+    const handle = await Remote.Server.createRemoteAgent(options);
+    handle.permissionMode = config.permission_mode ?? "default";
+    this.mcpLoading = config.mcp_loading;
+    this.hasHooks = config.hooks.length > 0;
     try {
-      const options: CreateRemoteAgentOptions = {
-        provider,
-        interactionMode: "interactive",
-        enableModelPlanMode: true,
-        cwd: this.cwd,
-        enableCoordinatorMode: config.enable_coordinator_mode ?? false,
-        memoryEnabled: Config.memoryEnabled(config),
-        mcpLoading: config.mcp_loading,
-        askUser: this.createAsker(),
-        onSubagentEvent: (event) => {
-          this.reportSubagent(event);
-        },
-      };
-      if (config.hooks) {
-        options.hooks = config.hooks;
-      }
-      if (config.mcp_servers) {
-        options.mcpServers = config.mcp_servers;
-      }
-      if (config.sandbox) {
-        options.sandboxConfig = config.sandbox;
-      }
-      const handle = await Remote.Server.createRemoteAgent(options);
-      handle.permissionMode = config.permission_mode ?? "default";
-      this.mcpLoading = config.mcp_loading;
-      this.hasHooks = config.hooks.length > 0;
       await Workflow.Wiring.getWorkflowService(
         handle.registry,
       )?.loadPersistedRuns();
       return handle;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      emit({
-        type: "error",
-        data: { message: `Agent init failed: ${message}` },
-      });
-      return null;
+      await handle.dispose();
+      throw error;
     }
   }
 
@@ -439,9 +459,6 @@ export class YukinoBridge {
   private async ensureHandle(): Promise<RemoteAgentHandle | null> {
     if (this.handle) {
       return this.handle;
-    }
-    if (this.initPromise) {
-      return this.initPromise;
     }
     await this.init();
     return this.handle;
@@ -580,7 +597,12 @@ export class YukinoBridge {
 
     // Slash commands run through their own dispatch path (WS server parity);
     // /goal is handled inside handle.run, so plain text takes the run loop.
-    const parsed = Commands.Commands.parse(trimmed);
+    const bash = Conversation.UserBash.parseUserBashCommand(trimmed);
+    if (bash) {
+      await this.runUserBash(handle, bash.command, bash.excludeFromContext);
+      return;
+    }
+    const parsed = Commands.Commands.resolve(trimmed, handle.cmdRegistry);
     if (parsed) {
       if (parsed.name !== "goal") {
         await this.runCommandInternal(handle, parsed.name, parsed.args);
@@ -593,14 +615,17 @@ export class YukinoBridge {
 
   private async runLoop(
     handle: RemoteAgentHandle,
-    text: string,
+    text: string | null,
   ): Promise<void> {
     this.setStreaming(true);
     try {
-      const expanded = await Conversation.AtExpand.expandAtRefsWithImages(
-        text,
-        handle.cwd,
-      );
+      const expanded =
+        text === null
+          ? null
+          : await Conversation.AtExpand.expandAtRefsWithImages(
+              text,
+              handle.cwd,
+            );
       for await (const event of handle.run(expanded, {
         onPermissionRequest: this.createPermissionCallback(),
       })) {
@@ -619,6 +644,129 @@ export class YukinoBridge {
       const message = error instanceof Error ? error.message : String(error);
       emit({ type: "error", data: { message } });
     } finally {
+      this.completeRun(handle);
+    }
+  }
+
+  private startNotificationWakeup(): void {
+    if (this.disposing) {
+      return;
+    }
+    if (this.wakeupTimer) {
+      clearInterval(this.wakeupTimer);
+    }
+    this.wakeupTimer = setInterval(() => {
+      const handle = this.handle;
+      if (
+        !handle ||
+        this.streaming ||
+        this.disposing ||
+        this.pendingPlan ||
+        this.followUps.length ||
+        this.interrupted
+      ) {
+        return;
+      }
+      if (
+        handle.backgroundTaskManager.hasNotifications() ||
+        handle.teamManager.hasLeaderNotifications()
+      ) {
+        void this.runLoop(handle, null);
+      }
+    }, 500);
+    this.wakeupTimer.unref();
+  }
+
+  private async runUserBash(
+    handle: RemoteAgentHandle,
+    command: string,
+    excludeFromContext: boolean,
+  ): Promise<void> {
+    if (!command) {
+      throw new Error("请在 ! 后输入命令");
+    }
+    const bash = handle.registry.getInstanceOf(
+      "Bash",
+      YukinoTools.Bash.BashTool,
+    );
+    if (!bash) {
+      throw new Error("Bash 工具不可用");
+    }
+    const controller = new AbortController();
+    this.commandController = controller;
+    this.setStreaming(true);
+    const toolId = randomUUID();
+    const start = Date.now();
+    emit({
+      type: "tool_use",
+      data: { toolId, toolName: "Bash", args: { command } },
+    });
+    let result: Tools.ToolResult;
+    try {
+      result = await Conversation.UserBash.executeUserBash(
+        bash,
+        {
+          cwd: handle.cwd,
+          sessionId: handle.sessionId,
+          abortSignal: controller.signal,
+          onOutput: (output) => {
+            emit({
+              type: "tool_output",
+              data: { toolId, output: Utils.plainTerminalText(output) },
+            });
+          },
+        },
+        command,
+        excludeFromContext,
+      );
+    } catch (error) {
+      result = {
+        output: error instanceof Error ? error.message : String(error),
+        isError: true,
+      };
+    }
+    try {
+      const elapsed = (Date.now() - start) / 1000;
+      emit({
+        type: "tool_result",
+        data: {
+          toolId,
+          toolName: "Bash",
+          output: result.output,
+          isError: result.isError ?? false,
+          elapsed,
+        },
+      });
+      const recorded: Conversation.UserBashResult = {
+        command,
+        excludeFromContext,
+        output: result.output,
+        isError: result.isError ?? false,
+        elapsed,
+        status: controller.signal.aborted
+          ? "stopped"
+          : result.isError
+            ? "failed"
+            : "completed",
+      };
+      const input = History.recordInput({
+        text: `${excludeFromContext ? "!!" : "!"}${command}`,
+        cwd: handle.cwd,
+        sessionId: handle.sessionId,
+        source: "sdk",
+      });
+      const message = Session.saveUserMessage(
+        handle.cwd,
+        handle.sessionId,
+        input,
+        {
+          content: Conversation.Prompts.userBashContext(recorded),
+          user_bash: recorded,
+        },
+      );
+      handle.conv.appendMessages(Session.rebuildFromSession([message]));
+    } finally {
+      this.commandController = null;
       this.completeRun(handle);
     }
   }
@@ -644,7 +792,14 @@ export class YukinoBridge {
     } else {
       const next = this.followUps.shift();
       if (next) {
-        void this.runLoop(handle, next);
+        void this.send(next).catch((error: unknown) => {
+          emit({
+            type: "error",
+            data: {
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+        });
       }
     }
   }
@@ -691,7 +846,10 @@ export class YukinoBridge {
             this.handle,
           );
         }
-        if (event.toolName === "ExitPlanMode" && !event.isError) {
+        if (
+          ["EnterPlanMode", "ExitPlanMode"].includes(event.toolName) &&
+          !event.isError
+        ) {
           this.planReady = true;
         }
         emit({
@@ -796,6 +954,9 @@ export class YukinoBridge {
     // cwd may be an unresolved alias (symlink, /var vs /private/var) of the
     // canonical path the activity registry recorded.
     this.assertIdle();
+    if (cwd) {
+      cwd = await resolveProject(cwd);
+    }
     let switchedCwd = false;
     if (cwd && Storage.projectKey(cwd) !== Storage.projectKey(this.cwd)) {
       await this.reinit(cwd);
@@ -809,12 +970,11 @@ export class YukinoBridge {
     await handle.teamManager.stopAll();
     this.resetSessionUi();
     const saved = Session.loadSession(handle.cwd, sessionId);
-    const replay = Remote.SessionState.restoreRemoteSession(
-      handle,
-      sessionId,
-      saved,
+    await handle.stopMemoryTasks();
+    Remote.SessionState.restoreRemoteSession(handle, sessionId, saved);
+    const messages = projectHistory(
+      Session.rebuildFromSession(saved, { includeExcludedUserBash: true }),
     );
-    const messages = projectHistory(replay);
     emit({
       type: "session_changed",
       data: { sessionId: handle.sessionId, cwd: this.cwd },
@@ -843,6 +1003,14 @@ export class YukinoBridge {
   }
 
   private async reinit(cwd: string): Promise<void> {
+    cwd = await resolveProject(cwd);
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    if (this.wakeupTimer) {
+      clearInterval(this.wakeupTimer);
+    }
+    this.wakeupTimer = null;
     if (this.streaming) {
       this.abort();
     }
@@ -855,7 +1023,6 @@ export class YukinoBridge {
     this.workspace = null;
     this.cwd = cwd;
     this.lastUsage = { inputTokens: 0, outputTokens: 0 };
-    this.state.write({ cwd });
     this.followUps.length = 0;
     await this.init();
   }
@@ -900,7 +1067,7 @@ export class YukinoBridge {
     if (!handle) {
       return;
     }
-    const parsed = Commands.Commands.parse(input);
+    const parsed = Commands.Commands.resolve(input, handle.cmdRegistry);
     if (!parsed) {
       return;
     }
@@ -1488,17 +1655,15 @@ export class YukinoBridge {
 
   async getSettings(): Promise<SettingsSnapshot> {
     const handle = this.handle;
-    if (!handle) {
-      return {
-        providers: [],
-        currentProvider: -1,
-        model: "",
-        thinkingLevel: DEFAULT_THINKING,
-        thinkingLevels: [...Config.Constants.THINKING_LEVELS],
-      };
-    }
+    const config = !handle
+      ? Config.loadConfig(undefined, { allowEmptyProviders: true })
+      : null;
+    const providers = config?.providers ?? this.providers;
+    this.providers = providers;
+    const current =
+      handle?.provider ?? providers[config?.default_provider ?? 0];
     return {
-      providers: this.providers.map((provider) => ({
+      providers: providers.map((provider) => ({
         name: provider.name,
         protocol: provider.protocol,
         baseUrl: provider.base_url,
@@ -1506,13 +1671,17 @@ export class YukinoBridge {
       })),
       currentProvider: Math.max(
         0,
-        this.providers.findIndex(
-          (provider) => provider.base_url === handle.provider.base_url,
+        providers.findIndex(
+          (provider) => provider.base_url === current?.base_url,
         ),
       ),
-      model: handle.provider.model,
-      thinkingLevel: this.currentThinkingLevel(handle),
-      thinkingLevels: this.supportedThinkingLevels(handle),
+      model: current?.model ?? "",
+      thinkingLevel: handle
+        ? this.currentThinkingLevel(handle)
+        : (current?.thinking ?? DEFAULT_THINKING),
+      thinkingLevels: handle
+        ? this.supportedThinkingLevels(handle)
+        : [...Config.Constants.THINKING_LEVELS],
     };
   }
 
@@ -1556,20 +1725,31 @@ export class YukinoBridge {
 
   /** Persists the new model to config.yaml and rebuilds the LLM client. */
   async setModel(model: string): Promise<void> {
-    const handle = await this.ensureHandle();
+    this.assertIdle();
+    const trimmed = model.trim();
+    if (!trimmed) {
+      throw new Error("请输入模型名称");
+    }
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    const handle = this.handle;
     if (!handle) {
-      return;
-    }
-    if (this.streaming) {
-      emit({
-        type: "system",
-        data: {
-          message: "Cannot change the model while a run is in progress.",
-        },
+      const config = Config.loadConfig(undefined, {
+        allowEmptyProviders: true,
       });
+      const provider = Config.ProviderConfig.resolveDefaultProvider(
+        config.providers,
+        config.default_provider,
+      );
+      Config.ProviderLogin.persistModel(provider.base_url, trimmed);
+      const result = await this.init();
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
       return;
     }
-    await this.setModelInternal(handle, model.trim());
+    await this.setModelInternal(handle, trimmed);
   }
 
   private async setModelInternal(
@@ -1580,10 +1760,6 @@ export class YukinoBridge {
       return;
     }
     if (model === handle.provider.model) {
-      emit({
-        type: "system",
-        data: { message: `Model already set to ${model}.` },
-      });
       return;
     }
     const updated = { ...handle.provider, model };
@@ -1615,11 +1791,7 @@ export class YukinoBridge {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        emit({
-          type: "error",
-          data: { message: `Failed to switch model: ${message}` },
-        });
-        return;
+        throw new Error(`无法切换模型：${message}`, { cause: error });
       }
       // A save failure must not undo the runtime switch.
       let saved = true;
@@ -1629,12 +1801,12 @@ export class YukinoBridge {
         saved = false;
       }
       this.broadcastUpdatedState(handle);
-      emit({
-        type: "system",
-        data: {
-          message: `Model set to ${updated.model}${saved ? " and saved" : " for this session"}.`,
-        },
-      });
+      if (!saved) {
+        emit({
+          type: "error",
+          data: { message: "设置已生效，但无法保存到配置文件。" },
+        });
+      }
     } finally {
       this.completeRun(handle);
     }
@@ -1642,25 +1814,23 @@ export class YukinoBridge {
 
   /** Persists the default provider and rebuilds the LLM client. */
   async setProvider(index: number): Promise<void> {
+    this.assertIdle();
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    const config = Config.loadConfig(undefined, { allowEmptyProviders: true });
+    this.providers = config.providers;
     const provider = this.providers[index];
     if (!provider) {
-      emit({
-        type: "error",
-        data: { message: `Unknown provider index: ${String(index)}` },
-      });
-      return;
+      throw new Error("服务商不存在，请刷新设置");
     }
-    const handle = await this.ensureHandle();
+    const handle = this.handle;
     if (!handle) {
-      return;
-    }
-    if (this.streaming) {
-      emit({
-        type: "system",
-        data: {
-          message: "Cannot switch providers while a run is in progress.",
-        },
-      });
+      Config.ProviderLogin.persistDefaultProvider(index);
+      const result = await this.init();
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
       return;
     }
     // Block concurrent sends while the client is being rebuilt.
@@ -1686,11 +1856,7 @@ export class YukinoBridge {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        emit({
-          type: "error",
-          data: { message: `Failed to switch provider: ${message}` },
-        });
-        return;
+        throw new Error(`无法切换服务商：${message}`, { cause: error });
       }
       // A save failure must not undo the runtime switch.
       let saved = true;
@@ -1700,12 +1866,12 @@ export class YukinoBridge {
         saved = false;
       }
       this.broadcastUpdatedState(handle);
-      emit({
-        type: "system",
-        data: {
-          message: `Provider switched to ${provider.name} · ${provider.model}.${saved ? "" : " Default provider could not be saved."}`,
-        },
-      });
+      if (!saved) {
+        emit({
+          type: "error",
+          data: { message: "设置已生效，但无法保存到配置文件。" },
+        });
+      }
     } finally {
       this.completeRun(handle);
     }
@@ -1729,11 +1895,7 @@ export class YukinoBridge {
         handle.client.getThinkingLevel?.() ?? (level as ThinkingLevel);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      emit({
-        type: "error",
-        data: { message: `Failed to set thinking level: ${message}` },
-      });
-      return;
+      throw new Error(`无法设置推理深度：${message}`, { cause: error });
     }
     const effective = this.currentThinkingLevel(handle);
     try {
@@ -1745,10 +1907,6 @@ export class YukinoBridge {
       // Persistence is best-effort; the runtime change stands.
     }
     this.broadcastUpdatedState(handle);
-    emit({
-      type: "system",
-      data: { message: `Thinking level set to ${effective}.` },
-    });
   }
 
   /** Re-emits init_state so the header badge/model stays in sync. */
@@ -2138,6 +2296,14 @@ export class YukinoBridge {
   }
 
   async dispose(): Promise<void> {
+    this.disposing = true;
+    if (this.wakeupTimer) {
+      clearInterval(this.wakeupTimer);
+    }
+    this.wakeupTimer = null;
+    if (this.initPromise) {
+      await this.initPromise;
+    }
     this.abort();
     this.resetSessionUi();
     this.workspace?.dispose();

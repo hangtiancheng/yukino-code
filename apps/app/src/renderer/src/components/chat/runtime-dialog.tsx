@@ -9,7 +9,14 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@renderer/components/ui/dialog";
+import { ChoiceSelect } from "@renderer/components/ui/select";
 import { Spinner } from "@renderer/components/ui/spinner";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@renderer/components/ui/tabs";
 import type { RuntimeAction, RuntimeSnapshot } from "@shared/workspace-types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -104,21 +111,27 @@ export function RuntimeDialog({
         <DialogDescription className="sr-only">
           目标、任务、Agent、工作流、工具、技能、MCP、记忆与检查点
         </DialogDescription>
-        <div className="runtime-layout">
-          <nav className="runtime-nav" aria-label="Agent 能力">
-            {pages.map((item) => (
-              <button
-                key={item.id}
-                aria-current={page === item.id ? "page" : undefined}
-                className={page === item.id ? "active" : ""}
-                onClick={() => {
-                  setPage(item.id);
-                }}
-              >
-                <item.icon />
-                {item.label}
-              </button>
-            ))}
+        <Tabs
+          value={page}
+          onValueChange={(value) => {
+            setPage(value as typeof page);
+          }}
+          orientation="vertical"
+          className="runtime-layout"
+        >
+          <div className="runtime-nav">
+            <TabsList aria-label="Agent 能力" className="runtime-tabs">
+              {pages.map((item) => (
+                <TabsTrigger
+                  key={item.id}
+                  value={item.id}
+                  className="runtime-tab"
+                >
+                  <item.icon />
+                  {item.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
             {data ? (
               <div className="runtime-nav-meta">
                 <span>{data.tools.length} 个工具</span>
@@ -127,8 +140,8 @@ export function RuntimeDialog({
                 </span>
               </div>
             ) : null}
-          </nav>
-          <div className="runtime-content">
+          </div>
+          <TabsContent value={page} className="runtime-content">
             {error ? (
               <div role="alert" className="runtime-error">
                 <p>{error.message}</p>
@@ -226,21 +239,20 @@ export function RuntimeDialog({
                     {confirm ? (
                       <div className="rewind-confirm">
                         <strong>恢复会覆盖后续修改</strong>
-                        <select
-                          aria-label="恢复范围"
-                          className="native-select"
+                        <ChoiceSelect
+                          label="恢复范围"
                           value={mode}
                           disabled={rewind.isPending}
-                          onChange={(event) => {
-                            setMode(event.target.value as typeof mode);
-                          }}
-                        >
-                          <option value="code_only">仅恢复文件</option>
-                          <option value="conversation_only">仅恢复对话</option>
-                          <option value="code_and_conversation">
-                            恢复文件与对话
-                          </option>
-                        </select>
+                          onValueChange={setMode}
+                          options={[
+                            { value: "code_only", label: "仅恢复文件" },
+                            { value: "conversation_only", label: "仅恢复对话" },
+                            {
+                              value: "code_and_conversation",
+                              label: "恢复文件与对话",
+                            },
+                          ]}
+                        />
                         <div className="flex justify-end gap-2">
                           <Button
                             size="sm"
@@ -269,8 +281,8 @@ export function RuntimeDialog({
                 ) : null}
               </>
             )}
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

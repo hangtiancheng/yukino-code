@@ -133,16 +133,21 @@ function applyEvent(state: ChatState, event: BridgeEvent): ChatState {
         init: event.data,
         initializing: false,
         activeSessionId: event.data.ok ? event.data.sessionId : null,
-        items: event.data.ok
-          ? state.items
-          : [
-              ...state.items,
-              {
-                kind: "error",
-                id: nextId("err"),
-                text: `${event.data.error}${event.data.configPath ? `\nConfig file: ${event.data.configPath}` : ""}`,
-              },
-            ],
+      };
+
+    case "tool_output":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.kind === "tool" && item.toolId === event.data.toolId
+            ? {
+                ...item,
+                output: `${item.output ?? ""}${event.data.output}`.slice(
+                  -100_000,
+                ),
+              }
+            : item,
+        ),
       };
 
     case "run_state":
@@ -396,7 +401,7 @@ function historyToItems(messages: HistoryMessage[]): ChatItem[] {
   // that follows the assistant's tool_uses; index them globally by id.
   const resultsByToolUseId = new Map<
     string,
-    { content: string; isError: boolean }
+    { content: string; isError: boolean; contentBlocks?: ToolContentBlock[] }
   >();
   for (const message of messages) {
     for (const result of message.toolResults ?? []) {
@@ -406,6 +411,26 @@ function historyToItems(messages: HistoryMessage[]): ChatItem[] {
 
   const items: ChatItem[] = [];
   for (const message of messages) {
+    if (message.userBash) {
+      const bash = message.userBash;
+      items.push({
+        kind: "user",
+        id: nextId("u"),
+        text: `${bash.excludeFromContext ? "!!" : "!"}${bash.command}`,
+      });
+      items.push({
+        kind: "tool",
+        id: nextId("tool"),
+        toolId: nextId("bash"),
+        toolName: "Bash",
+        args: { command: bash.command },
+        output: bash.output,
+        isError: bash.isError,
+        elapsed: bash.elapsed,
+        running: false,
+      });
+      continue;
+    }
     if (message.role === "user") {
       // Skip tool-result carriers; only genuine user prompts render.
       if (message.content.trim() && !message.toolResults?.length) {
@@ -436,6 +461,7 @@ function historyToItems(messages: HistoryMessage[]): ChatItem[] {
           toolName: use.toolName,
           args: use.arguments,
           output: result?.content ?? null,
+          contentBlocks: result?.contentBlocks,
           isError: result?.isError ?? false,
           elapsed: null,
           running: false,

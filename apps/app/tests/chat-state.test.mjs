@@ -98,3 +98,84 @@ test("resuming a session clears activity indicators from the previous session", 
   assert.equal(state.activeSubagents, 0);
   assert.equal(state.activeSessionId, "restored");
 });
+
+test("initialization failures stay in the recovery screen instead of accumulating chat errors", () => {
+  const failure = {
+    type: "init_state",
+    data: { ok: false, kind: "project", error: "项目已不存在" },
+  };
+  const state = reduce([failure, failure, failure]);
+  assert.equal(state.items.length, 0);
+  assert.equal(state.initializing, false);
+});
+
+test("live shell output is replaced by the complete final result and keeps elapsed seconds", () => {
+  const state = reduce([
+    {
+      type: "tool_use",
+      data: { toolId: "shell", toolName: "Bash", args: { command: "pwd" } },
+    },
+    { type: "tool_output", data: { toolId: "shell", output: "first" } },
+    { type: "tool_output", data: { toolId: "shell", output: " second" } },
+    {
+      type: "tool_result",
+      data: {
+        toolId: "shell",
+        toolName: "Bash",
+        output: "complete",
+        isError: false,
+        elapsed: 1.2,
+      },
+    },
+  ]);
+  assert.equal(state.items[0].output, "complete");
+  assert.equal(state.items[0].elapsed, 1.2);
+  assert.equal(state.items[0].running, false);
+});
+
+test("session replay restores excluded shell commands and structured tool content", () => {
+  const image = {
+    type: "image",
+    source: { type: "base64", data: "AA==", media_type: "image/png" },
+  };
+  const state = chatReducer(initialChatState, {
+    type: "load_history",
+    messages: [
+      {
+        role: "user",
+        content: "shell context",
+        timestamp: 0,
+        userBash: {
+          command: "pwd",
+          output: "/project",
+          isError: false,
+          excludeFromContext: true,
+          elapsed: 0.1,
+          status: "completed",
+        },
+      },
+      {
+        role: "assistant",
+        content: "",
+        timestamp: 1,
+        toolUses: [{ toolUseId: "read", toolName: "Read", arguments: {} }],
+      },
+      {
+        role: "user",
+        content: "",
+        timestamp: 2,
+        toolResults: [
+          {
+            toolUseId: "read",
+            content: "image",
+            isError: false,
+            contentBlocks: [image],
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(state.items[0].text, "!!pwd");
+  assert.equal(state.items[1].output, "/project");
+  assert.deepEqual(state.items[2].contentBlocks, [image]);
+});

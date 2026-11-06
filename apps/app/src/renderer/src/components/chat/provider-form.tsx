@@ -1,6 +1,7 @@
 import { Button } from "@renderer/components/ui/button";
 import { Input } from "@renderer/components/ui/input";
 import { Label } from "@renderer/components/ui/label";
+import { ChoiceSelect } from "@renderer/components/ui/select";
 import type { ProviderInput } from "@shared/ipc-types";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -67,22 +68,21 @@ export function ProviderForm({
       ))}
       <div className="space-y-1.5">
         <Label htmlFor={`${id}-protocol`}>协议</Label>
-        <select
+        <ChoiceSelect
           id={`${id}-protocol`}
-          className="native-select w-full"
+          label="协议"
+          className="w-full"
           disabled={busy}
           value={input.protocol}
-          onChange={(event) => {
-            setInput((current) => ({
-              ...current,
-              protocol: event.target.value as ProviderInput["protocol"],
-            }));
+          onValueChange={(protocol) => {
+            setInput((current) => ({ ...current, protocol }));
           }}
-        >
-          <option value="openai">OpenAI Responses</option>
-          <option value="openai-compat">OpenAI Chat Completions</option>
-          <option value="anthropic">Anthropic</option>
-        </select>
+          options={[
+            { value: "openai", label: "OpenAI Responses" },
+            { value: "openai-compat", label: "OpenAI Chat Completions" },
+            { value: "anthropic", label: "Anthropic" },
+          ]}
+        />
       </div>
       <div className="flex justify-end gap-2">
         <Button

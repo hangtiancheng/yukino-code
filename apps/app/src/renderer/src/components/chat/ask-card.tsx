@@ -148,11 +148,14 @@ export function AskCard({
 
               {draft.selected.includes(OTHER) ? (
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`${item.id}-other`} className="sr-only">
+                  <Label
+                    htmlFor={`${item.id}-${questionIndex}-other`}
+                    className="sr-only"
+                  >
                     自定义回答
                   </Label>
                   <Input
-                    id={`${item.id}-other`}
+                    id={`${item.id}-${questionIndex}-other`}
                     autoFocus
                     placeholder="输入你的回答"
                     value={draft.otherText}

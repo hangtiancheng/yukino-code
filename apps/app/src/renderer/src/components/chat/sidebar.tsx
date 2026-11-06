@@ -1,16 +1,13 @@
 import { Button } from "@renderer/components/ui/button";
+import { Input } from "@renderer/components/ui/input";
 import { folderName } from "@renderer/lib/utils";
 import type { SessionSummary } from "@shared/ipc-types";
 import { cn } from "cn";
 import {
-  BoxesIcon,
-  ChevronRightIcon,
-  FolderIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   PlusIcon,
   SearchIcon,
-  Settings2Icon,
   SnowflakeIcon,
 } from "lucide-react";
 import { useDeferredValue, useState } from "react";
@@ -37,28 +34,18 @@ export function Sidebar({
   sessions,
   activeSessionId,
   currentProjectKey,
-  cwd,
   onResumeSession,
   onClose,
   onNewSession,
-  onOpenCommands,
-  onOpenRuntime,
-  onOpenSettings,
-  onChooseFolder,
   disabled,
 }: {
   open: boolean;
   sessions: SessionSummary[];
   activeSessionId: string | null;
   currentProjectKey: string | null;
-  cwd: string | null;
   onResumeSession: (sessionId: string, cwd?: string) => void;
   onClose: () => void;
   onNewSession: () => void;
-  onOpenCommands: () => void;
-  onOpenRuntime: () => void;
-  onOpenSettings: () => void;
-  onChooseFolder: () => void;
   disabled: boolean;
 }): React.JSX.Element {
   const [search, setSearch] = useState("");
@@ -125,24 +112,6 @@ export function Sidebar({
           <PlusIcon />
           新建会话<kbd>⌘ / Ctrl N</kbd>
         </Button>
-        <button
-          className="sidebar-nav-button"
-          onClick={onOpenCommands}
-          aria-label="搜索命令"
-        >
-          <SearchIcon />
-          <span>命令中心</span>
-          <kbd>⌘ / Ctrl K</kbd>
-        </button>
-        <button
-          className="sidebar-nav-button"
-          onClick={onOpenRuntime}
-          aria-label="打开工作台"
-        >
-          <BoxesIcon />
-          <span>Agent 工作台</span>
-          <ChevronRightIcon />
-        </button>
       </div>
       <div className="sidebar-history-heading">
         <span>会话</span>
@@ -150,7 +119,7 @@ export function Sidebar({
       </div>
       <div className="session-search">
         <SearchIcon />
-        <input
+        <Input
           aria-label="搜索会话"
           placeholder="搜索会话…"
           value={search}
@@ -207,33 +176,6 @@ export function Sidebar({
             ) : null,
           )
         )}
-      </div>
-      <div className="sidebar-footer">
-        <button
-          className="sidebar-project"
-          onClick={onChooseFolder}
-          disabled={disabled}
-          aria-label="切换项目"
-          title={cwd ?? "打开项目"}
-        >
-          <span className="project-avatar">
-            <FolderIcon />
-          </span>
-          <span>
-            <strong>{cwd ? folderName(cwd) : "打开项目"}</strong>
-            <small>{cwd ?? "选择工作目录"}</small>
-          </span>
-          <ChevronRightIcon />
-        </button>
-        <button
-          className="sidebar-nav-button"
-          onClick={onOpenSettings}
-          aria-label="打开设置"
-        >
-          <Settings2Icon />
-          <span>设置</span>
-          <kbd>⌘ / Ctrl ,</kbd>
-        </button>
       </div>
     </aside>
   );

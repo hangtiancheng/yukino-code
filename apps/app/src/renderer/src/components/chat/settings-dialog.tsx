@@ -14,6 +14,7 @@ import {
 } from "@renderer/components/ui/dialog";
 import { Input } from "@renderer/components/ui/input";
 import { Label } from "@renderer/components/ui/label";
+import { ChoiceSelect } from "@renderer/components/ui/select";
 import { Separator } from "@renderer/components/ui/separator";
 import { Spinner } from "@renderer/components/ui/spinner";
 import {
@@ -23,7 +24,7 @@ import {
 import type { ModelListResult, SettingsSnapshot } from "@shared/ipc-types";
 import { cn } from "cn";
 import { CheckIcon, RefreshCwIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 function Section({
@@ -35,7 +36,7 @@ function Section({
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-2">
-      <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+      <Label className="text-muted-foreground text-xs font-medium">
         {title}
       </Label>
       {children}
@@ -47,11 +48,16 @@ export function SettingsDialog({
   open,
   onOpenChange,
   streaming,
+  themeMode,
+  onThemeMode,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   streaming: boolean;
+  themeMode: "system" | "light" | "dark";
+  onThemeMode: (mode: "system" | "light" | "dark") => void;
 }): React.JSX.Element | null {
+  const modelRequest = useRef(0);
   const [settings, setSettings] = useState<SettingsSnapshot | null>(null);
   const [models, setModels] = useState<ModelListResult | null>(null);
   const [modelDraft, setModelDraft] = useState("");
@@ -64,6 +70,7 @@ export function SettingsDialog({
       return;
     }
     let cancelled = false;
+    modelRequest.current++;
     // Reset happens inside the async continuation so the effect body stays
     // free of synchronous setState (avoids cascading renders).
     void window.api
@@ -88,6 +95,8 @@ export function SettingsDialog({
   }, [open]);
 
   const applyProvider = useCallback((index: number) => {
+    modelRequest.current++;
+    setModels(null);
     setBusy(true);
     void window.api
       .setProvider(index)
@@ -138,11 +147,19 @@ export function SettingsDialog({
   }, []);
 
   const discoverModels = useCallback(() => {
+    const request = ++modelRequest.current;
     setModels({ status: "loading", models: [], current: modelDraft });
     void window.api
       .listModels()
-      .then(setModels)
+      .then((result) => {
+        if (modelRequest.current === request) {
+          setModels(result);
+        }
+      })
       .catch((cause: unknown) => {
+        if (modelRequest.current !== request) {
+          return;
+        }
         setModels({ status: "error", models: [], current: modelDraft });
         toast.error(String(cause));
       });
@@ -158,11 +175,21 @@ export function SettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Scroll region lives on this inner div, not on the popup, so the
-            absolutely-positioned close button stays pinned while the body
-            scrolls. scrollbar-none hides the scrollbar (scrolling still
-            works via wheel/trackpad). */}
-        <div className="min-h-0 flex-1 scrollbar-none overflow-y-auto">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
+          <Section title="外观">
+            <ChoiceSelect
+              label="主题"
+              value={themeMode}
+              onValueChange={onThemeMode}
+              options={[
+                { value: "system", label: "跟随系统" },
+                { value: "light", label: "浅色" },
+                { value: "dark", label: "深色" },
+              ]}
+              className="w-full"
+            />
+          </Section>
+          <Separator />
           {error ? (
             <p role="alert" className="text-destructive py-6 text-sm">
               {error}
@@ -213,7 +240,7 @@ export function SettingsDialog({
                       <button
                         key={`${provider.baseUrl}-${provider.name}`}
                         type="button"
-                        disabled={busy || active}
+                        disabled={busy || streaming || active}
                         onClick={() => {
                           applyProvider(index);
                         }}
@@ -281,7 +308,9 @@ export function SettingsDialog({
                         size="sm"
                         variant="ghost"
                         onClick={discoverModels}
-                        disabled={models?.status === "loading"}
+                        disabled={
+                          busy || streaming || models?.status === "loading"
+                        }
                         className="text-muted-foreground gap-1.5 text-xs"
                       >
                         {models?.status === "loading" ? (
@@ -301,7 +330,7 @@ export function SettingsDialog({
                               <button
                                 key={model.id}
                                 type="button"
-                                disabled={busy || active}
+                                disabled={busy || streaming || active}
                                 onClick={() => {
                                   applyModel(model.id);
                                 }}

@@ -5,10 +5,8 @@ import {
   ChevronDownIcon,
   Code2Icon,
   FolderOpenIcon,
-  MoonIcon,
   PanelLeftIcon,
   Settings2Icon,
-  SunIcon,
   SearchIcon,
   ChevronRightIcon,
 } from "lucide-react";
@@ -17,12 +15,10 @@ export function Header({
   init,
   sidebarOpen,
   editorOpen,
-  dark,
   streaming,
   onToggleSidebar,
   onToggleEditor,
   onChooseFolder,
-  onThemeMode,
   onOpenSettings,
   onOpenRuntime,
   onOpenCommands,
@@ -31,12 +27,10 @@ export function Header({
   init: InitState | null;
   sidebarOpen: boolean;
   editorOpen: boolean;
-  dark: boolean;
   streaming: boolean;
   onToggleSidebar: () => void;
   onToggleEditor: () => void;
   onChooseFolder: () => void;
-  onThemeMode: (mode: "system" | "light" | "dark") => void;
   onOpenSettings: () => void;
   onOpenRuntime: () => void;
   onOpenCommands: () => void;
@@ -88,21 +82,11 @@ export function Header({
           variant="ghost"
           size="icon-sm"
           onClick={onOpenRuntime}
+          disabled={!init?.ok}
           aria-label="Agent 工作台"
           title="任务与能力"
         >
           <BoxesIcon />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => {
-            onThemeMode(dark ? "light" : "dark");
-          }}
-          aria-label={dark ? "切换浅色主题" : "切换深色主题"}
-          title="切换主题"
-        >
-          {dark ? <SunIcon /> : <MoonIcon />}
         </Button>
         <Button
           variant="ghost"
@@ -118,6 +102,7 @@ export function Header({
           variant={editorOpen ? "secondary" : "ghost"}
           size="sm"
           onClick={onToggleEditor}
+          disabled={!init?.ok}
           aria-pressed={editorOpen}
           title="切换代码工作区 · ⌘ J"
         >

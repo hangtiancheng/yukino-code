@@ -165,14 +165,18 @@ async function bootstrap(page) {
       respondPlan: async () => {},
       respondAsk: async () => {},
       respondPermission: async () => {},
-      setPermissionMode: async () => {},
+      setPermissionMode: async (mode) => {
+        initial.permissionMode = mode;
+        window.__permissionMode = mode;
+        emit({ type: "init_state", data: { ...initial } });
+      },
       openConfig: async () => {},
     };
   });
   await page.goto("/");
   await page.waitForLoadState("networkidle");
   await expect(
-    page.getByRole("button", { name: "了解项目", exact: true }),
+    page.getByRole("textbox", { name: "任务输入", exact: true }),
   ).toBeVisible();
 }
 
@@ -210,7 +214,10 @@ test("workspace layout, commands, Chinese input and collapsed drafts", async ({
       ),
     )
     .toBeLessThan(12);
-  await page.getByRole("button", { name: "切换深色主题" }).click();
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByRole("combobox", { name: "主题", exact: true }).click();
+  await page.getByRole("option", { name: "深色", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(page.locator("html")).toHaveClass(/dark/);
   await page.screenshot({
     path: "test-results/workspace-dark.png",
@@ -247,7 +254,7 @@ test("live Agent changes preserve dirty drafts and require conflict review", asy
   await expect(page.locator(".view-lines").last()).toContainText(
     "Agent updated",
   );
-  const code = page.locator(".monaco-diff-editor").getByRole("textbox").last();
+  const code = page.locator(".monaco-editor").getByRole("textbox").last();
   await code.focus();
   await code.press("ControlOrMeta+End");
   await code.press("Enter");
@@ -323,7 +330,10 @@ test("command center supports keyboard search and inserts commands without sendi
   await expect(dialog).toBeVisible();
   await dialog.getByRole("combobox").fill("review");
   await expect(dialog.getByRole("option", { name: /review/ })).toBeVisible();
-  await page.screenshot({ path: "test-results/command-center.png" });
+  await page.screenshot({
+    path: "test-results/command-center.png",
+    animations: "disabled",
+  });
   await dialog.getByRole("combobox").press("Enter");
   const input = page.getByRole("textbox", { name: "任务输入" });
   await expect(input).toHaveValue("/review ");
@@ -332,7 +342,7 @@ test("command center supports keyboard search and inserts commands without sendi
     page.getByRole("button", { name: "发送", exact: true }),
   ).toBeEnabled();
   expect(await page.evaluate(() => window.__sent)).toBeUndefined();
-  await page.getByRole("button", { name: "打开命令", exact: true }).click();
+  await page.getByRole("button", { name: "命令中心", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(input).toHaveValue("/review ");
   await page.keyboard.press("ControlOrMeta+n");
@@ -431,9 +441,7 @@ test("background work and workflow phases expose live status and cancellation", 
   });
   await page.getByRole("button", { name: "Agent 工作台", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog
-    .getByRole("button", { name: "Agent 与协作", exact: true })
-    .click();
+  await dialog.getByRole("tab", { name: "Agent 与协作", exact: true }).click();
   await expect(dialog.getByText("reviewer", { exact: true })).toBeVisible();
   await dialog.getByText("查看输出", { exact: true }).click();
   await expect(dialog.getByText("build succeeded")).toBeVisible();
@@ -449,7 +457,7 @@ test("background work and workflow phases expose live status and cancellation", 
   await expect
     .poll(() => page.evaluate(() => window.__action))
     .toEqual({ type: "stop_teammate", team: "release", name: "tester" });
-  await dialog.getByRole("button", { name: "工作流", exact: true }).click();
+  await dialog.getByRole("tab", { name: "工作流", exact: true }).click();
   await expect(dialog.getByText("检查", { exact: true })).toBeVisible();
   await expect(dialog.getByText("构建", { exact: true })).toBeVisible();
   await dialog.getByText("运行日志", { exact: true }).click();
@@ -483,7 +491,7 @@ test("capabilities search, memory inspection and environment controls round-trip
   });
   await page.getByRole("button", { name: "Agent 工作台", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "工具与技能", exact: true }).click();
+  await dialog.getByRole("tab", { name: "工具与技能", exact: true }).click();
   await dialog.getByLabel("搜索能力").fill("读取");
   await expect(dialog.locator(".tool-grid summary")).toHaveCount(1);
   await dialog.locator(".tool-grid summary").click();
@@ -492,14 +500,15 @@ test("capabilities search, memory inspection and environment controls round-trip
   await expect
     .poll(() => page.evaluate(() => window.__action))
     .toEqual({ type: "reload_skills" });
-  await dialog
-    .getByRole("button", { name: "上下文与环境", exact: true })
-    .click();
+  await dialog.getByRole("tab", { name: "上下文与环境", exact: true }).click();
   await dialog.getByText("项目约定", { exact: true }).click();
   await expect(
     dialog.getByText("pnpm happy:fix", { exact: true }),
   ).toBeVisible();
-  await dialog.getByLabel("沙箱模式").selectOption("auto");
+  await dialog.getByRole("combobox", { name: "沙箱模式" }).click();
+  await page
+    .getByRole("option", { name: "沙箱内自动授权", exact: true })
+    .click();
   await expect
     .poll(() => page.evaluate(() => window.__action))
     .toEqual({ type: "sandbox", mode: "auto" });
@@ -529,25 +538,30 @@ test("checkpoint restoration requires a scope and explicit confirmation", async 
   });
   await page.getByRole("button", { name: "Agent 工作台", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "检查点", exact: true }).click();
+  await dialog.getByRole("tab", { name: "检查点", exact: true }).click();
   await expect(dialog.getByText("调整布局前")).toBeVisible();
   await dialog.getByRole("button", { name: "恢复", exact: true }).click();
   expect(await page.evaluate(() => window.__rewind)).toBeUndefined();
-  await dialog.getByLabel("恢复范围").selectOption("code_and_conversation");
+  await dialog.getByRole("combobox", { name: "恢复范围" }).click();
+  await page
+    .getByRole("option", { name: "恢复文件与对话", exact: true })
+    .click();
   await dialog.getByRole("button", { name: "确认恢复", exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => window.__rewind))
     .toEqual({ id: "snapshot", mode: "code_and_conversation" });
 });
 
-test("suggestions stay editable, attachments and session changes preserve intent", async ({
+test("empty conversations have no templates and attachments preserve intent", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 920, height: 680 });
   await bootstrap(page);
-  await page.getByRole("button", { name: "了解项目", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: /了解项目|实现功能|审查变更|排查问题/ }),
+  ).toHaveCount(0);
   const input = page.getByRole("textbox", { name: "任务输入" });
-  await expect(input).toHaveValue(/分析当前项目/);
+  await expect(input).toHaveValue("");
   expect(await page.evaluate(() => window.__sent)).toBeUndefined();
   await input.fill("读取图片");
   await page
@@ -722,4 +736,184 @@ test("stream batches preserve text around tool boundaries and support reply copy
   await expect(
     page.getByRole("button", { name: "停止任务", exact: true }),
   ).toHaveCount(0);
+});
+
+test("permission modes use a themed keyboard accessible select", async ({
+  page,
+}) => {
+  await bootstrap(page);
+  const mode = page.getByRole("combobox", { name: "Agent 权限模式" });
+  await mode.click();
+  await expect(page.getByRole("option")).toHaveCount(4);
+  await page.screenshot({
+    path: "test-results/permission-modes.png",
+    animations: "disabled",
+  });
+  await page.getByRole("option", { name: "允许所有工具", exact: true }).click();
+  await expect(mode).toContainText("允许所有工具");
+  expect(await page.evaluate(() => window.__permissionMode)).toBe(
+    "bypassPermissions",
+  );
+  await mode.focus();
+  await mode.press("ArrowDown");
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(mode).toBeFocused();
+  await page.evaluate(() =>
+    window.__emit({ type: "run_state", data: { streaming: true } }),
+  );
+  await expect(mode).toBeDisabled();
+  await expect(page.locator("select:visible")).toHaveCount(0);
+});
+
+test("full command lists keep the search visible and align long results within small windows", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 540 });
+  await bootstrap(page);
+  await page.evaluate(() => {
+    window.api.listCommands = async () =>
+      Array.from({ length: 50 }, (_, index) => ({
+        name: `command-${index}`,
+        description: "long-description-".repeat(35),
+        type: "prompt",
+        isSkill: false,
+      }));
+  });
+  await page.keyboard.press("ControlOrMeta+k");
+  const dialog = page.getByRole("dialog", { name: "命令中心" });
+  const search = dialog.getByRole("combobox");
+  await expect(search).toBeFocused();
+  await expect(dialog.getByRole("option")).toHaveCount(55);
+  const bounds = await dialog.boundingBox();
+  const inputBounds = await search.boundingBox();
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(540);
+  expect(inputBounds.y).toBeGreaterThan(bounds.y);
+  expect(inputBounds.width).toBeGreaterThan(300);
+  expect(
+    await dialog
+      .locator("[cmdk-list]")
+      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+  const firstResult = dialog.getByRole("option").nth(5);
+  const row = await firstResult.boundingBox();
+  const arrow = await firstResult.locator("svg").last().boundingBox();
+  expect(row.x + row.width - arrow.x - arrow.width).toBeLessThan(20);
+  await page.screenshot({
+    path: "test-results/command-full.png",
+    animations: "disabled",
+  });
+  await search.fill("没有此项");
+  await expect(dialog.getByText("没有匹配的操作")).toBeVisible();
+  await search.fill("command-49");
+  await search.press("Enter");
+  await expect(page.getByRole("textbox", { name: "任务输入" })).toHaveValue(
+    "/command-49 ",
+  );
+});
+
+test("missing projects have concise recovery, bounded details and a working retry", async ({
+  page,
+}) => {
+  await bootstrap(page);
+  await page.evaluate(() => {
+    for (let index = 0; index < 3; index++)
+      window.__emit({
+        type: "init_state",
+        data: {
+          ok: false,
+          kind: "project",
+          error: "项目文件夹已移动或删除，请重新选择项目。",
+          details:
+            "/private/var/folders/" +
+            "TestExecutorContextMappingPersistence".repeat(60),
+        },
+      });
+  });
+  await expect(
+    page.getByRole("heading", { name: "项目无法打开" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "选择项目", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator(".setup-panel pre")).toBeHidden();
+  await page.getByRole("button", { name: "查看详情", exact: true }).click();
+  await expect(page.locator(".setup-panel pre")).toBeVisible();
+  expect(
+    await page
+      .locator(".setup-panel")
+      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/project-recovery.png",
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: "重新连接", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "任务输入" })).toBeVisible();
+  await expect(page.getByRole("log")).toHaveCount(0);
+});
+
+test("code and inline diffs keep one line-number gutter and slim themed scrollbars", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await bootstrap(page);
+  await page.evaluate(() => {
+    const baseline = Array.from(
+      { length: 160 },
+      (_, index) => `export const value${index} = ${index};`,
+    ).join("\n");
+    window.api.workspaceRead = async () => ({
+      path: "hello.ts",
+      content: baseline.replace("value30 = 30", "value30 = 300"),
+      baseline,
+      revision: "long",
+      deleted: false,
+    });
+  });
+  await page.getByRole("button", { name: "hello.ts M" }).click();
+  const editor = page.locator(".monaco-editor").first();
+  await expect(editor).toBeVisible();
+  await expect(page.locator(".monaco-diff-editor")).toHaveCount(0);
+  await expect(
+    page
+      .locator(".margin-view-overlays .line-numbers")
+      .filter({ hasText: /^1$/ }),
+  ).toHaveCount(1);
+  await editor.hover();
+  const scrollbar = editor.locator(".scrollbar.vertical").first();
+  await expect.poll(async () => (await scrollbar.boundingBox())?.width).toBe(8);
+  const slider = scrollbar.locator(".slider");
+  await expect(slider).toHaveCSS("border-radius", "6px");
+  await page.screenshot({
+    path: "test-results/editor-code.png",
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: "变更对比", exact: true }).click();
+  await expect(page.locator(".monaco-diff-editor")).toBeVisible();
+  await expect(
+    page
+      .locator(
+        ".modified-in-monaco-diff-editor .margin-view-overlays .line-numbers",
+      )
+      .filter({ hasText: /^1$/ }),
+  ).toHaveCount(1);
+  await expect(page.locator(".monaco-diff-editor .editor.original")).toHaveCSS(
+    "width",
+    "0px",
+  );
+  await expect(page.locator(".diffOverview")).toHaveCount(0);
+  await page.screenshot({
+    path: "test-results/editor-diff.png",
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: "变更对比", exact: true }).click();
+  await expect(page.locator(".monaco-diff-editor")).toHaveCount(0);
+  await page.waitForTimeout(100);
+  expect(errors).toEqual([]);
 });

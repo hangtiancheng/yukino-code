@@ -4,6 +4,7 @@
 // keys navigate it, Tab/Enter insert (or run) the highlighted command.
 
 import { Button } from "@renderer/components/ui/button";
+import { ChoiceSelect } from "@renderer/components/ui/select";
 import { Textarea } from "@renderer/components/ui/textarea";
 import type { CommandSummary } from "@shared/ipc-types";
 import { cn } from "cn";
@@ -13,7 +14,6 @@ import {
   SquareIcon,
   PaperclipIcon,
   XIcon,
-  CommandIcon,
   ChevronDownIcon,
   CpuIcon,
   ShieldCheckIcon,
@@ -45,7 +45,6 @@ export function Composer({
   permissionMode,
   onOpenSettings,
   onPermissionMode,
-  onOpenCommands,
 }: {
   streaming: boolean;
   disabled: boolean;
@@ -55,7 +54,6 @@ export function Composer({
   model: string;
   permissionMode: string;
   onOpenSettings: () => void;
-  onOpenCommands: () => void;
   onPermissionMode: (
     mode: "default" | "acceptEdits" | "plan" | "bypassPermissions",
   ) => void;
@@ -310,16 +308,6 @@ export function Composer({
         >
           <PaperclipIcon />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={disabled}
-          title="命令"
-          aria-label="打开命令"
-          onClick={onOpenCommands}
-        >
-          <CommandIcon />
-        </Button>
         <span className="composer-toolbar-divider" />
         <button
           className="composer-model"
@@ -354,25 +342,24 @@ export function Composer({
         </Button>
       </div>
       <div className="composer-options">
-        <label>
-          <ShieldCheckIcon />
-          <select
-            aria-label="Agent 权限模式"
-            disabled={streaming || disabled}
-            value={permissionMode}
-            onChange={(event) => {
-              onPermissionMode(
-                event.target.value as
-                  "default" | "acceptEdits" | "plan" | "bypassPermissions",
-              );
-            }}
-          >
-            <option value="default">逐项授权</option>
-            <option value="acceptEdits">自动接受编辑</option>
-            <option value="plan">只读规划</option>
-            <option value="bypassPermissions">允许所有工具</option>
-          </select>
-        </label>
+        <ChoiceSelect
+          label="Agent 权限模式"
+          value={
+            permissionMode as
+              "default" | "acceptEdits" | "plan" | "bypassPermissions"
+          }
+          disabled={streaming || disabled}
+          onValueChange={onPermissionMode}
+          compact
+          icon={<ShieldCheckIcon />}
+          className="permission-select"
+          options={[
+            { value: "default", label: "逐项授权" },
+            { value: "acceptEdits", label: "自动接受编辑" },
+            { value: "plan", label: "只读规划" },
+            { value: "bypassPermissions", label: "允许所有工具" },
+          ]}
+        />
         <span>⇧ ↵ 换行</span>
       </div>
     </div>

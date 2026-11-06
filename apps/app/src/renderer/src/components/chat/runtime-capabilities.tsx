@@ -1,5 +1,6 @@
 import { Button } from "@renderer/components/ui/button";
 import { Input } from "@renderer/components/ui/input";
+import { ChoiceSelect } from "@renderer/components/ui/select";
 import type { RuntimeAction, RuntimeSnapshot } from "@shared/workspace-types";
 import {
   BrainCircuitIcon,
@@ -14,7 +15,6 @@ import {
   WrenchIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 export function RuntimeCapabilities({
   data,
@@ -180,9 +180,9 @@ export function RuntimeCapabilities({
             <div className="runtime-row">
               <ShieldCheckIcon className="text-muted-foreground size-4" />
               <span>沙箱</span>
-              <select
-                aria-label="沙箱模式"
-                className="native-select ml-auto"
+              <ChoiceSelect
+                label="沙箱模式"
+                className="ml-auto"
                 disabled={disabled || busy}
                 value={
                   !data.sandbox.enabled
@@ -191,17 +191,15 @@ export function RuntimeCapabilities({
                       ? "auto"
                       : "manual"
                 }
-                onChange={(event) => {
-                  onAction({
-                    type: "sandbox",
-                    mode: event.target.value as "auto" | "manual" | "off",
-                  });
+                onValueChange={(mode) => {
+                  onAction({ type: "sandbox", mode });
                 }}
-              >
-                <option value="off">关闭</option>
-                <option value="manual">手动授权</option>
-                <option value="auto">沙箱内自动授权</option>
-              </select>
+                options={[
+                  { value: "off", label: "关闭" },
+                  { value: "manual", label: "手动授权" },
+                  { value: "auto", label: "沙箱内自动授权" },
+                ]}
+              />
             </div>
             <div className="runtime-row">
               <BrainCircuitIcon className="text-muted-foreground size-4" />
@@ -229,18 +227,6 @@ export function RuntimeCapabilities({
             >
               <BrainCircuitIcon />
               压缩上下文
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void window.api
-                  .openConfig()
-                  .catch((cause: unknown) => toast.error(String(cause)));
-              }}
-            >
-              <FileCogIcon />
-              打开配置
             </Button>
           </div>
         </>

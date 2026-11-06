@@ -1,4 +1,4 @@
-import type { MCP, Tools } from "@yukino.js/yukino";
+import type { Conversation, MCP, Tools } from "@yukino.js/yukino";
 
 import type {
   FileEntry,
@@ -85,9 +85,11 @@ export interface HistoryMessage {
   toolResults?: {
     toolUseId: string;
     content: string;
+    contentBlocks?: ToolContentBlock[];
     isError: boolean;
   }[];
   thinking?: string;
+  userBash?: Conversation.UserBashResult;
 }
 
 export type InitState =
@@ -106,6 +108,8 @@ export type InitState =
   | {
       ok: false;
       error: string;
+      kind?: "project" | "config" | "runtime";
+      details?: string;
       /** Path of the config file the user needs to create/edit. */
       configPath?: string;
     };
@@ -128,6 +132,7 @@ export type SubagentActivity = {
  * `yukino:event` channel.
  */
 export type BridgeEvent =
+  | { type: "tool_output"; data: { toolId: string; output: string } }
   | { type: "workspace_changed"; data: { cwd: string; path: string | null } }
   | {
       type: "plan_approval";

@@ -40,6 +40,7 @@ export function useChat(): UseChat {
   );
   const [isDark, setIsDark] = useState(false);
   const initStarted = useRef(false);
+  const navigating = useRef(false);
 
   const refreshSessions = useCallback(() => {
     void window.api
@@ -145,7 +146,7 @@ export function useChat(): UseChat {
 
   const send = useCallback((text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) {
+    if (!trimmed || navigating.current) {
       return;
     }
     dispatch({ type: "append_user", text: trimmed });
@@ -156,34 +157,45 @@ export function useChat(): UseChat {
     void window.api.abort().catch(reportError);
   }, []);
 
-  const startNewSession = useCallback(() => {
-    void window.api.newSession().catch(reportError);
+  const navigate = useCallback((operation: () => Promise<unknown>) => {
+    if (navigating.current) {
+      return;
+    }
+    navigating.current = true;
+    dispatch({ type: "set_initializing", value: true });
+    void operation()
+      .catch(reportError)
+      .finally(() => {
+        navigating.current = false;
+        dispatch({ type: "set_initializing", value: false });
+      });
   }, []);
 
-  const resumeSession = useCallback((sessionId: string, cwd?: string) => {
-    void window.api
-      .resumeSession(sessionId, cwd)
-      .then((result) => {
+  const startNewSession = useCallback(() => {
+    navigate(() => window.api.newSession());
+  }, [navigate]);
+
+  const resumeSession = useCallback(
+    (sessionId: string, cwd?: string) => {
+      navigate(async () => {
+        const result = await window.api.resumeSession(sessionId, cwd);
         dispatch({ type: "load_history", messages: result.messages });
         if (result.switchedCwd) {
           toast.success("已切换项目");
         }
-      })
-      .catch(reportError);
-  }, []);
+      });
+    },
+    [navigate],
+  );
 
   const chooseFolder = useCallback(() => {
-    // The bridge re-initializes the agent for the chosen folder and emits a
-    // fresh `init_state` event through the stream.
-    void window.api
-      .selectFolder()
-      .then((result) => {
-        if (result.cwd) {
-          dispatch({ type: "clear_items" });
-        }
-      })
-      .catch(reportError);
-  }, []);
+    navigate(async () => {
+      const result = await window.api.selectFolder();
+      if (result.cwd) {
+        dispatch({ type: "clear_items" });
+      }
+    });
+  }, [navigate]);
 
   const respondPermission = useCallback(
     (id: string, response: PermissionResponse) => {
@@ -201,7 +213,7 @@ export function useChat(): UseChat {
 
   const setThemeMode = useCallback((mode: "system" | "light" | "dark") => {
     setThemeModeState(mode);
-    void window.api.setTheme(mode);
+    void window.api.setTheme(mode).catch(reportError);
     // Apply immediately so the UI doesn't wait for the round-trip broadcast.
     const prefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)",
@@ -237,12 +249,16 @@ export function useChat(): UseChat {
     setThemeMode,
     isDark,
     retry: () => {
+      dispatch({ type: "set_initializing", value: true });
       void window.api
         .init()
         .then((data) => {
           dispatch({ type: "init_state", data });
         })
-        .catch(reportError);
+        .catch((error: unknown) => {
+          dispatch({ type: "set_initializing", value: false });
+          reportError(error);
+        });
     },
   };
 }
