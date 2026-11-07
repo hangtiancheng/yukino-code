@@ -39,7 +39,7 @@ export function Header({
   const cwd = init?.ok ? init.cwd : null;
   return (
     <header
-      className={`border-border bg-background flex h-13.75 shrink-0 items-center gap-3 border-b px-5 [-webkit-app-region:drag] ${sidebarOpen ? "" : "mac:pl-21"}`}
+      className={`border-border bg-background flex h-14 min-w-0 shrink-0 items-center gap-2.5 border-b px-4 [-webkit-app-region:drag] ${sidebarOpen ? "" : "mac:pl-21"}`}
     >
       {!sidebarOpen ? (
         <Button
@@ -54,7 +54,7 @@ export function Header({
         </Button>
       ) : null}
       <button
-        className="flex max-w-[30%] items-center gap-2 text-xs font-[550] [-webkit-app-region:no-drag]"
+        className="hover:bg-muted flex max-w-[30%] min-w-0 shrink-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-xs font-semibold [-webkit-app-region:no-drag]"
         title={cwd ?? "Choose project"}
         disabled={streaming}
         onClick={onChooseFolder}
@@ -63,14 +63,17 @@ export function Header({
         <span className="truncate">
           {cwd ? cwd.split(/[\\/]/u).filter(Boolean).pop() : "Open project"}
         </span>
-        <ChevronDownIcon className="size-3" />
+        <ChevronDownIcon className="text-muted-foreground size-3 shrink-0" />
       </button>
       <ChevronRightIcon className="text-input size-3 shrink-0" />
-      <span className="text-muted-foreground max-w-[28%] truncate text-[11px]">
+      <span
+        className="text-muted-foreground min-w-0 flex-1 truncate text-xs"
+        title={sessionTitle}
+      >
         {sessionTitle}
       </span>
 
-      <div className="ml-auto flex items-center gap-1 [-webkit-app-region:no-drag]">
+      <div className="ml-auto flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
         <Button
           variant="ghost"
           size="icon-sm"

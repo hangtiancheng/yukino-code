@@ -21,11 +21,12 @@ export function RuntimeWorkflows({
           Workflows
         </h3>
         {data.namedWorkflows.length ? (
-          <div className="[&_button]:border-border [&_button:hover]:bg-secondary [&_svg]:text-accent-foreground grid grid-cols-2 gap-2.5 [&_button]:flex [&_button]:items-center [&_button]:gap-[9px] [&_button]:rounded-[9px] [&_button]:border [&_button]:p-3.5 [&_button]:text-left [&_strong]:flex-1 [&_strong]:overflow-hidden [&_strong]:text-[11px] [&_strong]:font-medium [&_strong]:text-ellipsis [&_svg]:size-[15px] [&_svg]:shrink-0 [&_svg:last-child]:w-3">
+          <div className="[&_button]:border-border [&_button:hover]:bg-secondary [&_svg]:text-accent-foreground grid grid-cols-2 gap-2.5 @max-[400px]/workbench:grid-cols-1 [&_button]:flex [&_button]:min-w-0 [&_button]:items-center [&_button]:gap-2.5 [&_button]:rounded-lg [&_button]:border [&_button]:p-3.5 [&_button]:text-left [&_strong]:min-w-0 [&_strong]:flex-1 [&_strong]:truncate [&_strong]:text-xs [&_strong]:font-medium [&_svg]:size-4 [&_svg]:shrink-0 [&_svg:last-child]:w-3">
             {data.namedWorkflows.map((name) => (
               <button
                 disabled={disabled}
                 key={name}
+                title={name}
                 onClick={() => {
                   onPrompt(`/${name}`);
                 }}
@@ -59,7 +60,9 @@ export function RuntimeWorkflows({
         >
           <h3 className="[&>svg]:text-accent-foreground mb-0.5 flex min-h-[25px] items-center gap-2 text-xs font-semibold [&>svg]:size-[15px] [&>svg]:shrink-0">
             <GitBranchIcon />
-            {run.workflowName}
+            <span className="min-w-0 flex-1 wrap-anywhere">
+              {run.workflowName}
+            </span>
             <RuntimeStatus className="ml-auto" status={run.status} />
           </h3>
           {run.description ? (
@@ -70,7 +73,7 @@ export function RuntimeWorkflows({
               <li key={`${index}/${phase.title}`}>
                 <span
                   className={cn(
-                    "border-border bg-muted text-muted-foreground grid size-[23px] place-items-center rounded-full border text-[9px]",
+                    "border-border bg-muted text-muted-foreground grid size-[23px] shrink-0 place-items-center rounded-full border text-[9px]",
                     phase.status === "running" &&
                       "border-ring bg-secondary text-accent-foreground",
                     phase.status === "done" &&
@@ -79,17 +82,19 @@ export function RuntimeWorkflows({
                 >
                   {index + 1}
                 </span>
-                <strong>{phase.title}</strong>
+                <strong className="min-w-0 wrap-anywhere">{phase.title}</strong>
                 <RuntimeStatus status={phase.status} />
               </li>
             ))}
           </ol>
           {run.agents.map((agent) => (
             <div
-              className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium"
+              className="border-border flex min-w-0 flex-wrap items-center gap-2.5 border-b py-3 text-xs"
               key={agent.id}
             >
-              <span>{agent.label ?? `Agent ${agent.id}`}</span>
+              <span className="min-w-0 flex-1 wrap-anywhere">
+                {agent.label ?? `Agent ${agent.id}`}
+              </span>
               <span className="text-muted-foreground ml-auto text-xs">
                 {agent.tokenCount.toLocaleString()} tokens · {agent.toolCount}{" "}
                 calls

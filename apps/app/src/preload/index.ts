@@ -62,6 +62,7 @@ const api = {
     mode: "code_only" | "conversation_only" | "code_and_conversation",
   ): Promise<void> => ipcRenderer.invoke("yukino:rewind", id, mode),
   openConfig: (): Promise<void> => ipcRenderer.invoke("yukino:open-config"),
+  openLogs: (): Promise<void> => ipcRenderer.invoke("yukino:open-logs"),
   selectAttachments: (): Promise<string[]> =>
     ipcRenderer.invoke("yukino:attachments"),
   init: (): Promise<InitState> => ipcRenderer.invoke("yukino:init"),

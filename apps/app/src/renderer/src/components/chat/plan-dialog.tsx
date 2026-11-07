@@ -62,7 +62,7 @@ export function PlanDialog(): React.JSX.Element {
           placeholder="Feedback"
           aria-label="Plan feedback"
         />
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant="ghost"
             disabled={busy}
@@ -72,7 +72,7 @@ export function PlanDialog(): React.JSX.Element {
                 .catch((error: unknown) => toast.error(String(error)));
             }}
           >
-            Cancel execution
+            Cancel
           </Button>
           <Button
             variant="outline"

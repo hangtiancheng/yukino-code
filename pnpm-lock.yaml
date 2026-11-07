@@ -233,6 +233,9 @@ importers:
       monaco-editor:
         specifier: 0.57.0
         version: 0.57.0
+      pino:
+        specifier: ^10.4.0
+        version: 10.4.0
       react-resizable-panels:
         specifier: ^4.18.1
         version: 4.18.1(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

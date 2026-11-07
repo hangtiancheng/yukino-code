@@ -31,7 +31,7 @@ export function RuntimeAgents({
               <div className="bg-secondary text-accent-foreground grid size-8 shrink-0 place-items-center rounded-[9px] [&_svg]:size-[17px]">
                 <BotIcon />
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 wrap-anywhere">
                 <strong>{agent.role}</strong>
                 <p>
                   {agent.background ? "Background" : "Foreground"} ·{" "}
@@ -63,7 +63,7 @@ export function RuntimeAgents({
               <div className="bg-secondary text-accent-foreground grid size-8 shrink-0 place-items-center rounded-[9px] [&_svg]:size-[17px]">
                 <UsersIcon />
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 wrap-anywhere">
                 <strong>
                   {member.name}
                   <small>{member.teamName}</small>

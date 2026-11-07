@@ -43,6 +43,7 @@
     "electron-updater": "^6.8.9",
     "lucide-react": "^1.61.0",
     "monaco-editor": "0.57.0",
+    "pino": "^10.4.0",
     "react-resizable-panels": "^4.18.1",
     "shadcn": "^4.22.1",
     "sonner": "^2.0.8",

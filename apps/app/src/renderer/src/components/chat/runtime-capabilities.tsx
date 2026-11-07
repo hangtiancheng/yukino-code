@@ -84,10 +84,12 @@ export function RuntimeCapabilities({
                       onPrompt(`/${skill.name}`);
                     }}
                   >
-                    <strong className="text-accent-foreground flex items-center text-xs font-medium">
-                      /{skill.name}
+                    <strong className="text-accent-foreground flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium">
+                      <span className="min-w-0 flex-1 wrap-anywhere">
+                        /{skill.name}
+                      </span>
                       {data.activeSkills.includes(skill.name) ? (
-                        <span className="text-success ml-auto inline-flex items-center gap-[3px] text-[9px] [&_svg]:size-[11px]">
+                        <span className="text-success ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] [&_svg]:size-3">
                           <CheckIcon />
                           Active
                         </span>
@@ -112,7 +114,7 @@ export function RuntimeCapabilities({
                 {data.tools.length}
               </span>
             </h3>
-            <div className="[&_details]:border-border [&_details]:bg-background [&_p]:text-muted-foreground [&_summary>svg]:text-muted-foreground grid grid-cols-2 gap-2 max-[700px]:grid-cols-1 [&_details]:self-start [&_details]:overflow-hidden [&_details]:rounded-[7px] [&_details]:border [&_p]:max-h-[180px] [&_p]:overflow-y-auto [&_p]:px-2.5 [&_p]:pb-2.5 [&_p]:text-[10px] [&_p]:leading-[1.7] [&_p]:wrap-anywhere [&_p]:whitespace-pre-wrap [&_summary]:flex [&_summary]:cursor-pointer [&_summary]:items-center [&_summary]:gap-1.5 [&_summary]:p-2.5 [&_summary]:text-[10px] [&_summary]:wrap-anywhere [&_summary>svg]:size-3 [&_summary>svg]:shrink-0">
+            <div className="[&_details]:border-border [&_details]:bg-background [&_p]:text-muted-foreground [&_summary>svg]:text-muted-foreground grid grid-cols-2 gap-2 @max-[400px]/workbench:grid-cols-1 [&_details]:min-w-0 [&_details]:self-start [&_details]:overflow-hidden [&_details]:rounded-lg [&_details]:border [&_p]:max-h-45 [&_p]:overflow-y-auto [&_p]:px-3 [&_p]:pb-3 [&_p]:text-[11px] [&_p]:leading-relaxed [&_p]:wrap-anywhere [&_p]:whitespace-pre-wrap [&_summary]:flex [&_summary]:cursor-pointer [&_summary]:items-center [&_summary]:gap-2 [&_summary]:p-3 [&_summary]:text-[11px] [&_summary]:wrap-anywhere [&_summary>svg]:size-3 [&_summary>svg]:shrink-0">
               {data.tools
                 .filter((name) =>
                   matches(`${name} ${data.toolDescriptions[name]}`),
@@ -154,12 +156,17 @@ export function RuntimeCapabilities({
             {data.mcpServers.length ? (
               data.mcpServers.map((name) => (
                 <div
-                  className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium"
+                  className="border-border flex min-w-0 items-center gap-2.5 border-b py-3 text-xs"
                   key={name}
                 >
                   <span className="bg-success inline-block size-1.5 shrink-0 rounded-full" />
-                  <strong>{name}</strong>
-                  <span className="text-success ml-auto text-xs">
+                  <strong
+                    className="min-w-0 flex-1 truncate font-medium"
+                    title={name}
+                  >
+                    {name}
+                  </strong>
+                  <span className="text-success ml-auto shrink-0 text-[11px]">
                     Connected
                   </span>
                 </div>
@@ -181,7 +188,7 @@ export function RuntimeCapabilities({
             {data.memories.length ? (
               data.memories.map((memory) => (
                 <details
-                  className="border-border [&>p]:text-muted-foreground [&_summary_span]:text-muted-foreground border-b pb-3 [&_summary]:flex [&_summary]:cursor-pointer [&_summary]:items-center [&_summary]:gap-2.5 [&_summary]:text-[11px] [&_summary_span]:ml-auto [&_summary_span]:text-[9px] [&_summary_strong]:font-medium [&>p]:mt-[7px] [&>p]:text-[10px]"
+                  className="border-border [&>p]:text-muted-foreground [&_summary_span]:text-muted-foreground min-w-0 border-b pb-3 [&_summary]:flex [&_summary]:cursor-pointer [&_summary]:items-center [&_summary]:gap-2.5 [&_summary]:text-xs [&_summary_span]:ml-auto [&_summary_span]:shrink-0 [&_summary_span]:text-[10px] [&_summary_strong]:min-w-0 [&_summary_strong]:flex-1 [&_summary_strong]:font-medium [&>p]:mt-2 [&>p]:text-[11px] [&>p]:leading-relaxed"
                   key={memory.name}
                 >
                   <summary>
@@ -205,12 +212,12 @@ export function RuntimeCapabilities({
               <ShieldCheckIcon />
               Runtime environment
             </h3>
-            <div className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium">
-              <ShieldCheckIcon className="text-muted-foreground size-4" />
+            <div className="border-border flex min-w-0 flex-wrap items-center gap-2.5 border-b py-3 text-xs">
+              <ShieldCheckIcon className="text-muted-foreground size-4 shrink-0" />
               <span>Sandbox</span>
               <ChoiceSelect
                 label="Sandbox mode"
-                className="ml-auto"
+                className="ml-auto max-w-full text-xs"
                 disabled={disabled || busy}
                 value={
                   !data.sandbox.enabled
@@ -224,20 +231,20 @@ export function RuntimeCapabilities({
                 }}
                 options={[
                   { value: "off", label: "Off" },
-                  { value: "manual", label: "Ask manually" },
-                  { value: "auto", label: "Auto-allow in sandbox" },
+                  { value: "manual", label: "Ask first" },
+                  { value: "auto", label: "Auto-allow" },
                 ]}
               />
             </div>
-            <div className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium">
-              <BrainCircuitIcon className="text-muted-foreground size-4" />
-              <span>Coordinator mode</span>
+            <div className="border-border flex min-w-0 flex-wrap items-center gap-2.5 border-b py-3 text-xs">
+              <BrainCircuitIcon className="text-muted-foreground size-4 shrink-0" />
+              <span>Coordinator</span>
               <span className="text-muted-foreground ml-auto text-xs">
                 {data.coordinator ? "Enabled" : "Disabled"}
               </span>
             </div>
-            <div className="border-border flex min-w-0 items-center gap-[9px] border-b py-2.5 text-[11px] [&_strong]:font-medium">
-              <FileCogIcon className="text-muted-foreground size-4" />
+            <div className="border-border flex min-w-0 flex-wrap items-center gap-2.5 border-b py-3 text-xs">
+              <FileCogIcon className="text-muted-foreground size-4 shrink-0" />
               <span>Hooks</span>
               <span className="text-muted-foreground ml-auto text-xs">
                 {data.hooks ? "Loaded" : "Not configured"}

@@ -24,7 +24,7 @@ export function ProviderForm({
   const [busy, setBusy] = useState(false);
   return (
     <form
-      className="space-y-3 rounded-lg border p-3"
+      className="bg-background min-w-0 space-y-3 rounded-xl border p-4"
       onSubmit={(event) => {
         event.preventDefault();
         setBusy(true);
@@ -84,7 +84,7 @@ export function ProviderForm({
           ]}
         />
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2 pt-1">
         <Button
           type="button"
           variant="ghost"

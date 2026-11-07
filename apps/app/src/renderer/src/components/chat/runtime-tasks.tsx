@@ -47,7 +47,7 @@ export function RuntimeTasks({
             <p className="text-sm leading-[1.8] font-medium wrap-anywhere">
               {goal.objective}
             </p>
-            <div className="[&>span]:text-muted-foreground [&>span>strong]:text-foreground flex items-center gap-[26px] py-[7px] [&>span]:flex [&>span]:flex-col [&>span]:gap-[3px] [&>span]:text-[9px] [&>span>strong]:text-[19px] [&>span>strong]:font-[550] [&>span>strong]:tracking-[-0.5px] [&>span>strong]:tabular-nums">
+            <div className="[&>span]:text-muted-foreground [&>span>strong]:text-foreground flex flex-wrap items-center gap-x-7 gap-y-3 py-2 [&>span]:flex [&>span]:flex-col [&>span]:gap-1 [&>span]:text-[10px] [&>span>strong]:text-xl [&>span>strong]:font-medium [&>span>strong]:tracking-tight [&>span>strong]:tabular-nums">
               <span>
                 <strong>{goal.turnsExecuted}</strong>turns
               </span>
@@ -129,7 +129,7 @@ export function RuntimeTasks({
             <Input
               className="text-[11px] md:text-[11px]"
               aria-label="Goal"
-              placeholder="Set a goal to keep working toward…"
+              placeholder="What should the agent work toward?"
               value={objective}
               onChange={(event) => {
                 setObjective(event.target.value);
@@ -138,9 +138,9 @@ export function RuntimeTasks({
               disabled={streaming}
               required
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Input
-                className="max-w-48 text-[11px] md:text-[11px]"
+                className="max-w-48 min-w-0 flex-1 text-[11px] md:text-[11px]"
                 aria-label="Token budget"
                 placeholder="Token budget (optional)"
                 type="number"
@@ -193,7 +193,9 @@ export function RuntimeTasks({
                   >
                     {task.status === "completed" ? <CheckIcon /> : task.id}
                   </span>
-                  <span className="min-w-0 flex-1">{task.subject}</span>
+                  <span className="min-w-0 flex-1 wrap-anywhere">
+                    {task.subject}
+                  </span>
                   <RuntimeStatus status={task.status} />
                 </summary>
                 <div className="text-muted-foreground px-0 pb-[13px] pl-7 text-[11px] leading-[1.8] wrap-anywhere whitespace-pre-wrap [&_p]:mt-[7px]">

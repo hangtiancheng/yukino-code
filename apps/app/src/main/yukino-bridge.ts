@@ -60,6 +60,7 @@ import {
   app,
   shell,
 } from "electron";
+import type { Logger } from "pino";
 
 import type {
   RuntimeAction,
@@ -68,6 +69,7 @@ import type {
 } from "../shared/workspace-types";
 
 import { applyRuntimeAction } from "./agent-runtime";
+import { redactLogText, withIpcLogging } from "./logger";
 import { ProjectError, resolveProject } from "./project";
 import { Workspace } from "./workspace";
 
@@ -150,6 +152,8 @@ interface PersistedState {
 }
 
 class StateStore {
+  constructor(private readonly log: Logger) {}
+
   private get path(): string {
     return join(app.getPath("userData"), "state.json");
   }
@@ -160,7 +164,8 @@ class StateStore {
         return {};
       }
       return JSON.parse(readFileSync(this.path, "utf-8")) as PersistedState;
-    } catch {
+    } catch (err) {
+      this.log.warn({ err }, "Could not read application state");
       return {};
     }
   }
@@ -175,8 +180,8 @@ class StateStore {
         this.path,
         JSON.stringify({ ...this.read(), ...patch }, null, 2),
       );
-    } catch {
-      // Best-effort persistence; never block the UI on it.
+    } catch (err) {
+      this.log.warn({ err }, "Could not save application state");
     }
   }
 }
@@ -194,7 +199,8 @@ export class YukinoBridge {
     null;
   private planReady = false;
   private cwd: string;
-  private readonly state = new StateStore();
+  private readonly state: StateStore;
+  private readonly log: Logger;
   /** All configured providers (merged with project MCP); drives settings. */
   private providers: ProviderConfig[] = [];
   /** Last usage snapshot, for /status. */
@@ -217,7 +223,9 @@ export class YukinoBridge {
   private readonly followUps: string[] = [];
   private readonly subagents = new Map<string, SubagentSnapshot>();
 
-  constructor() {
+  constructor(logger: Logger) {
+    this.log = logger.child({ component: "agent" });
+    this.state = new StateStore(logger.child({ component: "state" }));
     this.cwd = this.state.read().cwd || homedir();
   }
 
@@ -281,6 +289,7 @@ export class YukinoBridge {
   }
 
   private async initialize(): Promise<InitState> {
+    this.log.info("Initializing agent");
     try {
       this.cwd = await resolveProject(this.cwd);
       if (!this.workspace) {
@@ -293,6 +302,9 @@ export class YukinoBridge {
             this.handle?.fileHistory.trackEdit(path);
             this.handle?.fileStateCache.delete(path);
           },
+          (err) => {
+            this.log.warn({ err }, "Workspace watcher failed");
+          },
         );
         this.workspace.start();
       }
@@ -301,6 +313,7 @@ export class YukinoBridge {
       try {
         config = Config.loadConfig(undefined, { allowEmptyProviders: true });
       } catch (error) {
+        this.log.error({ err: error }, "Could not load provider configuration");
         return this.initError(
           "Could not read the provider configuration. Check the config file.",
           {
@@ -330,9 +343,18 @@ export class YukinoBridge {
       this.state.write({ cwd: this.cwd });
 
       const okState = this.buildInitState(handle);
+      this.log.info(
+        {
+          sessionId: handle.sessionId,
+          model: handle.provider.model,
+          protocol: handle.provider.protocol,
+        },
+        "Agent initialized",
+      );
       emit({ type: "init_state", data: okState });
       return okState;
     } catch (error) {
+      this.log.error({ err: error }, "Agent initialization failed");
       this.workspace?.dispose();
       this.workspace = null;
       return this.initError(
@@ -389,6 +411,7 @@ export class YukinoBridge {
       configPath?: string;
     } = {},
   ): InitState {
+    this.log.warn({ kind: context.kind }, message);
     const failure: InitState = { ok: false, error: message, ...context };
     emit({ type: "init_state", data: failure });
     return failure;
@@ -620,6 +643,9 @@ export class YukinoBridge {
     handle: RemoteAgentHandle,
     text: string | null,
   ): Promise<void> {
+    const log = this.log.child({ sessionId: handle.sessionId });
+    const started = performance.now();
+    log.info("Agent run started");
     this.setStreaming(true);
     try {
       const expanded =
@@ -644,9 +670,17 @@ export class YukinoBridge {
         this.emitAgentEvent(event);
       }
     } catch (error) {
+      log.error({ err: error }, "Agent run failed");
       const message = error instanceof Error ? error.message : String(error);
       emit({ type: "error", data: { message } });
     } finally {
+      log.info(
+        {
+          durationMs: Math.round(performance.now() - started),
+          interrupted: this.interrupted,
+        },
+        "Agent run finished",
+      );
       this.completeRun(handle);
     }
   }
@@ -723,6 +757,10 @@ export class YukinoBridge {
         excludeFromContext,
       );
     } catch (error) {
+      this.log.error(
+        { err: error, sessionId: handle.sessionId },
+        "Shell command failed",
+      );
       result = {
         output: error instanceof Error ? error.message : String(error),
         isError: true,
@@ -796,6 +834,7 @@ export class YukinoBridge {
       const next = this.followUps.shift();
       if (next) {
         void this.send(next).catch((error: unknown) => {
+          this.log.error({ err: error }, "Queued follow-up failed");
           emit({
             type: "error",
             data: {
@@ -808,6 +847,12 @@ export class YukinoBridge {
   }
 
   abort(): void {
+    if (this.streaming) {
+      this.log.info(
+        { sessionId: this.handle?.sessionId },
+        "Stopping agent run",
+      );
+    }
     this.interrupted = true;
     this.followUps.length = 0;
     this.pendingPlan = null;
@@ -890,12 +935,24 @@ export class YukinoBridge {
         });
         break;
       case "error":
+        this.log.error(
+          { err: event.error, sessionId: this.handle?.sessionId },
+          "Agent reported an error",
+        );
         emit({ type: "error", data: { message: event.error.message } });
         break;
       case "compact":
         emit({ type: "compact", data: { message: event.message } });
         break;
       case "retry":
+        this.log.warn(
+          {
+            reason: redactLogText(event.reason),
+            delay: event.delay,
+            sessionId: this.handle?.sessionId,
+          },
+          "Agent retrying",
+        );
         emit({
           type: "retry",
           data: { reason: event.reason, delay: event.delay },
@@ -1962,6 +2019,10 @@ export class YukinoBridge {
       this.mcpLoading,
     );
     for (const error of result.errors) {
+      this.log.error(
+        { server: error.serverName, err: new Error(error.error) },
+        "MCP connection failed",
+      );
       emit({
         type: "error",
         data: { message: `${error.serverName}: ${error.error}` },
@@ -2118,29 +2179,31 @@ export class YukinoBridge {
   // ---------- ipc ----------
 
   registerIpc(): void {
+    const handle = (
+      channel: string,
+      listener: Parameters<typeof ipcMain.handle>[1],
+    ): void => {
+      ipcMain.handle(channel, withIpcLogging(this.log, channel, listener));
+    };
     const workspace = (): Workspace => {
       if (!this.workspace) {
         throw new Error("Open a project first");
       }
       return this.workspace;
     };
-    ipcMain.handle("workspace:list", (_event, path?: string) =>
-      workspace().list(path),
-    );
-    ipcMain.handle("workspace:read", (_event, path: string) =>
-      workspace().read(path),
-    );
-    ipcMain.handle(
+    handle("workspace:list", (_event, path?: string) => workspace().list(path));
+    handle("workspace:read", (_event, path: string) => workspace().read(path));
+    handle(
       "workspace:save",
       (_event, path: string, content: string, revision: string) =>
         workspace().save(path, content, revision),
     );
-    ipcMain.handle("workspace:snapshot", () => workspace().snapshot());
-    ipcMain.handle("yukino:runtime", () => this.getRuntime());
-    ipcMain.handle("yukino:runtime-action", (_event, action: RuntimeAction) =>
+    handle("workspace:snapshot", () => workspace().snapshot());
+    handle("yukino:runtime", () => this.getRuntime());
+    handle("yukino:runtime-action", (_event, action: RuntimeAction) =>
       this.runtimeAction(action),
     );
-    ipcMain.handle(
+    handle(
       "yukino:mcp-app",
       async (_event, appId: string, operation: McpAppOperation) => {
         const handle = await this.ensureHandle();
@@ -2160,7 +2223,7 @@ export class YukinoBridge {
         );
       },
     );
-    ipcMain.handle(
+    handle(
       "yukino:respond-plan",
       async (
         _event,
@@ -2199,7 +2262,7 @@ export class YukinoBridge {
         );
       },
     );
-    ipcMain.handle(
+    handle(
       "yukino:rewind",
       (
         _event,
@@ -2207,7 +2270,7 @@ export class YukinoBridge {
         mode: "code_only" | "conversation_only" | "code_and_conversation",
       ) => this.rewind(id, mode),
     );
-    ipcMain.handle(
+    handle(
       "yukino:permission-mode",
       async (
         _event,
@@ -2228,7 +2291,7 @@ export class YukinoBridge {
         }
       },
     );
-    ipcMain.handle("yukino:open-config", async () => {
+    handle("yukino:open-config", async () => {
       const error = await shell.openPath(
         Config.ProviderConfig.globalConfigPath(),
       );
@@ -2236,85 +2299,78 @@ export class YukinoBridge {
         throw new Error(error);
       }
     });
-    ipcMain.handle("yukino:attachments", async () => {
+    handle("yukino:open-logs", async () => {
+      const error = await shell.openPath(app.getPath("logs"));
+      if (error) {
+        throw new Error(error);
+      }
+    });
+    handle("yukino:attachments", async () => {
       const result = await dialog.showOpenDialog({
         properties: ["openFile", "multiSelections"],
       });
       return result.canceled ? [] : result.filePaths;
     });
-    ipcMain.handle("yukino:init", () => this.init());
-    ipcMain.handle("yukino:send", (_event, text: string) => this.send(text));
-    ipcMain.handle("yukino:abort", () => {
+    handle("yukino:init", () => this.init());
+    handle("yukino:send", (_event, text: string) => this.send(text));
+    handle("yukino:abort", () => {
       this.abort();
     });
-    ipcMain.handle("yukino:new-session", () => this.newSession());
-    ipcMain.handle("yukino:list-sessions", () => this.listSessions());
-    ipcMain.handle(
-      "yukino:resume-session",
-      (_event, sessionId: string, cwd?: string) =>
-        this.resumeSession(sessionId, cwd),
+    handle("yukino:new-session", () => this.newSession());
+    handle("yukino:list-sessions", () => this.listSessions());
+    handle("yukino:resume-session", (_event, sessionId: string, cwd?: string) =>
+      this.resumeSession(sessionId, cwd),
     );
-    ipcMain.handle("yukino:select-folder", () => this.selectFolder());
-    ipcMain.handle(
+    handle("yukino:select-folder", () => this.selectFolder());
+    handle(
       "yukino:respond-permission",
       (_event, id: string, response: PermissionResponse) => {
         this.respondPermission(id, response);
       },
     );
-    ipcMain.handle(
+    handle(
       "yukino:respond-ask",
       (_event, id: string, answers: Record<string, string>) => {
         this.respondAsk(id, answers);
       },
     );
-    ipcMain.handle("yukino:list-commands", () => this.listCommands());
-    ipcMain.handle("yukino:run-command", (_event, input: string) =>
+    handle("yukino:list-commands", () => this.listCommands());
+    handle("yukino:run-command", (_event, input: string) =>
       this.runCommand(input),
     );
-    ipcMain.handle(
-      "yukino:save-provider",
-      async (_event, input: ProviderInput) => {
-        this.assertIdle();
-        const config = Config.loadConfig(undefined, {
-          allowEmptyProviders: true,
-        });
-        const saved = Config.ProviderLogin.saveProvider(
-          input,
-          config.providers,
-        );
-        this.providers = saved.providers;
-        const index = saved.providers.findIndex(
-          (provider) => provider.base_url === saved.provider.base_url,
-        );
-        Config.ProviderLogin.persistDefaultProvider(index);
-        if (this.handle) {
-          await this.setProvider(index);
-        } else {
-          await this.init();
-        }
-      },
-    );
-    ipcMain.handle("yukino:get-settings", () => this.getSettings());
-    ipcMain.handle("yukino:list-models", () => this.listModels());
-    ipcMain.handle("yukino:set-provider", (_event, index: number) =>
+    handle("yukino:save-provider", async (_event, input: ProviderInput) => {
+      this.assertIdle();
+      const config = Config.loadConfig(undefined, {
+        allowEmptyProviders: true,
+      });
+      const saved = Config.ProviderLogin.saveProvider(input, config.providers);
+      this.providers = saved.providers;
+      const index = saved.providers.findIndex(
+        (provider) => provider.base_url === saved.provider.base_url,
+      );
+      Config.ProviderLogin.persistDefaultProvider(index);
+      if (this.handle) {
+        await this.setProvider(index);
+      } else {
+        await this.init();
+      }
+    });
+    handle("yukino:get-settings", () => this.getSettings());
+    handle("yukino:list-models", () => this.listModels());
+    handle("yukino:set-provider", (_event, index: number) =>
       this.setProvider(index),
     );
-    ipcMain.handle("yukino:set-model", (_event, model: string) =>
-      this.setModel(model),
-    );
-    ipcMain.handle("yukino:set-thinking-level", (_event, level: string) =>
+    handle("yukino:set-model", (_event, model: string) => this.setModel(model));
+    handle("yukino:set-thinking-level", (_event, level: string) =>
       this.setThinkingLevel(level),
     );
-    ipcMain.handle("yukino:get-theme", () => ({
+    handle("yukino:get-theme", () => ({
       mode: this.getTheme(),
       dark: nativeTheme.shouldUseDarkColors,
     }));
-    ipcMain.handle(
-      "yukino:set-theme",
-      (_event, mode: "system" | "light" | "dark") => {
-        this.setTheme(mode);
-      },
-    );
+    handle("yukino:set-theme", (_event, mode: "system" | "light" | "dark") => {
+      this.setTheme(mode);
+    });
   }
 
   async dispose(): Promise<void> {

@@ -148,7 +148,7 @@ export function Composer({
   }, [onSend, attachments, disabled]);
 
   return (
-    <div className="border-input bg-card focus-within:border-ring relative rounded-[15px] border shadow-[0_4px_16px_#26173f06] transition-[border-color,box-shadow] focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_6%,transparent),0_5px_20px_#26173f05]">
+    <div className="border-input bg-card focus-within:border-ring relative min-w-0 rounded-2xl border shadow-[0_4px_20px_color-mix(in_srgb,var(--foreground)_4%,transparent)] transition-[border-color,box-shadow] focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_10%,transparent)]">
       {attachments.length ? (
         <div className="flex flex-wrap gap-1 px-3 pt-3">
           {attachments.map((path) => (
@@ -179,7 +179,7 @@ export function Composer({
           <div
             role="listbox"
             aria-label="Commands"
-            className="border-border bg-popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border py-1 shadow-lg"
+            className="border-border bg-popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full overflow-x-hidden overflow-y-auto rounded-lg border py-1 shadow-lg"
           >
             {matches.map((command, index) => (
               <button
@@ -202,10 +202,13 @@ export function Composer({
                   insertCommand(command);
                 }}
               >
-                <span className="shrink-0 font-mono text-xs font-medium">
+                <span
+                  className="max-w-[45%] min-w-0 shrink-0 truncate font-mono text-xs font-medium"
+                  title={`/${command.name}`}
+                >
                   /{command.name}
                 </span>
-                <span className="text-muted-foreground line-clamp-1 text-xs">
+                <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
                   {command.description}
                 </span>
                 {index === highlighted ? (
@@ -225,11 +228,11 @@ export function Composer({
             disabled
               ? "Not connected"
               : streaming
-                ? "Add a follow-up requirement. The agent will receive it in the next turn…"
-                : "Describe a task, or type / to choose a skill…"
+                ? "Add a follow-up…"
+                : "Describe a task, or use / for skills…"
           }
           disabled={disabled}
-          className="max-h-52 min-h-18.5 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 text-xs leading-[1.8] shadow-none focus-visible:ring-0 md:text-xs dark:bg-transparent"
+          className="max-h-52 min-h-18.5 min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 text-[13px] leading-[1.8] shadow-none focus-visible:ring-0 md:text-[13px] dark:bg-transparent"
           onChange={(event) => {
             const textarea = event.currentTarget;
             textarea.style.height = "auto";
@@ -313,7 +316,7 @@ export function Composer({
         </Button>
         <span className="bg-border mx-1.25 h-3.5 w-px" />
         <button
-          className="text-muted-foreground hover:text-accent-foreground flex max-w-[48%] min-w-0 items-center gap-1.5 rounded-[5px] px-0.75 py-1.25 text-[10px] max-[1050px]:max-w-[38%]"
+          className="text-muted-foreground hover:bg-muted hover:text-accent-foreground flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1.25 text-[11px]"
           onClick={onOpenSettings}
           disabled={streaming}
           title={model}
@@ -322,7 +325,6 @@ export function Composer({
           <span className="truncate">{model}</span>
           <ChevronDownIcon className="h-3.25 w-2.5 shrink-0" />
         </button>
-        <span className="mr-auto" />
         {streaming ? (
           <Button
             size="icon-sm"
@@ -344,7 +346,7 @@ export function Composer({
           <ArrowUpIcon className="size-3.5" />
         </Button>
       </div>
-      <div className="border-border bg-background text-muted-foreground flex items-center justify-between rounded-b-[14px] border-t px-3.25 py-2 text-[9px]">
+      <div className="border-border bg-background text-muted-foreground flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-b-2xl border-t px-3 py-2 text-[10px]">
         <ChoiceSelect
           label="Agent permission mode"
           value={
@@ -355,15 +357,15 @@ export function Composer({
           onValueChange={onPermissionMode}
           compact
           icon={<ShieldCheckIcon />}
-          className="text-foreground hover:bg-accent dark:hover:bg-accent h-6.5 max-w-47.5 border-transparent px-1.25 text-[11px]"
+          className="text-foreground hover:bg-accent dark:hover:bg-accent h-6.5 max-w-full border-transparent px-1 text-[11px]"
           options={[
-            { value: "default", label: "Ask for each action" },
+            { value: "default", label: "Ask before actions" },
             { value: "acceptEdits", label: "Auto-accept edits" },
-            { value: "plan", label: "Read-only planning" },
+            { value: "plan", label: "Plan only" },
             { value: "bypassPermissions", label: "Allow all tools" },
           ]}
         />
-        <span>⇧ ↵ for newline</span>
+        <span className="ml-auto shrink-0">⇧ ↵ New line</span>
       </div>
     </div>
   );

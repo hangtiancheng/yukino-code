@@ -33,11 +33,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 const pages = [
-  { id: "tasks", label: "Goals and tasks", icon: ListChecksIcon },
-  { id: "agents", label: "Agents and collaboration", icon: BotIcon },
+  { id: "tasks", label: "Goals & tasks", icon: ListChecksIcon },
+  { id: "agents", label: "Agents", icon: BotIcon },
   { id: "workflows", label: "Workflows", icon: WorkflowIcon },
-  { id: "capabilities", label: "Tools and skills", icon: SparklesIcon },
-  { id: "context", label: "Context and environment", icon: LayersIcon },
+  { id: "capabilities", label: "Tools & skills", icon: SparklesIcon },
+  { id: "context", label: "Context", icon: LayersIcon },
   { id: "history", label: "Checkpoints", icon: HistoryIcon },
 ] as const;
 
@@ -88,20 +88,22 @@ export function RuntimeDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(700px,85vh)] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_100px_#100a2820] max-[700px]:h-[90vh] sm:max-w-4xl">
-        <div className="border-border flex min-h-[65px] items-center gap-[11px] border-b px-5">
-          <span className="bg-secondary text-accent-foreground grid size-[31px] place-items-center rounded-[9px]">
+      <DialogContent className="flex h-[min(700px,calc(100dvh-48px))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <div className="border-border flex min-h-16 shrink-0 items-center gap-3 border-b px-5 max-[700px]:px-4">
+          <span className="bg-secondary text-accent-foreground grid size-8 shrink-0 place-items-center rounded-lg">
             <BoxesIcon className="size-[18px]" />
           </span>
-          <DialogTitle>Agent workbench</DialogTitle>
-          <span className="text-muted-foreground ml-0.5 flex items-center gap-[5px] text-[10px]">
+          <DialogTitle className="min-w-0 truncate pr-0">
+            Agent workbench
+          </DialogTitle>
+          <span className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-[10px] max-[400px]:hidden">
             <span className="bg-success inline-block size-[5px] shrink-0 rounded-full" />
             Live
           </span>
           <Button
             variant="ghost"
             size="icon-sm"
-            className="mr-8 ml-auto"
+            className="mr-7 ml-auto"
             aria-label="Refresh capabilities"
             onClick={onRefresh}
           >
@@ -118,26 +120,30 @@ export function RuntimeDialog({
             setPage(value as typeof page);
           }}
           orientation="vertical"
-          className="flex min-h-0 flex-1 flex-row gap-0 max-[700px]:flex-col"
+          className="flex min-h-0 min-w-0 flex-1 flex-row gap-0"
         >
-          <div className="border-border bg-background max-[700px]:border-border flex w-[176px] shrink-0 flex-col gap-[5px] border-r px-3 py-[17px] max-[700px]:w-full max-[700px]:flex-row max-[700px]:overflow-x-auto max-[700px]:border-r-0 max-[700px]:border-b max-[700px]:p-2">
+          <div className="border-border bg-background flex w-48 shrink-0 flex-col gap-1 border-r px-3 py-4 max-[700px]:w-14 max-[700px]:px-2">
             <TabsList
               aria-label="Agent capabilities"
-              className="flex h-auto w-full flex-col items-stretch gap-[5px] bg-transparent p-0 max-[700px]:w-max max-[700px]:flex-row"
+              className="flex h-auto w-full flex-col items-stretch gap-1 bg-transparent p-0"
             >
               {pages.map((item) => (
                 <TabsTrigger
                   key={item.id}
                   value={item.id}
-                  className="text-muted-foreground data-active:bg-accent data-active:text-accent-foreground h-10 flex-none justify-start gap-[9px] p-2.5 text-left text-xs after:hidden data-active:shadow-none! max-[700px]:p-2 max-[700px]:text-[10px]"
+                  aria-label={item.label}
+                  title={item.label}
+                  className="text-muted-foreground hover:bg-muted data-active:bg-accent data-active:text-accent-foreground h-10 min-w-0 flex-none justify-start gap-2.5 px-3 text-left text-xs after:hidden data-active:shadow-none! max-[700px]:justify-center! max-[700px]:px-0"
                 >
                   <item.icon />
-                  {item.label}
+                  <span className="truncate max-[700px]:hidden">
+                    {item.label}
+                  </span>
                 </TabsTrigger>
               ))}
             </TabsList>
             {data ? (
-              <div className="text-muted-foreground mt-auto flex flex-col gap-[5px] px-2.5 pt-4 pb-[3px] text-[10px] max-[700px]:hidden">
+              <div className="text-muted-foreground mt-auto flex flex-col gap-1.5 border-t px-3 pt-4 text-[10px] max-[700px]:hidden">
                 <span>{data.tools.length} tools</span>
                 <span>
                   {data.skills.length} skills · {data.mcpServers.length} MCP
@@ -148,12 +154,12 @@ export function RuntimeDialog({
           </div>
           <TabsContent
             value={page}
-            className="bg-card min-w-0 flex-1 overflow-y-auto p-6 max-[700px]:p-[18px]"
+            className="bg-card @container/workbench min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-6 wrap-anywhere max-[700px]:p-4"
           >
             {error ? (
               <div
                 role="alert"
-                className="text-destructive mb-[15px] flex items-center gap-2.5 rounded-[7px] bg-[color-mix(in_srgb,var(--destructive)_8%,var(--card))] p-3 text-[11px] [&>p]:flex-1"
+                className="text-destructive bg-destructive/8 mb-4 flex flex-wrap items-center gap-2.5 rounded-lg p-3 text-xs [&>p]:min-w-0 [&>p]:flex-1"
               >
                 <p>{error.message}</p>
                 <Button size="sm" variant="outline" onClick={onRefresh}>
@@ -219,7 +225,7 @@ export function RuntimeDialog({
                     {data.checkpoints.length ? (
                       [...data.checkpoints].reverse().map((checkpoint) => (
                         <div
-                          className="border-border flex items-center gap-2.5 border-b py-[13px] text-xs"
+                          className="border-border flex flex-wrap items-center gap-2.5 border-b py-3 text-xs"
                           key={checkpoint.id}
                         >
                           <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
@@ -257,6 +263,7 @@ export function RuntimeDialog({
                         </strong>
                         <ChoiceSelect
                           label="Restore scope"
+                          className="w-full"
                           value={mode}
                           disabled={rewind.isPending}
                           onValueChange={setMode}

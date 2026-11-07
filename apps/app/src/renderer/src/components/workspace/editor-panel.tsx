@@ -355,7 +355,7 @@ export function EditorPanel({
 
   return (
     <section
-      className="bg-card flex h-full min-w-0 flex-col [&_::-webkit-scrollbar]:h-1.5 [&_::-webkit-scrollbar]:w-1.5 [&_::-webkit-scrollbar-thumb]:rounded-[6px] [&_::-webkit-scrollbar-thumb]:border [&_::-webkit-scrollbar-thumb]:border-transparent"
+      className="bg-card @container/editor flex h-full min-w-0 flex-col [&_::-webkit-scrollbar]:h-1.5 [&_::-webkit-scrollbar]:w-1.5 [&_::-webkit-scrollbar-thumb]:rounded-[6px] [&_::-webkit-scrollbar-thumb]:border [&_::-webkit-scrollbar-thumb]:border-transparent"
       aria-label="Files"
     >
       <div className="border-border flex h-11 shrink-0 items-center gap-[7px] border-b pr-2.5 pl-3.5">
@@ -395,7 +395,7 @@ export function EditorPanel({
       </div>
       <div className="flex min-h-0 flex-1">
         <nav
-          className="border-border flex w-40 min-w-[120px] shrink-0 flex-col border-r bg-[color-mix(in_srgb,var(--sidebar)_45%,var(--card))] max-[1200px]:w-[125px] max-[1000px]:w-[110px] max-[1000px]:min-w-[100px]"
+          className="border-border flex w-40 shrink-0 flex-col border-r bg-[color-mix(in_srgb,var(--sidebar)_45%,var(--card))] @max-[520px]/editor:w-32"
           aria-label="Project files"
         >
           <div className="border-border flex h-9 items-stretch gap-2.5 border-b px-2 text-[11px]">
@@ -464,16 +464,18 @@ export function EditorPanel({
             )}
           </div>
           <button
-            className={`border-border flex h-[31px] shrink-0 items-center gap-[5px] border-t px-2.5 text-[10px] ${
+            className={`border-border flex h-8 shrink-0 items-center gap-1.5 border-t px-2.5 text-[10px] ${
               follow ? "text-accent-foreground" : "text-muted-foreground"
             }`}
             onClick={() => {
               setFollow((current) => !current);
             }}
             aria-pressed={follow}
+            title="Follow agent changes"
+            aria-label="Follow agent changes"
           >
-            <RadioIcon className="size-3.5" />
-            {follow ? "Follow agent" : "Following paused"}
+            <RadioIcon className="size-3.5 shrink-0" />
+            {follow ? "Follow agent" : "Paused"}
           </button>
         </nav>
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -484,7 +486,7 @@ export function EditorPanel({
           >
             {tabs.map((item) => (
               <div
-                className={`border-border flex items-center border-t-2 border-r ${
+                className={`border-border flex shrink-0 items-center border-t-2 border-r ${
                   active === item.file.path
                     ? "border-t-accent-foreground bg-card text-foreground"
                     : "text-muted-foreground border-t-transparent"
@@ -492,7 +494,7 @@ export function EditorPanel({
                 key={item.file.path}
               >
                 <button
-                  className="flex h-full max-w-[180px] items-center gap-1.5 px-[7px] pl-[11px] text-[11px] whitespace-nowrap"
+                  className="flex h-full max-w-45 min-w-0 items-center gap-1.5 px-2 pl-3 text-[11px] whitespace-nowrap"
                   role="tab"
                   aria-selected={active === item.file.path}
                   onClick={() => {
@@ -500,10 +502,16 @@ export function EditorPanel({
                   }}
                   title={item.file.path}
                 >
-                  <FileCode2Icon className="size-3.5" />
-                  {item.file.path.split("/").pop()}
+                  <FileCode2Icon className="size-3.5 shrink-0" />
+                  <span className="truncate">
+                    {item.file.path.split("/").pop()}
+                  </span>
                   {item.value !== item.file.content ? (
-                    <span className="bg-primary size-1.5 rounded-full" />
+                    <span
+                      className="bg-primary size-1.5 shrink-0 rounded-full"
+                      role="img"
+                      aria-label="Unsaved changes"
+                    />
                   ) : null}
                 </button>
                 <button
@@ -531,14 +539,16 @@ export function EditorPanel({
                 {tab.file.path}
               </span>
               <button
-                className={`hover:text-accent-foreground inline-flex items-center justify-center gap-[5px] p-1 px-0.5 text-[11px] ${diff ? "text-accent-foreground" : ""}`}
+                className={`hover:bg-muted hover:text-accent-foreground inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-1.5 text-[11px] ${diff ? "bg-secondary text-accent-foreground" : ""}`}
                 onClick={() => {
                   setDiff((value) => !value);
                 }}
                 aria-pressed={diff}
+                aria-label="Compare changes"
+                title="Compare changes"
               >
-                <FileDiffIcon className="size-3.5" />
-                Compare changes
+                <FileDiffIcon className="size-3.5 shrink-0" />
+                <span className="@max-[520px]/editor:hidden">Compare</span>
               </button>
               <Button
                 variant="ghost"
@@ -662,9 +672,14 @@ export function EditorPanel({
               </div>
             ) : null}
           </div>
-          <div className="border-border text-muted-foreground flex border-t px-3 py-1.5 text-[10px]">
-            <span>{snapshot?.branch ?? "Local project"}</span>
-            <span className="ml-auto">
+          <div className="border-border text-muted-foreground flex min-w-0 gap-3 border-t px-3 py-1.5 text-[10px]">
+            <span
+              className="min-w-0 flex-1 truncate"
+              title={snapshot?.branch ?? ""}
+            >
+              {snapshot?.branch ?? "Local project"}
+            </span>
+            <span className="ml-auto shrink-0">
               {tab
                 ? `${tab.value.split("\n").length} lines · UTF-8`
                 : "Monaco Editor"}
@@ -686,7 +701,7 @@ export function EditorPanel({
             The draft has not been written to disk. Closing will discard these
             changes.
           </DialogDescription>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => {

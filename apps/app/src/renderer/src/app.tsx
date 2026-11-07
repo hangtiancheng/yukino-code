@@ -274,7 +274,7 @@ function App(): React.JSX.Element {
                 className={`bg-card flex min-h-0 min-w-[320px] flex-1 flex-col overflow-hidden ${editorOpen && editorExpanded ? "hidden" : ""}`}
                 role="main"
               >
-                <div className="text-muted-foreground flex h-11.5 shrink-0 items-center gap-1.75 px-6.25 text-[10px]">
+                <div className="text-muted-foreground flex h-11 shrink-0 items-center gap-2 px-6 text-[11px]">
                   <span
                     className={
                       state.streaming
@@ -285,8 +285,8 @@ function App(): React.JSX.Element {
                   <span>
                     {state.streaming
                       ? pending
-                        ? "Waiting for your response"
-                        : "Working on the task"
+                        ? "Awaiting your response"
+                        : "Working…"
                       : state.initializing
                         ? "Opening…"
                         : failed
@@ -388,11 +388,19 @@ function App(): React.JSX.Element {
                     onRespondAsk={chat.respondAsk}
                   />
                 ) : (
-                  <div
-                    className="text-input grid min-h-0 flex-1 place-items-center"
-                    aria-hidden="true"
-                  >
-                    <SnowflakeIcon className="size-14" strokeWidth={1.2} />
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 text-center">
+                    <SnowflakeIcon
+                      className="text-ring mb-5 size-11 shrink-0"
+                      strokeWidth={1.2}
+                      aria-hidden="true"
+                    />
+                    <h1 className="text-[24px] leading-tight font-semibold tracking-tight text-balance">
+                      What are we building?
+                    </h1>
+                    <p className="text-muted-foreground mt-3 max-w-68 text-xs leading-relaxed text-pretty">
+                      Ask about your code, make a change, or work through a
+                      problem.
+                    </p>
                   </div>
                 )}
                 {!failed && !booting ? (
@@ -419,17 +427,22 @@ function App(): React.JSX.Element {
                         void window.api.setPermissionMode(mode).catch(report);
                       }}
                     />
-                    <div className="text-muted-foreground flex items-center gap-2 px-0.75 pt-2.25 text-[9px]">
+                    <div className="text-muted-foreground flex min-w-0 items-center gap-3 px-1 pt-2.5 text-[10px]">
                       {init?.ok ? (
-                        <span className="flex items-center gap-1.5">
-                          <CpuIcon className="size-3" />
-                          {init.providerName} · {init.thinkingLevel}
+                        <span
+                          className="flex min-w-0 flex-1 items-center gap-1.5"
+                          title={`${init.providerName} · ${init.thinkingLevel}`}
+                        >
+                          <CpuIcon className="size-3 shrink-0" />
+                          <span className="truncate">
+                            {init.providerName} · {init.thinkingLevel}
+                          </span>
                         </span>
                       ) : null}
                       {state.usage ? (
-                        <span className="ml-auto shrink-0 tabular-nums max-[1000px]:max-w-[45%] max-[1000px]:truncate">
-                          {formatTokens(state.usage.inputTokens)} input /{" "}
-                          {formatTokens(state.usage.outputTokens)} output
+                        <span className="ml-auto shrink-0 tabular-nums">
+                          {formatTokens(state.usage.inputTokens)} in /{" "}
+                          {formatTokens(state.usage.outputTokens)} out
                         </span>
                       ) : null}
                     </div>
@@ -467,11 +480,11 @@ function App(): React.JSX.Element {
                 </>
               ) : null}
             </Group>
-            <div className="border-border bg-card text-muted-foreground flex h-7 shrink-0 items-center gap-3.5 border-t px-3.75 text-[10px]">
-              <span className="max-w-[50%] truncate" title={cwd ?? ""}>
+            <div className="border-border bg-background text-muted-foreground flex h-7 min-w-0 shrink-0 items-center gap-3.5 border-t px-4 text-[10px]">
+              <span className="min-w-0 flex-1 truncate" title={cwd ?? ""}>
                 {cwd ?? "Choose a project folder"}
               </span>
-              <span className="ml-auto flex items-center gap-1.5">
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
                 <BoxesIcon className="size-3" />
                 {runtime.data
                   ? `${runtime.data.tools.length} tools · ${runtime.data.mcpServers.length} MCP`
@@ -479,7 +492,7 @@ function App(): React.JSX.Element {
               </span>
               {state.usage && init?.ok ? (
                 <span
-                  className="flex items-center gap-1.5 tabular-nums"
+                  className="flex shrink-0 items-center gap-1.5 tabular-nums"
                   title={`${state.usage.inputTokens.toLocaleString()} / ${init.contextWindow.toLocaleString()} tokens`}
                 >
                   <progress
@@ -550,17 +563,17 @@ function App(): React.JSX.Element {
           <DialogContent>
             <DialogTitle>Unsaved files</DialogTitle>
             <DialogDescription>
-              Switching projects may discard drafts in the editor. Save first,
-              or continue switching.
+              Save your editor drafts before switching projects, or discard them
+              to continue.
             </DialogDescription>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
                   setPendingAction(null);
                 }}
               >
-                Return to save
+                Keep editing
               </Button>
               <Button
                 variant="destructive"

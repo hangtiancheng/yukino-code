@@ -76,18 +76,18 @@ export function AskCard({
   return (
     <Card className="w-full max-w-2xl gap-0 py-0">
       <CardContent className="flex flex-col gap-4 p-4">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <CircleHelpIcon className="size-4" />
           </span>
           <span className="text-sm font-medium">Question</span>
           {item.answered ? (
-            <Badge variant="secondary" className="text-[10px] uppercase">
+            <Badge variant="secondary" className="text-[10px]">
               Answered
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-[10px] uppercase">
-              Waiting for answer
+            <Badge variant="outline" className="text-[10px]">
+              Needs your input
             </Badge>
           )}
         </div>
@@ -98,7 +98,7 @@ export function AskCard({
           return (
             <div key={question.question} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <p className="text-sm leading-relaxed font-medium">
+                <p className="text-sm leading-relaxed font-medium wrap-anywhere">
                   {question.question}
                 </p>
                 {question.multiSelect ? (
@@ -123,9 +123,9 @@ export function AskCard({
                     key={option.label}
                     value={option.label}
                     variant="outline"
-                    className="w-full justify-start"
+                    className="h-auto min-h-9 w-full min-w-0 justify-start whitespace-normal"
                   >
-                    <span className="flex min-w-0 flex-col items-start gap-0.5 py-1 text-left">
+                    <span className="flex min-w-0 flex-col items-start gap-1 py-1.5 text-left wrap-anywhere">
                       <span className="text-sm font-medium">
                         {option.label}
                       </span>

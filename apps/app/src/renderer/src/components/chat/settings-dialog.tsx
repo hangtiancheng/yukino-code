@@ -13,7 +13,6 @@ import {
   DialogDescription,
 } from "@renderer/components/ui/dialog";
 import { Input } from "@renderer/components/ui/input";
-import { Label } from "@renderer/components/ui/label";
 import { ChoiceSelect } from "@renderer/components/ui/select";
 import { Separator } from "@renderer/components/ui/separator";
 import { Spinner } from "@renderer/components/ui/spinner";
@@ -23,24 +22,27 @@ import {
 } from "@renderer/components/ui/toggle-group";
 import type { ModelListResult, SettingsSnapshot } from "@shared/ipc-types";
 import { cn } from "cn";
-import { CheckIcon, RefreshCwIcon } from "lucide-react";
+import { CheckIcon, PlusIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 function Section({
   title,
+  action,
   children,
 }: {
   title: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-2">
-      <Label className="text-muted-foreground text-xs font-medium">
-        {title}
-      </Label>
+    <section className="flex min-w-0 flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xs font-semibold">{title}</h3>
+        {action}
+      </div>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -167,15 +169,15 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[80vh] flex-col overflow-hidden sm:max-w-lg">
+      <DialogContent className="flex max-h-[min(800px,calc(100dvh-48px))] flex-col gap-5 overflow-hidden p-6 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription className="sr-only">
-            Providers, models, and thinking level
+          <DialogDescription className="text-xs">
+            Appearance, providers, and model preferences.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
+        <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pr-1 pb-1">
           <Section title="Appearance">
             <ChoiceSelect
               label="Theme"
@@ -201,14 +203,29 @@ export function SettingsDialog({
           ) : (
             <fieldset
               disabled={streaming}
-              className="flex flex-col gap-5 disabled:opacity-60"
+              className="flex min-w-0 flex-col gap-5 disabled:opacity-60"
             >
               {streaming ? (
                 <p className="text-muted-foreground text-xs">
-                  Connection settings can be changed after the task ends
+                  Connection settings are locked while a task is running.
                 </p>
               ) : null}
-              <Section title="Providers">
+              <Section
+                title="Providers"
+                action={
+                  !addingProvider && settings.providers.length > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        setAddingProvider(true);
+                      }}
+                    >
+                      <PlusIcon /> Add provider
+                    </Button>
+                  ) : null
+                }
+              >
                 {addingProvider || settings.providers.length === 0 ? (
                   <ProviderForm
                     onCancel={() => {
@@ -222,17 +239,7 @@ export function SettingsDialog({
                         .catch((error: unknown) => toast.error(String(error)));
                     }}
                   />
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setAddingProvider(true);
-                    }}
-                  >
-                    Add provider
-                  </Button>
-                )}
+                ) : null}
                 <div className="flex flex-col gap-1.5">
                   {settings.providers.map((provider, index) => {
                     const active = index === settings.currentProvider;
@@ -245,17 +252,23 @@ export function SettingsDialog({
                           applyProvider(index);
                         }}
                         className={cn(
-                          "border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                          "border-border flex min-w-0 items-center gap-3 rounded-xl border px-3.5 py-3 text-left text-sm transition-colors",
                           active
-                            ? "bg-accent"
+                            ? "border-ring/40 bg-secondary disabled:opacity-100"
                             : "hover:bg-accent/50 disabled:opacity-60",
                         )}
                       >
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate font-medium">
+                        <span className="flex min-w-0 flex-1 flex-col gap-1">
+                          <span
+                            className="truncate font-medium"
+                            title={provider.name}
+                          >
                             {provider.name}
                           </span>
-                          <span className="text-muted-foreground truncate font-mono text-[11px]">
+                          <span
+                            className="text-muted-foreground truncate text-[11px]"
+                            title={`${provider.protocol} · ${provider.model}`}
+                          >
                             {provider.protocol} · {provider.model}
                           </span>
                         </span>
@@ -318,7 +331,7 @@ export function SettingsDialog({
                         ) : (
                           <RefreshCwIcon className="size-3" />
                         )}
-                        Fetch model list
+                        Load models
                       </Button>
                     </div>
                     {models && models.status !== "loading" ? (
@@ -335,15 +348,23 @@ export function SettingsDialog({
                                   applyModel(model.id);
                                 }}
                                 className={cn(
-                                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
-                                  active ? "bg-accent" : "hover:bg-accent/50",
+                                  "flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-xs",
+                                  active
+                                    ? "bg-accent disabled:opacity-100"
+                                    : "hover:bg-accent/50",
                                 )}
                               >
-                                <span className="truncate font-mono">
+                                <span
+                                  className="min-w-0 flex-1 truncate font-mono"
+                                  title={model.id}
+                                >
                                   {model.id}
                                 </span>
                                 {model.name && model.name !== model.id ? (
-                                  <span className="text-muted-foreground truncate text-[11px]">
+                                  <span
+                                    className="text-muted-foreground max-w-[40%] truncate text-[11px]"
+                                    title={model.name}
+                                  >
                                     {model.name}
                                   </span>
                                 ) : null}
@@ -357,8 +378,8 @@ export function SettingsDialog({
                       ) : (
                         <p className="text-muted-foreground text-xs">
                           {models.status === "empty"
-                            ? "The provider returned no model list. Enter a model name directly."
-                            : "Failed to fetch. Check the provider connection or enter a model name manually."}
+                            ? "No models returned. Enter a model name above."
+                            : "Couldn’t load models. Check your connection or enter a name above."}
                         </p>
                       )
                     ) : null}
@@ -379,7 +400,7 @@ export function SettingsDialog({
                           applyThinking(level);
                         }
                       }}
-                      className="flex-wrap"
+                      className="w-full flex-wrap"
                     >
                       {settings.thinkingLevels.map((level) => (
                         <ToggleGroupItem
@@ -397,7 +418,7 @@ export function SettingsDialog({
             </fieldset>
           )}
         </div>
-        <div className="flex items-center justify-between gap-2 border-t pt-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t pt-4">
           <Button
             variant="outline"
             size="sm"
@@ -408,6 +429,17 @@ export function SettingsDialog({
             }}
           >
             Open config
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              void window.api.openLogs().catch((error: unknown) => {
+                toast.error(String(error));
+              });
+            }}
+          >
+            Open logs
           </Button>
         </div>
       </DialogContent>

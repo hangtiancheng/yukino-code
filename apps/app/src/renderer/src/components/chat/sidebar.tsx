@@ -88,7 +88,7 @@ export function Sidebar({
       aria-hidden={!open}
       inert={!open}
     >
-      <div className="flex min-h-12 items-center justify-end px-3 [-webkit-app-region:drag]">
+      <div className="flex min-h-14 items-center justify-end px-3 [-webkit-app-region:drag]">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -100,7 +100,7 @@ export function Sidebar({
           <PanelLeftIcon />
         </Button>
       </div>
-      <div className="flex items-center gap-2.5 px-[22px] pt-4 pb-7 whitespace-nowrap">
+      <div className="flex items-center gap-2.5 px-5 pt-3 pb-6 whitespace-nowrap">
         <span className="bg-primary text-primary-foreground grid size-8 place-items-center rounded-[11px] shadow-[0_3px_9px_color-mix(in_srgb,var(--primary)_20%,transparent)]">
           <SnowflakeIcon className="size-[23px]" strokeWidth={1.6} />
         </span>
@@ -108,7 +108,7 @@ export function Sidebar({
           yukino<span className="text-accent-foreground">.</span>
         </strong>
       </div>
-      <div className="flex flex-col gap-[5px] px-3.5 pb-[22px]">
+      <div className="flex flex-col gap-1 px-3.5 pb-6">
         <Button
           className="mb-[7px] h-[39px] w-full justify-start rounded-[9px] shadow-[0_2px_5px_#22193c0a]"
           disabled={disabled}
@@ -116,8 +116,9 @@ export function Sidebar({
         >
           <PlusIcon />
           New session
-          <kbd className="ml-auto text-[9px] font-normal opacity-60">
-            ⌘ / Ctrl N
+          <kbd className="ml-auto shrink-0 rounded border border-current/10 px-1.5 py-0.5 text-[10px] font-normal opacity-70">
+            <span className="mac:hidden">Ctrl N</span>
+            <span className="mac:inline hidden">⌘ N</span>
           </kbd>
         </Button>
       </div>

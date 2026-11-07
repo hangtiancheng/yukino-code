@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -24,6 +31,7 @@ async function run(): Promise<void> {
   let desktop: ElectronApplication | undefined;
   try {
     desktop = await _electron.launch({
+      env: { ...process.env, YUKINO_LOG_LEVEL: "debug" },
       args: [...(process.getuid?.() === 0 ? ["--no-sandbox"] : []), launcher],
       timeout: 30_000,
     });
@@ -65,6 +73,18 @@ async function run(): Promise<void> {
       saved,
     );
     assert.equal(stale, true);
+    await page.evaluate(() => {
+      console.warn("Smoke renderer warning token=smoke-credential");
+    });
+    await desktop.evaluate(({ app, shell }) => {
+      shell.openPath = async (path) => {
+        if (path !== app.getPath("logs")) {
+          throw new Error("Open logs must use the application log directory");
+        }
+        return "";
+      };
+    });
+    await page.evaluate(() => window.api.openLogs());
     if (agent.ok) {
       await page
         .locator(".monaco-editor")
@@ -77,6 +97,23 @@ async function run(): Promise<void> {
     });
     await desktop.close();
     desktop = undefined;
+    const logDirectory = join(userData, "logs");
+    const logFiles = (await readdir(logDirectory)).filter((name) =>
+      name.endsWith(".jsonl"),
+    );
+    assert.equal(logFiles.length, 1);
+    const logs = await readFile(join(logDirectory, logFiles[0]), "utf8");
+    assert.match(logs, /Application starting/);
+    assert.match(logs, /Application stopped/);
+    assert.match(logs, /IPC request failed/);
+    assert.match(logs, /workspace:read/);
+    assert.match(logs, /yukino:open-logs/);
+    assert.match(logs, /Smoke renderer warning/);
+    assert.match(logs, /\[Redacted\]/);
+    assert.doesNotMatch(
+      logs,
+      /smoke-credential|stale draft|export const value/,
+    );
     const missing = join(
       fixture,
       "TestExecutorContextMappingPersistence-deleted",
@@ -142,7 +179,7 @@ async function run(): Promise<void> {
     }
   }
   console.log(
-    "Electron smoke passed: preload IPC, file reads/writes, traversal rejection, save conflict, missing-project recovery and graceful shutdown.",
+    "Electron smoke passed: preload IPC, file reads/writes, traversal rejection, save conflict, missing-project recovery, Pino logs, credential redaction and graceful shutdown.",
   );
 }
 

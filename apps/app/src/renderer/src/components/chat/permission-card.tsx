@@ -54,24 +54,26 @@ export function PermissionCard({
             <ShieldAlertIcon className="size-4" />
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{payload.toolName}</span>
-              <Badge variant="secondary" className="text-[10px] uppercase">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-sm font-medium wrap-anywhere">
+                {payload.toolName}
+              </span>
+              <Badge variant="secondary" className="text-[10px]">
                 {item.response
                   ? responseLabel[item.response]
-                  : "Waiting for permission"}
+                  : "Needs approval"}
               </Badge>
               {payload.source ? (
                 <Badge
                   variant="outline"
-                  className="ml-auto shrink-0 text-[10px]"
+                  className="ml-auto h-auto max-w-full py-0.5 text-[10px] wrap-anywhere whitespace-normal"
                 >
                   {payload.source.agentName}
                 </Badge>
               ) : null}
             </div>
             {payload.reason ? (
-              <p className="text-muted-foreground text-xs leading-relaxed wrap-break-word">
+              <p className="text-muted-foreground text-xs leading-relaxed wrap-anywhere">
                 {payload.reason}
               </p>
             ) : null}
@@ -95,7 +97,7 @@ export function PermissionCard({
         </button>
 
         {showArgs ? (
-          <pre className="bg-muted/60 max-h-52 overflow-auto rounded-md p-3 font-mono text-xs wrap-break-word whitespace-pre-wrap">
+          <pre className="bg-muted/60 max-h-52 overflow-auto rounded-md p-3 font-mono text-xs wrap-anywhere whitespace-pre-wrap">
             {formatArgs(payload.args)}
           </pre>
         ) : null}
@@ -106,7 +108,7 @@ export function PermissionCard({
               <Badge
                 key={pattern}
                 variant="outline"
-                className="font-mono text-[10px]"
+                className="h-auto max-w-full rounded-md font-mono text-[10px] wrap-anywhere whitespace-normal"
               >
                 {pattern}
               </Badge>

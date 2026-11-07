@@ -38,6 +38,7 @@ export class Workspace {
     cwd: string,
     private readonly onChange: (path: string | null) => void,
     private readonly beforeWrite?: (path: string) => void,
+    private readonly onError?: (error: unknown) => void,
   ) {
     this.cwd = realpathSync(cwd);
   }
@@ -64,10 +65,12 @@ export class Workspace {
           }, 180);
         },
       );
-      this.watcher.on("error", () => {
+      this.watcher.on("error", (error) => {
+        this.onError?.(error);
         this.onChange(null);
       });
-    } catch {
+    } catch (error) {
+      this.onError?.(error);
       this.onChange(null);
     }
   }

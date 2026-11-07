@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import type { BridgeEvent, InitState } from "../src/shared/ipc-types.ts";
 import type {
@@ -185,6 +185,7 @@ async function bootstrap(page: Page): Promise<void> {
         emit({ type: "init_state", data: { ...initial } });
       },
       openConfig: async () => undefined,
+      openLogs: async () => undefined,
       rewind: async () => undefined,
       resumeSession: async () => ({ sessionId: "new", messages: [] }),
       listModels: async () => ({
@@ -203,6 +204,271 @@ async function bootstrap(page: Page): Promise<void> {
     page.getByRole("textbox", { name: "Task input", exact: true }),
   ).toBeVisible();
 }
+
+async function expectNoHorizontalOverflow(region: Locator): Promise<void> {
+  await expect
+    .poll(() =>
+      region.evaluate((element) => element.scrollWidth - element.clientWidth),
+    )
+    .toBeLessThanOrEqual(1);
+}
+
+for (const width of [1480, 880, 560]) {
+  test(`English workbench navigation and long content fit a ${width}px window`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 640 });
+    await bootstrap(page);
+    await page.evaluate(() => {
+      const name = "workspace-orchestration-".repeat(8);
+      window.__runtime.tasks[0].subject = name;
+      window.__runtime.skills = [{ name, description: name }];
+      window.__runtime.activeSkills = [name];
+      window.__runtime.tools = [name];
+      window.__runtime.toolDescriptions = { [name]: name };
+      window.__runtime.mcpServers = [name];
+      window.__runtime.memories = [
+        { name, description: name, type: "project", content: name },
+      ];
+      window.__runtime.namedWorkflows = [name];
+      window.__runtime.subagents = [
+        {
+          id: "agent",
+          role: name,
+          background: true,
+          status: "running",
+          tools: 4,
+          turns: 2,
+          activity: name,
+        },
+      ];
+      window.__runtime.checkpoints = [
+        {
+          id: "checkpoint",
+          text: name,
+          timestamp: new Date().toISOString(),
+          files: 2,
+        },
+      ];
+    });
+    await page
+      .getByRole("button", { name: "Agent workbench", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Agent workbench" });
+    const navigation = dialog.getByRole("tablist");
+    await expectNoHorizontalOverflow(navigation);
+    for (const name of [
+      "Goals & tasks",
+      "Agents",
+      "Workflows",
+      "Tools & skills",
+      "Context",
+      "Checkpoints",
+    ]) {
+      const tab = navigation.getByRole("tab", { name, exact: true });
+      await tab.click();
+      await expect(tab).toHaveAttribute("aria-selected", "true");
+      await expectNoHorizontalOverflow(dialog.getByRole("tabpanel"));
+      await expectNoHorizontalOverflow(dialog);
+    }
+    await dialog.getByRole("button", { name: "Restore", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Restore scope" }).click();
+    await page
+      .getByRole("option", { name: "Files and conversation", exact: true })
+      .click();
+    await expectNoHorizontalOverflow(dialog.getByRole("tabpanel"));
+    const bounds = await dialog.boundingBox();
+    assert.ok(bounds);
+    expect(bounds.x).toBeGreaterThanOrEqual(16);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width - 16);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(640);
+    await page.screenshot({
+      path: `test-results/workbench-english-${width}.png`,
+      animations: "disabled",
+    });
+    await navigation
+      .getByRole("tab", { name: "Goals & tasks", exact: true })
+      .focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      navigation.getByRole("tab", { name: "Agents", exact: true }),
+    ).toBeFocused();
+  });
+}
+
+test("long English labels, settings and questions fit the smallest split workspace", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 880, height: 540 });
+  await bootstrap(page);
+  await page.evaluate(() => {
+    const name = "development-workspace-".repeat(8);
+    window.__emit({
+      type: "init_state",
+      data: {
+        ok: true,
+        cwd: "/project/yukino",
+        projectKey: "project",
+        providerName: name,
+        model: name,
+        sessionId: "session",
+        permissionMode: "default",
+        contextWindow: 128_000,
+        thinkingLevel: "high",
+      },
+    });
+    window.__emit({
+      type: "usage",
+      data: { inputTokens: 123456, outputTokens: 9876 },
+    });
+    window.api.getSettings = async () => ({
+      providers: [
+        { name, protocol: "openai", baseUrl: "http://localhost", model: name },
+      ],
+      currentProvider: 0,
+      model: name,
+      thinkingLevel: "high",
+      thinkingLevels: ["minimal", "low", "medium", "high", "xhigh"],
+    });
+    window.api.listModels = async () => ({
+      status: "ready",
+      current: name,
+      models: [{ id: name, name: "Long model display name ".repeat(8) }],
+    });
+  });
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  const separator = page.getByRole("separator", {
+    name: "Resize code workspace",
+  });
+  const bounds = await separator.boundingBox();
+  assert.ok(bounds);
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(325, bounds.y + 100);
+  await page.mouse.up();
+  const main = page.getByRole("main");
+  await expectNoHorizontalOverflow(main);
+  await page.getByRole("button", { name: "hello.ts M" }).click();
+  await expect(page.locator(".monaco-editor").first()).toBeVisible();
+  await page
+    .getByRole("button", { name: "Compare changes", exact: true })
+    .click();
+  await expect(page.locator(".monaco-diff-editor")).toBeVisible();
+  const input = page.getByRole("textbox", { name: "Task input" });
+  await page.evaluate(() => {
+    window.api.listCommands = async () => [
+      {
+        name: "workspace-verification-".repeat(8),
+        description: "Verify every changed package before continuing ".repeat(
+          4,
+        ),
+        type: "prompt",
+        isSkill: false,
+      },
+    ];
+  });
+  await input.fill("/");
+  const command = page.getByRole("option", { name: /workspace-verification-/ });
+  await expect(command).toBeVisible();
+  await expectNoHorizontalOverflow(command);
+  await input.fill("A long session title ".repeat(20));
+  await input.press("Enter");
+  await expectNoHorizontalOverflow(page.locator("header"));
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await settings
+    .getByRole("button", { name: "Load models", exact: true })
+    .click();
+  await expect(
+    settings.getByTitle("Long model display name ".repeat(8)),
+  ).toBeAttached();
+  await expectNoHorizontalOverflow(settings);
+  await page.screenshot({
+    path: "test-results/settings-english.png",
+    animations: "disabled",
+  });
+  await settings
+    .getByRole("button", { name: "Add provider", exact: true })
+    .click();
+  await settings
+    .getByRole("combobox", { name: "Protocol", exact: true })
+    .click();
+  await page
+    .getByRole("option", { name: "OpenAI Chat Completions", exact: true })
+    .click();
+  await expectNoHorizontalOverflow(settings);
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    window.__emit({
+      type: "ask_request",
+      data: {
+        id: "long-question",
+        questions: [
+          {
+            question:
+              "How should changes across the workspace be verified before the next release?",
+            multiSelect: false,
+            options: [
+              {
+                label:
+                  "Run the complete workspace verification before continuing",
+                description:
+                  "Check formatting, types, the build, and all relevant tests for every changed package.",
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+  const option = page.getByRole("button", {
+    name: /Run the complete workspace verification/,
+  });
+  await option.scrollIntoViewIfNeeded();
+  await expectNoHorizontalOverflow(option);
+  expect(
+    await option.evaluate(
+      (element) => element.scrollHeight - element.clientHeight,
+    ),
+  ).toBeLessThanOrEqual(1);
+  await option.click();
+  await expect(
+    page.getByRole("button", { name: "Submit answer", exact: true }),
+  ).toBeEnabled();
+  await expectNoHorizontalOverflow(main);
+  await page.screenshot({
+    path: "test-results/split-english.png",
+    animations: "disabled",
+  });
+  const split = await separator.boundingBox();
+  assert.ok(split);
+  await page.mouse.move(split.x + split.width / 2, split.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(550, split.y + 100);
+  await page.mouse.up();
+  const editor = page.getByRole("region", { name: "Files", exact: true });
+  const editorBounds = await editor.boundingBox();
+  const compareBounds = await page
+    .getByRole("button", { name: "Compare changes", exact: true })
+    .boundingBox();
+  assert.ok(editorBounds);
+  assert.ok(compareBounds);
+  expect(editorBounds.width).toBeLessThan(400);
+  expect(compareBounds.x).toBeGreaterThan(editorBounds.x);
+  expect(compareBounds.x + compareBounds.width).toBeLessThanOrEqual(
+    editorBounds.x + editorBounds.width,
+  );
+  await page
+    .getByRole("button", { name: "Compare changes", exact: true })
+    .click();
+  await expect(page.locator(".monaco-diff-editor")).toHaveCount(0);
+  await expect(page.locator(".monaco-editor").first()).toBeVisible();
+  await page.screenshot({
+    path: "test-results/editor-narrow.png",
+    animations: "disabled",
+  });
+});
 
 test("workspace layout, commands, IME composition and collapsed drafts", async ({
   page,
@@ -245,6 +511,10 @@ test("workspace layout, commands, IME composition and collapsed drafts", async (
     )
     .toBeLessThan(12);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.screenshot({
+    path: "test-results/settings-light.png",
+    animations: "disabled",
+  });
   await page.getByRole("combobox", { name: "Theme", exact: true }).click();
   await page.getByRole("option", { name: "Dark", exact: true }).click();
   await page.keyboard.press("Escape");
@@ -291,7 +561,9 @@ test("live Agent changes preserve dirty drafts and require conflict review", asy
   await code.press("ControlOrMeta+End");
   await code.press("Enter");
   await code.pressSequentially("// user draft");
-  await expect(page.getByRole("tab").first().locator("span")).toBeVisible();
+  await expect(
+    page.getByRole("tab").first().getByRole("img", { name: "Unsaved changes" }),
+  ).toBeVisible();
   await page.evaluate(() => {
     window.__changeFile("export const greeting = 'Second Agent update';\n");
   });
@@ -491,9 +763,7 @@ test("background work and workflow phases expose live status and cancellation", 
     .getByRole("button", { name: "Agent workbench", exact: true })
     .click();
   const dialog = page.getByRole("dialog");
-  await dialog
-    .getByRole("tab", { name: "Agents and collaboration", exact: true })
-    .click();
+  await dialog.getByRole("tab", { name: "Agents", exact: true }).click();
   await expect(dialog.getByText("reviewer", { exact: true })).toBeVisible();
   await dialog.getByText("View output", { exact: true }).click();
   await expect(dialog.getByText("build succeeded")).toBeVisible();
@@ -546,7 +816,7 @@ test("capabilities search, memory inspection and environment controls round-trip
     .click();
   const dialog = page.getByRole("dialog");
   await dialog
-    .getByRole("tab", { name: "Tools and skills", exact: true })
+    .getByRole("tab", { name: "Tools & skills", exact: true })
     .click();
   await dialog.getByLabel("Search capabilities").fill("read");
   await expect(dialog.locator("summary")).toHaveCount(1);
@@ -558,17 +828,13 @@ test("capabilities search, memory inspection and environment controls round-trip
   await expect
     .poll(() => page.evaluate(() => window.__action))
     .toEqual({ type: "reload_skills" });
-  await dialog
-    .getByRole("tab", { name: "Context and environment", exact: true })
-    .click();
+  await dialog.getByRole("tab", { name: "Context", exact: true }).click();
   await dialog.getByText("Project conventions", { exact: true }).click();
   await expect(
     dialog.getByText("pnpm happy:fix", { exact: true }),
   ).toBeVisible();
   await dialog.getByRole("combobox", { name: "Sandbox mode" }).click();
-  await page
-    .getByRole("option", { name: "Auto-allow in sandbox", exact: true })
-    .click();
+  await page.getByRole("option", { name: "Auto-allow", exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => window.__action))
     .toEqual({ type: "sandbox", mode: "auto" });
@@ -692,7 +958,7 @@ test("permissions, questions and plan approval keep the Agent event flow intact"
     .poll(() => page.evaluate(() => window.__permission))
     .toEqual({ id: "permission", response: "allow" });
   await expect(
-    page.getByRole("log").getByText("Waiting for permission", { exact: true }),
+    page.getByRole("log").getByText("Needs approval", { exact: true }),
   ).toHaveCount(0);
   await page.evaluate(() => {
     window.__emit({

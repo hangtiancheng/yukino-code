@@ -258,6 +258,7 @@ export interface YukinoApi {
   ): Promise<void>;
   requestMcpApp(appId: string, operation: McpAppOperation): Promise<unknown>;
   openConfig(): Promise<void>;
+  openLogs(): Promise<void>;
   selectAttachments(): Promise<string[]>;
   init(): Promise<InitState>;
   send(text: string): Promise<void>;
