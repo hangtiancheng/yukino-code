@@ -1,0 +1,498 @@
+{
+  "sha256": {
+    "computer-use.ts": "1c77da25b3109c030a3908a01f93fbaad831e36302cdede4c1a0530390485370",
+    "snippets.ts": "02a11904f8043666385b171776b2e0c00b0d67e4593a48ab863ed993c1bb94f6",
+    "constants.ts": "7abeff289636c68d68f376446d1c53375e9faee31274b944800ef1f1e6463606",
+    "prompts.ts": "3a9667895edccc929f460f8647ffc219920e2accb54c65631b1192f0b4f6f9f0"
+  },
+  "cases": [
+    {
+      "input": {
+        "action": "left_click",
+        "coordinate": [10, 20]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "10", "20"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "1", "--delay", "80", "1"]
+        }
+      ],
+      "result": {
+        "output": "Computer action left_click completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "click",
+        "x": 0,
+        "y": 0,
+        "button": "back"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "0", "0"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "1", "--delay", "80", "8"]
+        }
+      ],
+      "result": {
+        "output": "Computer action click completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "right_click",
+        "x": 10,
+        "y": 20,
+        "keys": ["CTRL"]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "10", "20"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["keydown", "--", "CTRL"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "1", "--delay", "80", "3"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["keyup", "--", "CTRL"]
+        }
+      ],
+      "result": {
+        "output": "Computer action right_click completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "double_click",
+        "coordinate": [0, 1]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "0", "1"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "2", "--delay", "80", "1"]
+        }
+      ],
+      "result": {
+        "output": "Computer action double_click completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "triple_click",
+        "coordinate": [10, 20]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "10", "20"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "3", "--delay", "80", "1"]
+        }
+      ],
+      "result": {
+        "output": "Computer action triple_click completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "mouse_move",
+        "coordinate": [5, 9]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "5", "9"]
+        }
+      ],
+      "result": {
+        "output": "Computer action mouse_move completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "key",
+        "text": "CTRL+S"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["key", "--", "CTRL+S"]
+        }
+      ],
+      "result": {
+        "output": "Computer action key completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "keypress",
+        "keys": ["ENTER"]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["key", "--", "ENTER"]
+        }
+      ],
+      "result": {
+        "output": "Computer action keypress completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "type",
+        "text": "hello 中文"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["type", "--delay", "1", "--", "hello 中文"]
+        }
+      ],
+      "result": {
+        "output": "Computer action type completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "cursor_position"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["getmouselocation", "--shell"]
+        }
+      ],
+      "result": {
+        "output": "40,60",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "left_mouse_down"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousedown", "1"]
+        }
+      ],
+      "result": {
+        "output": "Computer action left_mouse_down completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "left_mouse_up"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mouseup", "1"]
+        }
+      ],
+      "result": {
+        "output": "Computer action left_mouse_up completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "left_click_drag",
+        "start_coordinate": [0, 1],
+        "coordinate": [4, 8]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "0", "1"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["mousedown", "1"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "4", "8"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["mouseup", "1"]
+        }
+      ],
+      "result": {
+        "output": "Computer action left_click_drag completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "drag",
+        "path": [
+          {
+            "x": 1,
+            "y": 2
+          },
+          {
+            "x": 3,
+            "y": 4
+          }
+        ]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "1", "2"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["mousedown", "1"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "3", "4"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["mouseup", "1"]
+        }
+      ],
+      "result": {
+        "output": "Computer action drag completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "scroll",
+        "scroll_amount": 3,
+        "scroll_direction": "up"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "3", "4"]
+        }
+      ],
+      "result": {
+        "output": "Computer action scroll completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "scroll",
+        "scroll_amount": 3,
+        "scroll_direction": "down"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "3", "5"]
+        }
+      ],
+      "result": {
+        "output": "Computer action scroll completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "scroll",
+        "scroll_amount": 3,
+        "scroll_direction": "left"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "3", "6"]
+        }
+      ],
+      "result": {
+        "output": "Computer action scroll completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "scroll",
+        "scroll_amount": 3,
+        "scroll_direction": "right"
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "3", "7"]
+        }
+      ],
+      "result": {
+        "output": "Computer action scroll completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "scroll",
+        "scroll_x": -120,
+        "scroll_y": 300,
+        "coordinate": [0, 0]
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["mousemove", "--sync", "0", "0"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "3", "5"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["click", "--repeat", "1", "6"]
+        }
+      ],
+      "result": {
+        "output": "Computer action scroll completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "scroll",
+        "scroll_y": 0
+      },
+      "calls": [],
+      "result": {
+        "output": "Computer action scroll completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "hold_key",
+        "keys": ["CTRL"],
+        "duration": 0
+      },
+      "calls": [
+        {
+          "command": "xdotool",
+          "args": ["keydown", "--", "CTRL"]
+        },
+        {
+          "command": "xdotool",
+          "args": ["keyup", "--", "CTRL"]
+        }
+      ],
+      "result": {
+        "output": "Computer action hold_key completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "wait",
+        "duration": 0
+      },
+      "calls": [],
+      "result": {
+        "output": "Wait completed.",
+        "isError": false
+      }
+    },
+    {
+      "input": {
+        "action": "left_click"
+      },
+      "calls": [],
+      "result": {
+        "output": "Error: action=left_click requires coordinate or x and y.",
+        "isError": true
+      }
+    },
+    {
+      "input": {
+        "action": "type"
+      },
+      "calls": [],
+      "result": {
+        "output": "Error: action=type requires text.",
+        "isError": true
+      }
+    },
+    {
+      "input": {
+        "action": "key"
+      },
+      "calls": [],
+      "result": {
+        "output": "Error: action=key requires text or keys.",
+        "isError": true
+      }
+    },
+    {
+      "input": {
+        "action": "zoom",
+        "region": [0, 0, 0, 0]
+      },
+      "calls": [],
+      "result": {
+        "output": "Error: action=zoom requires region [x1, y1, x2, y2] with positive area.",
+        "isError": true
+      }
+    },
+    {
+      "input": {},
+      "calls": [],
+      "result": {
+        "output": "Error: action (Anthropic-style) or actions (OpenAI-style batch) is required.",
+        "isError": true
+      }
+    },
+    {
+      "input": {
+        "action": "wait",
+        "actions": [
+          {
+            "type": "wait"
+          }
+        ]
+      },
+      "calls": [],
+      "result": {
+        "output": "Error: send either action (Anthropic-style, one action per call) or actions (OpenAI-style batch), not both.",
+        "isError": true
+      }
+    }
+  ]
+}

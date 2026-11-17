@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Yukino CLI (apps/yukino) is a terminal-based AI coding agent.
+Yukino CLI (packages/yukino) is a terminal-based AI coding agent.
 
-Yukino MCP server (apps/mcp) is an official collection of MCP tools for yukino
+Yukino MCP server (packages/mcp) is an official collection of MCP tools for yukino
 
 - Fix all ESLint errors. Ignore all ESLint warnings.
 - Use `pnpm lint:fix` to automatically correct lint errors. This command is idempotent and non-destructive.

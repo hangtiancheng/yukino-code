@@ -24,7 +24,7 @@
 - **Hooks** — event-driven shell / HTTP / prompt-injection hooks on every lifecycle event
 - **Beyond the terminal** — print mode for scripting & CI, remote mode serving a browser chat UI over WebSocket, VSCode integration with `@`-mentions from the editor
 
-Full documentation lives in [apps/yukino/README.md](./apps/yukino/README.md).
+Full documentation lives in [packages/yukino/README.md](./packages/yukino/README.md).
 
 ## Quick Start
 
@@ -185,7 +185,7 @@ hooks:
       # Shell command: bash on POSIX, 30s timeout, working directory = project directory,
       # with YUKINO_EVENT / YUKINO_TOOL / YUKINO_FILE_PATH injected; stdout is injected into
       # the agent as a system reminder on the next turn.
-      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino"
+      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/hangtiancheng/yukino-code/tree/main/packages/yukino"
     # Whether successful output rejects the tool call (pre_tool_use only). Default: false.
     # Mutually exclusive with async.
     reject: false
@@ -201,16 +201,16 @@ hooks:
     on_error: ignore
 ```
 
-See the [full configuration reference](./apps/yukino/README.md#configuration) for MCP servers, hooks, sandboxing and all provider fields.
+See the [full configuration reference](./packages/yukino/README.md#configuration) for MCP servers, hooks, sandboxing and all provider fields.
 
 ## Repository Layout
 
-This is a pnpm monorepo (workspace `apps/*`):
+This is a pnpm monorepo (workspace `packages/*`):
 
 | Package                              | Description                                                      |
 | ------------------------------------ | ---------------------------------------------------------------- |
-| [`@yukino.js/yukino`](./apps/yukino) | The terminal AI coding agent (Node.js)                           |
-| [`@yukino.js/mcp`](./apps/mcp)       | Official Yukino MCP tools collection — semantic doc search (RAG) |
+| [`@yukino.js/yukino`](./packages/yukino) | The terminal AI coding agent (Node.js)                           |
+| [`@yukino.js/mcp`](./packages/mcp)       | Official Yukino MCP tools collection — semantic doc search (RAG) |
 
 ## Development
 

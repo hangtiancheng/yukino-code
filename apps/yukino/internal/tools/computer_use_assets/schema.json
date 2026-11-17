@@ -1,0 +1,241 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "key",
+        "hold_key",
+        "type",
+        "cursor_position",
+        "mouse_move",
+        "left_mouse_down",
+        "left_mouse_up",
+        "left_click",
+        "left_click_drag",
+        "right_click",
+        "middle_click",
+        "double_click",
+        "triple_click",
+        "scroll",
+        "wait",
+        "screenshot",
+        "zoom",
+        "click",
+        "drag",
+        "keypress",
+        "move"
+      ],
+      "description": "Anthropic-style single computer action. Send either action or actions, not both."
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "click",
+              "double_click",
+              "drag",
+              "keypress",
+              "move",
+              "screenshot",
+              "scroll",
+              "type",
+              "wait"
+            ],
+            "description": "OpenAI-style action type: click (button, x, y, keys), double_click (x, y, keys), drag (path, keys), keypress (keys), move (x, y, keys), screenshot, scroll (x, y, scrollX, scrollY, keys), type (text), wait."
+          },
+          "button": {
+            "type": "string",
+            "enum": ["left", "right", "wheel", "back", "forward"],
+            "description": "Button for type=click."
+          },
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "description": "Keys held during the action, or pressed by keypress."
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": ["x", "y"],
+              "additionalProperties": false
+            },
+            "minItems": 2,
+            "maxItems": 200,
+            "description": "Drag path for type=drag."
+          },
+          "scrollX": {
+            "type": "number",
+            "description": "Horizontal scroll delta for type=scroll."
+          },
+          "scrollY": {
+            "type": "number",
+            "description": "Vertical scroll delta for type=scroll."
+          },
+          "text": {
+            "type": "string",
+            "description": "Text to type for type=type."
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "description": "OpenAI-style ordered batch of computer actions, executed in sequence; a screenshot is returned after the batch."
+    },
+    "pendingSafetyChecks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      },
+      "description": "OpenAI-style safety checks raised with the batch; acknowledged in the tool result."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["in_progress", "completed", "incomplete"],
+      "description": "OpenAI-style status of the computer call; echoed in the tool result."
+    },
+    "coordinate": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "Anthropic-style [x, y] coordinate in the latest screenshot space."
+    },
+    "duration": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 60,
+      "description": "Seconds for hold_key or wait."
+    },
+    "region": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Zoom region [x1, y1, x2, y2] in the latest screenshot space."
+    },
+    "scroll_amount": {
+      "type": "number",
+      "description": "Anthropic-style number of wheel clicks to scroll."
+    },
+    "scroll_direction": {
+      "type": "string",
+      "enum": ["up", "down", "left", "right"]
+    },
+    "start_coordinate": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "Anthropic-style drag start coordinate."
+    },
+    "text": {
+      "type": "string",
+      "description": "Text to type, or a '+'-separated key combination."
+    },
+    "x": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "OpenAI-style x coordinate."
+    },
+    "y": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "OpenAI-style y coordinate."
+    },
+    "button": {
+      "type": "string",
+      "enum": ["left", "right", "wheel", "middle", "back", "forward"],
+      "description": "Button for action=click."
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "description": "OpenAI-style keys held during an action or pressed by keypress."
+    },
+    "path": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": ["x", "y"],
+        "additionalProperties": false
+      },
+      "minItems": 2,
+      "maxItems": 200,
+      "description": "OpenAI-style drag path."
+    },
+    "scroll_x": {
+      "type": "number",
+      "description": "OpenAI-style horizontal scroll delta."
+    },
+    "scroll_y": {
+      "type": "number",
+      "description": "OpenAI-style vertical scroll delta."
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

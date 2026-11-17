@@ -1,0 +1,417 @@
+{
+  "sha256": "b2346b711be6216d48fdd50818c991b35f8b8eb42abcfb787a30dd577ce36c34",
+  "cases": [
+    {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "",
+          "toolUses": [
+            {
+              "toolUseId": "call-1",
+              "toolName": "ComputerUse",
+              "providerItemId": "cu_1",
+              "arguments": {
+                "actions": [
+                  {
+                    "type": "click",
+                    "x": 10,
+                    "y": 20
+                  },
+                  {
+                    "type": "double_click",
+                    "x": 1,
+                    "y": 2
+                  },
+                  {
+                    "type": "drag",
+                    "path": [
+                      {
+                        "x": 1,
+                        "y": 2
+                      },
+                      {
+                        "x": 2,
+                        "y": 3
+                      }
+                    ],
+                    "keys": ["CTRL"]
+                  },
+                  {
+                    "type": "keypress",
+                    "keys": ["ENTER"]
+                  },
+                  {
+                    "type": "move",
+                    "x": 1,
+                    "y": 2
+                  },
+                  {
+                    "type": "scroll",
+                    "x": 0,
+                    "y": 0,
+                    "scrollX": 100,
+                    "scrollY": -200
+                  },
+                  {
+                    "type": "screenshot"
+                  },
+                  {
+                    "type": "type",
+                    "text": "中文"
+                  },
+                  {
+                    "type": "wait"
+                  },
+                  {
+                    "type": "unknown"
+                  },
+                  {
+                    "type": "click",
+                    "x": 0
+                  }
+                ],
+                "pendingSafetyChecks": [
+                  {
+                    "id": "safety-1",
+                    "code": "",
+                    "message": "check"
+                  }
+                ],
+                "status": "in_progress"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "",
+          "toolResults": [
+            {
+              "toolUseId": "call-1",
+              "content": "screenshot",
+              "contentBlocks": [
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "aGVsbG8="
+                  }
+                }
+              ],
+              "isError": false
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "computer_call",
+          "id": "cu_1",
+          "call_id": "call-1",
+          "status": "in_progress",
+          "actions": [
+            {
+              "type": "click",
+              "x": 10,
+              "y": 20,
+              "button": "left"
+            },
+            {
+              "type": "double_click",
+              "x": 1,
+              "y": 2,
+              "keys": null
+            },
+            {
+              "type": "drag",
+              "path": [
+                {
+                  "x": 1,
+                  "y": 2
+                },
+                {
+                  "x": 2,
+                  "y": 3
+                }
+              ],
+              "keys": ["CTRL"]
+            },
+            {
+              "type": "keypress",
+              "keys": ["ENTER"]
+            },
+            {
+              "type": "move",
+              "x": 1,
+              "y": 2
+            },
+            {
+              "type": "scroll",
+              "x": 0,
+              "y": 0,
+              "scroll_x": 100,
+              "scroll_y": -200
+            },
+            {
+              "type": "screenshot"
+            },
+            {
+              "type": "type",
+              "text": "中文"
+            },
+            {
+              "type": "wait"
+            }
+          ],
+          "pending_safety_checks": [
+            {
+              "id": "safety-1",
+              "code": "",
+              "message": "check"
+            }
+          ]
+        },
+        {
+          "type": "computer_call_output",
+          "call_id": "call-1",
+          "output": {
+            "type": "computer_screenshot",
+            "image_url": "data:image/png;base64,aGVsbG8="
+          },
+          "acknowledged_safety_checks": [
+            {
+              "id": "safety-1",
+              "code": "",
+              "message": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "",
+          "toolUses": [
+            {
+              "toolUseId": "call-1",
+              "toolName": "ComputerUse",
+              "arguments": {
+                "actions": [],
+                "status": "unknown"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "",
+          "toolResults": [
+            {
+              "toolUseId": "call-1",
+              "content": "failed",
+              "isError": true
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "computer_call",
+          "id": "call-1",
+          "call_id": "call-1",
+          "status": "completed",
+          "actions": [],
+          "pending_safety_checks": []
+        },
+        {
+          "type": "computer_call_output",
+          "call_id": "call-1",
+          "output": {
+            "type": "computer_screenshot"
+          },
+          "acknowledged_safety_checks": []
+        },
+        {
+          "role": "user",
+          "content": "failed"
+        }
+      ]
+    },
+    {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "calling",
+          "toolUses": [
+            {
+              "toolUseId": "tool-1",
+              "toolName": "Fetch",
+              "arguments": {
+                "url": "https://example.com"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "trailing",
+          "toolResults": [
+            {
+              "toolUseId": "tool-1",
+              "content": "output",
+              "contentBlocks": [
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "aGVsbG8="
+                  }
+                },
+                {
+                  "type": "document",
+                  "title": "report",
+                  "source": {
+                    "type": "text",
+                    "data": "文档"
+                  }
+                },
+                {
+                  "type": "document",
+                  "source": {
+                    "type": "base64",
+                    "data": "cGRm"
+                  }
+                },
+                {
+                  "type": "document",
+                  "source": {
+                    "type": "url",
+                    "url": "https://example.com/report.pdf"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "role": "assistant",
+          "content": "calling"
+        },
+        {
+          "type": "function_call",
+          "name": "Fetch",
+          "call_id": "tool-1",
+          "arguments": "{\"url\":\"https://example.com\"}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "tool-1",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "output"
+            },
+            {
+              "type": "input_image",
+              "image_url": "data:image/png;base64,aGVsbG8=",
+              "detail": "auto"
+            },
+            {
+              "type": "input_file",
+              "file_data": "5paH5qGj",
+              "filename": "report.txt"
+            },
+            {
+              "type": "input_file",
+              "file_data": "cGRm",
+              "filename": "tool-result.pdf"
+            },
+            {
+              "type": "input_file",
+              "file_url": "https://example.com/report.pdf"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "trailing"
+        }
+      ]
+    },
+    {
+      "messages": [
+        {
+          "role": "user",
+          "content": "",
+          "toolResults": [
+            {
+              "toolUseId": "orphan",
+              "content": "plain",
+              "contentBlocks": [
+                {
+                  "type": "text",
+                  "text": "ignored"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "function_call_output",
+          "call_id": "orphan",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "plain"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "answer",
+          "thinkingBlocks": [
+            {
+              "type": "thinking",
+              "thinking": "reason",
+              "signature": "rs_test"
+            },
+            {
+              "type": "thinking",
+              "thinking": "omitted",
+              "signature": "other"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "type": "reasoning",
+          "id": "rs_test",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "reason"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "answer"
+        }
+      ]
+    }
+  ]
+}

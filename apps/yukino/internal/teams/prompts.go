@@ -1,0 +1,26 @@
+package teams
+
+const (
+	TeamCreateToolDescription         = "Create a team for coordinating multiple agents. Pass name to choose the team name, or omit it to auto-generate one. Existing teams and their members keep running. Use the returned team name to target subsequent operations."
+	TeamCreateNameParamDescription    = "Name for the new team; auto-generated when omitted. Must not match an existing team (see TeamList)."
+	TeamDescriptionParamDescription   = "What this team will work on"
+	SendMessageToolDescription        = "Communicate within an agent team: send a message to a teammate or to the leader mailbox. Use team_name to select a team when multiple teams exist; teammates always use their own team. One-shot subagents cannot receive messages; create Agent kind=\"teammate\" when communication or follow-up assignments are needed. Use to='leader' for the coordinator and to='*' to broadcast within the selected team. In coordinator mode, only the leader can send plan_approval_response; copy request_id, set approve, and give review feedback in content."
+	SendMessageToDescription          = "Teammate name, 'leader' for the coordinator, or '*' to broadcast"
+	SendMessageContentDescription     = "Message content, shutdown reason, or the leader's plan review feedback."
+	SendMessageRequestIdDescription   = "Copy the requestId from the shutdown or plan approval request when responding."
+	SendMessageApproveDescription     = "Required for shutdown_response and plan_approval_response: whether the request was accepted."
+	ListTeamToolDescription           = "List all teams and their members."
+	TeamDeleteToolDescription         = "Delete the selected team and stop its members. Specify team_name when multiple teams exist. Other teams keep running."
+	TaskStopToolDescription           = "Stop a running teammate or stop a background tool call early (subagent, Bash, PowerShell). Pass exactly one of teammate or task_id. Cancellation waits for cleanup; terminal background tasks leave the active UI while their results remain available through TaskOutput."
+	TaskStopTeammateDescription       = "Name of the teammate to stop, exactly as it appears in the from= field of a task-notification"
+	TaskStopTaskIdDescription         = "ID of a background task (Agent, Bash, PowerShell)"
+	TaskStopSubagentToolDescription   = "Stop one of this agent's own background tasks (Agent, Bash, PowerShell). Pass task_id."
+	TaskStopSubagentTaskIdDescription = "ID of this agent's background task"
+	PlanAutoApprovedMessage           = "Your plan was automatically approved. Begin execution within the current tool permissions; plan approval does not authorize individual tool calls."
+	PlanAutoApprovedAckMessage        = "Plan automatically approved; tool permissions remain active."
+	ShutdownAckMessage                = "acknowledged, shutting down"
+	StoppedAwaitingPlanReviewMessage  = "Stopped while awaiting plan review"
+	DefaultShutdownReason             = "team is wrapping up"
+	MemberDeactivatedShutdownReason   = "member deactivated"
+	TeammateStoppedMessage            = "Stopped"
+)

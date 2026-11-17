@@ -169,5 +169,5 @@ target
 **/.yukino/
 
 .playwright-cli/
-apps/yukino/coverage
+packages/yukino/coverage
 **/.claude

@@ -4,7 +4,7 @@ Yukino is a terminal-based AI coding agent. It provides an interactive UI (termi
 
 ## Overview
 
-Yukino runs as a single CLI binary that connects to configurable LLM providers (Anthropic, OpenAI, or any OpenAI-compatible endpoint). It renders a rich terminal interface using React and Ink, giving you streaming responses, tool execution feedback, permission prompts, and slash commands in a single pane.
+Yukino runs as a single CLI binary that connects to configurable LLM providers (Anthropic, OpenAI, or any OpenAI-compatible endpoint). It renders a rich terminal interface using Bubble Tea, giving you streaming responses, tool execution feedback, permission prompts, and slash commands in a single pane.
 
 Beyond interactive use, Yukino supports a non-interactive print mode for scripting, a remote mode that serves a browser-based chat UI over WebSocket, an A2A (Agent2Agent) server mode for agent-to-agent integration, and team coordination where one leader agent manages multiple teammates running in the same process and working in parallel.
 
@@ -72,7 +72,7 @@ Command templates support quoted positional arguments (`$1`, `$2`, ...), `$@`, d
 
 ### Remote Mode
 
-- Express HTTP server with WebSocket bridge for browser-based access
+- HTTP server with WebSocket bridge for browser-based access
 - React frontend served at a configurable address
 - Bidirectional message streaming between browser and agent
 
@@ -82,7 +82,7 @@ Command templates support quoted positional arguments (`$1`, `$2`, ...), `$@`, d
 npm install -g @yukino.js/yukino
 ```
 
-Or use the one-line installers ([macOS / Linux](../../install.sh), [Windows](../../install.ps1)):
+Or use the one-line installers ([macOS / Linux](https://github.com/hangtiancheng/yukino-code/blob/main/install.sh), [Windows](https://github.com/hangtiancheng/yukino-code/blob/main/install.ps1)):
 
 ```bash
 # macOS / Linux
@@ -108,10 +108,10 @@ The command checks npm's `latest` dist-tag by default. Use `--tag=canary` (or `-
 
 The TUI always checks npm's `latest` dist-tag for a newer release asynchronously and shows a `yukino update` hint on entry when one is available. The hint disappears after the first input submission or when a session is resumed; late check results stay hidden during the conversation. Available updates are shown again on the last line of the exit summary. Network errors do not interrupt the UI. Explicit `yukino update` also checks for updates.
 
-Or run directly from the monorepo:
+Or build from source in this repository:
 
 ```bash
-pnpm dev
+make build && ./dist/yukino
 ```
 
 ## Storage
@@ -326,8 +326,7 @@ mcp_servers:
       - serve
       - "--mcp"
   - name: yukino-mcp # stdio
-    command: pnpm
-    args: ["--filter", "@yukino.js/mcp", "dev"]
+    command: yukino-mcp # the companion Go MCP server binary (../mcp); stdio by default
     # Environment variables for the child process (stdio only; ignored for url servers).
     # Supports ${VAR}, ${VAR:-default}, $VAR; an unset variable without a default fails the
     # connection.
@@ -375,7 +374,7 @@ hooks:
       # Shell command: bash on POSIX, 30s timeout, working directory = project directory,
       # with YUKINO_EVENT / YUKINO_TOOL / YUKINO_FILE_PATH injected; stdout is injected into
       # the agent as a system reminder on the next turn.
-      command: echo 'You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino'
+      command: echo 'You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/yukino-js/yukino/tree/main/yukino'
     # Whether successful output rejects the tool call (pre_tool_use only). Default: false.
     # Mutually exclusive with async.
     reject: false
@@ -406,19 +405,17 @@ The standalone test runner reads `YUKINO_TEST_API_KEY`, `YUKINO_TEST_BASE_URL`, 
 
 Yukino also sets the following variables for hooks, native helpers, and test infrastructure. These are internal process inputs, managed by their caller rather than user configuration:
 
-| Variable                   | Set by             | Value                                                                           |
-| -------------------------- | ------------------ | ------------------------------------------------------------------------------- |
-| `YUKINO_EVENT`             | Hook runner        | Current hook event name.                                                        |
-| `YUKINO_TOOL`              | Hook runner        | Current tool name, or an empty string when absent.                              |
-| `YUKINO_FILE_PATH`         | Hook runner        | Current file path, or an empty string when absent.                              |
-| `YUKINO_COMPUTER_INPUT`    | Computer-use tool  | Base64-encoded JSON action passed to macOS and Windows native helpers.          |
-| `YUKINO_COMPUTER_ASSEMBLY` | Computer-use tool  | Temporary Windows helper assembly path for compilation and execution.           |
-| `YUKINO_SCREENSHOT_PATH`   | Computer-use tool  | Temporary output path for a Windows screenshot.                                 |
-| `YUKINO_CLIPBOARD_PATH`    | Clipboard reader   | Temporary output path for a Windows clipboard image.                            |
-| `YUKINO_TEST_HOME`         | Test setup         | A fresh temporary home directory for each test; used by the mocked `homedir()`. |
-| `YUKINO_LIB_ENTRY`         | Library entry test | File URL of the built library imported by the child Node.js process.            |
+| Variable                   | Set by            | Value                                                                  |
+| -------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| `YUKINO_EVENT`             | Hook runner       | Current hook event name.                                               |
+| `YUKINO_TOOL`              | Hook runner       | Current tool name, or an empty string when absent.                     |
+| `YUKINO_FILE_PATH`         | Hook runner       | Current file path, or an empty string when absent.                     |
+| `YUKINO_COMPUTER_INPUT`    | Computer-use tool | Base64-encoded JSON action passed to macOS and Windows native helpers. |
+| `YUKINO_COMPUTER_ASSEMBLY` | Computer-use tool | Temporary Windows helper assembly path for compilation and execution.  |
+| `YUKINO_SCREENSHOT_PATH`   | Computer-use tool | Temporary output path for a Windows screenshot.                        |
+| `YUKINO_CLIPBOARD_PATH`    | Clipboard reader  | Temporary output path for a Windows clipboard image.                   |
 
-The companion [Yukino MCP server](../mcp/README.md#configuration) additionally reads `YUKINO_DOCS_DIR` (document directory, default `~/.yukino/docs`) and `YUKINO_INDEX_DB` (index database, default `~/.yukino/index.sqlite`). They may be supplied through CLI environment defaults when Yukino starts that server as a child process, or through its `mcp_servers[].env`. The examples use `YUKINO_MCP_API_KEY` and the repository's `mcp.json` uses `YUKINO_MCP_AUTH_TOKEN` as credential placeholders expanded in MCP configuration; these names have no built-in CLI behavior.
+The companion [Yukino MCP server](../mcp/README.md) is the Go port of `@yukino.js/mcp`; it reads its backend endpoints and credentials from its own `.config.jsonc` instead of `YUKINO_DOCS_DIR`/`YUKINO_INDEX_DB` environment variables. Environment for MCP child processes is still supplied through CLI environment defaults or `mcp_servers[].env`. The examples use `YUKINO_MCP_API_KEY` as a credential placeholder expanded in MCP configuration; this name has no built-in CLI behavior.
 
 Other environment variables are read-only inputs to Yukino and belong in the host environment, outside the global `env` block. These include provider key fallbacks (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) and IDE integration (`CLAUDE_CODE_SSE_PORT`, `CLAUDE_CONFIG_DIR`, default `~/.claude`). Terminal and OS probes include `TERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`, `COLORTERM`, `TMUX`, `VTE_VERSION`, `KITTY_WINDOW_ID`, `ZED_TERM`, `WT_SESSION`, `COLORFGBG`, `SHELL`, `DISPLAY`, `WAYLAND_DISPLAY`, `CI`, `SSH_CONNECTION`, `SSH_CLIENT`, and `SSH_TTY`; color and hyperlink controls such as `FORCE_COLOR`, `NO_COLOR`, and `FORCE_HYPERLINK` are also host inputs.
 
@@ -731,7 +728,7 @@ yukino --remote 0.0.0.0:9000      # explicitly expose on all interfaces (no buil
 yukino --remote 0                # OS-assigned ephemeral port; the actual URL is printed on startup
 ```
 
-Starts an Express HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction. With port 0 the OS picks a free port and the server prints the reachable address (e.g. `Remote server listening at http://127.0.0.1:61041`) so you know where to connect.
+Starts an HTTP server and WebSocket bridge. The bundled React frontend is served at the configured address for browser-based interaction. With port 0 the OS picks a free port and the server prints the reachable address (e.g. `Remote server listening at http://127.0.0.1:61041`) so you know where to connect.
 
 The browser UI mirrors the terminal UI's capabilities: streaming replies and thinking, tool cards with live output, permission and ask-user dialogs, plan approval, foreground `/review` subagents, `/resume` session picker, steering messages while a turn runs (with a follow-up queue for messages that cannot steer), prompt history (`↑`/`↓`), `@file` completion, `!`/`!!` user Bash, image attachments (paste, drop, or the attach button — stored like terminal clipboard images and expanded as `@` references), todo progress, the Agents panel (subagents, background tasks, teammates), context-window usage, and dark/light themes. Model (`/model`), provider (`/login`, `/provider`), thinking level (`/thinking`), permission mode (badge click or `Shift+Tab`), rewind (`/rewind`), sandbox (`/sandbox`), worktree (`/worktree`), MCP reload (`/mcp reload`), fork-mode skills, and `/quit` (shuts the server down) all work from the browser; `Ctrl+B` backgrounds running foreground shells and `Esc` cancels the active turn. Background tasks and teammate notifications wake an idle server the same way they do in the terminal.
 
@@ -744,7 +741,7 @@ yukino --a2a                 # A2A server, listens on 127.0.0.1:18890
 yukino --a2a 9000            # custom loopback port (host:port also works)
 ```
 
-Serves Yukino as an Agent2Agent (`@a2a-js/sdk`) agent so other agents and orchestrators can call it. The agent card is at `/.well-known/agent-card.json`; JSON-RPC is served at `POST /` and HTTP+JSON/REST under `/v1/...`. Only A2A 1.0 is supported. Send `A2A-Version: 1.0` on every protocol request. JSON-RPC uses names such as `SendMessage`, `SendStreamingMessage`, `GetTask`, and `ListTasks`. The server only binds loopback addresses.
+Serves Yukino as an Agent2Agent (`a2a-go`) agent so other agents and orchestrators can call it. The agent card is at `/.well-known/agent-card.json`; JSON-RPC is served at `POST /` and HTTP+JSON/REST under `/v1/...`. Only A2A 1.0 is supported. Send `A2A-Version: 1.0` on every protocol request. JSON-RPC uses names such as `SendMessage`, `SendStreamingMessage`, `GetTask`, and `ListTasks`. The server only binds loopback addresses.
 
 Each context maps to one Yukino session. Assistant text streams as artifact updates with one stable artifact ID per assistant turn; the final update replaces its deltas with the complete text. Completed tasks expose the full final reply in `status.message` and in the corresponding artifact. History contains complete assistant messages, rather than individual tokens. Thinking and tool events appear only in streaming status-update `metadata.yukino`, using the `yukino` discriminator (`thinking`, `tool-call`, `tool-result`).
 
@@ -843,27 +840,27 @@ Pasting an image saves it as a PNG under `~/.yukino/sessions/artifacts/<session-
 
 ## Library Build
 
-Besides the `yukino` CLI, the package ships a library entry for embedding Yukino in another host process.
+Besides the `yukino` CLI, the module exposes its terminal-independent packages for embedding Yukino in another host process.
 
-| Entry          | Output                                                                 | Contents                                                                                                                                    |
-| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| CLI (`yukino`) | `dist/main.js`, `dist/image-worker.js`                                 | Minified ESM bundles with a separate image worker; Node built-ins, ink's `react-devtools-core` peer, and WASM codec packages stay external. |
-| Library        | `dist/lib/index.js`, `dist/lib/index.d.ts`, `dist/lib/image-worker.js` | The `src/index.ts` barrel and image worker; runtime dependencies resolve from the consumer's `node_modules`.                                |
+| Entry          | Output                                                    | Contents                                                                                                                                    |
+| -------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI (`yukino`) | `dist/yukino`, plus `dist/<platform>/yukino` cross-builds | A single static binary (`CGO_ENABLED=0`, `-trimpath`); `make cross-compile` produces the win32/linux/darwin × x64/arm64 matrix.             |
+| Library        | the importable Go packages                                | The `internal/...` packages replace the reference's `src/index.ts` barrel; every terminal-independent module composes without the UI layer. |
 
-Image decoding, compression, and screenshot transforms run in a cancellable worker thread. Jimp handles resizing and encoding; `@jsquash/jpeg` and `@jsquash/webp` decode JPEG and WebP with WASM binaries from their installed packages. Image jobs run one at a time to bound concurrent decode memory.
+Image decoding, compression, and screenshot transforms run in a cancellable goroutine behind a package-level queue that serializes jobs one at a time, mirroring the reference worker's pending chain with the same 120-second timeout and abort semantics. Pure-Go codecs (`image/jpeg`, `image/png`, `image/gif`, and `x/image` WebP/BMP/TIFF decoders) replace Jimp and the WASM codec packages.
 
-The library entry is terminal-independent by contract: it must never reach `src/ui/**` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can import it. `pnpm build` enforces that contract:
+The library surface is terminal-independent by contract: no package outside `internal/ui` may import `internal/ui` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can compose it. `go test ./cmd/yukino` enforces that contract:
 
-- **ui-only dependency ban** — the `ban-ui-only-deps` plugin in `tsup.config.ts` fails the build when a bundle-reachable module imports one of the ui-only packages (`ink`, `react`, `chalk`, `ansi-escapes`, …) or a path inside `src/ui`. The list is declared once in `tsup.config.ts` and re-derived from the actual import sites by `tests/build-guards.test.ts`, which fails if the two drift apart.
-- **`react` is banned, `react-dom` never appears** — the barrel does not re-export `src/ui/**`, so `react` is reached exclusively from the terminal layer; `react-dom` is imported only by the standalone browser bundle (`src/remote/browser`, built separately via `pnpm build:browser`), which is not part of the library graph.
-- **Ambiguous export scan** — once the bundle is written, the build runs the TypeScript ambiguous-export check (`TS2308`) over the library graph. A name exported by two `export *` sources is dropped by the bundler without any warning; the scan turns that into a build failure instead of a quietly smaller public API.
+- **ui-only dependency ban** — the build-guard test in `cmd/yukino/build_guards_test.go` fails when a non-UI package imports `internal/ui` or one of the ui-only modules (`charmbracelet/bubbletea`, `charmbracelet/bubbles`, `charmbracelet/lipgloss`, `charmbracelet/x/ansi`, `charmbracelet/x/term`, `muesli/cancelreader`, `rivo/uniseg`, `yuin/goldmark`, `alecthomas/chroma/v2`). The list is declared once in the test and re-derived from the actual import sites, which fails if the two drift apart — the counterpart of the reference's `ban-ui-only-deps` tsup plugin and `tests/build-guards.test.ts`.
+- **the browser bundle never enters the Go graph** — the React browser UI (`react-dom` included) ships as the prebuilt, byte-synchronized artifact under `internal/remote/browser/dist`, embedded with `go:embed` and served as-is; Go never compiles it.
+- **no ambiguous-export scan** — Go resolves every identifier per package at compile time and has no wildcard re-export bundling, so the reference's TS2308 guard has no failure mode to cover here.
 
-In a long-lived host process, prefer the composable modules (`Agent`, `ToolRegistry`, …) over the process-level entry points (`print-mode`, `recover`), which own process lifecycle — `recover` installs crash logging to `~/.yukino/crash.log` and calls `process.exit()`, and `print-mode` exits on invalid flags.
+In a long-lived host process, prefer the composable packages (`agent`, `tools`, …) over the process-level entry points in `cmd/yukino` (print mode, crash recovery), which own process lifecycle — crash recovery installs crash logging to `~/.yukino/crash.log` and exits the process, and print mode exits on invalid flags.
 
 ## Terminal Rendering Tests
 
-`tests/helpers/virtual-terminal.ts` connects real Ink input/output streams to `@xterm/headless`. The Unicode 11 addon matches VS Code's default terminal width policy. Output bytes go directly to the emulator, and write callbacks complete after parsing; await `waitUntilRenderFlush()` for Ink renders or the fixture's `flush()` for direct writes before inspecting the buffer.
+`scripts/check-terminal.mjs` drives the built binary in a real PTY for the light, dark, and composer-dark modes: it verifies palette activation, raw-mode entry and restoration, the native bar cursor lifecycle, the exit interaction summary, and that no cursor-shape markers leak into the final screen.
 
-Run `pnpm exec vitest run tests/ui-cursor.test.ts tests/ui-terminal-resize.test.ts tests/terminal-output.test.ts tests/ui-rendering.test.ts` to check terminal cells, CJK and emoji widths, combining characters, cursor placement, ANSI colors, fragmented UTF-8 output, native scrollback anchors, resize redraws, and table layouts. The Apple Terminal resize fixture preserves rows below the caret when shrinking height, matching its behavior rather than xterm's deletion of those rows. These tests exercise the primary screen without mouse capture. The emulator does not validate font rendering, pixel appearance, native selection, or OS clipboard behavior; those still need testing in the target terminal. Unicode width policies, especially for complex emoji sequences, can differ between terminals.
+Run `make check-terminal` for the PTY suite and `go test ./internal/ui/...` for the rendering regressions that compare Go output against fixtures generated from the reference TypeScript implementation at the pinned commit (`internal/ui/testdata/`): terminal cells, CJK and emoji widths, combining characters, cursor placement, ANSI colors, fragmented UTF-8 output, scrollback anchors, resize redraws, selector chrome, Markdown, tool cards, dialogs, and exit-summary widths. These tests exercise the primary screen without mouse capture. Fixtures and PTY runs do not validate font rendering, pixel appearance, native selection, or OS clipboard behavior; those still need testing in the target terminal. Unicode width policies, especially for complex emoji sequences, can differ between terminals.
 
-Runtime text measurement stays on `string-width`, which already uses `get-east-asian-width` and handles ANSI stripping and grapheme clusters. The xterm packages are development dependencies.
+Runtime text measurement stays on `charmbracelet/x/ansi` and `rivo/uniseg`, which handle ANSI stripping, grapheme clusters, and East-Asian widths — the counterpart of the reference's `string-width`.

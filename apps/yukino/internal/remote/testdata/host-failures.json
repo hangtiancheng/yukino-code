@@ -1,0 +1,135 @@
+{
+  "source_sha256": "39e665f2543f0c820e25559b4aaaaf1cefdc541db17d1e335bf729ec28dd4852",
+  "scenarios": [
+    {
+      "name": "provider-unknown",
+      "messages": [
+        {
+          "type": "error",
+          "data": {
+            "message": "Unknown provider index: 99"
+          }
+        }
+      ]
+    },
+    {
+      "name": "provider-failed",
+      "messages": [
+        {
+          "type": "error",
+          "data": {
+            "message": "Failed to switch provider: <runtime-error>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "provider-save-failed",
+      "messages": [
+        {
+          "type": "error",
+          "data": {
+            "message": "Failed to save provider: <runtime-error>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "model-failed",
+      "messages": [
+        {
+          "type": "error",
+          "data": {
+            "message": "Failed to switch model: <runtime-error>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "model-unchanged",
+      "messages": [
+        {
+          "type": "system",
+          "data": {
+            "message": "Model already set to m."
+          }
+        }
+      ]
+    },
+    {
+      "name": "image-empty",
+      "messages": [
+        {
+          "type": "image_error",
+          "data": {
+            "clientId": "image",
+            "message": "Uploaded image is empty."
+          }
+        }
+      ]
+    },
+    {
+      "name": "image-invalid",
+      "messages": [
+        {
+          "type": "image_error",
+          "data": {
+            "clientId": "image",
+            "message": "Uploaded file is not a recognized image (png, jpeg, gif, webp)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "resume-missing",
+      "messages": [
+        {
+          "type": "error",
+          "data": {
+            "message": "Session 'missing' not found or empty."
+          }
+        },
+        {
+          "type": "command_done",
+          "data": null
+        }
+      ]
+    },
+    {
+      "name": "resume-invalid-index",
+      "messages": [
+        {
+          "type": "error",
+          "data": {
+            "message": "Session '1x' not found or empty."
+          }
+        },
+        {
+          "type": "command_done",
+          "data": null
+        }
+      ]
+    },
+    {
+      "name": "compact-failed",
+      "messages": [
+        {
+          "type": "system",
+          "data": {
+            "message": "Compacting conversation..."
+          }
+        },
+        {
+          "type": "error",
+          "data": {
+            "message": "fixture compact failure"
+          }
+        },
+        {
+          "type": "command_done",
+          "data": null
+        }
+      ]
+    }
+  ]
+}

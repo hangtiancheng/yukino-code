@@ -1,0 +1,49 @@
+{
+  "summary": {
+    "agentActiveMs": 10000,
+    "cacheCreationTokens": 2000,
+    "cacheReadTokens": 8000,
+    "failedToolCalls": 1,
+    "inputTokens": 2000,
+    "outputTokens": 500,
+    "sessionId": "muuxygb5-4929a904",
+    "startedAt": 1000,
+    "successfulToolCalls": 3,
+    "toolTimeMs": 4000,
+    "latestVersion": "999.0.0"
+  },
+  "cases": [
+    {
+      "columns": 1,
+      "expected": "─\nS\ne\ns\ns\ni\no\nn\n \nm\nu\nu\nx\ny\ng\nb\n5\n-\n4\n9\n2\n9\na\n9\n0\n4\n\nT\no\no\nl\ns\n4\n \nc\na\nl\nl\ns\n·\n✓\n3\n·\n✗\n1\n·\n \n7\n5\n.\n0\n%\n \ns\nu\nc\nc\ne\ns\ns\nT\ni\nm\ne\n \n1\n5\ns\n \nw\na\nl\nl\n·\n \n1\n0\ns\n \na\nc\nt\ni\nv\ne\nB\nr\ne\na\nk\nd\no\nw\nn\n \nA\nP\nI\n \n6\ns\n \n(\n6\n0\n.\n0\n%\n)\n·\n \nT\no\no\nl\ns\n \n4\ns\n \n(\n4\n0\n.\n0\n%\n)\nT\no\nk\ne\nn\ns\n↑\n \n2\n.\n0\nk\n \ni\nn\np\nu\nt\n·\n↓\n \n5\n0\n0\n \no\nu\nt\np\nu\nt\nC\na\nc\nh\ne\n \n8\n.\n0\nk\n \nr\ne\na\nd\n·\n \n2\n.\n0\nk\n \nw\nr\ni\nt\ne\nC\na\nc\nh\ne\n \nh\ni\nt\n \n6\n6\n.\n7\n%\n \n(\n8\n.\n0\nk\n \no\nf\n \n1\n2\nk\n \np\nr\no\nm\np\nt\n)\ny\nu\nk\ni\nn\no\n \n-\n-\nr\ne\ns\nu\nm\ne\n \nm\nu\nu\nx\ny\ng\nb\n5\n-\n4\n9\n2\n9\na\n9\n0\n4\n─\nN\ne\nw\nY\nu\nk\ni\nn\no\nv\ne\nr\ns\ni\no\nn\nv\n9\n9\n9\n.\n0\n.\n0\ni\ns\na\nv\na\ni\nl\na\nb\nl\ne\n.\nR\nu\nn\ny\nu\nk\ni\nn\no\nu\np\nd\na\nt\ne"
+    },
+    {
+      "columns": 2,
+      "expected": "──\nSe\nss\nio\nn \nmu\nux\nyg\nb5\n-4\n92\n9a\n90\n4\n\nTo\nol\ns\n4 \nca\nll\ns\n·\n✓\n3\n·\n✗\n1\n· \n75\n.0\n% \nsu\ncc\nes\ns\nTi\nme\n \n15\ns \nwa\nll\n· \n10\ns \nac\nti\nve\nBr\nea\nkd\now\nn \nAP\nI\n6s\n \n(6\n0.\n0%\n)\n· \nTo\nol\ns\n4s\n \n(4\n0.\n0%\n)\nTo\nke\nns\n↑ \n2.\n0k\n \nin\npu\nt\n·\n↓ \n50\n0 \nou\ntp\nut\nCa\nch\ne \n8.\n0k\n \nre\nad\n· \n2.\n0k\n \nwr\nit\ne\nCa\nch\ne \nhi\nt \n66\n.7\n% \n(8\n.0\nk\nof\n \n12\nk \npr\nom\npt\n)\nyu\nki\nno\n \n--\nre\nsu\nme\n \nmu\nux\nyg\nb5\n-4\n92\n9a\n90\n4\n──\nNe\nw\nYu\nki\nno\nve\nrs\nio\nn\nv9\n99\n.0\n.0\nis\nav\nai\nla\nbl\ne.\nRu\nn\nyu\nki\nno\nup\nda\nte"
+    },
+    {
+      "columns": 3,
+      "expected": "───\n S\n e\n s\n s\n i\n o\n n\n  \n m\n u\n u\n x\n y\n g\n b\n 5\n -\n 4\n 9\n 2\n 9\n a\n 9\n 0\n 4\n\n T\n o\n o\n l\n s\n 4\n  \n c\n a\n l\n l\n s\n ·\n ✓\n 3\n ·\n ✗\n 1\n ·\n  \n 7\n 5\n .\n 0\n %\n  \n s\n u\n c\n c\n e\n s\n s\n T\n i\n m\n e\n  \n 1\n 5\n s\n  \n w\n a\n l\n l\n ·\n  \n 1\n 0\n s\n  \n a\n c\n t\n i\n v\n e\n B\n r\n e\n a\n k\n d\n o\n w\n n\n  \n A\n P\n I\n  \n 6\n s\n  \n (\n 6\n 0\n .\n 0\n %\n )\n ·\n  \n T\n o\n o\n l\n s\n  \n 4\n s\n  \n (\n 4\n 0\n .\n 0\n %\n )\n T\n o\n k\n e\n n\n s\n ↑\n  \n 2\n .\n 0\n k\n  \n i\n n\n p\n u\n t\n ·\n ↓\n  \n 5\n 0\n 0\n  \n o\n u\n t\n p\n u\n t\n C\n a\n c\n h\n e\n  \n 8\n .\n 0\n k\n  \n r\n e\n a\n d\n ·\n  \n 2\n .\n 0\n k\n  \n w\n r\n i\n t\n e\n C\n a\n c\n h\n e\n  \n h\n i\n t\n  \n 6\n 6\n .\n 7\n %\n  \n (\n 8\n .\n 0\n k\n  \n o\n f\n  \n 1\n 2\n k\n  \n p\n r\n o\n m\n p\n t\n )\n y\n u\n k\n i\n n\n o\n  \n -\n -\n r\n e\n s\n u\n m\n e\n  \n m\n u\n u\n x\n y\n g\n b\n 5\n -\n 4\n 9\n 2\n 9\n a\n 9\n 0\n 4\n───\n N\n e\n w\n Y\n u\n k\n i\n n\n o\n v\n e\n r\n s\n i\n o\n n\n v\n 9\n 9\n 9\n .\n 0\n .\n 0\n i\n s\n a\n v\n a\n i\n l\n a\n b\n l\n e\n .\n R\n u\n n\n y\n u\n k\n i\n n\n o\n u\n p\n d\n a\n t\n e"
+    },
+    {
+      "columns": 10,
+      "expected": "──────────\n Session \n muuxygb5\n -4929a90\n 4\n\n Tools 4\n calls ·\n ✓ 3 · ✗\n 1 ·\n 75.0%\n success\n Time 15s\n wall ·\n 10s\n active\n Breakdow\n n API 6s\n (60.0%)\n · Tools\n 4s\n (40.0%)\n Tokens ↑\n 2.0k\n input ·\n ↓ 500\n output\n Cache\n 8.0k\n read ·\n 2.0k\n write\n Cache\n hit\n 66.7%\n (8.0k of\n 12k\n prompt)\n yukino\n --resume\n  \n muuxygb5\n -4929a90\n 4\n──────────\n New\n Yukino\n version\n v999.0.0\n is avail\n able.\n Run\n yukino\n update"
+    },
+    {
+      "columns": 20,
+      "expected": "────────────────────\n Session muuxygb5-4\n 929a904\n\n Tools 4 calls · ✓\n 3 · ✗ 1 · 75.0%\n success\n Time 15s wall ·\n 10s active\n Breakdown API 6s\n (60.0%) · Tools 4s\n (40.0%)\n Tokens ↑ 2.0k\n input · ↓ 500\n output\n Cache 8.0k read ·\n 2.0k write\n Cache hit 66.7%\n (8.0k of 12k\n prompt)\n yukino --resume\n muuxygb5-4929a904\n────────────────────\n New Yukino version\n v999.0.0 is\n available. Run\n yukino update"
+    },
+    {
+      "columns": 40,
+      "expected": "────────────────────────────────────────\n Session muuxygb5-4929a904\n\n Tools 4 calls · ✓ 3 · ✗ 1 · 75.0%\n success\n Time 15s wall · 10s active\n Breakdown API 6s (60.0%) · Tools 4s\n (40.0%)\n Tokens ↑ 2.0k input · ↓ 500 output\n Cache 8.0k read · 2.0k write\n Cache hit 66.7% (8.0k of 12k prompt)\n yukino --resume muuxygb5-4929a904\n────────────────────────────────────────\n New Yukino version v999.0.0 is\n available. Run yukino update"
+    },
+    {
+      "columns": 80,
+      "expected": "────────────────────────────────────────────────────────────────────────────────\n Session muuxygb5-4929a904\n\n Tools 4 calls · ✓ 3 · ✗ 1 · 75.0% success\n Time 15s wall · 10s active\n Breakdown API 6s (60.0%) · Tools 4s (40.0%)\n Tokens ↑ 2.0k input · ↓ 500 output\n Cache 8.0k read · 2.0k write\n Cache hit 66.7% (8.0k of 12k prompt)\n yukino --resume muuxygb5-4929a904\n────────────────────────────────────────────────────────────────────────────────\n New Yukino version v999.0.0 is available. Run yukino update"
+    },
+    {
+      "columns": 160,
+      "expected": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n Session muuxygb5-4929a904\n\n Tools 4 calls · ✓ 3 · ✗ 1 · 75.0% success\n Time 15s wall · 10s active\n Breakdown API 6s (60.0%) · Tools 4s (40.0%)\n Tokens ↑ 2.0k input · ↓ 500 output\n Cache 8.0k read · 2.0k write\n Cache hit 66.7% (8.0k of 12k prompt)\n yukino --resume muuxygb5-4929a904\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n New Yukino version v999.0.0 is available. Run yukino update"
+    }
+  ]
+}

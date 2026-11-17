@@ -123,7 +123,7 @@ hooks:
     condition: 'event.endsWith("tool_use") && (tool.toLowerCase().includes("file") || /bash/i.test(tool))'
     action:
       type: command
-      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino"
+      command: echo "You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/hangtiancheng/yukino-code/tree/main/packages/yukino"
     reject: false
     once: true
     async: false
