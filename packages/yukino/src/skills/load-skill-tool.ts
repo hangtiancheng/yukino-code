@@ -1,10 +1,10 @@
 import type { SkillCatalog } from "@/skills/catalog.js";
 import { runFork, runInline } from "@/skills/executor.js";
-import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import {
   LOAD_SKILL_DESCRIPTION,
   LOAD_SKILL_NAME_DESCRIPTION,
 } from "@/skills/prompts.js";
+import type { SkillForkHost, SkillHost } from "@/skills/types.js";
 import type {
   Tool,
   ToolContext,

@@ -2,12 +2,12 @@ import {
   FORK_CONTEXT_FULL_MESSAGES,
   FORK_CONTEXT_RECENT_MESSAGES,
 } from "@/skills/constants.js";
-import type { Skill, SkillHost, SkillForkHost } from "@/skills/index.js";
 import {
   buildSkillPrompt,
   SKILL_INSTRUCTIONS,
   wrapParentContext,
 } from "@/skills/prompts.js";
+import type { Skill, SkillHost, SkillForkHost } from "@/skills/types.js";
 import type { ToolContext } from "@/tools/types.js";
 
 export function parseSkillPrompt(

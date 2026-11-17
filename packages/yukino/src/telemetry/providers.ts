@@ -62,6 +62,7 @@ import {
   SERVICE_NAME,
   SHUTDOWN_TIMEOUT_MS,
 } from "@/telemetry/constants.js";
+import { scrubTelemetryPayload } from "@/telemetry/privacy.js";
 import type {
   TelemetryAttributes,
   TelemetryMetricKind,
@@ -70,8 +71,7 @@ import type {
   TelemetryObservationKind,
   TelemetryObservationUpdate,
   TelemetryRuntime,
-} from "@/telemetry/index.js";
-import { scrubTelemetryPayload } from "@/telemetry/privacy.js";
+} from "@/telemetry/runtime.js";
 import { version } from "@/version.js";
 
 const log = createChildLogger({ module: "telemetry" });

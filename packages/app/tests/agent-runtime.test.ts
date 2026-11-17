@@ -76,7 +76,7 @@ function run(
 }
 
 function invalid(action: Record<string, unknown>): RuntimeAction {
-  return action as unknown as RuntimeAction;
+  return action as RuntimeAction;
 }
 
 void test("pausing an active goal during a run prevents continuation without aborting other work", async () => {

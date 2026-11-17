@@ -18,7 +18,7 @@ import {
   installRemoteTelemetrySignalHandlers,
   setTelemetryMode,
   shutdownTelemetry,
-} from "@/telemetry/index.js";
+} from "@/telemetry/runtime.js";
 import { App } from "@/ui/app.js";
 import { renderInteractionSummary } from "@/ui/interaction-summary.js";
 import { setThemeMode } from "@/ui/styles.js";

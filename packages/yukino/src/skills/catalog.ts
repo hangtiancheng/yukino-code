@@ -18,7 +18,7 @@ import {
   SKILL_FILE_NAME,
   SKILLS_DIR_NAME,
 } from "@/skills/constants.js";
-import type { Skill, SkillMeta } from "@/skills/index.js";
+import type { Skill, SkillMeta } from "@/skills/types.js";
 import { yukinoPath } from "@/storage/index.js";
 import { asRecord, strArg } from "@/utils/index.js";
 

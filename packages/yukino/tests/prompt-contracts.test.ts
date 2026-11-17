@@ -32,8 +32,8 @@ import {
 } from "@/prompt/tools.js";
 import { SkillCatalog } from "@/skills/catalog.js";
 import { runFork, runInline } from "@/skills/executor.js";
-import type { Skill, SkillForkHost } from "@/skills/index.js";
 import { buildSkillSection } from "@/skills/prompts.js";
+import type { Skill, SkillForkHost } from "@/skills/types.js";
 import { projectPath, yukinoPath } from "@/storage/index.js";
 import {
   BASH_DESCRIPTION,

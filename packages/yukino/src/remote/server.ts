@@ -128,9 +128,9 @@ import {
   runFork as runSkillFork,
   runInline as runSkillInline,
 } from "@/skills/executor.js";
-import type { SkillForkHost, SkillHost } from "@/skills/index.js";
 import { LoadSkillTool } from "@/skills/load-skill-tool.js";
 import { buildSkillSection } from "@/skills/prompts.js";
+import type { SkillForkHost, SkillHost } from "@/skills/types.js";
 import { mkdirPrivateSync, writePrivateFile } from "@/storage/private.js";
 import { AgentTool, type TeammateRunOptions } from "@/subagent/agent-tool.js";
 import { BUILTIN_AGENTS, PLAN_AGENT_NAME } from "@/subagent/constants.js";

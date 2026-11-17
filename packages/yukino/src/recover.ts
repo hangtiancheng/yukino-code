@@ -7,7 +7,10 @@ import {
   appendPrivateFileSync as appendFileSync,
   mkdirPrivateSync as mkdirSync,
 } from "@/storage/private.js";
-import { captureTelemetryError, shutdownTelemetry } from "@/telemetry/index.js";
+import {
+  captureTelemetryError,
+  shutdownTelemetry,
+} from "@/telemetry/runtime.js";
 
 /**
  * Appends a timestamped entry to the crash log.

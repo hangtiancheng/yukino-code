@@ -13,10 +13,14 @@ env:
   HUSKY: 0
 
 jobs:
-  ci:
-    name: Test & Build
+  packages:
+    name: Package (${{ matrix.package }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ['@yukino.js/yukino', '@yukino.js/mcp', '@yukino.js/app', docs]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,11 +37,89 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Happy yukino
-        run: pnpm --filter @yukino.js/yukino happy
+      - name: Build workspace dependencies
+        run: pnpm --filter '${{ matrix.package }}^...' --if-present build
 
-      - name: Happy mcp
-        run: pnpm --filter @yukino.js/mcp happy
+      - name: Check package
+        run: pnpm --filter '${{ matrix.package }}' happy
+        env:
+          DOCS_BASE: /${{ github.event.repository.name }}/
+
+      - name: Upload browser bundle
+        if: matrix.package == '@yukino.js/yukino'
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-bundle
+          path: packages/yukino/src/remote/browser/dist
+          if-no-files-found: error
+
+      - name: Upload docs build
+        if: matrix.package == 'docs'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/docs/dist
+
+  apps:
+    name: Go (${{ matrix.app }})
+    needs: packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [mcp, yukino]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/${{ matrix.app }}/go.mod
+          cache-dependency-path: apps/${{ matrix.app }}/go.sum
+
+      - name: Download browser bundle
+        if: matrix.app == 'yukino'
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-bundle
+          path: apps/yukino/internal/remote/browser/dist
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l cmd internal)
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test with race detector
+        run: go test -race ./...
+
+      - name: Build
+        run: go build -o dist/ ./cmd/...
+
+      - name: Check scripts
+        if: matrix.app == 'yukino'
+        run: make check-scripts
+
+  ci:
+    name: Test & Build
+    if: always()
+    needs: [packages, apps]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          PACKAGES_RESULT: ${{ needs.packages.result }}
+          APPS_RESULT: ${{ needs.apps.result }}
+        run: test "$PACKAGES_RESULT" = success && test "$APPS_RESULT" = success
 
   deploy-docs:
     name: Deploy Docs to GitHub Pages
@@ -58,30 +140,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build docs
-        run: pnpm --filter docs build
-        env:
-          DOCS_BASE: /${{ github.event.repository.name }}/
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: packages/docs/dist
 
       - name: Deploy to GitHub Pages
         id: deployment

@@ -29,7 +29,7 @@ import {
 import {
   getTelemetryRuntime,
   type TelemetryObservation,
-} from "@/telemetry/index.js";
+} from "@/telemetry/runtime.js";
 import type { ToolResult } from "@/tools/types.js";
 
 interface LlmMetadata {

@@ -169,7 +169,9 @@ void app
     // and ignore CommandOrControl + R in production.
     // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
     app.on("browser-window-created", (_, window) => {
-      optimizer.watchWindowShortcuts(window);
+      if (window instanceof BrowserWindow) {
+        optimizer.watchWindowShortcuts(window);
+      }
     });
 
     createWindow();

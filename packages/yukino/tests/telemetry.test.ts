@@ -6,14 +6,6 @@ import { HookEngine } from "@/hooks/index.js";
 import type { LLMClient } from "@/llm/client.js";
 import { ContextTooLongError, RateLimitError } from "@/llm/errors.js";
 import { PermissionChecker } from "@/permissions/index.js";
-import * as telemetry from "@/telemetry/index.js";
-import type {
-  TelemetryAttributes,
-  TelemetryObservation,
-  TelemetryObservationKind,
-  TelemetryObservationUpdate,
-  TelemetryRuntime,
-} from "@/telemetry/index.js";
 import {
   endAgentTelemetry,
   observeLlmStream,
@@ -22,6 +14,14 @@ import {
   startAgentTelemetry,
 } from "@/telemetry/instrumentation.js";
 import { parseExporterTypes } from "@/telemetry/providers.js";
+import * as telemetry from "@/telemetry/runtime.js";
+import type {
+  TelemetryAttributes,
+  TelemetryObservation,
+  TelemetryObservationKind,
+  TelemetryObservationUpdate,
+  TelemetryRuntime,
+} from "@/telemetry/runtime.js";
 import { ToolRegistry } from "@/tools/registry.js";
 
 class FakeObservation implements TelemetryObservation {

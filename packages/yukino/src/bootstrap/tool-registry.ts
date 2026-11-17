@@ -2,7 +2,7 @@ import type { Command, CommandRegistry } from "@/commands/commands.js";
 import { MCP_TOOL_PREFIX } from "@/mcp/constants.js";
 import type { SkillCatalog } from "@/skills/catalog.js";
 import { runInline as runSkillInline } from "@/skills/executor.js";
-import type { SkillHost } from "@/skills/index.js";
+import type { SkillHost } from "@/skills/types.js";
 import type { TeamManager } from "@/teams/index.js";
 import { TeamTodoWriteTool } from "@/teams/task-tools.js";
 import type { TaskList } from "@/todo/index.js";

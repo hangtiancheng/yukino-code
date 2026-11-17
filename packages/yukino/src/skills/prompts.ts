@@ -4,7 +4,7 @@ import {
   MAX_SKILL_DESCRIPTION_CHARS,
   SKILLS_DIR_NAME,
 } from "@/skills/constants.js";
-import type { Skill } from "@/skills/index.js";
+import type { Skill } from "@/skills/types.js";
 import { yukinoPath } from "@/storage/index.js";
 
 export const SKILL_INSTRUCTIONS =
