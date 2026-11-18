@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yukino-js/yukino/yukino/internal/config"
-	"github.com/yukino-js/yukino/yukino/internal/llm"
-	"github.com/yukino-js/yukino/yukino/internal/tools"
+	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/yukino-js/yukino/yukino/llm"
+	"github.com/yukino-js/yukino/yukino/tools"
 )
 
 func thinkingLevelColor(level string) lipgloss.Color {

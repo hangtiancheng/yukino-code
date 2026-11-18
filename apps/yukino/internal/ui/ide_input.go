@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/yukino-js/yukino/yukino/internal/vscode"
+	"github.com/yukino-js/yukino/yukino/vscode"
 )
 
 type ideConnectedMsg struct {

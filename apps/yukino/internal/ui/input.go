@@ -12,15 +12,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yukino-js/yukino/yukino/internal/commands"
-	"github.com/yukino-js/yukino/yukino/internal/config"
-	"github.com/yukino-js/yukino/yukino/internal/conversation/userbash"
-	"github.com/yukino-js/yukino/yukino/internal/images"
-	"github.com/yukino-js/yukino/yukino/internal/llm"
-	"github.com/yukino-js/yukino/yukino/internal/permissions"
-	"github.com/yukino-js/yukino/yukino/internal/plan_file"
-	"github.com/yukino-js/yukino/yukino/internal/prompt"
-	"github.com/yukino-js/yukino/yukino/internal/utils"
+	"github.com/yukino-js/yukino/yukino/commands"
+	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/yukino-js/yukino/yukino/conversation/userbash"
+	"github.com/yukino-js/yukino/yukino/images"
+	"github.com/yukino-js/yukino/yukino/llm"
+	"github.com/yukino-js/yukino/yukino/permissions"
+	"github.com/yukino-js/yukino/yukino/plan_file"
+	"github.com/yukino-js/yukino/yukino/prompt"
+	"github.com/yukino-js/yukino/yukino/utils"
 )
 
 var thinkingCompletion = regexp.MustCompile(`^(thinking|think)[ \t]+([a-z]*)$`)

@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yukino-js/yukino/yukino/internal/compact"
-	"github.com/yukino-js/yukino/yukino/internal/config"
-	"github.com/yukino-js/yukino/yukino/internal/utils"
+	"github.com/yukino-js/yukino/yukino/compact"
+	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/yukino-js/yukino/yukino/utils"
 )
 
 func formatFooterTokens(value int) string {

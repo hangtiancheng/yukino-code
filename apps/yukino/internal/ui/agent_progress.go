@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
-	"github.com/yukino-js/yukino/yukino/internal/subagent"
-	"github.com/yukino-js/yukino/yukino/internal/teams"
-	"github.com/yukino-js/yukino/yukino/internal/utils"
+	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/yukino-js/yukino/yukino/subagent"
+	"github.com/yukino-js/yukino/yukino/teams"
+	"github.com/yukino-js/yukino/yukino/utils"
 )
 
 type subagentProgress struct {

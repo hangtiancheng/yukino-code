@@ -3,8 +3,8 @@ package ui
 import (
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
-	"github.com/yukino-js/yukino/yukino/internal/tools"
+	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/yukino-js/yukino/yukino/tools"
 )
 
 func TestBusyTextSteersAndSlashCommandQueues(t *testing.T) {

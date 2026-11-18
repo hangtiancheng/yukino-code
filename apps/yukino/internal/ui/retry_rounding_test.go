@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
+	"github.com/yukino-js/yukino/yukino/agent"
 )
 
 // TestRetryDelayRounding verifies the retry status and system message round the

@@ -9,11 +9,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/yukino-js/yukino/yukino/internal/conversation"
-	"github.com/yukino-js/yukino/yukino/internal/file_history"
-	"github.com/yukino-js/yukino/yukino/internal/session"
-	"github.com/yukino-js/yukino/yukino/internal/subagent"
-	"github.com/yukino-js/yukino/yukino/internal/tool_result"
+	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/yukino-js/yukino/yukino/file_history"
+	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/yukino-js/yukino/yukino/subagent"
+	"github.com/yukino-js/yukino/yukino/tool_result"
 	"os"
 )
 

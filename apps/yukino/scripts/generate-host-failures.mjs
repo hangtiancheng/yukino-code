@@ -128,7 +128,7 @@ const sourceHash = createHash("sha256")
   .digest("hex");
 const output = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../internal/remote/testdata/host-failures.json",
+  "../remote/testdata/host-failures.json",
 );
 writeFileSync(
   output,

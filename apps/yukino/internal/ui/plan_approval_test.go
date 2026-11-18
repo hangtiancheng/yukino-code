@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
-	"github.com/yukino-js/yukino/yukino/internal/permissions"
+	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/yukino-js/yukino/yukino/permissions"
 )
 
 func planKey(r string) tea.KeyMsg {

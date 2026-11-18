@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/internal/sandbox"
-	"github.com/yukino-js/yukino/yukino/internal/tools"
+	"github.com/yukino-js/yukino/yukino/sandbox"
+	"github.com/yukino-js/yukino/yukino/tools"
 )
 
 // runSandboxCommand mirrors the reference `/sandbox` local_ui command

@@ -5,9 +5,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yukino-js/yukino/yukino/internal/permissions"
-	"github.com/yukino-js/yukino/yukino/internal/plan_file"
-	"github.com/yukino-js/yukino/yukino/internal/prompt"
+	"github.com/yukino-js/yukino/yukino/permissions"
+	"github.com/yukino-js/yukino/yukino/plan_file"
+	"github.com/yukino-js/yukino/yukino/prompt"
 )
 
 // planApprovalOptions mirrors PLAN_APPROVAL_OPTIONS in src/ui/constants.ts.

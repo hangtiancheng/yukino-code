@@ -3,9 +3,9 @@ package ui
 import (
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/internal/config"
-	"github.com/yukino-js/yukino/yukino/internal/goal"
-	"github.com/yukino-js/yukino/yukino/internal/session"
+	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/yukino-js/yukino/yukino/goal"
+	"github.com/yukino-js/yukino/yukino/session"
 )
 
 func newGoalTestModel(t *testing.T) Model {

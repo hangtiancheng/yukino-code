@@ -2,8 +2,8 @@ package ui
 
 import (
 	"github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/internal/agent"
-	"github.com/yukino-js/yukino/yukino/internal/tools"
+	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/yukino-js/yukino/yukino/tools"
 )
 
 type hostPermissionMsg struct{ request agent.PermissionRequestEvent }

@@ -10,9 +10,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yukino-js/yukino/yukino/internal/teams"
-	"github.com/yukino-js/yukino/yukino/internal/tool_result"
-	"github.com/yukino-js/yukino/yukino/internal/tools"
+	"github.com/yukino-js/yukino/yukino/teams"
+	"github.com/yukino-js/yukino/yukino/tool_result"
+	"github.com/yukino-js/yukino/yukino/tools"
 )
 
 type agentDialogEntry struct {

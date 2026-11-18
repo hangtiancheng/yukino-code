@@ -7,15 +7,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
-	"github.com/yukino-js/yukino/yukino/internal/config"
-	"github.com/yukino-js/yukino/yukino/internal/file_history"
-	"github.com/yukino-js/yukino/yukino/internal/history"
-	"github.com/yukino-js/yukino/yukino/internal/hooks"
-	"github.com/yukino-js/yukino/yukino/internal/llm"
-	"github.com/yukino-js/yukino/yukino/internal/permissions"
-	"github.com/yukino-js/yukino/yukino/internal/subagent"
-	"github.com/yukino-js/yukino/yukino/internal/teams"
+	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/yukino-js/yukino/yukino/file_history"
+	"github.com/yukino-js/yukino/yukino/history"
+	"github.com/yukino-js/yukino/yukino/hooks"
+	"github.com/yukino-js/yukino/yukino/llm"
+	"github.com/yukino-js/yukino/yukino/permissions"
+	"github.com/yukino-js/yukino/yukino/subagent"
+	"github.com/yukino-js/yukino/yukino/teams"
 )
 
 type initSingleProviderMsg struct{}

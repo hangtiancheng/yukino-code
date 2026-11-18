@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/internal/crash_log"
+	"github.com/yukino-js/yukino/yukino/recover"
 )
 
 func TestSyncOutputDetection(t *testing.T) {
@@ -131,7 +131,7 @@ func TestTerminalOutputWriterDetectsTerminalGone(t *testing.T) {
 	if gotContext != "stdio" {
 		t.Fatalf("context = %q, want stdio", gotContext)
 	}
-	if err, ok := gotDetail.(error); !ok || !crash_log.IsTerminalGone(err) {
+	if err, ok := gotDetail.(error); !ok || !recovery.IsTerminalGone(err) {
 		t.Fatalf("detail is not a terminal-gone error: %v", gotDetail)
 	}
 }

@@ -4,24 +4,23 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/charmbracelet/x/term"
-	"github.com/yukino-js/yukino/yukino/internal/a2a"
-	"github.com/yukino-js/yukino/yukino/internal/config"
-	"github.com/yukino-js/yukino/yukino/internal/crash_log"
-	"github.com/yukino-js/yukino/yukino/internal/hooks"
-	"github.com/yukino-js/yukino/yukino/internal/logger"
-	"github.com/yukino-js/yukino/yukino/internal/remote"
-	"github.com/yukino-js/yukino/yukino/internal/session"
-	"github.com/yukino-js/yukino/yukino/internal/telemetry"
-	"github.com/yukino-js/yukino/yukino/internal/tools"
+	"github.com/yukino-js/yukino/yukino/a2a"
+	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/yukino-js/yukino/yukino/hooks"
 	"github.com/yukino-js/yukino/yukino/internal/ui"
-	"github.com/yukino-js/yukino/yukino/internal/version"
+	"github.com/yukino-js/yukino/yukino/logger"
+	"github.com/yukino-js/yukino/yukino/recover"
+	"github.com/yukino-js/yukino/yukino/remote"
+	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/yukino-js/yukino/yukino/telemetry"
+	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/yukino-js/yukino/yukino/version"
 )
 
 // loadRuntimeConfig loads the app config with the project .mcp.json servers
@@ -49,7 +48,7 @@ func loadRuntimeConfig(allowEmptyProviders bool) (*config.AppConfig, []config.Ho
 func exitNow(code int) {
 	tools.RunExitCleanups()
 	logger.CloseLogger()
-	crash_log.RecordExit(code)
+	recovery.RecordExit(code)
 	os.Exit(code)
 }
 
@@ -89,23 +88,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	recordExit := crash_log.Install()
-	defer recordExit()
-	defer func() {
-		if r := recover(); r != nil {
-			if err, ok := r.(error); ok && crash_log.IsTerminalGone(err) {
-				crash_log.ExitForTerminalGone("uncaught exception", r)
-			}
-			crash_log.RecordPanic("main", r, debug.Stack())
-			logger.Global().Fatal(map[string]any{"err": r}, "uncaught exception")
-			telemetry.CaptureTelemetryError(fmt.Errorf("%v", r), "uncaught exception")
-			// Sync sweep before the telemetry flush: the process is going down,
-			// and detached children must not survive it as orphans.
-			tools.RunExitCleanups()
-			telemetry.ShutdownTelemetry()
-			panic(r)
-		}
-	}()
+	defer recovery.Recover()()
 
 	// Fill the process environment from the global config's env block before
 	// anything reads it: telemetry initialization reads OTEL_*/SENTRY_* from
@@ -122,7 +105,7 @@ func main() {
 		telemetry.SetTelemetryMode(telemetry.ModeA2A)
 		if err := a2a.RunA2aServer(a2aAddr); err != nil {
 			telemetry.CaptureTelemetryError(err, "main")
-			crash_log.RecordError("main", err)
+			recovery.RecordError("main", err)
 			logger.Global().Fatal(map[string]any{"err": err}, "unhandled runtime error")
 			telemetry.ShutdownTelemetry()
 			exitNow(-1)
@@ -176,7 +159,7 @@ func main() {
 		telemetry.InstallRemoteTelemetrySignalHandlers(func(exitCode int) {
 			srv.Stop()
 			tools.RunExitCleanups()
-			crash_log.RecordExit(exitCode)
+			recovery.RecordExit(exitCode)
 		})
 		if err := srv.Run(); err != nil {
 			telemetry.CaptureTelemetryError(err, "remote")
@@ -237,11 +220,11 @@ func main() {
 	}
 	terminalInput.Close()
 	if err != nil {
-		if crash_log.IsTerminalGone(err) {
-			crash_log.ExitForTerminalGone("stdio", err)
+		if recovery.IsTerminalGone(err) {
+			recovery.ExitForTerminalGone("stdio", err)
 		}
 		telemetry.CaptureTelemetryError(err, "main")
-		crash_log.RecordError("main", err)
+		recovery.RecordError("main", err)
 		logger.Global().Fatal(map[string]any{"err": err}, "unhandled runtime error")
 		telemetry.ShutdownTelemetry()
 		exitNow(-1)

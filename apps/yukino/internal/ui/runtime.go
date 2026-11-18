@@ -3,15 +3,15 @@ package ui
 import (
 	"context"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
-	"github.com/yukino-js/yukino/yukino/internal/compact"
-	"github.com/yukino-js/yukino/yukino/internal/config"
-	"github.com/yukino-js/yukino/yukino/internal/llm"
-	"github.com/yukino-js/yukino/yukino/internal/mcp"
-	"github.com/yukino-js/yukino/yukino/internal/memory"
-	"github.com/yukino-js/yukino/yukino/internal/prompt"
-	"github.com/yukino-js/yukino/yukino/internal/skills"
-	"github.com/yukino-js/yukino/yukino/internal/subagent"
+	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/yukino-js/yukino/yukino/compact"
+	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/yukino-js/yukino/yukino/llm"
+	"github.com/yukino-js/yukino/yukino/mcp"
+	"github.com/yukino-js/yukino/yukino/memory"
+	"github.com/yukino-js/yukino/yukino/prompt"
+	"github.com/yukino-js/yukino/yukino/skills"
+	"github.com/yukino-js/yukino/yukino/subagent"
 )
 
 func (m *Model) newRunAgent(ctx context.Context) *agent.Agent {

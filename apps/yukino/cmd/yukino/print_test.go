@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
+	"github.com/yukino-js/yukino/yukino/agent"
 )
 
 func captureStdout(t *testing.T, fn func()) string {

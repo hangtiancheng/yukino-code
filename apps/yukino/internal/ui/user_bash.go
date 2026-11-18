@@ -8,11 +8,11 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/internal/conversation"
-	"github.com/yukino-js/yukino/yukino/internal/conversation/userbash"
-	"github.com/yukino-js/yukino/yukino/internal/history"
-	"github.com/yukino-js/yukino/yukino/internal/session"
-	"github.com/yukino-js/yukino/yukino/internal/tools"
+	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/yukino-js/yukino/yukino/conversation/userbash"
+	"github.com/yukino-js/yukino/yukino/history"
+	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/yukino-js/yukino/yukino/tools"
 )
 
 type userBashRun struct {

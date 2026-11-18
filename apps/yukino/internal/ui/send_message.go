@@ -5,10 +5,10 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/internal/commands"
-	"github.com/yukino-js/yukino/yukino/internal/conversation"
-	"github.com/yukino-js/yukino/yukino/internal/history"
-	"github.com/yukino-js/yukino/yukino/internal/session"
+	"github.com/yukino-js/yukino/yukino/commands"
+	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/yukino-js/yukino/yukino/history"
+	"github.com/yukino-js/yukino/yukino/session"
 )
 
 func (m Model) sendMessage(text string, existingInput *history.InputEntry) (tea.Model, tea.Cmd) {

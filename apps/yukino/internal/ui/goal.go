@@ -6,10 +6,10 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/internal/conversation"
-	"github.com/yukino-js/yukino/yukino/internal/goal"
-	"github.com/yukino-js/yukino/yukino/internal/history"
-	"github.com/yukino-js/yukino/yukino/internal/session"
+	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/yukino-js/yukino/yukino/goal"
+	"github.com/yukino-js/yukino/yukino/history"
+	"github.com/yukino-js/yukino/yukino/session"
 )
 
 // goalBinder holds the active session's goal manager behind a stable pointer.

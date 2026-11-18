@@ -94,12 +94,18 @@ func TestBuildGuards(t *testing.T) {
 	var uiViolations []string
 	fset := token.NewFileSet()
 
-	for _, base := range []string{"internal", "cmd"} {
+	for _, base := range []string{"."} {
 		err := filepath.WalkDir(filepath.Join(root, base), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			if entry.IsDir() {
+				if entry.Name() == "testdata" || entry.Name() == "dist" || strings.HasPrefix(entry.Name(), ".") && path != root {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
 			pkgDir, err := filepath.Rel(root, filepath.Dir(path))

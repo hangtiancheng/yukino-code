@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/x/term"
-	"github.com/yukino-js/yukino/yukino/internal/crash_log"
+	"github.com/yukino-js/yukino/yukino/recover"
 )
 
 // isSyncOutputSupported detects DEC 2026 synchronized-output support from the
@@ -54,8 +54,8 @@ func vteVersion() int {
 
 // terminalGoneExit ends the process when a write fails because the terminal
 // vanished. It is a variable so tests can observe the call without exiting;
-// production uses crash_log.ExitForTerminalGone.
-var terminalGoneExit = crash_log.ExitForTerminalGone
+// production uses recovery.ExitForTerminalGone.
+var terminalGoneExit = recovery.ExitForTerminalGone
 
 // terminalOutputWriter guards the terminal output. bubbletea's renderer
 // discards write errors (`_, _ = r.out.Write(...)`), so a terminal that goes
@@ -95,7 +95,7 @@ func (w *terminalOutputWriter) Write(p []byte) (int, error) {
 		buf = framed
 	}
 	if _, err := w.out.Write(buf); err != nil {
-		if crash_log.IsTerminalGone(err) {
+		if recovery.IsTerminalGone(err) {
 			terminalGoneExit("stdio", err)
 		}
 		return 0, err

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/internal/agent"
-	"github.com/yukino-js/yukino/yukino/internal/bootstrap"
+	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/yukino-js/yukino/yukino/bootstrap"
 )
 
 func TestInteractionSummaryReference(t *testing.T) {

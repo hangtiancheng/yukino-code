@@ -2,6 +2,10 @@
 
 Yukino is a terminal-based AI coding agent. It provides an interactive UI (terminal user interface) for conversing with large language models, executing code, manipulating files, and orchestrating multi-agent workflows, all from the command line.
 
+## Go SDK
+
+The core is available as public Go packages for embedding in servers, editor integrations, and other applications. See [SDK.md](SDK.md) for setup, streaming, custom providers and tools, permissions, persistence, and lifecycle management. The CLI imports the same packages; only terminal UI remains under `internal/`.
+
 ## Overview
 
 Yukino runs as a single CLI binary that connects to configurable LLM providers (Anthropic, OpenAI, or any OpenAI-compatible endpoint). It renders a rich terminal interface using Bubble Tea, giving you streaming responses, tool execution feedback, permission prompts, and slash commands in a single pane.
@@ -845,14 +849,14 @@ Besides the `yukino` CLI, the module exposes its terminal-independent packages f
 | Entry          | Output                                                    | Contents                                                                                                                                    |
 | -------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | CLI (`yukino`) | `dist/yukino`, plus `dist/<platform>/yukino` cross-builds | A single static binary (`CGO_ENABLED=0`, `-trimpath`); `make cross-compile` produces the win32/linux/darwin × x64/arm64 matrix.             |
-| Library        | the importable Go packages                                | The `internal/...` packages replace the reference's `src/index.ts` barrel; every terminal-independent module composes without the UI layer. |
+| Library        | the importable Go packages                                | Public packages (`agent`, `llm`, `tools`, `session`, `workflow`, and others) are importable from external Go modules; see [SDK.md](SDK.md). |
 
 Image decoding, compression, and screenshot transforms run in a cancellable goroutine behind a package-level queue that serializes jobs one at a time, mirroring the reference worker's pending chain with the same 120-second timeout and abort semantics. Pure-Go codecs (`image/jpeg`, `image/png`, `image/gif`, and `x/image` WebP/BMP/TIFF decoders) replace Jimp and the WASM codec packages.
 
 The library surface is terminal-independent by contract: no package outside `internal/ui` may import `internal/ui` or a ui-only dependency, so a host without a TTY (a server, an editor extension, a test harness) can compose it. `go test ./cmd/yukino` enforces that contract:
 
 - **ui-only dependency ban** — the build-guard test in `cmd/yukino/build_guards_test.go` fails when a non-UI package imports `internal/ui` or one of the ui-only modules (`charmbracelet/bubbletea`, `charmbracelet/bubbles`, `charmbracelet/lipgloss`, `charmbracelet/x/ansi`, `charmbracelet/x/term`, `muesli/cancelreader`, `rivo/uniseg`, `yuin/goldmark`, `alecthomas/chroma/v2`). The list is declared once in the test and re-derived from the actual import sites, which fails if the two drift apart — the counterpart of the reference's `ban-ui-only-deps` tsup plugin and `tests/build-guards.test.ts`.
-- **the browser bundle never enters the Go graph** — the React browser UI (`react-dom` included) ships as the prebuilt, byte-synchronized artifact under `internal/remote/browser/dist`, embedded with `go:embed` and served as-is; Go never compiles it.
+- **the browser bundle never enters the Go graph** — the React browser UI (`react-dom` included) ships as the prebuilt, byte-synchronized artifact under `remote/browser/dist`, embedded with `go:embed` and served as-is; Go never compiles it.
 - **no ambiguous-export scan** — Go resolves every identifier per package at compile time and has no wildcard re-export bundling, so the reference's TS2308 guard has no failure mode to cover here.
 
 In a long-lived host process, prefer the composable packages (`agent`, `tools`, …) over the process-level entry points in `cmd/yukino` (print mode, crash recovery), which own process lifecycle — crash recovery installs crash logging to `~/.yukino/crash.log` and exits the process, and print mode exits on invalid flags.

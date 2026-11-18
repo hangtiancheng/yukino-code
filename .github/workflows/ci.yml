@@ -86,11 +86,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: browser-bundle
-          path: apps/yukino/internal/remote/browser/dist
+          path: apps/yukino/remote/browser/dist
 
       - name: Check formatting
         run: |
-          unformatted=$(gofmt -l cmd internal)
+          unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
             printf '%s\n' "$unformatted"
             exit 1

@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := build
 
 BROWSER_DIST_SOURCE ?= $(HOME)/github/yukino-code/packages/yukino/src/remote/browser/dist
-BROWSER_DIST_TARGET := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))internal/remote/browser/dist
+BROWSER_DIST_TARGET := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))remote/browser/dist
 
 .PHONY: sync-browser-dist
 sync-browser-dist:
@@ -63,7 +63,7 @@ fmt:
 	$(GO) fmt ./...
 
 fmt-check:
-	@task_unformatted="$$(gofmt -l cmd internal)" || exit 1; \
+	@task_unformatted="$$(gofmt -l .)" || exit 1; \
 	if [ -n "$$task_unformatted" ]; then \
 		printf '%s\n' "$$task_unformatted"; \
 		exit 1; \

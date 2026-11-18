@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/internal/teams"
-	"github.com/yukino-js/yukino/yukino/internal/todo"
+	"github.com/yukino-js/yukino/yukino/teams"
+	"github.com/yukino-js/yukino/yukino/todo"
 )
 
 func (m Model) visibleTasks() ([]*todo.Task, string) {

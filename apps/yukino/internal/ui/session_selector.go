@@ -9,11 +9,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/yukino-js/yukino/yukino/internal/file_history"
-	"github.com/yukino-js/yukino/yukino/internal/mcp"
-	"github.com/yukino-js/yukino/yukino/internal/memory"
-	"github.com/yukino-js/yukino/yukino/internal/session"
-	"github.com/yukino-js/yukino/yukino/internal/todo"
+	"github.com/yukino-js/yukino/yukino/file_history"
+	"github.com/yukino-js/yukino/yukino/mcp"
+	"github.com/yukino-js/yukino/yukino/memory"
+	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/yukino-js/yukino/yukino/todo"
 )
 
 // Port of src/ui/session-selector.tsx and the /resume command flow in
