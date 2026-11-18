@@ -5,7 +5,7 @@ import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
-import { Tools } from "@yukino.js/yukino";
+import { withFileMutationQueue, writeFileAtomically } from "@yukino.js/yukino";
 
 import type {
   FileEntry,
@@ -222,7 +222,7 @@ export class Workspace {
       throw new Error("File contents exceed 2 MB");
     }
     const target = await this.safePath(path);
-    return Tools.FileMutationQueue.withFileMutationQueue(target, async () => {
+    return withFileMutationQueue(target, async () => {
       const current = await this.read(path);
       if (current.deleted) {
         throw new Error(
@@ -238,7 +238,7 @@ export class Workspace {
         this.baselines.set(current.path, current.baseline);
       }
       this.beforeWrite?.(target);
-      await Tools.AtomicWrite.writeFileAtomically(target, content);
+      await writeFileAtomically(target, content);
       this.changed.add(current.path);
       this.onChange(current.path);
       return this.read(path);

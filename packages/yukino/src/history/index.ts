@@ -29,7 +29,7 @@ import {
 import { withFileSyncLock } from "@/teams/file-lock.js";
 import { canonicalPath } from "@/utils/paths.js";
 
-export * as Constants from "@/history/constants.js";
+export * from "@/history/constants.js";
 
 const TimestampSchema = z.number().int().nonnegative();
 export const UserInputSchema = z.object({

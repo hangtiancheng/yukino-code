@@ -29,8 +29,8 @@ import {
 } from "@/goal/prompts.js";
 import { loadSession, saveMessage } from "@/session/index.js";
 
-export * as Constants from "@/goal/constants.js";
-export * as Prompts from "@/goal/prompts.js";
+export * from "@/goal/constants.js";
+export * from "@/goal/prompts.js";
 
 export const GoalSchema = z.object({
   objective: z.string().trim().min(1).max(MAX_OBJECTIVE_CHARS),

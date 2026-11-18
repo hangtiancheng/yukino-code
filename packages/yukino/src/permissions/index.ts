@@ -40,9 +40,9 @@ import {
   type WorktreeSession,
 } from "@/worktree/index.js";
 
-export * as Constants from "@/permissions/constants.js";
-export * as Request from "@/permissions/request.js";
-export * as Shell from "@/permissions/shell.js";
+export * from "@/permissions/constants.js";
+export * from "@/permissions/request.js";
+export * from "@/permissions/shell.js";
 
 const log = createChildLogger({ module: "permissions" });
 

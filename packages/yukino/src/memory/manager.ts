@@ -18,7 +18,7 @@ import type { LLMClient } from "@/llm/client.js";
 import { createChildLogger } from "@/logger/index.js";
 import {
   DEFAULT_MEMORY_TYPE,
-  FRONTMATTER_BLOCK_RE,
+  MEMORY_FRONTMATTER_BLOCK_RE,
   MAX_ENTRYPOINT_BYTES,
   MAX_ENTRYPOINT_LINES,
   MAX_SELECTED_MEMORIES,
@@ -577,7 +577,7 @@ function parseFrontmatter(content: string): ParsedFrontmatter {
     return { body: content };
   }
 
-  const match = FRONTMATTER_BLOCK_RE.exec(content);
+  const match = MEMORY_FRONTMATTER_BLOCK_RE.exec(content);
   if (!match) {
     throw new Error("Memory frontmatter is missing its closing delimiter");
   }

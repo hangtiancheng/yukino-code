@@ -27,7 +27,7 @@ import {
 } from "@/storage/private.js";
 import { withFileSyncLock } from "@/teams/file-lock.js";
 
-export * as Constants from "@/file-history/constants.js";
+export * from "@/file-history/constants.js";
 
 const log = createChildLogger({ module: "file-history" });
 

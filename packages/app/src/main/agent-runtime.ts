@@ -1,4 +1,4 @@
-import type { Remote } from "@yukino.js/yukino";
+import type { RemoteAgentHandle } from "@yukino.js/yukino";
 
 import type { RuntimeAction } from "../shared/workspace-types";
 
@@ -9,7 +9,7 @@ interface RuntimeControls {
 }
 
 export async function applyRuntimeAction(
-  handle: Remote.Server.RemoteAgentHandle,
+  handle: RemoteAgentHandle,
   action: RuntimeAction,
   controls: RuntimeControls,
 ): Promise<void> {

@@ -90,20 +90,19 @@ import { TASKS_FILENAME } from "@/todo/constants.js";
 import { asErrorString } from "@/utils/index.js";
 import { canonicalPath } from "@/utils/paths.js";
 
-// Submodule namespaces for library consumers (Teams.<Sub>.*).
-export * as Constants from "@/teams/constants.js";
-export * as Coordinator from "@/teams/coordinator.js";
-export * as FileLock from "@/teams/file-lock.js";
-export * as FileMailbox from "@/teams/file-mailbox.js";
-export * as Progress from "@/teams/progress.js";
-export * as Prompts from "@/teams/prompts.js";
-export * as Protocol from "@/teams/protocol.js";
-export * as Registry from "@/teams/registry.js";
-export * as SharedTask from "@/teams/shared-task.js";
-export * as TaskStop from "@/teams/task-stop.js";
-export * as TaskTools from "@/teams/task-tools.js";
-export * as TeamFile from "@/teams/team-file.js";
-export * as Tools from "@/teams/tools.js";
+export * from "@/teams/constants.js";
+export * from "@/teams/coordinator.js";
+export * from "@/teams/file-lock.js";
+export * from "@/teams/file-mailbox.js";
+export * from "@/teams/progress.js";
+export * from "@/teams/prompts.js";
+export * from "@/teams/protocol.js";
+export * from "@/teams/registry.js";
+export * from "@/teams/shared-task.js";
+export * from "@/teams/task-stop.js";
+export * from "@/teams/task-tools.js";
+export * from "@/teams/team-file.js";
+export * from "@/teams/tools.js";
 
 const log = createChildLogger({ module: "teams" });
 

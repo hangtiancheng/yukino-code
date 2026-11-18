@@ -55,7 +55,7 @@ import {
 import { contentToText } from "@/utils/index.js";
 import { canonicalPath } from "@/utils/paths.js";
 
-export * as Constants from "@/session/constants.js";
+export * from "@/session/constants.js";
 
 // Tool block fields on disk always use snake_case; the in-memory conversation layer still uses camelCase.
 // The conversion between the two is consolidated in conversion functions in this file (toolUsesToRecords / toRestored, etc.).

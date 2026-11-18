@@ -27,9 +27,9 @@ import { createChildLogger } from "@/logger/index.js";
 import { readPrivateFileSync } from "@/storage/private.js";
 import { asRecord } from "@/utils/index.js";
 
-export * as Constants from "@/config/constants.js";
-export * as ProviderConfig from "@/config/provider-config.js";
-export * as ProviderLogin from "@/config/provider-login.js";
+export * from "@/config/constants.js";
+export * from "@/config/provider-config.js";
+export * from "@/config/provider-login.js";
 
 const log = createChildLogger({ module: "config" });
 

@@ -9,7 +9,7 @@ export const MAX_PTL_RETRIES = 3;
 // and when the provider reports no usable gap, that fraction of API round
 // groups is dropped instead.
 export const PTL_TRUNCATE_DIVISOR = 5;
-export const CHARS_PER_TOKEN = 3.5;
+export const COMPACT_CHARS_PER_TOKEN = 3.5;
 
 // Recent-history retention budget for compaction. When we compact we keep the tail of
 // the transcript verbatim instead of collapsing everything into a summary, so
@@ -51,7 +51,7 @@ export const AUTO_MARGIN_RATIO = 0.25;
 export const MANUAL_MARGIN_RATIO = 0.1;
 
 // Each image block counts as a fixed char-equivalent (~2000 tokens at
-// CHARS_PER_TOKEN, the order of magnitude of Anthropic's per-image token
+// COMPACT_CHARS_PER_TOKEN, the order of magnitude of Anthropic's per-image token
 // cost). Without this, image-heavy conversations systematically
 // under-estimate and compaction fires too late.
 export const IMAGE_CHAR_EQUIV = 7000;

@@ -34,7 +34,7 @@ import {
 } from "@/storage/private.js";
 import { TEAMS_DIR_NAME } from "@/teams/constants.js";
 
-export * as Constants from "@/logger/constants.js";
+export * from "@/logger/constants.js";
 
 /** Execution mode, written into the base field of every log entry. */
 type LoggerMode = "terminal" | "remote" | "teammate";

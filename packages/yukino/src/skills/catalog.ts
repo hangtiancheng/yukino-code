@@ -13,8 +13,8 @@ import { z } from "zod";
 
 import { createChildLogger } from "@/logger/index.js";
 import {
-  AGENTS_DIR_NAME,
-  FRONTMATTER_BLOCK_RE,
+  SKILLS_AGENTS_DIR_NAME,
+  SKILLS_FRONTMATTER_BLOCK_RE,
   SKILL_FILE_NAME,
   SKILLS_DIR_NAME,
 } from "@/skills/constants.js";
@@ -100,9 +100,11 @@ export class SkillCatalog {
 
   private skillDirPaths(): string[] {
     return [
-      join(homedir(), AGENTS_DIR_NAME, SKILLS_DIR_NAME),
+      join(homedir(), SKILLS_AGENTS_DIR_NAME, SKILLS_DIR_NAME),
       yukinoPath(SKILLS_DIR_NAME),
-      ...(this.cwd ? [join(this.cwd, AGENTS_DIR_NAME, SKILLS_DIR_NAME)] : []),
+      ...(this.cwd
+        ? [join(this.cwd, SKILLS_AGENTS_DIR_NAME, SKILLS_DIR_NAME)]
+        : []),
     ];
   }
 
@@ -269,7 +271,7 @@ export function parseSkillFile(content: string): {
 } | null {
   // Delimiters occupy their own lines; `---` inside YAML strings is content.
   const normalized = content.replace(/^\uFEFF/, "");
-  const match = FRONTMATTER_BLOCK_RE.exec(normalized);
+  const match = SKILLS_FRONTMATTER_BLOCK_RE.exec(normalized);
   if (!match) {
     return null;
   }

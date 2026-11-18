@@ -2,9 +2,9 @@ import { getSelfUpdateCommand, runSelfUpdate } from "@/update/install.js";
 import { getLatestVersion, isNewerVersion } from "@/update/version-check.js";
 import { version } from "@/version.js";
 
-export * as Constants from "@/update/constants.js";
-export * as Install from "@/update/install.js";
-export * as VersionCheck from "@/update/version-check.js";
+export * from "@/update/constants.js";
+export * from "@/update/install.js";
+export * from "@/update/version-check.js";
 
 /**
  * Checks the npm dist-tag and self-installs a newer release. Argument parsing

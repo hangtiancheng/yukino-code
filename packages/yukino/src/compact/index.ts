@@ -1,5 +1,4 @@
-// Submodule namespaces for library consumers (Compact.<Sub>.*).
-export * as Compact from "@/compact/compact.js";
-export * as Constants from "@/compact/constants.js";
-export * as Prompts from "@/compact/prompts.js";
-export * as Recovery from "@/compact/recovery.js";
+export * from "@/compact/compact.js";
+export * from "@/compact/constants.js";
+export * from "@/compact/prompts.js";
+export * from "@/compact/recovery.js";

@@ -12,9 +12,10 @@ import type { ImageMediaType, ScreenshotOptions } from "@/images/types.js";
 import { processImage } from "@/images/worker.js";
 import { createChildLogger } from "@/logger/index.js";
 
-// Submodule namespaces for library consumers (Images.<Sub>.*).
-export * as Clipboard from "@/images/clipboard.js";
-export * as Constants from "@/images/constants.js";
+export * from "@/images/clipboard.js";
+export * from "@/images/constants.js";
+export * from "@/images/types.js";
+export * from "@/images/worker.js";
 
 const log = createChildLogger({ module: "images" });
 

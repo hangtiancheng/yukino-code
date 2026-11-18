@@ -10,7 +10,7 @@ import {
   COMMAND_FILE_EXTENSION,
   COMMAND_FILE_EXTENSION_RE,
   CUSTOM_COMMAND_TAG,
-  FRONTMATTER_BLOCK_RE,
+  COMMANDS_FRONTMATTER_BLOCK_RE,
   PROMPTS_DIR_NAME,
 } from "@/commands/constants.js";
 import { createChildLogger } from "@/logger/index.js";
@@ -107,7 +107,7 @@ function parseCommandFile(base: string, full: string): Command | null {
   let argumentHint = "";
   let body = raw;
 
-  const frontmatterMatch = FRONTMATTER_BLOCK_RE.exec(raw);
+  const frontmatterMatch = COMMANDS_FRONTMATTER_BLOCK_RE.exec(raw);
   if (frontmatterMatch) {
     const frontmatter = frontmatterMatch[1].trim();
     body = raw.slice(frontmatterMatch[0].length).trim();

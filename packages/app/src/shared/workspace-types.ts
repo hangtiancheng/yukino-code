@@ -1,4 +1,9 @@
-import type { Goal, Teams, Todo, Workflow } from "@yukino.js/yukino";
+import type {
+  GoalState,
+  Task,
+  TeammateUIState,
+  WorkflowRun,
+} from "@yukino.js/yukino";
 
 export type RuntimeAction =
   | { type: "stop_task"; id: string }
@@ -55,7 +60,7 @@ export interface RuntimeSnapshot {
     content: string;
   }[];
   mcpServers: string[];
-  tasks: Todo.Task[];
+  tasks: Task[];
   backgroundTasks: {
     id: string;
     name: string;
@@ -64,11 +69,11 @@ export interface RuntimeSnapshot {
     startedAt: number;
     output: string;
   }[];
-  teammates: Teams.Progress.TeammateUIState[];
+  teammates: TeammateUIState[];
   subagents: SubagentSnapshot[];
-  workflows: Workflow.Progress.WorkflowRun[];
+  workflows: WorkflowRun[];
   namedWorkflows: string[];
-  goal: Goal.GoalState | null;
+  goal: GoalState | null;
   sandbox: { enabled: boolean; autoAllow: boolean };
   coordinator: boolean;
   hooks: boolean;

@@ -8,9 +8,9 @@ import { createChildLogger } from "@/logger/index.js";
 import { yukinoPath } from "@/storage/index.js";
 import {
   AGENT_FILE_EXTENSION,
-  AGENTS_DIR_NAME,
+  SUBAGENT_AGENTS_DIR_NAME,
   BUILTIN_AGENTS,
-  FRONTMATTER_BLOCK_RE,
+  SUBAGENT_FRONTMATTER_BLOCK_RE,
   MAX_FALLBACK_DESCRIPTION_CHARS,
 } from "@/subagent/constants.js";
 import type { AgentDefinition } from "@/subagent/definition.js";
@@ -21,7 +21,7 @@ const log = createChildLogger({ module: "subagent" });
 export function loadAgentDefinitions(): AgentDefinition[] {
   const definitions = [...BUILTIN_AGENTS];
 
-  loadDir(yukinoPath(AGENTS_DIR_NAME), definitions);
+  loadDir(yukinoPath(SUBAGENT_AGENTS_DIR_NAME), definitions);
   return definitions;
 }
 
@@ -70,7 +70,7 @@ const YamlFrontmatterSchema = z.looseObject({
 
 function parseAgentDefinition(content: string): AgentDefinition | null {
   content = content.replace(/^\uFEFF/u, "");
-  const match = FRONTMATTER_BLOCK_RE.exec(content);
+  const match = SUBAGENT_FRONTMATTER_BLOCK_RE.exec(content);
   if (!match) {
     return null;
   }

@@ -45,7 +45,7 @@ function stubClient(summaryBody: string): {
   return { client, lastPrompt: () => lastPrompt };
 }
 
-// CHARS_PER_TOKEN is 3.5 in compact.ts; estimateMessages = ceil(chars / 3.5).
+// COMPACT_CHARS_PER_TOKEN is 3.5 in constants.ts; estimateMessages = ceil(chars / 3.5).
 const estChars = (chars: number) => Math.ceil(chars / 3.5);
 
 describe("currentContextTokens (real-usage anchoring)", () => {

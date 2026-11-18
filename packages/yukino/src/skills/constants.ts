@@ -1,8 +1,8 @@
-export const AGENTS_DIR_NAME = ".agents";
+export const SKILLS_AGENTS_DIR_NAME = ".agents";
 export const SKILLS_DIR_NAME = "skills";
 export const SKILL_FILE_NAME = "SKILL.md";
 
-export const FRONTMATTER_BLOCK_RE =
+export const SKILLS_FRONTMATTER_BLOCK_RE =
   /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 export const SKILL_NAME_RE = /^[a-zA-Z0-9_-][a-zA-Z0-9._-]*$/;
 

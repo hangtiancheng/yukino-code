@@ -19,7 +19,7 @@ export const DEFAULT_EAGER_THRESHOLD_PERCENT = 10;
  * Estimation ratio used when real token counts are unavailable. MCP schemas are JSON
  * with high symbol density, so they have fewer characters per token than natural language.
  */
-export const CHARS_PER_TOKEN = 2.5;
+export const MCP_CHARS_PER_TOKEN = 2.5;
 
 /** Beta header for official endpoints; defer_loading and tool_reference both require it. */
 export const NATIVE_TOOL_USE_BETA = "advanced-tool-use-2025-11-20";

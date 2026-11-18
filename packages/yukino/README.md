@@ -843,7 +843,17 @@ Pasting an image saves it as a PNG under `~/.yukino/sessions/artifacts/<session-
 
 ## Library Build
 
-Besides the `yukino` CLI, the package ships a library entry for embedding Yukino in another host process.
+Besides the `yukino` CLI, the package ships a library entry for embedding Yukino in another host process. The root entry exposes named exports directly:
+
+```ts
+import { createRemoteAgent, type RemoteAgentHandle } from "@yukino.js/yukino";
+
+const handle: RemoteAgentHandle = await createRemoteAgent(options);
+```
+
+The telemetry APIs `parseExporterTypes` and `createTelemetryRuntime` are also available from the root entry. Creating a telemetry runtime loads the optional provider dependencies on demand and rejects if they are unavailable. `initializeTelemetry` manages the shared runtime and falls back to a no-op runtime when initialization fails.
+
+Import types, classes, and functions by name rather than through module namespaces. Constants with conflicting names carry a domain prefix, such as `COMPACT_CHARS_PER_TOKEN` and `MCP_CHARS_PER_TOKEN`.
 
 | Entry          | Output                                                                 | Contents                                                                                                                                    |
 | -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |

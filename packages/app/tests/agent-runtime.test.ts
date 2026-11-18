@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Remote } from "@yukino.js/yukino";
+import type { RemoteAgentHandle } from "@yukino.js/yukino";
 
 import { applyRuntimeAction } from "../src/main/agent-runtime.ts";
 import type { RuntimeAction } from "../src/shared/workspace-types.ts";
@@ -69,7 +69,7 @@ function run(
   controls: RuntimeControls,
 ): Promise<void> {
   return applyRuntimeAction(
-    handle as unknown as Remote.Server.RemoteAgentHandle,
+    handle as unknown as RemoteAgentHandle,
     action,
     controls,
   );

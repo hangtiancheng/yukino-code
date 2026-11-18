@@ -1,4 +1,4 @@
-import { PALETTES as paletteData } from "./palettes.js";
+import { PALETTES as paletteData } from "@/theme/palettes.js";
 
 export type ThemeMode = "dark" | "light";
 

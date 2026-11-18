@@ -91,8 +91,6 @@ describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
     if (!parsed.success) {
       return;
     }
-    // One namespace per source directory (plus the root-file namespaces), so
-    // the top level is small by design; the symbols check probes deep paths.
     expect(parsed.data.totalExports).toBeGreaterThan(30);
     for (const [name, type] of Object.entries(parsed.data.symbols)) {
       expect(type, name).toBe("function");
@@ -111,7 +109,16 @@ describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
     const script = `
       import { register } from "node:module";
       register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(loader)}`)}, import.meta.url);
-      await import(${JSON.stringify(pathToFileURL(libEntry).href)});
+      const { createTelemetryRuntime, parseExporterTypes, initializeTelemetry, getTelemetryRuntime } = await import(${JSON.stringify(pathToFileURL(libEntry).href)});
+      const assert = await import("node:assert/strict");
+      assert.deepEqual(parseExporterTypes("otlp, console, none"), ["otlp", "console"]);
+      await assert.rejects(createTelemetryRuntime(), /Optional telemetry dependency unavailable/);
+      process.env.OTEL_SDK_DISABLED = "false";
+      process.env.OTEL_TRACES_EXPORTER = "console";
+      const initialRuntime = getTelemetryRuntime();
+      await initializeTelemetry();
+      assert.equal(getTelemetryRuntime(), initialRuntime);
+      await getTelemetryRuntime().flush();
     `;
 
     expect(() =>

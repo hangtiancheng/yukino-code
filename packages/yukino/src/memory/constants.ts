@@ -20,7 +20,7 @@ export const MEMORY_DIR_NAME = "memory";
 export const AGENTS_FILE_NAME = "AGENTS.md";
 
 export const MILLISECONDS_PER_HOUR = 3_600_000;
-export const MILLISECONDS_PER_DAY = 86_400_000;
+export const MEMORY_MILLISECONDS_PER_DAY = 86_400_000;
 
 export const CONSOLIDATION_MAX_ITERATIONS = 15;
 export const EXTRACTION_MAX_ITERATIONS = 5;
@@ -61,4 +61,5 @@ export const MEMORY_NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u;
 export const FRONTMATTER_TYPE_RE = /^\s*type:\s*"?([^"\n]+?)"?\s*$/m;
 export const FRONTMATTER_DESCRIPTION_RE =
   /^\s*description:\s*"?([^"\n]+?)"?\s*$/m;
-export const FRONTMATTER_BLOCK_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+export const MEMORY_FRONTMATTER_BLOCK_RE =
+  /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;

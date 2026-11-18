@@ -7,12 +7,11 @@ import type { UserInput } from "@/history/index.js";
 import type { ToolResultContentBlock } from "@/tools/types.js";
 import { contentToText } from "@/utils";
 
-// Submodule namespaces for library consumers (Conversation.<Sub>.*).
-export * as AtExpand from "@/conversation/at-expand.js";
-export * as Constants from "@/conversation/constants.js";
-export * as Pairing from "@/conversation/pairing.js";
-export * as Prompts from "@/conversation/prompts.js";
-export * as UserBash from "@/conversation/user-bash.js";
+export * from "@/conversation/at-expand.js";
+export * from "@/conversation/constants.js";
+export * from "@/conversation/pairing.js";
+export * from "@/conversation/prompts.js";
+export * from "@/conversation/user-bash.js";
 
 export interface ToolUseBlock {
   toolUseId: string;

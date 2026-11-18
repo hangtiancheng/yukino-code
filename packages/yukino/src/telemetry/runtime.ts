@@ -1,4 +1,5 @@
 import { EXPORTER_NONE } from "@/telemetry/constants.js";
+import { createTelemetryRuntime } from "@/telemetry/providers.js";
 
 export type TelemetryMode = "a2a" | "print" | "remote" | "terminal" | "unknown";
 export type TelemetryObservationKind = "agent" | "generation" | "tool";
@@ -107,9 +108,9 @@ export async function initializeTelemetry(): Promise<void> {
     return;
   }
 
-  initialization = import("./providers.js")
-    .then(async ({ createTelemetryRuntime }) => {
-      runtime = await createTelemetryRuntime();
+  initialization = createTelemetryRuntime()
+    .then((providerRuntime) => {
+      runtime = providerRuntime;
       runtime.setMode(mode);
       process.once("beforeExit", () => {
         void flushTelemetry();

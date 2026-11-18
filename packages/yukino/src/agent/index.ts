@@ -95,11 +95,10 @@ import type { ToolRegistry } from "@/tools/registry.js";
 import type { PermissionRequestHandler, ToolResult } from "@/tools/types.js";
 import { asErrorString, asRecord, strArg } from "@/utils/index.js";
 
-export * as Constants from "@/agent/constants.js";
-// Submodule namespaces for library consumers (Agent.<Sub>.*).
-export * as Events from "@/agent/events.js";
-export * as Prompts from "@/agent/prompts.js";
-export * as StreamingExecutor from "@/agent/streaming-executor.js";
+export * from "@/agent/constants.js";
+export * from "@/agent/events.js";
+export * from "@/agent/prompts.js";
+export * from "@/agent/streaming-executor.js";
 
 type ToolResultEvent = Extract<AgentEvent, { type: "tool_result" }>;
 

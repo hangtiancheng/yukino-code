@@ -1,8 +1,11 @@
-import { MILLISECONDS_PER_DAY } from "@/memory/constants.js";
+import { MEMORY_MILLISECONDS_PER_DAY } from "@/memory/constants.js";
 
 /** Memory age calculation and short display labels. */
 export function memoryAgeDays(mtimeMs: number): number {
-  return Math.max(0, Math.floor((Date.now() - mtimeMs) / MILLISECONDS_PER_DAY));
+  return Math.max(
+    0,
+    Math.floor((Date.now() - mtimeMs) / MEMORY_MILLISECONDS_PER_DAY),
+  );
 }
 
 export function memoryAge(mtimeMs: number): string {

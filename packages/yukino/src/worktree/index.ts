@@ -12,7 +12,7 @@ import { dirname, isAbsolute, join, resolve } from "path";
 import { promisify } from "util";
 
 import { createChildLogger } from "@/logger/index.js";
-import { AGENTS_DIR_NAME } from "@/skills/constants.js";
+import { SKILLS_AGENTS_DIR_NAME } from "@/skills/constants.js";
 import { yukinoPath, projectKey } from "@/storage/index.js";
 import { canonicalPath } from "@/utils/paths.js";
 import {
@@ -32,8 +32,8 @@ import {
   WORKTREE_STATE_UNVERIFIED_GUIDANCE,
 } from "@/worktree/prompts.js";
 
-export * as Constants from "@/worktree/constants.js";
-export * as Prompts from "@/worktree/prompts.js";
+export * from "@/worktree/constants.js";
+export * from "@/worktree/prompts.js";
 
 const log = createChildLogger({ module: "worktree" });
 
@@ -658,11 +658,11 @@ async function copyAgentsSettings(
   repoRoot: string,
   wtPath: string,
 ): Promise<void> {
-  const agentsDir = join(repoRoot, AGENTS_DIR_NAME);
+  const agentsDir = join(repoRoot, SKILLS_AGENTS_DIR_NAME);
   if (!(await pathExists(agentsDir))) {
     return;
   }
-  const dstRoot = join(wtPath, AGENTS_DIR_NAME);
+  const dstRoot = join(wtPath, SKILLS_AGENTS_DIR_NAME);
   try {
     await mkdir(dstRoot, { recursive: true });
   } catch (err) {

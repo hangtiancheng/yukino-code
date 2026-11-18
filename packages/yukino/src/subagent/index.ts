@@ -1,11 +1,10 @@
-// Submodule namespaces for library consumers (Subagent.<Sub>.*).
-export * as AgentTool from "@/subagent/agent-tool.js";
-export * as Constants from "@/subagent/constants.js";
-export * as Definition from "@/subagent/definition.js";
-export * as Loader from "@/subagent/loader.js";
-export * as Plan from "@/subagent/plan.js";
-export * as Prompts from "@/subagent/prompts.js";
-export * as Spawn from "@/subagent/spawn.js";
-export * as TaskManager from "@/subagent/task-manager.js";
-export * as TaskStore from "@/subagent/task-store.js";
-export * as ToolFilter from "@/subagent/tool-filter.js";
+export * from "@/subagent/agent-tool.js";
+export * from "@/subagent/constants.js";
+export * from "@/subagent/definition.js";
+export * from "@/subagent/loader.js";
+export * from "@/subagent/plan.js";
+export * from "@/subagent/prompts.js";
+export * from "@/subagent/spawn.js";
+export * from "@/subagent/task-manager.js";
+export * from "@/subagent/task-store.js";
+export * from "@/subagent/tool-filter.js";

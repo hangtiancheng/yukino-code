@@ -2,14 +2,13 @@ import { stripVTControlCharacters } from "node:util";
 
 import { NUMERIC_LITERAL, TOOL_ARGS_SUMMARY_CHARS } from "@/utils/constants.js";
 
-// Submodule namespaces for library consumers (Utils.<Sub>.*).
-export * as Constants from "@/utils/constants.js";
-export * as FileScan from "@/utils/file-scan.js";
-export * as Paths from "@/utils/paths.js";
-export * as PublicHttp from "@/utils/public-http.js";
-export * as Redact from "@/utils/redact.js";
-export * as Slug from "@/utils/slug.js";
-export * as XML from "@/utils/xml.js";
+export * from "@/utils/constants.js";
+export * from "@/utils/file-scan.js";
+export * from "@/utils/paths.js";
+export * from "@/utils/public-http.js";
+export * from "@/utils/redact.js";
+export * from "@/utils/slug.js";
+export * from "@/utils/xml.js";
 
 /**
  * Strips ANSI escape sequences and non-printable control characters and

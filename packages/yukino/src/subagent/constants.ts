@@ -43,9 +43,9 @@ export const AGENT_KINDS = ["subagent", "teammate"] as const;
 export const DEFAULT_AGENT_KIND = "teammate";
 
 // Markdown agent definitions under ~/.yukino/agents override built-ins.
-export const AGENTS_DIR_NAME = "agents";
+export const SUBAGENT_AGENTS_DIR_NAME = "agents";
 export const AGENT_FILE_EXTENSION = ".md";
-export const FRONTMATTER_BLOCK_RE =
+export const SUBAGENT_FRONTMATTER_BLOCK_RE =
   /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/u;
 /** Body prefix used as the description when frontmatter omits one. */
 export const MAX_FALLBACK_DESCRIPTION_CHARS = 200;

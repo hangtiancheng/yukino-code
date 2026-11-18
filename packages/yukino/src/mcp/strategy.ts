@@ -22,7 +22,7 @@
 import type { McpLoading } from "@/config/index.js";
 import type { ProviderConfig } from "@/config/provider-config.js";
 import {
-  CHARS_PER_TOKEN,
+  MCP_CHARS_PER_TOKEN,
   DEFAULT_EAGER_THRESHOLD_PERCENT,
   MCP_TOOL_PREFIX,
   OFFICIAL_HOSTS,
@@ -49,7 +49,7 @@ export function isOfficialAnthropicEndpoint(baseUrl: string): boolean {
 }
 
 export function estimateSchemaTokens(schemaChars: number): number {
-  return Math.floor(schemaChars / CHARS_PER_TOKEN);
+  return Math.floor(schemaChars / MCP_CHARS_PER_TOKEN);
 }
 
 export function decideMode(

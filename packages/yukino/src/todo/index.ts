@@ -10,16 +10,16 @@ import {
   type TodoWriteInput,
 } from "@/todo/write.js";
 
-export * as Constants from "./constants.js";
-export * as Dependencies from "./dependencies.js";
-export * as Progress from "./progress.js";
-export * as Prompts from "./prompts.js";
-export * as Store from "./store.js";
-export * as Tools from "./tools.js";
-export * as Write from "./write.js";
+export * from "@/todo/constants.js";
+export * from "@/todo/dependencies.js";
+export * from "@/todo/progress.js";
+export * from "@/todo/prompts.js";
+export * from "@/todo/store.js";
+export * from "@/todo/tools.js";
+export * from "@/todo/write.js";
 
 export type Task = StoredTask;
-export type { TodoInput, TodoWriteInput } from "./write.js";
+export type { TodoInput, TodoWriteInput } from "@/todo/write.js";
 
 export interface TaskBoard {
   readonly boardId: string;

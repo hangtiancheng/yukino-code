@@ -1,4 +1,8 @@
-import type { Conversation, MCP, Tools } from "@yukino.js/yukino";
+import type {
+  McpApp,
+  ToolResultContentBlock,
+  UserBashResult,
+} from "@yukino.js/yukino";
 
 import type {
   FileEntry,
@@ -10,8 +14,8 @@ import type {
 // and the renderer. Everything crossing the contextBridge must be plain JSON —
 // no Error objects, no class instances, no functions.
 
-export type McpApp = MCP.Apps.McpApp;
-export type ToolContentBlock = Tools.ToolResultContentBlock;
+export type { McpApp } from "@yukino.js/yukino";
+export type ToolContentBlock = ToolResultContentBlock;
 export type McpAppOperation =
   | { method: "read_resource"; params: { uri: string } }
   | {
@@ -89,7 +93,7 @@ export interface HistoryMessage {
     isError: boolean;
   }[];
   thinking?: string;
-  userBash?: Conversation.UserBashResult;
+  userBash?: UserBashResult;
 }
 
 export type InitState =

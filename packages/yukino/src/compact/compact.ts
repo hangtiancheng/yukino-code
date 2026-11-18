@@ -4,7 +4,7 @@ import {
   ANALYSIS_OPEN_TAG,
   AUTO_COMPACT_SAFETY_MARGIN,
   AUTO_MARGIN_RATIO,
-  CHARS_PER_TOKEN,
+  COMPACT_CHARS_PER_TOKEN,
   COMPACTION_CONVERSATION_CHANGED_ERROR,
   COMPACTION_EMPTY_SUMMARY_ERROR,
   COMPACTION_STREAM_INCOMPLETE_ERROR,
@@ -204,7 +204,7 @@ export function estimateMessages(messages: Message[]): number {
       }
     }
   }
-  return Math.ceil(totalChars / CHARS_PER_TOKEN);
+  return Math.ceil(totalChars / COMPACT_CHARS_PER_TOKEN);
 }
 
 export function estimateTokens(conv: ConversationManager): number {
