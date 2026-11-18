@@ -14,15 +14,15 @@ The local replacement works independently of a published Go module release. Impo
 
 ## Packages
 
-| Packages | Purpose |
-| --- | --- |
-| `agent`, `llm`, `config`, `conversation` | Agent loop, streaming provider interface, provider configuration, message state |
-| `tools`, `bootstrap`, `permissions`, `sandbox` | Custom and built-in tools, CLI tool wiring, permission rules, shell isolation |
-| `session`, `history`, `file_history`, `goal`, `compact` | Persistence, input provenance, file rewind, persistent goals, compaction |
-| `skills`, `subagent`, `teams`, `todo`, `workflow` | Skills, background agents, teams, task tracking, scripted orchestration |
-| `mcp`, `a2a`, `remote`, `vscode` | MCP clients, A2A server, browser server, IDE integration |
-| `memory`, `prompt`, `commands`, `images`, `plan_file`, `tool_result` | Memory, prompts, commands, media, plan files, output handling |
-| `storage`, `logger`, `telemetry`, `recover`, `update`, `utils`, `version`, `frontmatter` | Supporting services |
+| Packages                                                                                 | Purpose                                                                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `agent`, `llm`, `config`, `conversation`                                                 | Agent loop, streaming provider interface, provider configuration, message state |
+| `tools`, `bootstrap`, `permissions`, `sandbox`                                           | Custom and built-in tools, CLI tool wiring, permission rules, shell isolation   |
+| `session`, `history`, `file_history`, `goal`, `compact`                                  | Persistence, input provenance, file rewind, persistent goals, compaction        |
+| `skills`, `subagent`, `teams`, `todo`, `workflow`                                        | Skills, background agents, teams, task tracking, scripted orchestration         |
+| `mcp`, `a2a`, `remote`, `vscode`                                                         | MCP clients, A2A server, browser server, IDE integration                        |
+| `memory`, `prompt`, `commands`, `images`, `plan_file`, `tool_result`                     | Memory, prompts, commands, media, plan files, output handling                   |
+| `storage`, `logger`, `telemetry`, `recover`, `update`, `utils`, `version`, `frontmatter` | Supporting services                                                             |
 
 ## Streaming a conversation
 
