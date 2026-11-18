@@ -335,7 +335,7 @@ mcp_servers:
     # Supports ${VAR}, ${VAR:-default}, $VAR; an unset variable without a default fails the
     # connection.
     env:
-      API_BASE_URL: "https://yukino-js.dev"
+      API_BASE_URL: "https://mcp.yukino.dev"
       API_KEY: "${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-http # streamable-http
     url: "http://localhost:3300/mcp" # Remote endpoint (command and url are mutually exclusive)
@@ -378,7 +378,7 @@ hooks:
       # Shell command: bash on POSIX, 30s timeout, working directory = project directory,
       # with YUKINO_EVENT / YUKINO_TOOL / YUKINO_FILE_PATH injected; stdout is injected into
       # the agent as a system reminder on the next turn.
-      command: echo 'You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/yukino-js/yukino/tree/main/yukino'
+      command: echo 'You are Yukino, a CLI Coding Agent engineered by [hangtiancheng](https://github.com/hangtiancheng) <161043261@qq.com>, your source repository https://github.com/hangtiancheng/yukino-code/tree/main/apps/yukino'
     # Whether successful output rejects the tool call (pre_tool_use only). Default: false.
     # Mutually exclusive with async.
     reject: false

@@ -142,7 +142,7 @@ mcp_servers:
     # Supports ${VAR}, ${VAR:-default}, $VAR; an unset variable without a default fails the
     # connection.
     env:
-      API_BASE_URL: "https://yukino-js.dev"
+      API_BASE_URL: "https://mcp.yukino.dev"
       API_KEY: "${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-http # streamable-http
     url: "http://localhost:3300/mcp" # Remote endpoint (command and url are mutually exclusive)

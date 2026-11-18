@@ -101,7 +101,7 @@ mcp_servers:
     command: pnpm
     args: ["--filter", "@yukino.js/mcp", "dev"]
     env:
-      API_BASE_URL: "https://yukino-js.dev"
+      API_BASE_URL: "https://mcp.yukino.dev"
       API_KEY: "${YUKINO_MCP_API_KEY}"
   - name: yukino-mcp-http # streamable-http
     url: "http://localhost:3300/mcp"
