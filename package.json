@@ -11,9 +11,9 @@
     "git:push": "pnpm git:commit && git push origin main",
     "git:push:skip": "pnpm git:commit:skip && git push origin main",
     "format": "concurrently \"pnpm --filter docs format\" \"pnpm --filter @yukino.js/app format\" \"pnpm --filter @yukino.js/mcp format\" \"pnpm --filter @yukino.js/yukino format\"",
-    "build": "concurrently \"pnpm --filter docs build\" \"pnpm --filter @yukino.js/app build\" \"pnpm --filter @yukino.js/mcp build\" \"pnpm --filter @yukino.js/yukino build\"",
+    "build": "concurrently \"pnpm --filter docs build\" \"pnpm --filter @yukino.js/mcp build\" \"pnpm --filter @yukino.js/yukino build\" && pnpm --filter @yukino.js/app build",
     "prepare": "husky",
-    "lint:fix": "pnpm --filter '@yukino.js/app^...' build && pnpm -r --if-present lint:fix",
+    "lint:fix": "pnpm -r --if-present lint:fix",
     "happy": "pnpm -r happy",
     "happy:fix": "pnpm -r happy:fix"
   },
