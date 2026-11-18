@@ -3,8 +3,8 @@ package llm
 import (
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 const (

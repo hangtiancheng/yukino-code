@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/yukino-js/yukino/yukino/worktree"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/worktree"
 )
 
 type ExitWorktreeTool struct{}

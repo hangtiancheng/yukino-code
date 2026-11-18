@@ -15,11 +15,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/images"
-	"github.com/yukino-js/yukino/yukino/logger"
-	"github.com/yukino-js/yukino/yukino/tools"
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/images"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 var log = logger.CreateChildLogger("mcp")

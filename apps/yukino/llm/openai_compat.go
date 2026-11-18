@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"

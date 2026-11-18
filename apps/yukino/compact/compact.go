@@ -10,11 +10,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/llm"
-	"github.com/yukino-js/yukino/yukino/session"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/llm"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 // CompactResult is the structured outcome of a compaction. When Compacted is

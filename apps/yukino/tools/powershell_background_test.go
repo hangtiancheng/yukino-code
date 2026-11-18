@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/subagent"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/subagent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 // Mirrors tests/powershell-background.test.ts: the suite is skipped when pwsh

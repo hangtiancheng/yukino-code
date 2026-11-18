@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/history"
-	"github.com/yukino-js/yukino/yukino/llm"
-	"github.com/yukino-js/yukino/yukino/session"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/llm"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func steeringInput(text string) *history.InputEntry {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 type TaskStopTool struct {

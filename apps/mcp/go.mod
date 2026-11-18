@@ -1,4 +1,4 @@
-module github.com/yukino-js/yukino/mcp
+module github.com/hangtiancheng/yukino-code/apps/mcp
 
 go 1.26.0
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/yukino-js/yukino/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
 )
 
 // TeammateProgressEvent mirrors the SubagentProgressEvent union the reference

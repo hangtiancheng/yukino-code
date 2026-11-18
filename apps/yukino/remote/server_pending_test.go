@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func newPendingServer() *Server {

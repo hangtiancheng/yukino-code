@@ -14,10 +14,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/tools"
-	"github.com/yukino-js/yukino/yukino/utils"
-	"github.com/yukino-js/yukino/yukino/worktree"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/worktree"
 )
 
 type DecisionEffect string

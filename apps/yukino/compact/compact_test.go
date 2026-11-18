@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/llm"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/llm"
 )
 
 type stubSummaryClient struct {

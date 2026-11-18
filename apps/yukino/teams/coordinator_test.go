@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/prompt"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/prompt"
 )
 
 func TestCoordinatorBlocksCodeTools(t *testing.T) {

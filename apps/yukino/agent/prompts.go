@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/yukino-js/yukino/yukino/goal"
+import "github.com/hangtiancheng/yukino-code/apps/yukino/goal"
 
 const NoPersistentGoalReminder = goal.PersistentGoalMarker +
 	"\nNo persistent goal is set. Follow the current user request.\n</persistent-goal>"

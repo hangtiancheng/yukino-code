@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/oauth"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
-	"github.com/yukino-js/yukino/mcp/internal/config"
 )
 
 type clientOptions struct {

@@ -3,10 +3,10 @@ package bootstrap
 import (
 	"os"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/sandbox"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/sandbox"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 // ConfigureBashSandbox mirrors the reference configureBashSandbox: it binds the

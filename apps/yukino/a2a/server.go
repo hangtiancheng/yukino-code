@@ -20,7 +20,7 @@ import (
 	"github.com/a2aproject/a2a-go/a2asrv"
 	"github.com/a2aproject/a2a-go/a2asrv/taskstore"
 
-	"github.com/yukino-js/yukino/yukino/remote"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/remote"
 )
 
 // ServerHandle is a running A2A HTTP server.

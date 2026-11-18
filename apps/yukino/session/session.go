@@ -17,11 +17,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/history"
-	"github.com/yukino-js/yukino/yukino/logger"
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 // log mirrors the reference's createChildLogger({ module: "session" }).

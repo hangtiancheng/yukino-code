@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 	"github.com/rivo/uniseg"
-	"github.com/yukino-js/yukino/yukino/utils"
 )
 
 func textForKey(key tea.KeyMsg) (string, bool) {

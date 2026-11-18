@@ -8,11 +8,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 
-	"github.com/yukino-js/yukino/mcp/internal/logger"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/logger"
 )
 
 var supportedExtensions = map[string]struct{}{

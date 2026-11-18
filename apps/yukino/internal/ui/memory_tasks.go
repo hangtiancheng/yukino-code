@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/memory/background"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/memory/background"
 )
 
 type memoryLoopMsg struct {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
 )
 
 func TestParseA2aAddress(t *testing.T) {

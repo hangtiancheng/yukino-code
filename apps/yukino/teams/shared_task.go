@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/todo"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/todo"
 )
 
 type SharedTaskStore struct {

@@ -16,10 +16,10 @@ import (
 
 	client "github.com/go-mysql-org/go-mysql/client"
 	wire "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yukino-js/yukino/mcp/internal/config"
-	"github.com/yukino-js/yukino/mcp/internal/tools"
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
 )
 
 const description = "Execute arbitrary MySQL SQL with full connection privileges: queries, writes, DDL, transactions, administration and multiple statements. Put a complete transaction in one call. Optional ? parameters are supported. Returns query rows or mutation result headers and field metadata for all statements. Connection credentials come from the mysql object in the JSON configuration; URLs and DSNs are not accepted."

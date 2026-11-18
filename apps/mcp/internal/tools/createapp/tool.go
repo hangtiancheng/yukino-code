@@ -15,8 +15,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/yukino-js/yukino/mcp/internal/logger"
-	"github.com/yukino-js/yukino/mcp/internal/tools"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/logger"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools"
 )
 
 // ResourceURI is the UI shell resource fetched by the host.

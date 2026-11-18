@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 )
 
 // formatSQL follows mysql2's text-query parameter semantics: ? escapes a value,

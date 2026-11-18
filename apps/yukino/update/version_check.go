@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 var (

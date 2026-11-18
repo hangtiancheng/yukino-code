@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/yukino-js/yukino/yukino/commands"
+import "github.com/hangtiancheng/yukino-code/apps/yukino/commands"
 
 const (
 	AgentsDialogTitle    = "Agents & tasks"

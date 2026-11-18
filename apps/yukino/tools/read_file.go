@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/images"
-	"github.com/yukino-js/yukino/yukino/logger"
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/images"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 var log = logger.CreateChildLogger("tools")

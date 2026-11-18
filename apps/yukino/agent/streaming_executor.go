@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/telemetry"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/telemetry"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 type toolBatch struct {

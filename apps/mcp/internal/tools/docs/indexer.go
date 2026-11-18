@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 )
 
 const maxContentLength = 8192

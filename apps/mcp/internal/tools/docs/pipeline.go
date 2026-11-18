@@ -3,7 +3,7 @@ package docs
 import (
 	"context"
 
-	"github.com/yukino-js/yukino/mcp/internal/logger"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/logger"
 )
 
 // SyncStats counts the outcome of one knowledge-base refresh.

@@ -31,7 +31,7 @@ var uiOnlyModules = []string{
 	"github.com/yuin/goldmark",
 }
 
-const uiPackage = "github.com/yukino-js/yukino/yukino/internal/ui"
+const uiPackage = "github.com/hangtiancheng/yukino-code/apps/yukino/internal/ui"
 
 func moduleRoot(t *testing.T) string {
 	t.Helper()

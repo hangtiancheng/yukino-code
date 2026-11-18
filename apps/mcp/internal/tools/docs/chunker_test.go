@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 )
 
 func TestSplitMarkdownKeepsSmallDocument(t *testing.T) {

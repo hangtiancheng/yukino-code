@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/memory"
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/skills"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/memory"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/skills"
 )
 
 // TestUIRegistryOrderMatchesReference pins the full tool registration order:

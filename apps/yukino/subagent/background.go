@@ -3,7 +3,7 @@ package subagent
 import (
 	"fmt"
 
-	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
 )
 
 func configureBackgroundRuntime(child *agent.Agent) *TaskManager {

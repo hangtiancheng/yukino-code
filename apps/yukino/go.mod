@@ -1,4 +1,4 @@
-module github.com/yukino-js/yukino/yukino
+module github.com/hangtiancheng/yukino-code/apps/yukino
 
 go 1.26.0
 

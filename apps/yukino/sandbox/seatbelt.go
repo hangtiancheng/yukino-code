@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 const SandboxExecPath = "/usr/bin/sandbox-exec"

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/bootstrap"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/bootstrap"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func RenderInteractionSummary(summary bootstrap.InteractionSummary, columns int, color bool, endedAt time.Time) string {

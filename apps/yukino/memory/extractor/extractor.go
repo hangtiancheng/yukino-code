@@ -10,14 +10,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/llm"
-	"github.com/yukino-js/yukino/yukino/logger"
-	"github.com/yukino-js/yukino/yukino/memory"
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/llm"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/memory"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 var log = logger.CreateChildLogger("memory")

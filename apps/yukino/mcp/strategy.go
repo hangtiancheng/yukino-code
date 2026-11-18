@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func IsOfficialAnthropicEndpoint(baseURL string) bool {

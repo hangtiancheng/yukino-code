@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/yukino-js/yukino/yukino/utils"
-	"github.com/yukino-js/yukino/yukino/worktree"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/worktree"
 )
 
 func (c *Checker) cwdLocked() string {

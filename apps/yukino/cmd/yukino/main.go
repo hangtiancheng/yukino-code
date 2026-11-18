@@ -10,17 +10,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/charmbracelet/x/term"
-	"github.com/yukino-js/yukino/yukino/a2a"
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/hooks"
-	"github.com/yukino-js/yukino/yukino/internal/ui"
-	"github.com/yukino-js/yukino/yukino/logger"
-	"github.com/yukino-js/yukino/yukino/recover"
-	"github.com/yukino-js/yukino/yukino/remote"
-	"github.com/yukino-js/yukino/yukino/session"
-	"github.com/yukino-js/yukino/yukino/telemetry"
-	"github.com/yukino-js/yukino/yukino/tools"
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/a2a"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/hooks"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/internal/ui"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/recover"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/remote"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/telemetry"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 // loadRuntimeConfig loads the app config with the project .mcp.json servers

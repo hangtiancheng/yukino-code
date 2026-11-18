@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/session"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func TestUserBashStoresHistoryAndExcludesDoubleBang(t *testing.T) {

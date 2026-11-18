@@ -6,9 +6,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 func (m Model) permissionOptions() []PermissionOption {

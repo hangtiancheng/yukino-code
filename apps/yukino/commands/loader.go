@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/yukino-js/yukino/yukino/frontmatter"
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/frontmatter"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 type CommandMeta struct {

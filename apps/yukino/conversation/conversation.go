@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 type ToolUseBlock struct {

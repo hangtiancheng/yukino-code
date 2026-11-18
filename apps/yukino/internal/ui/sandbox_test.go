@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 // The reference /sandbox parses auto/manual/off args (no dialog): off disables

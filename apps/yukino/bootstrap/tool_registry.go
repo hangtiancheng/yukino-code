@@ -3,12 +3,12 @@ package bootstrap
 import (
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/commands"
-	"github.com/yukino-js/yukino/yukino/goal"
-	"github.com/yukino-js/yukino/yukino/skills"
-	"github.com/yukino-js/yukino/yukino/teams"
-	"github.com/yukino-js/yukino/yukino/todo"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/commands"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/goal"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/skills"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/teams"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/todo"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 // CountMcpTools mirrors countMcpTools.

@@ -6,7 +6,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/yukino-js/yukino/yukino/frontmatter"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/frontmatter"
 )
 
 type ParsedFrontmatter struct {

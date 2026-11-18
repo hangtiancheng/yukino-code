@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
 )
 
 func testProvider(protocol, baseURL string, mutate func(*config.ProviderConfig)) *config.ProviderConfig {

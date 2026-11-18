@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
 )
 
 type pendingPlanApproval struct {

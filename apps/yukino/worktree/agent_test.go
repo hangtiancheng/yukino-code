@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 func testWorktreeRepo(t *testing.T) string {

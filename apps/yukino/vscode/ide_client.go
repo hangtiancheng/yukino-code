@@ -13,7 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 // IdeAtMention mirrors the reference IdeAtMention; lines are 1-based.

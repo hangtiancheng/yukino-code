@@ -7,7 +7,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 // ScrubTelemetryPayload redacts secrets and home paths from a JSON-shaped

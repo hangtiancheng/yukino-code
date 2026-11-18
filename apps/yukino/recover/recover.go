@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/logger"
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/telemetry"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/telemetry"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func logPath() string {

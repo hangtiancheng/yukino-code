@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/tools"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 // LoadSkillTool activates a skill by name. Inline skills return the full SOP

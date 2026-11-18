@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/file_history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/file_history"
 )
 
 type WriteFileTool struct {

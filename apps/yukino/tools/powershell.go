@@ -4,7 +4,7 @@ import (
 	"context"
 	"runtime"
 
-	"github.com/yukino-js/yukino/yukino/sandbox"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/sandbox"
 )
 
 type PowerShellTool struct {

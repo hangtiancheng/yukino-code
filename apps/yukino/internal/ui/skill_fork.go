@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/skills"
-	"github.com/yukino-js/yukino/yukino/subagent"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/skills"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/subagent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 type commandSkillForkHost struct {

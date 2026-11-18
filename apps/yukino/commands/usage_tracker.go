@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/history"
 )
 
 // CommandUsageTracker scores commands by frequency with a recency half-life

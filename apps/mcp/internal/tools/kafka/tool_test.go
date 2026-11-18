@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
 	"github.com/twmb/franz-go/pkg/kfake"
-	"github.com/yukino-js/yukino/mcp/internal/config"
 )
 
 func kafkaCall(t *testing.T, in Input) map[string]any {

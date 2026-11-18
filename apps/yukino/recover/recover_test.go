@@ -3,7 +3,7 @@ package recovery
 import (
 	"errors"
 	"fmt"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 func readLog(t *testing.T) string {

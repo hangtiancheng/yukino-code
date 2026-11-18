@@ -5,8 +5,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/yukino-js/yukino/yukino/frontmatter"
-	"github.com/yukino-js/yukino/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/frontmatter"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
 )
 
 var log = logger.CreateChildLogger("skills")

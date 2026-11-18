@@ -5,7 +5,7 @@ import (
 
 	a2alib "github.com/a2aproject/a2a-go/a2a"
 
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 // Permission extension parameter schemas, byte-identical to

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
 )
 
 func TestNewID(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 )
 
 // MarkdownChunk is one retrieval unit and the heading that labels it.

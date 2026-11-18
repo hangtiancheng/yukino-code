@@ -14,9 +14,9 @@ import (
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/tools"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 // InstallSkillTool installs a skill from a local file path or an http(s) URL

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 func TestIsNewerVersion(t *testing.T) {

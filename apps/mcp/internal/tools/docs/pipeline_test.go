@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/yukino-js/yukino/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
 )
 
 func TestSyncUnicodeFailureRecoveryDeletionAndConcurrentCache(t *testing.T) {

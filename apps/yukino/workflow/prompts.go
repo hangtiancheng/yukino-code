@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/yukino-js/yukino/yukino/prompt"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/prompt"
 )
 
 // jsonString mirrors JSON.stringify: no HTML escaping, keys as provided.

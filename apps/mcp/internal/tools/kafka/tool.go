@@ -10,13 +10,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/yukino-js/yukino/mcp/internal/config"
-	"github.com/yukino-js/yukino/mcp/internal/tools"
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
 )
 
 const description = "Operate Kafka through franz-go: produce, consume, list_topics, describe_topics, describe_cluster, create_topic, delete_topic, create_partitions, watermark_offsets and committed_offsets (-1001 means uncommitted). Uses the kafka object in JSON configuration or per-call brokers/client_id/config. Config accepts documented Kafka client options, including nested tls and sasl objects. Consume returns at most max_messages within timeout_ms and only commits returned records when auto_commit is enabled."

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/todo"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/todo"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 const teamNameParamDescription = "Target team name returned by TeamCreate or TeamList. Required when multiple teams match; omitted when only one team matches. Teammates are restricted to their own team."

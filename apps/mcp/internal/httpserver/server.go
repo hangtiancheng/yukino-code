@@ -17,7 +17,7 @@ import (
 	httpapp "github.com/hangtiancheng/yukino.go/libs/yukino_http"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/yukino-js/yukino/mcp/internal/logger"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/logger"
 )
 
 // Handler serves stateless JSON Streamable HTTP at /mcp and legacy SSE at /sse.

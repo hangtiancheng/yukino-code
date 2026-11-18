@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/yukino-js/yukino/yukino/utils"
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 func stripANSI(s string) string { return ansi.Strip(s) }

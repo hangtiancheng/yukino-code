@@ -3,7 +3,7 @@ package memory
 import (
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
 )
 
 func TestExtractWrittenPaths(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/telemetry"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/telemetry"
 )
 
 type StreamEvent interface{ streamEvent() }

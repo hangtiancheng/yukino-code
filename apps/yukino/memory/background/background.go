@@ -6,12 +6,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/llm"
-	"github.com/yukino-js/yukino/yukino/memory"
-	"github.com/yukino-js/yukino/yukino/memory/consolidation"
-	"github.com/yukino-js/yukino/yukino/memory/extractor"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/llm"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/memory"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/memory/consolidation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/memory/extractor"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 type Callbacks struct {

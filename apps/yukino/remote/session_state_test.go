@@ -3,13 +3,13 @@ package remote
 import (
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/compact"
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/file_history"
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/todo"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/compact"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/file_history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/todo"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func TestRestoreSessionResetsPerSessionState(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/plan_file"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/plan_file"
 )
 
 type EnterPlanModeTool struct{ Registry *Registry }

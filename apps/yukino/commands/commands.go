@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/subagent"
-	"github.com/yukino-js/yukino/yukino/workflow"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/subagent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/workflow"
 )
 
 type CommandType string

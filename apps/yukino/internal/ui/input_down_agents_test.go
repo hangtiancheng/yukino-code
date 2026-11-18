@@ -6,9 +6,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/yukino-js/yukino/yukino/session"
-	"github.com/yukino-js/yukino/yukino/subagent"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/subagent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 // The reference opens the agents dialog on Down only when the draft is not

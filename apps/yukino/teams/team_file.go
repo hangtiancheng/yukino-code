@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 type TeamFile struct {

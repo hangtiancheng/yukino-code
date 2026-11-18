@@ -15,9 +15,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"github.com/yukino-js/yukino/mcp/internal/config"
-	"github.com/yukino-js/yukino/mcp/internal/tools"
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 )
 
 const serverSelectionTimeout = 10 * time.Second

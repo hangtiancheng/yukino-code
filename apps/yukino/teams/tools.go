@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func teamToolSchema(name, description string, properties map[string]any, required ...string) map[string]any {

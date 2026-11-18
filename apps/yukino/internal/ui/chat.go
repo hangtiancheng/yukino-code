@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yukino-js/yukino/yukino/skills"
-	"github.com/yukino-js/yukino/yukino/utils"
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/skills"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 type chatMessage struct {

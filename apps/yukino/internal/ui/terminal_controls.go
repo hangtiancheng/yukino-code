@@ -6,11 +6,11 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/commands"
-	"github.com/yukino-js/yukino/yukino/conversation/userbash"
-	"github.com/yukino-js/yukino/yukino/history"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/commands"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation/userbash"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 var goalControl = regexp.MustCompile(`^/goal(?:\s+(status|pause|clear|complete))?$`)

@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/yukino-js/yukino/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
 )
 
 var log = logger.CreateChildLogger("vscode")

@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 const (

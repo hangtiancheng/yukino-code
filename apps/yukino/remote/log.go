@@ -3,8 +3,8 @@ package remote
 import (
 	"fmt"
 
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
 )
 
 var eventLog = logger.CreateChildLogger("remote")

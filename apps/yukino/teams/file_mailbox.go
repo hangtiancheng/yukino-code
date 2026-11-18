@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 var mailboxMemberPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)

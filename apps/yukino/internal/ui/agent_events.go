@@ -6,12 +6,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/mcp"
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/subagent"
-	"github.com/yukino-js/yukino/yukino/tool_result"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/mcp"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/subagent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tool_result"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 type agentEventMsg struct {

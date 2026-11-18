@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
 )
 
 //go:embed contracts.json

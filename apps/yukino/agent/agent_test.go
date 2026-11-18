@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/llm"
-	"github.com/yukino-js/yukino/yukino/skills"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/llm"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/skills"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 type mockClient struct {

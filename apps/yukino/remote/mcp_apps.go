@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/hooks"
-	"github.com/yukino-js/yukino/yukino/mcp"
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/hooks"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/mcp"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 const (

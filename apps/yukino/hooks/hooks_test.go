@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
 )
 
 func waitForNotifications(t *testing.T, engine *Engine, want []string) {

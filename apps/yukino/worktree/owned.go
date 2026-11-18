@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 type ownedWorktree struct {

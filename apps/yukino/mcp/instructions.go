@@ -3,7 +3,7 @@ package mcp
 import (
 	"sort"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
 )
 
 // Announces MCP server instructions as deltas.

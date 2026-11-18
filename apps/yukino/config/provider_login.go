@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 var digitsOnly = regexp.MustCompile(`^\d+$`)

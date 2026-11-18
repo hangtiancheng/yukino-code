@@ -3,7 +3,7 @@ package subagent
 import (
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 var SubagentDisallowedTools = map[string]bool{

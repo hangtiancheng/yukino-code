@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/config"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 type ConnectedTool struct {

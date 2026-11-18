@@ -2,11 +2,11 @@
 
 Yukino exposes its terminal-independent core as Go packages. The CLI uses these same implementations. No compatibility packages remain at the old `internal/...` paths. Terminal UI is private; process diagnostics are exposed by the `recover` package.
 
-The module path is `github.com/yukino-js/yukino/yukino` and requires Go 1.26 or later. For a local checkout, add it to your host module:
+The module path is `github.com/hangtiancheng/yukino-code/apps/yukino` and requires Go 1.26 or later. For a local checkout, add it to your host module:
 
 ```sh
-go mod edit -require=github.com/yukino-js/yukino/yukino@v0.0.0
-go mod edit -replace=github.com/yukino-js/yukino/yukino=/absolute/path/to/yukino-code/apps/yukino
+go mod edit -require=github.com/hangtiancheng/yukino-code/apps/yukino@v0.0.0
+go mod edit -replace=github.com/hangtiancheng/yukino-code/apps/yukino=/absolute/path/to/yukino-code/apps/yukino
 go mod tidy
 ```
 

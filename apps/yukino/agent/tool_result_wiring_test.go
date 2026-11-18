@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/conversation"
-	"github.com/yukino-js/yukino/yukino/llm"
-	"github.com/yukino-js/yukino/yukino/tool_result"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/llm"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tool_result"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func findToolResultsMsg(t *testing.T, conv *conversation.Manager) conversation.Message {

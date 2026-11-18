@@ -3,7 +3,7 @@ package workflow
 import (
 	"context"
 
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 // WorkflowTool exposes the Workflow service to the model, mirroring

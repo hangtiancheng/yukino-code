@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/config"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/config"
 )
 
 func TestClearResetsSession(t *testing.T) {

@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/images"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/images"
 )
 
 type computerOutputLimit struct {

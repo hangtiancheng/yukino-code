@@ -4,8 +4,8 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/yukino-js/yukino/yukino/tools"
-	"github.com/yukino-js/yukino/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
 )
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-zA-Z0-9_]`)

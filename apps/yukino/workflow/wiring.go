@@ -1,7 +1,7 @@
 package workflow
 
 import (
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 // AttachWorkflow registers the Workflow tool on the registry unless already

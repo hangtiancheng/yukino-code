@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/recover"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/recover"
 )
 
 func TestSyncOutputDetection(t *testing.T) {

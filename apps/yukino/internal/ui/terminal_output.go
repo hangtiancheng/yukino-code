@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/x/term"
-	"github.com/yukino-js/yukino/yukino/recover"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/recover"
 )
 
 // isSyncOutputSupported detects DEC 2026 synchronized-output support from the

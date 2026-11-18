@@ -3,7 +3,7 @@ package remote
 import (
 	"os"
 
-	"github.com/yukino-js/yukino/yukino/goal"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/goal"
 )
 
 // goal mirrors the reference AgentHandleImpl.goalManager getter: it lazily

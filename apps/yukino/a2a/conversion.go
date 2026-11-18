@@ -6,7 +6,7 @@ import (
 
 	a2alib "github.com/a2aproject/a2a-go/a2a"
 
-	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
 )
 
 // PermissionDecision is one of "allow", "deny" or "allowAlways".

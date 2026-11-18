@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/yukino-js/yukino/yukino/version"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/version"
 )
 
 // Install hooks mirror the module boundary the reference tests mock

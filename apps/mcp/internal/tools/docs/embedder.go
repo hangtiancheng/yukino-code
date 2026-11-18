@@ -9,7 +9,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 
-	"github.com/yukino-js/yukino/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
 )
 
 const embedBatchSize = 10

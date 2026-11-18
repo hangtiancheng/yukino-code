@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yukino-js/yukino/mcp/internal/config"
-	"github.com/yukino-js/yukino/mcp/internal/logger"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/logger"
 	_ "modernc.org/sqlite"
 )
 

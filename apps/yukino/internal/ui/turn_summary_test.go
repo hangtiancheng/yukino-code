@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
 )
 
 // TestOrphanToolResultLandsInCommittedSummary pins the reference turnToolCalls

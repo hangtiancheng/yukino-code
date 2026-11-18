@@ -5,10 +5,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/file_history"
-	"github.com/yukino-js/yukino/yukino/plan_file"
-	"github.com/yukino-js/yukino/yukino/utils"
-	"github.com/yukino-js/yukino/yukino/worktree"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/file_history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/plan_file"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/utils"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/worktree"
 )
 
 type executionContextKey struct{}

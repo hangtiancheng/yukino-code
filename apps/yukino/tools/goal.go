@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/goal"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/goal"
 )
 
 // GoalTool mirrors tools/goal.ts. The manager is resolved lazily so a session

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yukino-js/yukino/yukino/sandbox"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/sandbox"
 )
 
 // backgroundRequest is the Ctrl+B handshake between backgroundForeground and

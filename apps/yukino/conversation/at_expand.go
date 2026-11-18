@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yukino-js/yukino/yukino/images"
-	"github.com/yukino-js/yukino/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/images"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
 )
 
 var atExpandLog = logger.CreateChildLogger("at-expand")

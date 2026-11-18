@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/todo"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/todo"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func TestDelegatedTodoBoardsAreIndependent(t *testing.T) {

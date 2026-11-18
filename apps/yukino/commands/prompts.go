@@ -3,7 +3,7 @@ package commands
 import (
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/subagent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/subagent"
 )
 
 func BuildPlanPrompt(args string) string {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func setupHome(t *testing.T) {

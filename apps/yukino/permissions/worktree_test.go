@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/sandbox"
-	"github.com/yukino-js/yukino/yukino/tools"
-	"github.com/yukino-js/yukino/yukino/worktree"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/sandbox"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/worktree"
 )
 
 func worktreeTestRuntime(t *testing.T) (string, *Checker, context.Context) {

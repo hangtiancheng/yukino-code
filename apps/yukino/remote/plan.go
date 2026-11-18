@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/permissions"
-	"github.com/yukino-js/yukino/yukino/plan_file"
-	"github.com/yukino-js/yukino/yukino/prompt"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/permissions"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/plan_file"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/prompt"
 )
 
 func (s *Server) planApprovalMessage(id string) wsMessage {

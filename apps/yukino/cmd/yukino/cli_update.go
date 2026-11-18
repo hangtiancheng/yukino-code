@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/yukino-js/yukino/yukino/update"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/update"
 )
 
 // updateUsage mirrors UPDATE_USAGE in src/cli.ts.

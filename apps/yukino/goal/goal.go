@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/yukino-js/yukino/yukino/logger"
-	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/logger"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
 )
 
 // maxSafeInteger mirrors Number.MAX_SAFE_INTEGER (2^53 - 1).

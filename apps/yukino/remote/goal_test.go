@@ -3,7 +3,7 @@ package remote
 import (
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
 )
 
 func TestServerGoalLazyPerSession(t *testing.T) {

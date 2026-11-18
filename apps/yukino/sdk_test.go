@@ -16,7 +16,7 @@ func TestExternalConsumer(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	module := fmt.Sprintf("module example.com/sdk-consumer\n\ngo 1.26.0\n\nrequire github.com/yukino-js/yukino/yukino v0.0.0\n\nreplace github.com/yukino-js/yukino/yukino => %q\n", root)
+	module := fmt.Sprintf("module example.com/sdk-consumer\n\ngo 1.26.0\n\nrequire github.com/hangtiancheng/yukino-code/apps/yukino v0.0.0\n\nreplace github.com/hangtiancheng/yukino-code/apps/yukino => %q\n", root)
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(module), 0600); err != nil {
 		t.Fatal(err)
 	}

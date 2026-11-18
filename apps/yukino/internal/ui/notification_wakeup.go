@@ -4,8 +4,8 @@ import (
 	"context"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yukino-js/yukino/yukino/teams"
-	"github.com/yukino-js/yukino/yukino/update"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/teams"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/update"
 )
 
 type updateNoticeMsg struct{ version string }

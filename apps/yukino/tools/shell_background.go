@@ -13,9 +13,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	"github.com/yukino-js/yukino/yukino/sandbox"
-	"github.com/yukino-js/yukino/yukino/storage"
-	"github.com/yukino-js/yukino/yukino/tool_result"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/sandbox"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tool_result"
 )
 
 const MaxShellOutputBytes = 10 * 1024 * 1024

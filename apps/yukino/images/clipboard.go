@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/file_history"
-	"github.com/yukino-js/yukino/yukino/storage"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/file_history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/storage"
 )
 
 // SaveClipboardImageResult mirrors the reference discriminated union

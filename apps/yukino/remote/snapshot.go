@@ -1,8 +1,8 @@
 package remote
 
 import (
-	"github.com/yukino-js/yukino/yukino/history"
-	"github.com/yukino-js/yukino/yukino/tools"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/history"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/tools"
 )
 
 func (s *Server) bootstrapMessages() []wsMessage {

@@ -10,7 +10,7 @@ import (
 
 	wire "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/server"
-	"github.com/yukino-js/yukino/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
 )
 
 type batchHandler struct {

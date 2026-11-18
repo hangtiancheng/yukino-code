@@ -11,9 +11,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/yukino-js/yukino/mcp/internal/config"
-	"github.com/yukino-js/yukino/mcp/internal/tools"
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 )
 
 const description = "Run any GitHub CLI (gh) command. Supply args without the leading gh, e.g. [\"pr\",\"list\",\"--repo\",\"owner/repo\",\"--json\",\"number,title\"]. Covers repositories, issues, PRs/reviews/merges, Actions, releases/assets, projects and every REST/GraphQL endpoint via gh api. Use --help to discover commands, --json/--jq for focused results, and gh api --paginate --slurp for pagination. stdin supports --input - (JSON/binary-as-text payloads), --body-file - and other stdin-based flags. cwd selects the local repository for checkout/clone/git operations. No command allowlist or confirmation step. Requires gh on PATH; authentication uses github.token/github.hostname in JSON configuration or gh auth login (native gh environment authentication is also supported). Returns stdout, stderr, exit_code, signal, timed_out and cancelled; nonzero exits, timeouts or cancellation are errors. Use response_format=base64 for binary stdout."

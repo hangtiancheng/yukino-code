@@ -14,10 +14,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/yukino-js/yukino/mcp/internal/config"
-	"github.com/yukino-js/yukino/mcp/internal/httpserver"
-	"github.com/yukino-js/yukino/mcp/internal/logger"
-	"github.com/yukino-js/yukino/mcp/internal/server"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/config"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/httpserver"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/logger"
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/server"
 )
 
 func main() {

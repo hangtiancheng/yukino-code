@@ -1,6 +1,6 @@
 package memory
 
-import "github.com/yukino-js/yukino/yukino/conversation"
+import "github.com/hangtiancheng/yukino-code/apps/yukino/conversation"
 
 // ExtractWrittenPaths returns file_path arguments of successful WriteFile and
 // EditFile calls. Only completed writes count as saved memories; assistant

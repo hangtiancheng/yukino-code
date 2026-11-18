@@ -2,8 +2,8 @@ package ui
 
 import (
 	"errors"
-	"github.com/yukino-js/yukino/yukino/agent"
-	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/agent"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
 )
 
 func (m *Model) Dispose() error {

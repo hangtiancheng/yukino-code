@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yukino-js/yukino/yukino/session"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/session"
 )
 
 func newTestManager(t *testing.T) *GoalManager {

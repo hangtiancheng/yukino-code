@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hangtiancheng/yukino-code/apps/mcp/internal/tools/operations"
 	"github.com/jackc/pgx/v5/pgproto3"
-	"github.com/yukino-js/yukino/mcp/internal/tools/operations"
 )
 
 func postgresFixture(t *testing.T) (string, <-chan [][]byte) {

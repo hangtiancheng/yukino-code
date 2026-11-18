@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yukino-js/yukino/yukino/todo"
+	"github.com/hangtiancheng/yukino-code/apps/yukino/todo"
 )
 
 func newTestTeamManager(t *testing.T) *TeamManager {
