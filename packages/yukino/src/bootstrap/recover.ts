@@ -1,0 +1,166 @@
+// Records process lifecycle events (start, exit, crash) for post-mortem analysis.
+
+import {
+  CRASH_LOG_FILENAME,
+  TERMINAL_GONE_CODES,
+} from "@/bootstrap/constants.js";
+import { runExitCleanups } from "@/bootstrap/exit-cleanup.js";
+import { closeLogger, logger } from "@/logger/index.js";
+import { getYukinoDir, yukinoPath } from "@/storage/index.js";
+import {
+  appendPrivateFileSync as appendFileSync,
+  mkdirPrivateSync as mkdirSync,
+} from "@/storage/private.js";
+import {
+  captureTelemetryError,
+  shutdownTelemetry,
+} from "@/telemetry/runtime.js";
+import { asErrorString } from "@/utils/format.js";
+
+/**
+ * Appends a timestamped entry to the crash log.
+ * Write failures are silently ignored so diagnostics never crash the process.
+ */
+export function record(text: string): void {
+  try {
+    mkdirSync(getYukinoDir());
+    appendFileSync(
+      yukinoPath(CRASH_LOG_FILENAME),
+      `[${new Date().toISOString()}] ${text}\n`,
+      "utf8",
+    );
+  } catch {
+    // Intentionally empty: a failing diagnostic write must not crash the process.
+  }
+}
+
+/** Records an exception with its full stack trace. `context` identifies the originating layer. */
+export function recordError(context: string, error: unknown): void {
+  const stack =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  record(`crash [${context}] ${stack}`);
+}
+
+// A terminal that goes away (window closed, VS Code main process dying, ssh
+// dropped, pty torn down) makes every later stdio write fail: EIO from the
+// dead pty, EPIPE once the reader is gone, or ERR_STREAM_DESTROYED after Node
+// has already torn the stream down. That is the session's terminal
+// disappearing, not a yukino fault, so it must not be logged as a crash.
+
+/** True when `err` is a write failure caused by the terminal or its reader vanishing. */
+export function isTerminalGone(err: unknown): boolean {
+  if (err === null || (typeof err !== "object" && typeof err !== "function")) {
+    return false;
+  }
+  const code: unknown = Reflect.get(err, "code");
+  return typeof code === "string" && TERMINAL_GONE_CODES.has(code);
+}
+
+let terminalGoneRecorded = false;
+
+/**
+ * End the process when the terminal is gone: records the condition once and
+ * exits 0, so crash.log shows a `start` + `exit` pair with no `crash` line.
+ */
+function exitForTerminalGone(context: string, error: unknown): never {
+  if (!terminalGoneRecorded) {
+    terminalGoneRecorded = true;
+    const detail = asErrorString(error);
+    record(`terminal closed [${context}] ${detail}`);
+  }
+  // No terminal is left to render into or read from: exit immediately, before
+  // the next frame fails the same way. process.exit() skips async child
+  // teardown, so sweep the sync cleanup registry first — detached background
+  // shells must not outlive the session as orphans.
+  runExitCleanups();
+  process.exit(0);
+}
+
+let exitRecorded = false;
+
+/**
+ * Writes the exit marker; subsequent calls are no-ops.
+ *
+ * The UI runs in raw mode where the `exit` event may not fire on teardown,
+ * so the main flow also calls this explicitly. Whichever path arrives first wins.
+ */
+export function recordExit(code: number | string): void {
+  if (exitRecorded) {
+    return;
+  }
+  exitRecorded = true;
+  record(`exit pid=${String(process.pid)} code=${String(code)}`);
+}
+
+/**
+ * Installs crash diagnostics; call once at process startup.
+ *
+ * Three kinds of traces are recorded: a `start` line marks the beginning of a run;
+ * an `exit` line is written by the `exit` event on graceful shutdown; and
+ * `uncaughtException` / `unhandledRejection` handlers capture errors that escape
+ * to the top of the event loop (which would otherwise only print to the terminal
+ * and be lost once it closes). Together they determine the exit mode:
+ * crash + exit → crashed; start + exit only → clean shutdown; start only → killed externally.
+ *
+ * A terminal that disappears under a live session (window closed, VS Code main
+ * process dying, ssh dropped) fails every later write with one of the
+ * TERMINAL_GONE_CODES. Those are recorded as a single `terminal closed` line
+ * and exit 0, so they read as a clean shutdown rather than a crash; see
+ * `isTerminalGone`.
+ */
+export function recover(): void {
+  record(`start pid=${String(process.pid)}`);
+
+  // Stdout writes are asynchronous: once the terminal is gone the failure
+  // arrives as a stream 'error' event. Handling it here keeps a normal window
+  // close from surfacing as an uncaughtException, and keeps the last frame
+  // from racing the teardown below.
+  const onStdioError = (err: unknown): void => {
+    if (isTerminalGone(err)) {
+      exitForTerminalGone("stdio", err);
+    }
+    throw err;
+  };
+  process.stdout.on("error", onStdioError);
+  process.stderr.on("error", onStdioError);
+
+  process.on("uncaughtException", (err) => {
+    // Losing the terminal mid-write is an expected end of session (the user
+    // closed the window), so report it as a clean exit instead of a crash.
+    if (isTerminalGone(err)) {
+      exitForTerminalGone("uncaught exception", err);
+    }
+    recordError("uncaught exception", err);
+    // Once a handler is registered the runtime no longer prints the error itself; log it explicitly
+    logger.fatal({ err }, "uncaught exception");
+    captureTelemetryError(err, "uncaught exception");
+    // Sync sweep before the async telemetry flush: the process is going down,
+    // and detached children must not survive it as orphans.
+    runExitCleanups();
+    void shutdownTelemetry().finally(() => {
+      process.exit(1);
+    });
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    if (isTerminalGone(reason)) {
+      exitForTerminalGone("unhandled rejection", reason);
+    }
+    recordError("unhandled rejection", reason);
+    logger.fatal({ err: reason }, "unhandled rejection");
+    captureTelemetryError(reason, "unhandled rejection");
+    runExitCleanups();
+    void shutdownTelemetry().finally(() => {
+      process.exit(1);
+    });
+  });
+
+  // Flush logs and record the exit marker. The cleanup sweep is a last
+  // resort: graceful paths stop children themselves, and every kill is
+  // guarded, so a repeated sweep is a no-op.
+  process.on("exit", (code) => {
+    runExitCleanups();
+    closeLogger();
+    recordExit(code);
+  });
+}

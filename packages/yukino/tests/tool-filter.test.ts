@@ -1,0 +1,164 @@
+import { describe, it, expect } from "vitest";
+
+import {
+  MAIN_AGENT_ONLY_TOOLS,
+  SUBAGENT_DISALLOWED_TOOLS,
+} from "@/subagent/constants.js";
+import {
+  cloneRegistryForTeammate,
+  filterToolsForAgent,
+} from "@/subagent/tool-filter.js";
+import { ToolRegistry } from "@/tools/registry.js";
+import type { Tool } from "@/tools/types.js";
+
+const stub = (name: string): Tool => ({
+  name,
+  description: name,
+  category: "read",
+  schema: () => ({
+    name,
+    description: name,
+    input_schema: { type: "object", properties: {} },
+  }),
+  execute: () => Promise.resolve({ output: "", isError: false }),
+});
+
+function buildRegistry(names: string[]): ToolRegistry {
+  const registry = new ToolRegistry();
+  for (const name of names) {
+    registry.register(stub(name));
+  }
+  return registry;
+}
+
+const ALL = [
+  "ComputerUse",
+  "AskUserQuestion",
+  "EnterPlanMode",
+  "ExitPlanMode",
+  "TaskStop",
+  "Agent",
+  "ReadFile",
+  "Bash",
+];
+
+describe("main-agent-only tool policy", () => {
+  it("treats a wildcard mixed with named tools as unrestricted rather than hiding other tools", () => {
+    const registry = filterToolsForAgent(
+      buildRegistry(["ReadFile", "Grep", "Bash"]),
+      ["*", "ReadFile"],
+      undefined,
+      false,
+    );
+    expect(registry.listTools().map((tool) => tool.name)).toEqual([
+      "ReadFile",
+      "Grep",
+      "Bash",
+    ]);
+  });
+  it("keeps MAIN_AGENT_ONLY_TOOLS inside the subagent disallow list", () => {
+    for (const name of MAIN_AGENT_ONLY_TOOLS) {
+      expect(SUBAGENT_DISALLOWED_TOOLS.has(name)).toBe(true);
+    }
+  });
+
+  it("strips main-agent authority and recursive Agent calls while keeping scoped TaskStop", () => {
+    const forked = filterToolsForAgent(
+      buildRegistry(ALL),
+      undefined,
+      undefined,
+      false,
+    );
+    const names = new Set(forked.listTools().map((t) => t.name));
+
+    for (const name of [
+      "ComputerUse",
+      "AskUserQuestion",
+      "EnterPlanMode",
+      "ExitPlanMode",
+    ]) {
+      expect(names.has(name)).toBe(false);
+    }
+    expect(names.has("Agent")).toBe(false);
+    for (const name of ["TaskStop", "ReadFile", "Bash"]) {
+      expect(names.has(name)).toBe(true);
+    }
+  });
+
+  it("strips main-agent-only tools plus Agent from defined subagents", () => {
+    const filtered = filterToolsForAgent(
+      buildRegistry(ALL),
+      ["*"],
+      undefined,
+      false,
+    );
+    const names = new Set(filtered.listTools().map((t) => t.name));
+
+    for (const name of [
+      "ComputerUse",
+      "AskUserQuestion",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "Agent",
+    ]) {
+      expect(names.has(name)).toBe(false);
+    }
+    for (const name of ["ReadFile", "Bash", "TaskStop"]) {
+      expect(names.has(name)).toBe(true);
+    }
+  });
+
+  it("keeps Bash available to asynchronous agents", () => {
+    const filtered = filterToolsForAgent(
+      buildRegistry(["Bash"]),
+      ["*"],
+      undefined,
+      true,
+    );
+    expect(filtered.get("Bash")).toBeDefined();
+  });
+
+  it.each([false, true])(
+    "allows ExitPlanMode for plan definitions without allowing EnterPlanMode (async=%s)",
+    (isAsync) => {
+      const registry = buildRegistry(ALL);
+      const filtered = filterToolsForAgent(
+        registry,
+        ["*"],
+        undefined,
+        isAsync,
+        "plan",
+      );
+      expect(filtered.get("ExitPlanMode")).toBeDefined();
+      expect(filtered.get("EnterPlanMode")).toBeUndefined();
+      expect(
+        filterToolsForAgent(
+          registry,
+          ["*"],
+          ["ExitPlanMode"],
+          isAsync,
+          "plan",
+        ).get("ExitPlanMode"),
+      ).toBeUndefined();
+      expect(
+        filterToolsForAgent(
+          registry,
+          ["ReadFile"],
+          undefined,
+          isAsync,
+          "plan",
+        ).get("ExitPlanMode"),
+      ).toBeUndefined();
+    },
+  );
+
+  it("keeps the plan exit exception through teammate cloning", () => {
+    const registry = buildRegistry(ALL);
+    expect(
+      cloneRegistryForTeammate(registry).get("ExitPlanMode"),
+    ).toBeUndefined();
+    const teammate = cloneRegistryForTeammate(registry, "plan");
+    expect(teammate.get("ExitPlanMode")).toBeDefined();
+    expect(teammate.get("EnterPlanMode")).toBeUndefined();
+  });
+});

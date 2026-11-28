@@ -1,0 +1,244 @@
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { HookConfig } from "@/config/index.js";
+import { HookEngine, validate } from "@/hooks/index.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe("hook execution boundaries", () => {
+  it("consumes each anonymous once hook only after its condition matches", async () => {
+    const hooks: HookConfig[] = ["first", "second"].map((prompt) => ({
+      event: "pre_tool_use",
+      condition: 'tool === "WriteFile"',
+      once: true,
+      action: { type: "prompt", prompt },
+    }));
+    const engine = new HookEngine(hooks);
+    await engine.firePreToolHooks("ReadFile", {});
+    expect(engine.drainNotifications()).toEqual([]);
+    await engine.firePreToolHooks("WriteFile", {});
+    expect(engine.drainNotifications()).toEqual(["first", "second"]);
+    await engine.firePreToolHooks("WriteFile", {});
+    expect(engine.drainNotifications()).toEqual([]);
+  });
+
+  it("honors prompt rejection for a matching tool condition", async () => {
+    const engine = new HookEngine([
+      {
+        event: "pre_tool_use",
+        condition: 'tool === "Bash"',
+        reject: true,
+        action: { type: "prompt", prompt: "blocked" },
+      },
+    ]);
+    expect(await engine.firePreToolHooks("Bash", {})).toEqual({
+      rejected: true,
+      reason: "blocked",
+    });
+    expect(await engine.firePreToolHooks("ReadFile", {})).toEqual({
+      rejected: false,
+      reason: "",
+    });
+  });
+
+  it.each([
+    ["/\\.ts$/.test(filePath)", "src/file.ts", true],
+    ["/\\.ts$/.test(filePath)", "src/fileXts", false],
+    [
+      'filePath.startsWith("src/") && filePath.endsWith(".ts")',
+      "src/a/b/file.ts",
+      true,
+    ],
+    ['filePath === "a && b"', "a && b", true],
+    [
+      'tool === "ReadFile" || (tool === "WriteFile" && filePath === "x")',
+      "y",
+      true,
+    ],
+    ['args.file_path === "x"', "x", true],
+    ["undefinedVariable === true", "x", false],
+  ])(
+    "matches condition %s against %s",
+    async (condition, filePath, matched) => {
+      const engine = new HookEngine([
+        {
+          event: "pre_tool_use",
+          condition,
+          reject: true,
+          action: { type: "prompt", prompt: "matched" },
+        },
+      ]);
+      expect(
+        (await engine.firePreToolHooks("ReadFile", { file_path: filePath }))
+          .rejected,
+      ).toBe(matched);
+    },
+  );
+
+  it("runs commands in the agent work directory", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-hook-"));
+    try {
+      const engine = new HookEngine([
+        { event: "pre_send", action: { type: "command", command: "pwd -P" } },
+      ]);
+      const results = await engine.fire(
+        "pre_send",
+        { event: "pre_send" },
+        { cwd },
+      );
+      expect(results[0]?.output).toBe(realpathSync(cwd));
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "uses Bash for command hooks on POSIX",
+    async () => {
+      const engine = new HookEngine([
+        {
+          event: "pre_send",
+          action: {
+            type: "command",
+            command: '[[ -n "$BASH_VERSION" ]] && printf bash',
+          },
+        },
+      ]);
+
+      const results = await engine.fire("pre_send", { event: "pre_send" });
+      expect(results[0]).toMatchObject({ output: "bash", success: true });
+    },
+  );
+
+  it("sends no body for GET and applies on_error to non-success HTTP status", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("unavailable", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const engine = new HookEngine([
+      {
+        event: "pre_tool_use",
+        on_error: "reject",
+        action: { type: "http", url: "https://hooks.invalid", method: "get" },
+      },
+    ]);
+    const result = await engine.firePreToolHooks("WriteFile", {});
+    expect(result.rejected).toBe(true);
+    expect(result.reason).toContain("503");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBeUndefined();
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("rejects agent hooks during production configuration validation", () => {
+    const error = validate([
+      {
+        event: "pre_send",
+        action: { type: "agent", prompt: "inspect" },
+      },
+    ]);
+
+    expect(error?.message).toContain('action.type "agent" is not supported');
+  });
+
+  it("accepts a broken condition at validation and skips it silently at runtime", async () => {
+    const hooks: HookConfig[] = [
+      {
+        event: "pre_tool_use",
+        condition: "tool ===",
+        reject: true,
+        action: { type: "prompt", prompt: "never" },
+      },
+    ];
+
+    expect(validate(hooks)).toBeNull();
+    expect(await new HookEngine(hooks).firePreToolHooks("Bash", {})).toEqual({
+      rejected: false,
+      reason: "",
+    });
+  });
+
+  it("applies on_error to agent hook failures and stops the rejected chain", async () => {
+    const engine = new HookEngine([
+      {
+        event: "pre_tool_use",
+        on_error: "reject",
+        action: { type: "agent", prompt: "inspect" },
+      },
+      {
+        event: "pre_tool_use",
+        action: { type: "command", command: "should-never-run" },
+      },
+    ]);
+    expect((await engine.firePreToolHooks("WriteFile", {})).rejected).toBe(
+      true,
+    );
+    engine.agentRunner = () => Promise.reject(new Error("runner failed"));
+    const result = await engine.firePreToolHooks("WriteFile", {});
+    expect(result.rejected).toBe(true);
+    expect(result.reason).toContain("runner failed");
+  });
+
+  it("does not launch hooks after cancellation or enqueue synthetic async output", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("finished"));
+    vi.stubGlobal("fetch", fetchMock);
+    const engine = new HookEngine([
+      {
+        event: "pre_send",
+        async: true,
+        action: { type: "http", url: "https://hooks.invalid" },
+      },
+    ]);
+    const controller = new AbortController();
+    controller.abort();
+    expect(
+      await engine.fire(
+        "pre_send",
+        { event: "pre_send" },
+        { abortSignal: controller.signal },
+      ),
+    ).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await engine.fire("pre_send", { event: "pre_send" })).toEqual([]);
+    await vi.waitFor(() => {
+      expect(engine.drainNotifications()).toEqual(["finished"]);
+    });
+  });
+
+  it("releases a once slot when an async hook fails", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error("first failed"))
+      .mockResolvedValueOnce(new Response("retried"));
+    vi.stubGlobal("fetch", fetchMock);
+    const engine = new HookEngine([
+      {
+        event: "pre_send",
+        once: true,
+        async: true,
+        on_error: "fail",
+        action: { type: "http", url: "https://hooks.invalid" },
+      },
+    ]);
+
+    await engine.fire("pre_send", { event: "pre_send" });
+    await vi.waitFor(() => {
+      expect(engine.drainNotifications()[0]).toContain("first failed");
+    });
+
+    await engine.fire("pre_send", { event: "pre_send" });
+    await vi.waitFor(() => {
+      expect(engine.drainNotifications()).toEqual(["retried"]);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

@@ -1,0 +1,887 @@
+import { join } from "node:path";
+
+import { render, type Instance } from "ink";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VirtualTerminal } from "./helpers/virtual-terminal.js";
+
+import * as config from "@/config/index.js";
+import { RuntimePreferencesSchema } from "@/config/preferences.js";
+import type { ConversationManager } from "@/conversation/index.js";
+import { loadInputTexts as loadPromptHistory } from "@/history/index.js";
+import type { LLMClient } from "@/llm/client.js";
+import type * as llmClientModule from "@/llm/client.js";
+import type { StreamEvent } from "@/llm/events.js";
+import { MCPClient } from "@/mcp/client.js";
+import type { MCPServerConfig } from "@/mcp/config.js";
+import { PermissionChecker } from "@/permissions/index.js";
+import * as sessionMod from "@/session/index.js";
+import { SessionManager } from "@/session/manager.js";
+import { FileStateCache } from "@/tools/file-state-cache.js";
+import { App } from "@/ui/app.js";
+import { installTerminalOutput } from "@/ui/terminal-output.js";
+import { checkForUpdate } from "@/update/version-check.js";
+import { contentToText } from "@/utils/index.js";
+import { connectToIde } from "@/vscode/ide-client.js";
+
+const { createClientMock } = vi.hoisted(() => ({
+  createClientMock: vi.fn<() => Promise<LLMClient>>(),
+}));
+vi.mock("@/llm/client.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof llmClientModule>()),
+  createClient: createClientMock,
+}));
+vi.mock("@/update/version-check.js", () => ({ checkForUpdate: vi.fn() }));
+vi.mock("@/vscode/ide-client.js", () => ({ connectToIde: vi.fn() }));
+
+class ControlledClient implements LLMClient {
+  readonly protocol = "openai";
+  readonly requests: {
+    users: string[];
+    conversation: ConversationManager;
+    messages: ReturnType<ConversationManager["getMessages"]>;
+    schemas: unknown[];
+    signal?: AbortSignal;
+    finish: () => void;
+    fail: (error: Error) => void;
+  }[] = [];
+
+  setSystemPrompt = vi.fn<(prompt: string) => void>();
+
+  async *stream(
+    conversation: ConversationManager,
+    _schemas: unknown[],
+    signal?: AbortSignal,
+  ): AsyncGenerator<StreamEvent> {
+    let finish = (): void => undefined;
+    let fail = (_error: Error): void => undefined;
+    const waiting = new Promise<void>((resolve, reject) => {
+      const abort = () => {
+        reject(new DOMException("Interrupted", "AbortError"));
+      };
+      finish = () => {
+        signal?.removeEventListener("abort", abort);
+        resolve();
+      };
+      fail = (error) => {
+        signal?.removeEventListener("abort", abort);
+        reject(error);
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) {
+        abort();
+      }
+    });
+    const index = this.requests.length;
+    this.requests.push({
+      conversation,
+      messages: structuredClone(conversation.getMessages()),
+      schemas: structuredClone(_schemas),
+      users: conversation
+        .getMessages()
+        .filter((message) => message.role === "user")
+        .map((message) => contentToText(message.content)),
+      signal,
+      finish,
+      fail,
+    });
+    yield {
+      type: "text_delta",
+      text:
+        index === 0
+          ? "FIRST_REPLY\n\n" +
+            "Prior assistant output\n".repeat(60) +
+            "FIRST_END"
+          : `NEXT_REPLY_${String(index)}`,
+    };
+    await waiting;
+    yield {
+      type: "stream_end",
+      stopReason: "end_turn",
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+      },
+    };
+  }
+}
+
+let terminal: VirtualTerminal;
+let instance: Instance | undefined;
+let restoreOutput: () => void;
+let client: ControlledClient;
+
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubEnv("TERM_PROGRAM", "vscode");
+  vi.stubEnv("TMUX", "");
+  client = new ControlledClient();
+  createClientMock.mockResolvedValue(client);
+  vi.mocked(checkForUpdate).mockResolvedValue(undefined);
+  vi.mocked(connectToIde).mockResolvedValue(null);
+  terminal = new VirtualTerminal(120, 24);
+  restoreOutput = installTerminalOutput(terminal.stdout);
+});
+
+afterEach(async () => {
+  await act(async () => {
+    const exit = instance?.waitUntilExit();
+    instance?.unmount();
+    await exit;
+    instance?.cleanup();
+    for (const request of client.requests) {
+      request.finish();
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  instance = undefined;
+  restoreOutput();
+  terminal.dispose();
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+async function flush() {
+  await instance?.waitUntilRenderFlush();
+  await terminal.flush();
+}
+
+async function waitForRequests(count: number) {
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    expect(client.requests, terminal.bufferLines().join("\n")).toHaveLength(
+      count,
+    );
+  });
+  await flush();
+}
+
+async function finishRequest(index: number) {
+  await act(async () => {
+    client.requests[index]?.finish();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  await flush();
+}
+
+async function press(input: string) {
+  await act(async () => {
+    terminal.inputStream.write(input);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  await flush();
+}
+
+async function submit(text: string) {
+  await press(text);
+  await press("\r");
+}
+
+async function mount(
+  mcpServers: MCPServerConfig[] = [],
+  permissionMode?: string,
+) {
+  await act(async () => {
+    instance = render(
+      createElement(App, {
+        providers: [
+          {
+            name: "test",
+            protocol: "openai",
+            base_url: "http://unused.example",
+            model: "test-model",
+          },
+        ],
+        mcpServers,
+        permissionMode,
+        hooks: [],
+        memoryEnabled: false,
+        invocationOptions: { noProjectResources: true },
+      }),
+      {
+        stdout: terminal.stdout,
+        stdin: terminal.stdin,
+        stderr: terminal.stdout,
+        interactive: true,
+        patchConsole: false,
+        exitOnCtrlC: false,
+      },
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  await flush();
+}
+
+async function start(mcpServers: MCPServerConfig[] = []) {
+  await mount(mcpServers);
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    expect(createClientMock).toHaveBeenCalled();
+  });
+  await flush();
+  await submit("INITIAL_REQUEST");
+  await waitForRequests(1);
+}
+
+describe("App steering delivery", () => {
+  it("honors an explicitly configured plan permission mode at startup", async () => {
+    const modes: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- invoked with the original receiver below
+    const forCwd = PermissionChecker.prototype.forCwd;
+    vi.spyOn(PermissionChecker.prototype, "forCwd").mockImplementation(
+      function (this: PermissionChecker, cwd) {
+        modes.push(this.mode);
+        return forCwd.call(this, cwd);
+      },
+    );
+    await mount([], "plan");
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+      expect(modes).toContain("plan");
+    });
+    expect(modes).not.toContain("default");
+  });
+
+  it("delivers the first input exactly once after delayed initialization without calling it a follow-up", async () => {
+    let resolveClient!: (value: LLMClient) => void;
+    createClientMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveClient = resolve;
+        }),
+    );
+    await mount();
+    await vi.waitFor(() => {
+      expect(createClientMock).toHaveBeenCalled();
+    });
+    await submit("EARLY_INITIAL_INPUT");
+    const screen = terminal.bufferLines().join("\n");
+    expect(screen).toContain("Waiting for initialization");
+    expect(screen).not.toContain("Follow-up: EARLY_INITIAL_INPUT");
+    expect(client.requests).toHaveLength(0);
+    expect(loadPromptHistory()).not.toContain("EARLY_INITIAL_INPUT");
+    await act(async () => {
+      resolveClient(client);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    await waitForRequests(1);
+    expect(
+      client.requests[0].users.filter((text) => text === "EARLY_INITIAL_INPUT"),
+    ).toHaveLength(1);
+    await finishRequest(0);
+    expect(client.requests).toHaveLength(1);
+  });
+
+  it("keeps failed initialization editable and lets MCP reload recover outside the blocked queue", async () => {
+    vi.spyOn(config, "loadConfig").mockReturnValue(
+      config.AppConfigSchema.parse({
+        providers: [
+          {
+            name: "test",
+            protocol: "openai",
+            base_url: "http://unused.example",
+            model: "test-model",
+          },
+        ],
+        enable_memory: false,
+      }),
+    );
+    createClientMock.mockRejectedValueOnce(
+      new Error("Local initialization failure"),
+    );
+    await mount();
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+      await flush();
+      expect(terminal.bufferLines().join("\n")).toContain(
+        "Failed to initialize agent",
+      );
+    });
+    await submit("EDITABLE_FIRST_INPUT");
+    expect(terminal.bufferLines().join("\n")).not.toContain(
+      "Follow-up: EDITABLE_FIRST_INPUT",
+    );
+    expect(loadPromptHistory()).not.toContain("EDITABLE_FIRST_INPUT");
+    expect(terminal.bufferLines().join("\n")).toContain("EDITABLE_FIRST_INPUT");
+    let remaining = "EDITABLE_FIRST_INPUT".length;
+    while (remaining > 0) {
+      await press("\u007f");
+      remaining -= 1;
+    }
+    await submit("/mcp reload");
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+      expect(
+        createClientMock,
+        terminal.bufferLines().join("\n"),
+      ).toHaveBeenCalledTimes(2);
+    });
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+      await flush();
+      expect(terminal.bufferLines().join("\n")).toContain("MCP reloaded");
+    });
+    await submit("RECOVERED_FIRST_INPUT");
+    await waitForRequests(1);
+    expect(client.requests[0].users).toContain("RECOVERED_FIRST_INPUT");
+    expect(client.requests[0].users).not.toContain("EDITABLE_FIRST_INPUT");
+    await finishRequest(0);
+  });
+
+  it("runs /review in a fresh foreground child and returns its findings to the parent", async () => {
+    await start();
+    await finishRequest(0);
+    const parent = client.requests[0].conversation;
+    await submit("/review 42");
+    await waitForRequests(2);
+    const child = client.requests[1];
+    expect(child.conversation).not.toBe(parent);
+    expect(child.users.join("\n")).toContain("gh pr diff");
+    expect(child.users.join("\n")).not.toContain("INITIAL_REQUEST");
+    await submit("FOLLOW_UP_AFTER_REVIEW");
+    expect(client.requests).toHaveLength(2);
+    await finishRequest(1);
+    await waitForRequests(3);
+    expect(client.requests[2].conversation).toBe(parent);
+    expect(parent.getMessages()).toContainEqual(
+      expect.objectContaining({ role: "assistant", content: "NEXT_REPLY_1" }),
+    );
+    expect(client.requests[2].users.join("\n")).toContain("/review 42");
+    await finishRequest(2);
+  });
+
+  it("cancels the foreground review and accepts a new turn", async () => {
+    await start();
+    await finishRequest(0);
+    await submit("/review 42");
+    await waitForRequests(2);
+    await press("\u001b");
+    await vi.waitFor(() => {
+      expect(client.requests[1].signal?.aborted).toBe(true);
+    });
+    await submit("CONTINUE_AFTER_REVIEW");
+    await waitForRequests(3);
+    expect(client.requests[2].conversation).toBe(
+      client.requests[0].conversation,
+    );
+    await finishRequest(2);
+  });
+
+  it("keeps the read cache when the rewind picker is cancelled", async () => {
+    await start();
+    await finishRequest(0);
+    const clear = vi.spyOn(FileStateCache.prototype, "clear");
+    const conversation = client.requests[0].conversation;
+    const before = conversation.getMessages();
+    await submit("/rewind ");
+    await press("\r");
+    await press("\x1b[A");
+    await press("\r");
+    expect(clear).not.toHaveBeenCalled();
+    expect(conversation.getMessages()).toEqual(before);
+  });
+
+  it("keeps queued input and history after a conversation rewind fails", async () => {
+    await start();
+    await submit("/rewind ");
+    await submit("/queued-after-rewind-failure");
+    await finishRequest(0);
+    const clear = vi.spyOn(FileStateCache.prototype, "clear");
+    vi.spyOn(SessionManager.prototype, "navigate").mockImplementation(() => {
+      throw new Error("rewind storage unavailable");
+    });
+    const conversation = client.requests[0].conversation;
+    const before = conversation.getMessages();
+    await press("\r");
+    await press("\x1b[B");
+    await press("\r");
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await flush();
+      });
+      expect(terminal.bufferLines().join("\n")).toContain(
+        "Unknown command: /queued-after-rewind-failure",
+      );
+    });
+    expect(clear).not.toHaveBeenCalled();
+    expect(conversation.getMessages()).toEqual(before);
+    expect(terminal.bufferLines().join("\n")).toContain(
+      "Rewind failed: rewind storage unavailable",
+    );
+  });
+
+  it("keeps the original session and queued input if resume cannot load and renew its transcript", async () => {
+    await start();
+    const targetId = sessionMod.newSessionId();
+    sessionMod.saveMessage(process.cwd(), targetId, {
+      role: "user",
+      content: "RESUME_TARGET",
+      timestamp: 1,
+    });
+    vi.spyOn(SessionManager, "open").mockImplementation(() => {
+      throw new Error("resume storage unavailable");
+    });
+    await submit(`/resume ${targetId}`);
+    await submit("/queued-after-resume-failure");
+    await finishRequest(0);
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await flush();
+      });
+      expect(terminal.bufferLines().join("\n")).toContain(
+        "Unknown command: /queued-after-resume-failure",
+      );
+    });
+    const text = client.requests[0].conversation
+      .getMessages()
+      .map((message) => contentToText(message.content))
+      .join("\n");
+    expect(text).toContain("INITIAL_REQUEST");
+    expect(text).not.toContain("RESUME_TARGET");
+  });
+  it.each([5, 12, 24, 40])(
+    "renders delivered steering cards after the prior assistant response at %i rows",
+    async (rows) => {
+      terminal.resize(120, rows);
+      await start();
+      await submit("STEERING_CARD 中文修正");
+      await submit("SECOND_STEERING_CARD");
+      await finishRequest(0);
+      await waitForRequests(2);
+      expect(client.requests[1]?.users.slice(-2)).toEqual([
+        "STEERING_CARD 中文修正",
+        "SECOND_STEERING_CARD",
+      ]);
+      await finishRequest(1);
+      const lines = terminal.bufferLines();
+      expect(
+        lines.filter((line) => line.includes("STEERING_CARD 中文修正")),
+      ).toHaveLength(1);
+      expect(
+        lines.filter((line) => line.includes("SECOND_STEERING_CARD")),
+      ).toHaveLength(1);
+      const first = lines.findIndex((line) =>
+        line.includes("STEERING_CARD 中文修正"),
+      );
+      const second = lines.findIndex((line) =>
+        line.includes("SECOND_STEERING_CARD"),
+      );
+      expect(first).toBeGreaterThan(
+        lines.findIndex((line) => line.includes("FIRST_END")),
+      );
+      expect(second).toBeGreaterThan(first);
+      expect(
+        lines.findIndex((line) => line.includes("NEXT_REPLY_1")),
+      ).toBeGreaterThan(second);
+    },
+  );
+
+  it.each(["\x1b", "\x03"])(
+    "continues queued steering after interrupt %j with a fresh signal",
+    async (interrupt) => {
+      await start();
+      await submit("STEERING_AFTER_INTERRUPT");
+      await press(interrupt);
+      await waitForRequests(2);
+      expect(client.requests[0]?.signal?.aborted).toBe(true);
+      expect(client.requests[1]?.signal?.aborted).toBe(false);
+      expect(
+        client.requests[1]?.users.filter(
+          (text) => text === "STEERING_AFTER_INTERRUPT",
+        ),
+      ).toHaveLength(1);
+      await finishRequest(1);
+      expect(
+        terminal
+          .bufferLines()
+          .filter((line) => line.includes("STEERING_AFTER_INTERRUPT")),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("preserves duplicate steering messages and their order across interruption", async () => {
+    await start();
+    for (const text of ["REPEAT_STEER", "REPEAT_STEER", "TAIL_STEER"]) {
+      await submit(text);
+    }
+    await press("\x03");
+    for (let index = 1; index <= 3; index++) {
+      await waitForRequests(index + 1);
+      const request = client.requests[index];
+      expect(
+        request?.users.filter((text) => text === "REPEAT_STEER"),
+      ).toHaveLength(Math.min(index, 2));
+      expect(request?.users.includes("TAIL_STEER")).toBe(index === 3);
+      expect(request?.signal?.aborted).toBe(false);
+      await finishRequest(index);
+    }
+    await flush();
+    const lines = terminal.bufferLines();
+    expect(lines.filter((line) => line.includes("REPEAT_STEER"))).toHaveLength(
+      2,
+    );
+    expect(lines.filter((line) => line.includes("TAIL_STEER"))).toHaveLength(1);
+    expect(loadPromptHistory()).toEqual([
+      "INITIAL_REQUEST",
+      "REPEAT_STEER",
+      "TAIL_STEER",
+    ]);
+  });
+
+  it("stops without starting another request when no steering is queued", async () => {
+    await start();
+    await press("\x03");
+    await flush();
+    expect(client.requests).toHaveLength(1);
+    expect(client.requests[0]?.signal?.aborted).toBe(true);
+    await submit("EXPLICIT_NEXT_REQUEST");
+    await waitForRequests(2);
+    expect(client.requests[1]?.users).toContain("EXPLICIT_NEXT_REQUEST");
+    await finishRequest(1);
+  });
+});
+
+describe("App plan approval", () => {
+  it.each([
+    { role: "review", outcome: "complete" },
+    { role: "review", outcome: "fail" },
+    { role: "review", outcome: "cancel" },
+    { role: "plan", outcome: "complete" },
+    { role: "plan", outcome: "fail" },
+    { role: "plan", outcome: "cancel" },
+  ])(
+    "updates /$role progress and releases input after $outcome",
+    async ({ role, outcome }) => {
+      await start();
+      await finishRequest(0);
+      await submit(`/${role} 42`);
+      await waitForRequests(2);
+      await vi.waitFor(async () => {
+        await flush();
+        const output = terminal.bufferLines().join("\n");
+        expect(output).toContain(`Agent /${role} 42  ● running`);
+        expect(output).toContain(`${role} subagent | 0 turns`);
+      });
+
+      if (outcome === "cancel") {
+        await press("\x1b");
+        await vi.waitFor(async () => {
+          await act(async () => {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+          });
+          expect(client.requests[1].signal?.aborted).toBe(true);
+        });
+      } else if (outcome === "fail") {
+        await act(async () => {
+          client.requests[1].fail(new Error("Command child failed"));
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        });
+      } else {
+        await finishRequest(1);
+      }
+
+      const status =
+        outcome === "cancel"
+          ? "stopped"
+          : outcome === "fail"
+            ? "failed"
+            : "completed";
+      await vi.waitFor(async () => {
+        await flush();
+        const output = terminal.bufferLines().join("\n");
+        expect(output).toMatch(
+          new RegExp(`Agent /${role} 42  [✓✗–] ${status}`),
+        );
+        expect(output).not.toContain(`Agent /${role} 42  ● running`);
+        expect(output).toContain(
+          `${role} subagent | ${outcome === "complete" ? "1" : "0"} turns`,
+        );
+        expect(output.includes("Plan complete")).toBe(
+          role === "plan" && outcome === "complete",
+        );
+      });
+
+      expect(client.requests).toHaveLength(2);
+      if (role === "plan" && outcome === "complete") {
+        await press("\x1b[B");
+        await press("\r");
+      } else {
+        await submit(`CONTINUE_AFTER_${role}_${outcome}`);
+      }
+      await waitForRequests(3);
+      expect(client.requests[2].conversation).toBe(
+        client.requests[0].conversation,
+      );
+      await finishRequest(2);
+    },
+  );
+
+  it("shows EnterPlanMode progress and completes its card before requesting approval", async () => {
+    await start();
+    await finishRequest(0);
+    const parent = client.requests[0].conversation;
+    vi.spyOn(client, "stream").mockImplementationOnce(async function* () {
+      await Promise.resolve();
+      yield {
+        type: "tool_call_start",
+        toolId: "enter-plan",
+        toolName: "EnterPlanMode",
+      };
+      yield {
+        type: "tool_call_complete",
+        toolId: "enter-plan",
+        toolName: "EnterPlanMode",
+        arguments: {},
+      };
+      yield {
+        type: "stream_end",
+        stopReason: "tool_use",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        },
+      };
+    });
+
+    await submit("PLAN_THE_FIX");
+    await waitForRequests(2);
+    expect(client.requests[1].conversation).not.toBe(parent);
+    await vi.waitFor(async () => {
+      await flush();
+      const output = terminal.bufferLines().join("\n");
+      expect(output).toContain("EnterPlanMode");
+      expect(output).toContain("plan subagent | 0 turns");
+      expect(output).not.toContain("Plan complete");
+    });
+
+    await finishRequest(1);
+    await vi.waitFor(async () => {
+      await flush();
+      const output = terminal.bufferLines().join("\n");
+      expect(output).toContain("EnterPlanMode  ✓ completed");
+      expect(output).toContain("plan subagent | 1 turns");
+      expect(output).toContain("Plan complete");
+      expect(output).not.toContain("EnterPlanMode  ● running");
+    });
+    expect(client.requests).toHaveLength(2);
+    await press("\x1b[B");
+    await press("\r");
+    await waitForRequests(3);
+    expect(client.requests[2].conversation).toBe(parent);
+    expect(client.requests[2].users.at(-1)).toBe(
+      "Execute this plan:\n\nNEXT_REPLY_1",
+    );
+    await finishRequest(2);
+  });
+
+  it.each([
+    {
+      approval: "manual selection",
+      keys: ["\x1b[B", "\r"],
+      mode: "default",
+      effect: "ask",
+      message: "Each edit requires confirmation.",
+    },
+    {
+      approval: "Escape",
+      keys: ["\x1b"],
+      mode: "default",
+      effect: "ask",
+      message: "Each edit requires confirmation.",
+    },
+    {
+      approval: "YOLO selection",
+      keys: ["\r"],
+      mode: "bypassPermissions",
+      effect: "allow",
+      message: "Entered YOLO mode.",
+    },
+  ])(
+    "uses $mode after $approval for a plan entered with /plan",
+    async ({ keys, mode, effect, message }) => {
+      const entered = vi.spyOn(PermissionChecker.prototype, "enterPlanMode");
+      await start();
+      await finishRequest(0);
+      await submit("/plan ");
+      expect(entered).toHaveBeenCalledOnce();
+      const checker = entered.mock.contexts[0];
+      if (!(checker instanceof PermissionChecker)) {
+        throw new Error("Plan mode owner was not captured");
+      }
+      expect(checker.mode).toBe("plan");
+      await waitForRequests(2);
+      const parent = client.requests[0].conversation;
+      const child = client.requests[1];
+      expect(child.conversation).not.toBe(parent);
+      expect(child.users).toContain("INITIAL_REQUEST");
+      expect(
+        child.messages.some((message) =>
+          contentToText(message.content).includes('role "plan"'),
+        ),
+      ).toBe(true);
+      expect(JSON.stringify(child.schemas)).not.toContain('"name":"WriteFile"');
+      expect(JSON.stringify(child.schemas)).not.toContain(
+        '"name":"ExitPlanMode"',
+      );
+      const plan = "NEXT_REPLY_1";
+      await finishRequest(1);
+      await vi.waitFor(() => {
+        expect(terminal.bufferLines().join("\n")).toContain("Plan complete");
+      });
+      for (const key of keys) {
+        await press(key);
+      }
+      await waitForRequests(3);
+      expect(terminal.bufferLines().join("\n")).toContain(message);
+      expect(checker.mode).toBe(mode);
+      expect(
+        checker.check("EditFile", "write", {
+          file_path: join(process.cwd(), "plan-approval-test.txt"),
+        }).effect,
+      ).toBe(effect);
+      expect(client.requests[2]?.users.at(-1)).toBe(
+        `Execute this plan:\n\n${plan}`,
+      );
+      expect(client.requests[2].conversation).toBe(parent);
+      await finishRequest(2);
+    },
+  );
+});
+
+describe("App MCP reload", () => {
+  it("retracts old instructions without rewriting the cached conversation prefix or unchanged schemas", async () => {
+    let changed = false;
+    vi.spyOn(MCPClient.prototype, "connect").mockImplementation(function (
+      this: MCPClient,
+    ) {
+      return changed && this.name === "failed"
+        ? Promise.reject(
+            Object.assign(new Error("server unavailable"), { code: "ENOENT" }),
+          )
+        : Promise.resolve();
+    });
+    vi.spyOn(MCPClient.prototype, "disconnect").mockResolvedValue();
+    vi.spyOn(MCPClient.prototype, "listTools").mockResolvedValue([
+      {
+        name: "echo",
+        description: "Echo",
+        inputSchema: { type: "object", properties: {} },
+      },
+    ]);
+    vi.spyOn(MCPClient.prototype, "getInstructions").mockImplementation(
+      function (this: MCPClient) {
+        return changed && this.name === "quiet"
+          ? ""
+          : `${this.name} ${changed ? "new" : "old"} guidance`;
+      },
+    );
+    const servers = ["same", "removed", "failed", "quiet"].map((name) => ({
+      name,
+      command: "unused",
+    }));
+    const loadConfig = vi.spyOn(config, "loadConfig").mockReturnValue({
+      default_provider: 0,
+      ...RuntimePreferencesSchema.parse({}),
+      theme: "auto",
+      providers: [
+        {
+          name: "test",
+          protocol: "openai",
+          base_url: "http://unused.example",
+          model: "test-model",
+        },
+      ],
+      mcp_servers: servers,
+      hooks: [],
+    });
+    await start(servers);
+    await finishRequest(0);
+    const systemPromptCalls = client.setSystemPrompt.mock.calls.length;
+    const conversation = client.requests[0].conversation;
+    const before = structuredClone(conversation.getMessages());
+    expect(
+      before.map((message) => contentToText(message.content)).join("\n"),
+    ).toContain("removed old guidance");
+
+    await submit("/mcp reload");
+    await vi.waitFor(() => {
+      expect(terminal.bufferLines().join("\n")).toContain("MCP reloaded:");
+    });
+    await submit("AFTER_UNCHANGED_RELOAD");
+    await waitForRequests(2);
+    const unchanged = client.requests[1];
+    expect(unchanged.schemas).toEqual(client.requests[0].schemas);
+    expect(unchanged.messages.slice(0, before.length)).toEqual(before);
+    const appended = unchanged.messages
+      .slice(before.length)
+      .map((message) => contentToText(message.content))
+      .join("\n");
+    expect(appended).toContain(
+      "no longer apply:\nfailed\nquiet\nremoved\nsame",
+    );
+    expect(appended.indexOf("no longer apply")).toBeLessThan(
+      appended.indexOf("## same\nsame old guidance"),
+    );
+    await finishRequest(1);
+
+    changed = true;
+    loadConfig.mockReturnValue({
+      default_provider: 0,
+      ...RuntimePreferencesSchema.parse({}),
+      theme: "auto",
+      providers: [
+        {
+          name: "test",
+          protocol: "openai",
+          base_url: "http://unused.example",
+          model: "test-model",
+        },
+      ],
+      mcp_servers: servers.filter(({ name }) => name !== "removed"),
+      hooks: [],
+    });
+    const prefix = structuredClone(
+      client.requests[1].conversation.getMessages(),
+    );
+    await submit("/mcp reload");
+    await vi.waitFor(() => {
+      expect(terminal.bufferLines().join("\n")).toContain(
+        "MCP errors: failed:",
+      );
+    });
+    await submit("AFTER_CHANGED_RELOAD");
+    await waitForRequests(3);
+    const reloaded = client.requests[2].messages;
+    expect(reloaded.slice(0, prefix.length)).toEqual(prefix);
+    const delta = reloaded
+      .slice(prefix.length)
+      .map((message) => contentToText(message.content))
+      .join("\n");
+    expect(delta).toContain("no longer apply:\nfailed\nquiet\nremoved\nsame");
+    expect(delta).toContain("## same\nsame new guidance");
+    expect(delta).not.toContain("## quiet");
+    expect(client.setSystemPrompt).toHaveBeenCalledTimes(systemPromptCalls);
+    await finishRequest(2);
+  });
+});

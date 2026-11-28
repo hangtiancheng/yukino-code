@@ -1,0 +1,484 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { ProviderConfig } from "@/config/provider-config.js";
+import type { ConversationManager } from "@/conversation/index.js";
+import * as clients from "@/llm/client.js";
+import type { LLMClient } from "@/llm/client.js";
+import { OpenAIClient } from "@/llm/openai.js";
+import { PermissionChecker } from "@/permissions/index.js";
+import {
+  buildSubagentInstructions,
+  buildTeammatePrompt,
+} from "@/prompt/prompts.js";
+import { AgentTool } from "@/subagent/agent-tool.js";
+import { BUILTIN_AGENTS } from "@/subagent/constants.js";
+import { spawnSubagent } from "@/subagent/spawn.js";
+import { TaskManager } from "@/subagent/task-manager.js";
+import { ToolRegistry } from "@/tools/registry.js";
+import type { Tool } from "@/tools/types.js";
+
+const directories: string[] = [];
+function cwd(): string {
+  const directory = mkdtempSync(join(tmpdir(), "yukino-delegation-"));
+  directories.push(directory);
+  return directory;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const provider: ProviderConfig = {
+  name: "test",
+  protocol: "openai",
+  base_url: "http://127.0.0.1:1/v1",
+  api_key: "test-only",
+  model: "parent-model",
+  thinking: "high",
+};
+
+function stubClient(
+  inspect: (conversation: ConversationManager) => void,
+): LLMClient {
+  return {
+    setSystemPrompt: vi.fn(),
+    getThinkingLevel: () => "low",
+    async *stream(conversation) {
+      await Promise.resolve();
+      inspect(conversation);
+      yield { type: "text_delta", text: "Verified result" };
+      yield {
+        type: "stream_end",
+        stopReason: "end_turn",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        },
+      };
+    },
+  };
+}
+
+describe("delegated prompt contracts", () => {
+  it.each(BUILTIN_AGENTS)(
+    "lets $name read outside-root files without an approval channel",
+    async (definition) => {
+      const dir = cwd();
+      const parent = new PermissionChecker(dir);
+      const modes = [
+        "default",
+        "acceptEdits",
+        "plan",
+        "bypassPermissions",
+      ] as const;
+      const executed: string[] = [];
+      const registry = new ToolRegistry();
+      const target = join(tmpdir(), "..", "yukino-outside-project", "file.ts");
+      registry.register({
+        name: "ReadFile",
+        description: "read",
+        category: "read",
+        schema: () => ({
+          name: "ReadFile",
+          description: "read",
+          input_schema: { type: "object", properties: {} },
+        }),
+        execute: () => {
+          executed.push(parent.mode);
+          return Promise.resolve({ output: "read", isError: false });
+        },
+      });
+      let request = 0;
+      const client = new OpenAIClient(provider, "system");
+      vi.spyOn(client, "stream").mockImplementation(async function* () {
+        await Promise.resolve();
+        const mode = modes[request++];
+        if (mode) {
+          parent.mode = mode;
+          yield {
+            type: "tool_call_complete",
+            toolId: `read-${request}`,
+            toolName: "ReadFile",
+            arguments: { file_path: target },
+          };
+        }
+        yield {
+          type: "stream_end",
+          stopReason: mode ? "tool_use" : "end_turn",
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+          },
+        };
+      });
+      vi.spyOn(clients, "createClient").mockResolvedValue(client);
+      await spawnSubagent(
+        definition,
+        "Read the outside file",
+        client,
+        registry,
+        provider,
+        dir,
+        undefined,
+        undefined,
+        undefined,
+        parent,
+      );
+      expect(executed).toEqual(modes);
+    },
+  );
+
+  it.each([
+    undefined,
+    "default",
+    "acceptEdits",
+    "plan",
+    "bypassPermissions",
+  ] as const)(
+    "uses live parent permissions with configured mode overrides (%s)",
+    async (permissionMode) => {
+      const dir = cwd();
+      const parent = new PermissionChecker(dir);
+      const executed: string[] = [];
+      const modes = [
+        "default",
+        "acceptEdits",
+        "plan",
+        "bypassPermissions",
+        "default",
+      ] as const;
+      let request = 0;
+      const registry = new ToolRegistry();
+      registry.register({
+        name: "WriteProbe",
+        description: "write",
+        category: "write",
+        schema: () => ({
+          name: "WriteProbe",
+          description: "write",
+          input_schema: { type: "object", properties: {} },
+        }),
+        execute: () => {
+          executed.push(parent.mode);
+          return Promise.resolve({ output: "written", isError: false });
+        },
+      });
+      const client: LLMClient = {
+        setSystemPrompt: vi.fn(),
+        async *stream() {
+          await Promise.resolve();
+          const mode = modes[request++];
+          if (mode) {
+            parent.mode = mode;
+            yield {
+              type: "tool_call_complete",
+              toolId: `write-${request}`,
+              toolName: "WriteProbe",
+              arguments: { file_path: "a.ts" },
+            };
+          }
+          yield {
+            type: "stream_end",
+            stopReason: mode ? "tool_use" : "end_turn",
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              cacheReadInputTokens: 0,
+              cacheCreationInputTokens: 0,
+            },
+          };
+        },
+      };
+      await spawnSubagent(
+        {
+          name: "worker",
+          description: "work",
+          ...(permissionMode ? { permissionMode } : {}),
+        },
+        "work",
+        client,
+        registry,
+        provider,
+        dir,
+        undefined,
+        undefined,
+        undefined,
+        parent,
+      );
+      expect(executed).toEqual(
+        permissionMode === "acceptEdits" ||
+          permissionMode === "bypassPermissions"
+          ? modes
+          : ["acceptEdits", "bypassPermissions"],
+      );
+      expect(parent.mode).toBe("default");
+    },
+  );
+
+  it("delivers custom agent instructions without modifying the parent's system prompt", async () => {
+    const client = stubClient((conversation) => {
+      const content = JSON.stringify(conversation.getMessages());
+      expect(content).toContain("Return exact file paths");
+      expect(content).toContain("Inspect the parser");
+      expect(content).toContain("not an instruction to take over");
+    });
+    const setSystemPrompt = vi.spyOn(client, "setSystemPrompt");
+    const output = await spawnSubagent(
+      {
+        name: "auditor",
+        description: "Read-only audit",
+        initialPrompt: "Return exact file paths",
+      },
+      "Inspect the parser",
+      client,
+      new ToolRegistry(),
+      provider,
+      cwd(),
+    );
+    expect(output).toBe("Verified result");
+    expect(setSystemPrompt).not.toHaveBeenCalled();
+  });
+
+  it("inherits live thinking when a model override requires a new client", async () => {
+    const child = new OpenAIClient(provider, "system");
+    const scripted = stubClient(() => undefined);
+    vi.spyOn(child, "stream").mockImplementation(
+      (conversation, tools, signal) =>
+        scripted.stream(conversation, tools, signal),
+    );
+    const create = vi.spyOn(clients, "createClient").mockResolvedValue(child);
+    await spawnSubagent(
+      { name: "worker", description: "Bounded task", model: "child-model" },
+      "Inspect only",
+      stubClient(() => undefined),
+      new ToolRegistry(),
+      provider,
+      cwd(),
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "child-model", thinking: "low" }),
+      expect.any(String),
+    );
+  });
+
+  it("inherits the configured parent model for the built-in explore role", async () => {
+    const directory = cwd();
+    const child = new OpenAIClient(provider, "system");
+    const scripted = stubClient(() => undefined);
+    vi.spyOn(child, "stream").mockImplementation(
+      (conversation, tools, signal) =>
+        scripted.stream(conversation, tools, signal),
+    );
+    const create = vi.spyOn(clients, "createClient").mockResolvedValue(child);
+    const tool = new AgentTool(
+      directory,
+      new ToolRegistry(),
+      (definition, prompt, background, modelOverride) =>
+        spawnSubagent(
+          definition,
+          prompt,
+          stubClient(() => undefined),
+          new ToolRegistry(),
+          provider,
+          directory,
+          undefined,
+          undefined,
+          modelOverride,
+          undefined,
+          { background },
+        ),
+    );
+    const result = await tool.execute(
+      { cwd: directory },
+      {
+        kind: "subagent",
+        description: "explore",
+        prompt: "read only",
+        subagent_type: "explore",
+        fork: false,
+      },
+    );
+    expect(result.isError).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+    expect(
+      BUILTIN_AGENTS.find((agent) => agent.name === "explore")?.model,
+    ).toBeUndefined();
+  });
+
+  it("names teammate ownership and describes host-controlled lifecycle", () => {
+    const prompt = buildTeammatePrompt(
+      "squad",
+      "reviewer",
+      "Review src/parser.ts",
+    );
+    expect(prompt).toContain('"reviewer"');
+    expect(prompt).toContain('"squad"');
+    expect(prompt).toContain('SendMessage(to="leader", ...)');
+    expect(prompt).toContain('"Yukino" is the product identity');
+    expect(prompt).toContain("not permission changes");
+    expect(prompt).toContain(
+      "<assignment>\nReview src/parser.ts\n</assignment>",
+    );
+    expect(
+      buildSubagentInstructions({ name: "worker", description: "Inspect" }),
+    ).not.toContain("undefined");
+  });
+
+  it("describes role and context defaults independently", () => {
+    const tool = new AgentTool(cwd(), new ToolRegistry(), () =>
+      Promise.resolve("done"),
+    );
+    expect(tool.category).toBe("command");
+    expect(tool.schema().description).toContain(
+      "subagent_type selects the role (default general-purpose)",
+    );
+    expect(tool.schema().input_schema.properties.fork).toHaveProperty(
+      "default",
+      true,
+    );
+    const { properties } = tool.schema().input_schema;
+    expect(properties.kind).toMatchObject({
+      enum: ["subagent", "teammate"],
+      default: "teammate",
+    });
+    expect(properties.worktree).toMatchObject({ type: "boolean" });
+    expect(tool.schema().description).toContain(
+      "cancellable asynchronous tool call",
+    );
+    expect(tool.schema().description).toContain("use an agent team");
+    expect(tool.schema().description).toContain(
+      "cannot receive messages or resume",
+    );
+    expect(JSON.stringify(properties.run_in_background)).toContain("TaskStop");
+    expect(JSON.stringify(properties.model)).toContain(
+      "Most tasks do not need this field",
+    );
+    for (const removed of ["name", "isolation", "plan_mode_required"]) {
+      expect(properties).not.toHaveProperty(removed);
+    }
+    expect(tool.schema().input_schema.properties.subagent_type).toHaveProperty(
+      "default",
+      "general-purpose",
+    );
+  });
+
+  it("returns immediately for background Agents and reports completion once", async () => {
+    let finish!: (output: string) => void;
+    const pending = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    const manager = new TaskManager();
+    const spawn = vi.fn(() => pending);
+    const directory = cwd();
+    const tool = new AgentTool(
+      directory,
+      new ToolRegistry(),
+      spawn,
+      undefined,
+      manager,
+    );
+
+    const result = await tool.execute(
+      { cwd: directory, toolCallId: "outer-agent" },
+      {
+        kind: "subagent",
+        description: "inspect",
+        prompt: "inspect files",
+        subagent_type: "explore",
+        fork: false,
+        run_in_background: true,
+      },
+    );
+
+    const task = manager.list()[0];
+    expect(result.output).toContain(`task_id: ${task.id}`);
+    expect(task.status).toBe("running");
+    await Promise.resolve();
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "explore" }),
+      "inspect files",
+      true,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        toolCallId: "outer-agent",
+        backgroundTaskId: task.id,
+      }),
+      undefined,
+    );
+
+    finish("background result");
+    await manager.waitAll();
+    expect(task.status).toBe("completed");
+    expect(manager.drainNotifications()).toHaveLength(1);
+    expect(manager.drainNotifications()).toEqual([]);
+  });
+
+  it("keeps cancelled background tasks cancelled after their runner settles", async () => {
+    let finish!: (output: string) => void;
+    let cancelled = false;
+    const manager = new TaskManager();
+    const task = manager.create(
+      "inspect",
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+      () => {
+        cancelled = true;
+      },
+    );
+    await Promise.resolve();
+
+    expect(manager.stop(task.id)).toBe(true);
+    finish("late result");
+    await task.done;
+
+    expect(cancelled).toBe(true);
+    expect(task.status).toBe("cancelled");
+    expect(task.output).toBe("Stopped by user");
+  });
+});
+
+describe("provider tool declarations", () => {
+  it("preserves JSON Schema constraints and separates all three wire formats", () => {
+    const inputSchema = {
+      type: "object" as const,
+      properties: { value: { type: "string" } },
+      required: ["value"],
+      additionalProperties: false,
+    };
+    const tool: Tool = {
+      name: "Example",
+      description: "A bounded operation",
+      category: "read",
+      schema: () => ({
+        name: "Example",
+        description: "A bounded operation",
+        input_schema: inputSchema,
+      }),
+      execute: () => Promise.resolve({ output: "done", isError: false }),
+    };
+    const registry = new ToolRegistry();
+    registry.register(tool);
+    const native = registry.getAllSchemas()[0];
+    const responses = registry.getAllSchemas("openai")[0];
+    const chat = registry.getAllSchemas("openai-compat")[0];
+    expect(native.input_schema).toEqual(inputSchema);
+    expect(responses).toMatchObject({ parameters: inputSchema });
+    expect(responses).not.toHaveProperty("function");
+    expect(chat.function.parameters).toEqual(inputSchema);
+    expect(chat).not.toHaveProperty("parameters");
+  });
+});

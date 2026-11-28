@@ -1,0 +1,17 @@
+packages:
+  - packages/*
+
+allowBuilds:
+  "@parcel/watcher": true
+  "@swc/core": true
+  electron-winstaller: true
+  esbuild: true
+  protobufjs: true
+
+minimumReleaseAge: 0
+
+overrides:
+  # npm-run-path@6 requires unicorn-magic@0.3, whose node export only defines
+  # the "import" condition. tsx's CJS resolver cannot load it, breaking the
+  # app tests that require @yukino.js/yukino (and therefore execa).
+  unicorn-magic: 0.4.1

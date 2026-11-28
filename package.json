@@ -1,0 +1,41 @@
+{
+  "name": "yukino-code",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "yukino-code",
+  "private": true,
+  "scripts": {
+    "git:config": "git config user.name hangtiancheng && git config user.email '161043261@qq.com'",
+    "git:commit": "git add -A && git commit -m \"feat: Introduce new features\"",
+    "git:commit:skip": "git add -A && git commit -m \"feat: Introduce new features [skip ci]\"",
+    "git:push": "pnpm git:commit && git push origin main",
+    "git:push:skip": "pnpm git:commit:skip && git push origin main",
+    "format": "pnpm -r format",
+    "build": "pnpm -r build",
+    "prepare": "husky",
+    "lint:fix": "pnpm -r --if-present lint:fix",
+    "happy": "pnpm -r happy",
+    "happy:fix": "pnpm -r happy:fix"
+  },
+  "keywords": [
+    "yukino",
+    "code"
+  ],
+  "devDependencies": {
+    "concurrently": "^10.0.7",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.2"
+  },
+  "lint-staged": {
+    "*.{json,jsonc,js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue,css,scss,md,mdx}": [
+      "sh -c 'pnpm format'"
+    ]
+  },
+  "author": "https://github.com/hangtiancheng",
+  "license": "MIT",
+  "packageManager": "pnpm@12.10.1",
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "tailwindcss": "^4.3.5"
+  }
+}

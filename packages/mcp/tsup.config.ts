@@ -1,0 +1,33 @@
+import { readFileSync } from "node:fs";
+
+import { defineConfig } from "tsup";
+
+const pkg: unknown = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
+);
+const version =
+  typeof pkg === "object" &&
+  pkg !== null &&
+  "version" in pkg &&
+  typeof pkg.version === "string"
+    ? pkg.version
+    : "0.0.0";
+
+export default defineConfig({
+  entry: ["src/main.ts"],
+  format: ["esm"],
+  platform: "node",
+  target: "node24",
+  removeNodeProtocol: false,
+  outDir: "dist",
+  clean: true,
+  banner: {
+    js: [
+      "#!/usr/bin/env node",
+      'import { createRequire } from "node:module";',
+      "const require = createRequire(import.meta.url);",
+    ].join("\n"),
+  },
+  define: { __YUKINO_MCP_VERSION__: JSON.stringify(version) },
+  tsconfig: "tsconfig.json",
+});

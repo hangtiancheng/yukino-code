@@ -1,0 +1,800 @@
+import { render, type Instance } from "ink";
+import { act, createElement, useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AgentEvent } from "@/agent/events.js";
+import type { ChatMessage } from "@/ui/chat.js";
+import {
+  useAgentOutput,
+  type AgentCardDecoration,
+} from "@/ui/use-agent-output.js";
+
+let instance: Instance | undefined;
+let current:
+  | { output: ReturnType<typeof useAgentOutput>; messages: ChatMessage[] }
+  | undefined;
+
+function Harness() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  current = { output: useAgentOutput(setMessages), messages };
+  return null;
+}
+
+function state() {
+  if (!current) {
+    throw new Error("Output harness is not mounted");
+  }
+  return current;
+}
+
+function startLoop(
+  resolveAgentCard?: (toolId: string) => AgentCardDecoration | undefined,
+) {
+  let handler: ((event: AgentEvent) => void) | undefined;
+  act(() => {
+    handler = state().output.createEventHandler(resolveAgentCard);
+  });
+  return (...events: AgentEvent[]) => {
+    act(() => {
+      for (const event of events) {
+        handler?.(event);
+      }
+    });
+  };
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1000);
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  act(() => {
+    instance = render(createElement(Harness), {
+      patchConsole: false,
+      interactive: false,
+    });
+  });
+});
+
+afterEach(() => {
+  act(() => {
+    instance?.unmount();
+    instance?.cleanup();
+  });
+  instance = undefined;
+  current = undefined;
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("agent output hook", () => {
+  it("moves stable long-answer blocks into history while retaining only the unfinished tail", () => {
+    const send = startLoop();
+    const prefix =
+      "A complete paragraph with 中文 and **formatting**. ".repeat(60) + "\n\n";
+    send({ type: "thinking_text", text: "Reviewing the design" });
+    send({ type: "stream_text", text: prefix + "An unfinished paragraph" });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().messages.map((message) => message.content)).toEqual([
+      "Reviewing the design",
+      prefix,
+    ]);
+    expect(state().output.streamingText).toBe("An unfinished paragraph");
+    expect(state().output.streamingTextRef.current).toBe(
+      "An unfinished paragraph",
+    );
+    send(
+      { type: "stream_text", text: " completed." },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(
+      state()
+        .messages.filter((message) => message.role === "assistant")
+        .map((message) => message.content)
+        .join(""),
+    ).toBe(prefix + "An unfinished paragraph completed.");
+    expect(state().output.streamingText).toBe("");
+  });
+
+  it("leaves open fences and lists editable until a later block seals them", () => {
+    const send = startLoop();
+    const code = "```ts\n" + "const value = 1;\n".repeat(200);
+    send({ type: "stream_text", text: code });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().messages).toEqual([]);
+    expect(state().output.streamingText).toBe(code);
+    send({ type: "stream_text", text: "```\n\nNext paragraph" });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().messages).toEqual([
+      { role: "assistant", content: code + "```\n\n" },
+    ]);
+    expect(state().output.streamingText).toBe("Next paragraph");
+    send({ type: "loop_complete", stopReason: "end_turn" });
+    expect(state().messages.at(-1)?.content).toBe("Next paragraph");
+  });
+
+  it.each([false, true])(
+    "commits question results immediately with isError=%s while retaining unfinished tools",
+    (isError) => {
+      const send = startLoop();
+      send(
+        { type: "thinking_text", text: "Checking the project" },
+        { type: "stream_text", text: "Choose the configuration" },
+        {
+          type: "tool_use",
+          toolName: "ReadFile",
+          toolId: "read",
+          args: { file_path: "config.yml" },
+        },
+        {
+          type: "tool_result",
+          toolName: "ReadFile",
+          toolId: "read",
+          output: "Configuration",
+          isError: false,
+          elapsed: 1,
+        },
+        {
+          type: "tool_use",
+          toolName: "AskUserQuestion",
+          toolId: "question",
+          args: { questions: [] },
+        },
+        {
+          type: "tool_use",
+          toolName: "Bash",
+          toolId: "parallel",
+          args: { command: "collect diagnostics" },
+        },
+        {
+          type: "tool_result",
+          toolName: "AskUserQuestion",
+          toolId: "question",
+          output: isError ? "User cancelled" : '"Database?" = "MySQL"',
+          isError,
+          elapsed: 2,
+        },
+      );
+      const committed = state().messages.slice();
+      expect(committed.map((message) => message.content)).toEqual([
+        "Checking the project",
+        "Choose the configuration",
+        "",
+      ]);
+      expect(
+        committed.at(-1)?.toolSummary?.map((tool) => tool.toolName),
+      ).toEqual(["ReadFile", "AskUserQuestion"]);
+      expect(committed.at(-1)?.toolSummary?.[1].isError).toBe(isError);
+      expect(state().output.activeTools).toEqual([
+        expect.objectContaining({ toolId: "parallel", loading: true }),
+      ]);
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(state().output.streamingText).toBe("");
+      expect(state().output.streamingThinking).toBe("");
+      expect(state().output.streamingTextRef.current).toBe("");
+      send(
+        {
+          type: "tool_result",
+          toolName: "Bash",
+          toolId: "parallel",
+          output: "Diagnostics complete",
+          isError: false,
+          elapsed: 3,
+        },
+        { type: "turn_complete" },
+        { type: "stream_text", text: "Continuing with your answer" },
+        { type: "loop_complete", stopReason: "end_turn" },
+      );
+      expect(state().messages.slice(0, committed.length)).toEqual(committed);
+      expect(state().messages.at(-2)?.toolSummary).toEqual([
+        expect.objectContaining({
+          toolName: "Bash",
+          argsSummary: "collect diagnostics",
+          output: "Diagnostics complete",
+        }),
+      ]);
+      expect(state().messages.at(-1)?.content).toBe(
+        "Continuing with your answer",
+      );
+      expect(
+        state()
+          .messages.flatMap((message) => message.toolSummary ?? [])
+          .filter((tool) => tool.toolName === "AskUserQuestion"),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("batches thinking deltas with text and clears pending flushes before a new request", () => {
+    const send = startLoop();
+    for (let index = 0; index < 100; index++) {
+      send({ type: "thinking_text", text: "x" });
+    }
+    expect(state().output.streamingThinking).toBe("");
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().output.streamingThinking).toBe("x".repeat(100));
+    send({ type: "stream_text", text: "old request" });
+    act(() => {
+      state().output.prepareTurn();
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().output.streamingText).toBe("");
+    expect(state().output.streamingTextRef.current).toBe("");
+    expect(state().output.streamingThinking).toBe("");
+    const next = startLoop();
+    next(
+      { type: "stream_text", text: "new request" },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(state().messages).toEqual([
+      { role: "assistant", content: "new request" },
+    ]);
+  });
+
+  it("batches stream updates and commits once at turn and loop boundaries", () => {
+    const send = startLoop();
+    send(
+      { type: "stream_text", text: "Hello" },
+      { type: "stream_text", text: " world" },
+    );
+    expect(state().output.streamingText).toBe("");
+    expect(state().output.streamingTextRef.current).toBe("Hello world");
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(state().output.streamingText).toBe("Hello world");
+    send(
+      { type: "turn_complete" },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(state().messages).toEqual([
+      { role: "assistant", content: "Hello world" },
+    ]);
+    expect(state().output.streamingText).toBe("");
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(state().output.streamingText).toBe("");
+  });
+
+  it("keeps thinking, text, and parallel same-name tools in chronological groups", () => {
+    const send = startLoop();
+    send({ type: "thinking_text", text: "Reasoning" });
+    vi.setSystemTime(2500);
+    send(
+      {
+        type: "thinking_complete",
+        thinking: "Reasoning",
+        signature: "signature",
+      },
+      { type: "stream_text", text: "Checking" },
+      {
+        type: "tool_use",
+        toolName: "Read",
+        toolId: "a",
+        args: { file_path: "a.ts" },
+      },
+      {
+        type: "tool_use",
+        toolName: "Read",
+        toolId: "b",
+        args: { file_path: "b.ts" },
+      },
+      {
+        type: "tool_result",
+        toolName: "Read",
+        toolId: "b",
+        output: "second",
+        isError: true,
+        elapsed: 2,
+      },
+    );
+    expect(
+      state().output.activeTools.map((tool) => [tool.toolId, tool.loading]),
+    ).toEqual([
+      ["a", true],
+      ["b", false],
+    ]);
+    send(
+      {
+        type: "tool_result",
+        toolName: "Read",
+        toolId: "a",
+        output: "first",
+        isError: false,
+        elapsed: 3,
+      },
+      { type: "turn_complete" },
+    );
+    expect(state().messages.slice(0, 2)).toEqual([
+      { role: "turn_summary", content: "Reasoning", thinkingDuration: 1.5 },
+      { role: "assistant", content: "Checking" },
+    ]);
+    const toolSummary = state().messages[2]?.toolSummary;
+    expect(toolSummary).toHaveLength(2);
+    expect(toolSummary?.[0]).toMatchObject({
+      output: "first",
+      isError: false,
+    });
+    expect(toolSummary?.[0]?.argsSummary).toContain("a.ts");
+    expect(toolSummary?.[1]).toMatchObject({
+      output: "second",
+      isError: true,
+    });
+    expect(toolSummary?.[1]?.argsSummary).toContain("b.ts");
+    expect(state().output.activeTools).toEqual([]);
+    expect(state().output.streamingThinking).toBe("");
+    send(
+      { type: "stream_text", text: "Done" },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(state().messages.at(-1)).toEqual({
+      role: "assistant",
+      content: "Done",
+    });
+  });
+
+  it("commits teammate Agent cards to history instead of pinning them across turns", () => {
+    const send = startLoop();
+    send({
+      type: "tool_use",
+      toolName: "Agent",
+      toolId: "team-agent",
+      args: { description: "reviewer", kind: "teammate" },
+    });
+    expect(state().output.activeTools).toEqual([
+      expect.objectContaining({ toolId: "team-agent", loading: true }),
+    ]);
+
+    send(
+      {
+        type: "tool_result",
+        toolName: "Agent",
+        toolId: "team-agent",
+        output: "Teammate spawned",
+        isError: false,
+        elapsed: 0.2,
+      },
+      { type: "turn_complete" },
+    );
+
+    expect(state().output.activeTools).toEqual([]);
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toEqual([
+      expect.objectContaining({
+        toolName: "Agent",
+        output: "Teammate spawned",
+        isError: false,
+      }),
+    ]);
+
+    act(() => {
+      state().output.prepareTurn();
+    });
+    expect(state().output.activeTools).toEqual([]);
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toHaveLength(1);
+  });
+
+  it("commits background Agent cards to history like plain tool calls", () => {
+    const send = startLoop();
+    send(
+      {
+        type: "tool_use",
+        toolName: "Agent",
+        toolId: "background-agent",
+        args: {
+          description: "background review",
+          subagent_type: "explore",
+          fork: false,
+          run_in_background: true,
+        },
+      },
+      {
+        type: "tool_result",
+        toolName: "Agent",
+        toolId: "background-agent",
+        output: "Background agent started",
+        isError: false,
+        elapsed: 0.1,
+      },
+      { type: "turn_complete" },
+    );
+
+    expect(state().output.activeTools).toEqual([]);
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toEqual([
+      expect.objectContaining({
+        toolName: "Agent",
+        output: "Background agent started",
+        isError: false,
+      }),
+    ]);
+  });
+
+  it.each(["Agent", "EnterPlanMode"])(
+    "commits foreground %s cards with the resolved subagent status",
+    (toolName) => {
+      const send = startLoop((toolId) =>
+        toolId === "agent-stop"
+          ? {
+              status: "stopped",
+              progress: "general-purpose subagent | 2 turns",
+            }
+          : toolId === "agent-done"
+            ? { status: "completed", progress: "explore subagent | 3 turns" }
+            : undefined,
+      );
+      send(
+        {
+          type: "tool_use",
+          toolName,
+          toolId: "agent-stop",
+          args: {
+            kind: "subagent",
+            description: "fix bug",
+            prompt: "fix it",
+            subagent_type: "general-purpose",
+            fork: false,
+          },
+        },
+        {
+          type: "tool_use",
+          toolName,
+          toolId: "agent-done",
+          args: {
+            kind: "subagent",
+            description: "survey code",
+            prompt: "survey",
+            subagent_type: "explore",
+            fork: false,
+          },
+        },
+        {
+          type: "tool_use",
+          toolName: "Read",
+          toolId: "read-1",
+          args: { file_path: "a.ts" },
+        },
+        {
+          type: "tool_result",
+          toolName,
+          toolId: "agent-stop",
+          output: "partial work\n\n[Interrupted]",
+          isError: false,
+          elapsed: 12,
+        },
+        {
+          type: "tool_result",
+          toolName,
+          toolId: "agent-done",
+          output: "findings",
+          isError: false,
+          elapsed: 8,
+        },
+        {
+          type: "tool_result",
+          toolName: "Read",
+          toolId: "read-1",
+          output: "contents",
+          isError: false,
+          elapsed: 1,
+        },
+      );
+
+      // The interrupted card must not look like a success: status drives the
+      // red "stopped" styling.
+      const stopped = state().output.activeTools.find(
+        (tool) => tool.toolId === "agent-stop",
+      );
+      expect(stopped).toEqual(
+        expect.objectContaining({
+          status: "stopped",
+          progress: "general-purpose subagent | 2 turns",
+          loading: false,
+        }),
+      );
+      // Tools without a tracked subagent keep their ordinary result styling.
+      const read = state().output.activeTools.find(
+        (tool) => tool.toolId === "read-1",
+      );
+      expect(read?.status).toBeUndefined();
+      expect(read?.progress).toBeUndefined();
+
+      send({ type: "turn_complete" });
+      const summary = state().messages.at(-1)?.toolSummary ?? [];
+      expect(summary[0]).toEqual(
+        expect.objectContaining({
+          toolName,
+          status: "stopped",
+          progress: "general-purpose subagent | 2 turns",
+          output: "partial work\n\n[Interrupted]",
+          isError: false,
+        }),
+      );
+      expect(summary[1]).toEqual(
+        expect.objectContaining({
+          toolName,
+          status: "completed",
+          progress: "explore subagent | 3 turns",
+        }),
+      );
+      expect(summary[2]?.status).toBeUndefined();
+      expect(summary[2]?.progress).toBeUndefined();
+    },
+  );
+
+  it("marks a rejected plan result as failed even when the subagent completed", () => {
+    const send = startLoop(() => ({
+      status: "completed",
+      progress: "plan subagent | 1 turns",
+    }));
+    send(
+      {
+        type: "tool_use",
+        toolName: "EnterPlanMode",
+        toolId: "empty-plan",
+        args: {},
+      },
+      {
+        type: "tool_result",
+        toolName: "EnterPlanMode",
+        toolId: "empty-plan",
+        output: "The plan agent returned no plan.",
+        isError: true,
+        elapsed: 1,
+      },
+      { type: "turn_complete" },
+    );
+    expect(state().messages.at(-1)?.toolSummary).toEqual([
+      expect.objectContaining({
+        toolName: "EnterPlanMode",
+        status: "failed",
+        isError: true,
+      }),
+    ]);
+  });
+
+  it("keeps teammate spawn history after deleting the team", () => {
+    const send = startLoop();
+    for (const toolId of ["a-1", "a-2", "b-1"]) {
+      send(
+        {
+          type: "tool_use",
+          toolName: "Agent",
+          toolId,
+          args: { description: toolId, kind: "teammate" },
+        },
+        {
+          type: "tool_result",
+          toolName: "Agent",
+          toolId,
+          output: "Teammate spawned",
+          isError: false,
+          elapsed: 0.1,
+        },
+      );
+    }
+
+    send(
+      {
+        type: "tool_use",
+        toolName: "TeamDelete",
+        toolId: "delete",
+        args: {},
+      },
+      {
+        type: "tool_result",
+        toolName: "TeamDelete",
+        toolId: "delete",
+        output: "Team deleted",
+        isError: false,
+        elapsed: 0.1,
+      },
+      { type: "turn_complete" },
+    );
+
+    expect(state().output.activeTools).toEqual([]);
+    expect(
+      state()
+        .messages.flatMap((message) => message.toolSummary ?? [])
+        .map((tool) => tool.toolName),
+    ).toEqual(["Agent", "Agent", "Agent", "TeamDelete"]);
+  });
+
+  it("keeps previous teammate spawn history when TeamCreate adds a team", () => {
+    const send = startLoop();
+    for (const toolId of ["a-1", "a-2"]) {
+      send(
+        {
+          type: "tool_use",
+          toolName: "Agent",
+          toolId,
+          args: { description: toolId, kind: "teammate" },
+        },
+        {
+          type: "tool_result",
+          toolName: "Agent",
+          toolId,
+          output: "Teammate spawned",
+          isError: false,
+          elapsed: 0.1,
+        },
+      );
+    }
+    send(
+      {
+        type: "tool_use",
+        toolName: "TeamCreate",
+        toolId: "create",
+        args: {},
+      },
+      {
+        type: "tool_result",
+        toolName: "TeamCreate",
+        toolId: "create",
+        output: "Team 'beta' created",
+        isError: false,
+        elapsed: 0.1,
+      },
+    );
+
+    // The TeamCreate call itself still commits to history like a normal tool.
+    expect(
+      state().messages.flatMap((message) => message.toolSummary ?? []),
+    ).toEqual([]);
+    send({ type: "turn_complete" });
+    expect(
+      state()
+        .messages.flatMap((message) => message.toolSummary ?? [])
+        .map((tool) => tool.toolName),
+    ).toEqual(["Agent", "Agent", "TeamCreate"]);
+    expect(state().output.activeTools).toEqual([]);
+  });
+
+  it("keeps retry, compaction, and token accounting without dropping pending text", () => {
+    const send = startLoop();
+    send(
+      { type: "stream_text", text: "partial" },
+      { type: "retry", reason: "busy", delay: 2000 },
+      { type: "compact", message: "Context compacted" },
+      {
+        type: "usage",
+        usage: {
+          inputTokens: 10,
+          outputTokens: 4,
+          cacheReadInputTokens: 100,
+          cacheCreationInputTokens: 50,
+        },
+      },
+      {
+        type: "usage",
+        usage: {
+          inputTokens: 20,
+          outputTokens: 6,
+          cacheReadInputTokens: 200,
+          cacheCreationInputTokens: 0,
+        },
+      },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(state().messages.map((message) => message.content)).toEqual([
+      "↻ busy (waiting 2s)",
+      "⊙ Context compacted",
+      "partial",
+    ]);
+    expect(state().output.inputTokens).toBe(30);
+    expect(state().output.outputTokens).toBe(10);
+    expect(state().output.usageTotalsRef.current).toEqual({
+      cacheCreationTokens: 50,
+      cacheReadTokens: 300,
+      inputTokens: 30,
+      outputTokens: 10,
+    });
+    act(() => {
+      state().output.resetUsage();
+    });
+    expect(state().output.inputTokens).toBe(0);
+    expect(state().output.outputTokens).toBe(0);
+    expect(state().output.usageTotalsRef.current).toEqual({
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+  });
+
+  it("retains partial text for abort/error handling and cancels late flushes", () => {
+    const send = startLoop();
+    send(
+      { type: "stream_text", text: "unfinished" },
+      { type: "error", error: new Error("offline") },
+    );
+    act(() => {
+      state().output.finishTurn();
+    });
+    expect(state().output.streamingTextRef.current).toBe("unfinished");
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(state().output.streamingText).toBe("");
+    const next = startLoop();
+    next(
+      { type: "stream_text", text: "new turn" },
+      { type: "loop_complete", stopReason: "end_turn" },
+    );
+    expect(state().messages).toEqual([
+      { role: "assistant", content: "new turn" },
+    ]);
+  });
+
+  it("shows retry feedback until output resumes or the turn ends", () => {
+    const send = startLoop();
+    send({ type: "retry", reason: "busy", delay: 2000 });
+    expect(state().output.retryStatus).toBe("Retrying (2s delay): busy");
+    send({ type: "stream_text", text: "resumed" });
+    expect(state().output.retryStatus).toBeUndefined();
+    send({ type: "retry", reason: "busy", delay: 0 });
+    act(() => {
+      state().output.finishTurn();
+    });
+    expect(state().output.retryStatus).toBeUndefined();
+  });
+
+  it("cancels a scheduled stream flush when unmounted", () => {
+    const setTimeout = vi.spyOn(globalThis, "setTimeout");
+    const send = startLoop();
+    send({ type: "stream_text", text: "pending" });
+    const scheduled: unknown = setTimeout.mock.results.at(-1)?.value;
+    const clearTimeout = vi.spyOn(globalThis, "clearTimeout");
+    act(() => {
+      instance?.unmount();
+    });
+    expect(clearTimeout).toHaveBeenCalledWith(scheduled);
+  });
+
+  it("commits thinking and completed tools once when a loop ends without turn_complete", () => {
+    const send = startLoop();
+    send(
+      { type: "thinking_text", text: "Investigating" },
+      { type: "stream_text", text: "Partial response" },
+      {
+        type: "tool_use",
+        toolId: "read",
+        toolName: "Read",
+        args: { file_path: "a.ts" },
+      },
+      {
+        type: "tool_result",
+        toolId: "read",
+        toolName: "Read",
+        output: "saved",
+        isError: false,
+        elapsed: 1,
+      },
+      { type: "loop_complete", stopReason: "interrupted" },
+      { type: "loop_complete", stopReason: "interrupted" },
+    );
+    expect(state().messages.map((message) => message.content)).toEqual([
+      "Investigating",
+      "Partial response",
+      "",
+    ]);
+    expect(state().messages.at(-1)?.toolSummary?.[0].output).toBe("saved");
+    expect(state().output.activeTools).toEqual([]);
+    expect(state().output.streamingTextRef.current).toBe("");
+  });
+});

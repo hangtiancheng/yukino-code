@@ -1,0 +1,649 @@
+import { ImagePlusIcon, SquareIcon, ArrowUpIcon } from "lucide-react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { SlashMenu } from "#/components/slash-menu.js";
+import {
+  Autocomplete,
+  AutocompleteInput,
+  AutocompleteList,
+  AutocompleteItem,
+} from "#/components/ui/autocomplete.js";
+import { Badge } from "#/components/ui/badge.js";
+import { Button } from "#/components/ui/button.js";
+import { Input } from "#/components/ui/input.js";
+import { Textarea } from "#/components/ui/textarea.js";
+import { FILE_COMPLETE_DEBOUNCE_MS, MAX_TEXTAREA_HEIGHT } from "#/constants.js";
+import type {
+  FileCompleteResponsePayload,
+  ImageResultPayload,
+  SlashCommand,
+} from "#/types.js";
+
+interface InputAreaProps {
+  streaming: boolean;
+  prefill?: { content: string; revision: number };
+  thinkingLevel: string;
+  commands: SlashCommand[];
+  /** Steering messages queued for the in-flight run. */
+  steering: string[];
+  /** Messages queued as follow-ups while the turn is busy. */
+  followUps: string[];
+  /** Prompt history shared with the terminal (↑/↓ navigation). */
+  history: string[];
+  /** Latest @-mention completion response from the server. */
+  fileMatches: FileCompleteResponsePayload | null;
+  /** Settled image uploads (path inserted as an @-ref, or an error hint). */
+  imageResults: ImageResultPayload[];
+  onSend: (text: string) => boolean;
+  onCancel: () => void;
+  onRequestFileCompletions: (requestId: string, query: string) => void;
+  onUploadImage: (clientId: string, name: string, dataBase64: string) => void;
+  onConsumeImageResult: (clientId: string) => void;
+  onBackgroundShells: () => void;
+}
+
+let uploadCounter = 0;
+function nextUploadId(): string {
+  uploadCounter += 1;
+  return `img_${Date.now().toString(36)}_${String(uploadCounter)}`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Failed to read the file."));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** The `@token` immediately before the caret, or null (terminal atQuery parity). */
+function atQueryBefore(value: string, caret: number): string | null {
+  if (value.startsWith("/") || value.trimStart().startsWith("!")) {
+    return null;
+  }
+  const before = value.slice(0, caret);
+  const match = /(?:^|\s)@([^\s]*)$/u.exec(before);
+  return match ? match[1] : null;
+}
+
+export function InputArea({
+  streaming,
+  prefill,
+  thinkingLevel,
+  commands,
+  steering,
+  followUps,
+  history,
+  fileMatches,
+  imageResults,
+  onSend,
+  onCancel,
+  onRequestFileCompletions,
+  onUploadImage,
+  onConsumeImageResult,
+  onBackgroundShells,
+}: InputAreaProps) {
+  const [value, setValue] = useState("");
+  useEffect(() => {
+    if (prefill?.revision) {
+      setValue(prefill.content);
+      setCaret(prefill.content.length);
+    }
+  }, [prefill]);
+  const [caret, setCaret] = useState(0);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashCursor, setSlashCursor] = useState(0);
+  const [blockedHint, setBlockedHint] = useState("");
+  const [atCursor, setAtCursor] = useState(0);
+  const [atDismissed, setAtDismissed] = useState(false);
+  const [uploads, setUploads] = useState<{ clientId: string; name: string }[]>(
+    [],
+  );
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const blockedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyIndexRef = useRef(-1);
+  const historyDraftRef = useRef<string | null>(null);
+  const atRequestRef = useRef("");
+
+  const filtered = useMemo<SlashCommand[]>(() => {
+    // Commands cannot run mid-stream; keep the menu closed while steering.
+    if (streaming) {
+      return [];
+    }
+    if (!value.startsWith("/") || value.includes(" ") || value.includes("\n")) {
+      return [];
+    }
+    const prefix = value.slice(1).toLowerCase();
+    return commands.filter((c) => c.name.toLowerCase().startsWith(prefix));
+  }, [value, commands, streaming]);
+
+  useEffect(() => {
+    setSlashOpen(filtered.length > 0);
+    setSlashCursor(0);
+  }, [filtered]);
+
+  // ---- @-mention completion ----
+  const atQuery = useMemo(() => {
+    if (slashOpen) {
+      return null;
+    }
+    return atQueryBefore(value, caret);
+  }, [value, caret, slashOpen]);
+
+  useEffect(() => {
+    if (atQuery === null) {
+      return;
+    }
+    const requestId = `at_${Date.now().toString(36)}_${String(Math.random()).slice(2, 8)}`;
+    const timer = setTimeout(() => {
+      atRequestRef.current = requestId;
+      onRequestFileCompletions(requestId, atQuery);
+    }, FILE_COMPLETE_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [atQuery, onRequestFileCompletions]);
+
+  const atMatches =
+    atQuery !== null &&
+    !atDismissed &&
+    fileMatches !== null &&
+    fileMatches.requestId === atRequestRef.current
+      ? fileMatches.matches
+      : [];
+
+  useEffect(() => {
+    setAtCursor(0);
+  }, [atMatches.length, atQuery]);
+
+  const applyAtMatch = useCallback(
+    (match: string) => {
+      const el = textareaRef.current;
+      const currentCaret = el?.selectionStart ?? value.length;
+      const query = atQueryBefore(value, currentCaret);
+      if (query === null) {
+        return;
+      }
+      const tokenStart = currentCaret - query.length - 1;
+      const insertion = match.includes(" ") ? `'@${match}'` : `@${match}`;
+      const next =
+        value.slice(0, tokenStart) + insertion + value.slice(currentCaret);
+      setValue(next);
+      setAtDismissed(true);
+      requestAnimationFrame(() => {
+        if (el) {
+          const position = tokenStart + insertion.length;
+          el.focus();
+          el.setSelectionRange(position, position);
+          setCaret(position);
+        }
+      });
+    },
+    [value],
+  );
+
+  // ---- image uploads ----
+  const uploadImage = useCallback(
+    (file: File) => {
+      const clientId = nextUploadId();
+      setUploads((prev) => [...prev, { clientId, name: file.name || "image" }]);
+      void fileToBase64(file).then(
+        (dataBase64) => {
+          onUploadImage(clientId, file.name || "image.png", dataBase64);
+        },
+        () => {
+          setUploads((prev) =>
+            prev.filter((entry) => entry.clientId !== clientId),
+          );
+          flashHint("Could not read the image file.");
+        },
+      );
+    },
+    [onUploadImage],
+  );
+
+  useEffect(() => {
+    for (const result of imageResults) {
+      setUploads((prev) =>
+        prev.filter((entry) => entry.clientId !== result.clientId),
+      );
+      if (result.path) {
+        const insertion = `@'${result.path}'`;
+        setValue((current) => {
+          const pad = current.length > 0 && !/\s$/u.test(current) ? " " : "";
+          return current + pad + insertion + " ";
+        });
+      } else {
+        flashHint(result.message ?? "Image upload failed.");
+      }
+      onConsumeImageResult(result.clientId);
+    }
+  }, [imageResults, onConsumeImageResult]);
+
+  // Auto-grow the textarea up to MAX_TEXTAREA_HEIGHT.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) {
+      return;
+    }
+    el.style.height = "auto";
+    el.style.height = `${String(Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT))}px`;
+  }, [value]);
+
+  // Focus on mount and whenever streaming flips back to false.
+  useEffect(() => {
+    if (!streaming) {
+      textareaRef.current?.focus();
+    }
+  }, [streaming]);
+
+  useEffect(
+    () => () => {
+      if (blockedTimerRef.current) {
+        clearTimeout(blockedTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  function flashHint(message: string): void {
+    setBlockedHint(message);
+    if (blockedTimerRef.current) {
+      clearTimeout(blockedTimerRef.current);
+    }
+    blockedTimerRef.current = setTimeout(() => {
+      setBlockedHint("");
+    }, 4000);
+  }
+
+  const selectSlash = (index: number) => {
+    const cmd = filtered[index];
+    if (!cmd) {
+      return;
+    }
+    setValue(`/${cmd.name} `);
+    setSlashOpen(false);
+    textareaRef.current?.focus();
+  };
+
+  const send = () => {
+    const text = value.trim();
+    if (!text) {
+      return;
+    }
+    if (!onSend(text)) {
+      flashHint(
+        "Offline message queue is full. Your text is kept; retry after reconnecting.",
+      );
+      return;
+    }
+    setValue("");
+    setSlashOpen(false);
+    setAtDismissed(false);
+    setBlockedHint("");
+    historyIndexRef.current = -1;
+    historyDraftRef.current = null;
+  };
+
+  /** ↑/↓ prompt-history navigation when the caret is at a vertical edge. */
+  const navigateHistory = (direction: -1 | 1): boolean => {
+    if (history.length === 0) {
+      return false;
+    }
+    const index = historyIndexRef.current;
+    if (direction === -1) {
+      const next = index === -1 ? history.length - 1 : Math.max(0, index - 1);
+      if (index === -1) {
+        historyDraftRef.current = value;
+      }
+      historyIndexRef.current = next;
+      const entry = history[next];
+      if (entry !== undefined) {
+        setValue(entry);
+      }
+      return true;
+    }
+    if (index === -1) {
+      return false;
+    }
+    const next = index + 1;
+    if (next >= history.length) {
+      historyIndexRef.current = -1;
+      setValue(historyDraftRef.current ?? "");
+      historyDraftRef.current = null;
+      return true;
+    }
+    historyIndexRef.current = next;
+    const entry = history[next];
+    if (entry !== undefined) {
+      setValue(entry);
+    }
+    return true;
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // While an IME composition is active, Enter/arrows/Escape belong to the
+    // composition window — never send or navigate mid-composition.
+    if (e.nativeEvent.isComposing) {
+      return;
+    }
+    setCaret(e.currentTarget.selectionStart ?? value.length);
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      onBackgroundShells();
+      return;
+    }
+
+    if (slashOpen || atMatches.length > 0) {
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        (e.key === "Enter" && !e.shiftKey)
+      ) {
+        return;
+      }
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        if (slashOpen) {
+          selectSlash(slashCursor);
+        } else if (atMatches[atCursor]) {
+          applyAtMatch(atMatches[atCursor]);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSlashOpen(false);
+        setAtDismissed(true);
+        return;
+      }
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (streaming) {
+        onCancel();
+      } else if (value) {
+        setValue("");
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp" && !e.shiftKey) {
+      const el = e.currentTarget;
+      const currentCaret = el.selectionStart ?? 0;
+      const onFirstLine = !value.slice(0, currentCaret).includes("\n");
+      if (onFirstLine && navigateHistory(-1)) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if (e.key === "ArrowDown" && !e.shiftKey) {
+      const el = e.currentTarget;
+      const currentCaret = el.selectionStart ?? 0;
+      const onLastLine = !value.slice(currentCaret).includes("\n");
+      if (onLastLine && historyIndexRef.current !== -1 && navigateHistory(1)) {
+        e.preventDefault();
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  const trimmed = value.trimStart();
+  const bashMode = trimmed.startsWith("!");
+  const bashExcluded = trimmed.startsWith("!!");
+  const composerStyle: CSSProperties & Record<"--composer-accent", string> = {
+    "--composer-accent": bashMode
+      ? "var(--yukino-bash-mode)"
+      : `var(--yukino-thinking-${thinkingLevel.toLowerCase() || "off"})`,
+  };
+
+  return (
+    <Autocomplete<string>
+      items={slashOpen ? filtered.map((command) => command.name) : atMatches}
+      filter={null}
+      inline
+      open={slashOpen || atMatches.length > 0}
+      autoHighlight="always"
+      value={value}
+      onValueChange={(next, details) => {
+        if (details.reason === "input-change") {
+          setValue(next);
+          setAtDismissed(false);
+        }
+      }}
+      onOpenChange={(open) => {
+        if (!open) {
+          setSlashOpen(false);
+          setAtDismissed(true);
+        }
+      }}
+      onItemHighlighted={(item) => {
+        if (slashOpen) {
+          setSlashCursor(
+            Math.max(
+              0,
+              filtered.findIndex((command) => command.name === item),
+            ),
+          );
+        } else {
+          setAtCursor(Math.max(0, atMatches.indexOf(item ?? "")));
+        }
+      }}
+    >
+      <footer className="composer shrink-0 bg-bg px-3 sm:px-8">
+        <div className="relative mx-auto w-full max-w-5xl pt-3 pb-1">
+          {slashOpen && (
+            <SlashMenu commands={filtered} onSelect={selectSlash} />
+          )}
+          {atMatches.length > 0 && (
+            <AutocompleteList
+              aria-label="File completions"
+              className="completion-menu absolute inset-x-0 bottom-full mb-2 max-h-64"
+            >
+              {atMatches.map((match) => (
+                <AutocompleteItem
+                  key={match}
+                  value={match}
+                  onClick={() => {
+                    applyAtMatch(match);
+                  }}
+                >
+                  <span className="truncate font-mono text-xs text-base">
+                    {match}
+                  </span>
+                </AutocompleteItem>
+              ))}
+            </AutocompleteList>
+          )}
+          {(steering.length > 0 || followUps.length > 0) && (
+            <div
+              className="mb-2 flex flex-wrap gap-1.5"
+              role="status"
+              aria-label="Queued messages"
+            >
+              {steering.map((text, index) => (
+                <Badge
+                  variant="outline"
+                  key={`steer_${text}_${String(index)}`}
+                  className="max-w-full truncate rounded-full border border-accent/30 bg-accent/6 px-2.5 py-0.5 font-mono text-[11px] text-accent"
+                  title={text}
+                >
+                  {`steering: ${text}`}
+                </Badge>
+              ))}
+              {followUps.map((text, index) => (
+                <Badge
+                  variant="outline"
+                  key={`follow_${text}_${String(index)}`}
+                  className="max-w-full truncate rounded-full border border-warning/30 bg-warning-bg px-2.5 py-0.5 font-mono text-[11px] text-warning"
+                  title={text}
+                >
+                  {`follow-up: ${text}`}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {blockedHint && (
+            <p className="mb-2 font-mono text-[11px] text-warning" role="alert">
+              {blockedHint}
+            </p>
+          )}
+          <div className="flex items-end gap-2 px-3 sm:px-5">
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                for (const file of Array.from(e.target.files ?? [])) {
+                  uploadImage(file);
+                }
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              aria-label="Attach images"
+              title="Attach images (or paste/drop them)"
+              onClick={() => {
+                fileInputRef.current?.click();
+              }}
+              className="mb-1.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-dim transition-colors hover:bg-selected hover:text-bright"
+            >
+              <ImagePlusIcon size={15} aria-hidden="true" />
+            </Button>
+            <div
+              style={composerStyle}
+              className="composer-field min-w-0 flex-1 rounded-xl border bg-surface transition-colors"
+            >
+              {uploads.length > 0 && (
+                <div
+                  className="flex flex-wrap gap-1.5 px-3 pt-3"
+                  aria-label="Uploading images"
+                >
+                  {uploads.map((upload) => (
+                    <Badge
+                      variant="outline"
+                      key={upload.clientId}
+                      className="flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-surface px-2.5 py-0.5 font-mono text-[11px] text-dim"
+                      title={upload.name}
+                    >
+                      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
+                      <span className="truncate">{upload.name}</span>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <AutocompleteInput
+                render={
+                  <Textarea
+                    ref={textareaRef}
+                    rows={1}
+                    value={value}
+                    onChange={(e) => {
+                      setValue(e.target.value);
+                      setCaret(e.target.selectionStart ?? 0);
+                      setAtDismissed(false);
+                    }}
+                    onKeyDown={onKeyDown}
+                    onKeyUp={(e) => {
+                      setCaret(e.currentTarget.selectionStart ?? 0);
+                    }}
+                    onClick={(e) => {
+                      setCaret(e.currentTarget.selectionStart ?? 0);
+                    }}
+                    onSelect={(e) => {
+                      setCaret(e.currentTarget.selectionStart ?? 0);
+                    }}
+                    onPaste={(e) => {
+                      const files = Array.from(
+                        e.clipboardData?.files ?? [],
+                      ).filter((file) => file.type.startsWith("image/"));
+                      if (files.length > 0) {
+                        e.preventDefault();
+                        for (const file of files) {
+                          uploadImage(file);
+                        }
+                      }
+                    }}
+                    onDrop={(e) => {
+                      const files = Array.from(
+                        e.dataTransfer?.files ?? [],
+                      ).filter((file) => file.type.startsWith("image/"));
+                      if (files.length > 0) {
+                        e.preventDefault();
+                        for (const file of files) {
+                          uploadImage(file);
+                        }
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                    }}
+                    placeholder={
+                      streaming ? "Steer the current task…" : "Message Yukino…"
+                    }
+                    className="block min-h-0 max-h-50 w-full resize-none rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent px-3 py-2.5 text-sm leading-relaxed text-bright outline-none placeholder:text-dim"
+                    aria-label="Message input"
+                  />
+                }
+              />
+              {bashMode && (
+                <span className="mx-3 mb-2 inline-block rounded-lg border border-warning/40 bg-warning-bg px-2 py-0.5 font-mono text-[10px] font-semibold text-warning">
+                  {bashExcluded ? "Bash · excluded" : "Bash"}
+                </span>
+              )}
+            </div>
+            {streaming ? (
+              <Button
+                type="button"
+                onClick={onCancel}
+                title="Cancel the running turn (Esc)"
+                className="mb-1.5 flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-error/40 bg-error-bg px-2.5 font-mono text-xs font-semibold text-error transition-colors hover:border-error"
+              >
+                <SquareIcon size={10} fill="currentColor" aria-hidden="true" />
+                Cancel
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={send}
+                disabled={value.trim().length === 0}
+                className="mb-1.5 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-accent text-accent-contrast transition-opacity disabled:cursor-default disabled:opacity-30"
+                aria-label="Send message"
+              >
+                <ArrowUpIcon size={14} aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+          <p className="mt-2 hidden px-1 text-[11px] text-dim sm:block">
+            Enter send · Shift+Enter newline · ↑ history · @ files · ! bash ·
+            paste/drop images · Esc cancel
+          </p>
+        </div>
+      </footer>
+    </Autocomplete>
+  );
+}

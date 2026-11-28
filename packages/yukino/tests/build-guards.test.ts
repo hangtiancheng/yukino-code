@@ -1,0 +1,300 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { build } from "tsup";
+import ts from "typescript";
+import { describe, expect, it } from "vitest";
+
+import pkg from "../package.json";
+import {
+  cliConfig,
+  findAmbiguousExports,
+  libConfig,
+  uiOnlyDeps,
+  uiOnlyPattern,
+} from "../tsup.config.js";
+
+const appRoot = join(import.meta.dirname, "..");
+const srcRoot = join(appRoot, "src");
+// Full install-manifest set: optionalDependencies are part of the graph by
+// default (only their install failures are tolerated), so import-site
+// derivation must see them too.
+const dependencyNames = [
+  ...Object.keys(pkg.dependencies),
+  ...Object.keys(pkg.optionalDependencies ?? {}),
+].sort();
+
+/**
+ * Recompute the ui-only set from the sources: a dependency is ui-only
+ * when every module importing it belongs to the terminal layer (src/main.tsx and
+ * src/ui/**). Type-only imports are ignored — they are erased and cannot make a
+ * package reachable at runtime.
+ */
+const deriveUIOnlyDeps = (): string[] => {
+  const importSites = new Map<string, Set<string>>();
+
+  const visit = (file: string): void => {
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(file, "utf8"),
+      ts.ScriptTarget.ESNext,
+    );
+    const relativePath = file.slice(appRoot.length + 1).replaceAll("\\", "/");
+    const specifiers: string[] = [];
+    const collect = (node: ts.Node): void => {
+      if (ts.isImportDeclaration(node)) {
+        const isTypeOnlyImport =
+          node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword;
+        if (!isTypeOnlyImport && ts.isStringLiteral(node.moduleSpecifier)) {
+          specifiers.push(node.moduleSpecifier.text);
+        }
+      } else if (
+        ts.isExportDeclaration(node) &&
+        !node.isTypeOnly &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
+        specifiers.push(node.moduleSpecifier.text);
+      } else if (ts.isCallExpression(node) && node.arguments.length > 0) {
+        const [firstArgument] = node.arguments;
+        const isDynamicImport =
+          node.expression.kind === ts.SyntaxKind.ImportKeyword;
+        const isRequireCall =
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === "require";
+        if (
+          ts.isStringLiteral(firstArgument) &&
+          (isDynamicImport || isRequireCall)
+        ) {
+          specifiers.push(firstArgument.text);
+        }
+      }
+      ts.forEachChild(node, collect);
+    };
+    collect(source);
+
+    for (const specifier of specifiers) {
+      const dependency = dependencyNames.find(
+        (name) => specifier === name || specifier.startsWith(`${name}/`),
+      );
+      if (!dependency) {
+        continue;
+      }
+      const sites = importSites.get(dependency) ?? new Set<string>();
+      sites.add(relativePath);
+      importSites.set(dependency, sites);
+    }
+  };
+
+  // src/remote/browser is a standalone browser bundle with its own tsup build
+  // (`pnpm build:browser`), served as static assets by the remote server. It is
+  // never part of the CLI/library import graph, so its imports (react,
+  // react-dom, dompurify, marked) must not count as import sites here.
+  const browserPrefix = "src/remote/browser/";
+
+  const walk = (directory: string): void => {
+    for (const entry of ts.sys.readDirectory(directory, [".ts", ".tsx"])) {
+      const relativeEntry = entry
+        .slice(appRoot.length + 1)
+        .replaceAll("\\", "/");
+      if (relativeEntry.startsWith(browserPrefix)) {
+        continue;
+      }
+      visit(entry);
+    }
+  };
+  walk(srcRoot);
+
+  const isTerminalLayer = (path: string): boolean =>
+    path.startsWith("src/ui/") || path === "src/main.tsx";
+
+  return dependencyNames
+    .filter((dependency) => {
+      const sites = importSites.get(dependency);
+      return (
+        sites !== undefined &&
+        sites.size > 0 &&
+        [...sites].every(isTerminalLayer)
+      );
+    })
+    .sort();
+};
+
+describe("source entry organization", () => {
+  it("keeps only application and library entries at the source root", () => {
+    expect(
+      readdirSync(srcRoot, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => entry.name)
+        .sort(),
+    ).toEqual(["cli.ts", "index.ts", "main.tsx"]);
+  });
+});
+
+describe("Code Mode worker build", () => {
+  it("emits a standalone worker and leaves quickjs-wasi external in both builds", async () => {
+    expect(cliConfig.entry).toHaveProperty(
+      "code-mode-worker",
+      "src/code-mode/code-mode-worker.js",
+    );
+    expect(libConfig.entry).toHaveProperty(
+      "code-mode-worker",
+      "src/code-mode/code-mode-worker.js",
+    );
+    for (const config of [cliConfig, libConfig]) {
+      const outDir = mkdtempSync(join(tmpdir(), "yukino-code-mode-build-"));
+      try {
+        await build({
+          ...config,
+          entry: { "code-mode-worker": "src/code-mode/code-mode-worker.js" },
+          outDir,
+          clean: false,
+          dts: false,
+          minify: false,
+          silent: true,
+          onSuccess: undefined,
+        });
+        const source = readFileSync(
+          join(outDir, "code-mode-worker.js"),
+          "utf8",
+        );
+        expect(source).toMatch(/from ["']quickjs-wasi["']/);
+        expect(source).not.toContain("class QuickJS");
+      } finally {
+        rmSync(outDir, { recursive: true, force: true });
+      }
+    }
+  });
+});
+
+describe("library build ui-only dependency guard", () => {
+  it("declares every entry as a real dependency", () => {
+    const undeclared = uiOnlyDeps.filter(
+      (dependency) => !dependencyNames.includes(dependency),
+    );
+    expect(undeclared).toEqual([]);
+  });
+
+  it("matches the set derived from the actual import sites", () => {
+    expect(deriveUIOnlyDeps()).toEqual([...uiOnlyDeps].sort());
+  });
+
+  it("matches a ui-only package and its subpaths only", () => {
+    expect(uiOnlyPattern.test("ink")).toBe(true);
+    expect(uiOnlyPattern.test("ink/build/devtools.js")).toBe(true);
+    expect(uiOnlyPattern.test("chalk")).toBe(true);
+    expect(uiOnlyPattern.test("chalk/source/index.js")).toBe(true);
+    expect(uiOnlyPattern.test("fuse.js")).toBe(true);
+    // Prefixes of a listed name are different packages.
+    expect(uiOnlyPattern.test("ink-foo")).toBe(false);
+    expect(uiOnlyPattern.test("chalkboard")).toBe(false);
+  });
+
+  it("bans react and keeps server-safe dependencies out of the ban", () => {
+    // The barrel does not re-export src/ui, so react and marked are reached
+    // exclusively from the terminal layer and are banned like the other
+    // ui-only deps.
+    for (const specifier of ["react", "react/jsx-runtime", "marked"]) {
+      expect(uiOnlyPattern.test(specifier)).toBe(true);
+    }
+    expect(uiOnlyDeps).toContain("react");
+    expect(uiOnlyDeps).toContain("marked");
+    // react-dom is imported only by the standalone browser bundle
+    // (src/remote/browser), never by the node graph — it is not part of the set.
+    for (const specifier of [
+      "react-dom",
+      "react-dom/client",
+      "zod",
+      "@anthropic-ai/sdk",
+      "express",
+      "jimp",
+      "ws",
+    ]) {
+      expect(uiOnlyPattern.test(specifier)).toBe(false);
+    }
+    expect(uiOnlyDeps).not.toContain("react-dom");
+  });
+});
+
+describe("ambiguous-export scan", () => {
+  const withTempProject = (
+    files: Record<string, string>,
+    run: (root: string) => void,
+  ): void => {
+    const root = mkdtempSync(join(tmpdir(), "yukino-guard-"));
+    try {
+      for (const [path, contents] of Object.entries(files)) {
+        const target = join(root, path);
+        mkdirSync(join(target, ".."), { recursive: true });
+        writeFileSync(target, contents);
+      }
+      run(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  const tsconfig = JSON.stringify({
+    compilerOptions: {
+      module: "esnext",
+      moduleResolution: "bundler",
+      target: "esnext",
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+    },
+    include: ["src"],
+  });
+
+  it("detects a name exported by two `export *` sources", () => {
+    withTempProject(
+      {
+        "tsconfig.json": tsconfig,
+        "src/a.ts": "export const dup = 1;\n",
+        "src/b.ts": "export const dup = 2;\n",
+        "src/index.ts": 'export * from "./a.js";\nexport * from "./b.js";\n',
+      },
+      (root) => {
+        const conflicts = findAmbiguousExports(
+          join(root, "tsconfig.json"),
+          root,
+        );
+        expect(conflicts).toHaveLength(1);
+        expect(conflicts[0]?.file).toBe("src/index.ts");
+        expect(conflicts[0]?.message).toContain(
+          "already exported a member named 'dup'",
+        );
+      },
+    );
+  });
+
+  it("accepts the same symbol re-exported through two paths", () => {
+    withTempProject(
+      {
+        "tsconfig.json": tsconfig,
+        "src/a.ts": "export const shared = 1;\n",
+        "src/b.ts": 'export * from "./a.js";\n',
+        "src/index.ts": 'export * from "./a.js";\nexport * from "./b.js";\n',
+      },
+      (root) => {
+        expect(findAmbiguousExports(join(root, "tsconfig.json"), root)).toEqual(
+          [],
+        );
+      },
+    );
+  });
+
+  it("reports no conflict for the published barrel", () => {
+    expect(
+      findAmbiguousExports(join(appRoot, "tsconfig.build.json"), appRoot),
+    ).toEqual([]);
+  });
+});

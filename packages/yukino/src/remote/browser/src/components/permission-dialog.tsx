@@ -1,0 +1,60 @@
+import { LockKeyholeIcon } from "lucide-react";
+
+import { Button } from "#/components/ui/button.js";
+import { RESPONSE_LABEL, RESPONSE_OPTIONS } from "#/constants.js";
+import type { PermissionItem, PermissionResponse } from "#/types.js";
+
+interface PermissionDialogProps {
+  item: PermissionItem;
+  onRespond: (id: string, response: PermissionResponse) => void;
+}
+
+export function PermissionDialog({ item, onRespond }: PermissionDialogProps) {
+  return (
+    <section
+      aria-label={`Permission required for ${item.toolName}`}
+      className="my-3 rounded-xl border border-warning/35 bg-warning-bg p-4 "
+    >
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-warning">
+        <LockKeyholeIcon size={13} aria-hidden="true" />
+        Permission Required: <span className="font-mono">{item.toolName}</span>
+      </div>
+      <div className="mb-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-base">
+        {item.description}
+      </div>
+      {item.rememberPatterns?.map((pattern) => (
+        <div
+          key={pattern}
+          className="mb-2 font-mono text-xs whitespace-pre-wrap break-all"
+        >
+          Remember scope: {pattern}
+        </div>
+      ))}
+      {item.responded ? (
+        <div className="text-xs text-dim">
+          <span className="mr-1 text-success">✓</span>
+          {RESPONSE_LABEL[item.response ?? ""] ?? item.response}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          {RESPONSE_OPTIONS.filter(
+            (option) =>
+              option.value !== "allowAlways" ||
+              (item.rememberPatterns?.length ?? 0) > 0,
+          ).map((opt) => (
+            <Button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onRespond(item.id, opt.value);
+              }}
+              className={`w-full cursor-pointer rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors sm:w-auto sm:py-1.5 ${opt.className}`}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}

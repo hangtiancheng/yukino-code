@@ -1,0 +1,25 @@
+import { resolve } from "node:path";
+
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": resolve(import.meta.dirname, "src"),
+      "#": resolve(import.meta.dirname, "src/remote/browser/src"),
+    },
+  },
+  test: {
+    setupFiles: ["tests/setup.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
+    environment: "node",
+    testTimeout: 100_000,
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.d.ts"],
+      reporter: ["html", "json-summary", "lcov", "text"],
+      reportsDirectory: "coverage",
+    },
+  },
+});

@@ -1,0 +1,101 @@
+import { z } from "zod";
+
+import type { SkillCatalog } from "@/skills/catalog.js";
+import { runFork, runInline } from "@/skills/executor.js";
+import {
+  LOAD_SKILL_DESCRIPTION,
+  LOAD_SKILL_NAME_DESCRIPTION,
+} from "@/skills/prompts.js";
+import type { SkillForkHost, SkillHost } from "@/skills/types.js";
+import { createToolSchema } from "@/tools/schema.js";
+import type {
+  Tool,
+  ToolContext,
+  ToolResult,
+  ToolSchema,
+} from "@/tools/types.js";
+import { asErrorString } from "@/utils/index.js";
+
+// On-demand skill activation: returns the full SOP body so it enters the
+// conversation as a regular message (progressive disclosure). Fork-mode
+// skills instead delegate to a subagent and return only its result.
+const LoadSkillToolInputSchema = z.strictObject({
+  name: z.string().describe(LOAD_SKILL_NAME_DESCRIPTION),
+});
+
+export class LoadSkillTool implements Tool {
+  name = "LoadSkill";
+  description = LOAD_SKILL_DESCRIPTION;
+  category = "read" as const;
+
+  constructor(
+    private catalog: SkillCatalog,
+    private host: SkillHost,
+    // Host for running isolated subagents; skills with mode: fork depend on it.
+    // When omitted (host has not integrated the subagent runtime), falls back to inline
+    // to ensure the tool remains available.
+    private forkHost?: SkillForkHost,
+  ) {}
+
+  forDelegatedAgent(): LoadSkillTool {
+    return new LoadSkillTool(this.catalog, { activateSkill: () => undefined });
+  }
+
+  parameters() {
+    return LoadSkillToolInputSchema;
+  }
+
+  schema(): ToolSchema {
+    return createToolSchema(this.name, this.description, this.parameters());
+  }
+
+  async execute(
+    ctx: ToolContext,
+    args: Record<string, unknown>,
+  ): Promise<ToolResult> {
+    const validated = this.parameters().safeParse(args);
+    if (!validated.success) {
+      return Promise.resolve({
+        output: validated.error.message,
+        isError: true,
+      });
+    }
+    args = validated.data;
+
+    const name = validated.data.name ?? "";
+    const skill = this.catalog.get(name);
+    if (!skill) {
+      const available =
+        this.catalog
+          .list()
+          .map((s) => s.name)
+          .join(", ") || "(none)";
+      return {
+        output: `Skill '${name}' not found. Available skills: ${available}`,
+        isError: true,
+      };
+    }
+
+    // Fork mode keeps the SOP body out of the main conversation: an isolated
+    // subagent executes it and only its final result is returned.
+    if (skill.meta.mode === "fork" && this.forkHost) {
+      try {
+        return {
+          output: await runFork(skill, "", this.forkHost, ctx.abortSignal, ctx),
+          isError: false,
+        };
+      } catch (err) {
+        return {
+          output: `Skill '${name}' fork execution failed: ${asErrorString(err)}`,
+          isError: true,
+        };
+      }
+    }
+
+    const body = runInline(skill, "", this.host);
+    return {
+      output: `Skill '${name}' activated.\n\n${body}`,
+      isError: false,
+    };
+  }
+}

@@ -1,0 +1,441 @@
+import { describe, it, expect } from "vitest";
+
+import {
+  estimateTokens,
+  estimateMessages,
+  currentContextTokens,
+  computeKeepStartIndex,
+  computeCompactThreshold,
+  forceCompact,
+  type UsageAnchor,
+} from "@/compact/compact.js";
+import { RecoveryState } from "@/compact/recovery.js";
+import { ConversationManager, type Message } from "@/conversation/index.js";
+import type { LLMClient } from "@/llm/client.js";
+import type { StreamEvent } from "@/llm/events.js";
+import { contentToText } from "@/utils/index.js";
+
+// A stub LLM that emits a fixed summary and records the text it was asked to
+// summarize, so tests can assert what the summary covered.
+function stubClient(summaryBody: string): {
+  client: LLMClient;
+  lastPrompt: () => string;
+} {
+  let lastPrompt = "";
+  const client: LLMClient = {
+    setSystemPrompt(_prompt: string) {
+      /** noop */
+    },
+    async *stream(conversation): AsyncGenerator<StreamEvent> {
+      lastPrompt = contentToText(conversation.getMessages()[0]?.content ?? "");
+      await Promise.resolve();
+      yield { type: "text_delta", text: `<summary>${summaryBody}</summary>` };
+      yield {
+        type: "stream_end",
+        stopReason: "end_turn",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        },
+      };
+    },
+  };
+  return { client, lastPrompt: () => lastPrompt };
+}
+
+// COMPACT_CHARS_PER_TOKEN is 3.5 in constants.ts; estimateMessages = ceil(chars / 3.5).
+const estChars = (chars: number) => Math.ceil(chars / 3.5);
+
+describe("currentContextTokens (real-usage anchoring)", () => {
+  it("falls back to whole-transcript char estimation when there is no anchor (cold start)", () => {
+    const conversation = new ConversationManager();
+    conversation.addUserMessage("a".repeat(35));
+    conversation.addAssistantFull("b".repeat(35), [], []);
+
+    const got = currentContextTokens(conversation, undefined);
+    expect(got).toBe(estimateTokens(conversation));
+    expect(got).toBe(estChars(70));
+  });
+
+  it("uses baseline + increment for messages appended after the anchor", () => {
+    const conversation = new ConversationManager();
+    // Two messages were already covered by the API usage that produced the
+    // anchor; their characters must NOT be re-counted.
+    conversation.addUserMessage("x".repeat(1000));
+    conversation.addAssistantFull("y".repeat(1000), [], []);
+
+    const anchor: UsageAnchor = {
+      baselineTokens: 5000, // the real API-reported full context size
+      anchorCount: 2, // it covered the first 2 messages
+    };
+
+    expect(currentContextTokens(conversation, anchor)).toBe(5000);
+
+    conversation.addUserMessage("z".repeat(70));
+    expect(currentContextTokens(conversation, anchor)).toBe(
+      5000 + estChars(70),
+    );
+    expect(currentContextTokens(conversation, anchor)).toBe(5020);
+  });
+
+  it("anchoring beats raw char estimation after a cache hit (real input << chars)", () => {
+    const conversation = new ConversationManager();
+    // A large transcript: char estimation would be huge.
+    conversation.addUserMessage("q".repeat(100_000));
+
+    const charEstimate = estimateTokens(conversation);
+    expect(charEstimate).toBeGreaterThan(20_000);
+
+    // But the API reported a small real context (e.g. mostly cache-read).
+    const anchor: UsageAnchor = { baselineTokens: 6000, anchorCount: 1 };
+    expect(currentContextTokens(conversation, anchor)).toBe(6000);
+    expect(currentContextTokens(conversation, anchor)).toBeLessThan(
+      charEstimate,
+    );
+  });
+
+  it("clamps when the transcript was truncated below the anchor index", () => {
+    const conversation = new ConversationManager();
+    conversation.addUserMessage("only one message");
+
+    // Anchor claims more messages than currently exist (e.g. post-compaction).
+    const anchor: UsageAnchor = { baselineTokens: 3000, anchorCount: 5 };
+    // slice(min(5,1)=1) → empty → just the baseline, no negative slicing.
+    expect(currentContextTokens(conversation, anchor)).toBe(3000);
+  });
+
+  it("estimateMessages matches the documented chars/3.5 rounding", () => {
+    expect(estimateMessages([])).toBe(0);
+    expect(estimateMessages([{ role: "user", content: "x".repeat(7) }])).toBe(
+      estChars(7),
+    );
+  });
+
+  it("estimateMessages counts image blocks at the fixed char equivalent", () => {
+    const result = (content: Message["toolResults"]) => [
+      { role: "user" as const, content: "", toolResults: content },
+    ];
+    const textOnly = result([
+      {
+        toolUseId: "t1",
+        content: "x".repeat(7),
+        contentBlocks: [{ type: "text", text: "x".repeat(7) }],
+        isError: false,
+      },
+    ]);
+    const withImage = result([
+      {
+        toolUseId: "t1",
+        content: "x".repeat(7),
+        contentBlocks: [
+          { type: "text", text: "x".repeat(7) },
+          {
+            type: "image",
+            source: { type: "base64", media_type: "image/png", data: "AA" },
+          },
+        ],
+        isError: false,
+      },
+    ]);
+    expect(estimateMessages(textOnly)).toBe(estChars(7));
+    expect(
+      estimateMessages(
+        result([
+          {
+            toolUseId: "t2",
+            content: "x",
+            contentBlocks: [{ type: "text", text: "y".repeat(70) }],
+            isError: false,
+          },
+        ]),
+      ),
+    ).toBe(estChars(70));
+    // IMAGE_CHAR_EQUIV = 7000 chars → estimated at chars/3.5, not zero.
+    expect(estimateMessages(withImage)).toBe(estChars(7 + 7000));
+  });
+});
+
+describe("computeKeepStartIndex (recent-history retention)", () => {
+  it("keeps at least MIN_KEEP_MESSAGES (5) recent messages when they are short", () => {
+    // 12 tiny messages: token-floor (10k) is never reached, so the count-floor
+    // of 5 decides the boundary → keep the last 5.
+    const messages: Message[] = Array.from({ length: 12 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `m${String(i)}`,
+    }));
+    expect(computeKeepStartIndex(messages)).toBe(12 - 5);
+  });
+
+  it("does not split a tool_use/tool_result pair at the keep boundary", () => {
+    // Build: 8 short user/assistant messages, then a tool_use assistant (idx 8)
+    // and its tool_result user (idx 9), then 4 more short messages (idx 10-13).
+    // The plain count-floor would land keepStart on idx 9 (the tool_result),
+    // which must be backed up to idx 8 (the tool_use) so the pair stays whole.
+    const conversation = new ConversationManager();
+    for (let i = 0; i < 8; i++) {
+      if (i % 2 === 0) {
+        conversation.addUserMessage(`u${String(i)}`);
+      } else {
+        conversation.addAssistantFull(`a${String(i)}`, [], []);
+      }
+    }
+    conversation.addAssistantFull(
+      "calling tool",
+      [],
+      [{ toolUseId: "tid-1", toolName: "Read", arguments: { path: "/x" } }],
+    );
+    conversation.addToolResultsMessage([
+      { toolUseId: "tid-1", content: "file contents", isError: false },
+    ]);
+    for (let i = 10; i < 14; i++) {
+      conversation.addAssistantFull(`tail${String(i)}`, [], []);
+    }
+
+    const messages = conversation.getMessages();
+    const keepStart = computeKeepStartIndex(messages);
+
+    expect(keepStart).toBe(8);
+    expect(messages[keepStart].toolUses?.[0]?.toolUseId).toBe("tid-1");
+    const kept = messages.slice(keepStart);
+    const hasUse = kept.some((m) =>
+      m.toolUses?.some((t) => t.toolUseId === "tid-1"),
+    );
+    const hasResult = kept.some((m) =>
+      m.toolResults?.some((t) => t.toolUseId === "tid-1"),
+    );
+    expect(hasUse && hasResult).toBe(true);
+  });
+
+  it("stops at the token floor and does not keep everything", () => {
+    // Each message is ~14000 tokens (49000 chars / 3.5). The first kept message
+    // already satisfies the token-floor (KEEP_RECENT_TOKENS = 10k), so the scan
+    // stops after keeping exactly 1 and never reaches the KEEP_MAX_TOKENS (40k)
+    // upper-bound check.
+    const big = "z".repeat(49000);
+    const messages: Message[] = Array.from({ length: 6 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: big,
+    }));
+    const keepStart = computeKeepStartIndex(messages);
+    expect(keepStart).toBe(messages.length - 1);
+    expect(keepStart).toBeGreaterThan(0);
+  });
+});
+
+describe("doCompact via forceCompact (keep recent verbatim)", () => {
+  it("keeps recent original messages verbatim and only summarizes the prefix", async () => {
+    const conversation = new ConversationManager();
+    // A long prefix that must be summarized away...
+    for (let i = 0; i < 20; i++) {
+      conversation.addUserMessage(
+        `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
+      );
+      conversation.addAssistantFull(`old-reply-${String(i)}`, [], []);
+    }
+    // ...and a recent tail we expect to survive untouched.
+    conversation.addUserMessage("RECENT-QUESTION marker-recent-q");
+    conversation.addAssistantFull("RECENT-ANSWER marker-recent-a", [], []);
+    conversation.addUserMessage("RECENT-FOLLOWUP marker-recent-f");
+
+    const { client, lastPrompt } = stubClient("THE SUMMARY BODY");
+    const before = conversation.getMessages().length;
+    const { message: msg, boundary } = await forceCompact(
+      conversation,
+      client,
+      null,
+      [],
+      [],
+    );
+
+    // forceCompact returns the structured boundary the session owner persists:
+    // the bare summary plus the verbatim kept tail as role+content records
+    // (tool_use/tool_result blocks are persisted alongside when present;
+    // this fixture's tail is plain text).
+    expect(boundary).toBeDefined();
+    expect(boundary?.summary).toBe("THE SUMMARY BODY");
+    const keepJoined = boundary?.keep
+      .map((k) => contentToText(k.content))
+      .join("\n");
+    expect(keepJoined).toContain("marker-recent-q");
+    expect(keepJoined).toContain("marker-recent-f");
+    // The boundary summary is bare (no recovery attachment / no framing
+    // wrapper — those are added at replay time, not persisted).
+    expect(boundary?.summary).not.toContain(
+      "The conversation history before this point was compacted",
+    );
+
+    const after = conversation.getMessages();
+    const joined = after.map((m) => contentToText(m.content)).join("\n");
+
+    expect(joined).toContain("marker-recent-q");
+    expect(joined).toContain("marker-recent-a");
+    expect(joined).toContain("marker-recent-f");
+    expect(joined).toContain("THE SUMMARY BODY");
+    expect(joined).toContain(
+      "The conversation history before this point was compacted",
+    );
+    expect(joined).toContain("Recent messages have been preserved verbatim");
+    expect(lastPrompt()).toContain("OLD-PREFIX-0");
+    expect(lastPrompt()).not.toContain("marker-recent-q");
+    // No assistant ack message — just summary + kept tail.
+    expect(after.length).toBeLessThan(before);
+    expect(after.length).toBeGreaterThanOrEqual(2);
+    expect(msg).toContain("kept");
+  });
+
+  it("persists the session transcript hint in the compact boundary", async () => {
+    const conversation = new ConversationManager();
+    for (let i = 0; i < 20; i++) {
+      conversation.addUserMessage(
+        `OLD-PREFIX-${String(i)}-` + "p".repeat(1200),
+      );
+      conversation.addAssistantFull(`old-reply-${String(i)}`, [], []);
+    }
+    conversation.addUserMessage("recent question");
+    conversation.addAssistantFull("recent answer", [], []);
+
+    const sessionPath = "/tmp/yukino-session-transcript.jsonl";
+    const { client } = stubClient("PERSISTED SUMMARY");
+    const { boundary } = await forceCompact(
+      conversation,
+      client,
+      null,
+      [],
+      [],
+      sessionPath,
+    );
+
+    expect(boundary?.summary).toContain("PERSISTED SUMMARY");
+    expect(boundary?.summary).toContain(
+      `use ReadFile to read the full session transcript: ${sessionPath}`,
+    );
+  });
+
+  it("does not split a tool_use/tool_result pair across the compaction boundary", async () => {
+    const conversation = new ConversationManager();
+    for (let i = 0; i < 20; i++) {
+      conversation.addUserMessage(`prefix-${String(i)}-` + "p".repeat(1200));
+      conversation.addAssistantFull(`reply-${String(i)}`, [], []);
+    }
+    // Recent tail containing a tool pair near the boundary.
+    conversation.addAssistantFull(
+      "running read",
+      [],
+      [{ toolUseId: "keep-tid", toolName: "Read", arguments: { path: "/a" } }],
+    );
+    conversation.addToolResultsMessage([
+      {
+        toolUseId: "keep-tid",
+        content: "RESULT-CONTENT-marker",
+        isError: false,
+      },
+    ]);
+    conversation.addAssistantFull("done with tool", [], []);
+    conversation.addUserMessage("thanks");
+
+    const { client } = stubClient("summary");
+    await forceCompact(conversation, client, null, [], []);
+
+    const after = conversation.getMessages();
+    const hasUse = after.some((m) =>
+      m.toolUses?.some((t) => t.toolUseId === "keep-tid"),
+    );
+    const hasResult = after.some((m) =>
+      m.toolResults?.some((t) => t.toolUseId === "keep-tid"),
+    );
+    // Either both halves of the pair survive, or neither — never an orphan.
+    expect(hasUse).toBe(hasResult);
+    // In this layout the pair is in the recent tail, so both survive.
+    expect(hasUse && hasResult).toBe(true);
+  });
+
+  it("degenerates to no-op when there are too few messages to compact", async () => {
+    const conversation = new ConversationManager();
+    conversation.addUserMessage("only-q marker");
+    conversation.addAssistantFull("only-a marker", [], []);
+
+    const { client } = stubClient("should-not-be-used");
+    const before = conversation.getMessages();
+    const { message: msg } = await forceCompact(
+      conversation,
+      client,
+      null,
+      [],
+      [],
+    );
+    const after = conversation.getMessages();
+
+    // Everything is inside the kept tail → compaction skipped, transcript intact.
+    expect(after).toEqual(before);
+    expect(msg.toLowerCase()).toContain("skip");
+    const joined = after.map((m) => contentToText(m.content)).join("\n");
+    expect(joined).toContain("only-q marker");
+    expect(joined).not.toContain(
+      "The conversation history before this point was compacted",
+    );
+  });
+});
+
+describe("RecoveryState retention", () => {
+  it("keeps only the five most recent bounded file snapshots", () => {
+    const recovery = new RecoveryState();
+
+    for (let index = 0; index < 10; index++) {
+      recovery.recordFileRead(
+        `/tmp/file-${String(index)}.txt`,
+        "x".repeat(30_000),
+      );
+    }
+
+    const files = recovery.snapshotFiles(100);
+    expect(files).toHaveLength(5);
+    expect(files.map((file) => file.path).sort()).toEqual(
+      [5, 6, 7, 8, 9].map((index) => `/tmp/file-${String(index)}.txt`),
+    );
+    expect(files.every((file) => file.content.length <= 17_500)).toBe(true);
+  });
+
+  it("refreshes an existing path without growing retention", () => {
+    const recovery = new RecoveryState();
+    for (let index = 0; index < 5; index++) {
+      recovery.recordFileRead(
+        `/tmp/file-${String(index)}.txt`,
+        `old-${String(index)}`,
+      );
+    }
+
+    recovery.recordFileRead("/tmp/file-0.txt", "new-content");
+    recovery.recordFileRead("/tmp/file-5.txt", "latest");
+
+    const files = recovery.snapshotFiles(100);
+    expect(files).toHaveLength(5);
+    expect(files.some((file) => file.path === "/tmp/file-1.txt")).toBe(false);
+    expect(files.find((file) => file.path === "/tmp/file-0.txt")?.content).toBe(
+      "new-content",
+    );
+  });
+});
+
+describe("computeCompactThreshold (small context windows)", () => {
+  it("keeps large-window behaviour identical (fixed margins)", () => {
+    // effective = 200000 - min(8000, 20000) = 192000; margins 13000 / 3000
+    expect(computeCompactThreshold(200000, 8000)).toBe(192000 - 13000);
+    expect(computeCompactThreshold(200000, 8000, true)).toBe(192000 - 3000);
+  });
+
+  it("keeps the threshold positive and ordered on a small window", () => {
+    // effective = 16000 - 4000 = 12000; fixed margins would go negative/zero.
+    const auto = computeCompactThreshold(16000, 4000);
+    const hard = computeCompactThreshold(16000, 4000, true);
+    expect(auto).toBeGreaterThan(0);
+    expect(hard).toBeGreaterThan(auto);
+    expect(hard).toBeLessThan(12000);
+  });
+
+  it("rejects a window with no room beyond the summary reserve", () => {
+    expect(() => computeCompactThreshold(20000, 20000)).toThrow(/too small/);
+    expect(() => computeCompactThreshold(10000, 30000)).toThrow(/too small/);
+  });
+});

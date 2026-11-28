@@ -1,0 +1,128 @@
+import { Button } from "@renderer/components/ui/button";
+import { folderName } from "@renderer/lib/utils";
+import type { InitState } from "@shared/ipc-types";
+import {
+  BoxesIcon,
+  ChevronDownIcon,
+  Code2Icon,
+  FolderOpenIcon,
+  PanelLeftIcon,
+  Settings2Icon,
+  SnowflakeIcon,
+  SearchIcon,
+  ChevronRightIcon,
+} from "lucide-react";
+
+export function Header({
+  init,
+  sidebarOpen,
+  editorOpen,
+  streaming,
+  onToggleSidebar,
+  onToggleEditor,
+  onChooseFolder,
+  onOpenSettings,
+  onOpenRuntime,
+  onOpenCommands,
+  sessionTitle,
+}: {
+  init: InitState | null;
+  sidebarOpen: boolean;
+  editorOpen: boolean;
+  streaming: boolean;
+  onToggleSidebar: () => void;
+  onToggleEditor: () => void;
+  onChooseFolder: () => void;
+  onOpenSettings: () => void;
+  onOpenRuntime: () => void;
+  onOpenCommands: () => void;
+  sessionTitle: string;
+}): React.JSX.Element {
+  const cwd = init?.ok ? init.cwd : null;
+  return (
+    <header
+      className={`workspace-toolbar flex h-14 min-w-0 shrink-0 items-center gap-2.5 border-b px-4 [-webkit-app-region:drag] ${sidebarOpen ? "" : "mac:pl-21"}`}
+    >
+      {!sidebarOpen ? (
+        <Button
+          className="[-webkit-app-region:no-drag]"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Show sessions"
+          title="Show sessions · ⌘ B"
+          onClick={onToggleSidebar}
+        >
+          <PanelLeftIcon />
+        </Button>
+      ) : null}
+      {!sidebarOpen ? (
+        <SnowflakeIcon className="text-primary size-5 shrink-0 max-sm:hidden" />
+      ) : null}
+      <button
+        className="project-picker"
+        title={cwd ?? "Choose project"}
+        disabled={streaming}
+        onClick={onChooseFolder}
+      >
+        <FolderOpenIcon className="text-accent-foreground size-3.75 shrink-0" />
+        <span className="truncate">
+          {cwd ? folderName(cwd) : "Open project"}
+        </span>
+        <ChevronDownIcon className="text-muted-foreground size-3 shrink-0" />
+      </button>
+      <ChevronRightIcon className="text-input size-3 shrink-0" />
+      <span
+        className="text-muted-foreground min-w-0 flex-1 truncate text-xs"
+        title={sessionTitle}
+      >
+        {sessionTitle}
+      </span>
+
+      <div className="ml-auto flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onOpenCommands}
+          aria-label="Command center"
+          title="Command center · ⌘ / Ctrl K"
+        >
+          <SearchIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => {
+            onOpenRuntime();
+          }}
+          disabled={!init?.ok}
+          aria-label="Agent workbench"
+          title="Tasks and capabilities"
+        >
+          <BoxesIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onOpenSettings}
+          aria-label="Settings"
+          title="Settings · ⌘ ,"
+        >
+          <Settings2Icon />
+        </Button>
+        <span className="bg-border mx-1 h-4 w-px shrink-0" />
+        <Button
+          variant={editorOpen ? "secondary" : "ghost"}
+          size="sm"
+          onClick={onToggleEditor}
+          disabled={!init?.ok}
+          aria-label="Code"
+          aria-pressed={editorOpen}
+          title="Toggle code workspace · ⌘ J"
+        >
+          <Code2Icon />
+          <span className="hidden sm:inline">Code</span>
+        </Button>
+      </div>
+    </header>
+  );
+}

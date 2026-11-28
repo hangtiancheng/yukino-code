@@ -1,0 +1,62 @@
+import { Modal, ModalHeader } from "#/components/modal.js";
+import { PickerList } from "#/components/picker-list.js";
+import { Button } from "#/components/ui/button.js";
+import { DialogClose } from "#/components/ui/dialog.js";
+import type { ModelListPayload } from "#/types.js";
+
+interface ModelPickerProps {
+  state: ModelListPayload;
+  onSelect: (model: string) => void;
+  onClose: () => void;
+}
+
+/** Model picker for /model (terminal model-select parity). */
+export function ModelPicker({ state, onSelect, onClose }: ModelPickerProps) {
+  return (
+    <Modal label="Switch model" onEscape={onClose}>
+      <ModalHeader
+        subtitle={`Current: ${state.current || "unknown"}`}
+        title="Switch model"
+      />
+      {state.status === "ready" ? (
+        <PickerList
+          items={state.models.map((model) => ({
+            id: model.id,
+            label: model.id,
+            detail:
+              model.name && model.name !== model.id ? model.name : undefined,
+            current: model.id === state.current,
+          }))}
+          onSelect={onSelect}
+        />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          {state.status === "loading" && (
+            <p className="px-3 py-6 text-center text-sm text-dim">
+              Discovering models…
+            </p>
+          )}
+          {state.status === "error" && (
+            <p className="px-3 py-6 text-center text-sm text-error">
+              Model discovery failed. Check the provider endpoint.
+            </p>
+          )}
+          {state.status === "empty" && (
+            <p className="px-3 py-6 text-center text-sm text-dim">
+              The provider did not advertise any models.
+            </p>
+          )}
+        </div>
+      )}
+      <div className="flex items-center justify-end border-t border-border px-4 py-3 sm:px-5">
+        <Button
+          type="button"
+          render={<DialogClose />}
+          className="cursor-pointer rounded-lg border border-border px-3.5 py-1.5 text-[13px] font-semibold text-base transition-colors hover:bg-selected"
+        >
+          Cancel
+        </Button>
+      </div>
+    </Modal>
+  );
+}

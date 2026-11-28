@@ -1,0 +1,2 @@
+# pnpm --filter @yukino.js/yukino format
+pnpm exec lint-staged

@@ -1,0 +1,147 @@
+import type { Command, CommandRegistry } from "@/commands/commands.js";
+import type { CodeModeConfig } from "@/config/preferences.js";
+import { MCP_TOOL_PREFIX } from "@/mcp/constants.js";
+import type { SkillCatalog } from "@/skills/catalog.js";
+import { runInline as runSkillInline } from "@/skills/executor.js";
+import type { SkillHost } from "@/skills/types.js";
+import type { TeamManager } from "@/teams/index.js";
+import { TeamTodoWriteTool } from "@/teams/task-tools.js";
+import type { TaskList } from "@/todo/index.js";
+import { TodoWriteTool } from "@/todo/tools.js";
+import { ApplyPatchTool } from "@/tools/apply-patch.js";
+import { BashTool } from "@/tools/bash.js";
+import { CodeModeTool } from "@/tools/code-mode.js";
+import { ComputerUseTool } from "@/tools/computer-use.js";
+import { EditFileTool } from "@/tools/edit-file.js";
+import { EnterPlanModeTool } from "@/tools/enter-plan-mode.js";
+import { EnterWorktreeTool } from "@/tools/enter-worktree.js";
+import { ExitPlanModeTool } from "@/tools/exit-plan-mode.js";
+import { ExitWorktreeTool } from "@/tools/exit-worktree.js";
+import { GlobTool } from "@/tools/glob.js";
+import { GoalTool } from "@/tools/goal.js";
+import { GrepTool } from "@/tools/grep.js";
+import { McpCallTool } from "@/tools/mcp-call.js";
+import { PowerShellTool } from "@/tools/powershell.js";
+import { ReadFileTool } from "@/tools/read-file.js";
+import { ToolRegistry } from "@/tools/registry.js";
+import { TaskOutputTool } from "@/tools/task-output.js";
+import { ToolSearchTool } from "@/tools/tool-search.js";
+import { WebFetchTool } from "@/tools/web-fetch.js";
+import { WriteFileTool } from "@/tools/write-file.js";
+
+export function countMcpTools(registry: ToolRegistry): number {
+  return registry
+    .listTools()
+    .filter((tool) => tool.name.startsWith(MCP_TOOL_PREFIX)).length;
+}
+
+/**
+ * Removes every MCP tool wrapper from the registry. Used by /mcp reload, which
+ * reconnects all servers from scratch, so no wrapper survives the reload.
+ */
+export function removeMcpTools(registry: ToolRegistry): void {
+  for (const tool of registry.listTools()) {
+    if (tool.name.startsWith(MCP_TOOL_PREFIX)) {
+      registry.unregister(tool.name);
+    }
+  }
+}
+
+export function createToolRegistry(
+  taskList: TaskList,
+  options: {
+    codeMode?: CodeModeConfig;
+    enableModelPlanMode?: boolean;
+    interactionMode?: "interactive" | "non-interactive";
+    teamManager?: TeamManager;
+  } = {},
+): ToolRegistry {
+  const registry = new ToolRegistry();
+  registry.setPolicy({
+    codeModeEnabled:
+      options.codeMode !== undefined && options.codeMode.mode !== "off",
+    codeModeMode: options.codeMode?.mode,
+    codeModeInlineBudget: options.codeMode?.inline_budget,
+  });
+  registry.register(new GoalTool());
+  registry.register(
+    options.teamManager
+      ? new TeamTodoWriteTool(
+          options.teamManager,
+          undefined,
+          undefined,
+          taskList,
+        )
+      : new TodoWriteTool(taskList),
+  );
+  registry.register(new TaskOutputTool());
+  registry.register(new BashTool());
+  registry.register(new PowerShellTool());
+  registry.register(new ComputerUseTool());
+  registry.register(new EditFileTool());
+  registry.register(new ApplyPatchTool());
+  if (options.codeMode && options.codeMode.mode !== "off") {
+    registry.register(new CodeModeTool());
+  }
+  if (
+    options.enableModelPlanMode ??
+    options.interactionMode !== "non-interactive"
+  ) {
+    registry.register(new EnterPlanModeTool(registry));
+  }
+  registry.register(new EnterWorktreeTool());
+  registry.register(new ExitPlanModeTool());
+  registry.register(new ExitWorktreeTool());
+  registry.register(new ReadFileTool());
+  registry.register(new ToolSearchTool(registry));
+  registry.register(new McpCallTool(registry));
+  registry.register(new WriteFileTool());
+  registry.register(new GlobTool());
+  registry.register(new GrepTool());
+  registry.register(new WebFetchTool());
+  return registry;
+}
+
+export function wireSkillsToRegistry(
+  catalog: SkillCatalog,
+  commandRegistry: CommandRegistry,
+  skillHost: SkillHost,
+): void {
+  for (const meta of catalog.list()) {
+    if (commandRegistry.find(meta.name)) {
+      continue;
+    }
+
+    const skill = catalog.get(meta.name);
+    if (!skill) {
+      continue;
+    }
+
+    const command: Command = {
+      resource: "skill",
+      name: meta.name,
+      type: skill.meta.mode === "fork" ? "skill_fork" : "prompt",
+      description: `${meta.description} [skill]`,
+      isSkill: true,
+      handler:
+        skill.meta.mode === "fork"
+          ? () => ""
+          : (context) => runSkillInline(skill, context.args, skillHost),
+    };
+
+    try {
+      commandRegistry.register(command);
+    } catch {
+      continue;
+    }
+  }
+}
+
+export function buildComposedToolFilter(
+  coordinator: (name: string) => boolean,
+  skillFilter: ((name: string) => boolean) | null,
+): (name: string) => boolean {
+  return skillFilter
+    ? (name: string) => coordinator(name) && skillFilter(name)
+    : coordinator;
+}

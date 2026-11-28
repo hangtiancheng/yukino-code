@@ -1,0 +1,165 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+
+import { describe, expect, it, vi } from "vitest";
+
+import { createA2aRuntime } from "@/a2a/executor.js";
+import { NO_PROVIDERS_ERROR } from "@/config/constants.js";
+import * as config from "@/config/index.js";
+import { RuntimePreferencesSchema } from "@/config/preferences.js";
+import {
+  globalConfigPath,
+  type ProviderConfig,
+} from "@/config/provider-config.js";
+import { MCPManager } from "@/mcp/manager.js";
+import * as remote from "@/runtime/factory.js";
+
+describe("A2A runtime cleanup", () => {
+  it.each([
+    {
+      name: "empty provider list",
+      configuration: "providers: []\n",
+      error: NO_PROVIDERS_ERROR,
+    },
+    {
+      name: "invalid protocol",
+      configuration:
+        "providers:\n  - name: test\n    protocol: invalid\n    base_url: https://test.invalid\n    model: test\n",
+      error: "Invalid configuration",
+    },
+  ])(
+    "rejects $name before starting the runtime",
+    async ({ configuration, error }) => {
+      const cwd = mkdtempSync(join(tmpdir(), "yukino-a2a-config-"));
+      const path = globalConfigPath();
+      const create = vi.spyOn(remote, "createAgentRuntime");
+      try {
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, configuration);
+        await expect(createA2aRuntime(cwd)).rejects.toThrow(error);
+        expect(create).not.toHaveBeenCalled();
+      } finally {
+        create.mockRestore();
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("reports an expired transcript instead of starting an empty continuation", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "yukino-a2a-expired-"));
+    try {
+      await expect(createA2aRuntime(cwd, "expired-12345678")).rejects.toThrow(
+        "transcript is no longer available",
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+  it.each([false, true])(
+    "releases owned tools after stopping workers, even on failure: %s",
+    async (failWorkers) => {
+      const cwd = mkdtempSync(join(tmpdir(), "yukino-a2a-runtime-"));
+      const provider: ProviderConfig = {
+        name: "test",
+        protocol: "openai",
+        model: "test",
+        base_url: "https://test.invalid",
+        api_key: "test",
+      };
+      const handle = await remote.createAgentRuntime({
+        provider,
+        cwd,
+        enableCoordinatorMode: false,
+        memoryEnabled: false,
+      });
+      const abort = vi
+        .spyOn(handle, "abortForeground")
+        .mockImplementation(() => undefined);
+      const trace: string[] = [];
+      let release: () => void = () => undefined;
+      const workersStopped = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const stopAll = vi
+        .spyOn(handle.backgroundTaskManager, "stopAll")
+        .mockImplementation(async () => {
+          trace.push("stop workers");
+          await workersStopped;
+          if (failWorkers) {
+            throw new Error("expected cleanup failure");
+          }
+          trace.push("workers stopped");
+        });
+      const teamDispose = vi.spyOn(handle.teamManager, "dispose");
+      handle.mcpManager = new MCPManager();
+      const mcpDispose = vi
+        .spyOn(handle.mcpManager, "disconnectAll")
+        .mockImplementation(() => {
+          trace.push("disconnect MCP");
+          return Promise.resolve();
+        });
+      const registryDispose = vi
+        .spyOn(handle.registry, "dispose")
+        .mockImplementation(() => {
+          trace.push("dispose tools");
+          return Promise.resolve();
+        });
+      vi.spyOn(config, "loadConfig").mockReturnValue({
+        default_provider: 0,
+        ...RuntimePreferencesSchema.parse({}),
+        theme: "auto",
+        providers: [provider],
+        hooks: [],
+        mcp_servers: [],
+        enable_memory: false,
+        permission_mode: "acceptEdits",
+      });
+      vi.spyOn(remote, "createAgentRuntime").mockImplementation((options) => {
+        if (options.checker) {
+          handle.checker = options.checker;
+        }
+        handle.sessionId = options.sessionId ?? handle.sessionId;
+        return Promise.resolve(handle);
+      });
+      try {
+        const runtime = await createA2aRuntime(cwd);
+        expect(handle.permissionMode).toBe("acceptEdits");
+        expect(remote.createAgentRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            interactionMode: "non-interactive",
+            mcpServers: [],
+          }),
+        );
+        const cleanup = runtime.dispose().catch((error: unknown) => error);
+        await vi.waitFor(() => {
+          expect(abort).toHaveBeenCalledOnce();
+        });
+        expect(stopAll).toHaveBeenCalledOnce();
+        expect(registryDispose).not.toHaveBeenCalled();
+        expect(mcpDispose).not.toHaveBeenCalled();
+        release();
+        if (failWorkers) {
+          const error = await cleanup;
+          expect(error).toBeInstanceOf(AggregateError);
+          if (!(error instanceof AggregateError)) {
+            throw new Error("Expected an aggregate cleanup error");
+          }
+          expect(error.errors).toEqual([new Error("expected cleanup failure")]);
+        } else {
+          await expect(cleanup).resolves.toBeUndefined();
+        }
+        expect(teamDispose).toHaveBeenCalledOnce();
+        expect(registryDispose).toHaveBeenCalledOnce();
+        expect(mcpDispose).toHaveBeenCalledOnce();
+        expect(trace.at(-1)).toBe("dispose tools");
+      } finally {
+        release();
+        vi.restoreAllMocks();
+        await handle.teamManager.dispose();
+        await handle.registry.dispose();
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+});

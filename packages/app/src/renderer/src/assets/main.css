@@ -1,0 +1,448 @@
+@import "tailwindcss";
+@import "@catppuccin/tailwindcss/mocha.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Streamdown ships Tailwind utilities (incl. shiki light/dark token classes)
+ * inside node_modules, which Tailwind v4 does not scan automatically. */
+@source "../../../../node_modules/streamdown/dist";
+@source "../../../../node_modules/@streamdown/code/dist";
+
+@custom-variant dark (&:is(.dark *));
+@custom-variant mac (&:where(html[data-platform="mac"] *));
+
+@theme inline {
+  --color-success: var(--success);
+  --color-scrim: var(--scrim);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --animate-status-pulse: status-pulse 1.6s ease-in-out infinite;
+
+  @keyframes status-pulse {
+    50% {
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 5%, transparent);
+    }
+  }
+}
+
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+  --scrim: color-mix(in srgb, var(--catppuccin-color-crust) 65%, #000000);
+  --background: var(--catppuccin-color-base);
+  --foreground: var(--catppuccin-color-text);
+  --card: #fafafd;
+  --card-foreground: var(--catppuccin-color-text);
+  --popover: var(--card);
+  --popover-foreground: var(--catppuccin-color-text);
+  --primary: var(--catppuccin-color-mauve);
+  --primary-foreground: var(--catppuccin-color-base);
+  --secondary: var(--catppuccin-color-surface0);
+  --secondary-foreground: var(--catppuccin-color-text);
+  --muted: var(--catppuccin-color-mantle);
+  --muted-foreground: var(--catppuccin-color-subtext1);
+  --accent: color-mix(
+    in srgb,
+    var(--catppuccin-color-mauve) 12%,
+    var(--background)
+  );
+  --accent-foreground: color-mix(
+    in srgb,
+    var(--catppuccin-color-mauve) 90%,
+    var(--foreground)
+  );
+  --destructive: color-mix(
+    in srgb,
+    var(--catppuccin-color-red) 90%,
+    var(--foreground)
+  );
+  --destructive-foreground: var(--catppuccin-color-base);
+  --warning: color-mix(
+    in srgb,
+    var(--catppuccin-color-yellow) 30%,
+    var(--foreground)
+  );
+  --warning-foreground: var(--catppuccin-color-text);
+  --border: var(--catppuccin-color-surface0);
+  --input: var(--catppuccin-color-surface1);
+  --ring: var(--catppuccin-color-mauve);
+  --sidebar: var(--catppuccin-color-mantle);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --success: color-mix(
+    in srgb,
+    var(--catppuccin-color-green) 40%,
+    var(--foreground)
+  );
+  --chart-1: var(--catppuccin-color-mauve);
+  --chart-2: var(--catppuccin-color-blue);
+  --chart-3: var(--catppuccin-color-teal);
+  --chart-4: var(--catppuccin-color-peach);
+  --chart-5: var(--catppuccin-color-pink);
+  --chrome: var(--catppuccin-color-mantle);
+  --explorer: color-mix(in srgb, var(--card) 32%, var(--catppuccin-color-base));
+  --workspace-shadow: 0 5px 16px
+    color-mix(in srgb, var(--foreground) 8%, transparent);
+  --dialog-shadow: 0 24px 80px color-mix(in srgb, var(--scrim) 24%, transparent);
+}
+.dark {
+  color-scheme: dark;
+  --card: var(--catppuccin-color-base);
+  --popover: var(--catppuccin-color-mantle);
+  --explorer: color-mix(in srgb, var(--card) 42%, var(--chrome));
+  --accent-foreground: var(--catppuccin-color-mauve);
+  --destructive: var(--catppuccin-color-red);
+  --warning: var(--catppuccin-color-yellow);
+  --success: var(--catppuccin-color-green);
+  --workspace-shadow: 0 8px 24px
+    color-mix(in srgb, var(--catppuccin-color-crust) 65%, transparent);
+  --dialog-shadow: 0 24px 80px color-mix(in srgb, var(--scrim) 65%, transparent);
+}
+
+.workspace-toolbar {
+  background: var(--chrome);
+}
+
+.workspace-conversation,
+.editor-workspace {
+  background: var(--card);
+}
+
+.project-picker {
+  @apply hover:bg-accent hover:text-accent-foreground flex max-w-[32%] min-w-0 shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors [-webkit-app-region:no-drag];
+}
+
+.brand-mark {
+  @apply bg-accent text-accent-foreground grid size-8 shrink-0 place-items-center rounded-lg border;
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+}
+
+.session-row {
+  @apply hover:bg-accent/60 my-0.5 flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.session-row[aria-current] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: inset 2px 0 var(--primary);
+}
+
+.conversation-heading,
+.editor-heading {
+  @apply flex h-12 min-w-0 shrink-0 items-center gap-2 border-b px-4 text-xs;
+  background: color-mix(in srgb, var(--card) 70%, var(--chrome));
+}
+
+.conversation-heading {
+  @apply justify-between;
+}
+
+.conversation-start {
+  @apply relative grid min-h-0 flex-1 place-items-center overflow-y-auto px-5 py-6 sm:px-7;
+}
+
+.conversation-start::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--muted-foreground) 27%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 21px 21px;
+  mask-image: radial-gradient(
+    ellipse 60% 70% at 50% 32%,
+    black,
+    transparent 82%
+  );
+}
+
+.conversation-welcome {
+  @apply relative flex w-full max-w-100 flex-col items-start rounded-2xl px-4 py-7 sm:px-7;
+  background: color-mix(in srgb, var(--card) 91%, transparent);
+}
+
+.welcome-mark {
+  @apply mb-6 grid size-[72px] place-items-center rounded-2xl border;
+  background-color: var(--accent);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+  box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--card) 60%, transparent);
+}
+
+.composer-frame {
+  @apply bg-card relative min-w-0 rounded-[14px] border transition-[border-color,box-shadow];
+  border-color: color-mix(in srgb, var(--primary) 18%, var(--border));
+  box-shadow: var(--workspace-shadow);
+}
+
+.composer-frame:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 10%, transparent);
+}
+
+.workbench-tile {
+  background: var(--explorer);
+  transition:
+    border-color 150ms,
+    background-color 150ms;
+}
+
+.workbench-tile:hover {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: var(--accent);
+}
+
+.workspace-divider {
+  @apply z-5 w-px shrink-0 touch-none;
+  background-color: var(--border);
+  outline: none;
+}
+
+.workspace-divider:is(
+  :hover,
+  :focus-visible,
+  [data-separator="hover"],
+  [data-separator="active"]
+) {
+  background-color: var(--accent-foreground);
+  box-shadow: 0 0 0 1px var(--accent-foreground);
+}
+
+.file-explorer {
+  @apply flex h-full min-w-0 flex-col;
+  background-color: var(--explorer);
+}
+
+.explorer-project {
+  @apply flex h-10 shrink-0 items-center gap-2 px-3.5 text-xs font-semibold;
+}
+
+.explorer-views {
+  @apply mx-2 mb-1.5 flex shrink-0 gap-0.5 rounded-md border p-0.5;
+  background-color: color-mix(in srgb, var(--chrome) 80%, var(--explorer));
+}
+
+.explorer-views button {
+  @apply text-muted-foreground flex min-w-0 flex-1 items-center justify-center gap-1 rounded-sm px-1 py-[3px] text-[11px] leading-4 font-medium outline-offset-0;
+}
+
+.explorer-views button:is(:hover, [aria-pressed="true"]) {
+  @apply text-foreground bg-card;
+}
+
+.explorer-views button[aria-pressed="true"] {
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+.explorer-views button > span {
+  @apply text-accent-foreground min-w-0 truncate text-[10px];
+}
+
+.file-list {
+  @apply min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-1.5 pb-2;
+}
+
+.file-row {
+  @apply hover:bg-accent/60 flex h-[23px] w-full min-w-0 items-center gap-1.5 rounded-[5px] px-2 text-left text-[12px] outline-offset-[-2px];
+}
+
+.file-row[aria-current] {
+  @apply bg-accent text-accent-foreground;
+  box-shadow: inset 2px 0 var(--primary);
+}
+
+.file-icon {
+  --vscode-ctp-blue: var(--catppuccin-color-blue);
+  --vscode-ctp-green: var(--catppuccin-color-green);
+  --vscode-ctp-maroon: var(--catppuccin-color-maroon);
+  --vscode-ctp-mauve: var(--catppuccin-color-mauve);
+  --vscode-ctp-overlay1: var(--catppuccin-color-overlay1);
+  --vscode-ctp-peach: var(--catppuccin-color-peach);
+  --vscode-ctp-pink: var(--catppuccin-color-pink);
+  --vscode-ctp-red: var(--catppuccin-color-red);
+  --vscode-ctp-rosewater: var(--catppuccin-color-rosewater);
+  --vscode-ctp-sapphire: var(--catppuccin-color-sapphire);
+  --vscode-ctp-sky: var(--catppuccin-color-sky);
+  --vscode-ctp-teal: var(--catppuccin-color-teal);
+  --vscode-ctp-text: var(--catppuccin-color-text);
+  --vscode-ctp-yellow: var(--catppuccin-color-yellow);
+}
+
+.explorer-empty {
+  @apply text-muted-foreground px-2.5 py-2 text-xs;
+}
+
+.explorer-footer,
+.editor-status {
+  @apply text-muted-foreground flex h-7 min-w-0 shrink-0 items-center gap-2 border-t px-2 text-[11px];
+  background-color: var(--explorer);
+}
+
+.explorer-follow,
+.editor-tab-close {
+  @apply hover:bg-accent hover:text-accent-foreground grid shrink-0 place-items-center rounded outline-offset-0;
+}
+
+.explorer-follow {
+  @apply ml-auto flex h-5 items-center gap-1 px-1;
+}
+
+.explorer-follow[aria-pressed="true"] {
+  @apply bg-accent text-accent-foreground;
+}
+
+.editor-tabs {
+  @apply flex h-9 shrink-0 overflow-x-auto overflow-y-hidden border-b;
+  background-color: var(--explorer);
+}
+
+.editor-tab {
+  @apply text-muted-foreground flex shrink-0 items-center gap-1 border-r px-2;
+}
+
+.editor-tab[data-active="true"] {
+  @apply bg-card text-foreground;
+  box-shadow: inset 0 2px var(--primary);
+}
+
+.editor-tab-label {
+  @apply flex h-full max-w-40 min-w-0 items-center gap-1.5 text-[12px] whitespace-nowrap outline-offset-[-2px];
+}
+
+.editor-tab-close {
+  @apply size-5;
+}
+
+.editor-actions {
+  @apply flex h-9 shrink-0 items-center gap-0.5 border-b px-2;
+}
+
+.editor-path {
+  @apply text-muted-foreground flex min-w-0 flex-1 items-center gap-1 overflow-hidden px-1 text-[11px] whitespace-nowrap;
+}
+
+.editor-path > li:last-child {
+  @apply shrink-0;
+  max-width: 100%;
+}
+
+.editor-empty {
+  @apply text-muted-foreground flex h-full flex-col items-center justify-center gap-2.5 px-3 text-center;
+}
+
+.editor-empty-icon {
+  @apply text-accent-foreground bg-accent grid size-12 place-items-center rounded-xl border;
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    @apply bg-background text-foreground h-full overflow-hidden;
+  }
+  body {
+    @apply antialiased;
+    font-family:
+      "Aptos",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+    font-size: 13px;
+  }
+  button,
+  select,
+  input {
+    font: inherit;
+  }
+  button:not(:disabled),
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+  button:focus-visible,
+  select:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 40%, transparent);
+  }
+  ::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted-foreground) 27%, transparent);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

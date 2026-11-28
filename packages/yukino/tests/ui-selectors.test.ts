@@ -1,0 +1,1633 @@
+import { stripVTControlCharacters } from "node:util";
+
+import chalk, { Chalk } from "chalk";
+import { Box, Text, render, renderToString, useInput, usePaste } from "ink";
+import type { Instance, Key } from "ink";
+import type * as Ink from "ink";
+import { act, createElement } from "react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { RuntimePreferencesSchema } from "@/config/preferences.js";
+import type { ProviderConfig } from "@/config/provider-config.js";
+import type { ProjectSessionInfo } from "@/session/index.js";
+import { SessionManager } from "@/session/manager.js";
+import type { AgentTask } from "@/subagent/task-manager.js";
+import { createProgress, type TeammateUIState } from "@/teams/progress.js";
+import { AskUserQuestionTool } from "@/tools/ask-user.js";
+import { AgentStatus } from "@/ui/agent-status.js";
+import { AgentsDialog } from "@/ui/agents-dialog.js";
+import { AskUserDialog } from "@/ui/ask-user-dialog.js";
+import { ChatView, CommittedMessage } from "@/ui/chat.js";
+import { ICONS, THEME } from "@/ui/constants.js";
+import { DisplayPreferencesContext } from "@/ui/display-preferences.js";
+import { InteractionDock } from "@/ui/interaction-dock.js";
+import { PermissionDialog } from "@/ui/permission-dialog.js";
+import { PlanApprovalDialog } from "@/ui/plan-approval.js";
+import { ProviderSelect } from "@/ui/provider-select.js";
+import { SelectorFrame } from "@/ui/selector-frame.js";
+import { SelectorListRow } from "@/ui/selector-list.js";
+import { updateSelectorQuery } from "@/ui/selector-search.js";
+import { SessionSelector } from "@/ui/session-selector.js";
+import { SettingsDialog } from "@/ui/settings-dialog.js";
+import { setThemeMode } from "@/ui/styles.js";
+import { visibleWidth } from "@/ui/terminal-text.js";
+import { SessionTreeSelector } from "@/ui/tree-selector.js";
+
+// Keep Ink's real layout and React hooks; invoke only the captured input
+// callback. usePaste must be mocked too: the real hook enables raw mode,
+// which throws on the non-TTY test stdin.
+vi.mock("ink", async (importOriginal) => ({
+  ...(await importOriginal<typeof Ink>()),
+  useInput: vi.fn(),
+  usePaste: vi.fn(),
+}));
+
+const noKey: Key = {
+  upArrow: false,
+  downArrow: false,
+  leftArrow: false,
+  rightArrow: false,
+  pageDown: false,
+  pageUp: false,
+  home: false,
+  end: false,
+  return: false,
+  escape: false,
+  ctrl: false,
+  shift: false,
+  tab: false,
+  backspace: false,
+  delete: false,
+  meta: false,
+  super: false,
+  hyper: false,
+  capsLock: false,
+  numLock: false,
+};
+const initialColumns = Object.getOwnPropertyDescriptor(
+  process.stdout,
+  "columns",
+);
+const initialRows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
+const initialColorLevel = chalk.level;
+const colors = new Chalk({ level: 3 });
+let instance: Instance | undefined;
+let frame = "";
+
+function resize(columns: number, rows: number) {
+  act(() => {
+    process.stdout.columns = columns;
+    process.stdout.rows = rows;
+    process.stdout.emit("resize");
+  });
+}
+
+function mount(node: ReactNode) {
+  act(() => {
+    instance = render(node, {
+      patchConsole: false,
+      interactive: false,
+      debug: true,
+    });
+  });
+}
+
+function rerender(node: ReactNode) {
+  act(() => {
+    instance?.rerender(node);
+  });
+}
+
+function send(input = "", key: Partial<Key> = {}) {
+  const handler = vi
+    .mocked(useInput)
+    .mock.calls.findLast(([, options]) => options?.isActive !== false)?.[0];
+  if (!handler) {
+    throw new Error("Selector input handler is not mounted");
+  }
+  act(() => {
+    handler(input, { ...noKey, ...key });
+  });
+}
+
+function paste(text: string) {
+  const handler = vi.mocked(usePaste).mock.calls.at(-1)?.[0];
+  if (!handler) {
+    throw new Error("Selector paste handler is not mounted");
+  }
+  act(() => {
+    handler(text);
+  });
+}
+
+function staticFrame(node: ReactNode, columns: number) {
+  let output = "";
+  act(() => {
+    output = renderToString(node, { columns });
+  });
+  return stripVTControlCharacters(output);
+}
+
+function providers(count = 15): ProviderConfig[] {
+  return Array.from({ length: count }, (_, index) => {
+    const id = String(index + 1).padStart(2, "0");
+    return {
+      name: `Provider-${id}`,
+      protocol: "openai-compat",
+      // base_url is the provider identity, so every entry needs a distinct one.
+      base_url: `https://provider-${id}.invalid`,
+      model: `local-model-${String(index + 1)}`,
+    };
+  });
+}
+
+function teammate(name: string, teamName = "squad"): TeammateUIState {
+  return {
+    name,
+    teamName,
+    status: "running",
+    startTime: Date.now(),
+    spinnerVerb: "working",
+    progress: createProgress(),
+  };
+}
+
+function backgroundTask(
+  id: string,
+  status: AgentTask["status"] = "running",
+): AgentTask {
+  return {
+    id,
+    name: `review-${id}`,
+    kind: "agent",
+    status,
+    output: status === "running" ? "" : "review findings",
+    startedAt: 0,
+    cancel: vi.fn(),
+    done: Promise.resolve(),
+  };
+}
+
+describe("agents list and detail", () => {
+  it("does not open a question if its tool call was already aborted", async () => {
+    const ask = vi.fn().mockResolvedValue({});
+    const controller = new AbortController();
+    controller.abort();
+    const tool = new AskUserQuestionTool(ask);
+    const result = await tool.execute(
+      { cwd: ".", abortSignal: controller.signal },
+      {
+        questions: [
+          {
+            question: "Continue?",
+            multiSelect: false,
+            options: [{ label: "Yes" }, { label: "No" }],
+          },
+        ],
+      },
+    );
+    expect(result.isError).toBe(true);
+    expect(ask).not.toHaveBeenCalled();
+  });
+  it("starts each queued question with fresh state and ignores duplicate completion", () => {
+    const onComplete = vi.fn();
+    const question = (label: string) => ({
+      question: `${label}?`,
+      options: [{ label: "One" }, { label: "Two" }],
+      multiSelect: false,
+    });
+    mount(
+      createElement(InteractionDock, {
+        composer: { onSubmit: vi.fn() },
+        askUser: { requestId: 1, questions: [question("First")], onComplete },
+      }),
+    );
+    send("", { downArrow: true });
+    send("", { return: true });
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenLastCalledWith({ "First?": "Two" });
+    rerender(
+      createElement(InteractionDock, {
+        composer: { onSubmit: vi.fn() },
+        askUser: {
+          requestId: 2,
+          questions: [question("Second"), question("Third")],
+          onComplete,
+        },
+      }),
+    );
+    expect(frame).toContain("Second?");
+    send("1");
+    send("1");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledTimes(2);
+    expect(onComplete).toHaveBeenLastCalledWith({
+      "Second?": "One",
+      "Third?": "One",
+    });
+  });
+  it("orders teammates, subagents and shell tasks and routes each action", () => {
+    const onClose = vi.fn();
+    const onKill = vi.fn();
+    const onShutdown = vi.fn();
+    const onStopBackground = vi.fn();
+    const task = backgroundTask("agent-1");
+    const bash = { ...backgroundTask("bash-2"), kind: "shell" as const };
+    const powershell = {
+      ...backgroundTask("ps-3"),
+      kind: "shell" as const,
+      output: "command output",
+    };
+    mount(
+      createElement(AgentsDialog, {
+        teammates: [teammate("reviewer")],
+        backgroundTasks: [bash, task, powershell],
+        subagents: [
+          {
+            toolCallId: "call-1",
+            taskId: task.id,
+            role: "explore",
+            turnCount: 3,
+            activeTools: [{ toolId: "read", toolName: "ReadFile" }],
+            lastTool: "ReadFile",
+            status: "running",
+          },
+        ],
+        onClose,
+        onKill,
+        onShutdown,
+        onStopBackground,
+      }),
+    );
+    expect(frame).toContain("@reviewer");
+    expect(frame).toContain("agent-1: review-agent-1");
+    expect(frame.indexOf("@reviewer")).toBeLessThan(frame.indexOf("agent-1:"));
+    expect(frame.indexOf("agent-1:")).toBeLessThan(frame.indexOf("bash-2:"));
+    expect(frame.indexOf("bash-2:")).toBeLessThan(frame.indexOf("ps-3:"));
+    expect(frame).toContain("background Bash");
+    expect(frame).toContain("background PowerShell");
+    send("k", { ctrl: true });
+    expect(onKill).not.toHaveBeenCalled();
+    send("k");
+    send("s");
+    expect(onKill).toHaveBeenCalledWith("reviewer", "squad");
+    expect(onShutdown).toHaveBeenCalledWith("reviewer", "squad");
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("explore · 3 turns · ReadFile");
+    expect(frame).toContain("No output yet");
+    send("s");
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    send("k");
+    expect(onStopBackground).toHaveBeenCalledWith(task.id);
+    send("", { escape: true });
+    expect(onClose).not.toHaveBeenCalled();
+    send("", { downArrow: true });
+    send("k");
+    expect(onStopBackground).toHaveBeenLastCalledWith(bash.id);
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("command output");
+    send("k");
+    expect(onStopBackground).toHaveBeenLastCalledWith(powershell.id);
+    send("s");
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    send("", { escape: true });
+    send("", { escape: true });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it.each(["completed", "failed", "cancelled"] as const)(
+    "unloads %s background tasks and closes their selected detail",
+    (status) => {
+      const onClose = vi.fn();
+      const onStopBackground = vi.fn();
+      const view = (tasks: AgentTask[]) =>
+        createElement(AgentsDialog, {
+          teammates: [],
+          backgroundTasks: tasks,
+          subagents: [],
+          onClose,
+          onStopBackground,
+        });
+      const tasks = [
+        backgroundTask("agent-1"),
+        { ...backgroundTask("bash-2"), kind: "shell" as const },
+        { ...backgroundTask("ps-3"), kind: "shell" as const },
+      ];
+      mount(view(tasks));
+      send("", { return: true });
+      expect(frame).toContain("No output yet");
+      rerender(
+        view(
+          tasks.map((task) => ({ ...task, status, output: "archived result" })),
+        ),
+      );
+      expect(frame).not.toContain("agent-1");
+      expect(frame).not.toContain("bash-2");
+      expect(frame).not.toContain("ps-3");
+      expect(frame).not.toContain("archived result");
+      expect(frame).not.toContain("k stop");
+      expect(onClose).toHaveBeenCalledOnce();
+      send("k");
+      expect(onStopBackground).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns to the list when a selected task finishes while others run", () => {
+    const onClose = vi.fn();
+    const view = (status: AgentTask["status"]) =>
+      createElement(AgentsDialog, {
+        teammates: [teammate("reviewer")],
+        backgroundTasks: [backgroundTask("agent-1", status)],
+        subagents: [],
+        onClose,
+      });
+    mount(view("running"));
+    send("", { downArrow: true });
+    send("", { return: true });
+    rerender(view("completed"));
+    expect(frame).toContain("@reviewer");
+    expect(frame).not.toContain("agent-1");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("identifies teammates by both team and member names", () => {
+    mount(
+      createElement(AgentsDialog, {
+        teammates: [
+          { ...teammate("reviewer", "alpha"), lastMessage: "first team" },
+          { ...teammate("reviewer", "beta"), lastMessage: "second team" },
+        ],
+        backgroundTasks: [],
+        subagents: [],
+        onClose: vi.fn(),
+      }),
+    );
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("second team");
+    expect(frame).not.toContain("first team");
+  });
+
+  it("windows large lists, reaches every entry, and clamps selection after removal", () => {
+    resize(80, 14);
+    const props = {
+      teammates: Array.from({ length: 18 }, (_, index) =>
+        teammate(`member-${String(index)}`),
+      ),
+      backgroundTasks: [],
+      subagents: [],
+      onClose: vi.fn(),
+    };
+    mount(createElement(AgentsDialog, props));
+    expect(frame).toContain("@member-0");
+    expect(frame).not.toContain("@member-17");
+    for (let index = 0; index < 17; index++) {
+      send("", { downArrow: true });
+    }
+    expect(frame).toContain("@member-17");
+    expect(frame).not.toContain("@member-0");
+    expect(frame.split("\n").length).toBeLessThanOrEqual(14);
+    rerender(
+      createElement(AgentsDialog, {
+        ...props,
+        teammates: [teammate("remaining")],
+      }),
+    );
+    send("", { return: true });
+    expect(frame).toContain("@remaining");
+  });
+
+  it("advertises Down for background-only work and hides the status when empty", () => {
+    expect(
+      staticFrame(
+        createElement(AgentStatus, {
+          teammates: 0,
+          backgroundSubagents: 0,
+          backgroundShells: 0,
+        }),
+        80,
+      ),
+    ).toBe("");
+    const output = staticFrame(
+      createElement(AgentStatus, {
+        teammates: 0,
+        backgroundSubagents: 2,
+        backgroundShells: 0,
+      }),
+      80,
+    );
+    expect(output).toContain("2 background subagents");
+    expect(output).toContain("↓ on last input line to view");
+    expect(output).not.toContain("teammate");
+    const shellOnly = staticFrame(
+      createElement(AgentStatus, {
+        teammates: 0,
+        backgroundSubagents: 0,
+        backgroundShells: 1,
+      }),
+      120,
+    );
+    expect(shellOnly).toContain("1 background command");
+    expect(shellOnly).toContain("↓ on last input line to view");
+    const mixed = staticFrame(
+      createElement(AgentStatus, {
+        teammates: 1,
+        backgroundSubagents: 1,
+        backgroundShells: 2,
+      }),
+      160,
+    );
+    expect(mixed).toContain(
+      "1 teammate · 1 background subagent · 2 background commands",
+    );
+  });
+});
+
+function sessions(count = 15): ProjectSessionInfo[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `session-${String(index + 1).padStart(2, "0")}`,
+    cwd: process.cwd(),
+    projectKey: "fixture-project",
+    firstMessage: `Conversation-${String(index + 1).padStart(2, "0")}`,
+    messageCount: index + 1,
+    size: 100,
+    metadata: {},
+    modTime: new Date("2026-01-01T00:00:00Z"),
+    lastUserMessageTime: new Date("2026-01-01T00:00:00Z"),
+  }));
+}
+
+function dock(node: ReactNode) {
+  return createElement(
+    Box,
+    { flexDirection: "column" },
+    createElement(Text, null, "Live activity\nTeam status"),
+    node,
+    createElement(Text, null, "Footer path\nFooter tokens"),
+  );
+}
+
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.mocked(useInput).mockClear();
+  vi.spyOn(process.stdout, "write").mockImplementation(
+    (chunk: string | Uint8Array) => {
+      frame = stripVTControlCharacters(
+        typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(),
+      );
+      return true;
+    },
+  );
+  resize(80, 24);
+  frame = "";
+});
+
+afterEach(() => {
+  act(() => {
+    instance?.unmount();
+    instance?.cleanup();
+  });
+  instance = undefined;
+  for (const [name, descriptor] of [
+    ["columns", initialColumns],
+    ["rows", initialRows],
+  ] satisfies [string, PropertyDescriptor | undefined][]) {
+    if (descriptor) {
+      Object.defineProperty(process.stdout, name, descriptor);
+    } else {
+      Reflect.deleteProperty(process.stdout, name);
+    }
+  }
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  chalk.level = initialColorLevel;
+  setThemeMode("dark");
+});
+
+describe("provider selector", () => {
+  it("starts at the current provider, limits the window to ten, and separates focus from current", () => {
+    const onSelect = vi.fn();
+    mount(
+      createElement(ProviderSelect, {
+        providers: providers(),
+        currentProviderIndex: 11,
+        onSelect,
+      }),
+    );
+    expect(frame).toContain(`${ICONS.arrow} Provider-12 ${ICONS.success}`);
+    expect(frame).toContain("12/15");
+    expect(frame.match(/Provider-\d+/g)).toHaveLength(10);
+    expect(frame).not.toContain("Provider-02");
+    expect(frame).toContain("openai-compat · local-model");
+    send("", { downArrow: true });
+    expect(frame).toContain(`${ICONS.arrow} Provider-13`);
+    expect(frame).toContain(`Provider-12 ${ICONS.success}`);
+    expect(frame).not.toContain(`${ICONS.arrow} Provider-12`);
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith(providers()[12]);
+  });
+
+  it("fuzzy searches local names, models and protocols, then clears back to the current item", () => {
+    const configured = [
+      {
+        ...providers(1)[0],
+        name: "Development",
+        base_url: "https://dev.invalid",
+        model: "fast-model",
+        protocol: "openai",
+      },
+      {
+        ...providers(1)[0],
+        name: "Production",
+        base_url: "https://prod.invalid",
+        model: "reasoning-model",
+      },
+    ] satisfies ProviderConfig[];
+    const onSelect = vi.fn();
+    mount(
+      createElement(ProviderSelect, {
+        providers: configured,
+        currentProviderIndex: 1,
+        onSelect,
+      }),
+    );
+    send("Develpment");
+    expect(frame).toContain(`${ICONS.arrow} Development`);
+    expect(frame).toContain("1/1 · 2 total");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(configured[0]);
+    send("u", { ctrl: true });
+    expect(frame).toContain(`${ICONS.arrow} Production ${ICONS.success}`);
+    send("reasoning");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(configured[1]);
+    send("u", { ctrl: true });
+    send("compat");
+    expect(frame).toContain("1/1 · 2 total");
+    expect(frame).toContain("Production");
+  });
+
+  it("handles no results and Escape cancels without first clearing the search", () => {
+    const onCancel = vi.fn();
+    const onSelect = vi.fn();
+    mount(
+      createElement(ProviderSelect, {
+        providers: providers(),
+        onCancel,
+        onSelect,
+      }),
+    );
+    send("zzzzzzzzzzzzzz");
+    expect(frame).toContain("No matching providers");
+    expect(frame).toContain("0/0 · 15 total");
+    send("", { upArrow: true });
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(onSelect).not.toHaveBeenCalled();
+    send("", { escape: true });
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("retains item identity on reorder and clamps safely after removal and empty list updates", () => {
+    const configured = providers(3);
+    const onSelect = vi.fn();
+    const view = (items: ProviderConfig[]) =>
+      createElement(ProviderSelect, {
+        providers: items,
+        currentProviderIndex: 1,
+        onSelect,
+      });
+    mount(view(configured));
+    rerender(view([configured[2], configured[0], configured[1]]));
+    expect(frame).toContain("3/3");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(configured[1]);
+    rerender(view([configured[2]]));
+    expect(frame).toContain("1/1");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(configured[2]);
+    onSelect.mockClear();
+    rerender(view([]));
+    send("", { upArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("No providers configured");
+    expect(onSelect).not.toHaveBeenCalled();
+    rerender(view(configured));
+    send("", { downArrow: true });
+    expect(frame).toContain("3/3");
+  });
+
+  it("wraps navigation and uses the first item when the current provider is absent", () => {
+    const onSelect = vi.fn();
+    mount(
+      createElement(ProviderSelect, {
+        providers: providers(3),
+        currentProviderIndex: 99,
+        onSelect,
+      }),
+    );
+    send("", { upArrow: true });
+    expect(frame).toContain("3/3");
+    send("", { downArrow: true });
+    expect(frame).toContain("1/3");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith(providers(3)[0]);
+    expect(() => {
+      send("", { escape: true });
+    }).not.toThrow();
+  });
+
+  it("distinguishes providers with the same display name by base URL", () => {
+    const configured = [
+      { ...providers(1)[0], name: "Shared", base_url: "https://first.invalid" },
+      {
+        ...providers(1)[0],
+        name: "Shared",
+        base_url: "https://second.invalid",
+      },
+    ];
+    const onSelect = vi.fn();
+    mount(
+      createElement(ProviderSelect, {
+        providers: configured,
+        currentProviderIndex: 1,
+        onSelect,
+      }),
+    );
+
+    // The rows carry the same display name; base_url is what keeps them apart.
+    expect(frame).toContain("2/2");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ base_url: "https://second.invalid" }),
+    );
+
+    // …and it is searchable, so a same-named provider can still be found.
+    onSelect.mockClear();
+    send("first.invalid");
+    expect(frame).toContain("1/1");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ base_url: "https://first.invalid" }),
+    );
+
+    send("u", { ctrl: true });
+    send("second.invalid");
+    expect(frame).toContain("1/1");
+  });
+});
+
+describe("session selector", () => {
+  it("keeps the selected sort order while searching", () => {
+    const saved = sessions(2);
+    saved[0].metadata.name = "Alpha plan";
+    saved[1].metadata.name = "Alpha";
+    const onSelect = vi.fn();
+    mount(
+      createElement(SessionSelector, {
+        sessions: saved,
+        onSelect,
+        onCancel: vi.fn(),
+      }),
+    );
+    send("Alpha");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(saved[0].id, saved[0].cwd);
+    send("s", { ctrl: true });
+    send("s", { ctrl: true });
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(saved[1].id, saved[1].cwd);
+  });
+
+  it("shows management help and the delete target within a narrow viewport", () => {
+    resize(60, 18);
+    const saved = sessions(2);
+    saved[0].metadata.name = "设计草稿 👩‍💻";
+    mount(
+      createElement(SessionSelector, {
+        sessions: saved,
+        onSelect: vi.fn(),
+        onCancel: vi.fn(),
+        onDelete: vi.fn(() => Promise.resolve()),
+      }),
+    );
+    expect(frame).toContain("Ctrl+K help");
+    send("k", { ctrl: true });
+    expect(frame).toContain("Ctrl+X archived");
+    expect(frame).toContain("name:/tag:/project:");
+    send("d", { ctrl: true });
+    expect(frame).toContain("Delete session · 设计草稿 👩‍💻");
+    expect(frame).toContain("Y delete · N/Esc cancel");
+    expect(frame).not.toContain("Ctrl+X archived");
+    expect(frame.split("\n").every((line) => visibleWidth(line) <= 60)).toBe(
+      true,
+    );
+    expect(frame.split("\n").length).toBeLessThanOrEqual(16);
+  });
+
+  it("catches synchronous management failures and allows retry", async () => {
+    const saved = sessions(2);
+    const onRename = vi.fn(() => {
+      throw new Error("Session changed");
+    });
+    mount(
+      createElement(SessionSelector, {
+        sessions: saved,
+        onRename,
+        onSelect: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    send("r", { ctrl: true });
+    send("new name");
+    send("", { return: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(frame).toContain("Session changed");
+    expect(frame).toContain("Rename session");
+    send("", { return: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onRename).toHaveBeenCalledTimes(2);
+  });
+
+  it("toggles scope, named-only, paths, archive visibility and sort within the picker", () => {
+    const saved = sessions(3);
+    saved[0].metadata.name = "Zulu";
+    saved[1].metadata.name = "Alpha";
+    saved[1].cwd = "/other-project";
+    saved[1].projectKey = "other";
+    saved[2].metadata.archived = true;
+    const onSelect = vi.fn();
+    mount(
+      createElement(SessionSelector, {
+        sessions: saved,
+        onSelect,
+        onCancel: vi.fn(),
+      }),
+    );
+    expect(frame).toContain("1/1");
+    send("a", { ctrl: true });
+    expect(frame).toContain("1/2");
+    send("x", { ctrl: true });
+    expect(frame).toContain("1/3");
+    send("n", { ctrl: true });
+    expect(frame).toContain("1/2");
+    send("s", { ctrl: true });
+    send("s", { ctrl: true });
+    expect(frame).toContain("· name");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(saved[1].id, saved[1].cwd);
+    expect(frame).toContain("/other-project");
+    send("p", { ctrl: true });
+    expect(frame).not.toContain("/other-project");
+  });
+
+  it("renames inside the picker and requires explicit delete confirmation", async () => {
+    const saved = sessions(2);
+    const onRename = vi.fn(() => Promise.resolve());
+    const onDelete = vi.fn(() => Promise.resolve());
+    mount(
+      createElement(SessionSelector, {
+        sessions: saved,
+        onRename,
+        onDelete,
+        onSelect: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    send("r", { ctrl: true });
+    expect(frame).toContain("Rename session");
+    expect(frame).toContain("Name:");
+    send("New name");
+    send("", { return: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onRename).toHaveBeenCalledWith(saved[0], "New name");
+    send("d", { ctrl: true });
+    send("", { return: true });
+    expect(onDelete).not.toHaveBeenCalled();
+    send("n");
+    expect(frame).toContain("Resume session");
+    send("d", { ctrl: true });
+    send("y");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onDelete).toHaveBeenCalledWith(saved[0]);
+  });
+
+  it("protects the active session and keeps failed management operations reviewable", async () => {
+    const saved = sessions(2);
+    const onDelete = vi.fn(() =>
+      Promise.reject(new Error("Session is leased")),
+    );
+    mount(
+      createElement(SessionSelector, {
+        sessions: saved,
+        currentSessionId: saved[0].id,
+        onDelete,
+        onSelect: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    send("d", { ctrl: true });
+    expect(frame).toContain("Switch away");
+    expect(onDelete).not.toHaveBeenCalled();
+    send("", { downArrow: true });
+    send("d", { ctrl: true });
+    send("y");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(frame).toContain("Session is leased");
+    expect(frame).toContain("Delete session");
+  });
+
+  it("starts at the current session with a two-line, focus-following window", () => {
+    mount(
+      createElement(SessionSelector, {
+        sessions: sessions(),
+        currentSessionId: "session-12",
+        onSelect: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    expect(frame).toContain(`${ICONS.arrow} Conversation-12 ${ICONS.success}`);
+    expect(frame.match(/Conversation-\d+/g)).toHaveLength(7);
+    expect(frame).toContain("session-12 · 12 messages");
+    expect(frame).toContain("12/15");
+    send("", { downArrow: true });
+    expect(frame).toContain(`${ICONS.arrow} Conversation-13`);
+    expect(frame).toContain(`Conversation-12 ${ICONS.success}`);
+  });
+
+  it("shrinks the visible window when the page reserves extra footer rows", () => {
+    mount(
+      createElement(SessionSelector, {
+        sessions: sessions(),
+        currentSessionId: "session-12",
+        reservedRows: 8,
+        onSelect: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    const rendered = frame.match(/Conversation-\d+/g)?.length ?? 0;
+    expect(rendered).toBeGreaterThan(0);
+    expect(rendered).toBeLessThan(8);
+  });
+
+  it("searches first messages past the beginning and IDs, and restores selection on backspace", () => {
+    const saved = sessions(2);
+    saved[1].firstMessage = `${"Earlier context. ".repeat(10)}Fix deployment pipeline`;
+    const onSelect = vi.fn();
+    mount(
+      createElement(SessionSelector, {
+        sessions: saved,
+        currentSessionId: saved[1].id,
+        onSelect,
+        onCancel: vi.fn(),
+      }),
+    );
+    send("deploymnt");
+    expect(frame).toContain("1/1 · 2 total");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(saved[1].id, saved[1].cwd);
+    send("u", { ctrl: true });
+    send(saved[0].id);
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(saved[0].id, saved[0].cwd);
+    send("u", { ctrl: true });
+    send("x");
+    send("", { backspace: true });
+    expect(frame).toContain("2/2");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenLastCalledWith(saved[1].id, saved[1].cwd);
+  });
+
+  it("handles no results, empty lists and list shrink without selecting a missing session", () => {
+    const saved = sessions();
+    const onSelect = vi.fn();
+    const onCancel = vi.fn();
+    const view = (items: ProjectSessionInfo[]) =>
+      createElement(SessionSelector, {
+        sessions: items,
+        currentSessionId: saved[14].id,
+        onSelect,
+        onCancel,
+      });
+    mount(view(saved));
+    rerender(view([saved[0]]));
+    expect(frame).toContain("1/1");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith(saved[0].id, saved[0].cwd);
+    onSelect.mockClear();
+    send("zzzzzzzzzz");
+    expect(frame).toContain("No matching sessions");
+    send("", { return: true });
+    send("", { escape: true });
+    expect(onCancel).toHaveBeenCalledOnce();
+    send("u", { ctrl: true });
+    rerender(view([]));
+    send("", { upArrow: true });
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(frame).toContain("No saved sessions");
+    expect(frame).toContain("0/0");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe("selector layout", () => {
+  it.each(["dark", "light"] satisfies ("dark" | "light")[])(
+    "uses rounded frames and highlighted focus in %s mode without relying on color",
+    (mode) => {
+      setThemeMode(mode);
+      for (const columns of [1, 20, 32, 48, 80, 120]) {
+        for (const colorLevel of [0, 3] satisfies (0 | 3)[]) {
+          chalk.level = colorLevel;
+          let output = "";
+          act(() => {
+            output = renderToString(
+              createElement(SelectorFrame, {
+                title: "Select provider",
+                width: columns,
+                hint: "↑↓ navigate · Enter select · Escape cancel · Ctrl+U clear",
+                children: createElement(Text, null, "choice"),
+              }),
+              { columns },
+            );
+          });
+          const plain = stripVTControlCharacters(output);
+          expect(
+            plain.split("\n").every((line) => visibleWidth(line) <= columns),
+          ).toBe(true);
+          if (columns >= 20) {
+            expect(plain).toContain("Select provider");
+            expect(plain).toContain("Enter");
+            expect(plain).toMatch(/Esc(?:ape)?/);
+            expect(plain.split("\n")[1].startsWith(" Select")).toBe(true);
+          }
+          if (colorLevel === 0) {
+            expect(output).toBe(plain);
+          } else {
+            expect(output).toContain(
+              colors.hex(THEME.border)(
+                columns >= 2 ? `╭${"─".repeat(columns - 2)}╮` : "─",
+              ),
+            );
+            if (columns >= 20) {
+              expect(output).toContain(
+                colors.hex(THEME.customMessageLabel)("Select provider"),
+              );
+            }
+          }
+        }
+      }
+      chalk.level = 3;
+      let selected = "";
+      act(() => {
+        selected = renderToString(
+          createElement(SelectorListRow, {
+            width: 40,
+            label: "Selected",
+            current: true,
+            focused: true,
+          }),
+          { columns: 40 },
+        );
+      });
+      expect(selected).toContain(
+        `${colors.hex(THEME.accent)(" ").split(" ")[0]}${ICONS.arrow} Selected`,
+      );
+      expect(stripVTControlCharacters(selected)).toContain(
+        `${ICONS.arrow} Selected ${ICONS.success}`,
+      );
+    },
+  );
+
+  it.each([8, 12, 16, 24, 40])(
+    "keeps providers and the footer within %i rows, including content above the dock",
+    (rows) => {
+      resize(80, rows);
+      mount(
+        dock(
+          createElement(ProviderSelect, {
+            providers: providers(),
+            currentProviderIndex: 14,
+            onSelect: vi.fn(),
+          }),
+        ),
+      );
+      expect(frame.split("\n").length).toBeLessThanOrEqual(rows);
+      expect(frame).toContain("Footer path\nFooter tokens");
+      expect((frame.match(/Provider-\d+/g) ?? []).length).toBeLessThanOrEqual(
+        10,
+      );
+      if (rows >= 12) {
+        expect(frame).toContain(`${ICONS.arrow} Provider-15 ${ICONS.success}`);
+        expect((frame.match(/Provider-\d+/g) ?? []).length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it.each([8, 12, 16, 24, 40])(
+    "budgets two rows per session without pushing out the footer at %i rows",
+    (rows) => {
+      resize(80, rows);
+      mount(
+        dock(
+          createElement(SessionSelector, {
+            sessions: sessions(),
+            currentSessionId: "session-15",
+            onSelect: vi.fn(),
+            onCancel: vi.fn(),
+          }),
+        ),
+      );
+      expect(frame.split("\n").length).toBeLessThanOrEqual(rows);
+      expect(frame).toContain("Footer path\nFooter tokens");
+      if (rows >= 12) {
+        expect(frame).toContain(
+          `${ICONS.arrow} Conversation-15 ${ICONS.success}`,
+        );
+        expect(frame.match(/Conversation-\d+/g)).toHaveLength(
+          Math.min(10, Math.max(1, Math.floor((rows - 11) / 2))),
+        );
+      }
+    },
+  );
+
+  it("recalculates the window on terminal resize and changing live content", () => {
+    const selector = createElement(SessionSelector, {
+      sessions: sessions(),
+      currentSessionId: "session-15",
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+    });
+    mount(dock(selector));
+    resize(28, 14);
+    expect(frame.split("\n").length).toBeLessThanOrEqual(14);
+    expect(frame.match(/Conversation-\d+/g)).toHaveLength(2);
+    expect(frame).toContain(`${ICONS.arrow} Conversation-15 ${ICONS.success}`);
+    for (const line of frame.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(28);
+    }
+    rerender(
+      createElement(
+        Box,
+        { flexDirection: "column" },
+        selector,
+        createElement(Text, null, "Footer path\nFooter tokens"),
+      ),
+    );
+    expect(frame.match(/Conversation-\d+/g)).toHaveLength(2);
+    expect(frame).toContain("Footer tokens");
+  });
+
+  it.each([4, 20, 80])(
+    "renders ANSI/CJK names within %i columns and drops descriptions before names",
+    (width) => {
+      const output = staticFrame(
+        createElement(
+          Box,
+          { width },
+          createElement(SelectorListRow, {
+            width,
+            focused: true,
+            current: true,
+            label: "\u001b[31m日本語開発\u001b[0m",
+            description: "openai · local-model",
+          }),
+        ),
+        width,
+      );
+      for (const line of output.split("\n")) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+      }
+      if (width >= 20) {
+        expect(output).toContain(`日本語開発 ${ICONS.success}`);
+      }
+      expect(output.includes("local-model")).toBe(width === 80);
+    },
+  );
+
+  it("keeps long headers, subtitles and hints to one line in the non-modal frame", () => {
+    const output = staticFrame(
+      createElement(SelectorFrame, {
+        title: "日本語タイトル".repeat(10),
+        subtitle: "A long\nsubtitle".repeat(10),
+        hint: "Long hint ".repeat(10),
+        width: 20,
+        children: createElement(Text, null, "choice"),
+      }),
+      20,
+    );
+    expect(output.split("\n")).toHaveLength(7);
+    for (const line of output.split("\n")) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(20);
+    }
+    expect(output).toContain(`╭${"─".repeat(18)}╮`);
+  });
+});
+
+describe("search input boundaries and independent dialog controls", () => {
+  it("does not treat navigation, tab, control shortcuts or mouse events as search text", () => {
+    for (const key of [
+      "tab",
+      "leftArrow",
+      "rightArrow",
+      "home",
+      "end",
+      "pageUp",
+      "pageDown",
+      "ctrl",
+      "meta",
+      "super",
+    ] satisfies (keyof Key)[]) {
+      expect(updateSelectorQuery("find", "x", { ...noKey, [key]: true })).toBe(
+        "find",
+      );
+    }
+    expect(updateSelectorQuery("find", "\u001b[<0;1;2M", noKey)).toBe("find");
+    expect(updateSelectorQuery("find", "[<0;1;2M", noKey)).toBe("find");
+    expect(updateSelectorQuery("", "12 日本語\n検索", noKey)).toBe(
+      "12 日本語 検索",
+    );
+    expect(updateSelectorQuery("a😁", "", { ...noKey, backspace: true })).toBe(
+      "a",
+    );
+    expect(
+      updateSelectorQuery("ae\u0301", "", { ...noKey, delete: true }),
+    ).toBe("a");
+    expect(updateSelectorQuery("find", "u", { ...noKey, ctrl: true })).toBe("");
+  });
+
+  it("preserves permission Escape denial", () => {
+    const onComplete = vi.fn();
+    mount(
+      createElement(PermissionDialog, {
+        toolName: "Write",
+        argsSummary: "file.ts",
+        reason: "Approval required",
+        onComplete,
+      }),
+    );
+    send("", { escape: true });
+    expect(onComplete).toHaveBeenCalledWith("deny");
+    expect(frame).not.toContain("Search:");
+  });
+
+  it("preserves plan feedback text, Shift+Tab submission and Escape manual approval", () => {
+    const onSelect = vi.fn();
+    mount(createElement(PlanApprovalDialog, { onSelect }));
+    send("", { downArrow: true });
+    send("", { downArrow: true });
+    send("revise 12 steps");
+    send("", { tab: true, shift: true });
+    expect(onSelect).toHaveBeenCalledWith("feedback", "revise 12 steps");
+    send("", { escape: true });
+    expect(onSelect).toHaveBeenLastCalledWith("manual");
+    expect(frame).not.toContain("Search:");
+  });
+
+  it("validates empty plan feedback and clears the error through the paste callback", () => {
+    const onSelect = vi.fn();
+    mount(createElement(PlanApprovalDialog, { onSelect }));
+    send("", { downArrow: true });
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(frame).toContain("Feedback is required.");
+
+    send("x");
+    expect(frame).not.toContain("Feedback is required.");
+    send("", { backspace: true });
+    send("", { return: true });
+    expect(frame).toContain("Feedback is required.");
+    paste("Use the cache API");
+    expect(frame).not.toContain("Feedback is required.");
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith("feedback", "Use the cache API");
+  });
+
+  it("edits plan feedback at the caret and keeps it when navigating out and back", () => {
+    const onSelect = vi.fn();
+    mount(createElement(PlanApprovalDialog, { onSelect }));
+    send("", { downArrow: true });
+    send("", { downArrow: true });
+    paste("あ😁 steps");
+    send("", { home: true });
+    send("", { rightArrow: true });
+    send("", { delete: true });
+    send("new");
+    send("", { home: true });
+    send("", { upArrow: true });
+    send("", { downArrow: true });
+    send("", { return: true });
+    expect(onSelect).toHaveBeenCalledWith("feedback", "あnew steps");
+  });
+
+  it.each([32, 80])(
+    "uses sequential question labels when navigating at %i columns",
+    (columns) => {
+      resize(columns, 24);
+      mount(
+        createElement(AskUserDialog, {
+          questions: Array.from({ length: 4 }, (_, index) => ({
+            question: `Question ${String(index + 1)}?`,
+            options: [{ label: "Yes" }, { label: "No" }],
+            multiSelect: false,
+          })),
+          onComplete: vi.fn(),
+        }),
+      );
+      for (const label of ["Q1", "Q2", "Q3", "Q4"]) {
+        expect(frame).toContain(`☐ ${label}`);
+        send("", { tab: true });
+      }
+      expect(frame).toContain("✓ Submit");
+      expect(frame).toContain("Review your answers");
+      send("", { tab: true, shift: true });
+      expect(frame).toContain("☐ Q4");
+    },
+  );
+
+  it("preserves AskUser numeric shortcuts, free text and tab navigation", () => {
+    const onComplete = vi.fn();
+    mount(
+      createElement(AskUserDialog, {
+        questions: [
+          {
+            question: "First choice?",
+            options: [{ label: "One", description: "First option" }],
+            multiSelect: false,
+          },
+          {
+            question: "Second choice?",
+            options: [{ label: "Two", description: "Second option" }],
+            multiSelect: false,
+          },
+        ],
+        onComplete,
+      }),
+    );
+    expect(frame).toContain("☐ Q1");
+    expect(frame).toContain("☐ Q2");
+    send("2");
+    send("", { return: true });
+    send("custom 123");
+    send("", { return: true });
+    expect(frame).toContain("Second choice?");
+    expect(frame).toContain("☑ Q1");
+    send("", { tab: true, shift: true });
+    expect(frame).toContain("First choice?");
+    send("", { tab: true });
+    send("1");
+    send("", { return: true });
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({
+      "First choice?": "custom 123",
+      "Second choice?": "Two",
+    });
+    expect(frame).not.toContain("Search:");
+  });
+});
+
+function mountAskOther(onComplete: (answers: Record<string, string>) => void) {
+  mount(
+    createElement(AskUserDialog, {
+      questions: [
+        {
+          question: "Pick one",
+          options: [{ label: "One", description: "First option" }],
+          multiSelect: false,
+        },
+      ],
+      onComplete,
+    }),
+  );
+  // Move to "Other (type your own)" and enter free-text mode; the TextField
+  // registers its useInput handler last, so send() reaches it from here on.
+  send("2");
+  send("", { return: true });
+}
+
+describe("AskUser multi-select answers", () => {
+  it.each([
+    { selected: ["1", "2"], text: "  Custom  ", expected: "One, Two, Custom" },
+    { selected: ["2"], text: "Custom", expected: "Two, Custom" },
+    { selected: [], text: "  Custom  ", expected: "Custom" },
+    { selected: ["1", "2"], text: "  ", expected: "One, Two" },
+    { selected: [], text: "  ", expected: "(no answer)" },
+  ])(
+    "submits '$expected' to the harness",
+    async ({ selected, text, expected }) => {
+      const questions = [
+        {
+          question: "Pick options",
+          options: [{ label: "One" }, { label: "Two" }],
+          multiSelect: true,
+        },
+      ];
+      const onComplete = vi.fn<(answers: Record<string, string>) => void>();
+      const answers = new Promise<Record<string, string>>((resolve) => {
+        onComplete.mockImplementation(resolve);
+      });
+      const tool = new AskUserQuestionTool(() => answers);
+      const result = tool.execute({ cwd: process.cwd() }, { questions });
+      mount(createElement(AskUserDialog, { questions, onComplete }));
+
+      for (const key of selected) {
+        send(key);
+      }
+      send("3");
+      send("", { return: true });
+      send(text);
+      send("", { return: true });
+
+      expect(frame).toContain("Review your answers");
+      expect(frame).toContain(`→ ${expected}`);
+      expect(onComplete).not.toHaveBeenCalled();
+      send("", { return: true });
+      expect(onComplete).toHaveBeenCalledExactlyOnceWith({
+        "Pick options": expected,
+      });
+      const toolResult = await result;
+      expect(toolResult.isError).toBe(false);
+      expect(toolResult.output).toContain(`"Pick options" = "${expected}"`);
+    },
+  );
+});
+
+describe("AskUser free-text field editing", () => {
+  it("moves the caret with arrows, Ctrl+A/E and edits mid-text", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    send("abc");
+    send("", { leftArrow: true });
+    send("X");
+    send("", { leftArrow: true });
+    send("", { backspace: true });
+    send("a", { ctrl: true });
+    send("Z");
+    send("e", { ctrl: true });
+    send("!");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({ "Pick one": "ZaXc!" });
+  });
+
+  it("supports Shift+Enter newlines and vertical caret movement", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    send("line1");
+    send("", { return: true, shift: true });
+    send("line2");
+    send("", { upArrow: true });
+    send("+");
+    send("", { downArrow: true });
+    send("", { leftArrow: true });
+    send("", { delete: true });
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({ "Pick one": "line1+\nline" });
+  });
+
+  it("grows vertically as long text wraps and navigates wrapped rows", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    const rowsBefore = frame.split("\n").length;
+    // 140 chars wrap into three visual rows at the 80-column test width.
+    send("a".repeat(140));
+    expect(frame.split("\n").length).toBeGreaterThanOrEqual(rowsBefore + 2);
+    // Caret sits on the third wrapped row; move up one row and insert.
+    send("", { upArrow: true });
+    send("X");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({
+      "Pick one": "a".repeat(71) + "X" + "a".repeat(69),
+    });
+  });
+
+  it("keeps the draft when Escape returns to the options", () => {
+    const onComplete = vi.fn();
+    mountAskOther(onComplete);
+    send("hello");
+    send("", { escape: true });
+    expect(frame).not.toContain("hello");
+    expect(onComplete).not.toHaveBeenCalled();
+    // Cursor still rests on "Other"; Enter re-enters free-text mode with the draft.
+    send("", { return: true });
+    send(" world");
+    send("", { return: true });
+    expect(onComplete).toHaveBeenCalledWith({ "Pick one": "hello world" });
+  });
+});
+
+describe("session tree presentation", () => {
+  it("cycles display filters and provides fold-all actions without navigating", () => {
+    const manager = SessionManager.create(process.cwd(), { persist: false });
+    const root = manager.append({ role: "user", content: "Parent" });
+    manager.append({ role: "assistant", content: "Answer" });
+    const onOptionsChange = vi.fn();
+    const onSelect = vi.fn();
+    mount(
+      createElement(SessionTreeSelector, {
+        tree: manager.getTree(),
+        leafId: manager.leafId,
+        options: {},
+        onOptionsChange,
+        onSelect,
+        onCancel: vi.fn(),
+      }),
+    );
+    send("f", { ctrl: true });
+    expect(onOptionsChange).toHaveBeenLastCalledWith({ filter: "no-tools" });
+    send("e", { ctrl: true });
+    expect(onOptionsChange).toHaveBeenLastCalledWith({
+      foldedEntryIds: [root],
+    });
+    send("o", { ctrl: true });
+    expect(onOptionsChange).toHaveBeenLastCalledWith({ foldedEntryIds: [] });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes expanded branches, folded branches and the current entry", () => {
+    const manager = SessionManager.create(process.cwd(), { persist: false });
+    const root = manager.append({
+      role: "user",
+      content: "Parent",
+      timestamp: 1,
+    });
+    manager.append({
+      role: "assistant",
+      content: "Current response",
+      timestamp: 2,
+    });
+    const props = {
+      tree: manager.getTree(),
+      leafId: manager.leafId,
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+      onOptionsChange: vi.fn(),
+    };
+    const expanded = staticFrame(
+      createElement(SessionTreeSelector, { ...props, options: {} }),
+      100,
+    );
+    expect(expanded).toContain("▾ Parent");
+    expect(expanded).toContain("· Current response");
+    expect(expanded).toContain("current");
+    const folded = staticFrame(
+      createElement(SessionTreeSelector, {
+        ...props,
+        options: { foldedEntryIds: [root] },
+      }),
+      100,
+    );
+    expect(folded).toContain("▸ Parent");
+    expect(folded).toContain("Current response");
+  });
+});
+
+describe("settings panel", () => {
+  function props() {
+    return {
+      values: RuntimePreferencesSchema.parse({}),
+      sources: [
+        {
+          field: "display",
+          scope: "project" as const,
+          path: "/workspace/.yukino/config.yaml",
+        },
+      ],
+      model: "test-model",
+      thinking: "high",
+      onModel: vi.fn().mockResolvedValue(undefined),
+      onThinking: vi.fn(),
+      onChange: vi.fn().mockResolvedValue(undefined),
+      onClose: vi.fn(),
+    };
+  }
+  it("finds the selected Catppuccin flavor by its displayed name", () => {
+    const options = props();
+    options.values.theme = "dark";
+    mount(createElement(SettingsDialog, options));
+    send("Mocha");
+    expect(frame).toContain("Mocha · Dark");
+    expect(frame).toContain("Theme");
+    expect(frame).not.toContain("No matching settings");
+    expect(frame).not.toContain("Automatic compaction");
+  });
+  it("filters settings and changes one display preference with explicit persistence scope", async () => {
+    const options = props();
+    mount(createElement(SettingsDialog, options));
+    expect(frame).toContain("Settings");
+    send("Show thinking");
+    expect(frame).toContain("project");
+    await act(async () => {
+      send("", { return: true });
+      await Promise.resolve();
+    });
+    expect(options.onChange).toHaveBeenLastCalledWith(
+      { display: { show_thinking: false } },
+      false,
+    );
+    send("s", { ctrl: true });
+    await act(async () => {
+      send("", { rightArrow: true });
+      await Promise.resolve();
+    });
+    expect(options.onChange).toHaveBeenLastCalledWith(
+      { display: { show_thinking: false } },
+      true,
+    );
+    send("", { escape: true });
+    expect(options.onClose).toHaveBeenCalledOnce();
+  });
+  it("reports save failures and blocks duplicate input while applying a setting", async () => {
+    let reject!: (error: Error) => void;
+    const options = props();
+    options.onChange.mockImplementation(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    );
+    mount(createElement(SettingsDialog, options));
+    send("Theme");
+    await act(async () => {
+      send("", { return: true });
+      await Promise.resolve();
+    });
+    send("", { return: true });
+    send("", { escape: true });
+    expect(options.onChange).toHaveBeenCalledOnce();
+    expect(options.onClose).not.toHaveBeenCalled();
+    await act(async () => {
+      reject(new Error("Cannot save settings"));
+      await Promise.resolve();
+    });
+    expect(frame).toContain("Cannot save settings");
+    send("", { escape: true });
+    expect(options.onClose).toHaveBeenCalledOnce();
+  });
+  it.each([20, 40, 80, 120])(
+    "fits settings within a %i-column terminal",
+    (columns) => {
+      const output = staticFrame(
+        createElement(SettingsDialog, props()),
+        columns,
+      );
+      for (const line of output.split("\n")) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(columns);
+      }
+      expect(output).toContain("Settings");
+      expect(output).toContain("test-model");
+    },
+  );
+});
+
+it("applies thinking visibility and output spacing to live and committed messages", () => {
+  const values = RuntimePreferencesSchema.parse({}).display;
+  const scene = createElement(
+    Box,
+    { flexDirection: "column" },
+    createElement(ChatView, {
+      expanded: true,
+      thinkingText: "PRIVATE_THOUGHT",
+      streamingText: "Visible answer",
+    }),
+    createElement(CommittedMessage, {
+      expanded: true,
+      message: {
+        role: "turn_summary",
+        content: "SAVED_THOUGHT",
+        thinkingDuration: 1,
+      },
+    }),
+  );
+  const shown = staticFrame(
+    createElement(DisplayPreferencesContext.Provider, { value: values }, scene),
+    80,
+  );
+  expect(shown).toContain("PRIVATE_THOUGHT");
+  expect(shown).toContain("SAVED_THOUGHT");
+  const hidden = staticFrame(
+    createElement(
+      DisplayPreferencesContext.Provider,
+      { value: { ...values, show_thinking: false, output_padding: 3 } },
+      scene,
+    ),
+    80,
+  );
+  expect(hidden).not.toContain("PRIVATE_THOUGHT");
+  expect(hidden).not.toContain("SAVED_THOUGHT");
+  expect(hidden).toContain("   Visible answer");
+});

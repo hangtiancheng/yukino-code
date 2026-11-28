@@ -1,0 +1,134 @@
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { uiOnlyPattern } from "../tsup.config.js";
+
+const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const libDir = join(pkgRoot, "dist", "lib");
+const libEntry = join(libDir, "index.js");
+const cliEntry = join(pkgRoot, "dist", "main.js");
+const remoteBrowserDir = join(pkgRoot, "dist", "browser", "dist");
+
+// Module specifiers quoted in import/export statements (including dynamic import).
+const moduleSpecifier = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
+// JSDoc examples may quote specifiers that are not real dependencies.
+const stripComments = (text: string): string =>
+  text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+describe("cli entry (dist/main.js)", () => {
+  it("keeps the shebang for the bin target", () => {
+    expect(existsSync(cliEntry)).toBe(true);
+    expect(
+      readFileSync(cliEntry, "utf-8").startsWith("#!/usr/bin/env node"),
+    ).toBe(true);
+  });
+
+  it("includes the remote browser bundle", () => {
+    for (const file of [
+      "index.html",
+      join("static", "index.css"),
+      join("static", "index.js"),
+    ]) {
+      expect(existsSync(join(remoteBrowserDir, file)), file).toBe(true);
+    }
+  });
+});
+
+describe.skipIf(!existsSync(libEntry))("library entry (dist/lib)", () => {
+  it("imports no ui-only dependency or src/ui module", () => {
+    for (const file of readdirSync(libDir)) {
+      if (!file.endsWith(".js") && !file.endsWith(".d.ts")) {
+        continue;
+      }
+      const code = stripComments(readFileSync(join(libDir, file), "utf-8"));
+      for (const [, specifier] of code.matchAll(moduleSpecifier)) {
+        expect(
+          uiOnlyPattern.test(specifier),
+          `${file} must not import the ui-only dependency "${specifier}"`,
+        ).toBe(false);
+        expect(
+          specifier.startsWith("@/ui"),
+          `${file} must not import the UI layer via "${specifier}"`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("leaks no unresolved @/ type imports", () => {
+    for (const file of readdirSync(libDir)) {
+      if (!file.endsWith(".d.ts")) {
+        continue;
+      }
+      const code = stripComments(readFileSync(join(libDir, file), "utf-8"));
+      expect(
+        /["']@\/[^"']*["']/.exec(code),
+        `${file} must not leak unresolved @/ type imports`,
+      ).toBeNull();
+    }
+  });
+
+  it("loads in plain node and exposes the agent API", () => {
+    const scriptFile = fileURLToPath(
+      new URL("./library-entry-script.js", import.meta.url),
+    );
+    const stdout = execFileSync(process.execPath, [scriptFile], {
+      env: { ...process.env, YUKINO_LIB_ENTRY: pathToFileURL(libEntry).href },
+      encoding: "utf-8",
+    });
+
+    const LoadedSchema = z.object({
+      totalExports: z.number().int().positive(),
+      version: z.string().regex(/^\d+\.\d+/),
+      symbols: z.record(z.string(), z.string()),
+    });
+    const parsed = LoadedSchema.safeParse(JSON.parse(stdout));
+    expect(parsed.success, stdout).toBe(true);
+    if (!parsed.success) {
+      return;
+    }
+    expect(parsed.data.totalExports).toBeGreaterThan(30);
+    for (const [name, type] of Object.entries(parsed.data.symbols)) {
+      expect(type, name).toBe("function");
+    }
+  });
+
+  it("loads when optional telemetry dependencies are unavailable", () => {
+    const loader = `
+      export function resolve(specifier, context, nextResolve) {
+        if (["@langfuse/", "@opentelemetry/", "@sentry/"].some(prefix => specifier.startsWith(prefix))) {
+          throw new Error("Optional telemetry dependency unavailable: " + specifier);
+        }
+        return nextResolve(specifier, context);
+      }
+    `;
+    const script = `
+      import { register } from "node:module";
+      register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(loader)}`)}, import.meta.url);
+      const { createTelemetryRuntime, parseExporterTypes, initializeTelemetry, getTelemetryRuntime } = await import(${JSON.stringify(pathToFileURL(libEntry).href)});
+      const assert = await import("node:assert/strict");
+      assert.deepEqual(parseExporterTypes("otlp, console, none"), ["otlp", "console"]);
+      await assert.rejects(createTelemetryRuntime(), /Optional telemetry dependency unavailable/);
+      process.env.OTEL_SDK_DISABLED = "false";
+      process.env.OTEL_TRACES_EXPORTER = "console";
+      const initialRuntime = getTelemetryRuntime();
+      await initializeTelemetry();
+      assert.equal(getTelemetryRuntime(), initialRuntime);
+      await getTelemetryRuntime().flush();
+    `;
+
+    expect(() =>
+      execFileSync(
+        process.execPath,
+        ["--input-type=module", "--eval", script],
+        {
+          encoding: "utf-8",
+        },
+      ),
+    ).not.toThrow();
+  });
+});

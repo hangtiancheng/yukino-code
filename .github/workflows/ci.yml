@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HUSKY: 0
+
+jobs:
+  packages:
+    name: Package (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ['@yukino.js/yukino', '@yukino.js/mcp', '@yukino.js/app', docs]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace dependencies
+        run: pnpm --filter '${{ matrix.package }}^...' --if-present build
+
+      - name: Check package
+        run: pnpm --filter '${{ matrix.package }}' happy
+        env:
+          DOCS_BASE: /${{ github.event.repository.name }}/
+
+      - name: Upload browser bundle
+        if: matrix.package == '@yukino.js/yukino'
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-bundle
+          path: packages/yukino/src/remote/browser/dist
+          if-no-files-found: error
+
+      - name: Upload docs build
+        if: matrix.package == 'docs'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/docs/dist
+
+  ci:
+    name: Test & Build
+    if: always()
+    needs: [packages]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          PACKAGES_RESULT: ${{ needs.packages.result }}
+        run: test "$PACKAGES_RESULT" = success
+
+  deploy-docs:
+    name: Deploy Docs to GitHub Pages
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

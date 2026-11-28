@@ -1,0 +1,322 @@
+import type {
+  AgentControl,
+  AgentPreferences,
+  AgentState,
+} from "@shared/agent-types";
+import type {
+  FileEntry,
+  FileSnapshot,
+  WorkspaceSnapshot,
+  RuntimeSnapshot,
+  WorkbenchPage,
+} from "@shared/workspace-types";
+import type {
+  McpApp,
+  ToolResultContentBlock,
+  UserBashResult,
+} from "@yukino.js/yukino";
+
+// Shared, IPC-serializable contract between the main process (yukino bridge)
+// and the renderer. Everything crossing the contextBridge must be plain JSON —
+// no Error objects, no class instances, no functions.
+
+export type { McpApp } from "@yukino.js/yukino";
+export type ToolContentBlock = ToolResultContentBlock;
+export type McpAppOperation =
+  | { method: "read_resource"; params: { uri: string } }
+  | {
+      method: "call_tool";
+      params: { name: string; arguments?: Record<string, unknown> };
+    };
+
+export type PermissionResponse = "allow" | "deny" | "allowAlways";
+export type MessageDelivery = "steer" | "followUp";
+
+/** A question posed by the AskUserQuestion tool. */
+export interface AskQuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AskQuestion {
+  question: string;
+  options: AskQuestionOption[];
+  multiSelect: boolean;
+}
+
+export interface PermissionRequestPayload {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  /** Human-readable reason the permission system attached to this request. */
+  reason: string;
+  rememberPatterns?: string[];
+  /** Subagent origin, when the request came from a spawned agent. */
+  source?: { agentName: string; cwd: string };
+}
+
+export interface AskRequestPayload {
+  id: string;
+  questions: AskQuestion[];
+}
+
+export interface UsagePayload {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+}
+
+export interface SessionSummary {
+  id: string;
+  firstMessage: string;
+  archived: boolean;
+  tags: string[];
+  messageCount: number;
+  modTime: number;
+  /** Canonical project directory this session belongs to. */
+  cwd: string;
+  /** sha256(canonicalPath(cwd)) — stable per-project grouping key. */
+  projectKey: string;
+  /** Epoch ms of the last real user message; null when the session has none.
+   *  This is the ordering key so merely viewing a session never reorders it. */
+  lastUserMessageTime: number | null;
+}
+
+/** Flattened transcript message sent to the renderer on session resume. */
+export interface HistoryMessage {
+  role: string;
+  /** Plain text, or the text projection of content blocks. */
+  content: string;
+  timestamp: number;
+  toolUses?: {
+    toolUseId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+  }[];
+  toolResults?: {
+    toolUseId: string;
+    content: string;
+    contentBlocks?: ToolContentBlock[];
+    isError: boolean;
+  }[];
+  thinking?: string;
+  userBash?: UserBashResult;
+}
+
+export type InitState =
+  | {
+      ok: true;
+      cwd: string;
+      /** sha256(canonicalPath(cwd)) — matches SessionSummary.projectKey. */
+      projectKey: string;
+      providerName: string;
+      model: string;
+      sessionId: string;
+      permissionMode: string;
+      contextWindow: number;
+      thinkingLevel: string;
+    }
+  | {
+      ok: false;
+      error: string;
+      kind?: "project" | "config" | "runtime";
+      details?: string;
+      /** Path of the config file the user needs to create/edit. */
+      configPath?: string;
+    };
+
+/** Subagent lifecycle activity (mirrors RuntimeSubagentEvent). */
+export type SubagentActivity = {
+  toolCallId: string;
+  role: string;
+  background: boolean;
+} & (
+  | { type: "started" }
+  | { type: "tool_use"; toolId: string; toolName: string }
+  | { type: "tool_result"; toolId: string }
+  | { type: "turn_complete" }
+  | { type: "finished"; status: "completed" | "failed" | "stopped" }
+);
+
+/**
+ * The full stream of events pushed from main to renderer on the
+ * `yukino:event` channel.
+ */
+export type BridgeEvent =
+  | { type: "preferences"; data: AgentPreferences }
+  | { type: "queue_changed"; data: AgentState["queue"] }
+  | { type: "user_input"; data: { id: string; text: string } }
+  | { type: "runtime_changed" }
+  | { type: "tool_output"; data: { toolId: string; output: string } }
+  | { type: "workspace_changed"; data: { cwd: string; path: string | null } }
+  | {
+      type: "plan_approval";
+      data: { id: string; content: string; path: string } | null;
+    }
+  | { type: "open_settings" }
+  | { type: "open_runtime"; page?: WorkbenchPage }
+  | { type: "init_state"; data: InitState }
+  | { type: "run_state"; data: { streaming: boolean } }
+  | { type: "stream_text"; data: { text: string } }
+  | { type: "thinking_text"; data: { text: string } }
+  | {
+      type: "tool_use";
+      data: { toolId: string; toolName: string; args: Record<string, unknown> };
+    }
+  | {
+      type: "tool_result";
+      data: {
+        toolId: string;
+        toolName: string;
+        output: string;
+        mcpApp?: McpApp;
+        contentBlocks?: ToolContentBlock[];
+        isError: boolean;
+        elapsed: number;
+      };
+    }
+  | { type: "turn_complete" }
+  | { type: "loop_complete"; data: { stopReason: string } }
+  | { type: "usage"; data: UsagePayload }
+  | { type: "error"; data: { message: string } }
+  | { type: "system"; data: { message: string; markdown?: boolean } }
+  | { type: "compact"; data: { message: string } }
+  | { type: "retry"; data: { reason: string; delay: number } }
+  | { type: "permission_request"; data: PermissionRequestPayload }
+  | {
+      type: "permission_resolved";
+      data: { id: string; response: PermissionResponse };
+    }
+  | { type: "ask_request"; data: AskRequestPayload }
+  | { type: "ask_resolved"; data: { id: string } }
+  | { type: "subagent"; data: SubagentActivity }
+  | { type: "session_changed"; data: { sessionId: string; cwd: string } }
+  /** Pushed after a bridge-side session resume (e.g. the /resume command). */
+  | { type: "history"; data: ResumeResult };
+
+/** Payload returned by `yukino:resume-session`; also carried by the
+ *  `history` event (where the cwd fields are absent). */
+export interface ResumeResult {
+  sessionId: string;
+  messages: HistoryMessage[];
+  /** Working directory of the resumed session. */
+  cwd?: string;
+  /** True when the resume caused the app's working directory to change. */
+  switchedCwd?: boolean;
+}
+
+/** A slash command surfaced in the composer's command panel. */
+export interface CommandSummary {
+  isSkill: boolean;
+  name: string;
+  description: string;
+  type: "local" | "local_ui" | "prompt" | "skill_fork";
+}
+
+/** A provider entry as shown in the settings picker. */
+export interface ProviderInput {
+  name: string;
+  protocol: "anthropic" | "openai" | "openai-compat";
+  base_url: string;
+  api_key: string;
+  model: string;
+}
+
+export interface ProviderSummary {
+  name: string;
+  protocol: string;
+  baseUrl: string;
+  model: string;
+}
+
+/** Snapshot of everything the settings page needs. */
+export interface SettingsSnapshot {
+  preferences: AgentPreferences;
+  providers: ProviderSummary[];
+  /** Index into `providers` of the active provider. */
+  currentProvider: number;
+  model: string;
+  thinkingLevel: string;
+  thinkingLevels: string[];
+}
+
+export interface ModelListResult {
+  status: "loading" | "ready" | "empty" | "error";
+  models: { id: string; name: string | null }[];
+  current: string;
+}
+
+/** The API surface exposed to the renderer as `window.api`. */
+export interface YukinoApi {
+  getAgentState(): Promise<AgentState>;
+  controlAgent(action: AgentControl): Promise<unknown>;
+  setPreferences(
+    patch: import("@yukino.js/yukino").PreferencesPatch,
+    persist: boolean,
+  ): Promise<SettingsSnapshot>;
+  reloadResources(): Promise<void>;
+  transferSession(
+    action: "import" | "export" | "diagnostics",
+    options?: {
+      format: "jsonl" | "html";
+      scope: "active" | "tree";
+      redact: boolean;
+    },
+  ): Promise<boolean>;
+  runtimeAction(
+    action: import("./workspace-types").RuntimeAction,
+  ): Promise<void>;
+  workspaceList(path?: string): Promise<FileEntry[]>;
+  workspaceRead(path: string): Promise<FileSnapshot>;
+  workspaceSave(
+    path: string,
+    content: string,
+    revision: string,
+  ): Promise<FileSnapshot>;
+  workspaceSnapshot(): Promise<WorkspaceSnapshot>;
+  getRuntime(): Promise<RuntimeSnapshot>;
+  setPermissionMode(
+    mode: "default" | "acceptEdits" | "plan" | "bypassPermissions",
+  ): Promise<void>;
+  rewind(
+    id: string,
+    mode: "code_only" | "conversation_only" | "code_and_conversation",
+  ): Promise<void>;
+  respondPlan(
+    id: string,
+    choice: "approve" | "feedback",
+    feedback?: string,
+  ): Promise<void>;
+  requestMcpApp(appId: string, operation: McpAppOperation): Promise<unknown>;
+  openConfig(): Promise<void>;
+  openLogs(): Promise<void>;
+  selectAttachments(): Promise<string[]>;
+  pasteImage(): Promise<string>;
+  init(): Promise<InitState>;
+  send(text: string, delivery?: MessageDelivery): Promise<void>;
+  cancelQueuedMessage(id: string): Promise<string>;
+  abort(): Promise<void>;
+  newSession(): Promise<{ sessionId: string }>;
+  listSessions(): Promise<SessionSummary[]>;
+  resumeSession(sessionId: string, cwd?: string): Promise<ResumeResult>;
+  selectFolder(): Promise<{ cwd: string | null }>;
+  respondPermission(id: string, response: PermissionResponse): Promise<void>;
+  respondAsk(id: string, answers: Record<string, string>): Promise<void>;
+  getTheme(): Promise<{ mode: "system" | "light" | "dark"; dark: boolean }>;
+  setTheme(mode: "system" | "light" | "dark"): Promise<void>;
+  /** Slash commands for the composer's command panel. */
+  listCommands(): Promise<CommandSummary[]>;
+  /** Runs a slash command; results stream back as BridgeEvents. */
+  runCommand(input: string): Promise<void>;
+  /** Settings snapshot: providers, current provider/model, thinking levels. */
+  saveProvider(input: ProviderInput): Promise<void>;
+  getSettings(): Promise<SettingsSnapshot>;
+  listModels(): Promise<ModelListResult>;
+  setProvider(index: number): Promise<void>;
+  setModel(model: string): Promise<void>;
+  setThinkingLevel(level: string): Promise<void>;
+  onEvent(callback: (event: BridgeEvent) => void): () => void;
+  onTheme(callback: (theme: "dark" | "light") => void): () => void;
+}

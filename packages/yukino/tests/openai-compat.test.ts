@@ -1,0 +1,511 @@
+import { describe, it, expect } from "vitest";
+import z, { parse, safeParse } from "zod";
+
+import type { Message } from "@/conversation/index.js";
+import { buildChatCompletionMessages, buildOpenAIInput } from "@/llm/openai.js";
+
+describe("OpenAI Responses computer action replay", () => {
+  function replayActions(actions: unknown) {
+    const items = buildOpenAIInput([
+      {
+        role: "assistant",
+        content: "",
+        toolUses: [
+          {
+            toolUseId: "computer-call",
+            toolName: "ComputerUse",
+            arguments: { actions },
+          },
+        ],
+      },
+    ]);
+    const call = items.find(
+      (item) => "type" in item && item.type === "computer_call",
+    );
+    return call && "actions" in call ? call.actions : undefined;
+  }
+
+  it("replays all native action variants in order with the SDK field names and required nullable fields", () => {
+    const actions = [
+      { type: "click", x: 10, y: 20, button: "right", keys: ["SHIFT"] },
+      { type: "double_click", x: 30, y: 40 },
+      {
+        type: "drag",
+        path: [
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+        ],
+        keys: ["CTRL"],
+      },
+      { type: "keypress", keys: ["META", "A"] },
+      { type: "move", x: 50, y: 60, keys: null },
+      { type: "screenshot" },
+      {
+        type: "scroll",
+        x: 50,
+        y: 60,
+        scrollX: -100,
+        scrollY: 200,
+        keys: ["SHIFT"],
+      },
+      { type: "type", text: "日本語😁" },
+      { type: "wait" },
+    ];
+    expect(replayActions(actions)).toEqual([
+      actions[0],
+      { ...actions[1], keys: null },
+      actions[2],
+      actions[3],
+      actions[4],
+      actions[5],
+      {
+        type: "scroll",
+        x: 50,
+        y: 60,
+        scroll_x: -100,
+        scroll_y: 200,
+        keys: ["SHIFT"],
+      },
+      actions[7],
+      actions[8],
+    ]);
+  });
+
+  it("omits malformed actions without coercing their fields or disturbing valid neighbors", () => {
+    const malformed = [
+      null,
+      "click",
+      {},
+      { type: "unknown" },
+      { type: "click", x: "10", y: 20 },
+      { type: "click", x: 10, y: 20, button: "middle" },
+      { type: "double_click", x: 10, y: 20, keys: [3] },
+      { type: "drag", path: [{ x: 1, y: "2" }] },
+      { type: "keypress", keys: "CTRL" },
+      { type: "move", x: Number.POSITIVE_INFINITY, y: 20 },
+      { type: "scroll", x: 10, y: 20, scrollX: "100", scrollY: 0 },
+      { type: "scroll", x: 10, y: 20, scrollY: Number.NaN },
+      { type: "type", text: 42 },
+    ];
+    expect(
+      replayActions([{ type: "wait" }, ...malformed, { type: "screenshot" }]),
+    ).toEqual([{ type: "wait" }, { type: "screenshot" }]);
+  });
+
+  it("uses execution defaults for omitted click buttons and scroll distances and removes unrelated fields", () => {
+    expect(
+      replayActions([
+        { type: "click", x: 10, y: 20, debug: "internal" },
+        { type: "scroll", x: 10, y: 20, scrollY: -100 },
+        { type: "wait", text: "internal" },
+      ]),
+    ).toEqual([
+      { type: "click", x: 10, y: 20, button: "left" },
+      { type: "scroll", x: 10, y: 20, scroll_x: 0, scroll_y: -100 },
+      { type: "wait" },
+    ]);
+  });
+});
+
+describe("OpenAI Responses reasoning replay", () => {
+  it("includes only native rs_ reasoning IDs", () => {
+    const items = buildOpenAIInput([
+      {
+        role: "assistant",
+        content: "answer",
+        thinkingBlocks: [
+          { type: "thinking", thinking: "native", signature: "rs_123" },
+          {
+            type: "thinking",
+            thinking: "foreign",
+            signature: "anthropic-signature",
+          },
+          { type: "thinking", thinking: "compat", signature: "" },
+        ],
+      },
+    ]);
+    const reasoning = items.filter(
+      (item) => "type" in item && item.type === "reasoning",
+    );
+
+    expect(reasoning).toEqual([
+      {
+        type: "reasoning",
+        id: "rs_123",
+        summary: [{ type: "summary_text", text: "native" }],
+      },
+    ]);
+  });
+});
+
+describe("openai-compat chat message building", () => {
+  it("attaches reasoning_content to the assistant message alongside tool_calls", () => {
+    const messages = buildChatCompletionMessages([
+      {
+        role: "assistant",
+        content: "",
+        thinkingBlocks: [
+          { type: "thinking", thinking: "Check the file first", signature: "" },
+        ],
+        toolUses: [
+          {
+            toolUseId: "r1",
+            toolName: "ReadFile",
+            arguments: { file_path: "a.ts" },
+          },
+        ],
+      },
+    ]);
+    expect(messages[0]).toMatchObject({
+      reasoning_content: "Check the file first",
+    });
+    expect(messages[0]).toMatchObject({ tool_calls: [{ id: "r1" }] });
+  });
+  it("preserves assistant tool_calls and tool-result turns", () => {
+    const history: Message[] = [
+      { role: "user", content: "list files" },
+      {
+        role: "assistant",
+        content: "",
+        toolUses: [
+          { toolUseId: "c1", toolName: "Bash", arguments: { command: "ls" } },
+        ],
+      },
+      {
+        role: "user",
+        content: "",
+        toolResults: [{ toolUseId: "c1", content: "a.txt", isError: false }],
+      },
+      { role: "assistant", content: "Found a.txt" },
+    ];
+
+    const msgs = buildChatCompletionMessages(history);
+
+    const AssistantWithToolsSchema = z.looseObject({
+      tool_calls: z.array(
+        z.looseObject({
+          id: z.string(),
+          function: z.looseObject({
+            name: z.string(),
+            arguments: z.string(),
+          }),
+        }),
+      ),
+    });
+
+    const ToolMessageSchema = z.looseObject({
+      tool_call_id: z.string(),
+      content: z.string(),
+    });
+
+    const assistantWithTools = msgs.find(
+      (m) => m.role === "assistant" && Array.isArray(m.tool_calls),
+    );
+    const { success, data } = safeParse(
+      AssistantWithToolsSchema,
+      assistantWithTools,
+    );
+
+    expect(assistantWithTools).toBeDefined();
+    expect(success).toBe(true);
+    expect(data?.tool_calls[0].id).toBe("c1");
+    expect(data?.tool_calls[0].function.name).toBe("Bash");
+    expect(JSON.parse(data?.tool_calls[0].function.arguments ?? "{}")).toEqual({
+      command: "ls",
+    });
+
+    const toolMessage = msgs.find((m) => m.role === "tool");
+    const { success: success2, data: data2 } = safeParse(
+      ToolMessageSchema,
+      toolMessage,
+    );
+
+    expect(toolMessage).toBeDefined();
+    expect(success2).toBe(true);
+    expect(data2?.tool_call_id).toBe("c1");
+    expect(data2?.content).toBe("a.txt");
+
+    expect(
+      msgs.some((m) => m.role === "user" && m.content === "list files"),
+    ).toBe(true);
+    expect(
+      msgs.some((m) => m.role === "assistant" && m.content === "Found a.txt"),
+    ).toBe(true);
+  });
+});
+
+describe("image tool results over OpenAI endpoints", () => {
+  const DATA = Buffer.from("img-bytes").toString("base64");
+  const history: Message[] = [
+    {
+      role: "assistant",
+      content: "",
+      toolUses: [
+        {
+          toolUseId: "c1",
+          toolName: "ReadFile",
+          arguments: { file_path: "a.png" },
+        },
+      ],
+    },
+    {
+      role: "user",
+      content: "",
+      toolResults: [
+        {
+          toolUseId: "c1",
+          content: "[Image: a.png]",
+          contentBlocks: [
+            { type: "text", text: "[Image: a.png]" },
+            {
+              type: "image",
+              source: { type: "base64", media_type: "image/png", data: DATA },
+            },
+          ],
+          isError: false,
+        },
+      ],
+    },
+  ];
+
+  it("chat completions: flattens role:tool text and appends a synthetic user message with the image", () => {
+    const msgs = buildChatCompletionMessages(history);
+    const toolMsg = msgs.find((m) => m.role === "tool");
+    expect(toolMsg?.content).toContain("[Image: a.png]");
+    expect(JSON.stringify(toolMsg)).not.toContain(DATA);
+
+    const synthetic = msgs.find(
+      (m) => m.role === "user" && Array.isArray(m.content),
+    );
+    expect(synthetic).toBeDefined();
+    const PartsSchema = z.array(
+      z.looseObject({
+        type: z.string(),
+        text: z.string().optional(),
+        image_url: z.looseObject({ url: z.string() }).optional(),
+      }),
+    );
+    const parts = parse(PartsSchema, synthetic?.content);
+    expect(parts[0].type).toBe("text");
+    expect(parts[0].text).toBe("[Rich content returned by tool call c1]");
+    expect(parts[1].type).toBe("image_url");
+    expect(parts[1].image_url?.url).toBe(`data:image/png;base64,${DATA}`);
+  });
+
+  it("responses API: converts rich tool output inside function_call_output", () => {
+    const items = buildOpenAIInput(history);
+    const fco = items.find(
+      (item) => "type" in item && item.type === "function_call_output",
+    );
+    const output = fco && "output" in fco ? fco.output : null;
+    expect(Array.isArray(output)).toBe(true);
+    const PartsSchema = z.array(
+      z.looseObject({
+        type: z.string(),
+        text: z.string().optional(),
+        image_url: z.string().optional(),
+      }),
+    );
+    const parts = parse(PartsSchema, output);
+    expect(parts[0].type).toBe("input_text");
+    expect(parts[0].text).toBe("[Image: a.png]");
+    expect(parts[1].type).toBe("input_image");
+    expect(parts[1].image_url).toBe(`data:image/png;base64,${DATA}`);
+    expect(items).toHaveLength(2);
+  });
+
+  it("converts URL images and PDF documents for both OpenAI protocols", () => {
+    const rich: Message[] = [
+      {
+        role: "user",
+        content: "",
+        toolResults: [
+          {
+            toolUseId: "c-rich",
+            content: "image and document",
+            contentBlocks: [
+              {
+                type: "image",
+                source: { type: "url", url: "https://example.com/image.png" },
+              },
+              {
+                type: "document",
+                title: "report",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data: "QUJD",
+                },
+              },
+            ],
+            isError: false,
+          },
+        ],
+      },
+    ];
+
+    const responses = buildOpenAIInput(rich);
+    const responseOutput =
+      "output" in responses[0] && Array.isArray(responses[0].output)
+        ? responses[0].output
+        : [];
+    expect(responseOutput).toEqual([
+      { type: "input_text", text: "image and document" },
+      {
+        type: "input_image",
+        image_url: "https://example.com/image.png",
+        detail: "auto",
+      },
+      { type: "input_file", file_data: "QUJD", filename: "report.pdf" },
+    ]);
+
+    const chat = buildChatCompletionMessages(rich);
+    const synthetic = chat.find(
+      (message) => message.role === "user" && Array.isArray(message.content),
+    );
+    expect(
+      synthetic && Array.isArray(synthetic.content) ? synthetic.content : [],
+    ).toEqual([
+      { type: "text", text: "[Rich content returned by tool call c-rich]" },
+      {
+        type: "image_url",
+        image_url: { url: "https://example.com/image.png" },
+      },
+      { type: "file", file: { file_data: "QUJD", filename: "report.pdf" } },
+    ]);
+  });
+
+  it("does not emit extra rich parts for text-only Anthropic blocks", () => {
+    const textOnly: Message[] = [
+      {
+        role: "user",
+        content: "",
+        toolResults: [
+          {
+            toolUseId: "c2",
+            content: "plain",
+            contentBlocks: [{ type: "text", text: "plain" }],
+            isError: false,
+          },
+        ],
+      },
+    ];
+    const chat = buildChatCompletionMessages(textOnly);
+    expect(
+      chat.some(
+        (message) => message.role === "user" && Array.isArray(message.content),
+      ),
+    ).toBe(false);
+    const responses = buildOpenAIInput(textOnly);
+    const fco = responses.find(
+      (item) => "type" in item && item.type === "function_call_output",
+    );
+    expect(fco && "output" in fco ? fco.output : null).toEqual([
+      { type: "input_text", text: "plain" },
+    ]);
+  });
+
+  it("converts user messages with image blocks into multimodal parts", () => {
+    const userWithImage: Message[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "what is this?" },
+          {
+            type: "image",
+            source: { type: "base64", media_type: "image/png", data: DATA },
+          },
+        ],
+      },
+    ];
+
+    const chat = buildChatCompletionMessages(userWithImage);
+    expect(chat).toHaveLength(1);
+    const chatParts = chat[0].content;
+    expect(Array.isArray(chatParts)).toBe(true);
+    expect(JSON.stringify(chatParts)).toContain(
+      `data:image/png;base64,${DATA}`,
+    );
+
+    const responses = buildOpenAIInput(userWithImage);
+    expect(responses).toHaveLength(1);
+    const respParts = "content" in responses[0] ? responses[0].content : null;
+    expect(Array.isArray(respParts)).toBe(true);
+    expect(JSON.stringify(respParts)).toContain("input_image");
+  });
+});
+
+describe("document tool results over OpenAI chat completions", () => {
+  const richJson = (
+    msgs: ReturnType<typeof buildChatCompletionMessages>,
+  ): string => {
+    const synthetic = msgs.find(
+      (m) => m.role === "user" && Array.isArray(m.content),
+    );
+    return JSON.stringify(synthetic?.content ?? []);
+  };
+
+  it("does not silently drop a url document; emits an explicit unsupported note", () => {
+    const history: Message[] = [
+      {
+        role: "assistant",
+        content: "",
+        toolUses: [{ toolUseId: "d1", toolName: "Fetch", arguments: {} }],
+      },
+      {
+        role: "user",
+        content: "",
+        toolResults: [
+          {
+            toolUseId: "d1",
+            content: "[doc]",
+            contentBlocks: [
+              {
+                type: "document",
+                source: { type: "url", url: "https://example.com/file.pdf" },
+              },
+            ],
+            isError: false,
+          },
+        ],
+      },
+    ];
+    const json = richJson(buildChatCompletionMessages(history));
+    expect(json).toContain("not supported");
+    expect(json).toContain("example.com");
+  });
+
+  it("keeps a base64 document as a file part", () => {
+    const data = Buffer.from("pdf-bytes").toString("base64");
+    const history: Message[] = [
+      {
+        role: "assistant",
+        content: "",
+        toolUses: [{ toolUseId: "d2", toolName: "Fetch", arguments: {} }],
+      },
+      {
+        role: "user",
+        content: "",
+        toolResults: [
+          {
+            toolUseId: "d2",
+            content: "[doc]",
+            contentBlocks: [
+              {
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data,
+                },
+              },
+            ],
+            isError: false,
+          },
+        ],
+      },
+    ];
+    const json = richJson(buildChatCompletionMessages(history));
+    expect(json).toContain('"type":"file"');
+  });
+});
